@@ -1,5 +1,7 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
-import type { ConnectionState } from './types'
+import type { ConnectionState, MobileAccessEndpoint } from './types'
+
+type ConnectionHealthEndpoint = string | MobileAccessEndpoint
 
 // Why: thresholds for escalating connection UX from neutral
 // "Reconnecting…" to alarming "host appears unreachable, re-pair?".
@@ -45,7 +47,7 @@ export type ConnectionVerdict =
  */
 export function shouldShowTailscaleHint(args: {
   endpoint?: string | null
-  endpoints?: readonly string[] | null
+  endpoints?: readonly ConnectionHealthEndpoint[] | null
 }): boolean {
   const candidates =
     args.endpoints && args.endpoints.length > 0
@@ -56,7 +58,10 @@ export function shouldShowTailscaleHint(args: {
   if (candidates.length === 0) {
     return false
   }
-  return candidates.every((ep) => isTailscaleEndpoint(ep))
+  return candidates.every((endpoint) => {
+    const url = typeof endpoint === 'string' ? endpoint : endpoint.url
+    return isTailscaleEndpoint(url)
+  })
 }
 
 // Why: the rpc-client's lastConnectedAt is a one-shot timestamp; we have
@@ -70,7 +75,7 @@ export function classifyConnection(args: {
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
   /** Full preferred list when known — suppresses Tailscale hint if any non-TS remains. */
-  endpoints?: readonly string[] | null
+  endpoints?: readonly ConnectionHealthEndpoint[] | null
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args

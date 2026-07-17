@@ -13,7 +13,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { CustomAddressDialog, type CustomAddressDialogCopy } from '../network/CustomAddressDialog'
@@ -23,7 +23,6 @@ import {
   addAdvertiseAddress,
   MAX_MOBILE_ADVERTISE_ADDRESSES,
   removeAdvertiseAddress,
-  reorderAdvertiseAddresses,
   type MobileNetworkInterface
 } from '../settings/mobile-network-interface-selection'
 import {
@@ -36,6 +35,10 @@ export type OrderedNetworkAddressPickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
   selectedAddresses: readonly string[]
   onSelectedAddressesChange: (addresses: string[]) => void
+  relayPreferenceIndex?: number
+  onRouteOrderChange?: (addresses: string[], relayIndex: number) => void
+  refreshingNetworkInterfaces?: boolean
+  onRefreshNetworkInterfaces?: () => void
   disabled?: boolean
   className?: string
   id?: string
@@ -43,7 +46,8 @@ export type OrderedNetworkAddressPickerProps = {
 
 function buildRows(
   networkInterfaces: readonly MobileNetworkInterface[],
-  selectedAddresses: readonly string[]
+  selectedAddresses: readonly string[],
+  relayPreferenceIndex?: number
 ): OrderedNetworkAddressRowModel[] {
   const discoveredByAddress = new Map(
     networkInterfaces.map((iface) => [iface.address, iface] as const)
@@ -51,7 +55,25 @@ function buildRows(
   const selectedSet = new Set(selectedAddresses)
   const rows: OrderedNetworkAddressRowModel[] = []
 
-  selectedAddresses.forEach((address, index) => {
+  const selectedRouteIds = [...selectedAddresses]
+  if (relayPreferenceIndex !== undefined) {
+    selectedRouteIds.splice(relayPreferenceIndex, 0, RELAY_ROUTE_ID)
+  }
+  selectedRouteIds.forEach((address, index) => {
+    if (address === RELAY_ROUTE_ID) {
+      rows.push({
+        address,
+        label: translate(
+          'auto.components.mobile.OrderedNetworkAddressPicker.relay-option',
+          'Orca Cloud Relay'
+        ),
+        selected: true,
+        priorityIndex: index + 1,
+        isCustom: false,
+        isRelay: true
+      })
+      return
+    }
     const iface = discoveredByAddress.get(address)
     rows.push({
       address,
@@ -77,6 +99,8 @@ function buildRows(
 
   return rows
 }
+
+const RELAY_ROUTE_ID = '__orca_cloud_relay__'
 
 const customDialogCopy = (): CustomAddressDialogCopy => ({
   title: translate(
@@ -108,20 +132,25 @@ export function OrderedNetworkAddressPicker({
   networkInterfaces,
   selectedAddresses,
   onSelectedAddressesChange,
+  relayPreferenceIndex,
+  onRouteOrderChange,
+  refreshingNetworkInterfaces = false,
+  onRefreshNetworkInterfaces,
   disabled = false,
   className,
   id
 }: OrderedNetworkAddressPickerProps): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false)
   const rows = useMemo(
-    () => buildRows(networkInterfaces, selectedAddresses),
-    [networkInterfaces, selectedAddresses]
+    () => buildRows(networkInterfaces, selectedAddresses, relayPreferenceIndex),
+    [networkInterfaces, relayPreferenceIndex, selectedAddresses]
   )
   const selectedRows = rows.filter((row) => row.selected)
   const unselectedRows = rows.filter((row) => !row.selected)
   const atCap = selectedAddresses.length >= MAX_MOBILE_ADVERTISE_ADDRESSES
   const canRemove = selectedAddresses.length > 1
-  const dragDisabled = disabled || selectedAddresses.length < 2
+  const selectedRouteIds = selectedRows.map(({ address }) => address)
+  const dragDisabled = disabled || selectedRouteIds.length < 2
 
   // Why: require a short drag distance so checkbox clicks don't start a reorder.
   const sensors = useSensors(
@@ -146,12 +175,21 @@ export function OrderedNetworkAddressPicker({
     if (!over || active.id === over.id) {
       return
     }
-    const fromIndex = selectedAddresses.indexOf(String(active.id))
-    const toIndex = selectedAddresses.indexOf(String(over.id))
+    const fromIndex = selectedRouteIds.indexOf(String(active.id))
+    const toIndex = selectedRouteIds.indexOf(String(over.id))
     if (fromIndex < 0 || toIndex < 0) {
       return
     }
-    onSelectedAddressesChange(reorderAdvertiseAddresses(selectedAddresses, fromIndex, toIndex))
+    const next = selectedRouteIds.slice()
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved!)
+    const nextRelayIndex = next.indexOf(RELAY_ROUTE_ID)
+    const nextAddresses = next.filter((route) => route !== RELAY_ROUTE_ID)
+    if (nextRelayIndex >= 0) {
+      onRouteOrderChange?.(nextAddresses, nextRelayIndex)
+    } else {
+      onSelectedAddressesChange(nextAddresses)
+    }
   }
 
   return (
@@ -159,7 +197,7 @@ export function OrderedNetworkAddressPicker({
       <p className="text-muted-foreground text-xs">
         {translate(
           'auto.components.mobile.OrderedNetworkAddressPicker.priority-hint',
-          'Priority is top to bottom — drag selected addresses to change the order the phone tries them.'
+          'Priority is top to bottom — drag selected routes to change the order your phone tries them.'
         )}
       </p>
       {rows.length === 0 ? (
@@ -174,7 +212,7 @@ export function OrderedNetworkAddressPicker({
           className="divide-border/60 border-border/60 divide-y rounded-md border"
           aria-label={translate(
             'auto.components.mobile.OrderedNetworkAddressPicker.list-label',
-            'Network addresses to advertise'
+            'Connection routes'
           )}
         >
           <DndContext
@@ -182,12 +220,12 @@ export function OrderedNetworkAddressPicker({
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            <SortableContext items={[...selectedAddresses]} strategy={verticalListSortingStrategy}>
+            <SortableContext items={selectedRouteIds} strategy={verticalListSortingStrategy}>
               {selectedRows.map((row) => (
                 <SortableOrderedNetworkAddressRow
                   key={row.address}
                   row={row}
-                  checkboxDisabled={disabled || !canRemove}
+                  checkboxDisabled={disabled || row.isRelay || !canRemove}
                   dragDisabled={dragDisabled}
                   onToggle={toggleAddress}
                 />
@@ -204,20 +242,38 @@ export function OrderedNetworkAddressPicker({
           ))}
         </ul>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-fit gap-1.5"
-        disabled={disabled || atCap}
-        onClick={() => setDialogOpen(true)}
-      >
-        <Plus className="size-3.5" />
-        {translate(
-          'auto.components.mobile.NetworkInterfacePicker.add-custom',
-          'Add custom address…'
-        )}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-fit gap-1.5"
+          disabled={disabled || atCap}
+          onClick={() => setDialogOpen(true)}
+        >
+          <Plus className="size-3.5" />
+          {translate(
+            'auto.components.mobile.NetworkInterfacePicker.add-custom',
+            'Add custom address…'
+          )}
+        </Button>
+        {onRefreshNetworkInterfaces ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit gap-1.5"
+            disabled={disabled || refreshingNetworkInterfaces}
+            onClick={onRefreshNetworkInterfaces}
+          >
+            <RefreshCw className={cn('size-3.5', refreshingNetworkInterfaces && 'animate-spin')} />
+            {translate(
+              'auto.components.mobile.OrderedNetworkAddressPicker.refresh-addresses',
+              'Refresh addresses'
+            )}
+          </Button>
+        ) : null}
+      </div>
       <CustomAddressDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}

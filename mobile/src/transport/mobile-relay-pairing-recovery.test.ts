@@ -17,6 +17,9 @@ const now = Date.UTC(2026, 6, 13)
 const offer = {
   v: 2,
   endpoint: 'ws://192.168.1.10:6768',
+  endpoints: ['ws://192.168.1.10:6768', 'ws://100.64.1.20:6768'],
+  routeOrder: 1,
+  relayPreferenceIndex: 1,
   deviceToken: 'device-token',
   publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
   relay: {
@@ -139,7 +142,15 @@ describe('mobile relay pairing recovery', () => {
       })
     )
     expect(deps.writeCredentialBundle).toHaveBeenCalledOnce()
-    expect(deps.saveHost).toHaveBeenCalledOnce()
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoints: [
+          expect.objectContaining({ kind: 'lan', url: offer.endpoints[0] }),
+          expect.objectContaining({ kind: 'relay' }),
+          expect.objectContaining({ kind: 'tailscale', url: offer.endpoints[1] })
+        ]
+      })
+    )
     expect(deps.clearJournal).toHaveBeenCalledOnce()
   })
 

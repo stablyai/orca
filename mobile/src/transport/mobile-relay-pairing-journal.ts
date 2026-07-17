@@ -17,6 +17,8 @@ export const MobileRelayPairingJournalMetadataSchema = z
         id: z.string().min(1),
         name: z.string().min(1),
         endpoint: z.string().min(1),
+        endpoints: z.array(z.string().min(1)).min(1).max(4).optional(),
+        relayPreferenceIndex: z.number().int().min(0).max(4).optional(),
         publicKeyB64: z.string().min(1),
         lastConnected: z.number().int().nonnegative()
       })
@@ -83,6 +85,10 @@ export function createMobileRelayPairingJournal(args: {
         id: args.hostId,
         name: args.hostName,
         endpoint: args.offer.endpoint,
+        ...(args.offer.endpoints ? { endpoints: args.offer.endpoints } : {}),
+        ...(args.offer.relayPreferenceIndex !== undefined
+          ? { relayPreferenceIndex: args.offer.relayPreferenceIndex }
+          : {}),
         publicKeyB64: args.offer.publicKeyB64,
         lastConnected: args.now ?? Date.now()
       },

@@ -175,7 +175,9 @@ describe('registerMobileHandlers', () => {
 
     await expect(
       handlers.get('mobile:getPairingQR')?.(null, {
-        addresses: ['100.64.1.20', '192.168.1.24']
+        addresses: ['100.64.1.20', '192.168.1.24'],
+        orderedRoutes: true,
+        relayPreferenceIndex: 1
       })
     ).resolves.toMatchObject({
       available: true,
@@ -185,6 +187,8 @@ describe('registerMobileHandlers', () => {
     expect(createMobilePairingOffer).toHaveBeenCalledWith({
       addresses: ['100.64.1.20', '192.168.1.24'],
       connectionMode: undefined,
+      orderedRoutes: true,
+      relayPreferenceIndex: 1,
       rotate: undefined,
       name: expect.stringMatching(/^Mobile /)
     })

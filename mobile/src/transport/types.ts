@@ -12,7 +12,7 @@ import {
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
 
 export { MAX_PAIRING_ENDPOINTS, PairingOfferSchema }
-export type { PairingOffer }
+export type { MobileAccessEndpoint, PairingOffer }
 
 /** Preferred dial order: `endpoints` when present, else `[endpoint]`. Deduped + capped. */
 export function normalizePairingEndpoints(

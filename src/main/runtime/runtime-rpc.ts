@@ -644,6 +644,7 @@ export class OrcaRuntimeRpcServer {
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    routeOrder?: 1
   }):
     | PairingOfferUnavailable
     | {
@@ -705,7 +706,8 @@ export class OrcaRuntimeRpcServer {
       endpoints: endpoints.length > 1 ? endpoints : undefined,
       deviceToken: device.token,
       publicKeyB64,
-      scope
+      scope,
+      routeOrder: args.routeOrder
     })
     return {
       available: true,
@@ -723,6 +725,8 @@ export class OrcaRuntimeRpcServer {
     /** Ordered advertise addresses; when set, takes precedence over `address`. */
     addresses?: readonly string[] | null
     connectionMode?: MobilePairingConnectionMode
+    relayPreferenceIndex?: number
+    orderedRoutes?: boolean
     name?: string
     rotate?: boolean
   }): Promise<MobilePairingOffer> {
@@ -770,7 +774,10 @@ export class OrcaRuntimeRpcServer {
   private async createMobilePairingOfferSerial(
     args: {
       address?: string | null
+      addresses?: readonly string[] | null
       connectionMode?: MobilePairingConnectionMode
+      relayPreferenceIndex?: number
+      orderedRoutes?: boolean
       name?: string
       rotate?: boolean
     },
@@ -794,10 +801,14 @@ export class OrcaRuntimeRpcServer {
         }
       }
     }
+    const orderedRoutes = args.orderedRoutes === true
     const direct = this.createPairingOffer({
-      ...args,
+      address: orderedRoutes ? args.address : (args.address ?? args.addresses?.[0]),
+      addresses: orderedRoutes ? args.addresses : undefined,
+      name: args.name,
       rotate: args.rotate || switchingPendingMode,
-      scope: 'mobile'
+      scope: 'mobile',
+      routeOrder: orderedRoutes ? 1 : undefined
     })
     if (!direct.available) {
       return direct
@@ -882,6 +893,25 @@ export class OrcaRuntimeRpcServer {
       }
       return this.relayPairingRequestSuperseded()
     }
+    const relayPreferenceIndex = Math.max(
+      0,
+      Math.min(
+        direct.endpoints.length,
+        Number.isInteger(args.relayPreferenceIndex)
+          ? args.relayPreferenceIndex!
+          : direct.endpoints.length
+      )
+    )
+    const pairingUrl = encodePairingOffer({
+      v: PAIRING_OFFER_VERSION,
+      endpoint: direct.endpoint,
+      endpoints: direct.endpoints.length > 1 ? direct.endpoints : undefined,
+      deviceToken: device.token,
+      publicKeyB64,
+      scope: 'mobile',
+      relay: relayPairing.relay,
+      ...(orderedRoutes ? { routeOrder: 1 as const, relayPreferenceIndex } : {})
+    })
     try {
       if (!this.setMobileRelayBinding(device.deviceId, relayPairing.binding)) {
         this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
@@ -900,19 +930,7 @@ export class OrcaRuntimeRpcServer {
         message: 'Could not store Relay binding for the pairing device'
       })
     }
-    return {
-      ...direct,
-      connectionMode: 'automatic',
-      pairingUrl: encodePairingOffer({
-        v: PAIRING_OFFER_VERSION,
-        endpoint: direct.endpoint,
-        endpoints: direct.endpoints.length > 1 ? direct.endpoints : undefined,
-        deviceToken: device.token,
-        publicKeyB64,
-        scope: 'mobile',
-        relay: relayPairing.relay
-      })
-    }
+    return { ...direct, pairingUrl, connectionMode: 'automatic' }
   }
 
   private relayPairingRequestSuperseded(): PairingOfferUnavailable {

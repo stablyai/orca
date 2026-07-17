@@ -120,6 +120,12 @@ describe('pairing offer', () => {
     const base64 = Buffer.from(JSON.stringify(wrong)).toString('base64')
     expect(() => decodePairingOffer(`orca://pair#${base64}`)).toThrow()
   })
+
+  it('rejects oversized raw payloads even when the excess is in unknown fields', () => {
+    const oversized = { ...offer, ignored: 'x'.repeat(1_000) }
+    const base64 = Buffer.from(JSON.stringify(oversized)).toString('base64url')
+    expect(() => decodePairingOffer(`orca://pair#${base64}`)).toThrow(/safe QR payload limit/)
+  })
 })
 
 describe('normalizePairingEndpoints', () => {

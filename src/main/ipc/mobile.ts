@@ -119,6 +119,8 @@ export function registerMobileHandlers(
         address?: string
         addresses?: string[]
         connectionMode?: MobilePairingConnectionMode
+        relayPreferenceIndex?: number
+        orderedRoutes?: boolean
         rotate?: boolean
       }
     ) => {
@@ -126,7 +128,7 @@ export function registerMobileHandlers(
       // embed in the QR code. Ordered `addresses` enables Tailscale→LAN failover;
       // single `address` remains for back-compat callers.
       const addresses =
-        args?.addresses && args.addresses.length > 0
+        args?.orderedRoutes && args.addresses && args.addresses.length > 0
           ? args.addresses
           : args?.address
             ? [args.address]
@@ -153,6 +155,10 @@ export function registerMobileHandlers(
       const offer = await rpcServer.createMobilePairingOffer({
         addresses,
         connectionMode: args?.connectionMode,
+        ...(args?.orderedRoutes === true ? { orderedRoutes: true } : {}),
+        ...(args?.orderedRoutes === true && args.relayPreferenceIndex !== undefined
+          ? { relayPreferenceIndex: args.relayPreferenceIndex }
+          : {}),
         rotate: args?.rotate,
         name: `Mobile ${new Date().toLocaleDateString()}`
       })

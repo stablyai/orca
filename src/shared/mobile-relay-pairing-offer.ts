@@ -10,6 +10,10 @@ export const PAIRING_OFFER_VERSION = 2
 // Why: QR payloads grow with each endpoint; ECC M / 256px stays scannable at a
 // small ordered list (Tailscale + LAN + a couple customs).
 export const MAX_PAIRING_ENDPOINTS = 4
+export const MAX_PAIRING_ENDPOINT_BYTES = 320
+// Why: a 256px QR becomes unreliable when an otherwise valid collection of
+// long hostnames pushes the encoded offer into very dense QR versions.
+export const MAX_PAIRING_OFFER_JSON_BYTES = 900
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -66,11 +70,19 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
   return z
     .object({
       v: z.literal(PAIRING_OFFER_VERSION),
-      endpoint: z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS),
-      // Why: additive ordered failover lets new clients try multiple routes,
-      // while old clients continue to read only the primary `endpoint`.
+      endpoint: z
+        .string()
+        .min(1)
+        .max(Math.min(MAX_PAIRING_ENDPOINT_BYTES, PAIRING_ENDPOINT_MAX_CHARACTERS)),
+      // Why: additive ordered failover list for new mobile clients. Old apps ignore
+      // unknown fields / only read `endpoint`, so keep `endpoint` as the primary.
       endpoints: z
-        .array(z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS))
+        .array(
+          z
+            .string()
+            .min(1)
+            .max(Math.min(MAX_PAIRING_ENDPOINT_BYTES, PAIRING_ENDPOINT_MAX_CHARACTERS))
+        )
         .min(1)
         .max(MAX_PAIRING_ENDPOINTS)
         .optional(),
@@ -79,7 +91,13 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       // offer, while relayHostId is verified from its decoded bytes later.
       publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
       scope: PairingScopeSchema.optional(),
-      relay: relaySchema.optional()
+      relay: relaySchema.optional(),
+      // Why: absent means the v2 legacy direct/Relay strategy; only an explicit
+      // marker lets a new client apply authoritative sequential route order.
+      routeOrder: z.literal(1).optional(),
+      // Why: Relay stays a separate credential object for old clients, while
+      // this compact index lets new clients insert it into direct route order.
+      relayPreferenceIndex: z.number().int().min(0).max(MAX_PAIRING_ENDPOINTS).optional()
     })
     .superRefine((offer, ctx) => {
       if (offer.relay && offer.scope === 'runtime') {
@@ -98,6 +116,36 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
           code: 'custom',
           path: ['publicKeyB64'],
           message: 'Relay offers require a canonical 32-byte public key'
+        })
+      }
+      const directCount = offer.endpoints?.length ?? 1
+      if (offer.relayPreferenceIndex !== undefined && !offer.relay) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['relayPreferenceIndex'],
+          message: 'Relay preference requires Relay metadata'
+        })
+      } else if (
+        offer.relayPreferenceIndex !== undefined &&
+        offer.relayPreferenceIndex > directCount
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['relayPreferenceIndex'],
+          message: 'Relay preference exceeds direct route count'
+        })
+      }
+      if (offer.routeOrder !== 1 && offer.relayPreferenceIndex !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['routeOrder'],
+          message: 'Ordered routes require an explicit route-order marker'
+        })
+      }
+      if (new TextEncoder().encode(JSON.stringify(offer)).length > MAX_PAIRING_OFFER_JSON_BYTES) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Pairing offer is too large for a reliable QR code'
         })
       }
     })

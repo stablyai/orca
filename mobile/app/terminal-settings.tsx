@@ -48,10 +48,10 @@ function textSizeSummary(scale: number): string {
 }
 
 const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | null })[] = [
-  { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
-  { value: '60s', label: 'After 1 minute', ms: 60_000 },
-  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
+  { value: 'indefinite', label: 'Keep phone size (default)', ms: null },
+  { value: '60s', label: 'Restore after 1 minute', ms: 60_000 },
+  { value: '5m', label: 'Restore after 5 minutes', ms: 5 * 60_000 },
+  { value: '30m', label: 'Restore after 30 minutes', ms: 30 * 60_000 }
 ]
 
 function valueFromMs(ms: number | null | undefined): RestoreValue {

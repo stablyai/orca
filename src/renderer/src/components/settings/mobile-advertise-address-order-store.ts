@@ -10,6 +10,13 @@ export const MOBILE_ADVERTISE_ADDRESSES_STORAGE_KEY = 'orca:mobile-advertise-add
 export type MobileAdvertiseAddressOrderStore = {
   addresses: string[]
   customAddresses: string[]
+  relayPreferenceIndex: number
+}
+
+export type MobileAdvertiseAddressState = {
+  addresses: string[]
+  customAddresses: Set<string>
+  relayPreferenceIndex: number
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -27,7 +34,8 @@ export function loadMobileAdvertiseAddressOrder(): MobileAdvertiseAddressOrderSt
       // Legacy shape: plain string[] — treat none as custom until refresh.
       return {
         addresses: capOrderedAdvertiseAddresses(parsed),
-        customAddresses: []
+        customAddresses: [],
+        relayPreferenceIndex: parsed.length
       }
     }
     if (
@@ -40,7 +48,16 @@ export function loadMobileAdvertiseAddressOrder(): MobileAdvertiseAddressOrderSt
       const customAddresses = isStringArray(record.customAddresses)
         ? record.customAddresses.filter((address) => addresses.includes(address))
         : []
-      return { addresses, customAddresses }
+      const relayPreferenceIndex = Math.max(
+        0,
+        Math.min(
+          addresses.length,
+          Number.isInteger(record.relayPreferenceIndex)
+            ? record.relayPreferenceIndex
+            : addresses.length
+        )
+      )
+      return { addresses, customAddresses, relayPreferenceIndex }
     }
     return null
   } catch {
@@ -48,15 +65,29 @@ export function loadMobileAdvertiseAddressOrder(): MobileAdvertiseAddressOrderSt
   }
 }
 
+export function loadMobileAdvertiseAddressState(): MobileAdvertiseAddressState {
+  const stored = loadMobileAdvertiseAddressOrder()
+  if (!stored) {
+    return { addresses: [], customAddresses: new Set(), relayPreferenceIndex: 0 }
+  }
+  return {
+    addresses: stored.addresses,
+    customAddresses: new Set(stored.customAddresses),
+    relayPreferenceIndex: stored.relayPreferenceIndex
+  }
+}
+
 export function saveMobileAdvertiseAddressOrder(
   addresses: readonly string[],
-  customAddresses: ReadonlySet<string> | readonly string[] = []
+  customAddresses: ReadonlySet<string> | readonly string[] = [],
+  relayPreferenceIndex: number = addresses.length
 ): void {
   const capped = capOrderedAdvertiseAddresses(addresses)
   const customSet = customAddresses instanceof Set ? customAddresses : new Set(customAddresses)
   const stored: MobileAdvertiseAddressOrderStore = {
     addresses: capped,
-    customAddresses: capped.filter((address) => customSet.has(address))
+    customAddresses: capped.filter((address) => customSet.has(address)),
+    relayPreferenceIndex: Math.max(0, Math.min(capped.length, relayPreferenceIndex))
   }
   window.localStorage.setItem(MOBILE_ADVERTISE_ADDRESSES_STORAGE_KEY, JSON.stringify(stored))
 }

@@ -6,9 +6,11 @@ export type PairingConnectionAttempt = {
 /** Overall pair budget shared by pair-scan / pair-confirm (KTD4). */
 export const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 /** Steady-state reconnect keeps 12s; pair-time uses a shorter per-endpoint budget (KTD4). */
-export const PAIR_CONNECT_TIMEOUT_MS = 5_500
+export const PAIR_CONNECT_TIMEOUT_MS = 3_500
+/** Includes WebSocket open and pinned E2EE authentication for one ordered route. */
+export const PAIR_ROUTE_AUTH_TIMEOUT_MS = 4_500
 /** Cap pair-time walk so n×timeout + handshake margin fits PAIRING_OVERALL_TIMEOUT (~25s). */
-export const PAIR_MAX_DIAL_ENDPOINTS = 3
+export const PAIR_MAX_DIAL_ENDPOINTS = 4
 /** Leave room for E2EE + status.get after the last dial opens. */
 const PAIR_POST_DIAL_MARGIN_MS = 7_000
 
@@ -18,7 +20,7 @@ export type PairDialPlan = {
 }
 
 /**
- * Bound the pair-time endpoint walk: explore ≤3, shrink per-endpoint timeout when needed
+ * Bound the pair-time endpoint walk: explore ≤4, shrink per-endpoint timeout when needed
  * so n×timeout + margin ≤ overall pair budget (KTD4).
  */
 export function resolvePairDialPlan(

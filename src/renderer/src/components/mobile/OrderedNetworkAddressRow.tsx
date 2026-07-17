@@ -12,6 +12,7 @@ export type OrderedNetworkAddressRowModel = {
   selected: boolean
   priorityIndex: number | null
   isCustom: boolean
+  isRelay?: boolean
 }
 
 type RowChromeProps = {
@@ -25,6 +26,9 @@ type RowChromeProps = {
 }
 
 function displayLabel(row: OrderedNetworkAddressRowModel): string {
+  if (row.isRelay) {
+    return row.label
+  }
   return row.isCustom
     ? translate(
         'auto.components.mobile.OrderedNetworkAddressPicker.custom-option',
@@ -65,7 +69,7 @@ function AddressRowChrome({
       </span>
       <Checkbox
         checked={row.selected}
-        disabled={checkboxDisabled}
+        disabled={checkboxDisabled || row.isRelay}
         onCheckedChange={(value) => {
           onToggle(row.address, value === true)
         }}
@@ -119,7 +123,7 @@ export function SortableOrderedNetworkAddressRow({
           aria-label={translate(
             'auto.components.mobile.OrderedNetworkAddressPicker.drag-handle',
             'Drag to reorder {{address}}',
-            { address: row.address }
+            { address: displayLabel(row) }
           )}
           {...attributes}
           {...listeners}

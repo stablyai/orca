@@ -26,6 +26,8 @@ import {
 } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { HostProfile, RpcResponse } from './types'
+import { buildMobileAccessRoutes } from './mobile-access-route-order'
+import { normalizePairingEndpoints } from './types'
 
 export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred'
 
@@ -252,16 +254,14 @@ async function publishCommitted(
 
 function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
   const host = journal.metadata.host
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
   return {
     ...host,
     deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: url.toString() }
-    ],
+    endpoints: buildMobileAccessRoutes({
+      directUrls: normalizePairingEndpoints(host.endpoint, host.endpoints),
+      relay,
+      relayPreferenceIndex: host.relayPreferenceIndex
+    }),
     relayHostId: relay.relayHostId,
     relay
   }

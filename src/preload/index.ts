@@ -4589,6 +4589,8 @@ const api = {
       address?: string
       addresses?: string[]
       connectionMode?: MobilePairingConnectionMode
+      relayPreferenceIndex?: number
+      orderedRoutes?: boolean
       rotate?: boolean
     }): Promise<
       | {

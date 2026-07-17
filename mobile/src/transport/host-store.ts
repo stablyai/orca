@@ -23,6 +23,7 @@ import {
   removeMobileRelayHostOverlays,
   saveMobileRelayHostOverlay
 } from './mobile-relay-host-overlay-store'
+import { createHostLastGoodEndpointUpdater } from './host-last-good-endpoint'
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upgrade-journal'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
@@ -337,29 +338,7 @@ export async function updateLastConnected(hostId: string): Promise<void> {
   }
 }
 
-export async function updateHostLastGoodEndpoint(
-  hostId: string,
-  lastGoodEndpoint: string
-): Promise<void> {
-  const trimmed = lastGoodEndpoint.trim()
-  if (!trimmed) {
-    return
-  }
-  try {
-    await mutateStoredHosts((hosts) => {
-      const index = hosts.findIndex((h) => h.id === hostId)
-      if (index < 0) {
-        return hosts
-      }
-      const next = hosts.slice()
-      next[index] = { ...next[index]!, lastGoodEndpoint: trimmed }
-      return next
-    })
-  } catch {
-    // Why: last-good is a reconnect hint; callers fire it best-effort like lastConnected.
-  }
-}
-
+export const updateHostLastGoodEndpoint = createHostLastGoodEndpointUpdater(mutateStoredHosts)
 /** Test-only: drain module mutation chain between cases. */
 export function resetHostStoreForTests(): void {
   hostListMutation = Promise.resolve()

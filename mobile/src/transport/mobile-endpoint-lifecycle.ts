@@ -9,6 +9,7 @@ import {
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import { saveHost } from './host-store'
+import { updateHostLastGoodEndpoint } from './host-store'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -76,7 +77,12 @@ function createSupervisor(
   onLog: ConnectionLogSink
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host, {
-    openDirect: (endpoint) => connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openDirect: (endpoint) =>
+      connect(endpoint, host.deviceToken, host.publicKeyB64, {
+        onLog,
+        endpoints: [endpoint],
+        connectTimeoutMs: 2_750
+      }),
     openRelay: (relay, credential, confirmReqId) =>
       connectMobileRelayRpcSession({
         relay,
@@ -90,6 +96,7 @@ function createSupervisor(
     readBundle: readMobileRelayCredentialBundle,
     writeBundle: writeMobileRelayCredentialBundle,
     saveHost,
+    updateLastGood: updateHostLastGoodEndpoint,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
     setTimer: setTimeout,

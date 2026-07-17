@@ -16,6 +16,7 @@ type PendingRequest = {
 
 export type PairingCandidateClient = {
   sendRequest(method: string, params?: unknown): Promise<RpcResponse>
+  getState?(): import('./types').ConnectionState
   close(): void
 }
 

@@ -2,18 +2,11 @@ import { Platform } from 'react-native'
 import {
   DeviceCredentialInstalledSchema,
   PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+  type DeviceCredentialInstalled
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
-import {
-  normalizePairingEndpoints,
-  type HostProfile,
-  type MobileAccessEndpoint,
-  type PairingOffer,
-  type RpcResponse
-} from './types'
+import type { PairingOffer, RpcResponse } from './types'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -31,9 +24,13 @@ import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
-import { racePairingCandidates, type PairingCandidate } from './pairing-candidate-race'
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
-import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
+import {
+  hostProfileFromPairingOffer,
+  relayHostProfileFromPairing
+} from './host-profile-from-pairing'
+import { relayWebSocketUrl } from './mobile-access-route-order'
+import { selectPreProfilePairingRoute } from './pre-profile-pairing-route-selection'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -155,48 +152,28 @@ async function runPairing(
     assertActive(isDisposed)
   }
 
-  const directClient = dependencies.connectDirect(
-    offer.endpoint,
-    offer.deviceToken,
-    offer.publicKeyB64,
-    connectOptions
-  )
-  clients.add(directClient)
-  const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
-  if (journal) {
-    const relayClient = createRecoveringPairingRelayCandidate({
-      journal,
-      connect: (relay) =>
-        dependencies.connectRelay({
-          relay,
-          deviceToken: offer.deviceToken,
-          desktopPublicKeyB64: offer.publicKeyB64
-        }),
-      resolveDirector: (relay) => dependencies.resolveInviteDirector({ relay }),
-      persistMove: async (relay) => {
-        journal = {
-          ...journal!,
-          metadata: {
-            ...journal!.metadata,
-            relay: {
-              ...journal!.metadata.relay,
-              cellUrl: relay.cellUrl,
-              assignmentEpoch: relay.assignmentEpoch
-            }
-          }
-        }
-        await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
-      },
-      now: dependencies.now
-    })
-    clients.add(relayClient)
-    candidates.push({ path: 'relay', client: relayClient })
-  }
-  const winner = await racePairingCandidates(candidates)
+  const selection = await selectPreProfilePairingRoute({
+    offer,
+    journal,
+    connectOptions,
+    dependencies,
+    clients,
+    isDisposed
+  })
+  const winner = selection.winner
+  journal = selection.journal
   assertActive(isDisposed)
 
   if (!journal) {
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    await dependencies.saveHost(
+      hostProfileFromPairingOffer({
+        id: hostId,
+        name: hostName,
+        offer,
+        lastConnected: now,
+        lastGoodEndpoint: winner.url
+      })
+    )
     return { hostId }
   }
 
@@ -217,7 +194,15 @@ async function runPairing(
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
-    await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
+    await dependencies.saveHost(
+      hostProfileFromPairingOffer({
+        id: hostId,
+        name: hostName,
+        offer,
+        lastConnected: now,
+        lastGoodEndpoint: winner.url
+      })
+    )
     await dependencies.clearJournal(journal.metadata.journalId)
     return { hostId }
   }
@@ -235,66 +220,15 @@ async function runPairing(
   }
   assertActive(isDisposed)
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
-  await dependencies.saveHost(relayHost(journal, endpoints.relay))
+  await dependencies.saveHost(
+    relayHostProfileFromPairing(
+      journal,
+      endpoints.relay,
+      winner.path === 'relay' ? relayWebSocketUrl(endpoints.relay) : winner.url
+    )
+  )
   await dependencies.clearJournal(journal.metadata.journalId)
   return { hostId }
-}
-
-function classifyEndpointKind(url: string): MobileAccessEndpoint['kind'] {
-  try {
-    const hostname = new URL(url).hostname
-    if (hostname.endsWith('.ts.net') || /^100\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname)) {
-      return 'tailscale'
-    }
-  } catch {}
-  return 'lan'
-}
-
-function baseHost(
-  offer: PairingOffer,
-  hostId: string,
-  name: string,
-  lastConnected: number
-): HostProfile {
-  const urls = normalizePairingEndpoints(offer.endpoint, offer.endpoints)
-  const endpoints = urls.map((url, index) => {
-    const kind = classifyEndpointKind(url)
-    return {
-      id: index === 0 ? 'direct-primary' : `direct-${index}`,
-      kind,
-      url
-    }
-  })
-  return {
-    id: hostId,
-    name,
-    endpoint: urls[0]!,
-    endpoints,
-    deviceToken: offer.deviceToken,
-    publicKeyB64: offer.publicKeyB64,
-    lastConnected
-  }
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
 }
 
 function requireSuccess(response: RpcResponse): unknown {

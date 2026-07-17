@@ -9,6 +9,8 @@ export class LogicalClientCutoverError extends Error {
   }
 }
 
+export class LogicalClientAuthenticationError extends Error {}
+
 // Why: instanceof can miss across bundle copies, so also match by message.
 export function isLogicalClientCutoverError(error: unknown): boolean {
   return (
@@ -34,6 +36,8 @@ export type StableLogicalRpcClient = RpcClient & {
   migrateTo(session: RpcClient, path: MobileConnectionPath, timeoutMs?: number): Promise<void>
   suspendActiveSession(): void
   getActivePath(): MobileConnectionPath
+  setActivePath(path: MobileConnectionPath): void
+  publishRouteOwnerState(state: ConnectionState): void
   getGeneration(): number
 }
 
@@ -150,13 +154,14 @@ export function createStableLogicalRpcClient(
       closed = true
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
+      for (const pending of pendingRequests) {
+        pending.reject(new Error('Client closed'))
+      }
+      pendingRequests.clear()
       for (const record of subscriptions.values()) {
         record.disposePhysical?.()
       }
       subscriptions.clear()
-      // Why: let the physical close settle in-flight requests — it knows which
-      // frames were written and marks those delivery-unknown; a blanket local
-      // reject would erase that distinction.
       activeSession.close()
       publishState('disconnected')
     },
@@ -168,13 +173,14 @@ export function createStableLogicalRpcClient(
       suspended = true
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
+      for (const pending of pendingRequests) {
+        pending.reject(new Error('Client suspended'))
+      }
+      pendingRequests.clear()
       for (const record of subscriptions.values()) {
         record.disposePhysical?.()
         record.disposePhysical = null
       }
-      // Why: let the physical close settle in-flight requests — it knows which
-      // frames were written and marks those delivery-unknown (a suspend can cut
-      // over a half-open relay whose sends may already be delivered).
       activeSession.close()
       publishState('disconnected')
     },
@@ -223,6 +229,10 @@ export function createStableLogicalRpcClient(
     },
 
     getActivePath: () => activePath,
+    setActivePath(path) {
+      activePath = path
+    },
+    publishRouteOwnerState: publishState,
     getGeneration: () => generation
   }
 
@@ -277,7 +287,11 @@ function waitForAuthenticated(session: RpcClient, timeoutMs: number): Promise<vo
         resolve()
       } else if (state === 'auth-failed' || state === 'disconnected') {
         finish()
-        reject(new Error(`replacement session ${state}`))
+        reject(
+          state === 'auth-failed'
+            ? new LogicalClientAuthenticationError('replacement session auth-failed')
+            : new Error('replacement session disconnected')
+        )
       }
     })
     timer = setTimeout(() => {

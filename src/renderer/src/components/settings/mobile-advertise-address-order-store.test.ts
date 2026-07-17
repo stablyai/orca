@@ -28,7 +28,8 @@ describe('mobile-advertise-address-order-store', () => {
     )
     expect(loadMobileAdvertiseAddressOrder()).toEqual({
       addresses: ['100.64.1.20', '192.168.1.24', 'home.example.com'],
-      customAddresses: ['home.example.com']
+      customAddresses: ['home.example.com'],
+      relayPreferenceIndex: 3
     })
   })
 
@@ -39,7 +40,8 @@ describe('mobile-advertise-address-order-store', () => {
     )
     expect(loadMobileAdvertiseAddressOrder()).toEqual({
       addresses: ['100.64.1.20', '192.168.1.24'],
-      customAddresses: []
+      customAddresses: [],
+      relayPreferenceIndex: 2
     })
   })
 

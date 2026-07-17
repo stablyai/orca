@@ -1,23 +1,8 @@
 import { normalizePairingEndpoints, type PairingOffer } from './types'
-import type { HostProfile, MobileAccessEndpoint } from './types'
-
-function classifyEndpointKind(url: string): MobileAccessEndpoint['kind'] {
-  try {
-    const hostname = new URL(url).hostname
-    if (hostname.endsWith('.ts.net') || /^100\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname)) {
-      return 'tailscale'
-    }
-  } catch {}
-  return 'lan'
-}
-
-function pairingEndpointsToMobileAccessEndpoints(urls: string[]): MobileAccessEndpoint[] {
-  return urls.map((url, index) => ({
-    id: index === 0 ? 'direct-primary' : `direct-${index}`,
-    kind: classifyEndpointKind(url),
-    url
-  }))
-}
+import type { HostProfile } from './types'
+import { buildMobileAccessRoutes } from './mobile-access-route-order'
+import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 
 /** Build a host profile from a successful pairing offer (no last-good yet). */
 export function hostProfileFromPairingOffer(args: {
@@ -25,9 +10,13 @@ export function hostProfileFromPairingOffer(args: {
   name: string
   offer: PairingOffer
   lastConnected?: number
+  lastGoodEndpoint?: string
 }): HostProfile {
   const urls = normalizePairingEndpoints(args.offer.endpoint, args.offer.endpoints)
-  const endpoints = pairingEndpointsToMobileAccessEndpoints(urls)
+  const endpoints = buildMobileAccessRoutes({
+    directUrls: urls,
+    relayPreferenceIndex: args.offer.relayPreferenceIndex
+  })
   return {
     id: args.id,
     name: args.name,
@@ -35,6 +24,27 @@ export function hostProfileFromPairingOffer(args: {
     endpoints,
     deviceToken: args.offer.deviceToken,
     publicKeyB64: args.offer.publicKeyB64,
-    lastConnected: args.lastConnected ?? Date.now()
+    lastConnected: args.lastConnected ?? Date.now(),
+    ...(args.lastGoodEndpoint ? { lastGoodEndpoint: args.lastGoodEndpoint } : {})
+  }
+}
+
+export function relayHostProfileFromPairing(
+  journal: MobileRelayPairingJournal,
+  relay: MobileRelayEndpoint,
+  lastGoodEndpoint?: string
+): HostProfile {
+  const host = journal.metadata.host
+  return {
+    ...host,
+    deviceToken: journal.secrets.deviceToken,
+    endpoints: buildMobileAccessRoutes({
+      directUrls: normalizePairingEndpoints(host.endpoint, host.endpoints),
+      relay,
+      relayPreferenceIndex: host.relayPreferenceIndex
+    }),
+    relayHostId: relay.relayHostId,
+    relay,
+    ...(lastGoodEndpoint ? { lastGoodEndpoint } : {})
   }
 }

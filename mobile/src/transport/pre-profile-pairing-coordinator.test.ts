@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
-import { racePairingCandidates } from './pairing-candidate-race'
+import {
+  PairingAuthenticationError,
+  selectOrderedPairingCandidate
+} from './ordered-pairing-candidate'
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
 import type { HostProfile, PairingOffer, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
@@ -88,34 +91,88 @@ function dependencies(client: RpcClient, events: string[]) {
   }
 }
 
-describe('pre-profile pairing coordinator', () => {
-  it('chooses direct when both post-E2EE status successes settle in the same turn', async () => {
-    let resolveDirect!: (response: RpcResponse) => void
-    let resolveRelay!: (response: RpcResponse) => void
-    const direct = fakeClient([])
-    const relay = fakeClient([])
-    ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockReturnValue(
-      new Promise<RpcResponse>((resolve) => {
-        resolveDirect = resolve
-      })
-    )
-    ;(relay.sendRequest as ReturnType<typeof vi.fn>).mockReturnValue(
-      new Promise<RpcResponse>((resolve) => {
-        resolveRelay = resolve
-      })
-    )
-    const racing = racePairingCandidates([
-      { path: 'direct', client: direct },
-      { path: 'relay', client: relay }
-    ])
-    resolveRelay(success({ path: 'relay' }))
-    resolveDirect(success({ path: 'direct' }))
+describe('ordered pairing candidate selection', () => {
+  it('opens routes sequentially and stops after the first authenticated success', async () => {
+    const events: string[] = []
+    const failed = fakeClient([failure('unavailable')])
+    const relay = fakeClient([success({ version: '1.0.0' })])
+    const unused = fakeClient([success({ version: '1.0.0' })])
 
-    await expect(racing).resolves.toMatchObject({ path: 'direct' })
-    expect(relay.close).toHaveBeenCalledOnce()
-    expect(direct.close).not.toHaveBeenCalled()
+    const winner = await selectOrderedPairingCandidate(
+      [
+        { path: 'direct', open: () => (events.push('direct-1'), failed) },
+        { path: 'relay', open: () => (events.push('relay'), relay) },
+        { path: 'direct', open: () => (events.push('direct-2'), unused) }
+      ],
+      1000
+    )
+
+    expect(winner).toMatchObject({ path: 'relay', client: relay })
+    expect(events).toEqual(['direct-1', 'relay'])
+    expect(failed.close).toHaveBeenCalledOnce()
   })
 
+  it('advances when constructing an unreachable route throws synchronously', async () => {
+    const connected = fakeClient([success({ version: '1.0.0' })])
+
+    await expect(
+      selectOrderedPairingCandidate(
+        [
+          {
+            path: 'direct',
+            open: () => {
+              throw new Error('invalid WebSocket URL')
+            }
+          },
+          { path: 'relay', open: () => connected }
+        ],
+        1000
+      )
+    ).resolves.toMatchObject({ path: 'relay', client: connected })
+  })
+
+  it('does not try another address after the pinned desktop rejects authentication', async () => {
+    const rejected = fakeClient([failure('unauthorized')])
+    const nextOpen = vi.fn(() => fakeClient([success({})]))
+
+    await expect(
+      selectOrderedPairingCandidate(
+        [
+          { path: 'direct', open: () => rejected },
+          { path: 'relay', open: nextOpen }
+        ],
+        1000
+      )
+    ).rejects.toBeInstanceOf(PairingAuthenticationError)
+    expect(nextOpen).not.toHaveBeenCalled()
+  })
+
+  it('does not open another route after the overall pairing attempt is cancelled', async () => {
+    let cancelled = false
+    const failed = fakeClient([])
+    ;(failed.sendRequest as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      cancelled = true
+      return failure('unavailable')
+    })
+    const nextOpen = vi.fn(() => fakeClient([success({})]))
+
+    await expect(
+      selectOrderedPairingCandidate(
+        [
+          { path: 'direct', open: () => failed },
+          { path: 'relay', open: nextOpen }
+        ],
+        1000,
+        undefined,
+        () => cancelled
+      )
+    ).rejects.toThrow('pairing attempt cancelled')
+    expect(failed.close).toHaveBeenCalledOnce()
+    expect(nextOpen).not.toHaveBeenCalled()
+  })
+})
+
+describe('pre-profile pairing coordinator', () => {
   it('keeps a legacy offer direct-only through the shared path', async () => {
     const events: string[] = []
     const client = fakeClient([success({ version: '1.0.0' })])
@@ -135,9 +192,45 @@ describe('pre-profile pairing coordinator', () => {
       endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
       deviceToken: directOffer.deviceToken,
       publicKeyB64: directOffer.publicKeyB64,
-      lastConnected: now
+      lastConnected: now,
+      lastGoodEndpoint: directOffer.endpoint
     })
     expect(events).toEqual(['connect', 'save-host'])
+  })
+
+  it('pairs through the next ordered direct address when the primary fails', async () => {
+    const events: string[] = []
+    const failed = fakeClient([failure('unavailable')])
+    const connected = fakeClient([success({ version: '1.0.0' })])
+    const deps = dependencies(connected, events)
+    deps.connectDirect = vi.fn((endpoint: string) => {
+      events.push(endpoint)
+      return endpoint === directOffer.endpoint ? failed : connected
+    })
+    const secondary = 'ws://100.64.1.20:6768'
+
+    const attempt = startPreProfilePairing({
+      offer: {
+        ...directOffer,
+        endpoints: [directOffer.endpoint, secondary],
+        routeOrder: 1
+      },
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(events).toEqual([directOffer.endpoint, secondary, 'save-host'])
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: directOffer.endpoint,
+        endpoints: [
+          { id: 'direct-primary', kind: 'lan', url: directOffer.endpoint },
+          { id: 'direct-1', kind: 'tailscale', url: secondary }
+        ],
+        lastGoodEndpoint: secondary
+      })
+    )
   })
 
   it('reuses the existing host id and name when re-pairing the same desktop key (no duplicate)', async () => {
@@ -166,11 +259,12 @@ describe('pre-profile pairing coordinator', () => {
       endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
       deviceToken: directOffer.deviceToken,
       publicKeyB64: directOffer.publicKeyB64,
-      lastConnected: now
+      lastConnected: now,
+      lastGoodEndpoint: directOffer.endpoint
     })
   })
 
-  it('journals before connecting and publishes only after authoritative direct install', async () => {
+  it('races both legacy routes and publishes only after authoritative direct install', async () => {
     const events: string[] = []
     let journal: MobileRelayPairingJournal | null = null
     const client = {
@@ -225,6 +319,8 @@ describe('pre-profile pairing coordinator', () => {
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(journal).not.toBeNull()
+    expect(deps.connectDirect).toHaveBeenCalledOnce()
+    expect(deps.connectRelay).toHaveBeenCalledOnce()
     expect(events).toEqual([
       'save-journal',
       'connect',
@@ -249,7 +345,8 @@ describe('pre-profile pairing coordinator', () => {
             kind: 'relay',
             url: `wss://relay-c1.onorca.dev/v1/connect/${relayOffer.relay!.relayHostId}`
           }
-        ]
+        ],
+        lastGoodEndpoint: directOffer.endpoint
       })
     )
   })
@@ -340,6 +437,11 @@ describe('pre-profile pairing coordinator', () => {
     })
     expect(deps.writeCredentialBundle).toHaveBeenCalledWith(
       expect.objectContaining({ current: expect.objectContaining({ version: 1 }) })
+    )
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lastGoodEndpoint: `wss://relay-c1.onorca.dev/v1/connect/${relayOffer.relay!.relayHostId}`
+      })
     )
   })
 

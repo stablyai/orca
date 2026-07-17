@@ -82,4 +82,9 @@ describe('pairing deep links', () => {
     expect(normalizePairingEndpoints(offer.endpoint)).toEqual([offer.endpoint])
     expect(normalizePairingEndpoints(multi.endpoint, multi.endpoints)).toEqual(multi.endpoints)
   })
+
+  it('rejects oversized raw payloads even when the excess is in unknown fields', () => {
+    const oversized = encodeOffer({ ...offer, ignored: 'x'.repeat(1_000) })
+    expect(parsePairingCode(oversized)).toBeNull()
+  })
 })
