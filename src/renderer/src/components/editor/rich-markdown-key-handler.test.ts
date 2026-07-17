@@ -121,7 +121,7 @@ describe('rich markdown key handler', () => {
 
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
       expect(event.preventDefault).toHaveBeenCalled()
-      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledWith(true)
     } finally {
       editor.destroy()
     }

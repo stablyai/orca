@@ -11,10 +11,9 @@ export function handleRichMarkdownAddReviewNoteShortcut(
   if (!editorShortcutMatches('editor.addReviewNote', event)) {
     return false
   }
-  // Why: consume the chord only when the composer actually opens (same
-  // contract as the Monaco and preview surfaces), so a rebound chord stays
-  // available when annotations are off or nothing is selected.
-  if (!ctx.openAnnotationPopoverRef.current()) {
+  // Why: require the live selection so a collapsed selection cannot reopen a
+  // stale target; consume the chord only when a composer actually opens.
+  if (!ctx.openAnnotationPopoverRef.current(true)) {
     return false
   }
   event.preventDefault()

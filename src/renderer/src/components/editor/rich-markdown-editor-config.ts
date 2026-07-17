@@ -77,7 +77,7 @@ export type EditorConfigParams = {
   markdownSourceLineOffsetRef: MutableRefObject<number>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
-  openAnnotationPopoverRef: MutableRefObject<() => boolean>
+  openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   syncAnnotationTarget: (editor: Editor) => void
   clearAnnotationTarget: () => void
   scrollRichMarkdownReviewNoteCardIntoView: (commentId: string) => void
