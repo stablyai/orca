@@ -2581,14 +2581,13 @@ export async function createLocalWorktree(
   // the regression this replaced.
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
+  // Why: provision isolated services before setup terminals spawn so the
+  // resolved service env can be injected into the setup runner. A failed
+  // provision must not abort creation — the worktree stays, retry is offered.
+  let serviceEnv: Record<string, string> = {}
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
-
-    // Why: provision isolated services before setup terminals spawn so the
-    // resolved service env can be injected into the setup runner. A failed
-    // provision must not abort creation — the worktree stays, retry is offered.
-    let serviceEnv: Record<string, string> = {}
     // Why: services come from the raw parsed yaml (like defaultTabs) —
     // getEffectiveHooksFromConfig only carries setup/archive scripts and
     // returns null when both are absent, which would drop services entirely.
@@ -2662,11 +2661,19 @@ export async function createLocalWorktree(
     }
   })
 
+  // Why: the startup (agent) terminal spawns in-main before the renderer's
+  // services hydration resolves, so without this merge the first terminal of a
+  // freshly provisioned worktree — where the agent runs migrations — would
+  // miss the isolated-service env entirely.
+  const startupWithServiceEnv =
+    args.startup && Object.keys(serviceEnv).length > 0
+      ? { ...args.startup, env: { ...serviceEnv, ...args.startup.env } }
+      : args.startup
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
     spawnLocalStartupAndSetupTerminals({
       runtime,
       worktree,
-      startup: args.startup,
+      startup: startupWithServiceEnv,
       setup,
       defaultTabs,
       settings,
