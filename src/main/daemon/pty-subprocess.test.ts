@@ -1936,6 +1936,49 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
   })
 
+  it('deletes daemon-inherited MiMo host paths without deleting an explicit guest primary', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previous = {
+      MIMOCODE_CONFIG_DIR: process.env.MIMOCODE_CONFIG_DIR,
+      ORCA_MIMOCODE_CONFIG_DIR: process.env.ORCA_MIMOCODE_CONFIG_DIR,
+      ORCA_MIMOCODE_SOURCE_CONFIG_DIR: process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
+    }
+    process.env.MIMOCODE_CONFIG_DIR = 'C:\\host\\overlay'
+    process.env.ORCA_MIMOCODE_CONFIG_DIR = 'C:\\host\\overlay'
+    process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR = 'C:\\host\\source'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/bash',
+          MIMOCODE_CONFIG_DIR: '/home/guest/.config/mimocode'
+        },
+        envToDelete: [
+          'MIMOCODE_CONFIG_DIR',
+          'ORCA_MIMOCODE_CONFIG_DIR',
+          'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
+        ]
+      })
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)![2].env
+    expect(spawnEnv.MIMOCODE_CONFIG_DIR).toBe('/home/guest/.config/mimocode')
+    expect(spawnEnv.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+    expect(spawnEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+  })
+
   it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

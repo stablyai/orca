@@ -5,12 +5,14 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
@@ -23,6 +25,14 @@ vi.mock('electron', () => ({
 }))
 
 import { MimoCodeHookService } from './hook-service'
+
+function overlayConfigDir(userDataDir: string, ptyId: string): string {
+  return join(
+    userDataDir,
+    'mimocode-config-overlays',
+    createHash('sha256').update(ptyId).digest('hex')
+  )
+}
 
 describe('MimoCodeHookService buildPtyEnv', () => {
   let userDataDir: string
@@ -39,12 +49,26 @@ describe('MimoCodeHookService buildPtyEnv', () => {
 
     sourceConfigDir = mkdtempSync(join(tmpdir(), 'orca-mimocode-config-'))
     mkdirSync(join(sourceConfigDir, 'plugins'), { recursive: true })
-    for (const entry of ['data', 'cache', 'state']) {
+    for (const entry of ['data', 'cache', 'state', 'session', 'sessions', 'memory', 'storage']) {
       mkdirSync(join(sourceConfigDir, entry), { recursive: true })
       writeFileSync(join(sourceConfigDir, entry, 'sentinel'), 'USER DATA')
     }
+    mkdirSync(join(sourceConfigDir, 'node_modules', 'example', 'data'), { recursive: true })
+    writeFileSync(
+      join(sourceConfigDir, 'node_modules', 'example', 'data', 'sentinel'),
+      'PACKAGE DATA'
+    )
     writeFileSync(join(sourceConfigDir, 'mimocode.json'), '{"theme":"dark"}')
     writeFileSync(join(sourceConfigDir, 'auth.json'), 'USER AUTH')
+    for (const entry of [
+      'mimocode.sqlite',
+      'mimocode.sqlite-wal',
+      'mimocode.sqlite-shm',
+      'mimocode.sqlite-journal',
+      'STATE.SQLITE-JOURNAL'
+    ]) {
+      writeFileSync(join(sourceConfigDir, entry), 'USER DATABASE')
+    }
     writeFileSync(join(sourceConfigDir, 'plugins', 'user-plugin.js'), 'export default () => {}')
     writeFileSync(join(sourceConfigDir, 'plugins', 'orca-mimocode-status.js'), 'USER PLUGIN')
   })
@@ -59,11 +83,29 @@ describe('MimoCodeHookService buildPtyEnv', () => {
     const service = new MimoCodeHookService()
     const env = service.buildPtyEnv('pty-1', sourceConfigDir)
 
-    const overlayConfig = join(userDataDir, 'mimocode-config-overlays', 'shared')
+    const overlayConfig = env.MIMOCODE_CONFIG_DIR!
     expect(env).toEqual({ MIMOCODE_CONFIG_DIR: overlayConfig })
-    for (const entry of ['data', 'cache', 'state', 'auth.json']) {
+    expect(overlayConfig).toContain(join(userDataDir, 'mimocode-config-overlays'))
+    for (const entry of [
+      'data',
+      'cache',
+      'state',
+      'session',
+      'sessions',
+      'memory',
+      'storage',
+      'auth.json',
+      'mimocode.sqlite',
+      'mimocode.sqlite-wal',
+      'mimocode.sqlite-shm',
+      'mimocode.sqlite-journal',
+      'STATE.SQLITE-JOURNAL'
+    ]) {
       expect(existsSync(join(overlayConfig, entry))).toBe(false)
     }
+    expect(existsSync(join(overlayConfig, 'node_modules', 'example', 'data', 'sentinel'))).toBe(
+      true
+    )
     expect(readFileSync(join(overlayConfig, 'mimocode.json'), 'utf8')).toBe('{"theme":"dark"}')
     expect(readFileSync(join(overlayConfig, 'plugins', 'user-plugin.js'), 'utf8')).toBe(
       'export default () => {}'
@@ -82,7 +124,7 @@ describe('MimoCodeHookService buildPtyEnv', () => {
     const service = new MimoCodeHookService()
     const env = service.buildPtyEnv('pty-1', missingConfigDir)
 
-    const overlayConfig = join(userDataDir, 'mimocode-config-overlays', 'shared')
+    const overlayConfig = env.MIMOCODE_CONFIG_DIR!
     expect(env).toEqual({ MIMOCODE_CONFIG_DIR: overlayConfig })
     expect(
       readFileSync(join(overlayConfig, 'plugins', 'orca-mimocode-status.js'), 'utf8')
@@ -122,28 +164,199 @@ describe('MimoCodeHookService buildPtyEnv', () => {
     expect(service.buildPtyEnv('pty-1')).toEqual({})
   })
 
-  it('cleans the previous overlay before rebuilding it', () => {
+  it('reuses a safe overlay for the same PTY and source without cleanup', async () => {
+    const overlayMirror = await import('../pty/overlay-mirror')
+    const safeRemoveSpy = vi.spyOn(overlayMirror, 'safeRemoveTree')
     const service = new MimoCodeHookService()
     const firstEnv = service.buildPtyEnv('pty-1', sourceConfigDir)
     const overlayConfig = firstEnv.MIMOCODE_CONFIG_DIR!
+    safeRemoveSpy.mockClear()
 
-    rmSync(join(sourceConfigDir, 'mimocode.json'))
-    rmSync(join(sourceConfigDir, 'plugins', 'user-plugin.js'))
-    writeFileSync(join(sourceConfigDir, 'new-config.json'), '{}')
+    const secondEnv = service.buildPtyEnv('pty-1', sourceConfigDir)
 
+    expect(secondEnv).toEqual(firstEnv)
+    expect(safeRemoveSpy).not.toHaveBeenCalled()
+    expect(readFileSync(join(overlayConfig, 'mimocode.json'), 'utf8')).toBe('{"theme":"dark"}')
+  })
+
+  it('reuses an owned PTY overlay when the source changes until the PTY is cleared', async () => {
+    const overlayMirror = await import('../pty/overlay-mirror')
+    const safeRemoveSpy = vi.spyOn(overlayMirror, 'safeRemoveTree')
+    const secondSourceConfigDir = mkdtempSync(join(tmpdir(), 'orca-mimocode-config-second-'))
+    writeFileSync(join(secondSourceConfigDir, 'mimocode.json'), 'SECOND CONFIG')
+
+    try {
+      const service = new MimoCodeHookService()
+      const firstEnv = service.buildPtyEnv('pty-1', sourceConfigDir)
+      safeRemoveSpy.mockClear()
+
+      expect(service.buildPtyEnv('pty-1', secondSourceConfigDir)).toEqual(firstEnv)
+      expect(safeRemoveSpy).not.toHaveBeenCalled()
+      expect(readFileSync(join(firstEnv.MIMOCODE_CONFIG_DIR!, 'mimocode.json'), 'utf8')).toBe(
+        '{"theme":"dark"}'
+      )
+
+      service.clearPty('pty-1')
+      const rebuiltEnv = service.buildPtyEnv('pty-1', secondSourceConfigDir)
+      expect(rebuiltEnv.MIMOCODE_CONFIG_DIR).toBe(firstEnv.MIMOCODE_CONFIG_DIR)
+      expect(readFileSync(join(rebuiltEnv.MIMOCODE_CONFIG_DIR!, 'mimocode.json'), 'utf8')).toBe(
+        'SECOND CONFIG'
+      )
+    } finally {
+      rmSync(secondSourceConfigDir, { recursive: true, force: true })
+    }
+  })
+
+  it('isolates overlays for two PTYs with different config sources', () => {
+    const secondSourceConfigDir = mkdtempSync(join(tmpdir(), 'orca-mimocode-config-second-'))
+    writeFileSync(join(secondSourceConfigDir, 'mimocode.json'), 'SECOND CONFIG')
+
+    try {
+      const service = new MimoCodeHookService()
+      const firstEnv = service.buildPtyEnv('pty-1', sourceConfigDir)
+      const secondEnv = service.buildPtyEnv('pty-2', secondSourceConfigDir)
+
+      expect(firstEnv.MIMOCODE_CONFIG_DIR).not.toBe(secondEnv.MIMOCODE_CONFIG_DIR)
+      expect(readFileSync(join(firstEnv.MIMOCODE_CONFIG_DIR!, 'mimocode.json'), 'utf8')).toBe(
+        '{"theme":"dark"}'
+      )
+      expect(readFileSync(join(secondEnv.MIMOCODE_CONFIG_DIR!, 'mimocode.json'), 'utf8')).toBe(
+        'SECOND CONFIG'
+      )
+    } finally {
+      rmSync(secondSourceConfigDir, { recursive: true, force: true })
+    }
+  })
+
+  it('removes only the cleared PTY overlay', () => {
+    const service = new MimoCodeHookService()
+    const firstEnv = service.buildPtyEnv('pty-1', sourceConfigDir)
     const secondEnv = service.buildPtyEnv('pty-2', sourceConfigDir)
 
-    expect(secondEnv.MIMOCODE_CONFIG_DIR).toBe(overlayConfig)
-    expect(existsSync(join(overlayConfig, 'mimocode.json'))).toBe(false)
-    expect(existsSync(join(overlayConfig, 'plugins', 'user-plugin.js'))).toBe(false)
-    expect(readFileSync(join(overlayConfig, 'new-config.json'), 'utf8')).toBe('{}')
-    expect(
-      readFileSync(join(overlayConfig, 'plugins', 'orca-mimocode-status.js'), 'utf8')
-    ).toContain('/hook/mimo-code')
+    service.clearPty('pty-1')
+
+    expect(existsSync(firstEnv.MIMOCODE_CONFIG_DIR!)).toBe(false)
+    expect(existsSync(secondEnv.MIMOCODE_CONFIG_DIR!)).toBe(true)
+  })
+
+  it('drops ownership without reusing or clearing through a replaced overlay root', () => {
+    const externalDir = mkdtempSync(join(tmpdir(), 'orca-mimocode-external-'))
+    const movedOverlayRoot = join(userDataDir, 'moved-overlay-root')
+    const overlayRoot = join(userDataDir, 'mimocode-config-overlays')
+    const externalSentinels = ['pty-1', 'pty-2'].map((ptyId) => {
+      const externalTarget = join(externalDir, createHash('sha256').update(ptyId).digest('hex'))
+      const sentinel = join(externalTarget, 'sentinel')
+      mkdirSync(externalTarget)
+      writeFileSync(sentinel, 'EXTERNAL')
+      return sentinel
+    })
+
+    try {
+      const service = new MimoCodeHookService()
+      service.buildPtyEnv('pty-1', sourceConfigDir)
+      service.buildPtyEnv('pty-2', sourceConfigDir)
+      renameSync(overlayRoot, movedOverlayRoot)
+      symlinkSync(externalDir, overlayRoot, process.platform === 'win32' ? 'junction' : 'dir')
+
+      expect(service.buildPtyEnv('pty-1', sourceConfigDir)).toEqual({
+        MIMOCODE_CONFIG_DIR: sourceConfigDir
+      })
+      service.clearPty('pty-2')
+
+      for (const sentinel of externalSentinels) {
+        expect(readFileSync(sentinel, 'utf8')).toBe('EXTERNAL')
+      }
+    } finally {
+      rmSync(externalDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not use an untrusted PTY ID as an overlay path', () => {
+    const service = new MimoCodeHookService()
+    const env = service.buildPtyEnv('../outside', sourceConfigDir)
+
+    expect(env.MIMOCODE_CONFIG_DIR).toBe(overlayConfigDir(userDataDir, '../outside'))
+    expect(env.MIMOCODE_CONFIG_DIR).not.toContain(`..${process.platform === 'win32' ? '\\' : '/'}`)
+  })
+
+  it('excludes case variants of MiMo runtime state at the config root', () => {
+    mkdirSync(join(sourceConfigDir, 'SeSsIoNs'), { recursive: true })
+    writeFileSync(join(sourceConfigDir, 'AUTH.JSON'), 'USER AUTH')
+    writeFileSync(join(sourceConfigDir, 'STATE.DB-WAL'), 'USER DATABASE')
+
+    const service = new MimoCodeHookService()
+    const overlayConfig = service.buildPtyEnv('pty-1', sourceConfigDir).MIMOCODE_CONFIG_DIR!
+
+    expect(existsSync(join(overlayConfig, 'SeSsIoNs'))).toBe(false)
+    expect(existsSync(join(overlayConfig, 'AUTH.JSON'))).toBe(false)
+    expect(existsSync(join(overlayConfig, 'STATE.DB-WAL'))).toBe(false)
+  })
+
+  it('rejects a source inside the target tree without deleting or claiming it', () => {
+    const overlayConfig = overlayConfigDir(userDataDir, 'pty-1')
+    const nestedSource = join(overlayConfig, 'source')
+    mkdirSync(nestedSource, { recursive: true })
+    writeFileSync(join(nestedSource, 'sentinel'), 'SOURCE CONFIG')
+
+    const service = new MimoCodeHookService()
+    expect(service.buildPtyEnv('pty-1', nestedSource)).toEqual({
+      MIMOCODE_CONFIG_DIR: nestedSource
+    })
+    service.clearPty('pty-1')
+
+    expect(readFileSync(join(nestedSource, 'sentinel'), 'utf8')).toBe('SOURCE CONFIG')
+  })
+
+  it('rejects a target inside the source tree without registering ownership', () => {
+    const sourceContainingTarget = join(userDataDir, 'mimocode-config-overlays')
+    mkdirSync(sourceContainingTarget, { recursive: true })
+    writeFileSync(join(sourceContainingTarget, 'sentinel'), 'SOURCE CONFIG')
+
+    const service = new MimoCodeHookService()
+    expect(service.buildPtyEnv('pty-1', sourceContainingTarget)).toEqual({
+      MIMOCODE_CONFIG_DIR: sourceContainingTarget
+    })
+    service.clearPty('pty-1')
+
+    expect(readFileSync(join(sourceContainingTarget, 'sentinel'), 'utf8')).toBe('SOURCE CONFIG')
+  })
+
+  it('rejects a source symlink whose real path is inside the target tree', () => {
+    const overlayConfig = overlayConfigDir(userDataDir, 'pty-1')
+    const nestedSource = join(overlayConfig, 'source')
+    const sourceAlias = join(userDataDir, 'source-alias')
+    mkdirSync(nestedSource, { recursive: true })
+    writeFileSync(join(nestedSource, 'sentinel'), 'SOURCE CONFIG')
+    symlinkSync(nestedSource, sourceAlias, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const service = new MimoCodeHookService()
+    expect(service.buildPtyEnv('pty-1', sourceAlias)).toEqual({
+      MIMOCODE_CONFIG_DIR: sourceAlias
+    })
+    service.clearPty('pty-1')
+
+    expect(readFileSync(join(nestedSource, 'sentinel'), 'utf8')).toBe('SOURCE CONFIG')
+  })
+
+  it('rejects a target symlink whose real path is inside the source tree', () => {
+    const overlayConfig = overlayConfigDir(userDataDir, 'pty-1')
+    const nestedTarget = join(sourceConfigDir, 'nested-target')
+    mkdirSync(join(userDataDir, 'mimocode-config-overlays'), { recursive: true })
+    mkdirSync(nestedTarget)
+    writeFileSync(join(nestedTarget, 'sentinel'), 'SOURCE CONFIG')
+    symlinkSync(nestedTarget, overlayConfig, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const service = new MimoCodeHookService()
+    expect(service.buildPtyEnv('pty-1', sourceConfigDir)).toEqual({
+      MIMOCODE_CONFIG_DIR: sourceConfigDir
+    })
+    service.clearPty('pty-1')
+
+    expect(readFileSync(join(nestedTarget, 'sentinel'), 'utf8')).toBe('SOURCE CONFIG')
   })
 
   it('does not clean or modify the source when it is the overlay path', () => {
-    const overlayConfig = join(userDataDir, 'mimocode-config-overlays', 'shared')
+    const overlayConfig = overlayConfigDir(userDataDir, 'pty-1')
     mkdirSync(join(overlayConfig, 'plugins'), { recursive: true })
     writeFileSync(join(overlayConfig, 'mimocode.json'), 'SOURCE CONFIG')
     writeFileSync(join(overlayConfig, 'plugins', 'orca-mimocode-status.js'), 'SOURCE PLUGIN')
@@ -156,10 +369,13 @@ describe('MimoCodeHookService buildPtyEnv', () => {
     expect(readFileSync(join(overlayConfig, 'plugins', 'orca-mimocode-status.js'), 'utf8')).toBe(
       'SOURCE PLUGIN'
     )
+
+    service.clearPty('pty-1')
+    expect(readFileSync(join(overlayConfig, 'mimocode.json'), 'utf8')).toBe('SOURCE CONFIG')
   })
 
   it('does not clean a source that aliases the overlay path', () => {
-    const overlayConfig = join(userDataDir, 'mimocode-config-overlays', 'shared')
+    const overlayConfig = overlayConfigDir(userDataDir, 'pty-1')
     const sourceAlias = join(userDataDir, 'config-alias')
     mkdirSync(overlayConfig, { recursive: true })
     writeFileSync(join(overlayConfig, 'mimocode.json'), 'SOURCE CONFIG')
@@ -169,6 +385,8 @@ describe('MimoCodeHookService buildPtyEnv', () => {
     expect(service.buildPtyEnv('pty-1', sourceAlias)).toEqual({
       MIMOCODE_CONFIG_DIR: sourceAlias
     })
+
+    service.clearPty('pty-1')
     expect(readFileSync(join(overlayConfig, 'mimocode.json'), 'utf8')).toBe('SOURCE CONFIG')
   })
 
@@ -204,12 +422,12 @@ describe('MimoCodeHookService buildPtyEnv', () => {
   it('falls back before rebuilding when cleanup leaves a non-empty config directory', async () => {
     const overlayMirror = await import('../pty/overlay-mirror')
     vi.spyOn(overlayMirror, 'safeRemoveTree').mockImplementation(() => {})
-    const overlayConfig = join(userDataDir, 'mimocode-config-overlays', 'shared')
+    const service = new MimoCodeHookService()
+    const overlayConfig = overlayConfigDir(userDataDir, 'pty-1')
     const residualConfig = join(overlayConfig, 'residual.json')
     mkdirSync(overlayConfig, { recursive: true })
     writeFileSync(residualConfig, 'RESIDUAL CONFIG')
 
-    const service = new MimoCodeHookService()
     expect(service.buildPtyEnv('pty-1', sourceConfigDir)).toEqual({
       MIMOCODE_CONFIG_DIR: sourceConfigDir
     })
@@ -220,7 +438,8 @@ describe('MimoCodeHookService buildPtyEnv', () => {
   it('falls back before writing when cleanup leaves a plugins symlink', async () => {
     const overlayMirror = await import('../pty/overlay-mirror')
     vi.spyOn(overlayMirror, 'safeRemoveTree').mockImplementation(() => {})
-    const overlayConfig = join(userDataDir, 'mimocode-config-overlays', 'shared')
+    const service = new MimoCodeHookService()
+    const overlayConfig = overlayConfigDir(userDataDir, 'pty-1')
     const linkedPluginsDir = mkdtempSync(join(tmpdir(), 'orca-mimocode-linked-plugins-'))
     mkdirSync(overlayConfig, { recursive: true })
     symlinkSync(
@@ -231,7 +450,6 @@ describe('MimoCodeHookService buildPtyEnv', () => {
     writeFileSync(join(linkedPluginsDir, 'orca-mimocode-status.js'), 'SOURCE PLUGIN')
 
     try {
-      const service = new MimoCodeHookService()
       expect(service.buildPtyEnv('pty-1', sourceConfigDir)).toEqual({
         MIMOCODE_CONFIG_DIR: sourceConfigDir
       })

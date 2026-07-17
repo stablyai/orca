@@ -11,12 +11,21 @@ import {
   writeFileSync
 } from 'node:fs'
 import { homedir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { getOpenCodeFamilyPluginSource } from '../opencode/hook-service'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
 
 const ORCA_MIMOCODE_PLUGIN_FILE = 'orca-mimocode-status.js'
 const MIMOCODE_CONFIG_OVERLAYS_DIR = 'mimocode-config-overlays'
-const MIMOCODE_SHARED_CONFIG_DIR = 'shared'
+const MIMOCODE_RUNTIME_DIRS = new Set([
+  'data',
+  'cache',
+  'state',
+  'session',
+  'sessions',
+  'memory',
+  'storage'
+])
 
 function defaultMimocodeConfigDir(): string {
   return join(homedir(), '.config', 'mimocode')
@@ -35,15 +44,30 @@ function comparablePath(path: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved
 }
 
-function pathsReferToSameEntity(sourcePath: string, targetPath: string): boolean {
-  if (comparablePath(sourcePath) === comparablePath(targetPath)) {
-    return true
-  }
+function comparableRealPath(path: string): string {
   try {
-    return comparablePath(realpathSync(sourcePath)) === comparablePath(realpathSync(targetPath))
+    return comparablePath(realpathSync(path))
   } catch {
-    return false
+    return comparablePath(path)
   }
+}
+
+function isSameOrNestedPath(parentPath: string, childPath: string): boolean {
+  const rel = relative(parentPath, childPath)
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
+}
+
+function pathsHaveUnsafeRelationship(sourcePath: string, targetPath: string): boolean {
+  const sourcePaths = new Set([comparablePath(sourcePath), comparableRealPath(sourcePath)])
+  const targetPaths = new Set([comparablePath(targetPath), comparableRealPath(targetPath)])
+  for (const source of sourcePaths) {
+    for (const target of targetPaths) {
+      if (isSameOrNestedPath(source, target) || isSameOrNestedPath(target, source)) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 function isOwnedOverlayTarget(targetPath: string, overlayRoot: string): boolean {
@@ -54,7 +78,12 @@ function isOwnedOverlayTarget(targetPath: string, overlayRoot: string): boolean 
 function mirrorConfigDir(sourceConfigDir: string, targetConfigDir: string): void {
   mkdirSync(targetConfigDir, { recursive: true })
   for (const entry of readdirSync(sourceConfigDir, { withFileTypes: true })) {
-    if (['auth.json', 'data', 'cache', 'state'].includes(entry.name)) {
+    const normalizedName = entry.name.toLowerCase()
+    if (
+      normalizedName === 'auth.json' ||
+      MIMOCODE_RUNTIME_DIRS.has(normalizedName) ||
+      /\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$/i.test(entry.name)
+    ) {
       continue
     }
     if (entry.name === 'plugins') {
@@ -101,6 +130,15 @@ function ensureRealDirectory(path: string): void {
   }
 }
 
+function realDirectoryIdentity(path: string): string | undefined {
+  try {
+    const stats = lstatSync(path)
+    return stats.isDirectory() && !stats.isSymbolicLink() ? comparableRealPath(path) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function ensureCleanOverlayTarget(path: string): void {
   try {
     const stats = lstatSync(path)
@@ -119,15 +157,48 @@ function isMissingPathError(error: unknown): boolean {
 }
 
 export class MimoCodeHookService {
-  clearPty(_ptyId: string): void {}
+  private readonly ownedPtyOverlays = new Map<string, { target: string; rootIdentity: string }>()
 
-  buildPtyEnv(_ptyId: string, existingConfigDir?: string): Record<string, string> {
+  clearPty(ptyId: string): void {
+    const owned = this.ownedPtyOverlays.get(ptyId)
+    if (!owned) {
+      return
+    }
+    this.ownedPtyOverlays.delete(ptyId)
+    const overlayRoot = join(app.getPath('userData'), MIMOCODE_CONFIG_OVERLAYS_DIR)
+    if (
+      realDirectoryIdentity(overlayRoot) === owned.rootIdentity &&
+      isOwnedOverlayTarget(owned.target, overlayRoot)
+    ) {
+      safeRemoveTree(owned.target)
+    }
+  }
+
+  buildPtyEnv(ptyId: string, existingConfigDir?: string): Record<string, string> {
     // Why: only config is overlaid so MiMo keeps canonical ownership of auth,
     // sessions, memory, and other runtime data outside Orca's userData.
     const overlayRoot = join(app.getPath('userData'), MIMOCODE_CONFIG_OVERLAYS_DIR)
-    const configDir = join(overlayRoot, MIMOCODE_SHARED_CONFIG_DIR)
+    const configDir = this.getPtyConfigDir(overlayRoot, ptyId)
     const sourceConfig = resolveSourceConfigDir(existingConfigDir)
-    if (sourceConfig && pathsReferToSameEntity(sourceConfig, configDir)) {
+    const owned = this.ownedPtyOverlays.get(ptyId)
+    if (owned) {
+      try {
+        const stats = lstatSync(owned.target)
+        if (
+          owned.target === configDir &&
+          realDirectoryIdentity(overlayRoot) === owned.rootIdentity &&
+          isOwnedOverlayTarget(owned.target, overlayRoot) &&
+          !stats.isSymbolicLink() &&
+          stats.isDirectory()
+        ) {
+          return { MIMOCODE_CONFIG_DIR: owned.target }
+        }
+      } catch {
+        // A missing or replaced target must be rebuilt through the safety checks below.
+      }
+      this.ownedPtyOverlays.delete(ptyId)
+    }
+    if (sourceConfig && pathsHaveUnsafeRelationship(sourceConfig, configDir)) {
       return existingConfigDir ? { MIMOCODE_CONFIG_DIR: existingConfigDir } : {}
     }
     if (!isOwnedOverlayTarget(configDir, overlayRoot)) {
@@ -135,6 +206,7 @@ export class MimoCodeHookService {
     }
     try {
       ensureRealDirectory(overlayRoot)
+      const rootIdentity = comparableRealPath(overlayRoot)
       safeRemoveTree(configDir)
       // Why: cleanup is best-effort, so any residue must abort before overlay writes.
       ensureCleanOverlayTarget(configDir)
@@ -153,10 +225,18 @@ export class MimoCodeHookService {
         }
       }
       writeFileSync(pluginPath, getOpenCodeFamilyPluginSource('/hook/mimo-code'))
+      this.ownedPtyOverlays.set(ptyId, { target: configDir, rootIdentity })
     } catch {
+      this.ownedPtyOverlays.delete(ptyId)
       return existingConfigDir ? { MIMOCODE_CONFIG_DIR: existingConfigDir } : {}
     }
     return { MIMOCODE_CONFIG_DIR: configDir }
+  }
+
+  private getPtyConfigDir(overlayRoot: string, ptyId: string): string {
+    // Why: PTY IDs can originate outside this service; hashing keeps them from
+    // selecting paths outside the Orca-owned overlay root.
+    return join(overlayRoot, createHash('sha256').update(ptyId).digest('hex'))
   }
 }
 

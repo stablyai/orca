@@ -438,12 +438,14 @@ function stripRemotePaneEnvWhenHooksDisabled(
     {
       primary: 'OPENCODE_CONFIG_DIR',
       overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+      restoreSource: true
     },
     {
       primary: 'MIMOCODE_CONFIG_DIR',
       overlay: 'ORCA_MIMOCODE_CONFIG_DIR',
-      source: 'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
+      source: 'ORCA_MIMOCODE_SOURCE_CONFIG_DIR',
+      restoreSource: false
     }
   ] as const
   const hasOverlayEnv = overlayKeys.some(({ overlay, source }) => overlay in env || source in env)
@@ -458,17 +460,24 @@ function stripRemotePaneEnvWhenHooksDisabled(
   }
 
   const stripped = { ...env }
-  for (const { primary, overlay, source } of overlayKeys) {
+  for (const { primary, overlay, source, restoreSource } of overlayKeys) {
     if (!(overlay in stripped) && !(source in stripped)) {
       continue
     }
     const sourceValue = stripped[source]
     const overlayValue = stripped[overlay]
-    // Why: Orca overlay paths are host-local. Restore a recorded source for
-    // SSH, but preserve an independently supplied remote primary value.
-    if (sourceValue && (!stripped[primary] || stripped[primary] === overlayValue)) {
+    // Why: MiMo overlay/source provenance cannot be proven across SSH. Matching
+    // primaries are stripped to avoid leaking host paths; independent values stay.
+    if (
+      restoreSource &&
+      sourceValue &&
+      (!stripped[primary] || stripped[primary] === overlayValue)
+    ) {
       stripped[primary] = sourceValue
-    } else if (overlayValue && stripped[primary] === overlayValue) {
+    } else if (
+      (overlayValue && stripped[primary] === overlayValue) ||
+      (!restoreSource && sourceValue && stripped[primary] === sourceValue)
+    ) {
       delete stripped[primary]
     }
     delete stripped[overlay]
@@ -664,6 +673,11 @@ function shouldSkipCodexHomeEnvForWindowsShell(
 }
 
 const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
+const WSL_MIMOCODE_ENV_KEYS = [
+  'MIMOCODE_CONFIG_DIR',
+  'ORCA_MIMOCODE_CONFIG_DIR',
+  'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
+] as const
 type GetSelectedCodexHomePath = (target?: CodexAccountSelectionTarget) => string | null
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
@@ -823,6 +837,17 @@ function restoreOrStripOverlayEnv(
   delete baseEnv[keys.source]
 }
 
+function stripMimocodeHostOverlayEnv(baseEnv: Record<string, string>): void {
+  const primary = baseEnv.MIMOCODE_CONFIG_DIR
+  const overlay = baseEnv.ORCA_MIMOCODE_CONFIG_DIR
+  const source = baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
+  if ((overlay && primary === overlay) || (source && primary === source)) {
+    delete baseEnv.MIMOCODE_CONFIG_DIR
+  }
+  delete baseEnv.ORCA_MIMOCODE_CONFIG_DIR
+  delete baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
+}
+
 function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
   const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
     .toLowerCase()
@@ -951,7 +976,7 @@ export function buildPtyHostEnv(
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
-    if (isMimoLaunchCommand(launchCommandHint)) {
+    if (isMimoLaunchCommand(launchCommandHint) && opts.isWsl !== true) {
       const preexistingMimocodeConfigDir = resolveMimocodeSourceConfigDir(baseEnv)
       const mimoEnv = mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeConfigDir)
       Object.assign(baseEnv, mimoEnv)
@@ -979,6 +1004,11 @@ export function buildPtyHostEnv(
       overlay: 'ORCA_MIMOCODE_CONFIG_DIR',
       source: 'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
     })
+  }
+  if (opts.isWsl === true) {
+    // Why: native Orca cannot materialize a usable MiMo config overlay inside
+    // the guest. Strip host markers without deleting an explicit guest path.
+    stripMimocodeHostOverlayEnv(baseEnv)
   }
 
   // Why: Claude/Codex native hooks run inside the shell process, so Orca
@@ -1222,10 +1252,11 @@ export function clearPtyOwnershipForConnection(connectionId: string): void {
 // ─── Provider-scoped PTY state cleanup ──────────────────────────────
 
 export function clearProviderPtyState(id: string): void {
-  // Why: OpenCode and Pi both allocate PTY-scoped runtime state outside the
+  // Why: OpenCode, MiMo, and Pi allocate PTY-scoped runtime state outside the
   // node-pty process table. Centralizing provider cleanup avoids drift where a
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
+  mimoCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   // Why: SSH exit and connection-teardown paths bypass pty.ts's local onExit
   // callback but still need to release Claude account-switch guards.
@@ -3171,7 +3202,19 @@ export function registerPtyHandlers(
           CODEX_HOME_ENV_KEYS
         )
       }
+      if (isDaemonHostSpawn && skipCodexHomeEnv) {
+        // Why: a detached Windows daemon can retain host MiMo paths after main
+        // has prepared a WSL guest env; the daemon scrubs only its inherited copy.
+        spawnOptions.envToDelete = mergePtyEnvDeletions(
+          spawnOptions.envToDelete,
+          WSL_MIMOCODE_ENV_KEYS
+        )
+      }
+      const explicitWslMimocodeConfig = skipCodexHomeEnv ? env?.MIMOCODE_CONFIG_DIR : undefined
       deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
+      if (explicitWslMimocodeConfig) {
+        env!.MIMOCODE_CONFIG_DIR = explicitWslMimocodeConfig
+      }
       promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       if (args.command !== undefined) {
         spawnOptions.command = args.command
@@ -4080,14 +4123,21 @@ export function registerPtyHandlers(
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
           mergePtyEnvDeletions(
-            mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
-            agentTeamsEnvToDelete ?? []
+            mergePtyEnvDeletions(
+              mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+              agentTeamsEnvToDelete ?? []
+            ),
+            isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
           ),
-          isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
+          skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
         ),
-        skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
+        isDaemonHostSpawn && skipCodexHomeEnv ? WSL_MIMOCODE_ENV_KEYS : []
       )
+      const explicitWslMimocodeConfig = skipCodexHomeEnv ? spawnEnv?.MIMOCODE_CONFIG_DIR : undefined
       deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
+      if (explicitWslMimocodeConfig && spawnEnv) {
+        spawnEnv.MIMOCODE_CONFIG_DIR = explicitWslMimocodeConfig
+      }
       promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
