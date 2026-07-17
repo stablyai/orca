@@ -163,7 +163,7 @@ import {
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { EmulatorBridge } from './emulator/emulator-bridge'
-import { browserManager } from './browser/browser-manager'
+import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
@@ -1710,6 +1710,22 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 
 app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
+  // Why: certificate decisions must be installed before either desktop
+  // webviews or headless browser windows can issue their first TLS request.
+  app.on(
+    'certificate-error',
+    (event, webContents, url, error, certificate, callback, isMainFrame) => {
+      browserCertificateTrustController.handleCertificateError({
+        event,
+        webContents,
+        url,
+        error,
+        certificate,
+        callback,
+        isMainFrame
+      })
+    }
+  )
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   app.setName(devInstanceIdentity.name)
 
@@ -1919,6 +1935,9 @@ app.whenReady().then(async () => {
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
   runtime = runtimeService
+  browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
+    runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+  })
   automations = new AutomationService(store, {
     claudeUsage,
     codexUsage,
@@ -2401,6 +2420,7 @@ app.on('will-quit', (e) => {
   // Why: headless offscreen browser windows are main-process owned; tear them
   // down explicitly on quit alongside the other browser/session shutdowns.
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+  browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()

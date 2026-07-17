@@ -1538,6 +1538,123 @@ describe('OrcaRuntimeService', () => {
     expect(capabilities).toContain('browser.screencast.v1')
     // ...and the headless marker tells clients not to fall back to a local tab.
     expect(capabilities).toContain('browser.headless.v1')
+    expect(capabilities).toContain('browser.certificate-trust.v1')
+  })
+
+  it('surfaces live offscreen load failures in headless browser snapshots', () => {
+    const runtime = createRuntime()
+    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setAgentBrowserBridge({
+      tabList: vi.fn(() => ({
+        tabs: [
+          {
+            browserPageId: 'page-certificate-error',
+            index: 0,
+            url: 'https://localhost:3443/',
+            title: 'Local HTTPS',
+            active: true,
+            loadError: {
+              code: -202,
+              description: 'ERR_CERT_AUTHORITY_INVALID',
+              validatedUrl: 'https://localhost:3443/'
+            },
+            certificateFailure: {
+              challengeId: 'challenge-1',
+              browserPageId: 'page-certificate-error',
+              errorCode: -202,
+              error: 'ERR_CERT_AUTHORITY_INVALID',
+              origin: 'https://localhost:3443',
+              displayHost: 'localhost:3443',
+              canProceed: true,
+              observedAt: 123
+            }
+          }
+        ]
+      }))
+    } as never)
+    const browserTabs = runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)
+    expect(browserTabs).toContainEqual(
+      expect.objectContaining({
+        type: 'browser',
+        browserPageId: 'page-certificate-error',
+        loadError: {
+          code: -202,
+          description: 'ERR_CERT_AUTHORITY_INVALID',
+          validatedUrl: 'https://localhost:3443/'
+        },
+        certificateFailure: {
+          challengeId: 'challenge-1',
+          browserPageId: 'page-certificate-error',
+          errorCode: -202,
+          error: 'ERR_CERT_AUTHORITY_INVALID',
+          origin: 'https://localhost:3443',
+          displayHost: 'localhost:3443',
+          canProceed: true,
+          observedAt: 123
+        }
+      })
+    )
+  })
+
+  it('detects headless browser-tab changes by field, treating absent and null loadError alike', () => {
+    const runtime = createRuntime()
+    const base = {
+      type: 'browser' as const,
+      id: 'page-1',
+      title: 'Local',
+      browserWorkspaceId: 'page-1',
+      browserPageId: 'page-1',
+      url: 'https://localhost:3443/',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      isActive: true
+    }
+    const err = {
+      code: -202,
+      description: 'ERR_CERT_AUTHORITY_INVALID',
+      validatedUrl: 'https://localhost:3443/'
+    }
+    const certificateFailure = {
+      challengeId: 'challenge-1',
+      browserPageId: 'page-1',
+      errorCode: -202,
+      error: 'ERR_CERT_AUTHORITY_INVALID',
+      origin: 'https://localhost:3443',
+      displayHost: 'localhost:3443',
+      canProceed: true,
+      observedAt: 123
+    }
+    const unchanged = (a: unknown[], b: unknown[]): boolean =>
+      runtime['headlessBrowserTabsUnchanged'](a as never, b as never)
+
+    // Absent vs explicit null loadError are equivalent (the JSON.stringify trap).
+    expect(unchanged([{ ...base }], [{ ...base, loadError: null }])).toBe(true)
+    expect(unchanged([{ ...base, loadError: err }], [{ ...base, loadError: { ...err } }])).toBe(
+      true
+    )
+    // A load-error-only change (identical ids/order) must not be missed.
+    expect(unchanged([{ ...base }], [{ ...base, loadError: err }])).toBe(false)
+    expect(
+      unchanged([{ ...base, loadError: err }], [{ ...base, loadError: { ...err, code: -200 } }])
+    ).toBe(false)
+    expect(
+      unchanged(
+        [{ ...base, certificateFailure }],
+        [{ ...base, certificateFailure: { ...certificateFailure } }]
+      )
+    ).toBe(true)
+    expect(unchanged([{ ...base }], [{ ...base, certificateFailure }])).toBe(false)
+    expect(
+      unchanged(
+        [{ ...base, certificateFailure }],
+        [{ ...base, certificateFailure: { ...certificateFailure, challengeId: 'challenge-2' } }]
+      )
+    ).toBe(false)
+    // Scalar and length changes are detected.
+    expect(unchanged([{ ...base }], [{ ...base, title: 'Changed' }])).toBe(false)
+    expect(unchanged([{ ...base }], [{ ...base, isActive: false }])).toBe(false)
+    expect(unchanged([{ ...base }], [{ ...base }, { ...base, id: 'page-2' }])).toBe(false)
   })
 
   it('does not advertise headless browser capability when a renderer window exists', () => {
@@ -1547,6 +1664,16 @@ describe('OrcaRuntimeService', () => {
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
 
     expect(runtime.getStatus().capabilities).not.toContain('browser.headless.v1')
+    // Desktop webviews still host certificate trust, so the proceed capability
+    // remains advertised for remote clients controlling those pages.
+    expect(runtime.getStatus().capabilities).toContain('browser.certificate-trust.v1')
+  })
+
+  it('does not advertise certificate trust when no browser backend is available', () => {
+    const runtime = createRuntime()
+
+    expect(runtime.getStatus().capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(runtime.getStatus().capabilities).not.toContain('browser.screencast.v1')
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {

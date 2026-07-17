@@ -1492,6 +1492,12 @@ function buildMobileBrowserTab(
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
+    // Why: null means the active page successfully cleared its failure. Falling
+    // back through ?? would resurrect a stale workspace-level error.
+    loadError: activePage ? activePage.loadError : workspace.loadError,
+    certificateFailure: activePage
+      ? (state.browserCertificateFailuresByPageId[activePage.id] ?? null)
+      : null,
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId

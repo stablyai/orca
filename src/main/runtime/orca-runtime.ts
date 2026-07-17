@@ -264,6 +264,7 @@ import {
 } from '../../shared/worktree-ownership'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+  BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -3061,6 +3062,12 @@ export class OrcaRuntimeService {
     if (hasOffscreen) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
+    // Why: certificate proceed is owned by the browser-hosting process for both
+    // desktop webviews and offscreen pages. Advertise whenever either backend
+    // can host a page so remote clients can surface Proceed Anyway (Unsafe).
+    if (canBrowse) {
+      capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+    }
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -3430,13 +3437,16 @@ export class OrcaRuntimeService {
       allowAttachedWindow?: boolean
       onlyServeOwnedTerminals?: boolean
     } = {}
-  ): void {
+  ): Set<string> {
+    // Why: report which worktrees were reconciled in place so callers don't
+    // reconcile them a second time (see notifyMobileSessionTabsChanged).
+    const reconciledWorktreeIds = new Set<string>()
     if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
-      return
+      return reconciledWorktreeIds
     }
     const session = this.store?.getWorkspaceSession?.()
     if (!session) {
-      return
+      return reconciledWorktreeIds
     }
     const entries =
       worktreeId !== undefined
@@ -3455,6 +3465,7 @@ export class OrcaRuntimeService {
         // Reconcile just the browser tabs against the live bridge instead of
         // leaving a stale snapshot that omits a freshly-opened browser tab.
         this.reconcileHeadlessMobileSessionBrowserTabs(entryWorktreeId, existing)
+        reconciledWorktreeIds.add(entryWorktreeId)
         continue
       }
       const terminalTabs = this.buildHeadlessMobileSessionTerminalTabs(
@@ -3554,6 +3565,7 @@ export class OrcaRuntimeService {
         tabs: mergedTabs
       })
     }
+    return reconciledWorktreeIds
   }
 
   // Why: keep an existing snapshot's browser tabs in sync with the live bridge
@@ -3568,13 +3580,11 @@ export class OrcaRuntimeService {
     }
     const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
     const liveIds = liveBrowserTabs.map((tab) => tab.id)
-    const existingBrowserIds = existing.tabs
-      .filter((tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser')
-      .map((tab) => tab.id)
-    const unchanged =
-      liveIds.length === existingBrowserIds.length &&
-      liveIds.every((id, index) => existingBrowserIds[index] === id)
-    if (unchanged) {
+    const existingBrowserTabs = existing.tabs.filter(
+      (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
+    )
+    const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
+    if (this.headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
       return
     }
     const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
@@ -4051,11 +4061,82 @@ export class OrcaRuntimeService {
         loading: false,
         canGoBack: false,
         canGoForward: false,
+        loadError: tab.loadError ?? undefined,
+        certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),
         ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
         isActive: tab.active === true
       }
     })
+  }
+
+  // Why: change detection for headless browser tabs. Compares the fields that
+  // actually vary (a JSON.stringify equality was order-sensitive and silently
+  // dropped `undefined` keys, so it only worked while both sides shared one
+  // construction path).
+  private headlessBrowserTabsUnchanged(
+    live: RuntimeMobileSessionBrowserTab[],
+    existing: RuntimeMobileSessionBrowserTab[]
+  ): boolean {
+    if (live.length !== existing.length) {
+      return false
+    }
+    return live.every((tab, index) => {
+      const prev = existing[index]
+      return (
+        tab.id === prev.id &&
+        tab.title === prev.title &&
+        tab.url === prev.url &&
+        tab.isActive === prev.isActive &&
+        (tab.isPinned ?? false) === (prev.isPinned ?? false) &&
+        (tab.color ?? null) === (prev.color ?? null) &&
+        this.browserLoadErrorsEqual(tab.loadError, prev.loadError) &&
+        this.browserCertificateFailuresEqual(tab.certificateFailure, prev.certificateFailure)
+      )
+    })
+  }
+
+  private browserLoadErrorsEqual(
+    a: RuntimeMobileSessionBrowserTab['loadError'],
+    b: RuntimeMobileSessionBrowserTab['loadError']
+  ): boolean {
+    const left = a ?? null
+    const right = b ?? null
+    if (left === right) {
+      return true
+    }
+    if (!left || !right) {
+      return false
+    }
+    return (
+      left.code === right.code &&
+      left.description === right.description &&
+      left.validatedUrl === right.validatedUrl
+    )
+  }
+
+  private browserCertificateFailuresEqual(
+    a: RuntimeMobileSessionBrowserTab['certificateFailure'],
+    b: RuntimeMobileSessionBrowserTab['certificateFailure']
+  ): boolean {
+    const left = a ?? null
+    const right = b ?? null
+    if (left === right) {
+      return true
+    }
+    if (!left || !right) {
+      return false
+    }
+    return (
+      left.challengeId === right.challengeId &&
+      left.browserPageId === right.browserPageId &&
+      left.errorCode === right.errorCode &&
+      left.error === right.error &&
+      left.origin === right.origin &&
+      left.displayHost === right.displayHost &&
+      left.canProceed === right.canProceed &&
+      left.observedAt === right.observedAt
+    )
   }
 
   private getPersistedUnifiedSessionTabProps(
@@ -21545,6 +21626,17 @@ export class OrcaRuntimeService {
       this.notifyMobileSessionTabSnapshots()
       return
     }
+    if (this.offscreenBrowserBackend) {
+      const reconciled = this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+      // Why: hydrate already reconciles an existing snapshot in place; only
+      // reconcile here when it didn't (fresh build or an early-returned hydrate).
+      if (!reconciled.has(worktreeId)) {
+        const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+        if (existing) {
+          this.reconcileHeadlessMobileSessionBrowserTabs(worktreeId, existing)
+        }
+      }
+    }
     // Why: structural changes (tab add/remove/activate) must propagate promptly,
     // so cancel any pending coalesced title/status notify — this immediate emit
     // already reflects the latest snapshot and supersedes it.
@@ -25458,6 +25550,8 @@ export class OrcaRuntimeService {
 
   browserTabList: RuntimeBrowserCommands['browserTabList'] =
     this.browserCommands.browserTabList.bind(this.browserCommands)
+  browserProceedCertificate: RuntimeBrowserCommands['browserProceedCertificate'] =
+    this.browserCommands.browserProceedCertificate.bind(this.browserCommands)
 
   browserTabShow: RuntimeBrowserCommands['browserTabShow'] =
     this.browserCommands.browserTabShow.bind(this.browserCommands)

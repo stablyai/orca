@@ -2108,6 +2108,18 @@ export function useIpcEvents(): void {
       })
     )
 
+    const unsubscribeCertificateFailure = window.api.browser.onCertificateFailureChanged?.(
+      ({ browserPageId, failure }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        useAppStore.getState().setBrowserPageCertificateFailure(browserPageId, failure)
+      }
+    )
+    if (unsubscribeCertificateFailure) {
+      unsubs.push(unsubscribeCertificateFailure)
+    }
+
     // Why: agent-browser drives navigation via CDP, bypassing Electron's webview
     // event system. The renderer's did-navigate listener never fires for those
     // navigations, so the Zustand store (address bar, tab title) stays stale.

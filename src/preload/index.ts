@@ -2238,7 +2238,7 @@ const api = {
       worktreeId: string
       sessionProfileId?: string | null
       webContentsId: number
-    }): Promise<void> => ipcRenderer.invoke('browser:registerGuest', args),
+    }): Promise<boolean> => ipcRenderer.invoke('browser:registerGuest', args),
 
     unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
       ipcRenderer.invoke('browser:unregisterGuest', args),
@@ -2270,6 +2270,17 @@ const api = {
       ipcRenderer.on('browser:guest-load-failed', listener)
       return () => ipcRenderer.removeListener('browser:guest-load-failed', listener)
     },
+
+    onCertificateFailureChanged: (callback): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: Parameters<typeof callback>[0]
+      ): void => callback(data)
+      ipcRenderer.on('browser:certificate-failure-changed', listener)
+      return () => ipcRenderer.removeListener('browser:certificate-failure-changed', listener)
+    },
+
+    proceedCertificate: (args) => ipcRenderer.invoke('browser:proceedCertificate', args),
 
     onPermissionDenied: (
       callback: (event: { browserPageId: string; permission: string; origin: string }) => void

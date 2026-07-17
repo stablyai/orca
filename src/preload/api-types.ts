@@ -67,6 +67,8 @@ import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
   BrowserCookieImportResult,
+  BrowserCertificateFailure,
+  BrowserCertificateProceedResult,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
@@ -479,7 +481,7 @@ export type BrowserApi = {
     worktreeId: string
     sessionProfileId?: string | null
     webContentsId: number
-  }) => Promise<void>
+  }) => Promise<boolean>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
@@ -490,6 +492,13 @@ export type BrowserApi = {
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
+  onCertificateFailureChanged: (
+    callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
+  ) => () => void
+  proceedCertificate: (args: {
+    browserPageId: string
+    challengeId: string
+  }) => Promise<BrowserCertificateProceedResult>
   onPermissionDenied: (callback: (event: BrowserPermissionDeniedEvent) => void) => () => void
   onPopup: (callback: (event: BrowserPopupEvent) => void) => () => void
   onDownloadRequested: (callback: (event: BrowserDownloadRequestedEvent) => void) => () => void

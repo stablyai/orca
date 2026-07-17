@@ -889,6 +889,28 @@ export type BrowserLoadError = {
   validatedUrl: string
 }
 
+export type BrowserCertificateFailure = {
+  challengeId: string
+  browserPageId: string
+  errorCode: number | null
+  error: string
+  origin: string
+  displayHost: string
+  canProceed: boolean
+  observedAt: number
+}
+
+export type BrowserCertificateProceedFailureReason =
+  | 'expired'
+  | 'changed'
+  | 'ineligible'
+  | 'missing'
+  | 'navigated'
+
+export type BrowserCertificateProceedResult =
+  | { ok: true }
+  | { ok: false; reason: BrowserCertificateProceedFailureReason }
+
 // Why: BrowserPage persists the active viewport preset so CDP emulation can be
 // reapplied on reload/navigation without the user re-picking from the toolbar.
 export type BrowserViewportPresetId =
