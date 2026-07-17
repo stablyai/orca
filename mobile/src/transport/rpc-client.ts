@@ -1220,6 +1220,27 @@ export function connect(
         runActivityProbe()
         return
       }
+      if (state === 'connecting' || state === 'handshaking') {
+        // Why: iOS can suspend the socket and its timeout while backgrounded,
+        // so waiting for the old attempt can leave the UI stuck indefinitely.
+        console.log('[net] foreground — replacing stalled connection', { state })
+        clearConnectTimer()
+        if (handshakeTimer) {
+          clearTimeout(handshakeTimer)
+          handshakeTimer = null
+        }
+        const stalledWs = ws
+        ws = null
+        sharedKey = null
+        currentWsOpenedAt = null
+        if (stalledWs) {
+          stalledWs.onclose = null
+          stalledWs.close()
+        }
+        reconnectAttempt = 0
+        openConnection()
+        return
+      }
       if (state === 'reconnecting') {
         // Why: while backgrounded the retry loop may be sitting on a 60s
         // backoff or 90s trickle timer. Returning to the foreground is a

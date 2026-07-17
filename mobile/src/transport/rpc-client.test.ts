@@ -687,6 +687,44 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
+    it('restarts a socket stuck connecting when the app returns to foreground', () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const stuckSocket = mockSockets[0]!
+
+      expect(client.getState()).toBe('connecting')
+      client.notifyForeground()
+
+      expect(stuckSocket.close).toHaveBeenCalledTimes(1)
+      expect(mockSockets).toHaveLength(2)
+      expect(client.getState()).toBe('connecting')
+
+      const replacementSocket = mockSockets[1]!
+      replacementSocket.open()
+      replacementSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+      expect(replacementSocket.sent).toContain(
+        'encrypted:{"type":"e2ee_auth","deviceToken":"token"}'
+      )
+      replacementSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('restarts a socket stuck handshaking when the app returns to foreground', () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const stuckSocket = mockSockets[0]!
+      stuckSocket.open()
+
+      expect(client.getState()).toBe('handshaking')
+      client.notifyForeground()
+
+      expect(stuckSocket.close).toHaveBeenCalledTimes(1)
+      expect(mockSockets).toHaveLength(2)
+      expect(client.getState()).toBe('connecting')
+
+      client.close()
+    })
+
     it('reaps a half-open socket within 8s of foreground', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       const socket = mockSockets[0]!
