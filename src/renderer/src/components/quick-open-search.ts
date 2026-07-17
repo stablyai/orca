@@ -1,7 +1,6 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareFileNames } from '../../../shared/file-name-sort'
 import { fuzzyMatchIndexedFile, prepareQuickOpenQuery } from './quick-open-fuzzy-match'
-import { isPathSeparator } from './quick-open-word-boundaries'
 
 export const QUICK_OPEN_RESULT_LIMIT = 50
 export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
@@ -113,38 +112,51 @@ function buildSearchPathIndex(searchPath: string): {
   const starts = new Uint8Array(lowerPath.length)
   let lowerIndex = 0
   for (let i = 0; i < searchPath.length; i++) {
-    const curr = searchPath[i]
-    const prev = i > 0 ? searchPath[i - 1] : ''
-    const next = i + 1 < searchPath.length ? searchPath[i + 1] : ''
+    // Why: this loop touches every character in repositories that can exceed
+    // 100k paths; read each code unit once instead of repeatedly decoding it.
+    const currCode = searchPath.charCodeAt(i)
+    const prevCode = i > 0 ? searchPath.charCodeAt(i - 1) : -1
+    const nextCode = i + 1 < searchPath.length ? searchPath.charCodeAt(i + 1) : -1
     if (
       i === 0 ||
-      isPathSeparator(prev) ||
-      (isAsciiLowerOrDigit(prev) && isAsciiUpper(curr)) ||
-      (isAsciiUpper(prev) && isAsciiUpper(curr) && isAsciiLower(next))
+      isPathSeparatorCode(prevCode) ||
+      (isAsciiLetterCode(prevCode) && isAsciiDigitCode(currCode)) ||
+      (isAsciiDigitCode(prevCode) && isAsciiLetterCode(currCode)) ||
+      (isAsciiLowerOrDigitCode(prevCode) && isAsciiUpperCode(currCode)) ||
+      (isAsciiUpperCode(prevCode) && isAsciiUpperCode(currCode) && isAsciiLowerCode(nextCode))
     ) {
       starts[lowerIndex] = 1
     }
     // Why: Unicode lowercasing can expand one source character, so boundary
     // offsets must advance in lowerPath's coordinate space. ASCII skips the
     // per-character lowercase allocation; 100k-file indexing is ~2x faster.
-    lowerIndex += curr.charCodeAt(0) < 128 ? 1 : curr.toLowerCase().length
+    lowerIndex += currCode < 128 ? 1 : searchPath[i].toLowerCase().length
   }
   return { lowerPath, wordStarts: starts }
 }
 
-function isAsciiLowerOrDigit(ch: string): boolean {
-  const code = ch.charCodeAt(0)
+function isAsciiLowerOrDigitCode(code: number): boolean {
   return (code >= 48 && code <= 57) || (code >= 97 && code <= 122)
 }
 
-function isAsciiUpper(ch: string): boolean {
-  const code = ch.charCodeAt(0)
+function isAsciiDigitCode(code: number): boolean {
+  return code >= 48 && code <= 57
+}
+
+function isAsciiLetterCode(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
+function isAsciiUpperCode(code: number): boolean {
   return code >= 65 && code <= 90
 }
 
-function isAsciiLower(ch: string): boolean {
-  const code = ch.charCodeAt(0)
+function isAsciiLowerCode(code: number): boolean {
   return code >= 97 && code <= 122
+}
+
+function isPathSeparatorCode(code: number): boolean {
+  return code === 47 || code === 95 || code === 45 || code === 46 || code === 32
 }
 
 type QuickOpenRankedResult = QuickOpenSearchResult & {

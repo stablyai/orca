@@ -322,6 +322,19 @@ describe('quick-open-search', () => {
     ])
   })
 
+  it('recognizes words at letter-number transitions', () => {
+    const files = prepareQuickOpenFiles(['notes/MeetingNotes2026.md', 'src/OAuth2Client.ts'])
+
+    // Why: version/year suffixes and numbered identifiers are common filename
+    // words, so every supported query separator must reach their zero-width boundary.
+    for (const query of ['meeting notes 2026', 'meeting-notes-2026', 'meeting_notes_2026']) {
+      expect(rankQuickOpenFiles(query, files)[0]?.path).toBe('notes/MeetingNotes2026.md')
+    }
+    for (const query of ['oauth 2 client', 'oauth-2-client', 'oauth_2_client']) {
+      expect(rankQuickOpenFiles(query, files)[0]?.path).toBe('src/OAuth2Client.ts')
+    }
+  })
+
   it('keeps word starts aligned when Unicode lowercasing expands a character', () => {
     const files = prepareQuickOpenFiles(['İ/FooBar.ts'])
 
