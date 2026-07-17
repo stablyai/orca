@@ -53,6 +53,7 @@ export {
   formatMemorySnapshot,
   formatRepoList,
   formatRepoRefs,
+  formatRepoRemove,
   formatRepoShow,
   formatWorktreeList,
   formatWorktreePs,

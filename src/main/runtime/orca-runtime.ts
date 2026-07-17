@@ -191,6 +191,7 @@ import {
   splitWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../shared/worktree-id'
+import { countActiveRepoTerminals } from './repo-active-terminal-count'
 import {
   getProjectHostSetupForRepo,
   getProjectHostSetupWorktreeMeta
@@ -339,6 +340,7 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
+  RuntimeRepoRemoveResult,
   BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
@@ -2061,6 +2063,31 @@ class WorktreeIdRequiresFullPathError extends Error {
     super(
       'Worktree id selectors must use the full <repo-id>::<path> value. Use the id from `orca worktree list --json`, or target by path:<path>, branch:<branch>, or issue:<number>.'
     )
+  }
+}
+
+// Why: unregistering a repo with live terminals would orphan those PTYs (their
+// worktree metadata is pruned on removal). Carry recovery hints via data.nextSteps
+// so the CLI surfaces an actionable message instead of a bare code.
+class RepoHasActiveTerminalsError extends Error {
+  readonly code = 'repo_has_active_terminals'
+  readonly data: { activeTerminalCount: number; nextSteps: string[] }
+
+  constructor(repoId: string, activeTerminalCount: number) {
+    const singular = activeTerminalCount === 1
+    const noun = singular ? 'terminal' : 'terminals'
+    const copula = singular ? 'is' : 'are'
+    const pronoun = singular ? 'it' : 'them'
+    super(
+      `Cannot unregister repo ${repoId}: ${activeTerminalCount} live ${noun} ${copula} still attached. Stop ${pronoun} first or rerun with --force.`
+    )
+    this.data = {
+      activeTerminalCount,
+      nextSteps: [
+        `Stop ${pronoun} with \`orca terminal stop --worktree <selector>\`, then rerun \`orca repo rm\`.`,
+        `Rerun \`orca repo rm --repo id:${repoId} --force\` to unregister anyway — the checkout is preserved but the live ${noun} ${copula} orphaned.`
+      ]
+    }
   }
 }
 
@@ -13153,16 +13180,36 @@ export class OrcaRuntimeService {
     return updated
   }
 
-  async removeProject(repoSelector: string): Promise<{ removed: true }> {
+  async removeProject(
+    repoSelector: string,
+    options: { requireIdle?: boolean } = {}
+  ): Promise<RuntimeRepoRemoveResult> {
     if (!this.store?.removeProject) {
       throw new Error('runtime_unavailable')
     }
-    const repo = await this.resolveRepoSelector(repoSelector)
+    let repo: Repo
+    try {
+      repo = await this.resolveRepoSelector(repoSelector)
+    } catch (err) {
+      // Why: unregister is a state-alignment op — an already-absent repo is the
+      // desired end state, so return a specific idempotent result instead of
+      // erroring. selector_ambiguous still propagates (a real user error).
+      if (err instanceof Error && err.message === 'repo_not_found') {
+        return { removed: false, reason: 'absent' }
+      }
+      throw err
+    }
+    if (options.requireIdle) {
+      const activeTerminalCount = countActiveRepoTerminals(this.ptysById.values(), repo.id)
+      if (activeTerminalCount > 0) {
+        throw new RepoHasActiveTerminalsError(repo.id, activeTerminalCount)
+      }
+    }
     this.store.removeProject(repo.id)
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
     this.notifyReposChanged()
-    return { removed: true }
+    return { removed: true, repoId: repo.id }
   }
 
   async inspectTerminalProcess(

@@ -73,6 +73,18 @@ describe('agent-context over the live registry', () => {
     expect(rm?.aliases).toContainEqual(['worktree', 'remove'])
   })
 
+  it('exposes the discoverable repo rm command with its unregister alias', () => {
+    // Why: issue #9028 — repo add must have a discoverable symmetric unregister
+    // command, and agents must be able to resolve `repo unregister` to it.
+    const schema = buildAgentContext(COMMAND_SPECS)
+    const rm = schema.commands.find((command) => command.command === 'repo rm')
+    expect(rm).toBeDefined()
+    expect(rm?.aliases).toContainEqual(['repo', 'unregister'])
+    expect(rm?.aliases).toContainEqual(['repo', 'remove'])
+    expect(rm?.flags).toContain('repo')
+    expect(rm?.flags).toContain('force')
+  })
+
   it('human summary count matches the command count', () => {
     const schema = buildAgentContext(COMMAND_SPECS)
     expect(formatAgentContextSummary(schema)).toContain(`${schema.commandCount} commands`)

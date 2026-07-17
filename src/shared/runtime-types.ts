@@ -708,6 +708,14 @@ export type RuntimeRepoList = {
   repos: Repo[]
 }
 
+// Why: unregister is a state-alignment operation — an already-absent repo is the
+// desired end state, so the result distinguishes "removed now" from "already
+// absent" instead of erroring. This keeps repeat unregister idempotent for
+// cleanup scripts and matches the issue #9028 acceptance criteria.
+export type RuntimeRepoRemoveResult =
+  | { removed: true; repoId: string }
+  | { removed: false; reason: 'absent' }
+
 export type RuntimeRepoSearchRefs = {
   refs: string[]
   refDetails?: BaseRefSearchResult[]

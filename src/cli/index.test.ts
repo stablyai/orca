@@ -2490,6 +2490,55 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('unregisters a repo through repo.rm and requests the idle guard by default', async () => {
+    queueFixtures(callMock, okFixture('req_repo_rm', { removed: true, repoId: 'repo-1' }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['repo', 'rm', '--repo', 'id:repo-1', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('repo.rm', { repo: 'id:repo-1', requireIdle: true })
+    expect(logSpy.mock.calls[0]?.[0]).toContain('"repoId": "repo-1"')
+  })
+
+  it('bypasses the idle guard when --force is passed', async () => {
+    queueFixtures(callMock, okFixture('req_repo_rm', { removed: true, repoId: 'repo-1' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['repo', 'rm', '--repo', 'id:repo-1', '--force', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('repo.rm', { repo: 'id:repo-1', requireIdle: false })
+  })
+
+  it('runs `repo remove`, `repo delete`, and `repo unregister` as the canonical `repo rm`', async () => {
+    for (const verb of ['remove', 'delete', 'unregister']) {
+      callMock.mockReset()
+      queueFixtures(callMock, okFixture('req_repo_rm', { removed: true, repoId: 'repo-1' }))
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['repo', verb, '--repo', 'id:repo-1', '--json'], '/tmp/repo')
+
+      expect(callMock).toHaveBeenCalledWith(
+        'repo.rm',
+        expect.objectContaining({ repo: 'id:repo-1' })
+      )
+    }
+  })
+
+  it('treats an already-absent repo as idempotent success (no nonzero exit code)', async () => {
+    const priorExitCode = process.exitCode
+    queueFixtures(callMock, okFixture('req_repo_rm', { removed: false, reason: 'absent' }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['repo', 'rm', '--repo', 'id:gone', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('repo.rm', { repo: 'id:gone', requireIdle: true })
+    // Why: a repeat unregister of an already-absent repo is the desired end
+    // state — it must not surface as a failure (exit code stays unset/0).
+    expect(process.exitCode).not.toBe(1)
+    expect(logSpy.mock.calls[0]?.[0]).toContain('"removed": false')
+    process.exitCode = priorExitCode
+  })
+
   it('lists projects through the project-first runtime API', async () => {
     queueFixtures(
       callMock,

@@ -1,6 +1,16 @@
-import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtime-types'
+import type {
+  RuntimeRepoList,
+  RuntimeRepoRemoveResult,
+  RuntimeRepoSearchRefs
+} from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
+import {
+  formatRepoList,
+  formatRepoRefs,
+  formatRepoRemove,
+  formatRepoShow,
+  printResult
+} from '../format'
 import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 
@@ -21,6 +31,16 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
       repo: getRequiredStringFlag(flags, 'repo')
     })
     printResult(result, json, formatRepoShow)
+  },
+  'repo rm': async ({ flags, client, json }) => {
+    // Why: requireIdle is the CLI opt-in to the runtime fail-closed guard;
+    // --force bypasses it (mirrors `worktree rm --force`). The renderer omits
+    // requireIdle entirely, so this guard never affects UI-driven removal.
+    const result = await client.call<RuntimeRepoRemoveResult>('repo.rm', {
+      repo: getRequiredStringFlag(flags, 'repo'),
+      requireIdle: flags.get('force') !== true
+    })
+    printResult(result, json, formatRepoRemove)
   },
   'repo set-base-ref': async ({ flags, client, json }) => {
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.setBaseRef', {
