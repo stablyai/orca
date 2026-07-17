@@ -1344,7 +1344,10 @@ export function RepositoryHooksSection({
               </div>
 
               {yamlState === 'loaded' ? (
-                <YamlScriptBlock content={renderYamlScriptPreview(yamlHooks)} />
+                <>
+                  <YamlScriptBlock content={renderYamlScriptPreview(yamlHooks)} />
+                  <ServiceRecipeDiagnostics hooks={yamlHooks} />
+                </>
               ) : yamlState === 'invalid' ? (
                 <div className="space-y-4">
                   <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-background/60 p-3">
@@ -1381,6 +1384,42 @@ export function RepositoryHooksSection({
         </details>
       </SearchableSetting>
     </section>
+  )
+}
+
+// Why: services parse leniently — invalid entries and destroy-less recipes are
+// non-fatal, so surface them here rather than failing the whole orca.yaml.
+function ServiceRecipeDiagnostics({
+  hooks
+}: {
+  hooks: OrcaHooks | null
+}): React.JSX.Element | null {
+  const diagnostics = hooks?.serviceDiagnostics ?? []
+  const missingDestroyWarnings = (hooks?.services ?? [])
+    .filter((service) => !service.destroy)
+    .map((service) =>
+      translate(
+        'auto.components.settings.RepositoryHooksSection.serviceMissingDestroy',
+        'Service "{{value0}}" has no destroy command — containers will outlive worktrees.',
+        { value0: service.id }
+      )
+    )
+  if (diagnostics.length === 0 && missingDestroyWarnings.length === 0) {
+    return null
+  }
+  return (
+    <ul className="space-y-1 text-xs">
+      {diagnostics.map((diagnostic, index) => (
+        <li key={`service-diagnostic-${index}`} className="text-destructive">
+          {diagnostic.message}
+        </li>
+      ))}
+      {missingDestroyWarnings.map((warning) => (
+        <li key={warning} className="text-amber-700 dark:text-amber-300">
+          {warning}
+        </li>
+      ))}
+    </ul>
   )
 }
 

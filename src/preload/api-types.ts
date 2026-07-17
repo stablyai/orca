@@ -242,6 +242,10 @@ import type {
   EphemeralVmRecipeResultWarning
 } from '../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
+import type {
+  WorktreeServiceRuntimeState,
+  WorktreeServicesRecord
+} from '../shared/worktree-services'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -2365,6 +2369,24 @@ export type PreloadApi = {
       cleanupDisabled: boolean
       message?: string
     }>
+  }
+  worktreeServices: {
+    list: () => Promise<WorktreeServicesRecord[]>
+    retry: (args: { worktreeId: string }) => Promise<WorktreeServicesRecord>
+    runtime: (args: { worktreeId: string }) => Promise<WorktreeServiceRuntimeState[]>
+    action: (args: {
+      worktreeId: string
+      action: 'start' | 'stop'
+      serviceId?: string
+    }) => Promise<{ success: boolean; errors: string[] }>
+    onProvisionEvent: (
+      callback: (event: {
+        provisionId: string
+        serviceId: string
+        stream: 'stdout' | 'stderr'
+        chunk: string
+      }) => void
+    ) => () => void
   }
   cache: {
     getGitHub: () => Promise<{

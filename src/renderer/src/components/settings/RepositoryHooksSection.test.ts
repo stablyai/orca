@@ -4,7 +4,7 @@ import React from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { OrcaHooks, Repo } from '../../../../shared/types'
 import { getLocalCommandSourcePolicyNotice, RepositoryHooksSection } from './RepositoryHooksSection'
 
 vi.mock('@/store', () => ({
@@ -32,6 +32,8 @@ const repo: Repo = {
 
 function renderRepositoryHooksSection(args: {
   onUpdateHookSettings: (settings: NonNullable<Repo['hookSettings']>) => void
+  yamlHooks?: OrcaHooks | null
+  hasHooksFile?: boolean
 }): { container: HTMLDivElement; root: Root } {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -40,8 +42,8 @@ function renderRepositoryHooksSection(args: {
     root.render(
       React.createElement(RepositoryHooksSection, {
         repo,
-        yamlHooks: null,
-        hasHooksFile: false,
+        yamlHooks: args.yamlHooks ?? null,
+        hasHooksFile: args.hasHooksFile ?? false,
         hooksInspectionReady: true,
         mayNeedUpdate: false,
         copiedTemplate: false,
@@ -131,6 +133,32 @@ describe('getLocalCommandSourcePolicyNotice', () => {
         hasSharedScript: true
       })
     ).toEqual({ kind: 'action', policy: 'run-both', label: 'Run both' })
+  })
+})
+
+describe('RepositoryHooksSection service diagnostics', () => {
+  it('renders service diagnostics and a missing-destroy warning', () => {
+    rendered = renderRepositoryHooksSection({
+      onUpdateHookSettings: () => {},
+      hasHooksFile: true,
+      yamlHooks: {
+        scripts: {},
+        services: [{ id: 'db', name: 'Postgres', create: 'docker compose up -d' }],
+        serviceDiagnostics: [
+          {
+            index: 1,
+            field: 'id',
+            message: 'Duplicate service id "db". Service ids must be unique.'
+          }
+        ]
+      }
+    })
+
+    const text = rendered.container.textContent ?? ''
+    expect(text).toContain('Duplicate service id "db". Service ids must be unique.')
+    expect(text).toContain(
+      'Service "db" has no destroy command — containers will outlive worktrees.'
+    )
   })
 })
 

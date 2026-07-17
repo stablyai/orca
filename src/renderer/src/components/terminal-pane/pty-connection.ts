@@ -29,6 +29,7 @@ import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
+import { getWorktreeServiceEnv } from '@/lib/worktree-service-env-injection'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
@@ -3106,6 +3107,7 @@ export function connectPanePty(
   }
   const paneEnv = {
     ...paneStartup?.env,
+    ...getWorktreeServiceEnv(deps.worktreeId),
     ...paneIdentityEnv
   }
 
@@ -4448,6 +4450,9 @@ export function connectPanePty(
       env
         ? {
             ...env,
+            // Why: cold-restore/reattach fresh spawns must keep the isolated
+            // service env, same as the initial connect path.
+            ...getWorktreeServiceEnv(deps.worktreeId),
             ...paneIdentityEnv,
             ...(env.ORCA_AGENT_LAUNCH_TOKEN
               ? { ORCA_AGENT_LAUNCH_TOKEN: env.ORCA_AGENT_LAUNCH_TOKEN }

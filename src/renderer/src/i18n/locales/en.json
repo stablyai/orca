@@ -267,7 +267,9 @@
           "3b57982bf6": "Git could not safely delete branch \"{{value0}}\" after deleting workspace \"{{value1}}\", so Orca kept it to avoid losing local commits.",
           "81f13f48d2": "Git could not safely delete branch \"{{value0}}\" after deleting worktree \"{{value1}}\", so Orca kept it to avoid losing local commits.",
           "runtimeScopeForbiddenTitle": "This connection has limited (mobile) access",
-          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server."
+          "runtimeScopeForbiddenDescription": "Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.",
+          "serviceDestroyFailed": "Isolated services cleanup failed",
+          "serviceDestroyFailedDescription": "Some services could not be destroyed and may still be running: {{value0}}"
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -1245,7 +1247,9 @@
         "noRunTargets": "No run targets are ready for this project.",
         "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe",
         "branchName": "Branch name",
-        "branchNamePlaceholder": "feature/my-branch"
+        "branchNamePlaceholder": "feature/my-branch",
+        "provisionIsolatedServices": "Isolated services",
+        "provisionIsolatedServicesHint": "Provision this workspace's own services (database, cache) from orca.yaml."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -4233,7 +4237,9 @@
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
           "branchFolderPathIdentity": "Branch or folder path",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "retryServicesFailed": "Failed to retry services provisioning.",
+          "retryServices": "Retry services provisioning"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4281,7 +4287,9 @@
           "e888362def": "State: Closed",
           "f394b3e86e": "State: Merged",
           "af2b07bda5": "State: {{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "servicesFailed": "Services: Failed",
+          "servicesReady": "Services"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "Go to Worktree",
@@ -6187,7 +6195,8 @@
           "da37d6f10e": "Copy",
           "3149964b66": "Copied",
           "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.",
+          "serviceMissingDestroy": "Service \"{{value0}}\" has no destroy command — containers will outlive worktrees."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -9893,7 +9902,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "isolatedServices": "Services"
           },
           "right": {
             "panel": {
@@ -10298,6 +10308,29 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "ServicesPanel": {
+            "statusReady": "Ready",
+            "statusProvisioning": "Provisioning",
+            "statusCreateFailed": "Create failed",
+            "statusDestroyFailed": "Destroy failed",
+            "emptyState": "No isolated services for this workspace.",
+            "emptyHint": "Declare services in orca.yaml and check \"Isolated services\" when creating a workspace.",
+            "retryFailed": "Retrying services provisioning failed: {{value0}}",
+            "retryProvisioning": "Retry provisioning",
+            "servicesSection": "Services",
+            "slotSection": "Slot & ports",
+            "slotLabel": "Slot {{value0}}",
+            "envSection": "Environment variables",
+            "runRunning": "Running",
+            "runStopped": "Stopped",
+            "runUnknown": "No status command",
+            "refreshStatus": "Refresh service status",
+            "startAll": "Start all",
+            "stopAll": "Stop all",
+            "noServices": "No services.",
+            "startService": "Start service",
+            "stopService": "Stop service"
           }
         }
       },

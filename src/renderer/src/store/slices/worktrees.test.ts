@@ -14,6 +14,7 @@ import type {
   WorktreeLineage,
   WorkspaceLineage
 } from '../../../../shared/types'
+import type { WorktreeServicesRecord } from '../../../../shared/worktree-services'
 import { toast } from 'sonner'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -90,6 +91,9 @@ const mockApi = {
     cancelProvision: vi.fn().mockResolvedValue({ cancelled: true }),
     cleanup: vi.fn().mockResolvedValue({}),
     listRuntimes: vi.fn().mockResolvedValue([])
+  },
+  worktreeServices: {
+    list: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -274,6 +278,80 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
     workspaceStatus: overrides.workspaceStatus ?? 'active'
   }
 }
+
+describe('worktree services hydration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockApi.worktreeServices.list.mockResolvedValue([])
+  })
+
+  it('coalesces boot hydration and skips later unrelated refresh reads', async () => {
+    const store = createTestStore()
+    await Promise.all([
+      store.getState().hydrateWorktreeServices({ ifNeeded: true }),
+      store.getState().hydrateWorktreeServices({ ifNeeded: true })
+    ])
+    await store.getState().hydrateWorktreeServices({ ifNeeded: true })
+    expect(mockApi.worktreeServices.list).toHaveBeenCalledTimes(1)
+
+    await store.getState().hydrateWorktreeServices()
+    expect(mockApi.worktreeServices.list).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let stale boot hydration erase a newer provisioning refresh', async () => {
+    const store = createTestStore()
+    let resolveBoot!: (records: WorktreeServicesRecord[]) => void
+    const bootRecords = new Promise<WorktreeServicesRecord[]>((resolve) => {
+      resolveBoot = resolve
+    })
+    mockApi.worktreeServices.list.mockReturnValueOnce(bootRecords).mockResolvedValueOnce([
+      {
+        worktreeId: 'repo::/worktree',
+        repoId: 'repo',
+        slot: 0,
+        slug: 'worktree-s0',
+        serviceIds: ['db'],
+        env: { DATABASE_URL: 'isolated' },
+        status: 'ready',
+        createdAt: '2026-07-17T00:00:00.000Z',
+        updatedAt: '2026-07-17T00:00:00.000Z'
+      }
+    ])
+
+    const boot = store.getState().hydrateWorktreeServices({ ifNeeded: true })
+    await store.getState().hydrateWorktreeServices()
+    resolveBoot([])
+    await boot
+
+    expect(store.getState().worktreeServicesEnv['repo::/worktree']).toEqual({
+      DATABASE_URL: 'isolated'
+    })
+  })
+
+  it('holds startup worktree refresh until service env hydration settles', async () => {
+    const store = createTestStore()
+    let resolveRecords!: (records: WorktreeServicesRecord[]) => void
+    mockApi.worktreeServices.list.mockReturnValueOnce(
+      new Promise<WorktreeServicesRecord[]>((resolve) => {
+        resolveRecords = resolve
+      })
+    )
+
+    let refreshSettled = false
+    const refresh = store
+      .getState()
+      .fetchAllWorktrees({ hydrationPurge: 'defer' })
+      .finally(() => {
+        refreshSettled = true
+      })
+    await Promise.resolve()
+    expect(refreshSettled).toBe(false)
+
+    resolveRecords([])
+    await refresh
+    expect(refreshSettled).toBe(true)
+  })
+})
 
 describe('folder workspace lookups', () => {
   it('returns a stable synthetic worktree for repeated folder workspace lookups', () => {

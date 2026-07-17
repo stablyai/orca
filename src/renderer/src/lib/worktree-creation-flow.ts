@@ -4,9 +4,9 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
-  type ActivateAndRevealResult,
-  type WorktreeStartupPayload
+  type ActivateAndRevealResult
 } from '@/lib/worktree-activation'
+import { buildStartupOpt } from '@/lib/worktree-startup-payload'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -25,6 +25,10 @@ import type {
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  hydrateServicesAfterCreate,
+  subscribeServiceProvisionEvents
+} from '@/lib/worktree-service-provisioning-flow'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 type ContinueBackgroundWorktreeCreationOptions = {
@@ -33,31 +37,6 @@ type ContinueBackgroundWorktreeCreationOptions = {
 
 // Why: mirrors the startup-opt the composer used to build inline. The renderer
 // only seeds the first terminal when the backend did not already spawn it.
-function buildStartupOpt(
-  request: WorktreeCreationRequest,
-  backendSpawned: boolean
-): WorktreeStartupPayload | undefined {
-  const plan = request.startupPlan
-  if (!plan || backendSpawned) {
-    return undefined
-  }
-  return {
-    command: plan.launchCommand,
-    ...(plan.env ? { env: plan.env } : {}),
-    launchConfig: plan.launchConfig,
-    ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
-    ...(request.agent ? { launchAgent: request.agent } : {}),
-    ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
-      : {}),
-    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
-  }
-}
-
 function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
   if (request.worktreeCreateProgressMode) {
     return request.worktreeCreateProgressMode === 'indeterminate'
@@ -136,6 +115,10 @@ async function executeWorktreeCreation(
     return
   }
 
+  const unsubscribeServiceEvents = preparedRequest.provisionServices
+    ? subscribeServiceProvisionEvents(creationId)
+    : undefined
+
   let result: CreateWorktreeResult
   try {
     result = await useAppStore
@@ -165,7 +148,8 @@ async function executeWorktreeCreation(
         preparedRequest.linkedBitbucketPR,
         preparedRequest.linkedAzureDevOpsPR,
         preparedRequest.linkedGiteaPR,
-        preparedRequest.compareBaseRef
+        preparedRequest.compareBaseRef,
+        { provisionServices: preparedRequest.provisionServices }
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -188,6 +172,8 @@ async function executeWorktreeCreation(
       toast.error(message)
     }
     return
+  } finally {
+    unsubscribeServiceEvents?.()
   }
 
   const worktree = result.worktree
@@ -199,6 +185,15 @@ async function executeWorktreeCreation(
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     return
   }
+  if (preparedRequest.provisionServices) {
+    await hydrateServicesAfterCreate()
+  }
+  const serviceInitializationBlocked = Boolean(result.serviceProvisioningError)
+  if (result.serviceProvisioningError) {
+    // Why: the worktree exists and remains usable for retry, but automatic
+    // commands were withheld so they cannot fall back to shared services.
+    toast.error(result.serviceProvisioningError.slice(0, 300))
+  }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true
@@ -207,7 +202,9 @@ async function executeWorktreeCreation(
     // startup, so both halves of the handoff share one renderer-session token.
     preparedRequest.startupPlan.launchToken = createBrowserUuid()
   }
-  const startupOpt = buildStartupOpt(preparedRequest, backendSpawned)
+  const startupOpt = serviceInitializationBlocked
+    ? undefined
+    : buildStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path) {
     const repoConnectionId =
@@ -255,7 +252,7 @@ async function executeWorktreeCreation(
   // Why: clearing synchronously right after activation lets React commit the
   // panel→terminal swap in one frame — no two-row flicker, no empty-terminal flash.
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
-  if (preparedRequest.startupPlan && preparedRequest.agent) {
+  if (!serviceInitializationBlocked && preparedRequest.startupPlan && preparedRequest.agent) {
     const optionScopeKey = primaryTabId ?? result.startupTerminal?.tabId
     if (optionScopeKey) {
       seedNativeChatAppliedSessionOptions(
@@ -265,7 +262,7 @@ async function executeWorktreeCreation(
       )
     }
   }
-  if (preparedRequest.startupPlan && !backendSpawned) {
+  if (preparedRequest.startupPlan && !backendSpawned && !serviceInitializationBlocked) {
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,
       primaryTabId,

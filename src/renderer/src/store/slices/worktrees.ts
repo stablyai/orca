@@ -19,6 +19,10 @@ import type {
   WorktreeMeta
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
+import type {
+  WorktreeServicesRecord,
+  WorktreeServicesStatus
+} from '../../../../shared/worktree-services'
 import {
   findWorktreeById,
   applyWorktreeUpdates,
@@ -108,6 +112,8 @@ const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 const detectedWorktreeRefreshesInFlight = new Map<string, Promise<DetectedWorktreeListResult>>()
+let worktreeServicesHydrationRequestId = 0
+let initialWorktreeServicesHydration: Promise<void> | null = null
 
 type BackgroundRuntimeRefreshOptions = {
   reuseRecentCompatibilityFailure?: boolean
@@ -2195,6 +2201,12 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
     remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
+    // Why: mirror the single-worktree removal cleanup on this bulk reconcile path
+    // (external removal / authoritative-scan purge). Without it a same-path
+    // recreate could inject the deleted worktree's stale isolated-service env.
+    worktreeServicesEnv: omitByWorktree(s.worktreeServicesEnv),
+    worktreeServicesStatus: omitByWorktree(s.worktreeServicesStatus),
+    worktreeServicesRecords: omitByWorktree(s.worktreeServicesRecords),
     // File search
     fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
     // Browser state
@@ -2305,6 +2317,56 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
   hasHydratedWorktreePurge: false,
+  worktreeServicesEnv: {},
+  worktreeServicesStatus: {},
+  worktreeServicesRecords: {},
+  hasHydratedWorktreeServices: false,
+
+  hydrateWorktreeServices: async (options) => {
+    if (options?.ifNeeded) {
+      if (get().hasHydratedWorktreeServices) {
+        return
+      }
+      if (initialWorktreeServicesHydration) {
+        return initialWorktreeServicesHydration
+      }
+    }
+    const requestId = ++worktreeServicesHydrationRequestId
+    const hydration = (async (): Promise<void> => {
+      const records = await window.api.worktreeServices.list()
+      const worktreeServicesEnv: Record<string, Record<string, string>> = {}
+      const worktreeServicesStatus: Record<string, WorktreeServicesStatus> = {}
+      const worktreeServicesRecords: Record<string, WorktreeServicesRecord> = {}
+      for (const record of records) {
+        worktreeServicesStatus[record.worktreeId] = record.status
+        worktreeServicesRecords[record.worktreeId] = record
+        if (record.status === 'ready') {
+          worktreeServicesEnv[record.worktreeId] = record.env
+        }
+      }
+      // Why: a mutation-triggered refresh can overtake boot hydration. Only
+      // the newest response may publish, or the older empty snapshot can erase
+      // freshly provisioned env and make subsequent PTYs target shared services.
+      if (requestId === worktreeServicesHydrationRequestId) {
+        set({
+          worktreeServicesEnv,
+          worktreeServicesStatus,
+          worktreeServicesRecords,
+          hasHydratedWorktreeServices: true
+        })
+      }
+    })()
+    if (options?.ifNeeded) {
+      initialWorktreeServicesHydration = hydration
+    }
+    try {
+      await hydration
+    } finally {
+      if (initialWorktreeServicesHydration === hydration) {
+        initialWorktreeServicesHydration = null
+      }
+    }
+  },
 
   fetchDetectedWorktrees: async (repoId) => {
     try {
@@ -2502,6 +2564,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchAllWorktrees: async (options) => {
     const { repos } = get()
+
+    // Why: restored terminal reconnect runs after this startup refresh and must
+    // see isolated env before spawning. Only the first refresh reads the secure
+    // file; later worktree refreshes return immediately with no IPC or disk I/O.
+    await get()
+      .hydrateWorktreeServices({ ifNeeded: true })
+      .catch(() => {})
 
     // Why: once the one-shot hydration-time purge has fired, subsequent
     // calls just need to refresh each repo's cached list. No need to
@@ -3070,7 +3139,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
             ...(startup ? { startup } : {}),
             ...(creationId ? { creationId } : {}),
-            ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
+            ...(automationProvenanceRequest ? { automationProvenanceRequest } : {}),
+            // Why: services are provisioned only on the local create path (v1
+            // excludes remote); serviceProvisionId reuses creationId so the
+            // renderer can correlate streamed provision events to this create.
+            ...(options?.provisionServices
+              ? {
+                  provisionServices: true,
+                  ...(creationId ? { serviceProvisionId: creationId } : {})
+                }
+              : {})
           }
           const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
           const result =
@@ -3354,6 +3432,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // an old toast cannot mutate a same-path replacement during UI teardown.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
 
+      if (removalResult?.serviceDestroyErrors?.length) {
+        toast.warning(
+          translate(
+            'auto.store.slices.worktrees.serviceDestroyFailed',
+            'Isolated services cleanup failed'
+          ),
+          {
+            description: translate(
+              'auto.store.slices.worktrees.serviceDestroyFailedDescription',
+              'Some services could not be destroyed and may still be running: {{value0}}',
+              { value0: removalResult.serviceDestroyErrors.join('; ').slice(0, 300) }
+            )
+          }
+        )
+      }
+
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
         try {
@@ -3632,6 +3726,25 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           })(),
           defaultTerminalTabsAppliedByWorktreeId: (() => {
             const next = { ...s.defaultTerminalTabsAppliedByWorktreeId }
+            delete next[worktreeId]
+            return next
+          })(),
+          // Why: worktree IDs are path-derived and can be reused by a same-name
+          // recreate. Drop this worktree's service env/status/record so a new
+          // worktree at the same path never inherits stale isolated-service env
+          // (injected into every PTY) or a phantom badge/panel from the deleted one.
+          worktreeServicesEnv: (() => {
+            const next = { ...s.worktreeServicesEnv }
+            delete next[worktreeId]
+            return next
+          })(),
+          worktreeServicesStatus: (() => {
+            const next = { ...s.worktreeServicesStatus }
+            delete next[worktreeId]
+            return next
+          })(),
+          worktreeServicesRecords: (() => {
+            const next = { ...s.worktreeServicesRecords }
             delete next[worktreeId]
             return next
           })(),

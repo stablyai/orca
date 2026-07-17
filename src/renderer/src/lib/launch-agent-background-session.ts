@@ -25,6 +25,7 @@ import {
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { buildBackgroundPaneEnv } from '@/lib/background-pane-env'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { retireProvider, retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
@@ -126,10 +127,7 @@ export async function launchAgentBackgroundSession(
   // in-terminal title row, so background sessions must not persist it there.
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
   const paneEnv = {
-    ...startupPlan.env,
-    ORCA_PANE_KEY: paneKey,
-    ORCA_TAB_ID: tab.id,
-    ORCA_WORKTREE_ID: worktreeId,
+    ...buildBackgroundPaneEnv(worktreeId, tab.id, leafId, startupPlan.env),
     ORCA_AGENT_LAUNCH_TOKEN: launchToken
   }
   const sshConnectionId = repo?.connectionId ?? null

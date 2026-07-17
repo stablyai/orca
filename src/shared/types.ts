@@ -2025,6 +2025,8 @@ export type OrcaHooks = {
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
   environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
   environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
+  services?: OrcaServiceRecipe[] // Per-worktree isolated service recipes
+  serviceDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from services
 }
 
 export type OrcaDefaultTabTemplate = {
@@ -2048,6 +2050,17 @@ export type OrcaVmRecipeDiagnostic = {
   index: number
   field?: string
   message: string
+}
+
+export type OrcaServiceRecipe = {
+  id: string
+  name: string
+  create: string
+  destroy?: string
+  start?: string
+  stop?: string
+  status?: string // exit 0 = running, non-zero = stopped
+  env?: Record<string, string>
 }
 
 export type RepoHookSettings = {
@@ -2170,6 +2183,10 @@ export type CreateWorktreeArgs = {
   creationId?: string
   /** Authorizes the host to mint system-owned automation provenance. */
   automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
+  /** Opt-in to provisioning isolated per-worktree services from orca.yaml. */
+  provisionServices?: boolean
+  /** Correlates worktreeServices:provisionEvent streams back to the pending creation. */
+  serviceProvisionId?: string
 }
 
 export type CreateWorktreeResult = {
@@ -2186,6 +2203,9 @@ export type CreateWorktreeResult = {
   setup?: WorktreeSetupLaunch
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
+  /** Worktree creation succeeded, but isolated services failed. Automatic
+   * setup/default-tab/agent commands are withheld to protect shared services. */
+  serviceProvisioningError?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
@@ -2207,6 +2227,7 @@ export type PreservedWorktreeBranch = {
 
 export type RemoveWorktreeResult = {
   preservedBranch?: PreservedWorktreeBranch
+  serviceDestroyErrors?: string[]
 }
 
 export type ForceDeleteWorktreeBranchResult = {
@@ -3287,6 +3308,7 @@ export type RightSidebarTab =
   | 'source-control'
   | 'checks'
   | 'ports'
+  | 'services'
 export type ActiveRightSidebarTab = Exclude<RightSidebarTab, 'search'>
 export type RightSidebarExplorerView = 'files' | 'search'
 

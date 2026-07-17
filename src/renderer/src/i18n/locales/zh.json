@@ -244,7 +244,9 @@
           "3b57982bf6": "删除工作区\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
           "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
           "runtimeScopeForbiddenTitle": "此连接具有受限（移动端）访问权限",
-          "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。"
+          "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。",
+          "serviceDestroyFailed": "Isolated services cleanup failed",
+          "serviceDestroyFailedDescription": "Some services could not be destroyed and may still be running: {{value0}}"
         },
         "repos": {
           "2975400634": "请更新 Orca 服务器，以便在此运行时打开非 Git 文件夹。",
@@ -1222,7 +1224,9 @@
         "noRunTargets": "此项目还没有可用的运行目标。",
         "perWorkspaceEnvHint": "通过环境模板按需创建环境",
         "branchName": "分支名称",
-        "branchNamePlaceholder": "feature/my-branch"
+        "branchNamePlaceholder": "feature/my-branch",
+        "provisionIsolatedServices": "Isolated services",
+        "provisionIsolatedServicesHint": "Provision this workspace's own services (database, cache) from orca.yaml."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "创建工作树",
@@ -4168,7 +4172,9 @@
           "automationCreated": "由自动化创建",
           "branchIdentity": "分支",
           "branchFolderPathIdentity": "分支或文件夹路径",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "retryServicesFailed": "Failed to retry services provisioning.",
+          "retryServices": "Retry services provisioning"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "智能体"
@@ -4216,7 +4222,9 @@
           "e888362def": "状态： 关闭",
           "f394b3e86e": "状态：合并",
           "af2b07bda5": "州：{{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "servicesFailed": "Services: Failed",
+          "servicesReady": "Services"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "转到工作树",
@@ -6112,7 +6120,8 @@
           "da37d6f10e": "复制",
           "3149964b66": "已复制",
           "waitForSetupBeforeAgent": "等待设置完成后再启动智能体",
-          "waitForSetupBeforeAgentHelp": "如果设置会安装依赖、MCP 服务器或智能体启动时需要的配置文件，请开启此选项。"
+          "waitForSetupBeforeAgentHelp": "如果设置会安装依赖、MCP 服务器或智能体启动时需要的配置文件，请开启此选项。",
+          "serviceMissingDestroy": "Service \"{{value0}}\" has no destroy command — containers will outlive worktrees."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 仓库颜色",
@@ -9870,7 +9879,8 @@
             "fc3095d2ed": "资源管理器",
             "aiVaultSessionHistory": "智能体",
             "folderWorkspaces": "已附加的工作树",
-            "parentPrChecks": "PR 检查"
+            "parentPrChecks": "PR 检查",
+            "isolatedServices": "Services"
           },
           "right": {
             "panel": {
@@ -10275,6 +10285,29 @@
             "workspaceGone": "无法打开日志 — 工作区已不可用。",
             "notAuthorized": "无法打开日志 — 路径未授权。",
             "alreadyEditable": "日志已处于编辑状态。"
+          },
+          "ServicesPanel": {
+            "statusReady": "Ready",
+            "statusProvisioning": "Provisioning",
+            "statusCreateFailed": "Create failed",
+            "statusDestroyFailed": "Destroy failed",
+            "emptyState": "No isolated services for this workspace.",
+            "emptyHint": "Declare services in orca.yaml and check \"Isolated services\" when creating a workspace.",
+            "retryFailed": "Retrying services provisioning failed: {{value0}}",
+            "retryProvisioning": "Retry provisioning",
+            "servicesSection": "Services",
+            "slotSection": "Slot & ports",
+            "slotLabel": "Slot {{value0}}",
+            "envSection": "Environment variables",
+            "runRunning": "Running",
+            "runStopped": "Stopped",
+            "runUnknown": "No status command",
+            "refreshStatus": "Refresh service status",
+            "startAll": "Start all",
+            "stopAll": "Stop all",
+            "noServices": "No services.",
+            "startService": "Start service",
+            "stopService": "Stop service"
           }
         }
       },

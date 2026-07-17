@@ -20,6 +20,8 @@ import {
   Workflow
 } from 'lucide-react'
 import CacheTimer, { usePromptCacheCountdownStartedAt } from './CacheTimer'
+import { toast } from 'sonner'
+import { ServicesStatusBadge } from './WorktreeCardMetadataStatusBadges'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
@@ -324,6 +326,25 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
+  const servicesStatus = useAppStore((s) => s.worktreeServicesStatus?.[worktree.id])
+  const handleRetryServices = useCallback(
+    async (event: React.MouseEvent): Promise<void> => {
+      // Why: the badge sits on the clickable card row; don't activate the worktree.
+      event.stopPropagation()
+      try {
+        await window.api.worktreeServices.retry({ worktreeId: worktree.id })
+        await useAppStore.getState().hydrateWorktreeServices()
+      } catch {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeCard.retryServicesFailed',
+            'Failed to retry services provisioning.'
+          )
+        )
+      }
+    },
+    [worktree.id]
+  )
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
   const workspacePorts = useAppStore(
     (s) =>
@@ -1187,7 +1208,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // carrying a persistent rebase chip while preserving other interruption cues.
   const showConflictOperationBadge =
     !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
-  const hasMetadataBadge = showConflictOperationBadge
+  const hasMetadataBadge = showConflictOperationBadge || Boolean(servicesStatus)
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the tiny unread/status lane; legacy keeps the bell
   // toggle, while the experimental card keeps the status glyph passive.
@@ -1206,6 +1227,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     showIdentityInNewCard ||
     showDetachedHeadInMetaRow ||
     showConflictOperationBadge ||
+    Boolean(servicesStatus) ||
     cacheStartedAt != null ||
     showMetaRowDetails
   )
@@ -1698,6 +1720,23 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   {CONFLICT_OPERATION_LABELS[conflictOperation]}
                 </Badge>
               )}
+
+              {servicesStatus &&
+                (servicesStatus === 'create_failed' || servicesStatus === 'destroy_failed' ? (
+                  <button
+                    type="button"
+                    onClick={handleRetryServices}
+                    className="inline-flex rounded p-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    title={translate(
+                      'auto.components.sidebar.WorktreeCard.retryServices',
+                      'Retry services provisioning'
+                    )}
+                  >
+                    <ServicesStatusBadge status={servicesStatus} />
+                  </button>
+                ) : (
+                  <ServicesStatusBadge status={servicesStatus} />
+                ))}
 
               {cacheStartedAt != null && (
                 <CacheTimer startedAt={cacheStartedAt} ttlMs={cacheTtlMs} />

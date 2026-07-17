@@ -2,6 +2,7 @@ import { parse } from 'yaml'
 import type {
   OrcaDefaultTabTemplate,
   OrcaHooks,
+  OrcaServiceRecipe,
   OrcaVmRecipe,
   OrcaVmRecipeDiagnostic
 } from './types'
@@ -122,6 +123,134 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   return { recipes, diagnostics }
 }
 
+type ServiceParseResult = {
+  services: OrcaServiceRecipe[]
+  diagnostics: OrcaVmRecipeDiagnostic[]
+}
+
+function normalizeServiceEnv(
+  value: unknown,
+  serviceId: string,
+  index: number,
+  diagnostics: OrcaVmRecipeDiagnostic[]
+): Record<string, string> | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  const record = asRecord(value)
+  if (!record) {
+    diagnostics.push({
+      index,
+      field: 'env',
+      message: `Service "${serviceId}" env must be a mapping.`
+    })
+    return undefined
+  }
+  const env: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(record)) {
+    // Why: keys become child-process env var names (and, on WSL, WSLENV entries
+    // joined by ':'), so a key with '=', ':' or whitespace would corrupt the
+    // environment passed to the recipe command.
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      diagnostics.push({
+        index,
+        field: 'env',
+        message: `Service "${serviceId}" env key "${key}" is not a valid environment variable name.`
+      })
+      continue
+    }
+    // Why: Orca uses this namespace for the stable slot/port contract. Letting
+    // recipe env replace it would make create and destroy target different services.
+    if (key.startsWith('ORCA_')) {
+      diagnostics.push({
+        index,
+        field: 'env',
+        message: `Service "${serviceId}" env key "${key}" is reserved by Orca.`
+      })
+      continue
+    }
+    if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+      env[key] = String(raw)
+    } else {
+      diagnostics.push({
+        index,
+        field: 'env',
+        message: `Service "${serviceId}" env value for "${key}" must be a string, number, or boolean.`
+      })
+    }
+  }
+  return Object.keys(env).length > 0 ? env : undefined
+}
+
+function normalizeServices(value: unknown): ServiceParseResult {
+  const diagnostics: OrcaVmRecipeDiagnostic[] = []
+  if (value !== undefined && !Array.isArray(value)) {
+    diagnostics.push({ index: 0, message: 'Services must be a list.' })
+    return { services: [], diagnostics }
+  }
+  if (!Array.isArray(value)) {
+    return { services: [], diagnostics }
+  }
+  const seenIds = new Set<string>()
+  const services = value
+    .map((entry, index) => {
+      const record = asRecord(entry)
+      if (!record) {
+        diagnostics.push({ index, message: 'Service entry must be a mapping.' })
+        return null
+      }
+      const id = asTrimmedString(record.id)
+      const name = asTrimmedString(record.name)
+      const create = asTrimmedString(record.create)
+      if (!id) {
+        diagnostics.push({ index, field: 'id', message: 'Service id is required.' })
+        return null
+      }
+      if (!ORCA_VM_RECIPE_ID_PATTERN.test(id)) {
+        diagnostics.push({
+          index,
+          field: 'id',
+          message: `Invalid service id "${id}". ${ORCA_VM_RECIPE_ID_RULE}`
+        })
+        return null
+      }
+      if (seenIds.has(id)) {
+        diagnostics.push({
+          index,
+          field: 'id',
+          message: `Duplicate service id "${id}". Service ids must be unique.`
+        })
+        return null
+      }
+      if (!name) {
+        diagnostics.push({ index, field: 'name', message: `Service "${id}" is missing name.` })
+        return null
+      }
+      if (!create) {
+        diagnostics.push({ index, field: 'create', message: `Service "${id}" is missing create.` })
+        return null
+      }
+      seenIds.add(id)
+      const destroy = asTrimmedString(record.destroy)
+      const start = asTrimmedString(record.start)
+      const stop = asTrimmedString(record.stop)
+      const status = asTrimmedString(record.status)
+      const env = normalizeServiceEnv(record.env, id, index, diagnostics)
+      return {
+        id,
+        name,
+        create,
+        ...(destroy ? { destroy } : {}),
+        ...(start ? { start } : {}),
+        ...(stop ? { stop } : {}),
+        ...(status ? { status } : {}),
+        ...(env ? { env } : {})
+      }
+    })
+    .filter((entry): entry is OrcaServiceRecipe => entry !== null)
+  return { services, diagnostics }
+}
+
 /**
  * Parse the supported project defaults from `orca.yaml`.
  */
@@ -146,6 +275,9 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const environmentRecipeParse = normalizeVmRecipes(record.environmentRecipes)
   const environmentRecipes = environmentRecipeParse.recipes
   const environmentRecipeDiagnostics = environmentRecipeParse.diagnostics
+  const serviceParse = normalizeServices(record.services)
+  const services = serviceParse.services
+  const serviceDiagnostics = serviceParse.diagnostics
 
   if (
     !setup &&
@@ -153,7 +285,9 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     !issueCommand &&
     defaultTabs.length === 0 &&
     environmentRecipes.length === 0 &&
-    environmentRecipeDiagnostics.length === 0
+    environmentRecipeDiagnostics.length === 0 &&
+    services.length === 0 &&
+    serviceDiagnostics.length === 0
   ) {
     return null
   }
@@ -166,6 +300,8 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     ...(issueCommand ? { issueCommand } : {}),
     ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
     ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
-    ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {})
+    ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {}),
+    ...(services.length > 0 ? { services } : {}),
+    ...(serviceDiagnostics.length > 0 ? { serviceDiagnostics } : {})
   }
 }

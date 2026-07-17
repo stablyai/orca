@@ -8,6 +8,7 @@
 // cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { posix, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -58,6 +59,11 @@ import {
   parseOrcaYaml,
   shouldRunSetupForCreate
 } from '../hooks'
+import {
+  loadServiceRecipesForWorktree,
+  provisionWorktreeServices,
+  sanitizeServiceCommandOutput
+} from '../worktree-services'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -2579,9 +2585,52 @@ export async function createLocalWorktree(
   // the regression this replaced.
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
+  // Why: provision isolated services before setup terminals spawn so the
+  // resolved service env can be injected into the setup runner. A failed
+  // provision must not abort creation — the worktree stays, retry is offered.
+  let serviceEnv: Record<string, string> = {}
+  let serviceProvisioningError: string | undefined
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+    // Why: prefer the new worktree branch's own services, falling back to the
+    // repo root — the composer opt-in is gated on the repo's primary checkout,
+    // so a base branch whose orca.yaml omits services must still provision from
+    // root. loadServiceRecipesForWorktree reads raw yaml (like defaultTabs);
+    // getEffectiveHooksFromConfig only carries setup/archive and would drop them.
+    const serviceRecipes = loadServiceRecipesForWorktree(worktreePath, repo.path)
+    if (args.provisionServices) {
+      try {
+        const record = await provisionWorktreeServices({
+          userDataPath: app.getPath('userData'),
+          worktreeId: worktree.id,
+          worktreeName: args.name,
+          worktreePath,
+          repo,
+          services: serviceRecipes,
+          provisionId: args.serviceProvisionId,
+          onEvent: (event) => mainWindow.webContents.send('worktreeServices:provisionEvent', event)
+        })
+        if (record.status === 'ready') {
+          serviceEnv = record.env
+        } else {
+          serviceProvisioningError = record.error ?? 'Isolated services could not be provisioned.'
+        }
+      } catch (error) {
+        serviceProvisioningError = sanitizeServiceCommandOutput(
+          error instanceof Error ? error.message : String(error)
+        )
+        console.error(`[services] provisioning failed for ${worktreePath}:`, error)
+      }
+    }
+
+    // Why: setup/default-tab commands commonly run migrations. If isolated
+    // provisioning failed, launching them without service env can mutate the
+    // shared database this opt-in exists to protect.
+    if (serviceProvisioningError) {
+      return
+    }
+
     try {
       defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
     } catch (error) {
@@ -2626,13 +2675,28 @@ export async function createLocalWorktree(
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
       }
     }
+    if (setup && Object.keys(serviceEnv).length > 0) {
+      setup = { ...setup, envVars: { ...setup.envVars, ...serviceEnv } }
+    }
   })
 
+  // Why: the startup (agent) terminal spawns in-main before the renderer's
+  // services hydration resolves, so without this merge the first terminal of a
+  // freshly provisioned worktree — where the agent runs migrations — would
+  // miss the isolated-service env entirely. Service env is authoritative (it
+  // wins over the launch env), matching the setup runner and every renderer PTY
+  // path, so the isolated DB/port always beats a colliding shared-env default.
+  const startupWithServiceEnv =
+    !serviceProvisioningError && args.startup && Object.keys(serviceEnv).length > 0
+      ? { ...args.startup, env: { ...args.startup.env, ...serviceEnv } }
+      : serviceProvisioningError
+        ? undefined
+        : args.startup
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
     spawnLocalStartupAndSetupTerminals({
       runtime,
       worktree,
-      startup: args.startup,
+      startup: startupWithServiceEnv,
       setup,
       defaultTabs,
       settings,
@@ -2650,6 +2714,7 @@ export async function createLocalWorktree(
         ? { setup }
         : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
+    ...(serviceProvisioningError ? { serviceProvisioningError } : {}),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
       : {}),

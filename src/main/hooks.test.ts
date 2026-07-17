@@ -292,6 +292,100 @@ describe('parseOrcaYaml', () => {
       ]
     })
   })
+
+  it('parses services recipes', () => {
+    const yaml = [
+      'services:',
+      '  - id: db',
+      '    name: Postgres 16',
+      '    create: docker compose up -d --wait',
+      '    destroy: docker compose down -v',
+      '    start: docker compose start',
+      '    stop: docker compose stop',
+      '    status: docker compose ps -q | grep -q .',
+      '    env:',
+      '      DATABASE_URL: postgres://app:app@localhost:${ORCA_PORT_0}/app'
+    ].join('\n')
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      services: [
+        {
+          id: 'db',
+          name: 'Postgres 16',
+          create: 'docker compose up -d --wait',
+          destroy: 'docker compose down -v',
+          start: 'docker compose start',
+          stop: 'docker compose stop',
+          status: 'docker compose ps -q | grep -q .',
+          env: { DATABASE_URL: 'postgres://app:app@localhost:${ORCA_PORT_0}/app' }
+        }
+      ]
+    })
+  })
+
+  it('reports diagnostics for invalid services entries', () => {
+    const yaml = [
+      'services:',
+      '  - id: db',
+      '    name: A',
+      '    create: echo a',
+      '  - id: db',
+      '    name: B',
+      '    create: echo b',
+      '  - id: "BAD ID"',
+      '    name: C',
+      '    create: echo c',
+      '  - id: nocreate',
+      '    name: D',
+      '  - id: badenv',
+      '    name: E',
+      '    create: echo e',
+      '    env:',
+      '      GOOD: ok',
+      '      BAD: [not, a, scalar]'
+    ].join('\n')
+    const result = parseOrcaYaml(yaml)
+    expect(result?.services).toEqual([
+      { id: 'db', name: 'A', create: 'echo a' },
+      { id: 'badenv', name: 'E', create: 'echo e', env: { GOOD: 'ok' } }
+    ])
+    expect(result?.serviceDiagnostics).toHaveLength(4)
+    expect(result?.serviceDiagnostics?.at(-1)?.message).toContain('BAD')
+  })
+
+  it('drops invalid env keys and reports a diagnostic', () => {
+    const yaml = [
+      'services:',
+      '  - id: db',
+      '    name: A',
+      '    create: echo a',
+      '    env:',
+      '      GOOD_KEY: ok',
+      '      ORCA_PORT_0: 29999',
+      '      "BAD:KEY": nope',
+      '      "A=B": nope'
+    ].join('\n')
+    const result = parseOrcaYaml(yaml)
+    expect(result?.services).toEqual([
+      { id: 'db', name: 'A', create: 'echo a', env: { GOOD_KEY: 'ok' } }
+    ])
+    expect(result?.serviceDiagnostics).toHaveLength(3)
+    expect(
+      result?.serviceDiagnostics?.some((diagnostic) => diagnostic.message.includes('reserved'))
+    ).toBe(true)
+  })
+
+  it('reports malformed services and env containers', () => {
+    const malformedServices = parseOrcaYaml('services: not-a-list')
+    expect(malformedServices?.services).toBeUndefined()
+    expect(malformedServices?.serviceDiagnostics?.[0]?.message).toBe('Services must be a list.')
+
+    const malformedEnv = parseOrcaYaml(
+      ['services:', '  - id: db', '    name: DB', '    create: echo up', '    env: nope'].join('\n')
+    )
+    expect(malformedEnv?.services).toEqual([{ id: 'db', name: 'DB', create: 'echo up' }])
+    expect(malformedEnv?.serviceDiagnostics?.[0]?.message).toContain('env must be a mapping')
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {

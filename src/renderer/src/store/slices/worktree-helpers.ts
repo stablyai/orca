@@ -28,6 +28,10 @@ import type {
 } from '@/lib/pending-worktree-creation'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import type {
+  WorktreeServicesRecord,
+  WorktreeServicesStatus
+} from '../../../../shared/worktree-services'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
@@ -116,6 +120,14 @@ export type WorktreeSlice = {
    * sessions (design §4.4). Session-only; never persisted.
    */
   hasHydratedWorktreePurge: boolean
+  // Resolved per-worktree service env (ready records only), merged into every PTY spawn.
+  worktreeServicesEnv: Record<string, Record<string, string>>
+  // Provisioning status per worktree, drives the sidebar badge and retry action.
+  worktreeServicesStatus: Record<string, WorktreeServicesStatus>
+  // Full provisioning record per worktree, drives the Services right-sidebar panel.
+  worktreeServicesRecords: Record<string, WorktreeServicesRecord>
+  hasHydratedWorktreeServices: boolean
+  hydrateWorktreeServices: (options?: { ifNeeded?: boolean }) => Promise<void>
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>
@@ -158,7 +170,11 @@ export type WorktreeSlice = {
     compareBaseRef?: string,
     // Why: reserved for automation-dispatch flows so host-side provenance can
     // be minted securely; regular create callers should omit this.
-    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
+    options?: {
+      automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+      /** Opt-in to provisioning isolated per-worktree services from orca.yaml. */
+      provisionServices?: boolean
+    }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

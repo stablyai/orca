@@ -1,6 +1,12 @@
 /* oxlint-disable max-lines */
 import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
+import { destroyWorktreeServices, loadServiceRecipesForWorktree } from '../worktree-services'
+import {
+  getWorktreeServicesRecord,
+  removeWorktreeServicesRecord,
+  upsertWorktreeServicesRecord
+} from '../../shared/worktree-services-store'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
@@ -1718,6 +1724,11 @@ export function registerWorktreeHandlers(
           }
         }
 
+        let serviceDestroyErrors: string[] | undefined
+        const servicesRecord = !repo.connectionId
+          ? getWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
+          : null
+
         if (repo.connectionId) {
           // Why: SSH deletion mirrors the local flow: hooks run while the
           // directory is intact, then the clean check guards destructive removal.
@@ -1819,8 +1830,47 @@ export function registerWorktreeHandlers(
           // retain strict PTY teardown before any recursive fallback deletion.
         }
 
+        // Why: destroy isolated services only after the clean check proves the
+        // removal will proceed — destroying earlier would irreversibly drop the
+        // services record for a worktree that a dirty-tree abort leaves standing.
+        // Exotic orphan-directory paths that return earlier are reconciled by
+        // the startup orphan-cleanup sweep. Never blocks removal; errors travel
+        // back on the result so the renderer can warn the user.
+        if (!repo.connectionId) {
+          if (servicesRecord) {
+            const destroyResult = await destroyWorktreeServices({
+              userDataPath: app.getPath('userData'),
+              worktreeId: args.worktreeId,
+              worktreePath: canonicalWorktreePath,
+              repo,
+              services: loadServiceRecipesForWorktree(canonicalWorktreePath, repo.path),
+              releaseRecord: false
+            })
+            if (!destroyResult.success) {
+              serviceDestroyErrors = destroyResult.errors
+              console.error(
+                `[services] destroy failed for ${canonicalWorktreePath}:`,
+                destroyResult.errors.join('; ')
+              )
+            }
+          }
+        }
+
         let removalResult: RemoveWorktreeResult | undefined
-        const removalGate = await runtime.acquireFileWatcherRemoval(canonicalWorktreePath)
+        const removalGate = await runtime
+          .acquireFileWatcherRemoval(canonicalWorktreePath)
+          .catch((error) => {
+            if (servicesRecord) {
+              upsertWorktreeServicesRecord(app.getPath('userData'), {
+                ...servicesRecord,
+                status: 'create_failed',
+                error:
+                  'Worktree removal stopped isolated services but did not remove the worktree. Retry provisioning.',
+                updatedAt: new Date().toISOString()
+              })
+            }
+            throw error
+          })
         let removalCompleted = false
         try {
           // Why: preflight ignores only these configured paths without mutating
@@ -1867,6 +1917,9 @@ export function registerWorktreeHandlers(
             if (recoveredRemovalResult) {
               removalResult = recoveredRemovalResult
               removalCompleted = true
+              if (servicesRecord) {
+                removeWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
+              }
             } else if (isOrphanedWorktreeError(error)) {
               // If git no longer tracks this worktree, clean up the directory and metadata
               console.warn(
@@ -1911,7 +1964,10 @@ export function registerWorktreeHandlers(
               invalidateAuthorizedRootsCache()
               notifyWorktreesChanged(mainWindow, repoId)
               removalCompleted = true
-              return {}
+              if (servicesRecord) {
+                removeWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
+              }
+              return serviceDestroyErrors ? { serviceDestroyErrors } : {}
             } else {
               throw new Error(
                 formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
@@ -1919,8 +1975,26 @@ export function registerWorktreeHandlers(
             }
           }
           removalCompleted = true
+          if (servicesRecord) {
+            removeWorktreeServicesRecord(app.getPath('userData'), args.worktreeId)
+          }
         } finally {
-          await removalGate.finish(removalCompleted)
+          try {
+            await removalGate.finish(removalCompleted)
+          } finally {
+            // Why: destroy happens while the worktree directory still exists.
+            // If Git removal then fails, retain the slot and expose retry state
+            // instead of leaving a live worktree silently without its services.
+            if (!removalCompleted && servicesRecord) {
+              upsertWorktreeServicesRecord(app.getPath('userData'), {
+                ...servicesRecord,
+                status: 'create_failed',
+                error:
+                  'Worktree removal stopped isolated services but did not remove the worktree. Retry provisioning.',
+                updatedAt: new Date().toISOString()
+              })
+            }
+          }
         }
         await cleanupUnusedWorktreePushTargetRemote(
           repo.path,
@@ -1940,7 +2014,7 @@ export function registerWorktreeHandlers(
         invalidateAuthorizedRootsCache()
 
         notifyWorktreesChanged(mainWindow, repoId)
-        return removalResult ?? {}
+        return { ...removalResult, ...(serviceDestroyErrors ? { serviceDestroyErrors } : {}) }
       })()
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: removal })
       try {

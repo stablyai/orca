@@ -3,6 +3,7 @@ import {
   type EagerPtyHandle
 } from '@/components/terminal-pane/pty-dispatcher'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { buildBackgroundPaneEnv } from '@/lib/background-pane-env'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
@@ -10,7 +11,6 @@ import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { makePaneKey } from '../../../shared/stable-pane-id'
 import { buildSetupRunnerCommand } from '../../../shared/setup-runner-command'
 import type {
   TerminalLayoutSnapshot,
@@ -44,20 +44,6 @@ export type LaunchWorktreeBackgroundTerminalsArgs = {
   worktreeId: string
   setup?: WorktreeSetupLaunch
   defaultTabs?: WorktreeDefaultTabsLaunch
-}
-
-function buildPaneEnv(
-  worktreeId: string,
-  tabId: string,
-  leafId: string,
-  env: Record<string, string> | undefined
-): Record<string, string> {
-  return {
-    ...env,
-    ORCA_PANE_KEY: makePaneKey(tabId, leafId),
-    ORCA_TAB_ID: tabId,
-    ORCA_WORKTREE_ID: worktreeId
-  }
 }
 
 function buildSplitLayout(
@@ -139,7 +125,7 @@ async function spawnPane(args: {
     rows: 40,
     cwd: args.worktree.path,
     ...(args.command ? { command: args.command } : {}),
-    env: buildPaneEnv(args.worktree.id, args.tabId, args.leafId, args.env),
+    env: buildBackgroundPaneEnv(args.worktree.id, args.tabId, args.leafId, args.env),
     connectionId: args.connectionId,
     worktreeId: args.worktree.id,
     tabId: args.tabId,

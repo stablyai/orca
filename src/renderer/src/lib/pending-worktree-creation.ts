@@ -16,7 +16,12 @@ import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/tas
  *  `fetching` covers the base-ref git fetch; `creating` covers `git worktree
  *  add`. Remote/runtime creates may skip git phases; VM recipes add a
  *  provider-provisioning phase before the runtime worktree exists. */
-export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
+export type WorktreeCreationPhase =
+  | 'preparing'
+  | 'provisioning-vm'
+  | 'provisioning-services'
+  | 'fetching'
+  | 'creating'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
@@ -91,6 +96,8 @@ export type WorktreeCreationRequest = {
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */
   suppressTerminalFocusOnCompletion?: boolean
+  /** Opt-in to provisioning isolated per-worktree services from orca.yaml. */
+  provisionServices?: boolean
 }
 
 /** Renderer-only, session-ephemeral record of an in-flight (or failed) worktree
@@ -125,6 +132,9 @@ export function getCreationProgressLabel(
 ): string {
   if (entry.phase === 'provisioning-vm') {
     return 'Provisioning VM…'
+  }
+  if (entry.phase === 'provisioning-services') {
+    return 'Provisioning services…'
   }
   if (entry.indeterminate) {
     return 'Setting up your workspace…'

@@ -161,6 +161,17 @@ export default function WorktreeCreationPanel({
               <span>{getCreationProgressLabel(entry)}</span>
               <span className="text-muted-foreground/70">{elapsedLabel}</span>
             </div>
+            {/* Why: surface streamed service-provisioning output (docker image
+                pulls can run for minutes) instead of only a static label. */}
+            {entry.phase === 'provisioning-services' && entry.provisioningLog ? (
+              <RecipeOutputLog
+                log={entry.provisioningLog}
+                emptyLabel={translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.vmProvisioningLogEmpty',
+                  'Waiting for recipe output…'
+                )}
+              />
+            ) : null}
           </div>
         )}
       </div>

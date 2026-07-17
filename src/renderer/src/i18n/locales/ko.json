@@ -244,7 +244,9 @@
           "3b57982bf6": "\"{{value1}}\" 워크스페이스를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
           "81f13f48d2": "\"{{value1}}\" 워크트리를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
           "runtimeScopeForbiddenTitle": "이 연결은 제한된(모바일) 액세스입니다",
-          "runtimeScopeForbiddenDescription": "모바일 범위 페어링에서는 워크스페이스를 사용할 수 없습니다. 설정 → 원격 Orca 서버 → 이 Orca 서버 공유에서 브라우저 액세스 링크로 다시 연결하세요."
+          "runtimeScopeForbiddenDescription": "모바일 범위 페어링에서는 워크스페이스를 사용할 수 없습니다. 설정 → 원격 Orca 서버 → 이 Orca 서버 공유에서 브라우저 액세스 링크로 다시 연결하세요.",
+          "serviceDestroyFailed": "Isolated services cleanup failed",
+          "serviceDestroyFailedDescription": "Some services could not be destroyed and may still be running: {{value0}}"
         },
         "repos": {
           "2975400634": "이 런타임에서 Git이 아닌 폴더를 열려면 Orca 서버를 업데이트하세요.",
@@ -1222,7 +1224,9 @@
         "noRunTargets": "이 프로젝트에는 실행 대상이 준비되어 있지 않습니다.",
         "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝",
         "branchName": "브랜치 이름",
-        "branchNamePlaceholder": "feature/my-branch"
+        "branchNamePlaceholder": "feature/my-branch",
+        "provisionIsolatedServices": "Isolated services",
+        "provisionIsolatedServicesHint": "Provision this workspace's own services (database, cache) from orca.yaml."
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "작업 트리 만들기",
@@ -4168,7 +4172,9 @@
           "automationCreated": "자동화로 생성됨",
           "branchIdentity": "브랜치",
           "branchFolderPathIdentity": "브랜치 또는 폴더 경로",
-          "ef18787206": "삭제 대기 중"
+          "ef18787206": "삭제 대기 중",
+          "retryServicesFailed": "Failed to retry services provisioning.",
+          "retryServices": "Retry services provisioning"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "에이전트"
@@ -4216,7 +4222,9 @@
           "e888362def": "상태: 폐쇄됨",
           "f394b3e86e": "상태: 병합됨",
           "af2b07bda5": "상태: {{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "servicesFailed": "Services: Failed",
+          "servicesReady": "Services"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "작업 트리로 이동",
@@ -6112,7 +6120,8 @@
           "da37d6f10e": "복사",
           "3149964b66": "복사됨",
           "waitForSetupBeforeAgent": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
-          "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오."
+          "waitForSetupBeforeAgentHelp": "설치 프로그램이 시작 중에 agent에 필요한 종속성, MCP 서버 또는 구성 파일을 설치할 때 이 기능을 켜십시오.",
+          "serviceMissingDestroy": "Service \"{{value0}}\" has no destroy command — containers will outlive worktrees."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
@@ -9870,7 +9879,8 @@
             "fc3095d2ed": "탐색기",
             "aiVaultSessionHistory": "에이전트",
             "folderWorkspaces": "연결된 워크트리",
-            "parentPrChecks": "PR 검사"
+            "parentPrChecks": "PR 검사",
+            "isolatedServices": "Services"
           },
           "right": {
             "panel": {
@@ -10275,6 +10285,29 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "ServicesPanel": {
+            "statusReady": "Ready",
+            "statusProvisioning": "Provisioning",
+            "statusCreateFailed": "Create failed",
+            "statusDestroyFailed": "Destroy failed",
+            "emptyState": "No isolated services for this workspace.",
+            "emptyHint": "Declare services in orca.yaml and check \"Isolated services\" when creating a workspace.",
+            "retryFailed": "Retrying services provisioning failed: {{value0}}",
+            "retryProvisioning": "Retry provisioning",
+            "servicesSection": "Services",
+            "slotSection": "Slot & ports",
+            "slotLabel": "Slot {{value0}}",
+            "envSection": "Environment variables",
+            "runRunning": "Running",
+            "runStopped": "Stopped",
+            "runUnknown": "No status command",
+            "refreshStatus": "Refresh service status",
+            "startAll": "Start all",
+            "stopAll": "Stop all",
+            "noServices": "No services.",
+            "startService": "Start service",
+            "stopService": "Stop service"
           }
         }
       },
