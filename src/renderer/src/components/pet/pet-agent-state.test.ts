@@ -89,30 +89,33 @@ describe('selectPetAnimationName', () => {
 })
 
 describe('nextPetDragAnimation', () => {
-  it('ignores sub-threshold jitter without advancing the sample', () => {
-    expect(nextPetDragAnimation(null, 3, -3)).toEqual({ animation: null, accepted: false })
-    expect(nextPetDragAnimation('running-right', -3, 2)).toEqual({
+  it('keeps the direction and baseline for sub-threshold horizontal travel', () => {
+    expect(nextPetDragAnimation(null, 3)).toEqual({ animation: null, accepted: false })
+    expect(nextPetDragAnimation('running-right', -3)).toEqual({
       animation: 'running-right',
       accepted: false
     })
   })
 
-  it('picks the horizontal direction at the 4px threshold', () => {
-    expect(nextPetDragAnimation(null, 4, 0)).toEqual({
+  it('picks the horizontal direction at the 4px threshold and advances the baseline', () => {
+    expect(nextPetDragAnimation(null, 4)).toEqual({
       animation: 'running-right',
       accepted: true
     })
-    expect(nextPetDragAnimation(null, -4, 0)).toEqual({
+    expect(nextPetDragAnimation(null, -4)).toEqual({
       animation: 'running-left',
       accepted: true
     })
   })
 
-  it('keeps the last direction on a mostly-vertical move', () => {
-    expect(nextPetDragAnimation('running-left', 0, 10)).toEqual({
+  it('keeps the last direction without advancing when horizontal travel stays under 4px', () => {
+    // A vertical/near-vertical drag has ~0 horizontal delta: keep the direction
+    // but do not reset the baseline, so accumulated horizontal travel still adds
+    // up toward the threshold on a slow diagonal drag.
+    expect(nextPetDragAnimation('running-left', 0)).toEqual({
       animation: 'running-left',
-      accepted: true
+      accepted: false
     })
-    expect(nextPetDragAnimation(null, 0, 10)).toEqual({ animation: null, accepted: true })
+    expect(nextPetDragAnimation(null, 0)).toEqual({ animation: null, accepted: false })
   })
 })

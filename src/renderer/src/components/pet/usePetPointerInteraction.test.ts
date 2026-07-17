@@ -79,6 +79,18 @@ describe('usePetPointerInteraction', () => {
     expect(result.current.dragAnimation).toBe('running-right')
   })
 
+  it('accumulates horizontal travel across a slow diagonal drag', () => {
+    // Regression: the baseline advances only on an accepted direction, so a
+    // sequence of sub-4px diagonal moves still crosses the threshold instead of
+    // resetting each time and never triggering.
+    const { result, fire } = setup()
+    fire('onPointerDown', { clientX: 50, clientY: 50 })
+    fire('onPointerMove', { clientX: 53, clientY: 55 })
+    expect(result.current.dragAnimation).toBe(null)
+    fire('onPointerMove', { clientX: 56, clientY: 60 })
+    expect(result.current.dragAnimation).toBe('running-right')
+  })
+
   it('keeps the latest horizontal direction when two moves land in one commit', () => {
     // Regression: the direction lives in a ref, not the state closure, so a
     // vertical move batched right after a horizontal one cannot resurrect the

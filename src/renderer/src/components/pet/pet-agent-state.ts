@@ -12,20 +12,21 @@ export type PetAnimationName =
 
 export type PetDragAnimation = 'running-right' | 'running-left' | null
 
-// Why: aligned with the Codex drag sampler. Sub-4px moves are ignored so
-// jitter can't flip direction, and vertical moves keep the last direction.
+// Why: direction tracks horizontal travel only. `accepted` (advance the
+// baseline) fires solely on a >=4px horizontal move, so sub-threshold jitter
+// and vertical drags keep the last direction without resetting the baseline —
+// otherwise a slow diagonal drag would reset before ever crossing 4px.
 export function nextPetDragAnimation(
   current: PetDragAnimation,
-  deltaX: number,
-  deltaY: number
+  deltaX: number
 ): { animation: PetDragAnimation; accepted: boolean } {
-  if (Math.abs(deltaX) < 4 && Math.abs(deltaY) < 4) {
-    return { animation: current, accepted: false }
+  if (deltaX >= 4) {
+    return { animation: 'running-right', accepted: true }
   }
-  return {
-    animation: deltaX >= 4 ? 'running-right' : deltaX <= -4 ? 'running-left' : current,
-    accepted: true
+  if (deltaX <= -4) {
+    return { animation: 'running-left', accepted: true }
   }
+  return { animation: current, accepted: false }
 }
 
 export type PetAnimationInput = {

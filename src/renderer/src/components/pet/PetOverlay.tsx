@@ -61,10 +61,8 @@ function SpriteFrame({
   // that restarts from frame 0 even when the state row is unchanged.
   restartKey: number
 }): React.JSX.Element {
-  // Why: key the @keyframes name on the selected animation too. Reusing one
-  // name across rows lets the browser preserve currentTime, so a switched-to
-  // row would enter mid-cycle instead of frame 0; a distinct name per animation
-  // (plus restartKey for same-row grabs) starts each one cleanly.
+  // Why: name the @keyframes per animation (+restartKey for same-row grabs) so a
+  // switched-to row starts at frame 0 instead of inheriting the prior timeline.
   const animKeyframesId = `${useId().replace(/[^a-zA-Z0-9_-]/g, '')}-${animationName}-${restartKey}`
   const anim =
     sprite.animations?.[animationName] ||
@@ -371,10 +369,8 @@ export function PetOverlay(): React.JSX.Element {
   }, [dragging, position])
 
   const motionAllowed = documentVisible && !reducedMotion
-  // Why: mirror the Codex mascot's grab-and-hold — a still (or vertical-only)
-  // grab freezes on frame 0 of the live state, while a horizontal drag keeps
-  // animating so the running rows show. The bob float always pauses mid-drag so
-  // it can't fight the drag.
+  // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
+  // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const bobAnimate = motionAllowed && !dragging
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
@@ -410,7 +406,11 @@ export function PetOverlay(): React.JSX.Element {
         >
           <style>{PET_BOB_KEYFRAMES_CSS}</style>
           {sprite ? (
+            // Why: remount per pet so switching cached sprites can't inherit the
+            // previous pet's animation timeline (same @keyframes name → carried
+            // currentTime); each pet starts clean.
             <SpriteFrame
+              key={url}
               url={url}
               sprite={sprite}
               animate={spriteAnimate}

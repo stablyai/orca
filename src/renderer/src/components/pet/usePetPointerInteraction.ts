@@ -32,9 +32,9 @@ export function usePetPointerInteraction(
   const [hovering, setHovering] = useState(false)
   const [dragGeneration, setDragGeneration] = useState(0)
   const dragOffsetRef = useRef<Point>({ x: 0, y: 0 })
-  // Why: last accepted sample for the drag direction hysteresis. Kept separate
-  // from dragOffsetRef, which anchors the overlay position math.
-  const dragSampleRef = useRef<Point>({ x: 0, y: 0 })
+  // Why: horizontal baseline for the drag-direction hysteresis, advanced only on
+  // an accepted direction. Kept separate from dragOffsetRef (position math).
+  const dragBaselineXRef = useRef(0)
   // Why: direction and the owning pointer are read+written inside pointer
   // handlers, so keep them in refs immune to React's render batching. Reading
   // the direction from state would let two coalesced moves in one commit
@@ -56,7 +56,7 @@ export function usePetPointerInteraction(
       x: event.clientX - position.x,
       y: event.clientY - position.y
     }
-    dragSampleRef.current = { x: event.clientX, y: event.clientY }
+    dragBaselineXRef.current = event.clientX
     dragDirectionRef.current = null
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
@@ -71,11 +71,10 @@ export function usePetPointerInteraction(
     }
     const next = nextPetDragAnimation(
       dragDirectionRef.current,
-      event.clientX - dragSampleRef.current.x,
-      event.clientY - dragSampleRef.current.y
+      event.clientX - dragBaselineXRef.current
     )
     if (next.accepted) {
-      dragSampleRef.current = { x: event.clientX, y: event.clientY }
+      dragBaselineXRef.current = event.clientX
       if (next.animation !== dragDirectionRef.current) {
         dragDirectionRef.current = next.animation
         setDragAnimation(next.animation)
