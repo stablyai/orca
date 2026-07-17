@@ -245,7 +245,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
-import { isWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
 import {
   folderWorkspaceKey,
   isWorkspaceKey,
@@ -6750,7 +6750,8 @@ export class OrcaRuntimeService {
     return uri
       ? parseFileUriPathParts(uri, {
           pathFlavor,
-          remotePosixAuthority: !!pty?.connectionId && pathFlavor !== 'win32'
+          remotePosixAuthority: !!pty?.connectionId && pathFlavor !== 'win32',
+          wslDistro: this.wslDistroForPty(pty, pathFlavor)
         })
       : null
   }
@@ -6782,6 +6783,20 @@ export class OrcaRuntimeService {
     }
     const worktreePath = splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
+  }
+
+  /** WSL distro backing a local (non-SSH) win32 PTY, derived from its
+   *  \\wsl.localhost worktree path. Lets OSC-7 rebuild the Linux shell's cwd as
+   *  a distro UNC path instead of a bogus \\<shell-hostname>\... share (#8470). */
+  private wslDistroForPty(
+    pty: RuntimePtyWorktreeRecord | null | undefined,
+    pathFlavor: 'posix' | 'win32'
+  ): string | undefined {
+    if (!pty || pty.connectionId || pathFlavor !== 'win32') {
+      return undefined
+    }
+    const worktreePath = splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath
+    return worktreePath ? (parseWslUncPath(worktreePath)?.distro ?? undefined) : undefined
   }
 
   /** Returns true when any retained agent-row snapshot changed in a
@@ -7416,13 +7431,14 @@ export class OrcaRuntimeService {
     dims: { cols: number; rows: number }
   ): RuntimeHeadlessTerminal {
     let state: RuntimeHeadlessTerminal | null = null
-    const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
+    const pty = this.ptysById.get(ptyId)
+    const pathFlavor = this.pathFlavorForPty(pty)
     const emulator = new HeadlessEmulator({
       cols: dims.cols,
       rows: dims.rows,
       pathFlavor,
-      remotePosixFileUriAuthority:
-        !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
+      remotePosixFileUriAuthority: !!pty?.connectionId && pathFlavor !== 'win32',
+      wslDistro: this.wslDistroForPty(pty, pathFlavor),
       // Why: replies take the provider input path (same entry as pty:write —
       // daemon shell-ready gating and the SSH relay write apply unchanged),
       // NOT writePtyInput, so renderer interactive-output metering never

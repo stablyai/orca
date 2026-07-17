@@ -31,6 +31,21 @@ describe('parseFileUriPath', () => {
     }
   })
 
+  it('rewrites a WSL PTY OSC7 authority to a distro UNC path instead of a bogus share', () => {
+    // Why: on a Windows host a WSL-backed shell reports its Linux hostname as
+    // the OSC7 authority. Without distro context it becomes an invalid
+    // \\<hostname>\... UNC that fails sleep/wake cwd validation (#8470).
+    expect(
+      parseFileUriPathParts('file://remoteseaview/home/yuming/project_ongoing/orca_remote', {
+        pathFlavor: 'win32',
+        wslDistro: 'Ubuntu'
+      })
+    ).toEqual({
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\yuming\\project_ongoing\\orca_remote',
+      hostname: 'remoteseaview'
+    })
+  })
+
   it('parses Windows SSH OSC7 drive paths independent of the desktop platform', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })

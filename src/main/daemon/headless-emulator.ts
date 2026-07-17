@@ -35,6 +35,7 @@ export type HeadlessEmulatorOptions = {
   onQueryReply?: (reply: string) => void
   pathFlavor?: 'posix' | 'win32'
   remotePosixFileUriAuthority?: boolean
+  wslDistro?: string
 }
 
 export type HeadlessEmulatorWriteOptions = {
@@ -72,6 +73,7 @@ export class HeadlessEmulator {
   private mouseModes = new TerminalMouseModeMirror()
   private readonly pathFlavor?: 'posix' | 'win32'
   private readonly remotePosixFileUriAuthority: boolean
+  private readonly wslDistro?: string
   private restoredOscLinks: TerminalOscLinkRange[] = []
   private disposed = false
   private onQueryReply: ((reply: string) => void) | null
@@ -91,9 +93,11 @@ export class HeadlessEmulator {
   constructor(opts: HeadlessEmulatorOptions) {
     this.pathFlavor = opts.pathFlavor
     this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
+    this.wslDistro = opts.wslDistro
     this.oscText = new TerminalOscCwdTitleScanner({
       pathFlavor: this.pathFlavor,
-      remotePosixAuthority: this.remotePosixFileUriAuthority
+      remotePosixAuthority: this.remotePosixFileUriAuthority,
+      wslDistro: this.wslDistro
     })
     this.terminal = new Terminal({
       cols: opts.cols,

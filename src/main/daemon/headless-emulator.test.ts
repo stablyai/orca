@@ -239,6 +239,25 @@ describe('HeadlessEmulator', () => {
       expect(emulator.getSnapshot().cwd).toBe('\\\\server\\share\\project')
     })
 
+    it('rebuilds a WSL shell OSC-7 cwd as a distro UNC path (#8470)', async () => {
+      // Why: a WSL-backed pane reports its Linux hostname as the OSC-7
+      // authority; without distro context it became an invalid \\<hostname>\...
+      // UNC that failed sleep/wake cwd validation.
+      emulator = new HeadlessEmulator({
+        cols: 80,
+        rows: 24,
+        pathFlavor: 'win32',
+        wslDistro: 'Ubuntu'
+      })
+      await emulator.write(
+        '\x1b]7;file://remoteseaview/home/yuming/project_ongoing/orca_remote\x07'
+      )
+
+      expect(emulator.getSnapshot().cwd).toBe(
+        '\\\\wsl.localhost\\Ubuntu\\home\\yuming\\project_ongoing\\orca_remote'
+      )
+    })
+
     it('handles OSC-7 with ST terminator', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b]7;file:///path/here\x1b\\')

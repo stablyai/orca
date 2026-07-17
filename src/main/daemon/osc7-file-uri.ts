@@ -6,6 +6,7 @@ export type ParsedFileUriPath = {
 export type ParseFileUriPathOptions = {
   pathFlavor?: 'posix' | 'win32'
   remotePosixAuthority?: boolean
+  wslDistro?: string
 }
 
 export function parseFileUriPath(
@@ -34,6 +35,16 @@ export function parseFileUriPathParts(
 
     if (/^\/[A-Za-z]:/.test(decodedPath)) {
       return { path: decodedPath.slice(1), hostname }
+    }
+    // Why: a WSL-backed local PTY reports its Linux shell hostname as the OSC-7
+    // authority, which is never a Windows UNC server. Rebuild the POSIX path as
+    // the session distro's \\wsl.localhost UNC so sleep/wake cwd validation
+    // resolves it instead of a bogus \\<hostname>\... share (#8470).
+    if (options.wslDistro) {
+      return {
+        path: `\\\\wsl.localhost\\${options.wslDistro}${decodedPath.replace(/\//g, '\\')}`,
+        hostname
+      }
     }
     // Why: localhost/empty-host OSC-7 URIs are POSIX paths even when parsed by
     // a Windows app; only non-local hosts describe Windows UNC shares.
