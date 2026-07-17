@@ -416,10 +416,14 @@ describe('quick-open-search', () => {
     const files = prepareQuickOpenFiles(['src/fooBar.ts', 'src/unrelated-foo-bxar.ts'])
 
     // Why: an extension dot in the query must not skip past the basename dot and
-    // strip the camelCase file's filename boost, letting junk outrank it.
-    const results = rankQuickOpenFiles('foo-bar.ts', files)
-    expect(results[0].path).toBe('src/fooBar.ts')
-    expect(results[0].score).toBeLessThan(-100)
+    // strip the camelCase file's filename boost, letting junk outrank it. Covers
+    // both the identifier-separated form and the spaced form (which reaches the
+    // dot via the `crossPathSeparators` gate).
+    for (const query of ['foo-bar.ts', 'foo bar.ts']) {
+      const results = rankQuickOpenFiles(query, files)
+      expect(results[0].path).toBe('src/fooBar.ts')
+      expect(results[0].score).toBeLessThan(-100)
+    }
   })
 
   it('treats a typed identifier separator as equivalent to a literal space in a name', () => {
@@ -481,6 +485,33 @@ describe('quick-open-search', () => {
     expect(rankQuickOpenFiles('meeting - 2026', files)[0]?.path).toBe('notes/Meeting - 2026.md')
     expect(rankQuickOpenFiles('Meeting - 2026.md', files)[0]?.path).toBe('notes/Meeting - 2026.md')
     expect(rankQuickOpenFiles('a _ b', files)[0]?.path).toBe('audio/a _ b.mp3')
+  })
+
+  it('does not let a space before a typed separator bridge across / or .', () => {
+    // Why: after a space consumes a `/` or `.` run, a typed `-`/`_` must not
+    // treat the separator-induced word start as a camelCase transition, or it
+    // would cross a boundary the spec keeps distinct (and win via the boost).
+    expect(
+      rankQuickOpenFiles(
+        'user _profile',
+        prepareQuickOpenFiles(['src/user_my_profile.ts', 'src/user.profile.ts'])
+      ).map((item) => item.path)
+    ).toEqual(['src/user_my_profile.ts'])
+    expect(rankQuickOpenFiles('a -b', prepareQuickOpenFiles(['src/a/b.ts']))).toEqual([])
+    expect(rankQuickOpenFiles('foo -ts', prepareQuickOpenFiles(['src/foo.ts']))).toEqual([])
+
+    // Why: a genuine camelCase/acronym transition (prior char is a letter) must
+    // still bridge for a space-then-separator query.
+    expect(
+      rankQuickOpenFiles('product -detail', prepareQuickOpenFiles(['ui/ProductDetail.tsx'])).map(
+        (item) => item.path
+      )
+    ).toEqual(['ui/ProductDetail.tsx'])
+    expect(
+      rankQuickOpenFiles('api -client', prepareQuickOpenFiles(['src/APIClient.ts'])).map(
+        (item) => item.path
+      )
+    ).toEqual(['src/APIClient.ts'])
   })
 
   it('does not blank a spaced-separator query mid-keystroke', () => {
