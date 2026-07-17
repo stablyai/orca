@@ -2568,6 +2568,9 @@ export type HostSettingOverrides = {
 
 export type GlobalSettings = {
   workspaceDir: string
+  /** Default directory the project/repo folder pickers open in (add project,
+   *  add multiple, clone destination). Unset = use the OS last-used location. */
+  projectDefaultPath?: string
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
