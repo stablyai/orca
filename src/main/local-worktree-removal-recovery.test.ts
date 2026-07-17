@@ -1,16 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  gitExecFileAsyncMock,
-  listWorktreesStrictMock,
-  removeLocalWorktreePathMock,
-  removeWorktreeMock
-} = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  listWorktreesStrictMock: vi.fn(),
-  removeLocalWorktreePathMock: vi.fn(),
-  removeWorktreeMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, listWorktreesStrictMock, removeLocalWorktreePathMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    listWorktreesStrictMock: vi.fn(),
+    removeLocalWorktreePathMock: vi.fn()
+  })
+)
 
 vi.mock('./git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
@@ -21,16 +17,13 @@ vi.mock('./local-worktree-filesystem', () => ({
 }))
 
 vi.mock('./git/worktree', () => ({
-  listWorktreesStrict: listWorktreesStrictMock,
-  removeWorktree: removeWorktreeMock
+  listWorktreesStrict: listWorktreesStrictMock
 }))
 
 import {
-  forceRemoveWorktreeAfterSubmoduleRefusal,
   recoverLocalWindowsWorktreeRemoval,
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval
 } from './local-worktree-removal-recovery'
-import { SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS } from './worktree-submodule-removal-guard'
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -360,161 +353,5 @@ describe('removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval', () => {
         deleteBranch: true
       })
     ).rejects.toThrow('Git still has stale worktree registration')
-  })
-})
-
-describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
-  beforeEach(() => {
-    gitExecFileAsyncMock.mockReset()
-    listWorktreesStrictMock.mockReset()
-    removeLocalWorktreePathMock.mockReset()
-    removeWorktreeMock.mockReset()
-    gitExecFileAsyncMock.mockImplementation(async (gitArgs: string[]) => ({
-      stdout:
-        gitArgs[0] === 'submodule' && gitArgs[1] === 'status'
-          ? ' abc123 vendor/sub (heads/main)\n'
-          : '',
-      stderr: ''
-    }))
-    listWorktreesStrictMock.mockResolvedValue([])
-    removeLocalWorktreePathMock.mockResolvedValue(undefined)
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  const registeredWorktree = { branch: 'refs/heads/feature', head: 'abc123' }
-  const submoduleRefusalError = Object.assign(new Error('Command failed: git worktree remove'), {
-    stderr: 'fatal: working trees containing submodules cannot be moved or removed'
-  })
-
-  it('retries the removal with force and the known registration after a clean guard pass', async () => {
-    removeWorktreeMock.mockResolvedValue({})
-
-    const result = await forceRemoveWorktreeAfterSubmoduleRefusal({
-      canonicalWorktreePath: '/workspaces/feature',
-      repoPath: '/repo',
-      localWorktreeGitOptions: { wslDistro: 'Ubuntu' },
-      registeredWorktree,
-      deleteBranch: true,
-      originalRemovalError: submoduleRefusalError,
-      originalRemovalForced: false,
-      closeWatcher: vi.fn().mockResolvedValue(undefined)
-    })
-
-    // The strict guard re-verifies inside the worktree before any force.
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
-      {
-        cwd: '/workspaces/feature',
-        wslDistro: 'Ubuntu',
-        timeout: SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
-      }
-    )
-    expect(removeWorktreeMock).toHaveBeenCalledWith('/repo', '/workspaces/feature', true, {
-      knownRemovedWorktree: registeredWorktree,
-      wslDistro: 'Ubuntu'
-    })
-    expect(result).toEqual({})
-  })
-
-  it('refuses the forced retry when a submodule has local-only commits', async () => {
-    gitExecFileAsyncMock.mockImplementation(async (gitArgs: string[]) => {
-      if (gitArgs[0] === 'submodule') {
-        return { stdout: '1\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await expect(
-      forceRemoveWorktreeAfterSubmoduleRefusal({
-        canonicalWorktreePath: '/workspaces/feature',
-        repoPath: '/repo',
-        localWorktreeGitOptions: {},
-        registeredWorktree,
-        deleteBranch: true,
-        originalRemovalError: submoduleRefusalError,
-        originalRemovalForced: false,
-        closeWatcher: vi.fn().mockResolvedValue(undefined)
-      })
-    ).rejects.toThrow('Worktree contains submodule work that may exist only in this workspace.')
-
-    expect(removeWorktreeMock).not.toHaveBeenCalled()
-  })
-
-  it('skips the guard when the user already forced the removal', async () => {
-    removeWorktreeMock.mockResolvedValue({})
-
-    await forceRemoveWorktreeAfterSubmoduleRefusal({
-      canonicalWorktreePath: '/workspaces/feature',
-      repoPath: '/repo',
-      localWorktreeGitOptions: {},
-      registeredWorktree,
-      deleteBranch: true,
-      originalRemovalError: submoduleRefusalError,
-      originalRemovalForced: true,
-      closeWatcher: vi.fn().mockResolvedValue(undefined)
-    })
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
-      expect.anything()
-    )
-    expect(removeWorktreeMock).toHaveBeenCalledWith(
-      '/repo',
-      '/workspaces/feature',
-      true,
-      expect.objectContaining({ knownRemovedWorktree: registeredWorktree })
-    )
-  })
-
-  it('routes a transient Windows failure of the forced retry into recovery', async () => {
-    await withPlatform('win32', async () => {
-      removeWorktreeMock.mockRejectedValue(
-        Object.assign(new Error('git worktree remove failed'), {
-          stderr: "error: failed to delete 'C:/workspaces/feature/deep': Permission denied"
-        })
-      )
-      const closeWatcher = vi.fn().mockResolvedValue(undefined)
-
-      const result = await forceRemoveWorktreeAfterSubmoduleRefusal({
-        canonicalWorktreePath: 'C:/workspaces/feature',
-        repoPath: 'C:/repo',
-        localWorktreeGitOptions: {},
-        registeredWorktree,
-        deleteBranch: true,
-        originalRemovalError: submoduleRefusalError,
-        originalRemovalForced: false,
-        closeWatcher
-      })
-
-      expect(closeWatcher).toHaveBeenCalledWith('C:/workspaces/feature')
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith('C:/workspaces/feature', {})
-      expect(result).toEqual({
-        preservedBranch: { branchName: 'feature', head: 'abc123' }
-      })
-    })
-  })
-
-  it('surfaces a non-recoverable forced retry failure as a force removal error', async () => {
-    await withPlatform('darwin', async () => {
-      removeWorktreeMock.mockRejectedValue(new Error('disk I/O error'))
-
-      await expect(
-        forceRemoveWorktreeAfterSubmoduleRefusal({
-          canonicalWorktreePath: '/workspaces/feature',
-          repoPath: '/repo',
-          localWorktreeGitOptions: {},
-          registeredWorktree,
-          deleteBranch: true,
-          originalRemovalError: submoduleRefusalError,
-          originalRemovalForced: false,
-          closeWatcher: vi.fn().mockResolvedValue(undefined)
-        })
-      ).rejects.toThrow('Failed to force delete worktree at /workspaces/feature. disk I/O error')
-
-      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
-    })
   })
 })

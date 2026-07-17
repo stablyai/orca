@@ -30,7 +30,10 @@ import type {
   Worktree,
   WorktreeMeta
 } from '../../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
+import {
+  assertWorktreeUnlockedForRemoval,
+  UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE
+} from '../../shared/worktree-removal'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
   buildKnownOrcaWorkspaceLayouts,
@@ -192,14 +195,9 @@ import {
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
 import {
-  forceRemoveWorktreeAfterSubmoduleRefusal,
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
-import {
-  assertSubmoduleWorktreeSafeToForceRemove,
-  sshSubmoduleRemovalGuardGitExec
-} from '../worktree-submodule-removal-guard'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
@@ -1753,22 +1751,13 @@ export function registerWorktreeHandlers(
               if (!isSubmoduleWorktreeRemovalError(error)) {
                 throw error
               }
-              // Why: non-forced `git worktree remove` refuses any worktree with
-              // populated submodules, even a clean one; --force is git's
-              // designed override. The guard re-verifies the tree strictly
-              // (dirty state hidden by ignore-submodules config, and submodule
-              // commits whose only copy lives in the worktree admin dir) right
-              // before forcing.
-              if (!args.force) {
-                await assertSubmoduleWorktreeSafeToForceRemove(
-                  sshSubmoduleRemovalGuardGitExec(provider!, canonicalWorktreePath),
-                  error,
-                  canonicalWorktreePath
-                )
+              if (args.force) {
+                throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, true))
               }
-              rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
-                ? provider!.removeWorktree(canonicalWorktreePath, true, remoteRemoveOptions)
-                : provider!.removeWorktree(canonicalWorktreePath, true))
+              // Why: a linked worktree can own the only copy of submodule Git
+              // objects. Remote-tracking refs cannot prove those objects still
+              // exist remotely, so only explicit Force Delete may override Git.
+              throw new Error(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)
             }
             removalCompleted = true
           } finally {
@@ -1895,20 +1884,8 @@ export function registerWorktreeHandlers(
             if (recoveredRemovalResult) {
               removalResult = recoveredRemovalResult
               removalCompleted = true
-            } else if (isSubmoduleWorktreeRemovalError(error)) {
-              removalResult = preserveBranchHeadFallback(
-                await forceRemoveWorktreeAfterSubmoduleRefusal({
-                  canonicalWorktreePath,
-                  repoPath: repo.path,
-                  localWorktreeGitOptions,
-                  registeredWorktree: refreshedRegisteredWorktree,
-                  deleteBranch,
-                  originalRemovalError: error,
-                  originalRemovalForced: args.force === true,
-                  closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath)
-                }),
-                refreshedRegisteredWorktree.head
-              )
+            } else if (isSubmoduleWorktreeRemovalError(error) && args.force !== true) {
+              throw new Error(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)
             } else if (isOrphanedWorktreeError(error)) {
               // If git no longer tracks this worktree, clean up the directory and metadata
               console.warn(

@@ -29383,47 +29383,25 @@ describe('OrcaRuntimeService', () => {
     expect(restoreRuntime).toHaveBeenCalledWith(TEST_WORKTREE_PATH, undefined)
   })
 
-  it('escalates runtime worktree removal to force when the tree contains submodules', async () => {
+  it('requires explicit force for runtime worktree removal with submodules', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    // The escalation guard re-verifies the tree (strict status + local-only
-    // submodule commit probe) before the forced retry.
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (gitArgs) => ({
-      stdout:
-        gitArgs[0] === 'submodule' && gitArgs[1] === 'status'
-          ? ' abc123 vendor/sub (heads/main)\n'
-          : '',
-      stderr: ''
-    }))
-    vi.mocked(removeWorktree)
-      .mockRejectedValueOnce(
-        Object.assign(new Error('Command failed: git worktree remove'), {
-          stderr: 'fatal: working trees containing submodules cannot be moved or removed'
-        })
-      )
-      .mockResolvedValueOnce({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-
-    expect(gitSpy).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
-      expect.objectContaining({ cwd: TEST_WORKTREE_PATH })
-    )
-
-    // Non-forced `git worktree remove` refuses submodule worktrees outright;
-    // the clean preflight already vetted the tree, so removal retries with
-    // --force (git's designed override) instead of surfacing the refusal.
-    expect(removeWorktree).toHaveBeenNthCalledWith(
-      2,
-      TEST_REPO_PATH,
-      TEST_WORKTREE_PATH,
-      true,
-      expect.objectContaining({
-        knownRemovedWorktree: expect.objectContaining({ path: TEST_WORKTREE_PATH })
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('Command failed: git worktree remove'), {
+        stderr: 'fatal: working trees containing submodules cannot be moved or removed'
       })
     )
-    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
-    expect(result).toEqual({})
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      'Worktree contains submodule work that may exist only in this workspace.'
+    )
+
+    expect(removeWorktree).toHaveBeenCalledTimes(1)
+    expect(gitSpy).not.toHaveBeenCalledWith(
+      expect.arrayContaining(['submodule']),
+      expect.anything()
+    )
   })
 
   it('restores runtime watchers when CLI worktree deletion fails after teardown', async () => {
