@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebAiAccount } from '../../../shared/types'
 import {
+  activateWebAiAccountNumberShortcut,
   activateWorkspaceNumberShortcut,
+  resolveWebAiAccountNumberShortcutTarget,
   resolveWorkspaceNumberShortcutTarget
 } from './workspace-number-shortcuts'
 
@@ -40,22 +42,25 @@ describe('workspace number shortcuts', () => {
     vi.clearAllMocks()
   })
 
-  it('places Web AI accounts before visible project workspaces', () => {
-    const chatgpt = account('chatgpt-main', 'chatgpt')
-    const claude = account('claude-work', 'claude')
-
-    expect(resolveWorkspaceNumberShortcutTarget([chatgpt, claude], ['wt-a', 'wt-b'], 0)).toEqual({
-      kind: 'web-ai-account',
-      account: chatgpt
-    })
-    expect(resolveWorkspaceNumberShortcutTarget([chatgpt, claude], ['wt-a', 'wt-b'], 1)).toEqual({
-      kind: 'web-ai-account',
-      account: claude
-    })
-    expect(resolveWorkspaceNumberShortcutTarget([chatgpt, claude], ['wt-a', 'wt-b'], 2)).toEqual({
+  it('keeps workspace numbers scoped to visible project worktrees', () => {
+    expect(resolveWorkspaceNumberShortcutTarget(['wt-a', 'wt-b'], 0)).toEqual({
       kind: 'worktree',
       worktreeId: 'wt-a'
     })
+    expect(resolveWorkspaceNumberShortcutTarget(['wt-a', 'wt-b'], 1)).toEqual({
+      kind: 'worktree',
+      worktreeId: 'wt-b'
+    })
+    expect(resolveWorkspaceNumberShortcutTarget(['wt-a', 'wt-b'], 2)).toBeNull()
+  })
+
+  it('resolves Web AI accounts through a separate number range', () => {
+    const chatgpt = account('chatgpt-main', 'chatgpt')
+    const claude = account('claude-work', 'claude')
+
+    expect(resolveWebAiAccountNumberShortcutTarget([chatgpt, claude], 0)).toEqual(chatgpt)
+    expect(resolveWebAiAccountNumberShortcutTarget([chatgpt, claude], 1)).toEqual(claude)
+    expect(resolveWebAiAccountNumberShortcutTarget([chatgpt, claude], 2)).toBeNull()
   })
 
   it('opens the selected account through authoritative profile validation', async () => {
@@ -71,7 +76,7 @@ describe('workspace number shortcuts', () => {
     })
     mocks.getVisibleWorktreeIds.mockReturnValue(['wt-a'])
 
-    await expect(activateWorkspaceNumberShortcut(0)).resolves.toBe(true)
+    await expect(activateWebAiAccountNumberShortcut(0)).resolves.toBe(true)
     expect(launchWebAiAccount).toHaveBeenCalledWith(chatgpt)
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
@@ -89,34 +94,50 @@ describe('workspace number shortcuts', () => {
     })
     mocks.getVisibleWorktreeIds.mockReturnValue(['wt-a'])
 
-    await expect(activateWorkspaceNumberShortcut(0)).resolves.toBe(false)
+    await expect(activateWebAiAccountNumberShortcut(0)).resolves.toBe(false)
     expect(launchWebAiAccount).toHaveBeenCalledWith(chatgpt)
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
-  it('offsets project workspace activation by the account count', async () => {
-    const chatgpt = account('chatgpt-main', 'chatgpt')
+  it('activates the worktree at the requested visible index', async () => {
     mocks.getState.mockReturnValue({
-      settings: { webAiAccounts: [chatgpt] },
-      launchWebAiAccount: vi.fn()
+      settings: { webAiAccounts: [] }
     })
     mocks.getVisibleWorktreeIds.mockReturnValue(['wt-a', 'wt-b'])
     mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
 
-    await expect(activateWorkspaceNumberShortcut(2)).resolves.toBe(true)
+    await expect(activateWorkspaceNumberShortcut(1)).resolves.toBe(true)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-b')
   })
 
-  it('does nothing when the requested number is out of range', async () => {
-    const launchWebAiAccount = vi.fn()
+  it('collapses concurrent account launches for the same profile', async () => {
+    const chatgpt = account('chatgpt-main', 'chatgpt')
+    let resolveLaunch: ((value: { ok: true }) => void) | undefined
+    const launchWebAiAccount = vi.fn(
+      () =>
+        new Promise<{ ok: true }>((resolve) => {
+          resolveLaunch = resolve
+        })
+    )
     mocks.getState.mockReturnValue({
-      settings: { webAiAccounts: [] },
+      settings: { webAiAccounts: [chatgpt] },
       launchWebAiAccount
+    })
+
+    const first = activateWebAiAccountNumberShortcut(0)
+    await expect(activateWebAiAccountNumberShortcut(0)).resolves.toBe(false)
+    expect(launchWebAiAccount).toHaveBeenCalledTimes(1)
+    resolveLaunch?.({ ok: true })
+    await expect(first).resolves.toBe(true)
+  })
+
+  it('does nothing when the requested number is out of range', async () => {
+    mocks.getState.mockReturnValue({
+      settings: { webAiAccounts: [] }
     })
     mocks.getVisibleWorktreeIds.mockReturnValue(['wt-a'])
 
     await expect(activateWorkspaceNumberShortcut(4)).resolves.toBe(false)
-    expect(launchWebAiAccount).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 })

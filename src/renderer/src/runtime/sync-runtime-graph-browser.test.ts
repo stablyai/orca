@@ -238,6 +238,8 @@ describe('browser mobile session sync', () => {
       })
 
       const snapshots = buildMobileSessionTabSnapshots(state)
+      const browserProjection = getRuntimeMobileSessionSyncKey(state).browserProjection
+      const serialized = JSON.stringify({ snapshots, browserProjection })
 
       expect(snapshots).toHaveLength(1)
       expect(snapshots[0]).toMatchObject({
@@ -251,9 +253,125 @@ describe('browser mobile session sync', () => {
           }
         ]
       })
-      expect(JSON.stringify(snapshots)).not.toContain('private-account')
-      expect(JSON.stringify(snapshots)).not.toContain('Private Chat Title')
-      expect(JSON.stringify(snapshots)).not.toContain('private-conversation')
+      expect(serialized).not.toContain('private-account')
+      expect(serialized).not.toContain('web-ai-browser')
+      expect(serialized).not.toContain('web-ai-page')
+      expect(serialized).not.toContain('Private Chat Title')
+      expect(serialized).not.toContain('private-conversation')
     }
   )
+
+  it('filters account-bound browser state inside an ordinary worktree', () => {
+    const publicWorkspace = makeBrowserWorkspace('Public Workspace')
+    const privateWorkspace = {
+      ...makeBrowserWorkspace('Private Workspace Title'),
+      id: 'private-browser-workspace',
+      activePageId: 'private-browser-page',
+      pageIds: ['private-browser-page'],
+      url: 'https://chatgpt.com/c/private-worktree-chat',
+      webAiAccountId: 'private-account-id',
+      sessionProfileId: 'private-profile-id',
+      sessionPartition: 'persist:private-profile-id'
+    }
+    const state = makeState({
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            activeTabId: 'public-unified-tab',
+            tabOrder: ['private-unified-tab', 'public-unified-tab'],
+            recentTabIds: ['private-unified-tab', 'public-unified-tab']
+          }
+        ]
+      } as unknown as AppState['groupsByWorktree'],
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'private-unified-tab',
+            groupId: 'group-1',
+            contentType: 'browser',
+            entityId: privateWorkspace.id,
+            title: 'Private Unified Metadata'
+          },
+          {
+            id: 'public-unified-tab',
+            groupId: 'group-1',
+            contentType: 'browser',
+            entityId: publicWorkspace.id,
+            title: 'Public Browser'
+          }
+        ]
+      } as unknown as AppState['unifiedTabsByWorktree'],
+      browserTabsByWorktree: { 'wt-1': [privateWorkspace, publicWorkspace] },
+      browserPagesByWorkspace: {
+        [privateWorkspace.id]: [
+          {
+            id: 'private-browser-page',
+            workspaceId: privateWorkspace.id,
+            worktreeId: 'wt-1',
+            url: 'https://chatgpt.com/c/private-worktree-chat',
+            title: 'Private Page Title',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ],
+        [publicWorkspace.id]: [
+          {
+            id: 'page-1',
+            workspaceId: publicWorkspace.id,
+            worktreeId: 'wt-1',
+            url: 'https://example.com/public-page',
+            title: 'Public Page Title',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: true,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      } as unknown as AppState['browserPagesByWorkspace']
+    })
+
+    const snapshots = buildMobileSessionTabSnapshots(state)
+    const browserProjection = getRuntimeMobileSessionSyncKey(state).browserProjection
+    const serialized = JSON.stringify({ snapshots, browserProjection })
+
+    expect(snapshots).toHaveLength(1)
+    expect(snapshots[0]).toMatchObject({
+      worktree: 'wt-1',
+      activeTabId: 'public-unified-tab',
+      tabGroups: [
+        {
+          id: 'group-1',
+          activeTabId: 'public-unified-tab',
+          tabOrder: ['public-unified-tab'],
+          recentTabIds: ['public-unified-tab']
+        }
+      ],
+      tabs: [
+        {
+          type: 'browser',
+          id: 'public-unified-tab',
+          browserWorkspaceId: publicWorkspace.id,
+          browserPageId: 'page-1',
+          title: 'Public Page Title',
+          url: 'https://example.com/public-page'
+        }
+      ]
+    })
+    expect(serialized).not.toContain('private-account-id')
+    expect(serialized).not.toContain('private-browser-workspace')
+    expect(serialized).not.toContain('private-browser-page')
+    expect(serialized).not.toContain('private-worktree-chat')
+    expect(serialized).not.toContain('Private Workspace Title')
+    expect(serialized).not.toContain('Private Page Title')
+    expect(serialized).not.toContain('private-unified-tab')
+    expect(serialized).not.toContain('Private Unified Metadata')
+  })
 })

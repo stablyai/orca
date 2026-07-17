@@ -790,6 +790,9 @@ export function createMainWindow(
       case 'switchRecentTab':
         mainWindow.webContents.send('ui:switchRecentTab')
         return
+      case 'jumpToWebAiAccountIndex':
+        mainWindow.webContents.send('ui:jumpToWebAiAccountIndex', action.index)
+        return
       case 'jumpToWorktreeIndex':
         mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
         return
@@ -850,6 +853,18 @@ export function createMainWindow(
     }
 
     if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
+      event.preventDefault()
+      return true
+    }
+
+    if (
+      isAutoRepeat &&
+      (action.type === 'jumpToWebAiAccountIndex' ||
+        action.type === 'jumpToWorktreeIndex' ||
+        action.type === 'jumpToTabIndex')
+    ) {
+      // Why: holding a number shortcut must not enqueue repeated account
+      // launches or churn workspace/tab focus while the first keydown settles.
       event.preventDefault()
       return true
     }

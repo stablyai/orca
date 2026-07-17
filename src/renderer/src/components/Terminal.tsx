@@ -1792,10 +1792,33 @@ function Terminal(): React.JSX.Element | null {
           void createFloatingWorkspaceTerminalTab(useAppStore.getState())
           return
         }
-        dispatchWorkspaceNewTabShortcut(activeWorktreeId, {
-          openBrowserTab: handleNewBrowserTab,
-          openTerminalTab: handleNewTab
-        })
+        const store = useAppStore.getState()
+        dispatchWorkspaceNewTabShortcut(
+          activeWorktreeId,
+          {
+            openBrowserTab: handleNewBrowserTab,
+            openTerminalTab: handleNewTab,
+            openWebAiAccountTab: (account) => {
+              if (!activeWorktreeId) {
+                return
+              }
+              const targetGroupId =
+                store.activeGroupIdByWorktree[activeWorktreeId] ??
+                store.groupsByWorktree[activeWorktreeId]?.[0]?.id
+              void store.launchWebAiAccount(account, {
+                openNewTab: true,
+                targetGroupId,
+                targetWorktreeId: activeWorktreeId
+              })
+            }
+          },
+          {
+            activeBrowserTabId: store.activeBrowserTabId,
+            activeTabType: store.activeTabType,
+            browserTabsByWorktree: store.browserTabsByWorktree,
+            webAiAccounts: store.settings?.webAiAccounts
+          }
+        )
         return
       }
 

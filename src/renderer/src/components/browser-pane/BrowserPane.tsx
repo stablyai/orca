@@ -77,7 +77,7 @@ import type {
 import {
   getWebAiAccountCookieImportScope,
   normalizeWebAiAccounts,
-  webAiAccountMatchesWorkspace
+  webAiAccountMatchesBinding
 } from '../../../../shared/web-ai-accounts'
 import {
   normalizeBrowserNavigationUrl,
@@ -794,7 +794,7 @@ export default function BrowserPane({
       normalizeWebAiAccounts(savedWebAiAccounts).find(
         (account) =>
           account.id === browserTab.webAiAccountId &&
-          webAiAccountMatchesWorkspace(account, browserTab)
+          webAiAccountMatchesBinding(account, browserTab)
       ) ?? null
     )
   }, [browserTab, savedWebAiAccounts])

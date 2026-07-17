@@ -61,7 +61,10 @@ function createTestStore() {
         activeTabType: 'terminal',
         activeTabTypeByWorktree: {},
         isNavigatingHistory: false,
+        worktreeNavHistory: [],
+        worktreeNavHistoryIndex: -1,
         worktreesByRepo: {},
+        getKnownWorktreeById: vi.fn(() => undefined),
         createUnifiedTab: vi.fn(),
         closeUnifiedTab: vi.fn(),
         activateTab: vi.fn(),
@@ -732,6 +735,122 @@ describe('createBrowserSlice Web AI accounts', () => {
     expect(store.getState().recordWorktreeVisit).toHaveBeenCalledTimes(1)
   })
 
+  it('embeds a saved account in a requested ordinary worktree and reuses it there', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: ((worktreeId: string) =>
+        worktreeId === 'wt-project'
+          ? ({ id: worktreeId } as never)
+          : undefined) as AppState['getKnownWorktreeById']
+    })
+
+    const created = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project',
+      targetGroupId: 'group-project'
+    })
+    const focused = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+
+    expect(created).toMatchObject({
+      worktreeId: 'wt-project',
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(focused?.id).toBe(created?.id)
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(1)
+    expect(store.getState().createUnifiedTab).toHaveBeenCalledWith(
+      'wt-project',
+      'browser',
+      expect.objectContaining({ targetGroupId: 'group-project' })
+    )
+  })
+
+  it('focuses the most recently visited existing account tab before creating another', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-two',
+      worktreeNavHistory: ['wt-one', 'wt-two'],
+      worktreeNavHistoryIndex: 1,
+      getKnownWorktreeById: ((worktreeId: string) =>
+        worktreeId === 'wt-one' || worktreeId === 'wt-two'
+          ? ({ id: worktreeId } as never)
+          : undefined) as AppState['getKnownWorktreeById']
+    })
+    const existing = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-one'
+    })
+    store.setState({ activeWorktreeId: 'wt-two' })
+
+    const focused = store.getState().openWebAiAccount(account)
+
+    expect(focused?.id).toBe(existing?.id)
+    expect(store.getState().browserTabsByWorktree['wt-two']).toBeUndefined()
+    expect(store.getState().setActiveWorktree).toHaveBeenLastCalledWith('wt-one')
+  })
+
+  it('creates another profile-bound tab in the explicitly selected worktree', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-project' }) as never) as AppState['getKnownWorktreeById']
+    })
+
+    store.getState().openWebAiAccount(account, { targetWorktreeId: 'wt-project' })
+    store.getState().openWebAiAccount(account, {
+      openNewTab: true,
+      targetWorktreeId: 'wt-project'
+    })
+
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(2)
+    expect(
+      store
+        .getState()
+        .browserTabsByWorktree['wt-project']?.every(
+          (workspace) =>
+            workspace.webAiAccountId === account.id &&
+            workspace.sessionPartition === account.sessionPartition
+        )
+    ).toBe(true)
+  })
+
+  it('fails closed when an explicit Web AI target is runtime-owned', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: 'runtime-one',
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-runtime',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-runtime' }) as never) as AppState['getKnownWorktreeById']
+    })
+
+    expect(
+      store.getState().openWebAiAccount(account, { targetWorktreeId: 'wt-runtime' })
+    ).toBeNull()
+    expect(store.getState().browserTabsByWorktree['wt-runtime']).toBeUndefined()
+  })
+
   it('opens a Custom account at its own HTTPS home instead of ChatGPT', () => {
     const store = createTestStore()
     const account = webAiAccount({
@@ -999,6 +1118,39 @@ describe('createBrowserSlice Web AI accounts', () => {
     expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(2)
   })
 
+  it('keeps guest-requested links in the source worktree and account binding', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-project' }) as never) as AppState['getKnownWorktreeById']
+    })
+    const source = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!source?.activePageId) {
+      throw new Error('Expected an integrated Web AI browser page')
+    }
+
+    const opened = store
+      .getState()
+      .openBrowserLinkInNewTab(source.activePageId, 'https://chatgpt.com/c/integrated')
+
+    expect(opened).toMatchObject({
+      worktreeId: 'wt-project',
+      url: 'https://chatgpt.com/c/integrated',
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(2)
+  })
+
   it('removes stale profile workspaces before recreating the account surface', () => {
     const store = createTestStore()
     const account = webAiAccount()
@@ -1147,6 +1299,47 @@ describe('createBrowserSlice Web AI accounts', () => {
     expect(store.getState().settings?.webAiAccounts).toEqual([])
     expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toBeUndefined()
     expect(mockApi.browser.sessionDeleteProfile).not.toHaveBeenCalled()
+  })
+
+  it('removes live and recently closed account tabs from ordinary worktrees', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-one',
+      getKnownWorktreeById: ((worktreeId: string) =>
+        worktreeId === 'wt-one' || worktreeId === 'wt-two'
+          ? ({ id: worktreeId } as never)
+          : undefined) as AppState['getKnownWorktreeById']
+    })
+    const closed = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-one'
+    })
+    store.getState().openWebAiAccount(account, {
+      openNewTab: true,
+      targetWorktreeId: 'wt-two'
+    })
+    if (!closed) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    store.getState().closeBrowserTab(closed.id)
+
+    expect(
+      store.getState().recentlyClosedBrowserTabsByWorktree['wt-one']?.[0]?.workspace.webAiAccountId
+    ).toBe(account.id)
+
+    await store.getState().deleteWebAiAccount(account.id)
+
+    expect(store.getState().browserTabsByWorktree['wt-one']).toBeUndefined()
+    expect(store.getState().browserTabsByWorktree['wt-two']).toBeUndefined()
+    expect(
+      Object.values(store.getState().recentlyClosedBrowserTabsByWorktree)
+        .flat()
+        .some((snapshot) => snapshot.workspace.webAiAccountId === account.id)
+    ).toBe(false)
   })
 
   it('keeps the workspace binding when account persistence fails', async () => {
@@ -1668,6 +1861,34 @@ describe('createBrowserSlice runtime guard', () => {
     store.getState().switchBrowserTabProfile(tab.id, 'another-profile', 'persist:another-profile')
 
     expect(store.getState().browserTabsByWorktree[accountWorkspaceId]?.[0]).toMatchObject({
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+  })
+
+  it('locks a saved Web AI profile when the tab is embedded in an ordinary worktree', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-project' }) as never) as AppState['getKnownWorktreeById']
+    })
+    const tab = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!tab) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+
+    store.getState().switchBrowserTabProfile(tab.id, 'another-profile', 'persist:another-profile')
+
+    expect(store.getState().browserTabsByWorktree['wt-project']?.[0]).toMatchObject({
       webAiAccountId: account.id,
       sessionProfileId: account.profileId,
       sessionPartition: account.sessionPartition

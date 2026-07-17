@@ -18,7 +18,10 @@ import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
-import { activateWorkspaceNumberShortcut } from '@/lib/workspace-number-shortcuts'
+import {
+  activateWebAiAccountNumberShortcut,
+  activateWorkspaceNumberShortcut
+} from '@/lib/workspace-number-shortcuts'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type {
   TerminalLayoutSnapshot,
@@ -68,6 +71,7 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { resolveWorkspaceNewTabShortcutTarget } from '@/lib/workspace-new-tab-shortcut'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -1393,6 +1397,19 @@ export function useIpcEvents(): void {
       })
     )
 
+    const onJumpToWebAiAccountIndex = window.api.ui.onJumpToWebAiAccountIndex
+    if (onJumpToWebAiAccountIndex) {
+      unsubs.push(
+        onJumpToWebAiAccountIndex((index) => {
+          const store = useAppStore.getState()
+          if (store.activeView !== 'terminal') {
+            return
+          }
+          void activateWebAiAccountNumberShortcut(index)
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onJumpToWorktreeIndex((index) => {
         const store = useAppStore.getState()
@@ -2649,7 +2666,23 @@ export function useIpcEvents(): void {
         if (!worktreeId) {
           return
         }
-        if (isWebAiBrowserWorkspaceId(worktreeId)) {
+        const shortcutTarget = resolveWorkspaceNewTabShortcutTarget(worktreeId, {
+          activeBrowserTabId: store.activeBrowserTabId,
+          activeTabType: store.activeTabType,
+          browserTabsByWorktree: store.browserTabsByWorktree,
+          webAiAccounts: store.settings?.webAiAccounts
+        })
+        if (shortcutTarget.kind === 'web-ai-account') {
+          const groupId =
+            store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+          void store.launchWebAiAccount(shortcutTarget.account, {
+            openNewTab: true,
+            targetGroupId: groupId,
+            targetWorktreeId: worktreeId
+          })
+          return
+        }
+        if (shortcutTarget.kind === 'browser') {
           const groupId =
             store.activeGroupIdByWorktree[worktreeId] ??
             store.groupsByWorktree[worktreeId]?.[0]?.id ??

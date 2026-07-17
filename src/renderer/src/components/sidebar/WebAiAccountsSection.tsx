@@ -4,9 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { BrowserSessionProfile, WebAiAccount } from '../../../../shared/types'
 import {
-  getWebAiAccountWorkspaceId,
   normalizeWebAiAccounts,
-  webAiAccountMatchesWorkspace
+  webAiAccountMatchesBinding
 } from '../../../../shared/web-ai-accounts'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -339,15 +338,17 @@ const WebAiAccountsSection = React.memo(function WebAiAccountsSection() {
             <div className="space-y-0.5">
               {accounts.map((account) => {
                 const profile = localProfileById.get(account.profileId) ?? null
-                const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
-                const workspaces = (browserTabsByWorktree[accountWorkspaceId] ?? []).filter(
-                  (entry) => webAiAccountMatchesWorkspace(account, entry)
-                )
+                const workspaces = Object.values(browserTabsByWorktree)
+                  .flat()
+                  .filter((entry) => webAiAccountMatchesBinding(account, entry))
                 const active =
                   activeView === 'terminal' &&
-                  activeWorktreeId === accountWorkspaceId &&
                   activeTabType === 'browser' &&
-                  workspaces.some((workspace) => workspace.id === activeBrowserTabId)
+                  workspaces.some(
+                    (workspace) =>
+                      workspace.worktreeId === activeWorktreeId &&
+                      workspace.id === activeBrowserTabId
+                  )
                 return (
                   <WebAiAccountRow
                     key={account.id}

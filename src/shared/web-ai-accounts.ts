@@ -261,6 +261,18 @@ export function normalizeWebAiAccounts(value: unknown): WebAiAccount[] {
   return accounts
 }
 
+export function webAiAccountMatchesBinding(
+  account: WebAiAccount,
+  workspace: Pick<BrowserWorkspace, 'sessionProfileId' | 'sessionPartition' | 'webAiAccountId'>
+): boolean {
+  return (
+    account.executionHostId === 'local' &&
+    workspace.webAiAccountId === account.id &&
+    workspace.sessionProfileId === account.profileId &&
+    workspace.sessionPartition === account.sessionPartition
+  )
+}
+
 export function webAiAccountMatchesWorkspace(
   account: WebAiAccount,
   workspace: Pick<
@@ -269,11 +281,9 @@ export function webAiAccountMatchesWorkspace(
   >,
   browserWorkspaceId = getWebAiAccountWorkspaceId(account.id)
 ): boolean {
+  // Why: account binding can also apply to a related tab in an ordinary
+  // worktree, while this predicate specifically validates standalone placement.
   return (
-    account.executionHostId === 'local' &&
-    workspace.worktreeId === browserWorkspaceId &&
-    workspace.webAiAccountId === account.id &&
-    workspace.sessionProfileId === account.profileId &&
-    workspace.sessionPartition === account.sessionPartition
+    workspace.worktreeId === browserWorkspaceId && webAiAccountMatchesBinding(account, workspace)
   )
 }

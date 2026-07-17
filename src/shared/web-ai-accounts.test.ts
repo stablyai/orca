@@ -10,6 +10,7 @@ import {
   isWebAiBrowserWorkspaceId,
   normalizeWebAiAccounts,
   parseWebAiAccountWorkspaceId,
+  webAiAccountMatchesBinding,
   webAiAccountMatchesWorkspace
 } from './web-ai-accounts'
 
@@ -224,7 +225,38 @@ describe('web AI accounts', () => {
     expect(parseWebAiAccountWorkspaceId('global-web-ai-account:0:')).toBeNull()
   })
 
-  it('matches a workspace only when account, host, profile, and partition stay aligned', () => {
+  it('matches an account binding in an ordinary worktree when identity fields stay aligned', () => {
+    const account = normalizeWebAiAccounts([
+      {
+        id: 'account-1',
+        provider: 'chatgpt',
+        label: 'Personal',
+        executionHostId: 'local',
+        profileId: 'profile-1',
+        sessionPartition: 'persist:profile-1',
+        createdAt: 1
+      }
+    ])[0]!
+    const workspace = {
+      worktreeId: 'ordinary-worktree',
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    }
+
+    expect(webAiAccountMatchesBinding(account, workspace)).toBe(true)
+    expect(
+      webAiAccountMatchesBinding(account, {
+        ...workspace,
+        sessionPartition: 'persist:another-profile'
+      })
+    ).toBe(false)
+    expect(
+      webAiAccountMatchesBinding({ ...account, executionHostId: 'ssh:example.test' }, workspace)
+    ).toBe(false)
+  })
+
+  it('keeps standalone workspace matching strict about synthetic placement', () => {
     const account = normalizeWebAiAccounts([
       {
         id: 'account-1',
@@ -247,7 +279,7 @@ describe('web AI accounts', () => {
     expect(
       webAiAccountMatchesWorkspace(account, {
         ...workspace,
-        sessionPartition: 'persist:another-profile'
+        worktreeId: 'ordinary-worktree'
       })
     ).toBe(false)
     expect(

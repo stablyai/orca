@@ -3267,6 +3267,11 @@ const api = {
       ipcRenderer.on('ui:openTasks', listener)
       return () => ipcRenderer.removeListener('ui:openTasks', listener)
     },
+    onJumpToWebAiAccountIndex: (callback: (index: number) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
+      ipcRenderer.on('ui:jumpToWebAiAccountIndex', listener)
+      return () => ipcRenderer.removeListener('ui:jumpToWebAiAccountIndex', listener)
+    },
     onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
       ipcRenderer.on('ui:jumpToWorktreeIndex', listener)

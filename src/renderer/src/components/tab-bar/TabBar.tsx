@@ -64,6 +64,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -74,6 +77,10 @@ import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-creat
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
 import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
 import { translate } from '@/i18n/i18n'
+import {
+  getWebAiAccountServiceLabel,
+  normalizeWebAiAccounts
+} from '../../../../shared/web-ai-accounts'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
@@ -313,7 +320,12 @@ function TabBarInner({
   const projects = useAppStore((s) => s.projects)
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
+  const launchWebAiAccount = useAppStore((s) => s.launchWebAiAccount)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const webAiAccounts = useMemo(
+    () => normalizeWebAiAccounts(settings?.webAiAccounts),
+    [settings?.webAiAccounts]
+  )
   // Why: probe Windows shell capabilities on the host that owns this worktree, so
   // the offered shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
@@ -596,18 +608,57 @@ function TabBarInner({
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
-        simulatorIsGoTo: workspaceHasSimulatorTab
+        simulatorIsGoTo: workspaceHasSimulatorTab,
+        webAiAccounts:
+          !terminalOnly && !browserOnly && !isWebClient && !activeRuntimeEnvironmentId
+            ? webAiAccounts
+            : undefined
       }),
     [
+      activeRuntimeEnvironmentId,
+      browserOnly,
+      isWebClient,
       mobileEmulatorEnabled,
       onNewFileTab,
       onNewSimulatorTab,
       onOpenFileTab,
       terminalOnly,
+      webAiAccounts,
       windowsShellEntries,
       workspaceHasSimulatorTab
     ]
   )
+  const launchSavedWebAiAccount = (accountId: string): void => {
+    const account = webAiAccounts.find((candidate) => candidate.id === accountId)
+    if (!account) {
+      return
+    }
+    void launchWebAiAccount(account, {
+      openNewTab: true,
+      targetGroupId: resolvedGroupId,
+      targetWorktreeId: worktreeId
+    }).then((result) => {
+      if (result.ok) {
+        return
+      }
+      toast.error(
+        result.reason === 'profile-check-failed'
+          ? translate(
+              'auto.components.sidebar.WebAiAccountsSection.profileCheckFailed',
+              'Could not verify browser profiles. Try again.'
+            )
+          : result.reason === 'profile-missing'
+            ? translate(
+                'auto.components.sidebar.WebAiAccountsSection.profileMissing',
+                'This browser profile no longer exists.'
+              )
+            : translate(
+                'auto.components.sidebar.WebAiAccountsSection.launchFailed',
+                'Failed to open this Web AI account.'
+              )
+      )
+    })
+  }
   const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
     switch (option.kind) {
       case 'new-terminal':
@@ -629,6 +680,11 @@ function TabBarInner({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-web-ai-account':
+        if (option.webAiAccountId) {
+          launchSavedWebAiAccount(option.webAiAccountId)
+        }
         break
       case 'new-markdown':
         onNewFileTab?.()
@@ -753,6 +809,34 @@ function TabBarInner({
       </DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
+  const canOfferWebAiAccounts =
+    !terminalOnly &&
+    !browserOnly &&
+    !isWebClient &&
+    !activeRuntimeEnvironmentId &&
+    webAiAccounts.length > 0
+  const newWebAiAccountsMenuItem = canOfferWebAiAccounts ? (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium">
+        <Globe className="size-4 text-muted-foreground" />
+        {translate('auto.components.sidebar.WebAiAccountsSection.title', 'Web AI Accounts')}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {webAiAccounts.map((account) => (
+          <DropdownMenuItem
+            key={account.id}
+            onSelect={() => launchSavedWebAiAccount(account.id)}
+            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+          >
+            <Globe className="size-4 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">
+              {account.label} / {getWebAiAccountServiceLabel(account)}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  ) : null
   const newSimulatorMenuItem =
     !terminalOnly && !browserOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
@@ -825,6 +909,7 @@ function TabBarInner({
         {openMarkdownMenuItem}
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newWebAiAccountsMenuItem}
         {newSimulatorMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
@@ -832,6 +917,7 @@ function TabBarInner({
       <>
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newWebAiAccountsMenuItem}
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}

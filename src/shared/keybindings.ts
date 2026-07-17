@@ -39,6 +39,7 @@ export type KeybindingActionId =
   | 'workspace.delete'
   | 'workspace.openBoard'
   | 'workspace.selectByIndex'
+  | 'webAi.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -325,8 +326,41 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     ],
     // Why: one remappable row for the whole 1-9 range. The stored chord is a
     // representative — its digit normalizes to 1, but the modifier set is what
-    // matters and any of 1-9 fires it. mac Cmd+1-9, Windows/Linux Ctrl+1-9 → Mod+1.
-    defaultBindings: platformBindings(['Mod+1'])
+    // matters and any of 1-9 fires it. mac Ctrl+1-9 selects worktrees, while
+    // Windows/Linux Ctrl+1-9 is represented by Mod+1.
+    defaultBindings: {
+      darwin: ['Ctrl+1'],
+      linux: ['Mod+1'],
+      win32: ['Mod+1']
+    }
+  },
+  {
+    id: 'webAi.selectByIndex',
+    title: 'Select Web AI account 1–9',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'web ai',
+      'account',
+      'profile',
+      'select',
+      'switch',
+      'number',
+      'digit',
+      '1-9',
+      'index'
+    ],
+    // Why: macOS reserves Option+1-9 for the saved Web AI account range. The
+    // composed glyphs are matched through the physical Digit code below.
+    // Windows/Linux leave this unassigned so AltGr/text layouts stay safe;
+    // users can still bind the range explicitly in Settings.
+    defaultBindings: {
+      darwin: ['Alt+1'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'voice.dictation',
@@ -701,16 +735,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Select Tab 1–9',
     group: 'Tab Navigation',
     scope: 'tabs',
-    // Why: deliberately no shared conflictGroup with workspace.selectByIndex.
-    // They live in different scopes, so swapping their modifiers (the headline
-    // use case) is never blocked as a false conflict; runtime stays deterministic
-    // because resolveWindowShortcutAction checks the workspace range first.
+    // Why: deliberately no shared conflictGroup with the index ranges. They
+    // live in separate scopes so each range can be remapped independently.
     searchKeywords: ['shortcut', 'tab', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
     // Why: representative chord for the 1-9 range (see workspace.selectByIndex).
-    // mac Ctrl+1-9 (Cmd+1-9 is the workspace jump); Windows/Linux Alt+1-9
-    // (Ctrl+1-9 is the workspace jump), so each platform gets a free chord.
+    // mac Cmd+1-9 selects tabs and Ctrl+1-9 selects worktrees; Windows/Linux
+    // keep Ctrl+1-9 for worktrees and Alt+1-9 for tabs.
     defaultBindings: {
-      darwin: ['Ctrl+1'],
+      darwin: ['Mod+1'],
       linux: ['Alt+1'],
       win32: ['Alt+1']
     }
@@ -1109,7 +1141,8 @@ const DEFINITION_IDS = new Set<KeybindingActionId>(
 // binding fires for any of 1-9. These ids opt into that range behavior.
 export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
   'tab.selectByIndex',
-  'workspace.selectByIndex'
+  'workspace.selectByIndex',
+  'webAi.selectByIndex'
 ]
 
 const DIGIT_INDEX_ACTION_ID_SET = new Set<KeybindingActionId>(DIGIT_INDEX_ACTION_IDS)
@@ -1700,6 +1733,7 @@ function shouldUseMacOptionComposedCaptureFallback(
   }
   return (
     (physicalToken.length === 1 && physicalToken >= 'A' && physicalToken <= 'Z') ||
+    (physicalToken.length === 1 && physicalToken >= '0' && physicalToken <= '9') ||
     isPunctuationKeyToken(physicalToken)
   )
 }
@@ -1962,7 +1996,18 @@ function digitKeyMatches(
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
-  return canFallBackToPhysicalCode(input, platform) && input.code === `Digit${digit}`
+  // Why: macOS Option+1-9 emits composed glyphs (for example Option+1 → ¡),
+  // so the logical key is not a digit even though the physical key is stable.
+  // Restrict this fallback to an actual Option chord so ordinary text input is
+  // never treated as a numeric app shortcut.
+  const macOptionComposedDigit =
+    getKeybindingPlatform(platform) === 'darwin' &&
+    hasModifier(input, 'alt') &&
+    logicalKeyTokenFromInput(input) === null
+  return (
+    (canFallBackToPhysicalCode(input, platform) || macOptionComposedDigit) &&
+    input.code === `Digit${digit}`
+  )
 }
 
 function isPunctuationKeyToken(token: string | null): token is string {

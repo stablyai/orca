@@ -6,7 +6,7 @@ import type { AppState } from './types'
 import type { WebAiAccount } from '../../../shared/types'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
-import { createTestStore } from './slices/store-test-helpers'
+import { createTestStore, makeWorktree, TEST_REPO } from './slices/store-test-helpers'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() }
@@ -125,6 +125,144 @@ describe('Web AI restart round trip', () => {
     expect(restarted.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(2)
     restarted.getState().openWebAiAccount(account, { openNewTab: true })
     expect(restarted.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(3)
+  })
+
+  it('restores an account-bound conversation beside worktree tabs', () => {
+    const worktreeId = 'wt-web-ai-project'
+    const worktree = makeWorktree({ id: worktreeId, repoId: TEST_REPO.id })
+    const integratedAccount: WebAiAccount = {
+      ...account,
+      id: 'account-chatgpt-personal',
+      provider: 'chatgpt',
+      label: 'Personal ChatGPT',
+      profileId: 'profile-chatgpt-personal',
+      sessionPartition: 'persist:orca-browser-session-profile-chatgpt-personal'
+    }
+    const integratedSettings = {
+      activeRuntimeEnvironmentId: null,
+      webAiAccounts: [integratedAccount]
+    } as AppState['settings']
+    const first = createTestStore()
+    first.setState({
+      settings: integratedSettings,
+      repos: [TEST_REPO],
+      worktreesByRepo: { [TEST_REPO.id]: [worktree] },
+      activeWorktreeId: worktreeId
+    })
+    const terminal = first.getState().createTab(worktreeId)
+    const browser = first.getState().openWebAiAccount(integratedAccount, {
+      targetWorktreeId: worktreeId
+    })
+    if (!browser?.activePageId) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    const conversationUrl = 'https://chatgpt.com/c/session-id'
+    first.getState().setBrowserPageUrl(browser.activePageId, conversationUrl)
+
+    const parsed = parseWorkspaceSession(
+      JSON.parse(JSON.stringify(buildWorkspaceSessionPayload(first.getState())))
+    )
+    if (!parsed.ok) {
+      throw new Error('Expected the integrated Web AI session to parse')
+    }
+
+    const restarted = createTestStore()
+    restarted.setState({
+      settings: integratedSettings,
+      repos: [TEST_REPO],
+      worktreesByRepo: { [TEST_REPO.id]: [worktree] }
+    })
+    restarted.getState().hydrateWorkspaceSession(parsed.value)
+    restarted.getState().hydrateTabsSession(parsed.value)
+    restarted.getState().hydrateEditorSession(parsed.value)
+    restarted.getState().hydrateBrowserSession(parsed.value)
+
+    const state = restarted.getState()
+    const restoredBrowser = state.browserTabsByWorktree[worktreeId]?.[0]
+    const restoredPage = restoredBrowser
+      ? state.browserPagesByWorkspace[restoredBrowser.id]?.[0]
+      : null
+    const restoredUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+    const restoredBrowserTab = restoredUnifiedTabs.find(
+      (tab) => tab.contentType === 'browser' && tab.entityId === restoredBrowser?.id
+    )
+    const restoredTerminalTab = restoredUnifiedTabs.find(
+      (tab) => tab.contentType === 'terminal' && tab.entityId === terminal.id
+    )
+
+    expect(state.browserTabsByWorktree[accountWorkspaceId]).toBeUndefined()
+    expect(restoredBrowser).toMatchObject({
+      worktreeId,
+      url: conversationUrl,
+      webAiAccountId: integratedAccount.id,
+      sessionProfileId: integratedAccount.profileId,
+      sessionPartition: integratedAccount.sessionPartition
+    })
+    expect(restoredPage).toMatchObject({
+      worktreeId,
+      url: conversationUrl,
+      browserRuntimeEnvironmentId: null
+    })
+    expect(restoredTerminalTab).toBeTruthy()
+    expect(restoredBrowserTab).toBeTruthy()
+    expect(
+      state.groupsByWorktree[worktreeId]?.some(
+        (group) =>
+          group.tabOrder.includes(restoredTerminalTab?.id ?? '') &&
+          group.tabOrder.includes(restoredBrowserTab?.id ?? '') &&
+          group.activeTabId === restoredBrowserTab?.id
+      )
+    ).toBe(true)
+    expect(state.activeWorktreeId).toBe(worktreeId)
+    expect(state.activeBrowserTabId).toBe(restoredBrowser?.id)
+    expect(state.activeTabType).toBe('browser')
+  })
+
+  it('drops an integrated session and its tab metadata when the saved account is gone', () => {
+    const worktreeId = 'wt-removed-account'
+    const worktree = makeWorktree({ id: worktreeId, repoId: TEST_REPO.id })
+    const first = createTestStore()
+    first.setState({
+      settings: settings(),
+      repos: [TEST_REPO],
+      worktreesByRepo: { [TEST_REPO.id]: [worktree] },
+      activeWorktreeId: worktreeId
+    })
+    const browser = first.getState().openWebAiAccount(account, {
+      targetWorktreeId: worktreeId
+    })
+    if (!browser) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    const parsed = parseWorkspaceSession(
+      JSON.parse(JSON.stringify(buildWorkspaceSessionPayload(first.getState())))
+    )
+    if (!parsed.ok) {
+      throw new Error('Expected the integrated Web AI session to parse')
+    }
+
+    const restarted = createTestStore()
+    restarted.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: []
+      } as unknown as AppState['settings'],
+      repos: [TEST_REPO],
+      worktreesByRepo: { [TEST_REPO.id]: [worktree] }
+    })
+    restarted.getState().hydrateWorkspaceSession(parsed.value)
+    restarted.getState().hydrateTabsSession(parsed.value)
+    restarted.getState().hydrateEditorSession(parsed.value)
+    restarted.getState().hydrateBrowserSession(parsed.value)
+
+    const state = restarted.getState()
+    expect(state.browserTabsByWorktree[worktreeId]).toBeUndefined()
+    expect(state.browserPagesByWorkspace[browser.id]).toBeUndefined()
+    expect(
+      (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+        (tab) => tab.contentType === 'browser' && tab.entityId === browser.id
+      )
+    ).toBe(false)
   })
 
   it('migrates legacy hidden pages beside their source tab without stealing focus', () => {

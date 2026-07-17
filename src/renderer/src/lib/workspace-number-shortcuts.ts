@@ -4,12 +4,11 @@ import type { WebAiAccount } from '../../../shared/types'
 import { normalizeWebAiAccounts } from '../../../shared/web-ai-accounts'
 import { activateAndRevealWorktree } from './worktree-activation'
 
-export type WorkspaceNumberShortcutTarget =
-  | { kind: 'web-ai-account'; account: WebAiAccount }
-  | { kind: 'worktree'; worktreeId: string }
+export type WorkspaceNumberShortcutTarget = { kind: 'worktree'; worktreeId: string }
+
+const webAiAccountLaunchesInFlight = new Set<string>()
 
 export function resolveWorkspaceNumberShortcutTarget(
-  accountsValue: unknown,
   visibleWorktreeIds: readonly string[],
   index: number
 ): WorkspaceNumberShortcutTarget | null {
@@ -17,32 +16,43 @@ export function resolveWorkspaceNumberShortcutTarget(
     return null
   }
 
-  const accounts = normalizeWebAiAccounts(accountsValue)
-  const account = accounts[index]
-  if (account) {
-    return { kind: 'web-ai-account', account }
-  }
-
-  const worktreeId = visibleWorktreeIds[index - accounts.length]
+  const worktreeId = visibleWorktreeIds[index]
   return worktreeId ? { kind: 'worktree', worktreeId } : null
 }
 
+export function resolveWebAiAccountNumberShortcutTarget(
+  accountsValue: unknown,
+  index: number
+): WebAiAccount | null {
+  if (!Number.isInteger(index) || index < 0) {
+    return null
+  }
+  return normalizeWebAiAccounts(accountsValue)[index] ?? null
+}
+
 export async function activateWorkspaceNumberShortcut(index: number): Promise<boolean> {
-  const store = useAppStore.getState()
-  const target = resolveWorkspaceNumberShortcutTarget(
-    store.settings?.webAiAccounts,
-    getVisibleWorktreeIds(),
-    index
-  )
+  const target = resolveWorkspaceNumberShortcutTarget(getVisibleWorktreeIds(), index)
   if (!target) {
     return false
   }
 
-  if (target.kind === 'web-ai-account') {
-    // Why: number shortcuts must use the same authoritative profile check as
-    // sidebar launches so a deleted profile cannot recreate a stale partition.
-    return (await store.launchWebAiAccount(target.account)).ok
+  return activateAndRevealWorktree(target.worktreeId) !== false
+}
+
+export async function activateWebAiAccountNumberShortcut(index: number): Promise<boolean> {
+  const store = useAppStore.getState()
+  const account = resolveWebAiAccountNumberShortcutTarget(store.settings?.webAiAccounts, index)
+  if (!account || webAiAccountLaunchesInFlight.has(account.id)) {
+    return false
   }
 
-  return activateAndRevealWorktree(target.worktreeId) !== false
+  // Why: account launch validates the persisted browser profile asynchronously.
+  // Collapse duplicate key events until it settles so one held shortcut cannot
+  // create multiple workspaces/tabs for the same account.
+  webAiAccountLaunchesInFlight.add(account.id)
+  try {
+    return (await store.launchWebAiAccount(account)).ok
+  } finally {
+    webAiAccountLaunchesInFlight.delete(account.id)
+  }
 }

@@ -12,7 +12,7 @@ import {
   resolveZoomTarget
 } from './useIpcEvents'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
-import type { TuiAgent } from '../../../shared/types'
+import type { BrowserWorkspace, TuiAgent, WebAiAccount } from '../../../shared/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import { getWebAiAccountWorkspaceId } from '../../../shared/constants'
@@ -1901,6 +1901,7 @@ describe('useIpcEvents updater integration', () => {
     const createFloatingWorkspaceTerminalTab = vi.fn()
     const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue(false)
     const openNewBrowserTabInActiveWorkspace = vi.fn().mockResolvedValue(undefined)
+    const launchWebAiAccount = vi.fn().mockResolvedValue({ ok: true })
     const focusRuntimeTerminalSurface = vi.fn(() => false)
     const focusTerminalTabSurface = vi.fn()
     let floatingPanelFocused = false
@@ -1927,12 +1928,14 @@ describe('useIpcEvents updater integration', () => {
       repos: [{ id: 'repo-1', connectionId: null }],
       worktreesByRepo: { 'repo-1': [{ id: 'wt-2', repoId: 'repo-1' }] },
       openFiles: [],
-      browserTabsByWorktree: {},
+      browserTabsByWorktree: {} as Record<string, BrowserWorkspace[]>,
+      activeBrowserTabId: null as string | null,
       activeGroupIdByWorktree: {} as Record<string, string>,
       groupsByWorktree: {} as Record<string, { id: string }[]>,
       tabBarOrderByWorktree: {},
       setTabBarOrder,
       openNewBrowserTabInActiveWorkspace,
+      launchWebAiAccount,
       ptyIdsByTabId: {} as Record<string, string[]>,
       terminalLayoutsByTabId: {} as Record<string, unknown>,
       fetchRepos: vi.fn(),
@@ -1961,7 +1964,8 @@ describe('useIpcEvents updater integration', () => {
         terminalFontSize: 13,
         experimentalNativeChat: false,
         openAgentTabsInChatByDefault: false,
-        activeRuntimeEnvironmentId: undefined as string | undefined
+        activeRuntimeEnvironmentId: undefined as string | undefined,
+        webAiAccounts: [] as WebAiAccount[]
       }
     }
     const createTerminalListenerRef: {
@@ -2293,7 +2297,50 @@ describe('useIpcEvents updater integration', () => {
     expect(createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
     expect(createTab).not.toHaveBeenCalled()
 
+    const integratedAccount: WebAiAccount = {
+      id: 'chatgpt-integrated',
+      provider: 'chatgpt',
+      label: 'Personal ChatGPT',
+      executionHostId: 'local',
+      profileId: 'profile-chatgpt',
+      sessionPartition: 'persist:profile-chatgpt',
+      createdAt: 1
+    }
     storeState.activeWorktreeId = 'wt-1'
+    storeState.activeTabType = 'browser'
+    storeState.activeBrowserTabId = 'browser-chatgpt'
+    storeState.activeGroupIdByWorktree['wt-1'] = 'group-worktree'
+    storeState.settings.webAiAccounts = [integratedAccount]
+    storeState.browserTabsByWorktree['wt-1'] = [
+      {
+        id: 'browser-chatgpt',
+        worktreeId: 'wt-1',
+        url: 'https://chatgpt.com/c/session-id',
+        title: 'ChatGPT',
+        loading: false,
+        faviconUrl: null,
+        canGoBack: false,
+        canGoForward: false,
+        loadError: null,
+        createdAt: 1,
+        webAiAccountId: integratedAccount.id,
+        sessionProfileId: integratedAccount.profileId,
+        sessionPartition: integratedAccount.sessionPartition
+      }
+    ]
+    newTerminalTabListenerRef.current()
+
+    expect(launchWebAiAccount).toHaveBeenCalledWith(integratedAccount, {
+      openNewTab: true,
+      targetGroupId: 'group-worktree',
+      targetWorktreeId: 'wt-1'
+    })
+    expect(createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
+    expect(createTab).not.toHaveBeenCalled()
+
+    storeState.activeWorktreeId = 'wt-1'
+    storeState.activeTabType = 'terminal'
+    storeState.activeBrowserTabId = null
     setActiveView.mockClear()
     setActiveWorktree.mockClear()
     setActiveTabType.mockClear()

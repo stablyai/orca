@@ -313,4 +313,43 @@ describe('WebAiAccountsSection', () => {
     const row = await screen.findByRole('button', { name: 'Personal ChatGPT' })
     expect(row).toHaveAttribute('aria-current', 'page')
   })
+
+  it('counts and activates account-bound tabs across ordinary worktrees', async () => {
+    mocks.holder.state = {
+      ...mocks.holder.state,
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'workspace-1',
+            webAiAccountId: account.id,
+            worktreeId: 'wt-1',
+            sessionProfileId: account.profileId,
+            sessionPartition: account.sessionPartition
+          }
+        ],
+        'wt-2': [
+          {
+            id: 'workspace-2',
+            webAiAccountId: account.id,
+            worktreeId: 'wt-2',
+            sessionProfileId: account.profileId,
+            sessionPartition: account.sessionPartition
+          }
+        ]
+      },
+      activeBrowserTabId: 'workspace-2',
+      activeWorktreeId: 'wt-2',
+      activeTabType: 'browser',
+      activeView: 'terminal'
+    }
+    render(
+      <TooltipProvider>
+        <WebAiAccountsSection />
+      </TooltipProvider>
+    )
+
+    const row = await screen.findByRole('button', { name: 'Personal ChatGPT' })
+    expect(row).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
 })

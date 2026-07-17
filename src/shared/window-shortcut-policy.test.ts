@@ -64,17 +64,33 @@ describe('resolveWindowShortcutAction', () => {
 
     expect(
       resolveWindowShortcutAction(
-        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        { code: 'Digit3', key: '3', meta: false, control: false, alt: true, shift: false },
         'darwin'
       )
-    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+    ).toEqual({ type: 'jumpToWebAiAccountIndex', index: 2 })
 
     expect(
       resolveWindowShortcutAction(
         { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
         'darwin'
       )
+    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
+        'darwin'
+      )
     ).toEqual({ type: 'jumpToTabIndex', index: 2 })
+  })
+
+  it('resolves macOS Option-composed digits through their physical key code', () => {
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '£', meta: false, control: false, alt: true, shift: false },
+        'darwin'
+      )
+    ).toEqual({ type: 'jumpToWebAiAccountIndex', index: 2 })
   })
 
   it('uses Alt+number for tab jumps on Windows/Linux without stealing workspace jumps', () => {
@@ -137,7 +153,7 @@ describe('resolveWindowShortcutAction', () => {
         'darwin',
         { 'tab.openQuickCommandsMenu': ['Mod+3'] }
       )
-    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
 
     expect(
       resolveWindowShortcutAction(
@@ -149,10 +165,10 @@ describe('resolveWindowShortcutAction', () => {
   })
 
   it('honors remapped tab/workspace number ranges, including swapping the modifiers', () => {
-    // Swap on macOS: tab now uses Cmd+1-9, workspace uses Ctrl+1-9.
+    // Swap away from the macOS defaults: tab uses Ctrl, workspace uses Cmd.
     const swapped: KeybindingOverrides = {
-      'tab.selectByIndex': ['Mod+1'],
-      'workspace.selectByIndex': ['Ctrl+1']
+      'tab.selectByIndex': ['Ctrl+1'],
+      'workspace.selectByIndex': ['Mod+1']
     }
     expect(
       resolveWindowShortcutAction(
@@ -160,14 +176,14 @@ describe('resolveWindowShortcutAction', () => {
         'darwin',
         swapped
       )
-    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
+    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
     expect(
       resolveWindowShortcutAction(
         { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
         'darwin',
         swapped
       )
-    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
 
     // A custom chord with an extra modifier also resolves.
     expect(
@@ -261,7 +277,7 @@ describe('resolveWindowShortcutAction', () => {
         undefined,
         { context: 'terminal', terminalShortcutPolicy: 'orca-first' }
       )
-    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
+    ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
   })
 
   it('does not resolve the removed PDF export shortcut globally', () => {

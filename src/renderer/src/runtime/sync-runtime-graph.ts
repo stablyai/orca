@@ -366,6 +366,14 @@ function getBrowserPagesByWorkspace(state: AppState): AppState['browserPagesByWo
   return state.browserPagesByWorkspace ?? EMPTY_BROWSER_PAGES_BY_WORKSPACE
 }
 
+function isWebAiAccountBoundBrowserWorkspace(workspace: {
+  webAiAccountId?: string | null
+}): boolean {
+  // Why: even malformed restored bindings remain private until validation can
+  // remove them; publishing an empty account tag would fail open.
+  return workspace.webAiAccountId != null
+}
+
 function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktree']): string {
   if (cachedTabsProjection?.source === tabsByWorktree) {
     return cachedTabsProjection.projection
@@ -435,33 +443,47 @@ function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles'])
 function buildRuntimeMobileBrowserProjection(state: AppState): string {
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
+  const privateWorkspaceIds = new Set<string>()
+  for (const [worktreeId, workspaces] of Object.entries(browserTabsByWorktree)) {
+    for (const workspace of workspaces) {
+      if (isWebAiBrowserWorkspaceId(worktreeId) || isWebAiAccountBoundBrowserWorkspace(workspace)) {
+        privateWorkspaceIds.add(workspace.id)
+      }
+    }
+  }
   return JSON.stringify({
     workspacesByWorktree: Object.fromEntries(
-      Object.entries(browserTabsByWorktree).map(([worktreeId, workspaces]) => [
-        worktreeId,
-        workspaces.map((workspace) => ({
-          id: workspace.id,
-          activePageId: workspace.activePageId,
-          title: workspace.title,
-          url: workspace.url,
-          loading: workspace.loading,
-          canGoBack: workspace.canGoBack,
-          canGoForward: workspace.canGoForward
-        }))
-      ])
+      Object.entries(browserTabsByWorktree)
+        .filter(([worktreeId]) => !isWebAiBrowserWorkspaceId(worktreeId))
+        .map(([worktreeId, workspaces]) => [
+          worktreeId,
+          workspaces
+            .filter((workspace) => !isWebAiAccountBoundBrowserWorkspace(workspace))
+            .map((workspace) => ({
+              id: workspace.id,
+              activePageId: workspace.activePageId,
+              title: workspace.title,
+              url: workspace.url,
+              loading: workspace.loading,
+              canGoBack: workspace.canGoBack,
+              canGoForward: workspace.canGoForward
+            }))
+        ])
     ),
     pagesByWorkspace: Object.fromEntries(
-      Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
-        workspaceId,
-        pages.map((page) => ({
-          id: page.id,
-          title: page.title,
-          url: page.url,
-          loading: page.loading,
-          canGoBack: page.canGoBack,
-          canGoForward: page.canGoForward
-        }))
-      ])
+      Object.entries(browserPagesByWorkspace)
+        .filter(([workspaceId]) => !privateWorkspaceIds.has(workspaceId))
+        .map(([workspaceId, pages]) => [
+          workspaceId,
+          pages.map((page) => ({
+            id: page.id,
+            title: page.title,
+            url: page.url,
+            loading: page.loading,
+            canGoBack: page.canGoBack,
+            canGoForward: page.canGoForward
+          }))
+        ])
     )
   })
 }
@@ -711,10 +733,11 @@ export function buildMobileSessionTabSnapshots(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
     const browserWorkspaceByIdForWorktree = new Map(
-      (getBrowserTabsByWorktree(state)[worktreeId] ?? []).map((workspace) => [
-        workspace.id,
-        workspace
-      ])
+      (getBrowserTabsByWorktree(state)[worktreeId] ?? [])
+        // Why: account-bound browser tabs contain local authenticated state,
+        // even when future UI places them beside ordinary worktree tabs.
+        .filter((workspace) => !isWebAiAccountBoundBrowserWorkspace(workspace))
+        .map((workspace) => [workspace.id, workspace])
     )
     const unifiedTabByIdForWorktree = new Map(
       (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])

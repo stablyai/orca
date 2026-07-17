@@ -2802,6 +2802,8 @@ export type PreloadApi = {
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
     onOpenWorkspaceBoard: (callback: () => void) => () => void
     onOpenTasks: (callback: () => void) => () => void
+    /** Desktop-only while older web adapters catch up with the shortcut channel. */
+    onJumpToWebAiAccountIndex?: (callback: (index: number) => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
