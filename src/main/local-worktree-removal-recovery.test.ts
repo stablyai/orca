@@ -30,6 +30,7 @@ import {
   recoverLocalWindowsWorktreeRemoval,
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval
 } from './local-worktree-removal-recovery'
+import { SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS } from './worktree-submodule-removal-guard'
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -368,7 +369,13 @@ describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
     listWorktreesStrictMock.mockReset()
     removeLocalWorktreePathMock.mockReset()
     removeWorktreeMock.mockReset()
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    gitExecFileAsyncMock.mockImplementation(async (gitArgs: string[]) => ({
+      stdout:
+        gitArgs[0] === 'submodule' && gitArgs[1] === 'status'
+          ? ' abc123 vendor/sub (heads/main)\n'
+          : '',
+      stderr: ''
+    }))
     listWorktreesStrictMock.mockResolvedValue([])
     removeLocalWorktreePathMock.mockResolvedValue(undefined)
   })
@@ -399,7 +406,11 @@ describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
     // The strict guard re-verifies inside the worktree before any force.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
-      { cwd: '/workspaces/feature', wslDistro: 'Ubuntu' }
+      {
+        cwd: '/workspaces/feature',
+        wslDistro: 'Ubuntu',
+        timeout: SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
+      }
     )
     expect(removeWorktreeMock).toHaveBeenCalledWith('/repo', '/workspaces/feature', true, {
       knownRemovedWorktree: registeredWorktree,

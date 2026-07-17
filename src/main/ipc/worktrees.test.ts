@@ -6577,6 +6577,13 @@ describe('registerWorktreeHandlers', () => {
 
   it('escalates to a forced git removal when the worktree contains submodules', async () => {
     const registeredWorktrees = mockKnownFeatureWorktree()
+    gitExecFileAsyncMock.mockImplementation(async (gitArgs: string[]) => ({
+      stdout:
+        gitArgs[0] === 'submodule' && gitArgs[1] === 'status'
+          ? ' abc123 vendor/sub (heads/main)\n'
+          : '',
+      stderr: ''
+    }))
     const submoduleError = Object.assign(new Error('Command failed: git worktree remove'), {
       stderr: 'fatal: working trees containing submodules cannot be moved or removed'
     })
@@ -6660,6 +6667,13 @@ describe('registerWorktreeHandlers', () => {
 
   it('surfaces the error when the forced submodule removal retry fails', async () => {
     mockKnownFeatureWorktree()
+    gitExecFileAsyncMock.mockImplementation(async (gitArgs: string[]) => ({
+      stdout:
+        gitArgs[0] === 'submodule' && gitArgs[1] === 'status'
+          ? ' abc123 vendor/sub (heads/main)\n'
+          : '',
+      stderr: ''
+    }))
     removeWorktreeMock
       .mockRejectedValueOnce(
         Object.assign(new Error('Command failed: git worktree remove'), {
@@ -7259,12 +7273,15 @@ describe('registerWorktreeHandlers', () => {
         )
         .mockResolvedValueOnce(undefined),
       worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
-      execNonInteractive: vi.fn().mockResolvedValue({
-        stdout: '',
+      execNonInteractive: vi.fn().mockImplementation(async (_binary: string, args: string[]) => ({
+        stdout:
+          args[0] === 'submodule' && args[1] === 'status'
+            ? ' abc123 vendor/sub (heads/main)\n'
+            : '',
         stderr: '',
         exitCode: 0,
         timedOut: false
-      })
+      }))
     }
     const fsProvider = {
       readFile: vi.fn().mockResolvedValue({

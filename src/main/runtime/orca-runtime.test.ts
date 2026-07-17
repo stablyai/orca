@@ -29388,9 +29388,13 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     // The escalation guard re-verifies the tree (strict status + local-only
     // submodule commit probe) before the forced retry.
-    const gitSpy = vi
-      .spyOn(gitRunner, 'gitExecFileAsync')
-      .mockResolvedValue({ stdout: '', stderr: '' })
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (gitArgs) => ({
+      stdout:
+        gitArgs[0] === 'submodule' && gitArgs[1] === 'status'
+          ? ' abc123 vendor/sub (heads/main)\n'
+          : '',
+      stderr: ''
+    }))
     vi.mocked(removeWorktree)
       .mockRejectedValueOnce(
         Object.assign(new Error('Command failed: git worktree remove'), {

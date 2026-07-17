@@ -8,9 +8,9 @@ import { formatWorktreeRemovalError } from './ipc/worktree-logic'
  */
 export type SubmoduleRemovalGuardGitExec = (args: string[]) => Promise<{ stdout: string }>
 
-// Why: the guard runs one status and one rev-list sweep on an explicit user
-// delete; a large tree on a slow link should fail closed instead of hanging.
-const SSH_SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS = 30_000
+// Why: these probes run during an explicit delete, but a large tree or slow
+// WSL/SSH host must fail closed instead of leaving deletion hung indefinitely.
+export const SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS = 30_000
 
 type NonInteractiveExecProvider = {
   execNonInteractive(
@@ -30,7 +30,7 @@ export function sshSubmoduleRemovalGuardGitExec(
       'git',
       gitArgs,
       worktreePath,
-      SSH_SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
+      SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
     )
     if (result.timedOut || result.spawnError || result.exitCode !== 0) {
       throw new Error(result.spawnError || `git ${gitArgs[0]} exited with ${result.exitCode}`)
@@ -56,13 +56,11 @@ export function sshSubmoduleRemovalGuardGitExec(
  *    submodule git database is their only copy, and the preserved branch's
  *    gitlink would reference a commit that no longer exists anywhere.
  *
- * Submodules that are declared but not active (`git submodule status` shows a
- * leading `-`, e.g. after `git submodule deinit`) cannot be verified — a
- * deinit leaves the submodule's database under the admin dir, invisible to
- * `git submodule foreach` — so they require explicit force too. The one
- * residual gap is a leftover database whose submodule was also removed from
- * .gitmodules: no porcelain command can see it, and git's own sanctioned
- * `worktree remove --force` destroys it identically.
+ * Submodules that are not active (`git submodule status` shows a leading `-`)
+ * cannot be verified because their databases are invisible to `foreach`. An
+ * empty status is unsafe too: Git's preceding submodule refusal proves an
+ * admin-dir database exists, but a removed `.gitmodules` entry can leave no
+ * porcelain name with which to inspect it. Both states require explicit force.
  * Throws a force-classifiable error when unsafe; rethrows the original
  * removal error when the state cannot be verified.
  */
@@ -105,11 +103,12 @@ export async function assertSubmoduleWorktreeSafeToForceRemove(
     throw dirtyError
   }
 
+  const hasNoVerifiableSubmodules = !submoduleStates.trim()
   const hasUnverifiableSubmodule = submoduleStates.split('\n').some((line) => line.startsWith('-'))
   const hasLocalOnlySubmoduleCommits = localOnlyCommitCounts
     .split('\n')
     .some((line) => Number.parseInt(line.trim(), 10) > 0)
-  if (hasUnverifiableSubmodule || hasLocalOnlySubmoduleCommits) {
+  if (hasNoVerifiableSubmodules || hasUnverifiableSubmodule || hasLocalOnlySubmoduleCommits) {
     throw new Error(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)
   }
 }

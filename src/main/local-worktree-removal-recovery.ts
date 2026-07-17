@@ -4,7 +4,10 @@ import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktre
 import { gitExecFileAsync } from './git/runner'
 import { listWorktreesStrict, removeWorktree, type GitWorktreeExecOptions } from './git/worktree'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
-import { assertSubmoduleWorktreeSafeToForceRemove } from './worktree-submodule-removal-guard'
+import {
+  assertSubmoduleWorktreeSafeToForceRemove,
+  SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
+} from './worktree-submodule-removal-guard'
 
 type LocalWindowsRemovalRecoveryArgs = {
   error: unknown
@@ -178,7 +181,8 @@ export async function forceRemoveWorktreeAfterSubmoduleRefusal(
       (gitArgs) =>
         gitExecFileAsync(gitArgs, {
           cwd: args.canonicalWorktreePath,
-          ...args.localWorktreeGitOptions
+          ...args.localWorktreeGitOptions,
+          timeout: args.localWorktreeGitOptions.timeout ?? SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
         }),
       args.originalRemovalError,
       args.canonicalWorktreePath

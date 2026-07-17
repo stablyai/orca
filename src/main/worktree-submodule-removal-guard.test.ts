@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   assertSubmoduleWorktreeSafeToForceRemove,
-  sshSubmoduleRemovalGuardGitExec
+  sshSubmoduleRemovalGuardGitExec,
+  SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
 } from './worktree-submodule-removal-guard'
 import { UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE } from '../shared/worktree-removal'
 
@@ -43,6 +44,7 @@ describe('assertSubmoduleWorktreeSafeToForceRemove', () => {
       '--quiet',
       'git rev-list --count HEAD --not --remotes'
     ])
+    expect(exec).toHaveBeenCalledTimes(3)
   })
 
   it('throws the classified dirty error when strict status reports changes', async () => {
@@ -78,6 +80,18 @@ describe('assertSubmoduleWorktreeSafeToForceRemove', () => {
     ).rejects.toThrow(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)
   })
 
+  it('throws the unpushed-submodules error when git found an unlisted leftover database', async () => {
+    // Why: the preceding removal refusal proves submodule admin state exists;
+    // empty porcelain means .gitmodules no longer names it for inspection.
+    await expect(
+      assertSubmoduleWorktreeSafeToForceRemove(
+        guardExec('', '', ''),
+        originalError,
+        '/workspaces/feature'
+      )
+    ).rejects.toThrow(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)
+  })
+
   it('surfaces the original refusal when the tree cannot be verified', async () => {
     const exec = vi.fn(async () => {
       throw new Error('fatal: not a git repository')
@@ -101,7 +115,7 @@ describe('sshSubmoduleRemovalGuardGitExec', () => {
       'git',
       ['status', '--porcelain'],
       '/remote/feature-wt',
-      expect.any(Number)
+      SUBMODULE_REMOVAL_GUARD_TIMEOUT_MS
     )
   })
 
