@@ -233,7 +233,7 @@ describe('PlaybackSuppressionService', () => {
     expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
   })
 
-  it('does not alter a different endpoint during crash recovery', async () => {
+  it('preserves recovery state when the current endpoint differs', async () => {
     const adapter = createAdapter(true)
     vi.mocked(adapter.snapshot).mockResolvedValue({
       backend: 'test',
@@ -250,7 +250,7 @@ describe('PlaybackSuppressionService', () => {
     await service.getCapability()
 
     expect(adapter.setMuted).not.toHaveBeenCalled()
-    expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
+    expect(recoveryStore.clear).not.toHaveBeenCalled()
   })
 
   it('clears recovery state when a failed mute left output unchanged', async () => {
@@ -316,5 +316,41 @@ describe('PlaybackSuppressionService', () => {
 
     expect(adapter.setMuted).toHaveBeenNthCalledWith(2, false, expect.any(AbortSignal), current)
     expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves recovery state when the endpoint changes during failed activation', async () => {
+    const before = {
+      backend: 'test',
+      endpointId: 'speaker-1',
+      endpointTarget: 'speaker-1',
+      muted: false
+    }
+    const current = {
+      backend: 'test',
+      endpointId: 'speaker-2',
+      endpointTarget: 'speaker-2',
+      muted: false
+    }
+    const adapter: PlaybackSuppressionAdapter = {
+      getCapability: vi.fn(async () => true),
+      snapshot: vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(current),
+      setMuted: vi.fn(async () => {
+        throw new Error('mute failed while the default endpoint changed')
+      })
+    }
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => null),
+      write: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await expect(service.acquire('dictation:1')).resolves.toEqual({
+      active: false,
+      reason: 'unavailable'
+    })
+
+    expect(adapter.setMuted).toHaveBeenCalledTimes(1)
+    expect(recoveryStore.clear).not.toHaveBeenCalled()
   })
 })

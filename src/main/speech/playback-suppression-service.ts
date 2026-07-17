@@ -184,7 +184,11 @@ export class PlaybackSuppressionService {
         Boolean(marker.endpointId) &&
         marker.backend === current.backend &&
         marker.endpointId === current.endpointId
-      if (sameEndpoint && current.muted) {
+      if (!sameEndpoint) {
+        // Why: the marker is the only durable path to restore the captured endpoint later.
+        return
+      }
+      if (current.muted) {
         await this.adapter.setMuted(marker.muted, new AbortController().signal, current)
       }
       await this.recoveryStore.clear()
@@ -201,7 +205,11 @@ export class PlaybackSuppressionService {
       const current = await this.adapter.snapshot()
       const sameEndpoint =
         snapshot.backend === current.backend && snapshot.endpointId === current.endpointId
-      if (sameEndpoint && current.muted !== snapshot.muted) {
+      if (!sameEndpoint) {
+        // Why: clearing here can strand the captured endpoint in a muted state.
+        return
+      }
+      if (current.muted !== snapshot.muted) {
         await this.adapter.setMuted(snapshot.muted, new AbortController().signal, current)
       }
       await this.recoveryStore.clear()
