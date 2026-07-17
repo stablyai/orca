@@ -86,15 +86,23 @@ func argument(_ name: String, in args: [String]) throws -> String {
     return args[index + 1]
 }
 
-func printSnapshot() throws {
-    let device = try defaultOutputDevice()
+func printSnapshot(endpointId: String, endpointTarget: String, muted: Bool) throws {
     let payload: [String: Any] = [
-        "endpointId": try deviceUID(device),
-        "endpointTarget": String(device),
-        "muted": try readMute(device),
+        "endpointId": endpointId,
+        "endpointTarget": endpointTarget,
+        "muted": muted,
     ]
     let data = try JSONSerialization.data(withJSONObject: payload, options: [])
     print(String(decoding: data, as: UTF8.self))
+}
+
+func printSnapshot() throws {
+    let device = try defaultOutputDevice()
+    try printSnapshot(
+        endpointId: try deviceUID(device),
+        endpointTarget: String(device),
+        muted: try readMute(device)
+    )
 }
 
 func applyMute(_ args: [String]) throws {
@@ -112,6 +120,9 @@ func applyMute(_ args: [String]) throws {
 do {
     let args = Array(CommandLine.arguments.dropFirst())
     switch args.first {
+    case "self-test":
+        // Why: release builds need a hardware-independent launch and JSON contract check.
+        try printSnapshot(endpointId: "orca-test-endpoint", endpointTarget: "orca-test-endpoint", muted: false)
     case "snapshot": try printSnapshot()
     case "set-muted": try applyMute(args)
     default: throw HelperError.invalidArguments("Usage: orca-playback-suppression snapshot | set-muted --endpoint-id ID --endpoint-target TARGET true|false")

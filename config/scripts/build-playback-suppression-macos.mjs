@@ -52,8 +52,20 @@ try {
     execFileSync('lipo', ['-create', ...binaries, '-output', outputPath])
   }
   execFileSync('chmod', ['755', outputPath])
+  verifySnapshotContract(execFileSync(outputPath, ['self-test'], { encoding: 'utf8' }))
 } finally {
   rmSync(workDir, { recursive: true, force: true })
+}
+
+function verifySnapshotContract(stdout) {
+  const snapshot = JSON.parse(stdout)
+  if (
+    snapshot.endpointId !== 'orca-test-endpoint' ||
+    snapshot.endpointTarget !== 'orca-test-endpoint' ||
+    snapshot.muted !== false
+  ) {
+    throw new Error('macOS playback suppression helper returned an invalid self-test snapshot.')
+  }
 }
 
 function readArg(name) {

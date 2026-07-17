@@ -45,6 +45,32 @@ if (result.error) {
 if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
+verifySnapshotContract(runSelfTest(outputPath))
+
+function runSelfTest(helperPath) {
+  const selfTest = spawnSync(helperPath, ['self-test'], { encoding: 'utf8' })
+  if (selfTest.signal) {
+    process.kill(process.pid, selfTest.signal)
+  }
+  if (selfTest.error) {
+    throw selfTest.error
+  }
+  if (selfTest.status !== 0) {
+    throw new Error(selfTest.stderr || 'Windows playback suppression helper self-test failed.')
+  }
+  return selfTest.stdout
+}
+
+function verifySnapshotContract(stdout) {
+  const snapshot = JSON.parse(stdout)
+  if (
+    snapshot.endpointId !== 'orca-test-endpoint' ||
+    snapshot.endpointTarget !== 'orca-test-endpoint' ||
+    snapshot.muted !== false
+  ) {
+    throw new Error('Windows playback suppression helper returned an invalid self-test snapshot.')
+  }
+}
 
 function findFrameworkCompiler(env) {
   const windowsDirectory = env.WINDIR ?? env.SystemRoot
