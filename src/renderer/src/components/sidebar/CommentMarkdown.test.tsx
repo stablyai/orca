@@ -3,6 +3,62 @@ import { describe, expect, it } from 'vitest'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
 
 describe('CommentMarkdown', () => {
+  it('marks compact headings so a parent can opt into block flow', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content={'## Walkthrough\n\nAdds verify:changed, which collects.'} />
+    )
+
+    expect(markup).toContain('comment-md-h comment-md-h2')
+    expect(markup).toContain('comment-md-p')
+    // Weight-only styling stays the compact default; block flow is opt-in.
+    expect(markup).toContain('font-bold')
+  })
+
+  it('does not fetch remote images unless a surface opts in', () => {
+    const badge = '![P2 Badge](https://img.shields.io/badge/P2-orange.png)'
+
+    const guarded = renderToStaticMarkup(<CommentMarkdown content={badge} />)
+    expect(guarded).not.toContain('<img')
+    expect(guarded).toContain('P2 Badge')
+
+    const optedIn = renderToStaticMarkup(<CommentMarkdown content={badge} allowRemoteImages />)
+    expect(optedIn).toContain('<img')
+    expect(optedIn).toContain('https://img.shields.io/badge/P2-orange.png')
+  })
+
+  it('honors the width/height a bot badge declares instead of its @3x intrinsic size', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        content='<img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/a.png">'
+        allowRemoteImages
+      />
+    )
+    expect(markup).toContain('width="115"')
+    expect(markup).toContain('height="28"')
+    // The markup supplies its own <a>/<picture>; wrapping orphans <source>.
+    expect(markup).not.toContain('<a')
+  })
+
+  it('keeps <picture> media queries so light/dark art still selects', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        content={
+          '<picture><source media="(prefers-color-scheme: dark)" srcset="https://x/d.png">' +
+          '<img alt="B" width="10" height="10" src="https://x/l.png"></picture>'
+        }
+        allowRemoteImages
+      />
+    )
+    expect(markup).toContain('media="(prefers-color-scheme: dark)"')
+  })
+
+  it('never renders non-http image sources even when opted in', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="![x](javascript:alert(1))" allowRemoteImages />
+    )
+    expect(markup).not.toContain('javascript:')
+  })
+
   it('autolinks same-repo GitHub issue references when repo context is provided', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown

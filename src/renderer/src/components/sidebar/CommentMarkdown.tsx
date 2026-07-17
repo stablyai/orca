@@ -163,6 +163,9 @@ const commentMarkdownSanitizeSchema = {
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
+    // Why: the default schema keeps only srcSet, so <picture> lost the media queries
+    // that pick its light/dark art and always fell through to the first <source>.
+    source: [...(defaultSchema.attributes?.source ?? []), 'media', 'type'],
     td: [...(defaultSchema.attributes?.td ?? []), 'align'],
     th: [...(defaultSchema.attributes?.th ?? []), 'align']
   },
@@ -185,6 +188,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   githubRepo?: GitHubRepoReference | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  /** Fetches remote <img> hosts on render, exposing the viewer's IP to them. */
+  allowRemoteImages?: boolean
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -199,20 +204,22 @@ const CommentMarkdown = React.memo(
       githubRepo,
       onLinkClick,
       allowFileUriLinks = false,
+      allowRemoteImages = false,
       ...rest
     },
     ref
   ) {
     const components = React.useMemo(() => {
-      if (!onLinkClick) {
-        return variant === 'document'
-          ? documentCommentMarkdownComponents
-          : compactCommentMarkdownComponents
+      if (variant === 'document') {
+        return onLinkClick
+          ? createDocumentCommentMarkdownComponents(onLinkClick)
+          : documentCommentMarkdownComponents
       }
-      return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick)
-        : createCompactCommentMarkdownComponents(onLinkClick)
-    }, [variant, onLinkClick])
+      if (!onLinkClick && !allowRemoteImages) {
+        return compactCommentMarkdownComponents
+      }
+      return createCompactCommentMarkdownComponents(onLinkClick, allowRemoteImages)
+    }, [variant, onLinkClick, allowRemoteImages])
     const activeRemarkPlugins = React.useMemo(
       () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
       [githubRepo]
