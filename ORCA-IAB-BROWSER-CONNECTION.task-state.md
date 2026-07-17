@@ -47,7 +47,7 @@
 - 07/17 패널 배치와 Orca 전용 제어는 확인했으나 Browser 플러그인의 직접 발견은 실패했습니다.
 
 ## Current Status
-- 독립 worktree의 직접 연결 구현, 실제 dev 검증, 독립 리뷰와 코드 Done gate를 완료했습니다. 사용자의 "끝까지 진행" 요청에 따라 커밋·통합·실사용 앱 반영 및 최종 QA를 새 완료 범위로 진행합니다.
+- 직접 연결 구현, 실제 dev 검증, 독립 리뷰, 전체 빌드와 로컬 커밋을 완료했습니다. 원격 저장소가 현재 GitHub 계정의 쓰기와 SSH 인증을 모두 거부해 deploy 절차가 중단됐으며, 실사용 앱 교체는 시작하지 않았습니다.
 
 ## Context Lens
 - Required: yes
@@ -134,13 +134,15 @@
 - [x] 별도 dev Orca의 새 세션 직접 연결 검증
 - [x] 독립 리뷰와 Done gate
 - [x] 전체 desktop/native 빌드 통과
-- [ ] 변경 커밋과 원격 백업
+- [x] 변경 로컬 커밋
+- [ ] 원격 백업 — GitHub 쓰기 권한 필요
 - [ ] 실사용 Orca 앱 반영과 최종 QA
 
 ## Risks / Blockers
-- macOS local Codex 직접 연결과 process-swap 이동은 완료됐고 현재 blocker는 없습니다.
+- macOS local Codex 직접 연결과 process-swap 이동에는 코드 blocker가 없습니다.
 - SSH 세션은 local pipe 대상에서 제외했습니다. Windows named pipe 경로는 구현했지만 이번 macOS 환경에서는 실행 검증하지 않았습니다.
 - 잘못되거나 분할된 JSON-RPC frame에 대한 추가 방어 테스트는 후속 hardening 후보이며 현재 macOS local 목표의 완료 차단 사항은 아닙니다.
+- 배포 blocker: HTTPS push는 현재 계정의 저장소 쓰기 권한 부족으로 403, SSH push는 등록된 public key가 없어 거부됐습니다.
 
 ## Verification
 - 명령/방법: 관련 테스트, 타입 검사, 별도 dev 런타임의 Browser 플러그인 직접 연결
@@ -152,7 +154,7 @@
 - 배포 없음이면 그 이유: 설치 앱 교체·커밋·병합은 이번 작업 계약 밖이며 별도 사용자 결정 사항
 
 ## Final Outcome
-- 직접 발견, 렌더러 교체 중 이동, 새 연결 재접속까지 구현과 실제 dev 검증 완료. 독립 리뷰 결과 blocker 0개, major 0개로 Done gate 통과.
+- 코드 Done gate와 로컬 커밋은 완료했습니다. 원격 백업 권한이 없어 배포 파이프라인과 실사용 앱 교체는 대기 중입니다.
 
 ## Independent Review
 - Contract met: yes
@@ -170,8 +172,8 @@
 - Evidence source paths / 근거 경로: 현재 작업 문서와 조사 후 확정할 코드·테스트
 - Verification / 검증: 공식 Browser 런타임 `iab` 발견, 같은 tab 객체의 `example.com` → `example.org` 이동과 새 connection 재접속 성공, 관련 테스트 99개·typecheck·lint·diff check 통과
 - Remaining risk / 남은 리스크: Windows와 SSH 원격 실행, protocol negative coverage는 이번 macOS local 완료 범위 밖
-- Resume next action / 재개 첫 행동: 필요 시 사용자 결정에 따라 커밋·병합·설치 앱 반영을 별도 작업으로 시작
+- Resume next action / 재개 첫 행동: stablyai/orca 쓰기 권한이 있는 GitHub 인증을 활성화한 뒤 push부터 재개
 
 ## Next Step
-- 다음 세션이 바로 실행할 첫 행동 1개: 사용자 요청이 있으면 커밋·병합·설치 앱 반영 범위를 확정
+- 다음 세션이 바로 실행할 첫 행동 1개: 권한 있는 GitHub 인증으로 해결 브랜치를 push
 - 이어 쓰면 안 되는 별도 작업: 기존 Shift+Enter 및 다른 Orca 기능 수정
