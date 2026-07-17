@@ -2682,6 +2682,9 @@ export type TerminalQuickCommandBase = {
   id: string
   label: string
   scope?: TerminalQuickCommandScope
+  /** Derived project commands carry explicit provenance because persisted
+   * personal ids are user-controlled and may use the reserved id prefix. */
+  origin?: 'orca-yaml'
 }
 
 export type TerminalCommandQuickCommand = TerminalQuickCommandBase & {

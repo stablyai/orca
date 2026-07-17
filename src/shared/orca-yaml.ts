@@ -105,41 +105,45 @@ function normalizeQuickCommands(value: unknown): OrcaQuickCommandTemplate[] {
     return []
   }
 
-  return value
-    .map((entry): OrcaQuickCommandTemplate | null => {
-      const record = asRecord(entry)
-      if (!record) {
-        return null
+  const commands: OrcaQuickCommandTemplate[] = []
+  for (const entry of value) {
+    // Why: orca.yaml is repo-authored input; the cap must bound normalization
+    // work and allocations, not merely truncate an already-built list.
+    if (commands.length >= MAX_QUICK_COMMANDS) {
+      break
+    }
+    const record = asRecord(entry)
+    if (!record) {
+      continue
+    }
+    const label = asTrimmedString(record.label)
+    if (!label) {
+      continue
+    }
+    if (record.action === 'agent-prompt') {
+      const agent = asTrimmedString(record.agent)
+      const prompt = typeof record.prompt === 'string' ? record.prompt.trimEnd() : ''
+      if (agent && prompt.trim()) {
+        commands.push({ action: 'agent-prompt', label, agent, prompt })
       }
-      const label = asTrimmedString(record.label)
-      if (!label) {
-        return null
-      }
-      if (record.action === 'agent-prompt') {
-        const agent = asTrimmedString(record.agent)
-        const prompt = typeof record.prompt === 'string' ? record.prompt.trimEnd() : ''
-        if (!agent || !prompt.trim()) {
-          return null
-        }
-        return { action: 'agent-prompt', label, agent, prompt }
-      }
-      const rawCommand = typeof record.command === 'string' ? record.command : ''
-      // Why: insert-only commands may end with an intentional cursor space, so
-      // strip only block-scalar newlines for them instead of a full trimEnd.
-      const command =
-        record.appendEnter === false ? rawCommand.replace(/[\r\n]+$/, '') : rawCommand.trimEnd()
-      if (!command.trim()) {
-        return null
-      }
-      return {
-        action: 'terminal-command',
-        label,
-        command,
-        ...(record.appendEnter === false ? { appendEnter: false } : {})
-      }
+      continue
+    }
+    const rawCommand = typeof record.command === 'string' ? record.command : ''
+    // Why: insert-only commands may end with an intentional cursor space, so
+    // strip only block-scalar newlines for them instead of a full trimEnd.
+    const command =
+      record.appendEnter === false ? rawCommand.replace(/[\r\n]+$/, '') : rawCommand.trimEnd()
+    if (!command.trim()) {
+      continue
+    }
+    commands.push({
+      action: 'terminal-command',
+      label,
+      command,
+      ...(record.appendEnter === false ? { appendEnter: false } : {})
     })
-    .filter((entry): entry is OrcaQuickCommandTemplate => entry !== null)
-    .slice(0, MAX_QUICK_COMMANDS)
+  }
+  return commands
 }
 
 type VmRecipeParseResult = {

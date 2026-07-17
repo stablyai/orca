@@ -6,6 +6,7 @@ import {
   collectProjectQuickCommandsForRepos,
   createProjectQuickCommandsSlice,
   omitProjectQuickCommandsForRepos,
+  selectProjectQuickCommandsForOpenMenu,
   selectProjectQuickCommandsForRepo
 } from './project-quick-commands'
 
@@ -53,6 +54,7 @@ describe('createProjectQuickCommandsSlice', () => {
       'repo-1': [
         {
           id: 'orca-yaml:dev-server',
+          origin: 'orca-yaml',
           label: 'Dev server',
           action: 'terminal-command',
           command: 'pnpm dev',
@@ -118,6 +120,32 @@ describe('createProjectQuickCommandsSlice', () => {
     })
     expect(subscriber).toHaveBeenCalledTimes(1)
     unsubscribe()
+  })
+
+  it('keeps closed-menu selectors stable across cache writes', () => {
+    const store = createTestStore()
+    const before = selectProjectQuickCommandsForOpenMenu(store.getState(), 'repo-1', false)
+
+    store.setState({
+      projectQuickCommandsByRepo: {
+        'repo-1': [
+          {
+            id: 'orca-yaml:build',
+            origin: 'orca-yaml',
+            label: 'Build',
+            command: 'make',
+            appendEnter: true,
+            scope: { type: 'repo', repoId: 'repo-1' }
+          }
+        ]
+      },
+      projectQuickCommandOwnerByRepo: { 'repo-1': 'local\0repo-1' }
+    })
+
+    expect(selectProjectQuickCommandsForOpenMenu(store.getState(), 'repo-1', false)).toBe(before)
+    expect(selectProjectQuickCommandsForOpenMenu(store.getState(), 'repo-1', true)).toBe(
+      store.getState().projectQuickCommandsByRepo['repo-1']
+    )
   })
 
   it('keeps the previous snapshot when a refresh fails', async () => {

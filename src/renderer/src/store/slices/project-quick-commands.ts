@@ -66,6 +66,16 @@ export function selectProjectQuickCommandsForRepo(
   return state.projectQuickCommandsByRepo[repoId]
 }
 
+export function selectProjectQuickCommandsForOpenMenu(
+  state: ProjectQuickCommandsCacheState,
+  repoId: string | null,
+  menuOpen: boolean
+): TerminalQuickCommand[] | undefined {
+  // Why: TerminalPane is expensive and always mounted; closed context menus
+  // must stay referentially stable across project-command cache writes.
+  return menuOpen && repoId !== null ? selectProjectQuickCommandsForRepo(state, repoId) : undefined
+}
+
 export function collectProjectQuickCommandsForRepos(
   state: ProjectQuickCommandsCacheState
 ): TerminalQuickCommand[] {

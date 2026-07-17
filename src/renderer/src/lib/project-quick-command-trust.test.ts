@@ -67,6 +67,7 @@ function okHooksResult(quickCommands: unknown) {
 
 const cachedProjectCommand: TerminalQuickCommand = {
   id: 'orca-yaml:dev-server',
+  origin: 'orca-yaml',
   label: 'Dev server',
   action: 'terminal-command',
   command: 'echo stale-cached',
@@ -82,9 +83,9 @@ describe('ensureProjectQuickCommandTrusted', () => {
     seedStore()
   })
 
-  it('passes personal commands through without any hooks read', async () => {
+  it('passes personal commands with reserved ids through without any hooks read', async () => {
     const personal: TerminalQuickCommand = {
-      id: 'quick-command-1',
+      id: 'orca-yaml:build',
       label: 'Build',
       command: 'make',
       appendEnter: true

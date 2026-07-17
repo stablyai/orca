@@ -452,9 +452,9 @@ export function useTerminalPaneContextMenu({
   }
 
   const onQuickCommand = (command: TerminalQuickCommand): void => {
-    // Why: pane resolution must happen before the async trust prompt — the
-    // context menu closes and the "menu pane" reference goes stale.
-    const pane = isTerminalAgentQuickCommand(command) ? null : resolveMenuPane()
+    // Why: resolve before async trust; the menu reference goes stale, and the
+    // freshly inspected command may have switched from agent to terminal.
+    const pane = resolveMenuPane()
     void (async () => {
       // Why: for project commands this returns the command re-projected from
       // the same orca.yaml read the trust prompt covered, not the cached copy.

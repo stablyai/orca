@@ -233,7 +233,7 @@ import {
 } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useRepoById } from '@/store/selectors'
-import { selectProjectQuickCommandsForRepo } from '@/store/slices/project-quick-commands'
+import { selectProjectQuickCommandsForOpenMenu } from '@/store/slices/project-quick-commands'
 import {
   isXtermHelperTextarea,
   releaseTerminalFocusForOutsidePointerDown,
@@ -897,18 +897,6 @@ function TerminalPane(
   const globalQuickCommands = validQuickCommands.filter(
     (command) => getTerminalQuickCommandScope(command).type === 'global'
   )
-  const cachedProjectQuickCommands = useAppStore((s) =>
-    quickCommandRepoId !== null
-      ? selectProjectQuickCommandsForRepo(s, quickCommandRepoId)
-      : undefined
-  )
-  const projectQuickCommands = cachedProjectQuickCommands ?? EMPTY_PROJECT_QUICK_COMMANDS
-  const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
-  useEffect(() => {
-    if (quickCommandRepoId !== null) {
-      void loadProjectQuickCommands(quickCommandRepoId)
-    }
-  }, [cachedProjectQuickCommands, quickCommandRepoId, loadProjectQuickCommands])
   const quickCommandGroupId =
     useAppStore(
       (s) =>
@@ -2583,8 +2571,21 @@ function TerminalPane(
     forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
-  // Why: a background refresh on open picks up orca.yaml edits (e.g. after a
-  // git pull) while the cached list renders without flicker.
+  const cachedProjectQuickCommands = useAppStore((s) =>
+    selectProjectQuickCommandsForOpenMenu(s, quickCommandRepoId, contextMenu.open)
+  )
+  const projectQuickCommands = (() => {
+    if (!cachedProjectQuickCommands || cachedProjectQuickCommands.length === 0) {
+      return EMPTY_PROJECT_QUICK_COMMANDS
+    }
+    // Why: personal settings win reserved-id collisions, matching the tab-bar
+    // menu and preventing duplicate rows in the terminal context menu.
+    const personalIds = new Set([...repoQuickCommands, ...globalQuickCommands].map((c) => c.id))
+    return cachedProjectQuickCommands.filter((command) => !personalIds.has(command.id))
+  })()
+  const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
+  // Why: refresh on open picks up orca.yaml edits without making closed panes
+  // subscribe to this cache or eagerly inspect hooks.
   useEffect(() => {
     if (contextMenu.open && quickCommandRepoId !== null) {
       void loadProjectQuickCommands(quickCommandRepoId, { refresh: true })
