@@ -370,6 +370,31 @@ branch refs/heads/feature/test
     ).toHaveLength(1)
   })
 
+  it('does not force-retry unrelated non-force remove failures', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree remove /repo-feature': {
+        error: new Error('git worktree remove failed'),
+        stderr: 'fatal: contains modified or untracked files, use --force to delete it'
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature')).rejects.toThrow(
+      'git worktree remove failed'
+    )
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
+    expect(getGitCalls()).not.toContain('git status --porcelain --untracked-files=all')
+  })
+
   it('rejects a locked worktree with stable app-owned copy before invoking remove', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {

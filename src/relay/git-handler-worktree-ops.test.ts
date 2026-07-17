@@ -271,6 +271,42 @@ describe('removeWorktreeOp', () => {
     )
   })
 
+  it('does not force-retry when the caller already forced SSH removal', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'worktree' && args[1] === 'remove') {
+        throw Object.assign(new Error('git worktree remove failed'), {
+          stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+        })
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature', force: true })
+    ).rejects.toThrow('git worktree remove failed')
+    expect(
+      git.mock.calls.filter(
+        ([args]) => args[0] === 'worktree' && args[1] === 'remove' && args.includes('--force')
+      )
+    ).toHaveLength(1)
+    expect(git).not.toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all'],
+      expect.any(String)
+    )
+  })
+
   it('preserves the branch (does not throw) when `branch -d` refuses an unmerged branch', async () => {
     let listCount = 0
     const git = vi.fn<GitExec>(async (args) => {
