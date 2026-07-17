@@ -7334,3 +7334,103 @@ describe('AgentHookServer closed-tab suppression bound', () => {
     expect(internals.closedAgentStatusTabIds.has(`closed-tab-${total - 1}`)).toBe(true)
   })
 })
+
+describe('AgentHookServer provider-session pane attribution', () => {
+  it('re-attributes a daemon-hosted claude hook post to the spawn-pinned pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const sessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+      server.registerProviderSessionPane(sessionId, GOOD_PANE, 'pty-1')
+
+      // Daemon workers inherit the daemon's stale pane key (PANE here), but
+      // the payload's session_id names the pinned session.
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'daemon-hosted turn',
+            session_id: sessionId
+          })
+        )
+      })
+
+      expect(response.status).toBe(204)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: GOOD_PANE,
+          state: 'working',
+          prompt: 'daemon-hosted turn'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('leaves posts with unknown session ids on their posted pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      server.registerProviderSessionPane(
+        'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        GOOD_PANE,
+        'pty-1'
+      )
+
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'unpinned session',
+            session_id: 'ffffffff-0000-4000-8000-000000000000'
+          })
+        )
+      })
+
+      expect(response.status).toBe(204)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, prompt: 'unpinned session' })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('drops a session binding when its spawning PTY exits', () => {
+    const server = new AgentHookServer()
+    const sessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    server.registerProviderSessionPane(sessionId, GOOD_PANE, 'pty-1')
+    server.clearProviderSessionPanesForPty('pty-1')
+    const internals = server as unknown as {
+      providerSessionPanes: Map<string, { paneKey: string; ptyId: string }>
+    }
+    expect(internals.providerSessionPanes.size).toBe(0)
+  })
+
+  it('bounds the provider-session pane registry with FIFO eviction', () => {
+    const server = new AgentHookServer()
+    const internals = server as unknown as {
+      providerSessionPanes: Map<string, { paneKey: string; ptyId: string }>
+    }
+    const total = 512 + 100
+    for (let i = 0; i < total; i += 1) {
+      server.registerProviderSessionPane(`session-${i}`, GOOD_PANE, `pty-${i}`)
+    }
+    expect(internals.providerSessionPanes.size).toBe(512)
+    expect(internals.providerSessionPanes.has('session-0')).toBe(false)
+    expect(internals.providerSessionPanes.has(`session-${total - 1}`)).toBe(true)
+  })
+})

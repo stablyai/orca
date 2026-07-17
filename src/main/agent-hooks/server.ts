@@ -326,6 +326,30 @@ function equivalentParsedAgentStatusPayload(
   )
 }
 
+// Why: one binding per spawn-pinned Claude session; generous headroom over
+// any realistic live-session count while bounding a leaky caller.
+const MAX_PROVIDER_SESSION_PANES = 512
+
+// Why: hook bodies carry the provider payload as a JSON string (or object on
+// some relays); session_id inside it is the only daemon-proof identity a
+// Claude hook event carries. Parse defensively — attribution must fail open.
+function readHookBodyPayloadSessionId(record: Record<string, unknown>): string | null {
+  const rawPayload = record.payload
+  let payload: unknown = rawPayload
+  if (typeof rawPayload === 'string') {
+    try {
+      payload = JSON.parse(rawPayload)
+    } catch {
+      return null
+    }
+  }
+  if (typeof payload !== 'object' || payload === null) {
+    return null
+  }
+  const sessionId = (payload as Record<string, unknown>).session_id
+  return typeof sessionId === 'string' && sessionId.trim().length > 0 ? sessionId.trim() : null
+}
+
 function trackEmptyPaneKeyHook(body: unknown): void {
   if (typeof body !== 'object' || body === null) {
     return
@@ -514,6 +538,12 @@ export class AgentHookServer {
   // evidence of live agent work in this main-process runtime.
   private runtimeObservedStatusPaneKeys = new Set<string>()
   private legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
+  // Why: Claude Code >=2.1.206 runs sessions in a shared daemon whose hook
+  // commands inherit the daemon's stale ORCA_PANE_KEY. Spawn-time pinning
+  // (pinClaudeSessionIdForPaneAttribution) records the true pane per session
+  // id here; incoming hook posts matching a pinned session are re-attributed
+  // to the recorded pane regardless of the env-derived key they carry.
+  private providerSessionPanes = new Map<string, { paneKey: string; ptyId: string }>()
   private paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
   // Why: full path to the on-disk last-status cache. Set in start() from
   // userDataPath. Null when the server runs without a userDataPath (e.g.
@@ -1314,6 +1344,49 @@ export class AgentHookServer {
     return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
   }
 
+  registerProviderSessionPane(sessionId: string, paneKey: string, ptyId: string): void {
+    if (!sessionId || !isValidPaneKey(paneKey)) {
+      return
+    }
+    // Why: bounded — one entry per spawn-pinned session; re-registration on
+    // re-attach moves the session to its current pane.
+    this.providerSessionPanes.set(sessionId, { paneKey, ptyId })
+    while (this.providerSessionPanes.size > MAX_PROVIDER_SESSION_PANES) {
+      const oldest = this.providerSessionPanes.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.providerSessionPanes.delete(oldest)
+    }
+  }
+
+  clearProviderSessionPanesForPty(ptyId: string): void {
+    for (const [sessionId, entry] of this.providerSessionPanes) {
+      if (entry.ptyId === ptyId) {
+        this.providerSessionPanes.delete(sessionId)
+      }
+    }
+  }
+
+  private normalizeHookBodyProviderSessionPane(body: unknown): unknown {
+    if (this.providerSessionPanes.size === 0 || typeof body !== 'object' || body === null) {
+      return body
+    }
+    const record = body as Record<string, unknown>
+    const sessionId = readHookBodyPayloadSessionId(record)
+    if (!sessionId) {
+      return body
+    }
+    const pinned = this.providerSessionPanes.get(sessionId)
+    if (!pinned || record.paneKey === pinned.paneKey) {
+      return body
+    }
+    // Why: daemon-hosted Claude workers post the daemon's env-derived pane
+    // key; the spawn-time session binding names the pane that actually owns
+    // this session, so trust it over the posted key.
+    return { ...record, paneKey: pinned.paneKey, tabId: parsePaneKey(pinned.paneKey)?.tabId }
+  }
+
   private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
     if (typeof body !== 'object' || body === null) {
       return body
@@ -1605,7 +1678,8 @@ export class AgentHookServer {
         }
 
         trackEmptyPaneKeyHook(body)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
+        const sessionAttributedBody = this.normalizeHookBodyProviderSessionPane(body)
+        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(sessionAttributedBody)
         const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
         if (normalized && !this.shouldSuppressClosedTabStatus(normalized.paneKey)) {
           const enriched = this.applyNormalizedStatus(normalized)
