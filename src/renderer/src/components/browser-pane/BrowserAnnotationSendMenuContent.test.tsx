@@ -102,4 +102,19 @@ describe('BrowserAnnotationSendMenuContent', () => {
     expect(browserPaneSource.match(/<BrowserAnnotationSendMenuContent\b/g)).toHaveLength(2)
     expect(browserPaneSource).not.toContain('<QuickLaunchAgentMenuItems')
   })
+
+  it('clears live browser annotations when the prompt is delivered to an agent', () => {
+    const browserPaneSource = readFileSync(
+      fileURLToPath(new URL('./BrowserPane.tsx', import.meta.url)),
+      'utf8'
+    )
+    const handlerStart = browserPaneSource.indexOf('const handleBrowserAnnotationsSentToAgent')
+    const handlerEnd = browserPaneSource.indexOf('const handleClearBrowserAnnotations')
+    expect(handlerStart).toBeGreaterThanOrEqual(0)
+    expect(handlerEnd).toBeGreaterThan(handlerStart)
+    const handler = browserPaneSource.slice(handlerStart, handlerEnd)
+    expect(handler).toContain('applyBrowserAnnotationsDeliveredToAgent')
+    expect(handler).toContain('clearBrowserPageAnnotations')
+    expect(handler).toContain('recordFeatureInteraction')
+  })
 })
