@@ -25,12 +25,16 @@ describe('buildSpriteAnimationCss', () => {
     expect(animationCss).toBe('pet-kf 6.6s step-end infinite')
   })
 
-  it('falls back to uniform steps() when durations are absent or invalid', () => {
+  it('falls back to uniform steps() when durations are absent, invalid, or corrupt', () => {
     for (const frameDurationsMs of [
       undefined,
       [100, 100],
       [100, -1, 100],
-      [100, Number.NaN, 100]
+      [100, Number.NaN, 100],
+      // Untrusted persisted data: non-arrays with a matching `length` must not
+      // reach .every and throw.
+      { length: 3 } as unknown as number[],
+      'aaa' as unknown as number[]
     ]) {
       const { keyframesCss, animationCss } = buildSpriteAnimationCss({
         ...BASE,

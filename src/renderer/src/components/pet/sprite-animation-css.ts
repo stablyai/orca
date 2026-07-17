@@ -57,8 +57,11 @@ function validFrameDurations(
   frameDurationsMs: number[] | undefined,
   frames: number
 ): number[] | null {
+  // Why: Array.isArray, not a truthiness check — persisted/RPC-synced sprites
+  // are untrusted, so a corrupt non-array value (e.g. { length: 6 }) must fail
+  // here rather than throw on .length/.every during render.
   if (
-    frameDurationsMs &&
+    Array.isArray(frameDurationsMs) &&
     frameDurationsMs.length === frames &&
     frameDurationsMs.every((ms) => Number.isFinite(ms) && ms > 0)
   ) {
