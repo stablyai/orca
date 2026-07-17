@@ -52,7 +52,8 @@ describe('repos folder pickers', () => {
     addRepo: vi.fn(),
     removeProject: vi.fn(),
     getRepo: vi.fn(),
-    updateRepo: vi.fn()
+    updateRepo: vi.fn(),
+    getSettings: vi.fn().mockReturnValue({})
   }
 
   const callPickFolders = (): Promise<string[]> => {
