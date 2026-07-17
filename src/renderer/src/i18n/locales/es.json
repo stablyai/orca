@@ -5496,7 +5496,9 @@
           "5cb5475664": "Confirmar antes de cerrar pestañas fijadas",
           "36b2a5dc6d": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
           "projectRuntime": "Runtime del proyecto",
-          "projectRuntimeDescription": "Runtime predeterminado para proyectos locales de Windows que no lo sobrescriben."
+          "projectRuntimeDescription": "Runtime predeterminado para proyectos locales de Windows que no lo sobrescriben.",
+          "globalHotkey": "Global hotkey",
+          "globalHotkeyDescription": "Show or hide the Orca window from anywhere with a system-wide keyboard shortcut."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "¡Gracias por el apoyo!",
@@ -7755,7 +7757,9 @@
             "d2d2d929c0": "Corrector ortográfico de Rich Markdown",
             "4497e2e2bb": "Muestra subrayados y sugerencias ortográficas del navegador al editar Rich Markdown.",
             "e61157e926": "Ajuste de línea en el editor",
-            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal."
+            "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
+            "globalHotkey": "Global hotkey",
+            "globalHotkeyDescription": "System-wide keyboard shortcut to show or hide the Orca window."
           }
         },
         "git": {
@@ -9160,6 +9164,14 @@
           "availability": "Disponible en",
           "testFlight": "TestFlight",
           "androidApk": "APK de Android"
+        },
+        "GlobalHotkeySetting": {
+          "recording": "Press a key combination that includes {{value0}}. Escape cancels.",
+          "pressKeys": "Press keys…",
+          "clickToRecord": "Click to record",
+          "disable": "Disable global hotkey",
+          "description": "Press this key combination anywhere to show or hide the Orca window.",
+          "label": "Global hotkey"
         }
       },
       "right": {

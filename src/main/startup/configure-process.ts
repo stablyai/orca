@@ -296,6 +296,36 @@ export function installDevParentSignalQuit(isDev: boolean): void {
   process.once('SIGTERM', onSignal)
 }
 
+function isLinuxWaylandSession(): boolean {
+  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
+  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
+  const isLinuxX11Override =
+    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
+  return (
+    process.platform === 'linux' &&
+    !isLinuxX11Override &&
+    (Boolean(process.env.WAYLAND_DISPLAY) ||
+      process.env.XDG_SESSION_TYPE === 'wayland' ||
+      ozonePlatformHint === 'wayland' ||
+      ozonePlatform === 'wayland')
+  )
+}
+
+export function enableWaylandGlobalShortcutsPortal(): void {
+  if (!isLinuxWaylandSession()) {
+    return
+  }
+
+  const existingFeatures = app.commandLine.getSwitchValue('enable-features')
+  const features = existingFeatures ? existingFeatures.split(',') : []
+  if (!features.includes('GlobalShortcutsPortal')) {
+    // Why: Electron's globalShortcut API requires the desktop portal on
+    // Wayland; without it, a configured hotkey silently never registers.
+    features.push('GlobalShortcutsPortal')
+  }
+  app.commandLine.appendSwitch('enable-features', features.join(','))
+}
+
 export function enableMainProcessGpuFeatures(): void {
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
     // Why: Ubuntu/Xvfb runners can fail Electron startup with
@@ -313,18 +343,8 @@ export function enableMainProcessGpuFeatures(): void {
   // 128 covers real layouts while keeping a bound so context leaks surface.
   app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
 
-  const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
-  const ozonePlatformHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? '').toLowerCase()
-  const isLinuxX11Override =
-    ozonePlatform === 'x11' || (ozonePlatform === '' && ozonePlatformHint === 'x11')
-  const isLinuxWaylandSession =
-    process.platform === 'linux' &&
-    !isLinuxX11Override &&
-    (Boolean(process.env.WAYLAND_DISPLAY) ||
-      process.env.XDG_SESSION_TYPE === 'wayland' ||
-      ozonePlatformHint === 'wayland' ||
-      ozonePlatform === 'wayland')
-  if (isLinuxWaylandSession) {
+  const linuxWaylandSession = isLinuxWaylandSession()
+  if (linuxWaylandSession) {
     // Why: #5319 reproduces when Wayland loses the eager GPU channel. Keep
     // acceleration available, but drop the GPU sandbox and let Chromium open
     // the GPU channel lazily on this compositor path.
@@ -336,7 +356,7 @@ export function enableMainProcessGpuFeatures(): void {
     // Why: mirror VS Code's conservative Electron GPU-channel startup flags
     // instead of opting into Vulkan/SkiaGraphite/unsafe WebGPU globally.
     // Terminal acceleration is controlled by xterm WebGL in the renderer.
-    ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+    ...(linuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     existingFeatures
   ]
     .filter(Boolean)

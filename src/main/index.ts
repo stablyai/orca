@@ -61,6 +61,7 @@ import {
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
   enableMainProcessGpuFeatures,
+  enableWaylandGlobalShortcutsPortal,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
   installDevParentWatchdog,
@@ -128,6 +129,7 @@ import {
 } from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
+import { GlobalHotkeyManager } from './global-hotkey/global-hotkey-manager'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import {
@@ -249,6 +251,7 @@ const recoveryReloadInFlight = createWebContentsTimedFlag()
 // Why: a tray/menu-bar "Settings…" click can precede the renderer attaching
 // its ui:openSettings listener; the renderer pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
+let globalHotkeyManager: GlobalHotkeyManager | null = null
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
@@ -659,6 +662,9 @@ if (hasSingleInstanceLock) {
     platform: process.platform
   })
   configureElectronNetworkCompatibility()
+  if (!isServeMode) {
+    enableWaylandGlobalShortcutsPortal()
+  }
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
   if (!gpuFallbackActiveThisLaunch) {
@@ -1803,6 +1809,18 @@ app.whenReady().then(async () => {
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
+  // Why: register the global show/hide hotkey early so it's available as soon
+  // as the app launches, even before the main window finishes loading. Serve
+  // mode is headless (SSH/web-client host) and must not grab OS-level keys.
+  if (!isServeMode) {
+    globalHotkeyManager = new GlobalHotkeyManager({
+      store,
+      getMainWindow: () => mainWindow,
+      openMainWindow: () => openMainWindow(),
+      warn: console.warn
+    })
+    globalHotkeyManager.start()
+  }
   // Why: disk-hydrated status rows are UI continuity only. The service starts
   // from an empty snapshot; only hook events observed in this runtime can keep
   // the local computer awake.
@@ -2401,6 +2419,9 @@ app.on('will-quit', (e) => {
   // Why: before-quit can still be aborted by renderer beforeunload; wait until
   // the committed quit path before removing the Windows notification icon.
   destroySystemTray()
+  // Why: unregister the global hotkey on quit to avoid leaked OS-level registrations.
+  globalHotkeyManager?.stop()
+  globalHotkeyManager = null
   // Why: stats.flush() must run before killAllPty() so it can read the
   // live agent state and emit synthetic agent_stop events for agents that
   // are still running. killAllPty() does not call runtime.onPtyExit(),

@@ -5481,7 +5481,9 @@
           "5cb5475664": "고정된 탭을 닫기 전에 확인",
           "36b2a5dc6d": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
           "projectRuntime": "프로젝트 런타임",
-          "projectRuntimeDescription": "별도로 재정의하지 않은 로컬 Windows 프로젝트의 기본 런타임입니다."
+          "projectRuntimeDescription": "별도로 재정의하지 않은 로컬 Windows 프로젝트의 기본 런타임입니다.",
+          "globalHotkey": "Global hotkey",
+          "globalHotkeyDescription": "Show or hide the Orca window from anywhere with a system-wide keyboard shortcut."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "지원해 주셔서 감사합니다!",
@@ -7740,7 +7742,9 @@
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "편집기 자동 줄 바꿈",
-            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
+            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다.",
+            "globalHotkey": "Global hotkey",
+            "globalHotkeyDescription": "System-wide keyboard shortcut to show or hide the Orca window."
           }
         },
         "git": {
@@ -9160,6 +9164,14 @@
           "availability": "이용 가능:",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "GlobalHotkeySetting": {
+          "recording": "Press a key combination that includes {{value0}}. Escape cancels.",
+          "pressKeys": "Press keys…",
+          "clickToRecord": "Click to record",
+          "disable": "Disable global hotkey",
+          "description": "Press this key combination anywhere to show or hide the Orca window.",
+          "label": "Global hotkey"
         }
       },
       "right": {

@@ -680,6 +680,19 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
+  it('defaults globalHotkey to disabled and sanitizes updates', async () => {
+    const store = await createStore()
+    // Why: the global hotkey is opt-in; a non-empty default would grab an
+    // OS-wide chord for every install.
+    expect(store.getSettings().globalHotkey).toBe('')
+    store.updateSettings({ globalHotkey: '  Alt+Space  ' })
+    expect(store.getSettings().globalHotkey).toBe('Alt+Space')
+    store.updateSettings({ globalHotkey: 42 as unknown as string })
+    expect(store.getSettings().globalHotkey).toBe('')
+    store.updateSettings({ globalHotkey: 'X'.repeat(200) })
+    expect(store.getSettings().globalHotkey).toHaveLength(64)
+  })
+
   it('persists minimizeToTrayOnClose true/false round-trip', async () => {
     const store = await createStore()
     store.updateSettings({ minimizeToTrayOnClose: true })

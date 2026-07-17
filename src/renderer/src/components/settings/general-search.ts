@@ -3,6 +3,7 @@ import { getGeneralEditorSearchEntries } from './general-editor-search'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 
@@ -132,7 +133,36 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
       ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
     ]
-  }
+  },
+  // Why: OS-global hotkeys only exist in the desktop app; hiding the entry on
+  // web clients keeps search from rendering an orphaned Navigation section.
+  ...(isWebClientLocation()
+    ? []
+    : [
+        {
+          title: translate('auto.components.settings.general.search.globalHotkey', 'Global hotkey'),
+          description: translate(
+            'auto.components.settings.general.search.globalHotkeyDescription',
+            'System-wide keyboard shortcut to show or hide the Orca window.'
+          ),
+          keywords: [
+            ...translateSearchKeyword('auto.components.settings.general.search.hotkey', 'hotkey'),
+            ...translateSearchKeyword(
+              'auto.components.settings.general.search.globalShortcut',
+              'global shortcut'
+            ),
+            ...translateSearchKeyword(
+              'auto.components.settings.general.search.showHide',
+              'show window'
+            ),
+            ...translateSearchKeyword('auto.components.settings.general.search.toggle', 'toggle'),
+            ...translateSearchKeyword(
+              'auto.components.settings.general.search.spotlight',
+              'spotlight'
+            )
+          ]
+        }
+      ])
 ])
 
 export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [

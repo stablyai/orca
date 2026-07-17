@@ -5519,7 +5519,9 @@
           "5cb5475664": "Confirm before closing pinned tabs",
           "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it.",
+          "globalHotkey": "Global hotkey",
+          "globalHotkeyDescription": "Show or hide the Orca window from anywhere with a system-wide keyboard shortcut."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -7815,7 +7817,9 @@
             "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
             "e61157e926": "Editor Word Wrap",
-            "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling."
+            "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
+            "globalHotkey": "Global hotkey",
+            "globalHotkeyDescription": "System-wide keyboard shortcut to show or hide the Orca window."
           }
         },
         "git": {
@@ -9183,6 +9187,14 @@
           "availability": "Available on",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "GlobalHotkeySetting": {
+          "recording": "Press a key combination that includes {{value0}}. Escape cancels.",
+          "pressKeys": "Press keys…",
+          "clickToRecord": "Click to record",
+          "disable": "Disable global hotkey",
+          "description": "Press this key combination anywhere to show or hide the Orca window.",
+          "label": "Global hotkey"
         }
       },
       "right": {

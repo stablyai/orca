@@ -2711,6 +2711,10 @@ export type GlobalSettings = {
   /** Last explicit native-chat model and model-scoped option selections. Live
    * panes still require an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
+  /** System-wide hotkey that shows/hides the Orca window, in Electron
+   *  accelerator format (e.g. "Alt+Space"). Empty or unset means disabled;
+   *  the feature is opt-in from Settings → General. */
+  globalHotkey?: string
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */

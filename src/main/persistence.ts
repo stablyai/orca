@@ -5271,6 +5271,12 @@ export class Store {
     if ('showMenuBarIcon' in updates) {
       sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
     }
+    if ('globalHotkey' in updates) {
+      // Why: sanitize here (not the IPC edge) so mobile/web RPC writes are
+      // covered too; only a bounded string may reach accelerator registration.
+      sanitizedUpdates.globalHotkey =
+        typeof updates.globalHotkey === 'string' ? updates.globalHotkey.trim().slice(0, 64) : ''
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
