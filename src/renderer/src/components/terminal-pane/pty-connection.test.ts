@@ -17442,6 +17442,11 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-replaced-codex')
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
+    // Why: the process-cadence poll interval carries ±10% Math.random jitter, so
+    // pin it to nominal cadence — otherwise the second null-foreground sample can
+    // land in the first advance window, confirming exit before the replacement
+    // hook owner is set and racing the very veto this test asserts.
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
     getForegroundProcess.mockResolvedValue('codex')
     const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -17499,6 +17504,7 @@ describe('connectPanePty', () => {
       RESET_TERMINAL_CURSOR_STYLE,
       expect.any(Function)
     )
+    randomSpy.mockRestore()
   })
 
   it('preserves replacement-agent title side effects through the process replacement veto', async () => {
