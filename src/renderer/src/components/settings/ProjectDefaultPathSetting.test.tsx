@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectDefaultPathSetting } from './ProjectDefaultPathSetting'
 import type { GlobalSettings } from '../../../../shared/types'
 
@@ -12,8 +12,18 @@ function settingsWith(projectDefaultPath?: string): GlobalSettings {
   return { projectDefaultPath } as unknown as GlobalSettings
 }
 
+beforeEach(() => {
+  // The component reads window.api.platform.get() to pick a platform-aware
+  // placeholder; stub the minimal surface it touches.
+  ;(window as unknown as { api: unknown }).api = {
+    platform: { get: () => ({ platform: 'darwin', osRelease: '', displayServer: null }) },
+    repos: { pickFolder: vi.fn() }
+  }
+})
+
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
 })
 
 describe('ProjectDefaultPathSetting', () => {

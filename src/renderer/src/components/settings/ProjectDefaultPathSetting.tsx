@@ -60,6 +60,10 @@ export function ProjectDefaultPathSetting({
     'auto.components.settings.ProjectDefaultPathSetting.description',
     'Where the folder pickers for adding or cloning a project open. Leave empty to use the last-used location.'
   )
+  // Why: show a path example that matches the user's OS so the placeholder reads
+  // naturally on Windows as well as macOS/Linux.
+  const placeholder =
+    window.api.platform.get().platform === 'win32' ? 'C:\\Users\\you\\dev' : '/Users/you/dev'
 
   return (
     <SearchableSetting
@@ -73,7 +77,7 @@ export function ProjectDefaultPathSetting({
         <Input
           id={inputId}
           value={draft}
-          placeholder="/Users/you/dev"
+          placeholder={placeholder}
           onChange={(e) => setDraftValue(e.target.value)}
           onBlur={() => commit(draftRef.current)}
           onKeyDown={(e) => {
@@ -87,7 +91,7 @@ export function ProjectDefaultPathSetting({
           variant="outline"
           size="icon"
           aria-label={translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e',
+            'auto.components.settings.ProjectDefaultPathSetting.browse',
             'Browse'
           )}
           onClick={() => void handleBrowse()}
