@@ -30,12 +30,20 @@ export const CODEX_PET_ANIMATIONS: Record<string, SpriteAnimation> = {
   review: { row: 8, frames: 6, frameDurationsMs: appStateDurations(6, 150, 280) }
 }
 
-// Codex bakes per-frame durations by default. A bundle that pins an explicit
-// `fps` wants uniform pacing at that rate instead, so it gets the same layout
-// without durations — SpriteFrame prefers durations over fps when both exist.
-export const CODEX_PET_ANIMATIONS_UNTIMED: Record<string, SpriteAnimation> = Object.fromEntries(
-  Object.entries(CODEX_PET_ANIMATIONS).map(([name, { row, frames }]) => [name, { row, frames }])
-)
+/** The Codex row layout paced uniformly at `fps` (each frame held 1000/fps ms).
+ *  A bundle that pins an explicit fps gets its pacing baked as durations, so the
+ *  fps is honored (SpriteFrame prefers durations over the sheet fps) and the
+ *  sprite carries durations — which keeps it distinct from the no-durations
+ *  legacy fingerprint below, so the render-time upgrade never retimes it. */
+export function codexAnimationsAtUniformFps(fps: number): Record<string, SpriteAnimation> {
+  const frameMs = 1000 / fps
+  return Object.fromEntries(
+    Object.entries(CODEX_PET_ANIMATIONS).map(([name, { row, frames }]) => [
+      name,
+      { row, frames, frameDurationsMs: Array.from({ length: frames }, () => frameMs) }
+    ])
+  )
+}
 
 export type CustomPetSprite = NonNullable<CustomPet['sprite']>
 
@@ -68,8 +76,11 @@ function isLegacyCodexSprite(sprite: CustomPetSprite): boolean {
   return names.every((name) => {
     const anim = animations[name]
     const preset = CODEX_PET_ANIMATIONS[name]
+    // Why: `anim` is untrusted persisted data — guard it so a corrupted entry
+    // (e.g. a null value) is a non-match rather than a render-time throw.
     return (
       !!preset &&
+      !!anim &&
       anim.row === preset.row &&
       anim.frames === preset.frames &&
       anim.frameDurationsMs === undefined

@@ -100,4 +100,12 @@ describe('applyCodexSpriteTimingDefaults', () => {
     const sprite = { ...legacyCodexSprite(), columns: CODEX_PET_DEFAULT_COLUMNS + 2 }
     expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
   })
+
+  it('does not throw on a corrupted animation entry that matches the outer fingerprint', () => {
+    const sprite = legacyCodexSprite()
+    // Persisted data is untrusted: a null value under a matching key must be a
+    // non-match, not a crash.
+    sprite.animations = { ...sprite.animations, idle: null as never }
+    expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
+  })
 })
