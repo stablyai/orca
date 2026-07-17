@@ -1496,7 +1496,7 @@ function buildMobileBrowserTab(
     // back through ?? would resurrect a stale workspace-level error.
     loadError: activePage ? activePage.loadError : workspace.loadError,
     certificateFailure: activePage
-      ? (state.browserCertificateFailuresByPageId[activePage.id] ?? null)
+      ? (state.browserCertificateFailuresByPageId?.[activePage.id] ?? null)
       : null,
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,
