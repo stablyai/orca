@@ -4,9 +4,9 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
-  type ActivateAndRevealResult,
-  type WorktreeStartupPayload
+  type ActivateAndRevealResult
 } from '@/lib/worktree-activation'
+import { buildStartupOpt } from '@/lib/worktree-startup-payload'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -25,6 +25,10 @@ import type {
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  hydrateServicesAfterCreate,
+  subscribeServiceProvisionEvents
+} from '@/lib/worktree-service-provisioning-flow'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 type ContinueBackgroundWorktreeCreationOptions = {
@@ -33,31 +37,6 @@ type ContinueBackgroundWorktreeCreationOptions = {
 
 // Why: mirrors the startup-opt the composer used to build inline. The renderer
 // only seeds the first terminal when the backend did not already spawn it.
-function buildStartupOpt(
-  request: WorktreeCreationRequest,
-  backendSpawned: boolean
-): WorktreeStartupPayload | undefined {
-  const plan = request.startupPlan
-  if (!plan || backendSpawned) {
-    return undefined
-  }
-  return {
-    command: plan.launchCommand,
-    ...(plan.env ? { env: plan.env } : {}),
-    launchConfig: plan.launchConfig,
-    ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
-    ...(request.agent ? { launchAgent: request.agent } : {}),
-    ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
-      : {}),
-    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
-  }
-}
-
 function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
   if (request.worktreeCreateProgressMode) {
     return request.worktreeCreateProgressMode === 'indeterminate'
@@ -136,23 +115,8 @@ async function executeWorktreeCreation(
     return
   }
 
-  // Why: stream service provisioning output onto the same pending-creation
-  // surface as git progress, correlated by creationId (== serviceProvisionId).
   const unsubscribeServiceEvents = preparedRequest.provisionServices
-    ? window.api.worktreeServices.onProvisionEvent?.((event) => {
-        if (event.provisionId !== creationId) {
-          return
-        }
-        const store = useAppStore.getState()
-        const pending = store.pendingWorktreeCreations[creationId]
-        if (!pending) {
-          return
-        }
-        store.updatePendingWorktreeCreation(creationId, {
-          phase: 'provisioning-services',
-          provisioningLog: ((pending.provisioningLog ?? '') + event.chunk).slice(-12_000)
-        })
-      })
+    ? subscribeServiceProvisionEvents(creationId)
     : undefined
 
   let result: CreateWorktreeResult
@@ -221,15 +185,8 @@ async function executeWorktreeCreation(
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     return
   }
-  // Why: refresh the worktreeId→env map so the new worktree's terminals get
-  // their service env, and the sidebar badge reflects provisioning status.
   if (preparedRequest.provisionServices) {
-    // Why: hydration failure must not derail the rest of post-create wiring
-    // (terminals, agent startup) for a worktree that was created successfully.
-    await useAppStore
-      .getState()
-      .hydrateWorktreeServices()
-      .catch(() => {})
+    await hydrateServicesAfterCreate()
   }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
