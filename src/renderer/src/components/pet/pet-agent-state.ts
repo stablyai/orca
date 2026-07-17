@@ -12,10 +12,8 @@ export type PetAnimationName =
 
 export type PetDragAnimation = 'running-right' | 'running-left' | null
 
-// Why: direction tracks horizontal travel only. `accepted` (advance the
-// baseline) fires solely on a >=4px horizontal move, so sub-threshold jitter
-// and vertical drags keep the last direction without resetting the baseline —
-// otherwise a slow diagonal drag would reset before ever crossing 4px.
+// Why: direction tracks horizontal travel only; `accepted` (advance the baseline)
+// fires only on a >=4px horizontal move so slow diagonal drags still accumulate.
 export function nextPetDragAnimation(
   current: PetDragAnimation,
   deltaX: number

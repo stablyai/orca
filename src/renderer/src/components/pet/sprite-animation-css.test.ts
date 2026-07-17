@@ -31,6 +31,9 @@ describe('buildSpriteAnimationCss', () => {
       [100, 100],
       [100, -1, 100],
       [100, Number.NaN, 100],
+      // Above the importer's 60s cap: corrupt/hand-edited persisted holds must
+      // not freeze the overlay.
+      [100, 70_000, 100],
       // Untrusted persisted data: non-arrays with a matching `length` must not
       // reach .every and throw.
       { length: 3 } as unknown as number[],

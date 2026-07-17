@@ -75,8 +75,8 @@ function spriteDiv(container: HTMLElement): HTMLDivElement {
   return div
 }
 
-// The @keyframes name is `pet-<useId>-<animationName>-<dragGeneration>`: the
-// animation name keeps a switched-to row from reusing the prior timeline, and
+// The @keyframes name is `pet-<useId>-<row>-<frames>-<dragGeneration>`: the
+// resolved track keeps a switched-to row from reusing the prior timeline, and
 // the generation suffix restarts a same-row grab from frame 0.
 function animationName(container: HTMLElement): string {
   return spriteDiv(container).style.animation.split(' ')[0]
@@ -118,7 +118,6 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
     // it renders as step-end rather than steps()).
     expect(spriteDiv(container).style.animationPlayState).toBe('running')
     expect(spriteDiv(container).style.animation).toContain('step-end')
-    expect(animationName(container)).toContain('idle')
     const idleName = animationName(container)
 
     // Grab and hold still: mint a fresh restart (frame 0) and freeze there while
@@ -139,18 +138,35 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
 
     // Drag right past the 4px deadzone: switch to the running-right row (row 1,
     // 8 frames, no durations → steps(8)) and resume animating. The keyframes
-    // name changes with the row, so it starts from frame 0 rather than reusing
-    // the idle timeline.
+    // name changes with the resolved row, so it starts from frame 0 rather than
+    // reusing the idle timeline.
     firePointer(wrapper, 'pointermove', 70, 80)
     expect(spriteDiv(container).style.animationPlayState).toBe('running')
     expect(spriteDiv(container).style.animation).toContain('steps(8)')
-    expect(animationName(container)).toContain('running-right')
     expect(animationName(container)).not.toBe(heldName)
 
-    // Release restores the live agent state (idle) and resumes animating.
+    // Release returns to the idle row (step-end) and resumes animating. Same row
+    // and generation as the grab-hold, so it's the held-idle identity again.
     firePointer(wrapper, 'pointerup', 70, 80)
     expect(spriteDiv(container).style.animationPlayState).toBe('running')
     expect(spriteDiv(container).style.animation).toContain('step-end')
-    expect(animationName(container)).toContain('idle')
+    expect(animationName(container)).toBe(heldName)
+  })
+
+  it('does not restart the idle track when hover falls back to the same row', () => {
+    ;({ container, root } = renderPetOverlay())
+    const wrapper = container.querySelector('.pointer-events-auto')
+    if (!wrapper) {
+      throw new Error('draggable wrapper not found')
+    }
+    // The mocked sprite has no jumping row, so hover (→ jumping) resolves back to
+    // idle. Keying the keyframes on the resolved row means the name must not
+    // change — otherwise the unchanged idle animation restarts on hover. React
+    // synthesizes onPointerEnter/Leave from pointerover/pointerout.
+    const idleName = animationName(container)
+    firePointer(wrapper, 'pointerover', 0, 0)
+    expect(animationName(container)).toBe(idleName)
+    firePointer(wrapper, 'pointerout', 0, 0)
+    expect(animationName(container)).toBe(idleName)
   })
 })

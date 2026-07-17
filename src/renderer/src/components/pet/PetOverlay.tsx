@@ -61,9 +61,7 @@ function SpriteFrame({
   // that restarts from frame 0 even when the state row is unchanged.
   restartKey: number
 }): React.JSX.Element {
-  // Why: name the @keyframes per animation (+restartKey for same-row grabs) so a
-  // switched-to row starts at frame 0 instead of inheriting the prior timeline.
-  const animKeyframesId = `${useId().replace(/[^a-zA-Z0-9_-]/g, '')}-${animationName}-${restartKey}`
+  const baseId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const anim =
     sprite.animations?.[animationName] ||
     (sprite.defaultAnimation && sprite.animations?.[sprite.defaultAnimation]) ||
@@ -72,6 +70,11 @@ function SpriteFrame({
   // Why: clamp to >=1 so an empty/invalid manifest can't produce steps(0),
   // which is rejected as invalid CSS and freezes the animation.
   const frames = Math.max(1, anim?.frames ?? sprite.columns ?? 1)
+  // Why: name the @keyframes by the RESOLVED track (+restartKey for same-row
+  // grabs), so a genuine row change starts at frame 0 while a state that falls
+  // back to the same row (e.g. hover on a pet without a jumping row) doesn't
+  // needlessly restart.
+  const animKeyframesId = `${baseId}-${row}-${frames}-${restartKey}`
   // Why: allow fractional downscaling so frames larger than maxSize shrink to
   // fit instead of overflowing the overlay; mirrors DetectedSpriteFrame's math.
   const scale = Math.min(maxSize / sprite.frameWidth, maxSize / sprite.frameHeight)
@@ -406,9 +409,8 @@ export function PetOverlay(): React.JSX.Element {
         >
           <style>{PET_BOB_KEYFRAMES_CSS}</style>
           {sprite ? (
-            // Why: remount per pet so switching cached sprites can't inherit the
-            // previous pet's animation timeline (same @keyframes name → carried
-            // currentTime); each pet starts clean.
+            // Why: remount per pet so a switched-to sprite starts a fresh
+            // animation instead of inheriting the prior pet's currentTime.
             <SpriteFrame
               key={url}
               url={url}

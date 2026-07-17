@@ -35,10 +35,8 @@ export function usePetPointerInteraction(
   // Why: horizontal baseline for the drag-direction hysteresis, advanced only on
   // an accepted direction. Kept separate from dragOffsetRef (position math).
   const dragBaselineXRef = useRef(0)
-  // Why: direction and the owning pointer are read+written inside pointer
-  // handlers, so keep them in refs immune to React's render batching. Reading
-  // the direction from state would let two coalesced moves in one commit
-  // resurrect a stale direction; `dragAnimation` state exists only to render.
+  // Why: read+written inside handlers, so keep in refs immune to render batching
+  // (state would let two coalesced moves resurrect a stale direction).
   const dragDirectionRef = useRef<PetDragAnimation>(null)
   const activePointerRef = useRef<number | null>(null)
 

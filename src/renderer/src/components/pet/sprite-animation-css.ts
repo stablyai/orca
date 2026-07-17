@@ -1,6 +1,10 @@
 // Sprite-sheet keyframe CSS for the pet overlay. Kept as a pure module so the
 // pacing math is unit-testable without mounting the overlay or a DOM.
 
+// Mirror of the importer's per-frame cap (pet.ts zod schema): a hold longer than
+// this at render would freeze the overlay, so reject it on the render side too.
+const MAX_FRAME_DURATION_MS = 60_000
+
 export type SpriteAnimationCss = {
   keyframesCss: string
   animationCss: string
@@ -57,13 +61,13 @@ function validFrameDurations(
   frameDurationsMs: number[] | undefined,
   frames: number
 ): number[] | null {
-  // Why: Array.isArray, not a truthiness check — persisted/RPC-synced sprites
-  // are untrusted, so a corrupt non-array value (e.g. { length: 6 }) must fail
-  // here rather than throw on .length/.every during render.
+  // Why: Array.isArray + bounds, not a truthiness check — persisted/RPC-synced
+  // sprites are untrusted, so a corrupt non-array or out-of-range hold falls back
+  // to uniform pacing instead of throwing or freezing the overlay.
   if (
     Array.isArray(frameDurationsMs) &&
     frameDurationsMs.length === frames &&
-    frameDurationsMs.every((ms) => Number.isFinite(ms) && ms > 0)
+    frameDurationsMs.every((ms) => Number.isFinite(ms) && ms > 0 && ms <= MAX_FRAME_DURATION_MS)
   ) {
     return frameDurationsMs
   }
@@ -71,10 +75,8 @@ function validFrameDurations(
 }
 
 // Cumulative step-end stops, one per frame. Returns null (→ uniform fallback)
-// when a frame is too short to survive our 4-decimal precision: either two
-// stops collapse to the same percentage, or the final stop rounds to 100% and
-// so has no interval before the loop. Either way the frame would vanish, so we
-// degrade to uniform pacing rather than silently drop it.
+// when a frame is too short to survive 4-decimal precision (two stops collapse,
+// or the final stop rounds to 100%) so no frame is silently dropped.
 function stepEndStops(
   durations: number[],
   totalMs: number,
