@@ -49,15 +49,19 @@ export class PlaybackSuppressionService {
 
   async acquire(owner: string): Promise<PlaybackSuppressionAcquireResult> {
     this.owners.add(owner)
-    if (!(await this.ensureRecovered())) {
-      this.owners.delete(owner)
-      return { active: false, reason: 'unavailable' }
-    }
 
     while (this.owners.has(owner)) {
       if (this.pendingRestoration) {
         await this.pendingRestoration.catch(() => undefined)
         continue
+      }
+      const recovered = await this.ensureRecovered()
+      if (!this.owners.has(owner)) {
+        return { active: false, reason: 'canceled' }
+      }
+      if (!recovered) {
+        this.owners.delete(owner)
+        return { active: false, reason: 'unavailable' }
       }
       if (this.activeSnapshot) {
         return { active: true }
@@ -65,6 +69,9 @@ export class PlaybackSuppressionService {
       if (this.pendingActivation) {
         const result = await this.pendingActivation
         if (!result.active) {
+          if (result.reason === 'canceled' && this.owners.has(owner)) {
+            continue
+          }
           return result
         }
         if (!this.owners.has(owner)) {
@@ -86,6 +93,9 @@ export class PlaybackSuppressionService {
       const activationWithCleanup = this.pendingActivation
       const result = await activationWithCleanup
       if (!result.active) {
+        if (result.reason === 'canceled' && this.owners.has(owner)) {
+          continue
+        }
         return result
       }
       if (!this.owners.has(owner)) {
@@ -108,7 +118,13 @@ export class PlaybackSuppressionService {
     this.activeSnapshot = null
     if (activeSnapshot && !activeSnapshot.muted) {
       const restoration = this.restore(activeSnapshot).catch((error: unknown) => {
-        this.activeSnapshot = activeSnapshot
+        if (this.recoveryStore) {
+          // Why: the durable marker must be reconciled before another activation
+          // can safely claim or replace the captured endpoint state.
+          this.recoveryComplete = false
+        } else {
+          this.activeSnapshot = activeSnapshot
+        }
         throw error
       })
       this.pendingRestoration = restoration
@@ -158,6 +174,10 @@ export class PlaybackSuppressionService {
           // Why: later acquisitions must not overwrite the unresolved durable marker.
           this.recoveryComplete = false
         }
+      }
+      if (!this.isCurrent(generation)) {
+        // Why: an older activation must not remove owners added after its release.
+        return { active: false, reason: 'canceled' }
       }
       this.owners.clear()
       return { active: false, reason: 'unavailable' }
