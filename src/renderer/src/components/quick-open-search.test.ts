@@ -536,11 +536,13 @@ describe('quick-open-search', () => {
   })
 
   it('does not bridge a doubled typed separator onto a single-separator name', () => {
-    // Why: a separator-induced word start is not a case transition, so "a--b"
-    // must not bridge onto "a-b" — the identifier-transition guard keeps a typed
-    // `-`/`_` landing only on a genuine camelCase boundary.
+    // Why: a case transition can't sit right after a matched separator, so "a--b"
+    // must not bridge onto "a-b" — even when a deeper same-letter camelCase tail
+    // ("a-bcBx") would otherwise authorize the bridge and land it on the '-'.
     expect(rankQuickOpenFiles('a--b', prepareQuickOpenFiles(['x/a-b.ts']))).toEqual([])
     expect(rankQuickOpenFiles('a_-b', prepareQuickOpenFiles(['x/a_b.ts']))).toEqual([])
+    expect(rankQuickOpenFiles('a--b', prepareQuickOpenFiles(['x/a-bcBx.ts']))).toEqual([])
+    expect(rankQuickOpenFiles('a_-b', prepareQuickOpenFiles(['x/a_bcBx.ts']))).toEqual([])
   })
 
   it('does not let a bare separator query match a file without separators', () => {

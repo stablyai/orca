@@ -137,12 +137,11 @@ function matchQueryFromAnchor(
       qi + 1 < query.length &&
       hasMatchedChar &&
       // Why: a zero-width case transition can only sit between two non-separator
-      // chars. When a preceding space already consumed a '/' or '.' run,
-      // lastMatchIdx is on that separator, so there is nothing to bridge — and
-      // firing here would let a typed '-'/'_' cross a '/'/'.' via a deeper
-      // same-letter camelCase decoy while consumption lands on the crossing.
-      path[lastMatchIdx] !== '/' &&
-      path[lastMatchIdx] !== '.' &&
+      // chars. When the last matched char is any separator — a space-consumed
+      // '/'/'.'  run or a literal '-'/'_'/space (e.g. the doubled "a--b") — there
+      // is nothing to bridge; firing here would let a deeper same-letter camelCase
+      // decoy authorize a bridge whose match then lands on that separator.
+      !isPathSeparator(path[lastMatchIdx]) &&
       hasIdentifierTransitionMatchBeforeSeparator(path, wordStarts, lastMatchIdx + 1, query[qi + 1])
     ) {
       // Why: typed separators also bridge zero-width case transitions. Rank
