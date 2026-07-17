@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const {
   applyAppIconMock,
   applyElectronProxySettingsMock,
+  setLocalCliProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
   onMock,
@@ -13,6 +14,7 @@ const {
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
+  setLocalCliProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -38,6 +40,10 @@ vi.mock('../warp-themes', () => ({
 
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
+}))
+
+vi.mock('../network/local-cli-environment', () => ({
+  setLocalCliProxySettings: setLocalCliProxySettingsMock
 }))
 
 vi.mock('../app-icon', () => ({
@@ -76,6 +82,7 @@ describe('registerSettingsHandlers', () => {
     applyAppIconMock.mockClear()
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
+    setLocalCliProxySettingsMock.mockClear()
     previewGhosttyImportMock.mockClear()
     previewWarpThemeImportMock.mockClear()
     prepareLocalWorktreeRootsForReposMock.mockReset().mockResolvedValue(undefined)
@@ -438,6 +445,10 @@ describe('registerSettingsHandlers', () => {
       httpProxyUrl: 'http://proxy.example:8080',
       httpProxyBypassRules: 'localhost;*.internal'
     })
+    expect(setLocalCliProxySettingsMock).toHaveBeenCalledWith({
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyBypassRules: 'localhost;*.internal'
+    })
   })
 
   it('drops invalid proxy URLs at the settings boundary', async () => {
@@ -457,6 +468,7 @@ describe('registerSettingsHandlers', () => {
       { notifyListeners: true, originWebContentsId: 1 }
     )
     expect(applyElectronProxySettingsMock).toHaveBeenCalledWith({ httpProxyUrl: '' })
+    expect(setLocalCliProxySettingsMock).toHaveBeenCalledWith({ httpProxyUrl: '' })
   })
 
   it('normalizes and applies app icon changes from renderer settings IPC', async () => {

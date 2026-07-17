@@ -54,6 +54,7 @@ describe('hydrateShellPath', () => {
         capturedShell = shell
         return {
           segments: ['/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin'],
+          proxyEnv: { HTTPS_PROXY: 'http://proxy.example:8080' },
           ok: true,
           failureReason: 'none'
         }
@@ -63,6 +64,7 @@ describe('hydrateShellPath', () => {
     expect(capturedShell).toBe('/bin/zsh')
     expect(result.ok).toBe(true)
     expect(result.segments).toEqual(['/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin'])
+    expect(result.proxyEnv).toEqual({ HTTPS_PROXY: 'http://proxy.example:8080' })
     expect(result.failureReason).toBe('none')
   })
 
@@ -70,7 +72,7 @@ describe('hydrateShellPath', () => {
     let spawnCount = 0
     const spawner: HydrationSpawner = async () => {
       spawnCount += 1
-      return { segments: ['/a'], ok: true, failureReason: 'none' }
+      return { segments: ['/a'], proxyEnv: {}, ok: true, failureReason: 'none' }
     }
 
     await hydrateShellPath({ shellOverride: '/bin/zsh', spawner })
@@ -84,7 +86,7 @@ describe('hydrateShellPath', () => {
     let spawnCount = 0
     const spawner: HydrationSpawner = async () => {
       spawnCount += 1
-      return { segments: ['/a'], ok: true, failureReason: 'none' }
+      return { segments: ['/a'], proxyEnv: {}, ok: true, failureReason: 'none' }
     }
 
     await hydrateShellPath({ shellOverride: '/bin/zsh', spawner })
@@ -101,7 +103,7 @@ describe('hydrateShellPath', () => {
       }
     })
 
-    expect(result).toEqual({ segments: [], ok: false, failureReason: 'no_shell' })
+    expect(result).toEqual({ segments: [], proxyEnv: {}, ok: false, failureReason: 'no_shell' })
   })
 
   // Why: each failure mode tagged independently so dashboards can pick the
@@ -112,25 +114,30 @@ describe('hydrateShellPath', () => {
   it('propagates failureReason:timeout from the spawner', async () => {
     const result = await hydrateShellPath({
       shellOverride: '/bin/zsh',
-      spawner: async () => ({ segments: [], ok: false, failureReason: 'timeout' })
+      spawner: async () => ({ segments: [], proxyEnv: {}, ok: false, failureReason: 'timeout' })
     })
-    expect(result).toEqual({ segments: [], ok: false, failureReason: 'timeout' })
+    expect(result).toEqual({ segments: [], proxyEnv: {}, ok: false, failureReason: 'timeout' })
   })
 
   it('propagates failureReason:spawn_error from the spawner', async () => {
     const result = await hydrateShellPath({
       shellOverride: '/bin/zsh',
-      spawner: async () => ({ segments: [], ok: false, failureReason: 'spawn_error' })
+      spawner: async () => ({
+        segments: [],
+        proxyEnv: {},
+        ok: false,
+        failureReason: 'spawn_error'
+      })
     })
-    expect(result).toEqual({ segments: [], ok: false, failureReason: 'spawn_error' })
+    expect(result).toEqual({ segments: [], proxyEnv: {}, ok: false, failureReason: 'spawn_error' })
   })
 
   it('propagates failureReason:empty_path from the spawner', async () => {
     const result = await hydrateShellPath({
       shellOverride: '/bin/zsh',
-      spawner: async () => ({ segments: [], ok: false, failureReason: 'empty_path' })
+      spawner: async () => ({ segments: [], proxyEnv: {}, ok: false, failureReason: 'empty_path' })
     })
-    expect(result).toEqual({ segments: [], ok: false, failureReason: 'empty_path' })
+    expect(result).toEqual({ segments: [], proxyEnv: {}, ok: false, failureReason: 'empty_path' })
   })
 
   it('cleans up shell listeners when hydration times out', async () => {
@@ -142,6 +149,7 @@ describe('hydrateShellPath', () => {
       const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
       const assertion = expect(resultPromise).resolves.toEqual({
         segments: [],
+        proxyEnv: {},
         ok: false,
         failureReason: 'timeout'
       })
@@ -156,6 +164,44 @@ describe('hydrateShellPath', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('captures only allowlisted proxy variables from the login shell', async () => {
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
+    const shellArgs = spawnMock.mock.calls[0][1] as string[]
+    expect(shellArgs[1]).toContain("printenv 'HTTPS_PROXY'")
+    expect(shellArgs[1]).not.toContain('GITHUB_TOKEN')
+
+    proc.stdout.emit(
+      'data',
+      Buffer.from(
+        [
+          '__ORCA_SHELL_PATH__',
+          ['/usr/local/bin', '/usr/bin'].join(delimiter),
+          '__ORCA_SHELL_PATH__',
+          '__ORCA_SHELL_PROXY_HTTPS_PROXY__',
+          'http://proxy.example:8080\n',
+          '__ORCA_SHELL_PROXY_HTTPS_PROXY__',
+          '__ORCA_SHELL_PROXY_NO_PROXY__',
+          'localhost,*.internal\n',
+          '__ORCA_SHELL_PROXY_NO_PROXY__'
+        ].join('')
+      )
+    )
+    proc.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      segments: ['/usr/local/bin', '/usr/bin'],
+      proxyEnv: {
+        HTTPS_PROXY: 'http://proxy.example:8080',
+        NO_PROXY: 'localhost,*.internal'
+      },
+      ok: true,
+      failureReason: 'none'
+    })
   })
 })
 

@@ -126,4 +126,19 @@ describe('CLI source-control integration card account scope', () => {
     )
     expect(rendered.textContent).toContain('glab auth login')
   })
+
+  it('shows connection guidance without login commands when GitHub auth cannot be verified', async () => {
+    mocks.store.current = {
+      settings: { activeRuntimeEnvironmentId: null },
+      openSettingsPage: vi.fn(),
+      openSettingsTarget: vi.fn()
+    }
+    mocks.preflight.statuses.ghStatus = 'connection-error'
+
+    const rendered = await renderCard(<GitHubIntegrationCard />)
+
+    expect(rendered.textContent).toContain('Connection error')
+    expect(rendered.textContent).toContain('network or proxy settings')
+    expect(rendered.textContent).not.toContain('gh auth login')
+  })
 })

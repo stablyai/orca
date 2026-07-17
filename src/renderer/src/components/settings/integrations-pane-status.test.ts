@@ -96,4 +96,20 @@ describe('getPreflightIntegrationStatuses', () => {
       giteaStatus: 'checking'
     })
   })
+
+  it('distinguishes failed CLI auth probes from confirmed logout', () => {
+    expect(
+      getPreflightIntegrationStatuses(
+        {
+          ...connectedPreflight,
+          gh: { installed: true, authenticated: false, authState: 'timeout' },
+          glab: { installed: true, authenticated: false, authState: 'unreachable' }
+        },
+        new Set()
+      )
+    ).toMatchObject({
+      ghStatus: 'connection-error',
+      glabStatus: 'connection-error'
+    })
+  })
 })

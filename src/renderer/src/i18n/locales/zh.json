@@ -1045,7 +1045,9 @@
         "0d0ace8861": "在 GitHub 上加星标",
         "ec43b38ba7": "已在 GitHub 上加星标",
         "157bb5ecbb": "打开 GitHub",
-        "preflightDismiss": "关闭"
+        "preflightDismiss": "关闭",
+        "github_cli_auth_check_failed": "GitHub CLI authentication could not be verified",
+        "github_cli_auth_check_failed_description": "Check your network or proxy settings, then re-check the GitHub CLI connection."
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -8636,7 +8638,10 @@
                   "6f30fc4216": "此运行时暂不支持 GitHub CLI 状态。",
                   "6b2cfb52b4": "gh",
                   "b4d900e7f1": "通过",
-                  "account_scope_prefix": "账户范围"
+                  "account_scope_prefix": "账户范围",
+                  "connection_error": "Connection error",
+                  "github_auth_check_failed": "Orca could not verify GitHub CLI authentication. Check your network or proxy settings, then re-check.",
+                  "gitlab_auth_check_failed": "Orca could not verify GitLab CLI authentication. Check your network or proxy settings, then re-check."
                 }
               }
             }

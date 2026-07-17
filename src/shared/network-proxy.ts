@@ -10,7 +10,7 @@ export type ProxyUrlValidationResult =
 const PROXY_URL_MAX_LENGTH = 2048
 const PROXY_BYPASS_RULES_MAX_LENGTH = 4096
 const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:'])
-const PROXY_ENV_KEYS = [
+export const NETWORK_PROXY_URL_ENV_KEYS = [
   'HTTPS_PROXY',
   'https_proxy',
   'ALL_PROXY',
@@ -18,7 +18,11 @@ const PROXY_ENV_KEYS = [
   'HTTP_PROXY',
   'http_proxy'
 ] as const
-const NO_PROXY_ENV_KEYS = ['NO_PROXY', 'no_proxy'] as const
+export const NETWORK_PROXY_BYPASS_ENV_KEYS = ['NO_PROXY', 'no_proxy'] as const
+export const NETWORK_PROXY_ENV_KEYS = [
+  ...NETWORK_PROXY_URL_ENV_KEYS,
+  ...NETWORK_PROXY_BYPASS_ENV_KEYS
+] as const
 
 function formatProxyUrl(url: URL): string {
   const auth =
@@ -72,7 +76,7 @@ export function normalizeProxyBypassRules(value: unknown): string {
 export function getProxyUrlFromEnvironment(
   env: Record<string, string | undefined>
 ): ProxyUrlValidationResult {
-  for (const key of PROXY_ENV_KEYS) {
+  for (const key of NETWORK_PROXY_URL_ENV_KEYS) {
     if (env[key]) {
       return normalizeProxyUrl(env[key])
     }
@@ -83,7 +87,7 @@ export function getProxyUrlFromEnvironment(
 export function getProxyBypassRulesFromEnvironment(
   env: Record<string, string | undefined>
 ): string {
-  for (const key of NO_PROXY_ENV_KEYS) {
+  for (const key of NETWORK_PROXY_BYPASS_ENV_KEYS) {
     if (env[key]) {
       return normalizeProxyBypassRules(env[key])
     }

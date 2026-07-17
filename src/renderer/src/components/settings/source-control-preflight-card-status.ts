@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { CliAuthState } from '../../../../shared/cli-auth-status'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { useAppStore } from '@/store'
@@ -11,6 +12,7 @@ import {
 type CliStatus = {
   installed?: boolean
   authenticated?: boolean
+  authState?: CliAuthState
 }
 
 export type CliProviderCardState =
@@ -18,6 +20,7 @@ export type CliProviderCardState =
   | 'connected'
   | 'not-installed'
   | 'not-authenticated'
+  | 'connection-error'
   | 'unavailable'
 
 export function deriveCliProviderCardState(input: {
@@ -41,7 +44,12 @@ export function deriveCliProviderCardState(input: {
   if (!input.cliStatus.installed) {
     return 'not-installed'
   }
-  return input.cliStatus.authenticated ? 'connected' : 'not-authenticated'
+  if (input.cliStatus.authenticated) {
+    return 'connected'
+  }
+  return input.cliStatus.authState === undefined || input.cliStatus.authState === 'unauthenticated'
+    ? 'not-authenticated'
+    : 'connection-error'
 }
 
 export type PreflightCardStatuses = {

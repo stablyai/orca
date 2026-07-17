@@ -44,11 +44,11 @@ export async function execLocalPreflightCommand(
   command: string,
   args: string[]
 ): Promise<PreflightCommandResult> {
-  const env = buildLocalPreflightEnv()
+  const env = await buildLocalPreflightEnv()
   const commandPromise = execFileAsync(command, args, {
     encoding: 'utf-8',
     timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
-    ...(env ? { env } : {})
+    env
   }) as Promise<PreflightCommandResult>
 
   return withPreflightTimeout(command, commandPromise)

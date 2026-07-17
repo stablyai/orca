@@ -57,6 +57,7 @@ import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../shared/folder-workspace-path-status'
+import type { CliAuthStatus } from '../shared/cli-auth-status'
 import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
@@ -588,10 +589,10 @@ export type DetectedBrowserInfo = {
 
 export type PreflightStatus = {
   git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
+  gh: CliAuthStatus
   /** Optional — older preload payloads predating GitLab support don't
    *  include it. Consumers gate on `glab?.installed` / `authenticated`. */
-  glab?: { installed: boolean; authenticated: boolean }
+  glab?: CliAuthStatus
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
     configured: boolean

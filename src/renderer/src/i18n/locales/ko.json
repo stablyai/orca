@@ -1045,7 +1045,9 @@
         "0d0ace8861": "GitHub에서 별표 주기",
         "ec43b38ba7": "GitHub에 별표 표시됨",
         "157bb5ecbb": "GitHub 열기",
-        "preflightDismiss": "닫기"
+        "preflightDismiss": "닫기",
+        "github_cli_auth_check_failed": "GitHub CLI authentication could not be verified",
+        "github_cli_auth_check_failed_description": "Check your network or proxy settings, then re-check the GitHub CLI connection."
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -8636,7 +8638,10 @@
                   "6f30fc4216": "이 런타임에서는 아직 GitHub CLI 상태를 사용할 수 없습니다.",
                   "6b2cfb52b4": "gh",
                   "b4d900e7f1": "PR, 이슈 및 검사는 다음을 통해 이루어집니다.",
-                  "account_scope_prefix": "계정 범위"
+                  "account_scope_prefix": "계정 범위",
+                  "connection_error": "Connection error",
+                  "github_auth_check_failed": "Orca could not verify GitHub CLI authentication. Check your network or proxy settings, then re-check.",
+                  "gitlab_auth_check_failed": "Orca could not verify GitLab CLI authentication. Check your network or proxy settings, then re-check."
                 }
               }
             }

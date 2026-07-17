@@ -37,6 +37,7 @@ import {
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
 import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
+import { buildLocalCliEnvironment } from '../network/local-cli-environment'
 
 // ─── Core resolution ────────────────────────────────────────────────
 
@@ -1422,6 +1423,10 @@ export async function ghExecFileAsync(
   let attemptedDefaultWslFallback = false
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
+      const commandEnv =
+        resolved.wsl === null
+          ? nonInteractiveGhEnv(await buildLocalCliEnvironment(options.env))
+          : nonInteractiveGhEnv(options.env)
       const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
         cwd: resolved.cwd,
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
@@ -1429,7 +1434,7 @@ export async function ghExecFileAsync(
         // Why: GitHub detail IPC powers PR cards, Tasks, and URL worktree
         // creation; one stuck gh child must fail visibly, not wedge every lane.
         timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
-        env: nonInteractiveGhEnv(options.env)
+        env: commandEnv
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
@@ -1555,12 +1560,14 @@ export async function glabExecFileAsync(
   let attemptedDefaultWslFallback = false
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
+      const commandEnv =
+        resolved.wsl === null ? await buildLocalCliEnvironment(options.env) : options.env
       const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
         cwd: resolved.cwd,
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
         timeout: options.timeout,
-        env: options.env
+        env: commandEnv
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {

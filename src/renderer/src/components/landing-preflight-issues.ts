@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import type { CliAuthState } from '../../../shared/cli-auth-status'
 import type { Repo } from '../../../shared/types'
 
 export type PreflightIssue = {
@@ -15,7 +16,7 @@ export type PreflightIssue = {
 
 export type LandingPreflightStatus = {
   git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
+  gh: { installed: boolean; authenticated: boolean; authState?: CliAuthState }
 }
 
 export type LandingPreflightIssueOptions = {
@@ -62,6 +63,26 @@ export function getLandingPreflightIssues(
       ),
       fixLabel: 'Install GitHub CLI',
       fixUrl: 'https://cli.github.com',
+      dismissible: true
+    })
+  } else if (
+    !status.gh.authenticated &&
+    status.gh.authState !== undefined &&
+    status.gh.authState !== 'unauthenticated'
+  ) {
+    issues.push({
+      id: 'gh-connectivity',
+      title: translate(
+        'auto.components.Landing.github_cli_auth_check_failed',
+        'GitHub CLI authentication could not be verified'
+      ),
+      description: translate(
+        'auto.components.Landing.github_cli_auth_check_failed_description',
+        'Check your network or proxy settings, then re-check the GitHub CLI connection.'
+      ),
+      fixLabel: 'Troubleshoot',
+      fixUrl:
+        'https://docs.github.com/en/get-started/using-github/troubleshooting-connectivity-problems',
       dismissible: true
     })
   } else if (!status.gh.authenticated) {
