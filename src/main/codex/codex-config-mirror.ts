@@ -39,41 +39,56 @@ export function syncSystemConfigIntoManagedCodexHome(
     // leave both runtime and its old baseline intact so the next launch retries.
     return
   }
-  let preservedConflictKeys: ReadonlySet<string>
+  let mirrorResult: CodexConfigMirrorResult
   try {
-    preservedConflictKeys = syncSystemConfigIntoManagedCodexHomeUnsafe(homes, promotionPlan)
+    mirrorResult = syncSystemConfigIntoManagedCodexHomeUnsafe(homes, promotionPlan)
   } catch (error) {
     console.warn('[codex-config] Failed to mirror system Codex config:', error)
+    return
+  }
+  if (mirrorResult.status === 'skipped-missing-source') {
+    // Why: advancing now would mark the unmirrored runtime change as promoted,
+    // so it could never retry once the source config reappears.
     return
   }
   // Why: the baseline advances only after a successful mirror; recording an
   // unpromoted runtime change as Orca-written would strand it forever.
   snapshotCodexRuntimeSettingsBaseline(
     homes.runtimeHomePath,
-    new Map([...promotionPlan.conflicts].filter(([key]) => preservedConflictKeys.has(key)))
+    new Map(
+      [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
+    )
   )
 }
+
+type CodexConfigMirrorResult =
+  | { status: 'skipped-missing-source' }
+  | { status: 'mirrored'; preservedConflictKeys: ReadonlySet<string> }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
   { runtimeHomePath, systemHomePath }: CodexSettingsPromotionHomes,
   promotionPlan: CodexSettingsPromotionPlan
-): ReadonlySet<string> {
+): CodexConfigMirrorResult {
   const systemConfigPath = join(systemHomePath, 'config.toml')
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
-  if (!systemConfigExists && !runtimeConfigExists) {
-    return new Set()
+  if (!systemConfigExists) {
+    // Why: a missing source is not an authoritative empty config. Merging it
+    // would erase every ordinary setting from an existing managed runtime.
+    return runtimeConfigExists
+      ? { status: 'skipped-missing-source' }
+      : { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
-  const rawSystemConfig = systemConfigExists ? readAgentStateFileSync(systemConfigPath) : ''
+  const rawSystemConfig = readAgentStateFileSync(systemConfigPath)
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
     )
-    return new Set()
+    return { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
   const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
@@ -85,7 +100,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   if (preserved.content !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, preserved.content)
   }
-  return preserved.keys
+  return { status: 'mirrored', preservedConflictKeys: preserved.keys }
 }
 
 export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string): string {

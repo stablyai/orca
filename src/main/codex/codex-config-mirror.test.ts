@@ -261,6 +261,26 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('codex_hooks')
   })
 
+  it('preserves an existing runtime config when the system config is missing', () => {
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    const runtimeConfig = [
+      'model = "runtime-model"',
+      '',
+      '[features]',
+      'hooks = true',
+      '',
+      '[projects."/repo"]',
+      'trust_level = "trusted"',
+      ''
+    ].join('\n')
+    writeFileSync(getRuntimeConfigPath(), runtimeConfig, 'utf-8')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(getRuntimeConfigPath(), 'utf-8')).toBe(runtimeConfig)
+    expect(existsSync(getSystemConfigPath())).toBe(false)
+  })
+
   it('mirrors system config updates while preserving runtime-owned trust sections', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     writeFileSync(
