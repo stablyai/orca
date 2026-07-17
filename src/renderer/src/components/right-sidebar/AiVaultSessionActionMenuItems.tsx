@@ -1,4 +1,12 @@
-import { Copy, FileJson, FolderOpen, LocateFixed, PanelTopOpen, Play } from 'lucide-react'
+import {
+  Copy,
+  FileJson,
+  FolderOpen,
+  LocateFixed,
+  MessageSquarePlus,
+  PanelTopOpen,
+  Play
+} from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { translate } from '@/i18n/i18n'
@@ -8,6 +16,7 @@ export function SessionActionMenuItems({
   resumeDisabled,
   resumeLabel,
   onResume,
+  onContinueInNewSession,
   onJumpToOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
@@ -22,6 +31,7 @@ export function SessionActionMenuItems({
   resumeDisabled: boolean
   resumeLabel: string
   onResume: () => void
+  onContinueInNewSession?: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
@@ -62,6 +72,15 @@ export function SessionActionMenuItems({
         <Play className="size-3.5" />
         {resumeLabel}
       </Item>
+      {onContinueInNewSession ? (
+        <Item onSelect={onContinueInNewSession}>
+          <MessageSquarePlus className="size-3.5" />
+          {translate(
+            'components.agentSessionContinuation.continueInNewSession',
+            'Continue in New Session…'
+          )}
+        </Item>
+      ) : null}
       {onCopyResume ? (
         <Item onSelect={onCopyResume}>
           <Copy className="size-3.5" />

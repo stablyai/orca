@@ -13555,6 +13555,31 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "Continuar en una sesión nueva…",
+      "dialogTitle": "Continuar en una sesión nueva",
+      "dialogDescription": "Inicia una sesión nueva del agente desde este punto. La sesión original no cambia.",
+      "untitledSession": "Sesión actual",
+      "originalAgent": "Agente original: {{agent}}",
+      "agent": "Agente",
+      "selectAgent": "Selecciona un agente",
+      "detectingAgents": "Detectando agentes en el host de este espacio de trabajo…",
+      "detectionFailed": "No se pudieron detectar agentes en el host de este espacio de trabajo.",
+      "noAgents": "No se detectaron agentes habilitados en el host de este espacio de trabajo.",
+      "context": "Contexto",
+      "modeFocused": "Traspaso enfocado (recomendado)",
+      "modeFocusedDescription": "Usa el estado más reciente y el espacio de trabajo actual, y consulta detalles anteriores solo cuando hacen falta.",
+      "modeFull": "Transcripción completa de la sesión",
+      "modeFullDescription": "Pide al nuevo agente que lea toda la sesión guardada antes de continuar.",
+      "startsIn": "Se inicia en:",
+      "startSession": "Iniciar sesión nueva",
+      "starting": "Iniciando…",
+      "noContext": "No hay contexto de sesión disponible para continuar en una sesión nueva.",
+      "agentDisabled": "{{agent}} está deshabilitado en la configuración de agentes.",
+      "agentUnavailable": "No se detectó {{agent}} en el host de este espacio de trabajo.",
+      "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
+      "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
     }
   },
   "dashboardPopout": {

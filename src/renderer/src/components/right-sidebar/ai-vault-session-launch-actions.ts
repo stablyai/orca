@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
@@ -26,6 +26,9 @@ import {
   isKnownAiVaultResumeWorkspaceTarget,
   type AiVaultSessionResumeTargetState
 } from './ai-vault-session-resume'
+import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
@@ -41,7 +44,13 @@ export function useAiVaultSessionLaunchActions({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   copyResumeCommand: (session: AiVaultSession, worktreeId?: string | null) => Promise<void>
   handleResume: (session: AiVaultSession, targetWorktreeId?: string) => void
+  handleContinueInNewSession: (session: AiVaultSession, targetWorktreeId: string) => void
+  continuationRequest: AgentSessionContinuationRequest | null
+  handleContinuationDialogOpenChange: (open: boolean) => void
 } {
+  const [continuationRequest, setContinuationRequest] =
+    useState<AgentSessionContinuationRequest | null>(null)
+
   const buildResumeCommand = useCallback(
     (session: AiVaultSession, worktreeId?: string | null): string =>
       buildAiVaultResumeCopyCommandForWorktree({
@@ -154,7 +163,82 @@ export function useAiVaultSessionLaunchActions({
     [activeWorktree?.id, activeWorktreeId, buildResumeStartup, targetState]
   )
 
-  return { buildResumeStartup, copyResumeCommand, handleResume }
+  const handleContinueInNewSession = useCallback(
+    (session: AiVaultSession, targetWorktreeId: string): void => {
+      const targetId = resolveAiVaultSessionLaunchTarget({
+        sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
+        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        targetWorktreeId,
+        targetState
+      })
+      if (targetId.status === 'missing') {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+            'Open a workspace before resuming a session.'
+          )
+        )
+        return
+      }
+      if (targetId.status === 'unsupported') {
+        toast.error(aiVaultResumeUnsupportedMessage(targetId.targetStatus))
+        return
+      }
+
+      const targetWorkspacePath = resolveAiVaultTargetWorkspacePath(
+        targetState,
+        targetId.worktreeId
+      )
+      if (!targetWorkspacePath) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+            'Open a workspace before resuming a session.'
+          )
+        )
+        return
+      }
+      setContinuationRequest(
+        prepareAiVaultSessionContinuation({
+          session,
+          targetWorktreeId: targetId.worktreeId,
+          targetWorkspacePath
+        })
+      )
+    },
+    [activeWorktree?.id, activeWorktreeId, targetState]
+  )
+
+  const handleContinuationDialogOpenChange = useCallback((open: boolean): void => {
+    if (!open) {
+      setContinuationRequest(null)
+    }
+  }, [])
+
+  return {
+    buildResumeStartup,
+    copyResumeCommand,
+    handleResume,
+    handleContinueInNewSession,
+    continuationRequest,
+    handleContinuationDialogOpenChange
+  }
+}
+
+function resolveAiVaultTargetWorkspacePath(
+  state: AiVaultSessionResumeTargetState,
+  workspaceId: string
+): string | null {
+  const scope = parseWorkspaceKey(workspaceId)
+  if (scope?.type === 'folder') {
+    return (
+      state.folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
+        ?.folderPath ?? null
+    )
+  }
+  const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+  return findWorktreeById(state.worktreesByRepo, worktreeId)?.path ?? null
 }
 
 export type AiVaultSessionLaunchTarget =

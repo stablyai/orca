@@ -13555,6 +13555,31 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "新しいセッションで続ける…",
+      "dialogTitle": "新しいセッションで続ける",
+      "dialogDescription": "この時点から新しいエージェントセッションを開始します。元のセッションは変更されません。",
+      "untitledSession": "現在のセッション",
+      "originalAgent": "元のエージェント: {{agent}}",
+      "agent": "エージェント",
+      "selectAgent": "エージェントを選択",
+      "detectingAgents": "このワークスペースホストでエージェントを検出中…",
+      "detectionFailed": "このワークスペースホストでエージェントを検出できませんでした。",
+      "noAgents": "このワークスペースホストで有効なエージェントが検出されませんでした。",
+      "context": "コンテキスト",
+      "modeFocused": "要点を引き継ぐ（推奨）",
+      "modeFocusedDescription": "最新の状態と現在のワークスペースを使い、必要な場合だけ過去の詳細を読みます。",
+      "modeFull": "セッション全文",
+      "modeFullDescription": "続行前に、保存されたセッション全体を新しいエージェントに読ませます。",
+      "startsIn": "開始場所:",
+      "startSession": "新しいセッションを開始",
+      "starting": "開始中…",
+      "noContext": "新しいセッションで続けるためのコンテキストがありません。",
+      "agentDisabled": "エージェント設定で {{agent}} が無効になっています。",
+      "agentUnavailable": "このワークスペースホストで {{agent}} が検出されませんでした。",
+      "sent": "セッションコンテキストを新しい {{agent}} セッションに送信しました。",
+      "launchFailed": "新しい {{agent}} セッションを開始できませんでした。"
     }
   },
   "dashboardPopout": {

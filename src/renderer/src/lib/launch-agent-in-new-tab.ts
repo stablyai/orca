@@ -40,6 +40,8 @@ export type LaunchAgentInNewTabArgs = {
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command. */
   agentArgs?: string | null
+  /** Working directory used when the new terminal starts. */
+  initialCwd?: string | null
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar quick-launch entry point. */
@@ -76,6 +78,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     groupId,
     prompt,
     agentArgs,
+    initialCwd,
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
@@ -204,6 +207,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       worktreeId,
       environmentId: runtimeEnvironmentId,
       groupId,
+      cwd: initialCwd,
       hasPrompt,
       startupPlan,
       // Why: send the client's resolved terminal choice explicitly, else a paired host applies its own default.
@@ -221,6 +225,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     ...initialViewModeProps
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
+  if (initialCwd?.trim()) {
+    // Why: continuations may originate below the workspace root; queue the
+    // recorded cwd before mount so local, WSL, and SSH panes all start there.
+    store.queueTabInitialCwd(tab.id, initialCwd)
+  }
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),

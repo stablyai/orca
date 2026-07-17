@@ -13555,6 +13555,31 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "새 세션에서 계속…",
+      "dialogTitle": "새 세션에서 계속",
+      "dialogDescription": "이 지점부터 새 에이전트 세션을 시작합니다. 원래 세션은 변경되지 않습니다.",
+      "untitledSession": "현재 세션",
+      "originalAgent": "원래 에이전트: {{agent}}",
+      "agent": "에이전트",
+      "selectAgent": "에이전트 선택",
+      "detectingAgents": "이 워크스페이스 호스트에서 에이전트를 찾는 중…",
+      "detectionFailed": "이 워크스페이스 호스트에서 에이전트를 찾을 수 없습니다.",
+      "noAgents": "이 워크스페이스 호스트에서 활성화된 에이전트를 찾지 못했습니다.",
+      "context": "컨텍스트",
+      "modeFocused": "핵심 컨텍스트 전달(권장)",
+      "modeFocusedDescription": "최신 상태와 현재 워크스페이스를 사용하고 필요한 경우에만 이전 세부 정보를 읽습니다.",
+      "modeFull": "전체 세션 기록",
+      "modeFullDescription": "계속하기 전에 새 에이전트가 저장된 전체 세션을 읽도록 합니다.",
+      "startsIn": "시작 위치:",
+      "startSession": "새 세션 시작",
+      "starting": "시작 중…",
+      "noContext": "새 세션에서 계속할 세션 컨텍스트가 없습니다.",
+      "agentDisabled": "에이전트 설정에서 {{agent}}이(가) 비활성화되어 있습니다.",
+      "agentUnavailable": "이 워크스페이스 호스트에서 {{agent}}을(를) 찾지 못했습니다.",
+      "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
+      "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다."
     }
   },
   "dashboardPopout": {
