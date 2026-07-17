@@ -24,6 +24,22 @@ function ids(
   }).map((section) => section.id)
 }
 
+function appearanceSearchTitles(
+  args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean; isDev?: boolean } = {}
+): string[] {
+  return (
+    buildSettingsNavigationMetadata({
+      isMac: args.isMac ?? false,
+      isWindows: args.isWindows ?? false,
+      isWebClient: args.isWebClient ?? false,
+      isDev: args.isDev ?? false,
+      repos: [repo]
+    })
+      .find((section) => section.id === 'appearance')
+      ?.searchEntries.map((entry) => entry.title) ?? []
+  )
+}
+
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
     expect(ids().slice(0, 10)).toEqual([
@@ -74,6 +90,13 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
     expect(webIds).toContain('repo-repo-1')
+  })
+
+  it('includes system tray search on Linux and Windows desktop only', () => {
+    expect(appearanceSearchTitles()).toContain('Minimize to Tray on Close')
+    expect(appearanceSearchTitles({ isWindows: true })).toContain('Minimize to Tray on Close')
+    expect(appearanceSearchTitles({ isMac: true })).not.toContain('Minimize to Tray on Close')
+    expect(appearanceSearchTitles({ isWebClient: true })).not.toContain('Minimize to Tray on Close')
   })
 
   it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {

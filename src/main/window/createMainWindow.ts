@@ -1024,15 +1024,14 @@ export function createMainWindow(
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
 
-  // Why: Windows minimize-to-tray. Hides the window instead of closing when the
-  // setting is on, this isn't a real quit (Ctrl+Q / tray "Quit" set
-  // getIsQuitting), and the renderer is alive. Returns true when it handled the
-  // close by hiding, so callers skip their normal close path. Shared by BOTH the
-  // renderer-drawn X (window:request-close) and the native close event (Alt+F4).
+  // Why: tray minimize hides the window instead of closing when the setting is
+  // on, this isn't a real quit (Ctrl+Q / tray "Quit" set getIsQuitting), and
+  // the renderer is alive. Shared by BOTH the renderer-drawn X
+  // (window:request-close) and the native close event (Alt+F4).
   const hideToTrayIfEnabled = (): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (
-      process.platform !== 'win32' ||
+      (process.platform !== 'win32' && process.platform !== 'linux') ||
       rendererProcessGone ||
       isRendererCrashed ||
       opts?.getIsQuitting?.() === true ||

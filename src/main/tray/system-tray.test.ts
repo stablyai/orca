@@ -224,16 +224,33 @@ describe('createSystemTray', () => {
     expect(warn).toHaveBeenCalledWith('[system-tray] macOS menu bar icon could not be loaded')
   })
 
-  it('is idempotent and remains disabled on Linux', async () => {
+  it('is idempotent on macOS', async () => {
     setPlatform('darwin')
     const { createSystemTray } = await loadModule()
     const options = createOptions()
     expect(createSystemTray(options)).toBe(createSystemTray(options))
     expect(trayInstances).toHaveLength(1)
+  })
 
+  it('keeps the Linux icon, Open/Quit menu, and best-effort click behavior', async () => {
     setPlatform('linux')
-    const linuxModule = await loadModule()
-    expect(linuxModule.createSystemTray(options)).toBeNull()
+    const { createSystemTray } = await loadModule()
+    const options = createOptions()
+
+    createSystemTray(options)
+
+    expect(trayInstances).toHaveLength(1)
+    expect(trayInstances[0].image).toBe(resizedImage)
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca')
+    expect(builtMenuItems().map((item) => item.label)).toEqual(['Open Orca', undefined, 'Quit'])
+    const clickHandler = trayInstances[0].on.mock.calls.find((call) => call[0] === 'click')?.[1]
+    expect(clickHandler).toBeTypeOf('function')
+
+    builtMenuItems()[0].click?.()
+    ;(clickHandler as () => void)()
+    builtMenuItems()[2].click?.()
+    expect(options.onOpen).toHaveBeenCalledTimes(2)
+    expect(options.onQuit).toHaveBeenCalledOnce()
   })
 })
 

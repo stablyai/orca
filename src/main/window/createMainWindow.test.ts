@@ -3077,8 +3077,9 @@ describe('createMainWindow', () => {
     })
   })
 
-  describe('minimize to tray on close (win32)', () => {
+  describe('minimize to tray on close (desktop tray platforms)', () => {
     const originalPlatform = process.platform
+    const trayPlatforms = ['win32', 'linux'] as const
 
     function setPlatform(platform: NodeJS.Platform): void {
       Object.defineProperty(process, 'platform', { value: platform, configurable: true })
@@ -3139,24 +3140,44 @@ describe('createMainWindow', () => {
       setPlatform(originalPlatform)
     })
 
-    it('hides to the tray instead of closing when the setting is on', () => {
-      setPlatform('win32')
-      const { windowHandlers, webContents, instance } = setupCloseWindow()
-      const store = makeStore(true, true)
+    it.each(trayPlatforms)(
+      'hides to the tray instead of closing when the setting is on for %s',
+      (platform) => {
+        setPlatform(platform)
+        const { windowHandlers, webContents, instance } = setupCloseWindow()
+        const store = makeStore(true, true)
 
-      createMainWindow(store as never, { getIsQuitting: () => false })
-      const preventDefault = vi.fn()
-      windowHandlers.close({ preventDefault } as never)
+        createMainWindow(store as never, { getIsQuitting: () => false })
+        const preventDefault = vi.fn()
+        windowHandlers.close({ preventDefault } as never)
 
-      expect(preventDefault).toHaveBeenCalled()
-      expect(instance.hide).toHaveBeenCalledTimes(1)
-      expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
-      // Notice already shown, so it must not fire again.
-      expect(notificationMock).not.toHaveBeenCalled()
-    })
+        expect(preventDefault).toHaveBeenCalled()
+        expect(instance.hide).toHaveBeenCalledTimes(1)
+        expect(webContents.send).not.toHaveBeenCalledWith(
+          'window:close-requested',
+          expect.anything()
+        )
+        // Notice already shown, so it must not fire again.
+        expect(notificationMock).not.toHaveBeenCalled()
+      }
+    )
 
     it('keeps the normal close flow when the setting is off', () => {
       setPlatform('win32')
+      const { windowHandlers, webContents, instance } = setupCloseWindow()
+      const store = makeStore(false, true)
+
+      createMainWindow(store as never, { getIsQuitting: () => false })
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+
+      expect(instance.hide).not.toHaveBeenCalled()
+      expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
+        isQuitting: false
+      })
+    })
+
+    it('keeps the normal close flow when the setting is off on Linux', () => {
+      setPlatform('linux')
       const { windowHandlers, webContents, instance } = setupCloseWindow()
       const store = makeStore(false, true)
 
@@ -3215,7 +3236,7 @@ describe('createMainWindow', () => {
       expect(store.updateUI).toHaveBeenCalledWith({ trayMinimizeNoticeShown: true })
     })
 
-    it('leaves the close handler unchanged off win32', () => {
+    it('leaves the close handler unchanged on macOS', () => {
       setPlatform('darwin')
       const { windowHandlers, webContents, instance } = setupCloseWindow()
       const store = makeStore(true, true)
@@ -3229,7 +3250,7 @@ describe('createMainWindow', () => {
       })
     })
 
-    // Why: on Windows the renderer-drawn X routes through window:request-close,
+    // Why: the renderer-drawn X routes through window:request-close,
     // not the native close event — regression guard for the bug where the app
     // quit instead of hiding because the guard only covered the native event.
     function captureIpcHandlers(): Record<string, (...args: any[]) => void> {
@@ -3241,18 +3262,24 @@ describe('createMainWindow', () => {
       return ipcHandlers
     }
 
-    it('hides to the tray when the renderer-drawn X requests close', () => {
-      setPlatform('win32')
-      const ipcHandlers = captureIpcHandlers()
-      const { webContents, instance } = setupCloseWindow()
-      const store = makeStore(true, true)
+    it.each(trayPlatforms)(
+      'hides to the tray when the renderer-drawn X requests close on %s',
+      (platform) => {
+        setPlatform(platform)
+        const ipcHandlers = captureIpcHandlers()
+        const { webContents, instance } = setupCloseWindow()
+        const store = makeStore(true, true)
 
-      createMainWindow(store as never, { getIsQuitting: () => false })
-      ipcHandlers['window:request-close']?.()
+        createMainWindow(store as never, { getIsQuitting: () => false })
+        ipcHandlers['window:request-close']?.()
 
-      expect(instance.hide).toHaveBeenCalledTimes(1)
-      expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', expect.anything())
-    })
+        expect(instance.hide).toHaveBeenCalledTimes(1)
+        expect(webContents.send).not.toHaveBeenCalledWith(
+          'window:close-requested',
+          expect.anything()
+        )
+      }
+    )
 
     it('forwards window:request-close to the renderer when the setting is off', () => {
       setPlatform('win32')
