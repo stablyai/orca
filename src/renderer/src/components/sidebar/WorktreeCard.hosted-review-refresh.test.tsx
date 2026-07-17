@@ -88,6 +88,28 @@ function makeRepo(): Repo {
   }
 }
 
+function makeGitHubRepo(): Repo {
+  return {
+    ...makeRepo(),
+    gitRemoteIdentity: {
+      canonicalKey: 'github.com/stablyai/orca',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/stablyai/orca.git'
+    }
+  }
+}
+
+function makeGitLabRepo(): Repo {
+  return {
+    ...makeRepo(),
+    gitRemoteIdentity: {
+      canonicalKey: 'gitlab.com/stablyai/orca',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:stablyai/orca.git'
+    }
+  }
+}
+
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
     id: 'repo-1::/repo/worktrees/branch',
@@ -131,11 +153,13 @@ describe('WorktreeCard hosted review refresh', () => {
     vi.useRealTimers()
   })
 
-  it('polls visible hosted review cards after a cached branch miss', async () => {
+  it('keeps polling visible GitLab review cards after a cached branch miss', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     act(() => {
-      root?.render(<WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />)
+      root?.render(
+        <WorktreeCard worktree={makeWorktree()} repo={makeGitLabRepo()} isActive={false} />
+      )
     })
 
     expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
@@ -163,6 +187,22 @@ describe('WorktreeCard hosted review refresh', () => {
 
     act(() => {
       root?.render(<WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />)
+    })
+
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+  })
+
+  it('leaves GitHub-backed card refreshes to the batched PR coordinator', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    act(() => {
+      root?.render(
+        <WorktreeCard worktree={makeWorktree()} repo={makeGitHubRepo()} isActive={false} />
+      )
     })
 
     act(() => {

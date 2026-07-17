@@ -83,6 +83,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { isGitHubBackedRepo } from '../../../../shared/project-host-setup-projection'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -597,6 +598,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
+  // Why: GitHub card refreshes are already batched by WorktreeList's coordinator;
+  // per-card hosted-review polling bypasses that budget and creates a startup stampede.
+  const usesCoordinatedGitHubRefresh = repo ? isGitHubBackedRepo(repo) : false
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
@@ -612,6 +616,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       worktree.isBare ||
       !hostedReviewCacheKey ||
       !shouldRefreshHostedReview ||
+      usesCoordinatedGitHubRefresh ||
       isMacAppDataPath(repo.path)
     ) {
       return
@@ -651,7 +656,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     fetchHostedReviewForBranch,
     branch,
     hostedReviewCacheKey,
-    shouldRefreshHostedReview
+    shouldRefreshHostedReview,
+    usesCoordinatedGitHubRefresh
   ])
 
   useEffect(() => {
@@ -664,6 +670,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       isFolder ||
       worktree.isBare ||
       !hostedReviewCacheKey ||
+      usesCoordinatedGitHubRefresh ||
       isMacAppDataPath(repo.path)
     ) {
       return
@@ -698,7 +705,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linkedGiteaPR,
     fetchHostedReviewForBranch,
     branch,
-    hostedReviewCacheKey
+    hostedReviewCacheKey,
+    usesCoordinatedGitHubRefresh
   ])
 
   // Why: same as above for issues — hidden-surface polling only burns GitHub calls for invisible data.
