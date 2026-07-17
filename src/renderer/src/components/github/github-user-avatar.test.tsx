@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import { GitHubUserAvatar } from './github-user-avatar'
+import { GitHubUserAvatar, resolveGitHubUserAvatarSrc } from './github-user-avatar'
 
 function render(node: React.JSX.Element): { root: Root; container: HTMLDivElement } {
   const container = document.createElement('div')
@@ -85,5 +85,23 @@ describe('GitHubUserAvatar', () => {
       root?.render(<GitHubUserAvatar login="enterprise-user" avatarUrl={url} />)
     })
     expect(container.querySelector('img')?.getAttribute('src')).toBe(url)
+  })
+
+  it('shows initials immediately when login and avatarUrl are both empty', () => {
+    ;({ root, container } = render(<GitHubUserAvatar login="" name="Ada" />))
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.textContent).toBe('AD')
+  })
+})
+
+describe('resolveGitHubUserAvatarSrc', () => {
+  it('prefers trimmed API avatar over login.png', () => {
+    expect(resolveGitHubUserAvatarSrc('u', '  https://avatars.example.com/u/1?v=4  ')).toBe(
+      'https://avatars.example.com/u/1?v=4'
+    )
+  })
+
+  it('skips empty login so no github.com/.png request is built', () => {
+    expect(resolveGitHubUserAvatarSrc('', null)).toBeNull()
   })
 })

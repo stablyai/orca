@@ -29,6 +29,25 @@ function initialsFor(login: string, name?: string | null): string {
 }
 
 /**
+ * Prefer the API `avatar_url`, then the public login.png URL. Empty/whitespace
+ * API values and empty logins never produce a bogus request. See #8784.
+ */
+export function resolveGitHubUserAvatarSrc(
+  login: string,
+  avatarUrl?: string | null
+): string | null {
+  const fromApi = avatarUrl?.trim()
+  if (fromApi) {
+    return fromApi
+  }
+  const trimmedLogin = login.trim()
+  if (!trimmedLogin) {
+    return null
+  }
+  return githubAvatarUrl(trimmedLogin)
+}
+
+/**
  * Avatar for a GitHub user that renders correctly on github.com and GitHub
  * Enterprise. GHE logins don't exist on github.com, so the login-based
  * `github.com/{login}.png` URL 404s. We prefer the API-provided `avatarUrl`
@@ -53,7 +72,7 @@ export function GitHubUserAvatar({
   // the early login-based URL must retry once the real avatar_url lands — a
   // latched boolean would keep showing the placeholder forever. See #8784.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  const src = avatarUrl || githubAvatarUrl(login)
+  const src = resolveGitHubUserAvatarSrc(login, avatarUrl)
   if (src && failedSrc !== src) {
     return (
       <img
