@@ -472,10 +472,7 @@ jobs:
           # message and tag name explicitly (avoids npm's `v1.2.3` prefix
           # assumptions and any lifecycle scripts that would run on bump).
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          # Why: package version is embedded in generated skill provenance; full tag
-          # history preserves released snapshots while the current version is updated.
-          node config/scripts/generate-skill-bundle-manifest.mjs --write
-          git add package.json resources/skills
+          git add package.json
           commit_message="release: v$VERSION"
           if [[ "$EVENT_NAME" == "schedule" ]]; then
             commit_message="$commit_message [rc-slot:$SLOT]"

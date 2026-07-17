@@ -41,14 +41,12 @@ const snapshotShape = {
 const knownSnapshotSchema = z.object(snapshotShape).strict()
 const manifestSchema = z
   .object({
-    schemaVersion: z.literal(1),
-    appVersion: z.string().min(1),
+    schemaVersion: z.literal(2),
     skills: z.array(
       z
         .object({
           name: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/),
           sourcePath: z.string().min(1),
-          appVersion: z.string().min(1),
           ...snapshotShape
         })
         .strict()
@@ -126,7 +124,6 @@ async function readSkillBundleArtifacts(resourceRoot: string): Promise<SkillBund
   )
   for (const current of manifest.skills) {
     if (
-      current.appVersion !== manifest.appVersion ||
       !registry.skills[current.name]?.some(
         (snapshot) =>
           snapshot.releaseRevision === current.releaseRevision &&
@@ -137,6 +134,8 @@ async function readSkillBundleArtifacts(resourceRoot: string): Promise<SkillBund
     }
   }
 
+  // Why: historical provenance only — the current revision's label is the
+  // running build's version, supplied at the inventory boundary, not stored here.
   const releasedAppVersions: Record<string, Record<number, string>> = {}
   for (const release of releaseMapping.releases) {
     for (const [name, revision] of Object.entries(release.skills)) {
@@ -146,10 +145,6 @@ async function readSkillBundleArtifacts(resourceRoot: string): Promise<SkillBund
       releasedAppVersions[name] ??= {}
       releasedAppVersions[name][revision] ??= release.appVersion
     }
-  }
-  for (const current of manifest.skills) {
-    releasedAppVersions[current.name] ??= {}
-    releasedAppVersions[current.name][current.releaseRevision] = current.appVersion
   }
 
   return {

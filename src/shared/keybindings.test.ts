@@ -78,6 +78,22 @@ describe('keybindings', () => {
     })
   })
 
+  it('allows Shift-only chords only for native input-source switching', () => {
+    const shiftSpace = {
+      key: ' ',
+      code: 'Space',
+      control: false,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    expect(keybindingFromInput(shiftSpace, 'darwin')).toMatchObject({ ok: false })
+    expect(
+      keybindingFromInputForAction('terminal.switchInputSource', shiftSpace, 'darwin')
+    ).toEqual({ ok: true, value: 'Shift+Space' })
+  })
+
   it('captures key events into canonical editable shortcuts', () => {
     expect(
       keybindingFromInput(
@@ -195,6 +211,16 @@ describe('keybindings', () => {
   it('defines a default shortcut for opening markdown notes', () => {
     expect(getEffectiveKeybindingsForAction('tab.openMarkdown', 'darwin')).toEqual(['Mod+Shift+O'])
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
+  })
+
+  it('defines a default shortcut for adding an editor review note', () => {
+    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'darwin')).toEqual([
+      'Mod+Alt+N'
+    ])
+    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'linux')).toEqual(['Mod+Alt+N'])
+    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'win32')).toEqual(['Mod+Alt+N'])
+    expect(formatKeybindingList(['Mod+Alt+N'], 'darwin')).toBe('⌘⌥N')
+    expect(formatKeybindingList(['Mod+Alt+N'], 'linux')).toBe('Ctrl+Alt+N')
   })
 
   it('defines platform-native replace-in-editor shortcuts', () => {

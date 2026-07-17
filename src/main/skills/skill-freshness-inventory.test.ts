@@ -55,13 +55,12 @@ async function fixture() {
   const current: SkillCurrentBundleEntry = {
     name: 'orca-cli',
     sourcePath: 'skills/orca-cli',
-    appVersion: '2.0.0',
     ...snapshots[1]
   }
   await Promise.all([
     writeFile(
       join(skillResourceRoot, 'current-manifest.json'),
-      `${JSON.stringify({ schemaVersion: 1, appVersion: '2.0.0', skills: [current] }, null, 2)}\n`
+      `${JSON.stringify({ schemaVersion: 2, skills: [current] }, null, 2)}\n`
     ),
     writeFile(
       join(skillResourceRoot, 'snapshot-registry.json'),
@@ -111,6 +110,7 @@ describe('read-only skill freshness inventory', () => {
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
 
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
       homeDir: test.homeDir,
       repos: [],
       resourceRoot: test.resourceRoot
@@ -130,6 +130,7 @@ describe('read-only skill freshness inventory', () => {
     )
 
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
       homeDir: test.homeDir,
       repos: [],
       resourceRoot: test.resourceRoot
@@ -151,6 +152,7 @@ describe('read-only skill freshness inventory', () => {
     )
 
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
       homeDir: test.homeDir,
       repos: [],
       resourceRoot: test.resourceRoot
@@ -176,6 +178,7 @@ describe('read-only skill freshness inventory', () => {
       await symlink(canonical, join(claudeRoot, 'orca-cli'))
 
       const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
         homeDir: test.homeDir,
         repos: [],
         resourceRoot: test.resourceRoot
@@ -205,6 +208,7 @@ describe('read-only skill freshness inventory', () => {
       )
 
       const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
         homeDir: test.homeDir,
         repos,
         resourceRoot: test.resourceRoot
@@ -223,6 +227,7 @@ describe('read-only skill freshness inventory', () => {
     const inaccessiblePath = join(test.homeDir, '.codex', 'skills', 'orca-cli')
 
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
       homeDir: test.homeDir,
       repos: [],
       resourceRoot: test.resourceRoot,
@@ -248,6 +253,7 @@ describe('read-only skill freshness inventory', () => {
     const inaccessiblePath = join(repoPath, '.agents', 'skills', 'orca-cli')
 
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
       homeDir: test.homeDir,
       repos: [{ id: 'repo', path: repoPath }] as unknown as Repo[],
       resourceRoot: test.resourceRoot,
@@ -292,6 +298,7 @@ describe('read-only skill freshness inventory', () => {
       }
 
       const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
         homeDir: test.homeDir,
         repos,
         resourceRoot: test.resourceRoot
@@ -310,6 +317,7 @@ describe('read-only skill freshness inventory', () => {
     )
 
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
       homeDir: test.homeDir,
       repos: [],
       resourceRoot: test.resourceRoot
@@ -326,7 +334,10 @@ describe('read-only skill freshness inventory', () => {
     await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`)
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
 
+    // Why: the injected version deliberately differs from every mapping entry
+    // to prove current placements are labeled by the running build, not history.
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.1.0-unreleased',
       homeDir: test.homeDir,
       repos: [],
       resourceRoot: test.resourceRoot
@@ -335,7 +346,8 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations[0]).toMatchObject({
       status: 'current',
       installedReleaseRevision: 2,
-      installedAppVersion: '2.0.0'
+      installedAppVersion: '2.1.0-unreleased',
+      currentAppVersion: '2.1.0-unreleased'
     })
   })
 
@@ -348,6 +360,7 @@ describe('read-only skill freshness inventory', () => {
     )
 
     const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
       homeDir: test.homeDir,
       repos,
       resourceRoot: test.resourceRoot

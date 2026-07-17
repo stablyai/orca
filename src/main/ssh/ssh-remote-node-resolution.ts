@@ -122,6 +122,7 @@ true
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Fall through to login shell.
   }
   return null
@@ -167,6 +168,7 @@ async function tryResolveViaLoginShell(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Fall through.
   }
   return null
@@ -191,6 +193,7 @@ async function nodeMeetsVersionRequirement(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Binary missing or fails to run — not usable.
     return false
   }
@@ -240,6 +243,7 @@ async function resolveRemoteWindowsNodePath(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Fall through to the shared error below.
   }
 
@@ -262,6 +266,7 @@ async function windowsNodeMeetsVersionRequirement(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     return false
   }
 }

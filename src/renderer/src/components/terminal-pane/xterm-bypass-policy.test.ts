@@ -148,6 +148,12 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
       shouldBypassXtermKeyboardEvent(event({ key: 'A', code: 'KeyA', shiftKey: true }), opts)
     ).toBe(false)
   })
+
+  it('leaves ordinary Shift+Space available to the terminal', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: ' ', code: 'Space', shiftKey: true }), opts)
+    ).toBe(false)
+  })
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {

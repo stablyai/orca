@@ -30,15 +30,16 @@ export function boundRepositorySkillRoots(roots: readonly SkillScanRoot[]): {
   }
 }
 
-export async function inventorySkillFreshness(
-  args: {
-    homeDir?: string
-    cwd?: string
-    repos?: Repo[]
-    resourceRoot?: string
-    candidateLstat?: CandidateLstat
-  } = {}
-): Promise<SkillFreshnessInventory> {
+export async function inventorySkillFreshness(args: {
+  // Why: the bundled artifacts are content-only; the running build supplies
+  // its own version here so current placements can be labeled honestly.
+  currentAppVersion: string
+  homeDir?: string
+  cwd?: string
+  repos?: Repo[]
+  resourceRoot?: string
+  candidateLstat?: CandidateLstat
+}): Promise<SkillFreshnessInventory> {
   const artifacts = await loadSkillBundleArtifacts(args.resourceRoot)
   const currentByName = new Map(artifacts.manifest.skills.map((skill) => [skill.name, skill]))
   const discoveryArgs = {
@@ -65,6 +66,7 @@ export async function inventorySkillFreshness(
         classifyHomeSkillCandidate({
           root,
           current,
+          currentAppVersion: args.currentAppVersion,
           artifacts,
           canonicalRootPath,
           candidateLstat: args.candidateLstat ?? ((path) => lstat(path))
@@ -84,6 +86,7 @@ export async function inventorySkillFreshness(
         classifyUnsupportedSkillCandidate({
           root,
           current,
+          currentAppVersion: args.currentAppVersion,
           artifacts,
           unresolvedPath: join(root.path, current.name),
           candidateLstat
@@ -99,6 +102,7 @@ export async function inventorySkillFreshness(
           (current) => () =>
             observeSkillFreshnessInstallation({
               current,
+              currentAppVersion: args.currentAppVersion,
               artifacts,
               rootId: 'repo-scan-limit',
               providers: [...new Set(omittedRepoRoots.flatMap((root) => root.providers))],
@@ -128,6 +132,7 @@ export async function inventorySkillFreshness(
               classifyUnsupportedSkillCandidate({
                 root,
                 current,
+                currentAppVersion: args.currentAppVersion,
                 artifacts,
                 unresolvedPath: candidate.path,
                 candidateLstat
@@ -142,6 +147,7 @@ export async function inventorySkillFreshness(
         (current) => () =>
           observeSkillFreshnessInstallation({
             current,
+            currentAppVersion: args.currentAppVersion,
             artifacts,
             rootId: root.id,
             providers: root.providers,

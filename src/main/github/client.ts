@@ -485,13 +485,29 @@ function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
-    author:
-      typeof item.user === 'object' && item.user !== null && 'login' in item.user
-        ? String((item.user as { login?: unknown }).login ?? '')
-        : typeof item.author === 'object' && item.author !== null && 'login' in item.author
-          ? String((item.author as { login?: unknown }).login ?? '')
-          : null,
+    ...authorFieldsFromUnknown(item),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
+  }
+}
+
+/**
+ * Derive both the author login and its API avatar_url in one place so GHE
+ * avatars render (the login-only `github.com/{login}.png` URL 404s on GHE).
+ *
+ * REST exposes `user.avatar_url`; gh/GraphQL expose `author.avatarUrl`. `gh pr
+ * view` omits the avatar entirely, so authorAvatarUrl is left undefined and the
+ * UI falls back to the login URL then a placeholder. See #8784.
+ */
+function authorFieldsFromUnknown(
+  item: Record<string, unknown>
+): Pick<MainWorkItem, 'author' | 'authorAvatarUrl'> {
+  const user = userFromUnknown(item.user ?? item.author)
+  if (!user) {
+    return { author: null }
+  }
+  return {
+    author: user.login,
+    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {})
   }
 }
 
@@ -746,12 +762,7 @@ function mapPullRequestWorkItem(
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
-    author:
-      typeof item.user === 'object' && item.user !== null && 'login' in item.user
-        ? String((item.user as { login?: unknown }).login ?? '')
-        : typeof item.author === 'object' && item.author !== null && 'login' in item.author
-          ? String((item.author as { login?: unknown }).login ?? '')
-          : null,
+    ...authorFieldsFromUnknown(item),
     branchName:
       typeof item.head === 'object' && item.head !== null && 'ref' in item.head
         ? String((item.head as { ref?: unknown }).ref ?? '')

@@ -57,6 +57,7 @@ function knownSnapshots(
 
 export async function observeSkillFreshnessInstallation(args: {
   current: SkillCurrentBundleEntry
+  currentAppVersion: string
   artifacts: SkillBundleArtifacts
   rootId: string
   providers: SkillFreshnessInstallation['providers']
@@ -78,7 +79,7 @@ export async function observeSkillFreshnessInstallation(args: {
     topology: args.topology.topology,
     currentReleaseRevision: args.current.releaseRevision,
     currentPackageDigest: args.current.packageDigest,
-    currentAppVersion: args.current.appVersion,
+    currentAppVersion: args.currentAppVersion,
     errorCategory: args.topology.errorCategory
   }
   if (!args.topology.resolvedPath || !args.topology.identity) {
@@ -105,9 +106,14 @@ export async function observeSkillFreshnessInstallation(args: {
       ...base,
       status: freshnessStatus(snapshot, args.current),
       installedReleaseRevision: snapshot?.releaseRevision ?? null,
+      // Why: the current revision may be unreleased (or trail the newest tag),
+      // so its label is the running build's version; only historical revisions
+      // resolve through the release mapping.
       installedAppVersion: snapshot
-        ? (args.artifacts.releasedAppVersions[args.current.name]?.[snapshot.releaseRevision] ??
-          null)
+        ? snapshot.releaseRevision === args.current.releaseRevision
+          ? args.currentAppVersion
+          : (args.artifacts.releasedAppVersions[args.current.name]?.[snapshot.releaseRevision] ??
+            null)
         : null,
       observedPackageDigest: observed.observedDigest
     }
@@ -126,6 +132,7 @@ export async function observeSkillFreshnessInstallation(args: {
 export async function classifyHomeSkillCandidate(args: {
   root: SkillScanRoot
   current: SkillCurrentBundleEntry
+  currentAppVersion: string
   artifacts: SkillBundleArtifacts
   canonicalRootPath: string
   candidateLstat: CandidateLstat
@@ -139,6 +146,7 @@ export async function classifyHomeSkillCandidate(args: {
     }
     return observeSkillFreshnessInstallation({
       current: args.current,
+      currentAppVersion: args.currentAppVersion,
       artifacts: args.artifacts,
       rootId: args.root.id,
       providers: args.root.providers,
@@ -167,6 +175,7 @@ export async function classifyHomeSkillCandidate(args: {
   }
   return observeSkillFreshnessInstallation({
     current: args.current,
+    currentAppVersion: args.currentAppVersion,
     artifacts: args.artifacts,
     rootId: args.root.id,
     providers: args.root.providers,
@@ -180,6 +189,7 @@ export async function classifyHomeSkillCandidate(args: {
 export async function classifyUnsupportedSkillCandidate(args: {
   root: SkillScanRoot
   current: SkillCurrentBundleEntry
+  currentAppVersion: string
   artifacts: SkillBundleArtifacts
   unresolvedPath: string
   candidateLstat: CandidateLstat
@@ -192,6 +202,7 @@ export async function classifyUnsupportedSkillCandidate(args: {
     }
     return observeSkillFreshnessInstallation({
       current: args.current,
+      currentAppVersion: args.currentAppVersion,
       artifacts: args.artifacts,
       rootId: args.root.id,
       providers: args.root.providers,
@@ -208,6 +219,7 @@ export async function classifyUnsupportedSkillCandidate(args: {
   }
   return observeSkillFreshnessInstallation({
     current: args.current,
+    currentAppVersion: args.currentAppVersion,
     artifacts: args.artifacts,
     rootId: args.root.id,
     providers: args.root.providers,

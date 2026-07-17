@@ -9,6 +9,7 @@ import {
   collectPackageFiles,
   describeFile,
   gitTreeSha,
+  isToleratedReleaseMappingPrefix,
   normalizeText,
   packageDigest,
   sortManifestFiles
@@ -134,6 +135,56 @@ describe('skill bundle manifest generator', () => {
       )
     ).toThrow('Released snapshot history is incomplete for orca-cli')
     expect(() => assertReleasedHistoryPreserved(null, artifacts)).not.toThrow()
+  })
+
+  it('tolerates only redundant trailing release-mapping rows', () => {
+    const serialized = (value) => `${JSON.stringify(value, null, 2)}\n`
+    const rows = [
+      { appVersion: '1.0.0', skills: { 'orca-cli': 1 } },
+      { appVersion: '1.1.0', skills: { 'orca-cli': 2 } }
+    ]
+    const artifacts = {
+      currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 2 }] },
+      releaseMapping: { schemaVersion: 1, releases: rows }
+    }
+    const committedPrefix = serialized({ schemaVersion: 1, releases: [rows[0]] })
+
+    // A just-cut tag whose bytes equal the working tree may lag in the mapping.
+    expect(isToleratedReleaseMappingPrefix(committedPrefix, artifacts)).toBe(true)
+    // The committed file matching the derived mapping is byte-equality's job, not tolerance.
+    expect(isToleratedReleaseMappingPrefix(serialized(artifacts.releaseMapping), artifacts)).toBe(
+      false
+    )
+    // A trailing row for bytes the committed artifacts do not describe is a real gap.
+    expect(
+      isToleratedReleaseMappingPrefix(committedPrefix, {
+        ...artifacts,
+        currentManifest: { skills: [{ name: 'orca-cli', releaseRevision: 3 }] }
+      })
+    ).toBe(false)
+    expect(
+      isToleratedReleaseMappingPrefix(committedPrefix, {
+        ...artifacts,
+        currentManifest: {
+          skills: [
+            { name: 'orca-cli', releaseRevision: 2 },
+            { name: 'orca-linear', releaseRevision: 1 }
+          ]
+        }
+      })
+    ).toBe(false)
+    // Rewritten earlier rows never pass, with or without trailing rows.
+    expect(
+      isToleratedReleaseMappingPrefix(
+        serialized({
+          schemaVersion: 1,
+          releases: [{ appVersion: '0.9.0', skills: { 'orca-cli': 1 } }]
+        }),
+        artifacts
+      )
+    ).toBe(false)
+    expect(isToleratedReleaseMappingPrefix('not json', artifacts)).toBe(false)
+    expect(isToleratedReleaseMappingPrefix(serialized({ schemaVersion: 1 }), artifacts)).toBe(false)
   })
 
   it.runIf(process.platform !== 'win32')(

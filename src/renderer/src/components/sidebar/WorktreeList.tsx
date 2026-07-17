@@ -5711,9 +5711,10 @@ const WorktreeList = React.memo(function WorktreeList({
       groupBy,
       repos: visibleReposForRows,
       worktreesByRepo,
+      visibleWorktrees,
       filterRepoIds
     })
-  }, [filterRepoIds, groupBy, visibleReposForRows, worktreesByRepo])
+  }, [filterRepoIds, groupBy, visibleReposForRows, visibleWorktrees, worktreesByRepo])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
 
   // Why: buildRows only needs which creates exist and their repo. Subscribe on a

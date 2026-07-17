@@ -6,7 +6,11 @@ import path from 'node:path'
 import process from 'node:process'
 import { isDeepStrictEqual } from 'node:util'
 
-const SCHEMA_VERSION = 1
+// Why: the three artifacts version independently — bumping one shape must not
+// rewrite the others or bypass the registry's schema-gated append-only guard.
+const CURRENT_MANIFEST_SCHEMA_VERSION = 2
+const SNAPSHOT_REGISTRY_SCHEMA_VERSION = 1
+const RELEASE_MAPPING_SCHEMA_VERSION = 1
 const SCRIPT_DIR = import.meta.dirname
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
 const SKILLS_ROOT = path.join(REPO_ROOT, 'skills')
@@ -313,8 +317,8 @@ function skillsTreeShasAtRefs(refs) {
 }
 
 function buildReleasedHistory() {
-  const registry = { schemaVersion: SCHEMA_VERSION, skills: {} }
-  const mapping = { schemaVersion: SCHEMA_VERSION, releases: [] }
+  const registry = { schemaVersion: SNAPSHOT_REGISTRY_SCHEMA_VERSION, skills: {} }
+  const mapping = { schemaVersion: RELEASE_MAPPING_SCHEMA_VERSION, releases: [] }
   const tags = releaseTags()
   const treeShas = skillsTreeShasAtRefs(tags)
   const distinctTreeShas = [...new Set(treeShas.filter(Boolean))]
@@ -366,7 +370,10 @@ function buildReleasedHistory() {
   return { registry, mapping }
 }
 
-async function buildArtifacts(appVersion) {
+// Why: the artifacts must be pure functions of skills/ bytes and release-tag
+// history. Stamping the app version made every release cut invalidate the
+// committed output on all open branches and drag skill CI onto unrelated PRs.
+async function buildArtifacts() {
   const { registry, mapping } = buildReleasedHistory()
   const releasedSnapshotCounts = Object.fromEntries(
     Object.entries(registry.skills).map(([name, snapshots]) => [name, snapshots.length])
@@ -399,14 +406,12 @@ async function buildArtifacts(appVersion) {
     currentSkills.push({
       name,
       sourcePath: `skills/${name}`,
-      appVersion,
       ...snapshot
     })
   }
   return {
     currentManifest: {
-      schemaVersion: SCHEMA_VERSION,
-      appVersion,
+      schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
       skills: currentSkills
     },
     snapshotRegistry: registry,
@@ -419,7 +424,7 @@ async function buildArtifacts(appVersion) {
 // so a generation-logic change must not rewrite them silently. Only the one
 // unreleased working-tree append per skill may change between runs.
 function assertReleasedHistoryPreserved(committedRegistry, artifacts) {
-  if (!committedRegistry || committedRegistry.schemaVersion !== SCHEMA_VERSION) {
+  if (!committedRegistry || committedRegistry.schemaVersion !== SNAPSHOT_REGISTRY_SCHEMA_VERSION) {
     return
   }
   for (const [name, committedSnapshots] of Object.entries(committedRegistry.skills ?? {})) {
@@ -466,17 +471,50 @@ async function writeArtifacts(artifacts) {
   ])
 }
 
+// Why: cutting a release tag adds a trailing mapping row on every checkout at
+// once, before any branch can regenerate. A trailing row whose revisions all
+// equal the current manifest is provably redundant until the next real
+// regeneration (installs of those bytes classify as current and are labeled by
+// the running build), so verify must not fail branches over it.
+function isToleratedReleaseMappingPrefix(committedText, artifacts) {
+  let committed
+  try {
+    committed = JSON.parse(committedText)
+  } catch {
+    return false
+  }
+  const derived = artifacts.releaseMapping
+  const committedCount = Array.isArray(committed?.releases) ? committed.releases.length : -1
+  if (committedCount < 0 || committedCount >= derived.releases.length) {
+    return false
+  }
+  const prefix = {
+    schemaVersion: derived.schemaVersion,
+    releases: derived.releases.slice(0, committedCount)
+  }
+  if (committedText !== serialized(prefix)) {
+    return false
+  }
+  const currentRevisions = Object.fromEntries(
+    artifacts.currentManifest.skills.map((skill) => [skill.name, skill.releaseRevision])
+  )
+  return derived.releases
+    .slice(committedCount)
+    .every((release) => isDeepStrictEqual(release.skills, currentRevisions))
+}
+
 async function verifyArtifacts(artifacts) {
   const expected = [
-    [CURRENT_MANIFEST_PATH, artifacts.currentManifest],
-    [SNAPSHOT_REGISTRY_PATH, artifacts.snapshotRegistry],
-    [RELEASE_MAPPING_PATH, artifacts.releaseMapping]
+    [CURRENT_MANIFEST_PATH, artifacts.currentManifest, null],
+    [SNAPSHOT_REGISTRY_PATH, artifacts.snapshotRegistry, null],
+    [RELEASE_MAPPING_PATH, artifacts.releaseMapping, isToleratedReleaseMappingPrefix]
   ]
   const stale = []
-  for (const [filePath, value] of expected) {
+  for (const [filePath, value, tolerated] of expected) {
     try {
       await access(filePath, constants.R_OK)
-      if ((await readFile(filePath, 'utf8')) !== serialized(value)) {
+      const committedText = await readFile(filePath, 'utf8')
+      if (committedText !== serialized(value) && !tolerated?.(committedText, artifacts)) {
         stale.push(filePath)
       }
     } catch {
@@ -493,8 +531,7 @@ async function verifyArtifacts(artifacts) {
 }
 
 async function main() {
-  const packageJson = JSON.parse(await readFile(path.join(REPO_ROOT, 'package.json'), 'utf8'))
-  const artifacts = await buildArtifacts(packageJson.version)
+  const artifacts = await buildArtifacts()
   assertReleasedHistoryPreserved(await readCommittedRegistry(), artifacts)
   await (process.argv.includes('--write') ? writeArtifacts : verifyArtifacts)(artifacts)
 }
@@ -514,6 +551,7 @@ export {
   collectPackageFiles,
   describeFile,
   gitTreeSha,
+  isToleratedReleaseMappingPrefix,
   normalizeText,
   packageDigest,
   sortManifestFiles,

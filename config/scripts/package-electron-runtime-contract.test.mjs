@@ -374,7 +374,7 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
-  it('keeps release-cut version commits self-healing and taggable on retries', () => {
+  it('keeps release-cut version commits skill-independent and taggable on retries', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
@@ -388,14 +388,13 @@ describe('Electron runtime package contract', () => {
     const bumpIndex = bumpStep.run.indexOf(
       'npm version "$VERSION" --no-git-tag-version --allow-same-version'
     )
-    const generateIndex = bumpStep.run.indexOf(
-      'node config/scripts/generate-skill-bundle-manifest.mjs --write'
-    )
-    const stageIndex = bumpStep.run.indexOf('git add package.json resources/skills')
+    const stageIndex = bumpStep.run.indexOf('git add package.json')
     expect(checkoutStep.with['fetch-depth']).toBe(0)
     expect(bumpIndex).toBeGreaterThanOrEqual(0)
-    expect(generateIndex).toBeGreaterThan(bumpIndex)
-    expect(stageIndex).toBeGreaterThan(generateIndex)
+    expect(stageIndex).toBeGreaterThan(bumpIndex)
+    // Why: version-only cuts must not mutate content-addressed skill artifacts.
+    expect(bumpStep.run).not.toContain('generate-skill-bundle-manifest')
+    expect(bumpStep.run).not.toContain('resources/skills')
     expect(bumpStep.run).toContain('git diff --cached --quiet')
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })

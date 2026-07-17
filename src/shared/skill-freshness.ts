@@ -20,12 +20,12 @@ export type SkillKnownSnapshot = {
 export type SkillCurrentBundleEntry = SkillKnownSnapshot & {
   name: string
   sourcePath: string
-  appVersion: string
 }
 
+// Why: schema 2 removed the stamped app version so the committed artifact is a
+// pure function of skills/ content; the running build supplies its own version.
 export type SkillBundleManifest = {
-  schemaVersion: 1
-  appVersion: string
+  schemaVersion: 2
   skills: SkillCurrentBundleEntry[]
 }
 

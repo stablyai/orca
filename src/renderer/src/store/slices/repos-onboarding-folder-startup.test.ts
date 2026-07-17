@@ -58,8 +58,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
       {
         sidebarRevealBehavior: 'auto',
         startup: {
-          command:
-            "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium' '--dangerously-bypass-approvals-and-sandbox'",
+          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
           env: {},
           launchAgent: 'codex',
           launchConfig: {
@@ -67,7 +66,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
             agentArgs: '--dangerously-bypass-approvals-and-sandbox',
             agentEnv: {}
           },
-          sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
+          sessionOptions: undefined,
           telemetry: {
             agent_kind: 'codex',
             launch_source: 'onboarding',

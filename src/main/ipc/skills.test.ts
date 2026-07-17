@@ -15,6 +15,9 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  app: {
+    getVersion: () => '9.9.9-test'
+  },
   ipcMain: {
     handle: handleMock
   }
@@ -168,7 +171,10 @@ describe('registerSkillsHandlers', () => {
 
     await handler(null)
 
-    expect(inventorySkillFreshnessMock).toHaveBeenCalledWith({ repos })
+    expect(inventorySkillFreshnessMock).toHaveBeenCalledWith({
+      currentAppVersion: '9.9.9-test',
+      repos
+    })
     expect(getWslHomeMock).not.toHaveBeenCalled()
   })
 })

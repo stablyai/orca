@@ -1,10 +1,5 @@
 import type { AgentType } from './agent-status-types'
-import {
-  catalogDefaultModel,
-  findCatalogModel,
-  getAgentSessionOptionCatalog,
-  sessionOptionValueIsValid
-} from './agent-session-option-catalog'
+import { sessionOptionValueIsValid } from './agent-session-option-catalog'
 import type {
   PersistedNativeChatSessionOptions,
   SessionOptionValue
@@ -14,16 +9,10 @@ export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType
 ): Record<string, SessionOptionValue> | undefined {
-  const catalog = getAgentSessionOptionCatalog(agent)
   const entry = persisted?.[agent]
-  // Why: fresh launches must be authoritative too, so resolve the catalog's
-  // declared fallback before the launch command is assembled.
-  const modelId =
-    typeof entry?.model === 'string' && entry.model.trim()
-      ? entry.model
-      : catalog
-        ? catalogDefaultModel(catalog)?.id
-        : undefined
+  // Why: untouched settings must preserve the agent CLI's configured defaults;
+  // only a model explicitly selected by the user authorizes launch flags.
+  const modelId = typeof entry?.model === 'string' && entry.model.trim() ? entry.model : undefined
   if (!modelId) {
     return undefined
   }
@@ -35,11 +24,6 @@ export function resolveNativeChatSessionOptionDefaults(
         values[id] = value
       }
     }
-  }
-
-  const model = catalog ? findCatalogModel(catalog, modelId) : undefined
-  for (const option of model?.options ?? []) {
-    values[option.id] ??= option.kind.defaultValue
   }
   return values
 }

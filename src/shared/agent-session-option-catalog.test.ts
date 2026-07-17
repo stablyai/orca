@@ -72,7 +72,7 @@ describe('agent session option catalog', () => {
     })
   })
 
-  it('restores defaults per model without leaking values across models', () => {
+  it('resolves only stored values without leaking values across models', () => {
     let persisted = updateNativeChatSessionOptionDefaults({
       persisted: undefined,
       agent: 'claude',
@@ -96,17 +96,56 @@ describe('agent session option catalog', () => {
     })
 
     expect(resolveNativeChatSessionOptionDefaults(persisted, 'claude')).toEqual({
-      model: 'sonnet',
-      effort: 'high'
+      model: 'sonnet'
     })
     expect(persisted.claude?.valuesByModel?.opus).toEqual({ effort: 'xhigh' })
   })
 
-  it('seeds a fresh launch from the catalog defaults', () => {
-    expect(resolveNativeChatSessionOptionDefaults(undefined, 'claude')).toEqual({
-      model: 'sonnet',
-      effort: 'high'
-    })
+  it('spawns vanilla when the user has not explicitly selected a model', () => {
+    // Regression (#9085): a fresh launch must not force the catalog default
+    // model/effort — the agent must spawn exactly as its own CLI would.
+    expect(resolveNativeChatSessionOptionDefaults(undefined, 'claude')).toBeUndefined()
+    expect(resolveNativeChatSessionOptionDefaults({}, 'claude')).toBeUndefined()
     expect(resolveNativeChatSessionOptionDefaults({}, 'future-agent')).toBeUndefined()
+  })
+
+  it('resolves an explicitly selected model and only its stored options', () => {
+    let persisted = updateNativeChatSessionOptionDefaults({
+      persisted: undefined,
+      agent: 'claude',
+      modelId: 'opus',
+      optionId: 'model',
+      value: 'opus'
+    })
+    expect(resolveNativeChatSessionOptionDefaults(persisted, 'claude')).toEqual({
+      model: 'opus'
+    })
+    persisted = updateNativeChatSessionOptionDefaults({
+      persisted,
+      agent: 'claude',
+      modelId: 'opus',
+      optionId: 'effort',
+      value: 'xhigh'
+    })
+    expect(resolveNativeChatSessionOptionDefaults(persisted, 'claude')).toEqual({
+      model: 'opus',
+      effort: 'xhigh'
+    })
+  })
+
+  it('keeps catalog option defaults after the user explicitly selects a model', () => {
+    const persisted = updateNativeChatSessionOptionDefaults({
+      persisted: undefined,
+      agent: 'claude',
+      modelId: 'sonnet',
+      optionId: 'model',
+      value: 'sonnet'
+    })
+    const defaults = resolveNativeChatSessionOptionDefaults(persisted, 'claude')
+
+    expect(resolveAgentSessionOptionLaunch('claude', defaults)).toEqual({
+      args: ['--model', 'sonnet', '--effort', 'high'],
+      appliedValues: { model: 'sonnet', effort: 'high' }
+    })
   })
 })
