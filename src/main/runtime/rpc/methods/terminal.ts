@@ -1519,6 +1519,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let closed = false
       let cursor = 0
       const streams = new Map<number, TerminalMultiplexStream>()
+      const pendingPtyWaitControllers = new Map<number, Set<AbortController>>()
       let ackTotalInFlightBytes = 0
       let resolveMultiplex = (): void => {}
       const multiplexClosed = new Promise<void>((resolve) => {
@@ -1738,11 +1739,28 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           emit({ type: 'end', streamId })
         }
       }
+      const cancelPendingPtyWaits = (streamId: number): void => {
+        const controllers = pendingPtyWaitControllers.get(streamId)
+        if (!controllers) {
+          return
+        }
+        pendingPtyWaitControllers.delete(streamId)
+        for (const controller of controllers) {
+          controller.abort()
+        }
+      }
+      const cancelAllPendingPtyWaits = (): void => {
+        for (const streamId of Array.from(pendingPtyWaitControllers.keys())) {
+          cancelPendingPtyWaits(streamId)
+        }
+      }
       const closeMultiplex = (): void => {
         if (closed) {
           return
         }
         closed = true
+        signal?.removeEventListener('abort', cancelAllPendingPtyWaits)
+        cancelAllPendingPtyWaits()
         const remoteDesktopKeysByPty = new Map<string, string[]>()
         for (const streamId of Array.from(streams.keys())) {
           const stream = streams.get(streamId)
@@ -1769,6 +1787,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
+          cancelPendingPtyWaits(stream.streamId)
           detachStream(stream.streamId, false)
           return
         }
@@ -2029,14 +2048,43 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // Why: a never-mounted tab has no graph leaf to await; mounting the
           // exact tab lets its PTY attach without activating the worktree.
           runtime.requestRendererTerminalTabMount(request.terminal)
+          const waitController = new AbortController()
+          const pendingControllers = pendingPtyWaitControllers.get(request.streamId) ?? new Set()
+          pendingControllers.add(waitController)
+          pendingPtyWaitControllers.set(request.streamId, pendingControllers)
+          if (signal?.aborted) {
+            waitController.abort()
+          }
+          // Why: the live slot handler does not exist until the PTY attaches;
+          // retain cancellation ownership while the pane is still pending.
+          const unregisterPendingHandler = registerBinaryStreamHandler(
+            request.streamId,
+            (frame) => {
+              if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
+                cancelPendingPtyWaits(request.streamId)
+                detachStream(request.streamId, false)
+              }
+            }
+          )
           try {
-            const ptyId = await runtime.waitForLeafPtyId(request.terminal, 10_000, signal)
+            const ptyId = await runtime.waitForLeafPtyId(
+              request.terminal,
+              10_000,
+              waitController.signal
+            )
             leaf = { ptyId }
           } catch {
-            if (closed || signal?.aborted) {
+            if (closed || signal?.aborted || waitController.signal.aborted) {
               return
             }
             // Fall through to the explicit no_connected_pty error below.
+          } finally {
+            const currentControllers = pendingPtyWaitControllers.get(request.streamId)
+            currentControllers?.delete(waitController)
+            if (currentControllers?.size === 0) {
+              pendingPtyWaitControllers.delete(request.streamId)
+            }
+            unregisterPendingHandler()
           }
         }
         if (!leaf?.ptyId) {
@@ -2373,6 +2421,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           void handleSubscribeFrame(frame.payload)
         }
       })
+
+      signal?.addEventListener('abort', cancelAllPendingPtyWaits, { once: true })
 
       runtime.registerSubscriptionCleanup(
         `terminal-multiplex:${connectionId}`,

@@ -2750,11 +2750,15 @@ describe('terminal multiplex RPC', () => {
     )
 
     await vi.waitFor(() => expect(runtime.waitForLeafPtyId).toHaveBeenCalled())
-    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith('terminal-1', 10_000, controller.signal)
+    const pendingWaitSignal = vi.mocked(runtime.waitForLeafPtyId).mock.calls[0]?.[2]
+    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith(
+      'terminal-1',
+      10_000,
+      expect.any(AbortSignal)
+    )
 
     controller.abort()
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.waitFor(() => expect(pendingWaitSignal?.aborted).toBe(true))
 
     expect(runtime.readTerminal).not.toHaveBeenCalled()
     expect(
@@ -2805,6 +2809,61 @@ describe('terminal multiplex RPC', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Error)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
     ).toEqual([])
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  it('cancels a pending desktop PTY wait when its multiplex slot unsubscribes', async () => {
+    let resolvePty: (ptyId: string) => void = () => {}
+    let waitSignal: AbortSignal | undefined
+    const readTerminal = vi.fn().mockResolvedValue({ tail: [], truncated: false })
+    const subscribeToTerminalData = vi.fn().mockReturnValue(vi.fn())
+    const registerRemoteTerminalViewSubscriber = vi.fn().mockReturnValue(vi.fn())
+    const waitForLeafPtyId = vi.fn(
+      (_handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
+        new Promise<string>((resolve, reject) => {
+          resolvePty = resolve
+          waitSignal = signal
+          signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
+            once: true
+          })
+        })
+    )
+    const harness = startDesktopMultiplexSubscribe({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      waitForLeafPtyId,
+      readTerminal,
+      subscribeToTerminalData,
+      registerRemoteTerminalViewSubscriber
+    })
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() => expect(waitForLeafPtyId).toHaveBeenCalled())
+
+    harness.handlers.get(7)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Unsubscribe,
+          streamId: 7,
+          seq: 2,
+          payload: new Uint8Array()
+        })
+      )!
+    )
+    resolvePty('pty-1')
+
+    await vi.waitFor(() =>
+      expect(waitSignal?.aborted || readTerminal.mock.calls.length > 0).toBe(true)
+    )
+    // Why: a closed pane must not become a hidden live-output consumer when its late PTY appears.
+    expect(waitSignal?.aborted).toBe(true)
+    expect(readTerminal).not.toHaveBeenCalled()
+    expect(subscribeToTerminalData).not.toHaveBeenCalled()
+    expect(registerRemoteTerminalViewSubscriber).not.toHaveBeenCalled()
+    expect(harness.handlers.has(7)).toBe(false)
+
     harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
     await harness.dispatchPromise
   })
