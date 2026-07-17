@@ -18,6 +18,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
+import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 
 const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
@@ -83,6 +84,7 @@ export function buildTitleDerivedAgentRows(args: {
           tab,
           leafId,
           title,
+          ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
           now: args.now,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
@@ -103,6 +105,7 @@ export function buildTitleDerivedAgentRows(args: {
       tab,
       leafId,
       title: tab.title,
+      ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
       now: args.now,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
@@ -124,10 +127,11 @@ function buildTitleDerivedAgentRow(args: {
   tab: TerminalTab
   leafId: string
   title: string
+  ownerAgentType: AgentType | null
   now: number
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
 }): DashboardAgentRow | null {
-  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
+  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.ownerAgentType)
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
   // shared detector keeps it neutral so runtime liveness probes do not treat
@@ -142,7 +146,9 @@ function buildTitleDerivedAgentRow(args: {
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  const agentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title, label)
+  const agentType = isClaudeAgentsTitle
+    ? 'claude'
+    : resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
   if (!agentType) {
     return null
   }
@@ -173,7 +179,11 @@ function buildTitleDerivedAgentRow(args: {
   }
 }
 
-export function resolveTitleDerivedAgentType(title: string, label: string): AgentType | null {
+export function resolveTitleDerivedAgentType(
+  title: string,
+  label: string,
+  ownerAgentType?: AgentType | null
+): AgentType | null {
   const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
   if (agentType !== 'claude') {
     return agentType
@@ -181,7 +191,26 @@ export function resolveTitleDerivedAgentType(title: string, label: string): Agen
   // Why: Claude's task-title spinner heuristic has no provider identity. In
   // split panes it can match arbitrary terminal spinners, so sidebar rows only
   // accept Claude when the title itself names Claude.
-  return CLAUDE_AGENT_TOKEN_RE.test(title) ? agentType : null
+  if (CLAUDE_AGENT_TOKEN_RE.test(title)) {
+    return agentType
+  }
+  // Why: bare Claude-shaped status frames carry activity but not identity. A
+  // single-pane launch owner is pane-safe authority for the row; without one,
+  // retain the existing refusal to mint a Claude identity from the frame alone.
+  return ownerAgentType && ownerAgentType !== 'unknown' ? ownerAgentType : null
+}
+
+function resolveTitleDerivedPaneOwner(
+  tab: TerminalTab,
+  layout: TerminalLayoutSnapshot | undefined,
+  leafId: string
+): AgentType | null {
+  // Why: launchAgent is tab-scoped. It is pane ownership only while the tab has
+  // one known leaf; applying it to splits would let one pane brand its sibling.
+  if (layout?.root?.type !== 'leaf' || layout.root.leafId !== leafId) {
+    return null
+  }
+  return resolvePaneAgentOwner({ launchAgent: tab.launchAgent })
 }
 
 /**

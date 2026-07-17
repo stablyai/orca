@@ -272,6 +272,54 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('opencode')
   })
 
+  it('keeps a known OpenCode pane stable across native, synthetic, bare, and idle titles', () => {
+    const titles = [
+      'OC | ⠋ implementing the feature',
+      '⠋ OpenCode',
+      '⠋ implementing the feature',
+      'OpenCode ready'
+    ]
+
+    for (const title of titles) {
+      expect(
+        resolveTabAgentFromSignals({
+          hasObservedAgentSignal: true,
+          isRemote: false,
+          title,
+          hookAgent: null,
+          launchAgent: 'opencode'
+        })
+      ).toBe('opencode')
+      expect(
+        resolveTabAgentFromSignals({
+          hasObservedAgentSignal: true,
+          isRemote: true,
+          title,
+          hookAgent: 'opencode'
+        })
+      ).toBe('opencode')
+      expect(
+        resolveTabAgentFromSignals({
+          hasObservedAgentSignal: true,
+          isRemote: false,
+          title,
+          hookAgent: null,
+          processAgent: 'opencode'
+        })
+      ).toBe('opencode')
+    }
+
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        launchAgent: 'opencode'
+      })
+    ).toBeNull()
+  })
+
   it('does not let an explicit title override launch identity before any activity is observed', () => {
     expect(
       resolveTabAgentFromSignals({
