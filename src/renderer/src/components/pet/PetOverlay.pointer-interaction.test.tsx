@@ -65,10 +65,21 @@ function installLocalStorage(): void {
   })
 }
 
-function spriteAnimationPlayState(container: HTMLElement): string | undefined {
-  return Array.from(container.querySelectorAll('div')).find(
-    (div) => div.style.backgroundImage !== ''
-  )?.style.animationPlayState
+function spriteDiv(container: HTMLElement): HTMLDivElement {
+  const div = Array.from(container.querySelectorAll('div')).find(
+    (candidate) => candidate.style.backgroundImage !== ''
+  )
+  if (!div) {
+    throw new Error('sprite div not found')
+  }
+  return div
+}
+
+// The @keyframes name is `pet-<useId>-<dragGeneration>`; the generation suffix
+// changes only when a grab mints a fresh restart, so it proves the frame-0
+// restart is wired.
+function animationName(container: HTMLElement): string {
+  return spriteDiv(container).style.animation.split(' ')[0]
 }
 
 function firePointer(target: Element, type: string, clientX: number, clientY: number): void {
@@ -103,23 +114,36 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
       throw new Error('draggable wrapper not found')
     }
 
-    // Baseline: the live idle row animates.
-    expect(spriteAnimationPlayState(container)).toBe('running')
+    // Baseline: the live idle row animates (idle carries per-frame durations, so
+    // it renders as step-end rather than steps()).
+    expect(spriteDiv(container).style.animationPlayState).toBe('running')
+    expect(spriteDiv(container).style.animation).toContain('step-end')
+    const idleName = animationName(container)
 
-    // Grab and hold still: snap to frame 0 of the live state and freeze there.
+    // Grab and hold still: mint a fresh restart (frame 0) and freeze there while
+    // staying on the live idle row.
     firePointer(wrapper, 'pointerdown', 50, 50)
-    expect(spriteAnimationPlayState(container)).toBe('paused')
+    expect(spriteDiv(container).style.animationPlayState).toBe('paused')
+    expect(spriteDiv(container).style.animation).toContain('step-end')
+    expect(animationName(container)).not.toBe(idleName)
 
     // A sub-4px twitch stays frozen (deadzone).
     firePointer(wrapper, 'pointermove', 52, 51)
-    expect(spriteAnimationPlayState(container)).toBe('paused')
+    expect(spriteDiv(container).style.animationPlayState).toBe('paused')
 
-    // Drag horizontally past the 4px deadzone: the running row animates.
-    firePointer(wrapper, 'pointermove', 60, 51)
-    expect(spriteAnimationPlayState(container)).toBe('running')
+    // A large vertical-only move keeps the hold (no horizontal direction yet).
+    firePointer(wrapper, 'pointermove', 52, 80)
+    expect(spriteDiv(container).style.animationPlayState).toBe('paused')
 
-    // Release restores the live agent state and resumes animating.
-    firePointer(wrapper, 'pointerup', 60, 51)
-    expect(spriteAnimationPlayState(container)).toBe('running')
+    // Drag right past the 4px deadzone: switch to the running-right row (row 1,
+    // 8 frames, no durations → steps(8)) and resume animating.
+    firePointer(wrapper, 'pointermove', 70, 80)
+    expect(spriteDiv(container).style.animationPlayState).toBe('running')
+    expect(spriteDiv(container).style.animation).toContain('steps(8)')
+
+    // Release restores the live agent state (idle) and resumes animating.
+    firePointer(wrapper, 'pointerup', 70, 80)
+    expect(spriteDiv(container).style.animationPlayState).toBe('running')
+    expect(spriteDiv(container).style.animation).toContain('step-end')
   })
 })

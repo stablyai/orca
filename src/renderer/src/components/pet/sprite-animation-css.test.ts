@@ -45,19 +45,25 @@ describe('buildSpriteAnimationCss', () => {
     }
   })
 
-  it('degrades to uniform pacing rather than dropping a frame when two stops collapse', () => {
-    // A sub-precision frame among a ~minute total would round two stops to the
-    // same percentage; the later CSS selector would otherwise win and the frame
-    // vanish. Degrade to steps() so every frame still renders.
-    const { keyframesCss, animationCss } = buildSpriteAnimationCss({
-      ...BASE,
-      frames: 2,
-      fps: 8,
-      frameDurationsMs: [0.001, 60_000]
-    })
-    expect(keyframesCss).not.toContain('step')
-    expect(keyframesCss).toContain(' to {')
-    expect(animationCss).toContain('steps(2)')
+  it('degrades to uniform pacing rather than dropping a frame that rounds away', () => {
+    // A sub-precision frame among a ~minute total loses its own stop: a leading
+    // one collapses two stops to 0%, a trailing one rounds the final stop to
+    // 100% (no interval before the loop). Either way, degrade to steps() so
+    // every frame still renders instead of letting one vanish.
+    for (const frameDurationsMs of [
+      [0.001, 60_000],
+      [60_000, 0.001]
+    ]) {
+      const { keyframesCss, animationCss } = buildSpriteAnimationCss({
+        ...BASE,
+        frames: 2,
+        fps: 8,
+        frameDurationsMs
+      })
+      expect(keyframesCss).not.toContain('step')
+      expect(keyframesCss).toContain(' to {')
+      expect(animationCss).toContain('steps(2)')
+    }
   })
 
   it('renders a genuinely short-but-representable frame as its own stop', () => {

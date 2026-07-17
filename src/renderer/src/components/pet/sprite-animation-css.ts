@@ -67,10 +67,11 @@ function validFrameDurations(
   return null
 }
 
-// Cumulative step-end stops, one per frame. Returns null when two stops collapse
-// to the same serialized percentage (a frame shorter than our 4-decimal
-// precision can resolve) so the caller degrades to uniform pacing rather than
-// silently dropping the frame the later duplicate selector would win.
+// Cumulative step-end stops, one per frame. Returns null (→ uniform fallback)
+// when a frame is too short to survive our 4-decimal precision: either two
+// stops collapse to the same percentage, or the final stop rounds to 100% and
+// so has no interval before the loop. Either way the frame would vanish, so we
+// degrade to uniform pacing rather than silently drop it.
 function stepEndStops(
   durations: number[],
   totalMs: number,
@@ -83,7 +84,7 @@ function stepEndStops(
   let previousPct = -1
   for (let index = 0; index < durations.length; index++) {
     const pct = +((elapsedMs / totalMs) * 100).toFixed(4)
-    if (pct <= previousPct) {
+    if (pct <= previousPct || pct >= 100) {
       return null
     }
     previousPct = pct

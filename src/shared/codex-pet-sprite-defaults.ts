@@ -36,7 +36,9 @@ export type CustomPetSprite = NonNullable<CustomPet['sprite']>
  *  192x208 frames on an 8-wide sheet at the flat 8 fps rate, idle default, and
  *  the nine Codex rows carrying no per-frame durations. Matching the full
  *  geometry (not just the row map) keeps a hand-authored 8 fps sheet that merely
- *  reuses those rows from being silently retimed.
+ *  reuses those rows from being silently retimed. A pet deliberately built on
+ *  the Codex layout that wants to keep uniform pacing opts out by declaring any
+ *  frameDurationsMs of its own.
  *
  *  Rows/sheet height are intentionally excluded so v2 (11-row) Codex sheets,
  *  which still bake these nine animations, upgrade too. */

@@ -15,6 +15,7 @@ export type PetPointerInteraction = {
     onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void
     onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => void
     onPointerCancel: (event: ReactPointerEvent<HTMLDivElement>) => void
+    onLostPointerCapture: (event: ReactPointerEvent<HTMLDivElement>) => void
     onPointerEnter: () => void
     onPointerLeave: () => void
   }
@@ -34,19 +35,29 @@ export function usePetPointerInteraction(
   // Why: last accepted sample for the drag direction hysteresis. Kept separate
   // from dragOffsetRef, which anchors the overlay position math.
   const dragSampleRef = useRef<Point>({ x: 0, y: 0 })
+  // Why: direction and the owning pointer are read+written inside pointer
+  // handlers, so keep them in refs immune to React's render batching. Reading
+  // the direction from state would let two coalesced moves in one commit
+  // resurrect a stale direction; `dragAnimation` state exists only to render.
+  const dragDirectionRef = useRef<PetDragAnimation>(null)
+  const activePointerRef = useRef<number | null>(null)
 
   // Why: setPointerCapture routes subsequent pointer events to this element
   // even when the cursor leaves the OS window, so dragging can't get stuck in
   // the "true" state if the user releases outside the app.
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (event.button !== 0) {
+    // Why: primary button only, and one pointer owns the drag — a second touch
+    // must not hijack the anchors mid-drag.
+    if (event.button !== 0 || activePointerRef.current !== null) {
       return
     }
+    activePointerRef.current = event.pointerId
     dragOffsetRef.current = {
       x: event.clientX - position.x,
       y: event.clientY - position.y
     }
     dragSampleRef.current = { x: event.clientX, y: event.clientY }
+    dragDirectionRef.current = null
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
     setDragAnimation(null)
@@ -55,17 +66,20 @@ export function usePetPointerInteraction(
   }
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (!dragging) {
+    if (event.pointerId !== activePointerRef.current) {
       return
     }
     const next = nextPetDragAnimation(
-      dragAnimation,
+      dragDirectionRef.current,
       event.clientX - dragSampleRef.current.x,
       event.clientY - dragSampleRef.current.y
     )
     if (next.accepted) {
       dragSampleRef.current = { x: event.clientX, y: event.clientY }
-      setDragAnimation(next.animation)
+      if (next.animation !== dragDirectionRef.current) {
+        dragDirectionRef.current = next.animation
+        setDragAnimation(next.animation)
+      }
     }
     moveTo({
       x: event.clientX - dragOffsetRef.current.x,
@@ -74,6 +88,11 @@ export function usePetPointerInteraction(
   }
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.pointerId !== activePointerRef.current) {
+      return
+    }
+    activePointerRef.current = null
+    dragDirectionRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
@@ -91,6 +110,9 @@ export function usePetPointerInteraction(
       onPointerMove,
       onPointerUp: endDrag,
       onPointerCancel: endDrag,
+      // Why: capture can be revoked without a pointerup (e.g. the element loses
+      // it); treat that as the end of the drag so it can't wedge on.
+      onLostPointerCapture: endDrag,
       onPointerEnter: () => setHovering(true),
       onPointerLeave: () => setHovering(false)
     }
