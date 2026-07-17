@@ -849,6 +849,37 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
   })
 
+  it('does not swallow a blocked completion snapshot while stored hook state is working', () => {
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      updatedAt: Date.now() - 60_000,
+      stateStartedAt: Date.now() - 60_000,
+      lastAssistantMessage: undefined
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'blocked',
+        prompt: 'needs approval',
+        agentType: 'codex',
+        stateStartedAt: Date.now() - 30_000
+      }
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        worktreeId: 'wt-primary',
+        paneKey,
+        agentState: 'blocked'
+      })
+    )
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+  })
+
   it('drops a delayed completion snapshot when the pane has already started a newer turn', () => {
     const previousDoneStartedAt = Date.now() - 10_000
     mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
