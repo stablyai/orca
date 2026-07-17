@@ -214,6 +214,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(bashCommand).toMatch(/exec "\$BASH" --login -i$/)
     // The UTF-8 switch must run before the login shell is exec'd.
     expect(bashCommand.indexOf('chcp.com')).toBeLessThan(bashCommand.indexOf('exec'))
+    // Must stay fail-open: `;` (not `&&`) so a missing chcp.com can't abort the
+    // exec and kill the terminal on startup.
+    expect(bashCommand).not.toContain('&&')
     expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
   })
