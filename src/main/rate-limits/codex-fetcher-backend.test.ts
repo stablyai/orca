@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
@@ -201,15 +202,11 @@ describe('Codex backend rate-limit requests', () => {
       })
     )
     let cancelledBodies = 0
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('<html>rate-limited error page</html>'))
-      },
-      cancel() {
+    vi.mocked(fetch).mockResolvedValue(
+      cancelTrackingResponse(429, () => {
         cancelledBodies += 1
-      }
-    })
-    vi.mocked(fetch).mockResolvedValue(new Response(body, { status: 429 }))
+      })
+    )
 
     await expect(
       consumeCodexRateLimitResetCredit({

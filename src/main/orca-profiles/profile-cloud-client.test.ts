@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import {
@@ -251,15 +252,11 @@ describe('Orca cloud client', () => {
 
   it('cancels the unread error-response body so bundled undici cannot crash on socket close', async () => {
     let cancelledBodies = 0
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode('<html>gateway error page</html>'))
-      },
-      cancel() {
+    fetchMock.mockResolvedValue(
+      cancelTrackingResponse(502, () => {
         cancelledBodies += 1
-      }
-    })
-    fetchMock.mockResolvedValue(new Response(body, { status: 502 }))
+      })
+    )
 
     await expect(refreshOrcaCloudCapabilities(config, session)).rejects.toThrow()
     expect(cancelledBodies).toBe(1)

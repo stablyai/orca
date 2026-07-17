@@ -1,12 +1,7 @@
 /**
- * Cancel a fetch Response body that no code path will read.
- *
- * Why: Node's bundled undici (used by global fetch, unlike Electron's
- * net.fetch) crashes the whole process with an uncatchable AssertionError
- * when a response body large enough to pause the HTTP/1 parser is left
- * unread and the peer closes the socket (nodejs/undici#5360, orca#8695).
- * Every main-process global-fetch call site must consume or cancel the
- * body on all paths, including !response.ok early returns.
+ * Cancel a fetch Response body that no code path will read. Why: leaving it
+ * unread can crash the whole process from inside Node's bundled undici
+ * (nodejs/undici#5360, orca#8695); see global-fetch-call-site-audit.test.ts.
  */
 export async function cancelUnreadResponseBody(response: Response): Promise<void> {
   try {
