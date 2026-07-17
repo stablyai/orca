@@ -783,9 +783,12 @@ export function createRemoteRuntimePtyTransport(
       }
       const targetHandle = handle
       const targetPtyId = remotePtyId
-      void subscribeToHandle().catch((error) => {
+      const attachSubscription = subscribeToHandle()
+      const attachSubscriptionGeneration = subscriptionGeneration
+      void attachSubscription.catch((error) => {
         if (
           attachCycle !== resubscribeCycle ||
+          attachSubscriptionGeneration !== subscriptionGeneration ||
           !isCurrentRemoteTerminal(targetHandle, targetPtyId)
         ) {
           return

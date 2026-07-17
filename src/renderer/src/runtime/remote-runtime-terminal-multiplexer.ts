@@ -344,7 +344,7 @@ class RemoteRuntimeTerminalMultiplexer {
               if (error.code === 'remote_runtime_unavailable' || error.code === 'runtime_timeout') {
                 // Why: liveness/network failures are followed by a terminal close;
                 // drive recovery without painting a fatal PTY error first.
-                this.handleClose()
+                this.handleClose(error.message)
                 return
               }
               this.failConnection(new Error(error.message))
