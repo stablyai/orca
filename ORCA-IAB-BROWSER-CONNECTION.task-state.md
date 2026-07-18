@@ -3,7 +3,7 @@
 ## Linear Source
 - 이슈: N/A
 - 링크: N/A
-- 상태: in-progress
+- 상태: completed
 - 담당: Codex
 
 ## Goal
@@ -47,7 +47,7 @@
 - 07/17 패널 배치와 Orca 전용 제어는 확인했으나 Browser 플러그인의 직접 발견은 실패했습니다.
 
 ## Current Status
-- macOS 실사용 직접 연결은 완료했습니다. 사용자의 완전한 완수 요청에 따라 protocol negative coverage, Windows 경로, SSH 오연결 방지 검증과 원본 저장소 병합 요청을 추가 완료 범위로 진행합니다.
+- 구현·protocol hardening·서명 빌드·실사용 앱 재설치·공식 Browser 직접 QA·원본 저장소 PR 생성을 모두 완료했습니다. upstream 리뷰와 병합만 외부 결정으로 남아 있습니다.
 
 ## Context Lens
 - Required: yes
@@ -62,6 +62,7 @@
 - Selected bundle/lens: `base`, `code`, `api`, `browser`, `release`; engineering + product
 - Applied instructions: 독립 worktree, 테스트 선작성, 실제 dev 화면 검증, peer 검토, 다른 세션과 사용자 변경 보존, 현재 표시 패널만 직접 연결, deploy 절차의 빌드·테스트·실사용 검증 및 커밋·push 전 사용자 확인
 - Latest review applied: native socket별 CDP 소유권·재연결 cleanup, 지원 API 축소 광고, backend 시작 실패 격리, local/live/unique resolver와 reconnect 테스트를 완료 조건에 추가
+- Latest completion receipt: 동일 `base`·`code`·`api`·`browser`·`release` bundle과 engineering + product lens를 유지해 hardening 전체 빌드·서명·설치 앱 공식 Browser QA·원본 PR 상태 확인·복구본 보존 기준을 적용했습니다.
 - N/A or deferred: 외부 서비스 변경은 요청 범위 밖입니다. 커밋·통합·기존 Orca 앱 반영은 07/18 사용자의 후속 요청으로 범위에 추가됐습니다.
 - Re-read trigger: 대상 경로가 세션 연결이 아닌 플러그인 패키지나 외부 Codex 호스트로 바뀌는 경우입니다.
 
@@ -124,6 +125,9 @@
 - 07/18 최상위 `Page.navigate`를 renderer 소유 탭 모델과 `<webview>.src` 갱신 경로에 연결
 - 07/18 최종 dev 빌드에서 같은 Browser/tab 객체의 `example.com` → `example.org` 이동과 URL·제목·본문 읽기 성공, 별도 새 Browser 연결에서도 같은 tabId와 동일 콘텐츠 재확인
 - 07/18 fragmented·coalesced·malformed·oversized frame, Windows named-pipe 경로, POSIX 소켓 디렉토리 소유권·권한·symlink·regular-file 방어 테스트 추가
+- 07/18 hardening 포함 전체 unpack 앱을 재빌드·심층 서명 검증하고 `/Applications/Orca.app`에 재설치
+- 07/18 재시작한 설치 앱에서 공식 Browser가 테스트 탭을 발견하고 동일 객체로 `example.com` → `example.org` 이동, 새 Browser 연결 재발견까지 통과. 테스트 탭만 정리하고 기존 사용자 탭 보존
+- 07/18 원본 저장소 PR #9249 생성. GitHub 기준 mergeable이며 현재 자동 체크 통과
 
 ## Recent Changes
 - 규칙 우회가 아니라 Orca main process가 Browser 플러그인의 native-pipe backend가 되도록 제품 연결 계층을 추가했습니다.
@@ -140,25 +144,25 @@
 - [x] 실사용 Orca 앱 반영과 최종 QA
 - [x] protocol 분할·병합·초과 크기·malformed frame 방어 검증
 - [x] Windows named-pipe와 SSH 제외 경계 검증
-- [ ] 원본 저장소 병합 요청
+- [x] 원본 저장소 병합 요청
 
 ## Risks / Blockers
 - macOS local Codex 직접 연결과 process-swap 이동에는 코드 blocker가 없습니다.
 - SSH 세션은 local pipe 대상에서 제외했습니다. Windows named pipe 경로는 구현·단위 검증했습니다.
 - Windows named-pipe 문자열 계약과 SSH 세션 제외는 단위 테스트로 검증했습니다. 실제 Windows OS와 SSH 원격 GUI 실행은 해당 환경의 CI/실행 검증이 필요합니다.
-- 원본 `stablyai/orca`에는 두 개인 계정 모두 쓰기 권한이 없어, 사용자 승인에 따라 `jeonghoon0126/orca` 개인 fork에 백업했습니다.
+- 원본 `stablyai/orca` 직접 push 권한은 없지만, 사용자 승인 계정의 `jeonghoon0126/orca` fork에서 원본 PR #9249를 열었습니다. 코드 작업 blocker는 없으며 upstream 리뷰·병합은 저장소 관리자 결정입니다.
 
 ## Verification
 - 명령/방법: 관련 테스트, 타입 검사, 별도 dev 런타임의 Browser 플러그인 직접 연결
-- 결과: Browser 연결·protocol hardening과 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 107개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, 전체 desktop/native 빌드와 서명 검증 통과. dev 앱뿐 아니라 교체·재시작한 실사용 Orca에서도 공식 Browser가 `example.com`을 직접 읽고 같은 객체로 `example.org` 이동 후 URL·제목·본문을 읽었으며, 새 Browser 연결에서 같은 탭을 재인식했습니다. 검증용 탭은 정리하고 기존 사용자 탭은 보존했습니다.
+- 결과: Browser 연결·protocol hardening과 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 107개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, hardening 포함 전체 desktop/native unpack 빌드와 설치 전·후 strict 심층 서명 검증 통과. 교체·재시작한 실사용 Orca에서도 공식 Browser가 `example.com`을 직접 발견하고 같은 객체로 `example.org` 이동 후 URL·제목·본문을 읽었으며, 별도 새 Browser 연결에서 같은 탭을 재인식했습니다. 검증용 탭은 정리하고 기존 사용자 탭은 보존했습니다.
 
 ## Release / Handoff
 - 배포/반영 방식: 서명된 macOS unpack 앱을 `/Applications/Orca.app`에 반영하고 재시작
-- 운영 전달사항: 이전 앱은 `/Applications/Orca.app.pre-iab-backup`에 복구용으로 보존, 사용자 데이터와 기존 탭 유지
-- 원격 반영: `jeonghoon0126/orca` 개인 fork의 해결 브랜치
+- 운영 전달사항: 최초 앱은 `/Applications/Orca.app.pre-iab-backup`, hardening 직전 직접 연결 앱은 `/Applications/Orca.app.pre-hardening-backup`에 복구용으로 보존. 사용자 데이터와 기존 탭 유지
+- 원격 반영: `jeonghoon0126/orca` 개인 fork의 해결 브랜치 및 원본 저장소 PR https://github.com/stablyai/orca/pull/9249
 
 ## Final Outcome
-- Browser 패널 직접 발견과 protocol hardening을 코드·dev 앱·실사용 앱에서 해결했습니다. 설치 앱 최신 반영과 원본 저장소 병합 요청이 남았습니다.
+- Browser 패널 직접 발견과 protocol hardening을 코드·dev 앱·최신 실사용 앱에서 해결하고 원본 저장소 PR까지 열었습니다. 현재 요청 범위의 구현과 로컬 반영은 완료됐고, upstream 리뷰·병합만 외부 결정입니다.
 
 ## Independent Review
 - Contract met: yes
@@ -175,9 +179,9 @@
 - Rejected paths / 버린 대안: Orca CLI만으로 완료 처리, 기존 dirty checkout 수정, 다른 브라우저 전환
 - Evidence source paths / 근거 경로: 현재 작업 문서와 조사 후 확정할 코드·테스트
 - Verification / 검증: 공식 Browser 런타임 `iab` 발견, 같은 tab 객체의 `example.com` → `example.org` 이동과 새 connection 재접속 성공, 관련 테스트 107개·typecheck·lint·diff check 통과
-- Remaining risk / 남은 리스크: 실제 Windows OS와 SSH 원격 GUI 실행은 원본 저장소 CI/해당 환경 검증 대상
-- Resume next action / 재개 첫 행동: hardening 커밋·실사용 앱 재반영 후 원본 저장소 PR 생성
+- Remaining risk / 남은 리스크: 실제 Windows OS와 SSH 원격 GUI 실행은 원본 저장소 CI/해당 환경 검증 대상이며, macOS local 완료 주장과 분리합니다.
+- Resume next action / 재개 첫 행동: upstream PR #9249 리뷰 결과 확인
 
 ## Next Step
-- 다음 세션이 바로 실행할 첫 행동 1개: hardening 변경을 커밋하고 개인 fork에 push
+- 다음 세션이 바로 실행할 첫 행동 1개: upstream PR #9249의 리뷰·병합 상태 확인
 - 이어 쓰면 안 되는 별도 작업: 기존 Shift+Enter 및 다른 Orca 기능 수정
