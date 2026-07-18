@@ -5,7 +5,10 @@ import {
   createMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
 } from './mobile-relay-direct-upgrade-journal'
-import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
+import {
+  reprovisionExistingMobileRelayCredential,
+  upgradeDirectMobileRelay
+} from './mobile-relay-direct-upgrade'
 import type { RpcClient } from './rpc-client'
 import type { HostProfile, RpcResponse } from './types'
 
@@ -70,6 +73,52 @@ function dependencies(journal: MobileRelayDirectUpgradeJournal | null = null) {
 }
 
 describe('existing direct pairing relay upgrade', () => {
+  it('reprovisions a lost relay credential for an existing relay host', async () => {
+    const relayHost: HostProfile = {
+      ...host,
+      endpoints: [
+        { id: 'direct-primary', kind: 'lan', url: host.endpoint },
+        {
+          id: 'relay-primary',
+          kind: 'relay',
+          url: `wss://relay-staging.onorca.dev/v1/connect/${relay.relayHostId}`
+        }
+      ],
+      relayHostId: relay.relayHostId,
+      relay
+    }
+    const deps = dependencies()
+    const committed = {
+      v: 1 as const,
+      reqId: 'upgrade-BwcHBwcHBwcHBwcHBwcHBw',
+      authorizationMode: 'authenticated-direct' as const,
+      currentVersion: 4,
+      resumeExpiresAt: 9_999_999
+    }
+    const client = clientWith([
+      success({ v: 1, relay }),
+      success(committed),
+      success({
+        v: 1,
+        relay,
+        installStatus: { v: 1, reqId: committed.reqId, state: 'committed', result: committed }
+      })
+    ])
+
+    const result = await reprovisionExistingMobileRelayCredential({
+      client,
+      host: relayHost,
+      dependencies: deps
+    })
+
+    expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {
+      reqId: committed.reqId,
+      newResumeTokenHash: expect.any(String)
+    })
+    expect(result?.bundle.current.version).toBe(4)
+    expect(result?.host.relay).toEqual(relay)
+  })
+
   it('persists pending material before install and publishes only after committed status', async () => {
     const deps = dependencies()
     let journal: MobileRelayDirectUpgradeJournal | null = null
@@ -187,6 +236,32 @@ describe('existing direct pairing relay upgrade', () => {
     await expect(
       upgradeDirectMobileRelay({ client, host, dependencies: deps })
     ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
+    expect(deps.deleteBundle).toHaveBeenCalledWith(host.id)
+    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
+  })
+
+  it('cleans the journal when removal wins before credential publication', async () => {
+    const journal = createMobileRelayDirectUpgradeJournal(host.id, (length) =>
+      new Uint8Array(length).fill(6)
+    )
+    const committed = installed(journal)
+    const deps = dependencies(journal)
+    deps.writeBundle.mockRejectedValue(
+      new MobileRelayUpgradeHostRemovedError('mobile relay host was removed')
+    )
+    const client = clientWith([
+      success({
+        v: 1,
+        relay,
+        installStatus: { v: 1, reqId: journal.reqId, state: 'committed', result: committed }
+      })
+    ])
+
+    await expect(
+      upgradeDirectMobileRelay({ client, host, dependencies: deps })
+    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
+
+    expect(deps.saveHost).not.toHaveBeenCalled()
     expect(deps.deleteBundle).toHaveBeenCalledWith(host.id)
     expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
   })

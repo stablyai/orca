@@ -39,6 +39,7 @@ import {
   removeHost,
   resolvePairingHostIdentity,
   resetHostStoreForTests,
+  runHostCredentialWriteForExistingHost,
   saveHost,
   saveExistingHostRelayUpgrade,
   updateHostNameAndEndpoint,
@@ -231,6 +232,86 @@ describe('host-store list mutations', () => {
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
     expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
+  })
+
+  it('serializes guarded relay secret writes ahead of host removal', async () => {
+    let releaseWrite!: () => void
+    let markWriteStarted!: () => void
+    const writeStarted = new Promise<void>((resolve) => {
+      markWriteStarted = resolve
+    })
+    const guardedWrite = runHostCredentialWriteForExistingHost(HOST_ONE.id, async () => {
+      markWriteStarted()
+      await new Promise<void>((resolve) => (releaseWrite = resolve))
+    })
+    await writeStarted
+
+    const removal = removeHost(HOST_ONE.id)
+    await Promise.resolve()
+    expect(JSON.parse(storedHostsRaw)).toContainEqual(HOST_ONE)
+
+    releaseWrite()
+    await Promise.all([guardedWrite, removal])
+
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
+    expect(scheduleCleanupMock).toHaveBeenCalledWith(HOST_ONE.id, expect.any(Function))
+  })
+
+  it('blocks guarded relay secret writes after host removal', async () => {
+    await removeHost(HOST_ONE.id)
+
+    const writeCredential = vi.fn(async () => {})
+    await expect(
+      runHostCredentialWriteForExistingHost(HOST_ONE.id, writeCredential)
+    ).rejects.toBeInstanceOf(MobileRelayUpgradeHostRemovedError)
+    expect(writeCredential).not.toHaveBeenCalled()
+  })
+
+  it('keeps relay host persistence ordered ahead of concurrent removal', async () => {
+    let releaseTokenWrite!: () => void
+    let markTokenWriteStarted!: () => void
+    const tokenWriteStarted = new Promise<void>((resolve) => {
+      markTokenWriteStarted = resolve
+    })
+    secureStoreMock.setItemAsync.mockImplementationOnce(async () => {
+      markTokenWriteStarted()
+      await new Promise<void>((resolve) => (releaseTokenWrite = resolve))
+    })
+    const relay = {
+      v: 1 as const,
+      directorUrl: 'https://relay.onorca.dev',
+      cellUrl: 'https://relay-c1.onorca.dev',
+      assignmentEpoch: 7,
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      e2eeFraming: 2 as const
+    }
+    const saving = saveExistingHostRelayUpgrade({
+      ...HOST_ONE,
+      deviceToken: 'replacement-token',
+      endpoints: [
+        { id: 'direct-primary', kind: 'lan', url: HOST_ONE.endpoint },
+        {
+          id: 'relay-primary',
+          kind: 'relay',
+          url: `wss://relay-c1.onorca.dev/v1/connect/${relay.relayHostId}`
+        }
+      ],
+      relayHostId: relay.relayHostId,
+      relay
+    })
+    await tokenWriteStarted
+
+    const removal = removeHost(HOST_ONE.id)
+    const removedBeforeRelease = await Promise.race([
+      removal.then(() => true),
+      new Promise<false>((resolve) => setTimeout(() => resolve(false), 10))
+    ])
+    releaseTokenWrite()
+    await Promise.all([saving, removal])
+
+    expect(removedBeforeRelease).toBe(false)
+    expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
+    expect(JSON.parse(storedOverlayRaw!)).toEqual([])
   })
 
   it('awaits cleanup scheduling after metadata commit', async () => {
