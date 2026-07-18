@@ -311,6 +311,23 @@ describe('getProviderUsageWindows', () => {
     ])
   })
 
+  it('keeps independent weekly and monthly windows alongside named buckets', () => {
+    const bucketed = makeLimits({
+      provider: 'gemini',
+      status: 'ok',
+      session: window(20),
+      weekly: window(35, 10080),
+      monthly: window(45, 43200),
+      buckets: [{ name: 'Pro', ...window(20) }]
+    })
+
+    expect(getProviderUsageWindows(bucketed)).toEqual([
+      { key: 'bucket:0:Pro', label: 'Pro', usedPercent: 20, resetsAt: null },
+      { key: 'weekly', label: '7d', usedPercent: 35, resetsAt: null },
+      { key: 'monthly', label: '30d', usedPercent: 45, resetsAt: null }
+    ])
+  })
+
   it('includes OpenCode Go monthly window', () => {
     const openCode = makeLimits({
       provider: 'opencode-go',

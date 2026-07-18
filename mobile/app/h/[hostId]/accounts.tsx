@@ -17,15 +17,13 @@ import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { styles } from './accounts-screen-styles'
 import { useNow } from '../../../src/hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
-import { loadVisibleUsageProviders } from '../../../src/storage/preferences'
+import { useVisibleUsageProviders } from '../../../src/components/use-visible-usage-providers'
 import {
   type AccountsSnapshot,
   type ProviderKey,
   decodeAccountsSnapshot,
-  type UsageProviderKey,
   type UsageProviderDescriptor,
   USAGE_PROVIDERS,
-  DEFAULT_VISIBLE_USAGE_PROVIDERS,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getProviderUsageWindows,
@@ -56,26 +54,7 @@ export default function AccountsScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
-  const [visibleProviders, setVisibleProviders] = useState<Set<UsageProviderKey>>(
-    () => new Set(DEFAULT_VISIBLE_USAGE_PROVIDERS)
-  )
-
-  // Why: reload on focus so a change made in Settings → Account usage is
-  // reflected when the user navigates back — the screen stays mounted and
-  // updates in place (mirrors how the terminal picks up Settings → Terminal).
-  useFocusEffect(
-    useCallback(() => {
-      let active = true
-      void loadVisibleUsageProviders().then((set) => {
-        if (active) {
-          setVisibleProviders(set)
-        }
-      })
-      return () => {
-        active = false
-      }
-    }, [])
-  )
+  const visibleProviders = useVisibleUsageProviders()
 
   const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
     setSnapshot(nextSnapshot)

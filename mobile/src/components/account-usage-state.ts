@@ -174,20 +174,19 @@ export function getProviderUsageWindows(limits: ProviderRateLimits | null): Usag
     return []
   }
   const buckets = limits.buckets ?? []
-  // Why: when named buckets exist they are authoritative. Gemini's `session`
-  // is derived from the most-constrained bucket (host deriveSessionSummary), so
-  // emitting both would show that worst bucket twice under a false "5h" label.
-  // Key includes the index so two buckets with the same name stay distinct.
-  if (buckets.length > 0) {
-    return buckets.map((bucket, index) => ({
-      key: `bucket:${index}:${bucket.name}`,
-      label: bucket.name,
-      usedPercent: bucket.usedPercent,
-      resetsAt: bucket.resetsAt
-    }))
-  }
   const rows: UsageWindowRow[] = []
-  if (limits.session) {
+  // Why: named buckets replace only the synthesized session summary; independent
+  // weekly/monthly windows still belong beside them, matching desktop behavior.
+  if (buckets.length > 0) {
+    rows.push(
+      ...buckets.map((bucket, index) => ({
+        key: `bucket:${index}:${bucket.name}`,
+        label: bucket.name,
+        usedPercent: bucket.usedPercent,
+        resetsAt: bucket.resetsAt
+      }))
+    )
+  } else if (limits.session) {
     rows.push({
       key: 'session',
       label: '5h',
