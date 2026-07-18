@@ -48,6 +48,7 @@ import {
 } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
+import { WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths } from '@/lib/workspace-file-drag'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
@@ -966,14 +967,25 @@ const WorktreeCard = React.memo(function WorktreeCard({
         event.preventDefault()
         return
       }
-      const dragIds =
+      const selectedDragWorktrees =
         isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((item) => item.id)
-          : worktree.id
+          ? selectedWorktrees
+          : null
+      const draggedIds = selectedDragWorktrees
+        ? selectedDragWorktrees.map((item) => item.id)
+        : [worktree.id]
+      const draggedPaths = selectedDragWorktrees
+        ? selectedDragWorktrees.map((item) => item.path)
+        : [worktree.path]
+      const dragIds = draggedIds.length > 1 ? draggedIds : worktree.id
       writeWorkspaceDragData(event.dataTransfer, dragIds)
-      onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
+      // Why: the single-path channel opts into file moves; workspace cards provide
+      // path references while retaining move for card reordering and copy for targets.
+      event.dataTransfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(draggedPaths))
+      event.dataTransfer.effectAllowed = 'copyMove'
+      onCardDragStart?.(event, worktree.id, draggedIds)
     },
-    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id]
+    [isDeleting, isMultiSelected, onCardDragStart, selectedWorktrees, worktree.id, worktree.path]
   )
 
   const handleDragEnd = useCallback(
