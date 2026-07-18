@@ -53,7 +53,10 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "mediaPlayback": "Now Playing",
+        "mediaPlaybackDescription": "Show the current Apple Music or Spotify track in the status bar.",
+        "mediaPlaybackToggleDescription": "Show the active local Apple Music or Spotify track on macOS."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -13383,6 +13386,15 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    }
+  },
+  "statusBar": {
+    "mediaPlayback": {
+      "playing": "Playing",
+      "paused": "Paused",
+      "stopped": "Stopped",
+      "noTrack": "No track info",
+      "nowPlaying": "Now Playing"
     }
   }
 }

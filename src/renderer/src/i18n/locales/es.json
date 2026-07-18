@@ -30,7 +30,10 @@
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del servicio en segundo plano y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
-        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI.",
+        "mediaPlayback": "Reproduciendo ahora",
+        "mediaPlaybackDescription": "Muestra la pista actual de Apple Music o Spotify en la barra de estado.",
+        "mediaPlaybackToggleDescription": "Muestra la pista local activa de Apple Music o Spotify en macOS."
       },
       "menuBarIcon": {
         "title": "Mostrar icono en la barra de menús",
@@ -13383,6 +13386,15 @@
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
+  "statusBar": {
+    "mediaPlayback": {
+      "playing": "Reproduciendo",
+      "paused": "En pausa",
+      "stopped": "Detenido",
+      "noTrack": "Sin información de la pista",
+      "nowPlaying": "Reproduciendo ahora"
     }
   }
 }

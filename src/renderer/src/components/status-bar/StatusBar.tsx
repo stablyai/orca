@@ -11,7 +11,8 @@ import {
   Loader2,
   PanelsTopLeft,
   RefreshCw,
-  Server
+  Server,
+  Music2
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -86,6 +87,9 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { MediaPlaybackStatusSegment } from './MediaPlaybackStatusSegment'
+import { isStatusBarItemSupportedOnPlatform } from './status-bar-platform-support'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -2032,6 +2036,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
+  const mediaPlaybackSupported = isStatusBarItemSupportedOnPlatform(
+    'media-playback',
+    getRendererAppPlatform()
+  )
+  const showMediaPlayback = mediaPlaybackSupported && statusBarItems.includes('media-playback')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   // Why: which usage-meter children actually render — excludes resource-usage
@@ -2212,6 +2221,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
           {petEnabled ? <PetStatusSegment /> : null}
+          {showMediaPlayback ? (
+            <MediaPlaybackStatusSegment compact={compact} iconOnly={iconOnly} />
+          ) : null}
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}
@@ -2389,6 +2401,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <Plug className="size-3.5" />
             {translate('auto.components.status.bar.StatusBar.9659e38343', 'Ports')}
           </DropdownMenuCheckboxItem>
+          {mediaPlaybackSupported ? (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('media-playback')}
+              onCheckedChange={() => toggleStatusBarItem('media-playback')}
+            >
+              <Music2 className="size-3.5" />
+              {translate('statusBar.mediaPlayback.nowPlaying', 'Now Playing')}
+            </DropdownMenuCheckboxItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

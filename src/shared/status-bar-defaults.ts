@@ -11,5 +11,6 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'grok',
   'ssh',
   'resource-usage',
-  'ports'
+  'ports',
+  'media-playback'
 ]
