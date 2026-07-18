@@ -61,6 +61,7 @@ const {
 
 class FakeTray {
   setToolTip = vi.fn()
+  setTitle = vi.fn()
   setContextMenu = vi.fn()
   setImage = vi.fn()
   on = vi.fn()
@@ -109,9 +110,13 @@ async function loadModule(): Promise<TrayModule> {
   return import('./system-tray')
 }
 
-function createOptions() {
+function createOptions(
+  overrides: { isDevInstance?: boolean; devInstanceLabel?: string | null } = {}
+) {
   return {
     appIcon: 'classic',
+    isDevInstance: overrides.isDevInstance ?? false,
+    devInstanceLabel: overrides.devInstanceLabel ?? null,
     onOpen: vi.fn(),
     onOpenSettings: vi.fn(),
     onCheckForUpdates: vi.fn(),
@@ -234,6 +239,66 @@ describe('createSystemTray', () => {
     setPlatform('linux')
     const linuxModule = await loadModule()
     expect(linuxModule.createSystemTray(options)).toBeNull()
+  })
+})
+
+describe('dev instance indicator', () => {
+  it('shows a DEV title, labeled tooltip, and menu header on macOS', async () => {
+    setPlatform('darwin')
+    const { createSystemTray } = await loadModule()
+
+    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
+
+    expect(trayInstances[0].setTitle).toHaveBeenCalledWith('DEV')
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch)')
+    expect(builtMenuItems()[0]).toMatchObject({
+      label: 'Orca DEV (my-branch)',
+      enabled: false
+    })
+  })
+
+  it('omits the label suffix when the dev instance has none', async () => {
+    setPlatform('darwin')
+    const { createSystemTray } = await loadModule()
+
+    createSystemTray(createOptions({ isDevInstance: true }))
+
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV')
+    expect(builtMenuItems()[0]).toMatchObject({ label: 'Orca DEV', enabled: false })
+  })
+
+  it('keeps the DEV marker in the tooltip across the attention toggle', async () => {
+    setPlatform('darwin')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
+    const created = trayInstances[0]
+    created.setToolTip.mockClear()
+
+    setTrayAttention(true)
+    expect(created.setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch) - activity waiting')
+    setTrayAttention(false)
+    expect(created.setToolTip).toHaveBeenLastCalledWith('Orca DEV (my-branch)')
+  })
+
+  it('marks the Windows tooltip without touching the macOS-only title', async () => {
+    setPlatform('win32')
+    const { createSystemTray } = await loadModule()
+
+    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
+
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch)')
+    expect(trayInstances[0].setTitle).not.toHaveBeenCalled()
+    expect(builtMenuItems()[0]).toMatchObject({ label: 'Orca DEV (my-branch)', enabled: false })
+  })
+
+  it('adds no DEV marker for production instances', async () => {
+    setPlatform('darwin')
+    const { createSystemTray } = await loadModule()
+
+    createSystemTray(createOptions())
+
+    expect(trayInstances[0].setTitle).not.toHaveBeenCalled()
+    expect(builtMenuItems()[0].label).toBe('Open Orca')
   })
 })
 

@@ -72,7 +72,8 @@
     "minimizeNotice": {
       "body": "Orcaはシステムトレイで実行中です"
     },
-    "activityWaiting": "Orca - アクティビティ待機中"
+    "activityWaiting": "Orca - アクティビティ待機中",
+    "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {

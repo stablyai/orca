@@ -72,7 +72,8 @@
     "minimizeNotice": {
       "body": "Orca가 시스템 트레이에서 계속 실행 중입니다"
     },
-    "activityWaiting": "Orca - 활동 대기 중"
+    "activityWaiting": "Orca - 활동 대기 중",
+    "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
