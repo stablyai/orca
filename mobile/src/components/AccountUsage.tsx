@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import type { UsageWindowRow } from './account-usage-state'
+import { getUsageWindowResetLabel, type UsageWindowRow } from './account-usage-state'
 
 // Pure types and selectors live in account-usage-state.ts (no RN imports) so
 // they are unit-testable; re-exported here so existing import sites are stable.
@@ -27,6 +27,7 @@ export {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getProviderUsageWindows,
+  getUsageWindowResetLabel,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
@@ -111,10 +112,12 @@ export function UsageBar({
 // provider is mid-fetch with nothing yet.
 export function UsageWindowBars({
   windows,
-  fetching
+  fetching,
+  now
 }: {
   windows: UsageWindowRow[]
   fetching?: boolean
+  now?: number
 }) {
   if (windows.length === 0) {
     return <UsageBar label="—" usedPercent={null} unavailable={!fetching} loading={fetching} />
@@ -131,6 +134,7 @@ export function UsageWindowBars({
             usedPercent={w.usedPercent}
             unavailable={false}
             labelWidth={labelWidth}
+            resetText={now == null ? null : getUsageWindowResetLabel(w, now)}
           />
         </View>
       ))}

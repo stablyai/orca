@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -21,12 +21,14 @@ export default function AccountUsageSettingsScreen() {
   // tap can't persist against the default base and silently drop a stored-only
   // provider (e.g. an opted-in Grok); the load resolves within a frame or two.
   const [visible, setVisible] = useState<Set<UsageProviderKey> | null>(null)
+  const mounted = useRef(false)
 
   // Why: this screen is the only writer of the visibility set, so load once on
   // mount rather than on every focus — a focus-reload could resolve mid-toggle
   // and overwrite the optimistic UI with a pre-write snapshot. The settled read
   // also waits for any in-flight toggle so a quick leave/return shows the latest.
   useEffect(() => {
+    mounted.current = true
     let active = true
     void loadVisibleUsageProvidersSettled().then((stored) => {
       if (active) {
@@ -35,13 +37,13 @@ export default function AccountUsageSettingsScreen() {
     })
     return () => {
       active = false
+      mounted.current = false
     }
   }, [])
 
   const toggle = useCallback((id: UsageProviderKey, value: boolean) => {
-    // Optimistic UI; the storage-level toggle re-reads the latest stored set and
-    // changes only this provider, so it survives an unmount and never clobbers
-    // one the user didn't touch. Swallow a write failure so the UI stays put.
+    // Why: keep taps responsive, then reconcile after a failed write so the
+    // switches never claim a provider choice that storage did not persist.
     setVisible((prev) => {
       if (!prev) {
         return prev
@@ -54,13 +56,23 @@ export default function AccountUsageSettingsScreen() {
       }
       return next
     })
-    void setUsageProviderVisible(id, value).catch(() => {})
+    void setUsageProviderVisible(id, value).catch(async () => {
+      const stored = await loadVisibleUsageProvidersSettled()
+      if (mounted.current) {
+        setVisible(stored)
+      }
+    })
   }, [])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <Text style={styles.heading}>Account usage</Text>

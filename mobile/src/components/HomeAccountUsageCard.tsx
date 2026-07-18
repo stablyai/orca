@@ -9,7 +9,7 @@ import {
   getActiveProviderRateLimits,
   getProviderUsageWindows,
   getUsageBarState,
-  hasActiveProviderUsage,
+  hasRenderableUsage,
   UsageBar,
   UsageWindowBars
 } from './AccountUsage'
@@ -48,21 +48,7 @@ export function HomeAccountUsageCard({
       ) : null}
       {USAGE_PROVIDERS.filter((p) => visibleProviders.has(p.id)).map((descriptor) => {
         const limits = getActiveProviderRateLimits(snapshot, descriptor.id)
-        const managedAccounts =
-          descriptor.id === 'claude'
-            ? snapshot.claude.accounts
-            : descriptor.id === 'codex'
-              ? snapshot.codex.accounts
-              : []
-        // Hide a provider with no managed account and no usage — but keep a
-        // display-only one visible while fetching/error, matching the accounts screen.
-        const displayOnlyPending =
-          !descriptor.managed && (limits?.status === 'fetching' || limits?.status === 'error')
-        if (
-          managedAccounts.length === 0 &&
-          !hasActiveProviderUsage(limits) &&
-          !displayOnlyPending
-        ) {
+        if (!hasRenderableUsage(snapshot, descriptor.id)) {
           return null
         }
         const active =

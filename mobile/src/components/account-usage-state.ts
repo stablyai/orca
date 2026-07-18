@@ -161,6 +161,7 @@ export type UsageWindowRow = {
   key: string
   label: string
   usedPercent: number
+  resetsAt: number | null
 }
 
 // Why: providers do not share one fixed pair of windows. Gemini reports named
@@ -181,20 +182,40 @@ export function getProviderUsageWindows(limits: ProviderRateLimits | null): Usag
     return buckets.map((bucket, index) => ({
       key: `bucket:${index}:${bucket.name}`,
       label: bucket.name,
-      usedPercent: bucket.usedPercent
+      usedPercent: bucket.usedPercent,
+      resetsAt: bucket.resetsAt
     }))
   }
   const rows: UsageWindowRow[] = []
   if (limits.session) {
-    rows.push({ key: 'session', label: '5h', usedPercent: limits.session.usedPercent })
+    rows.push({
+      key: 'session',
+      label: '5h',
+      usedPercent: limits.session.usedPercent,
+      resetsAt: limits.session.resetsAt
+    })
   }
   if (limits.weekly) {
-    rows.push({ key: 'weekly', label: '7d', usedPercent: limits.weekly.usedPercent })
+    rows.push({
+      key: 'weekly',
+      label: '7d',
+      usedPercent: limits.weekly.usedPercent,
+      resetsAt: limits.weekly.resetsAt
+    })
   }
   if (limits.monthly) {
-    rows.push({ key: 'monthly', label: '30d', usedPercent: limits.monthly.usedPercent })
+    rows.push({
+      key: 'monthly',
+      label: '30d',
+      usedPercent: limits.monthly.usedPercent,
+      resetsAt: limits.monthly.resetsAt
+    })
   }
   return rows
+}
+
+export function getUsageWindowResetLabel(window: UsageWindowRow, now: number): string | null {
+  return window.resetsAt == null ? null : formatResetCountdown(window.resetsAt - now)
 }
 
 /**
@@ -232,5 +253,9 @@ export function hasRenderableUsage(
       return true
     }
   }
-  return hasActiveProviderUsage(getActiveProviderRateLimits(snapshot, provider))
+  const limits = getActiveProviderRateLimits(snapshot, provider)
+  if (!descriptor?.managed && (limits?.status === 'fetching' || limits?.status === 'error')) {
+    return true
+  }
+  return hasActiveProviderUsage(limits)
 }

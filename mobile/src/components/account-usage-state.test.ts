@@ -4,6 +4,7 @@ import {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getProviderUsageWindows,
+  getUsageWindowResetLabel,
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
@@ -65,8 +66,8 @@ function makeSnapshot(
   }
 }
 
-function window(usedPercent: number, windowMinutes = 300) {
-  return { usedPercent, windowMinutes, resetsAt: null, resetDescription: null }
+function window(usedPercent: number, windowMinutes = 300, resetsAt: number | null = null) {
+  return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
 }
 
 describe('hasActiveProviderUsage', () => {
@@ -286,8 +287,8 @@ describe('getProviderUsageWindows', () => {
       ]
     })
     expect(getProviderUsageWindows(gemini)).toEqual([
-      { key: 'bucket:0:Pro', label: 'Pro', usedPercent: 20 },
-      { key: 'bucket:1:Flash', label: 'Flash', usedPercent: 5 }
+      { key: 'bucket:0:Pro', label: 'Pro', usedPercent: 20, resetsAt: null },
+      { key: 'bucket:1:Flash', label: 'Flash', usedPercent: 5, resetsAt: null }
     ])
   })
 
@@ -305,8 +306,8 @@ describe('getProviderUsageWindows', () => {
       ]
     })
     expect(getProviderUsageWindows(gemini)).toEqual([
-      { key: 'bucket:0:Pro', label: 'Pro', usedPercent: 20 },
-      { key: 'bucket:1:Flash', label: 'Flash', usedPercent: 5 }
+      { key: 'bucket:0:Pro', label: 'Pro', usedPercent: 20, resetsAt: null },
+      { key: 'bucket:1:Flash', label: 'Flash', usedPercent: 5, resetsAt: null }
     ])
   })
 
@@ -317,16 +318,28 @@ describe('getProviderUsageWindows', () => {
       monthly: window(42, 43200)
     })
     expect(getProviderUsageWindows(openCode)).toEqual([
-      { key: 'monthly', label: '30d', usedPercent: 42 }
+      { key: 'monthly', label: '30d', usedPercent: 42, resetsAt: null }
     ])
   })
 
-  it('returns session and weekly rows for the classic two-window shape', () => {
-    const claude = makeLimits({ status: 'ok', session: window(10), weekly: window(60, 10080) })
+  it('returns reset timestamps with classic session and weekly rows', () => {
+    const claude = makeLimits({
+      status: 'ok',
+      session: window(10, 300, 1_000),
+      weekly: window(60, 10080, 2_000)
+    })
     expect(getProviderUsageWindows(claude)).toEqual([
-      { key: 'session', label: '5h', usedPercent: 10 },
-      { key: 'weekly', label: '7d', usedPercent: 60 }
+      { key: 'session', label: '5h', usedPercent: 10, resetsAt: 1_000 },
+      { key: 'weekly', label: '7d', usedPercent: 60, resetsAt: 2_000 }
     ])
+  })
+
+  it('formats a dynamic window reset with the desktop countdown copy', () => {
+    const [row] = getProviderUsageWindows(
+      makeLimits({ status: 'ok', monthly: window(42, 43200, 3_600_000) })
+    )
+
+    expect(getUsageWindowResetLabel(row!, 0)).toBe('Resets in 1h')
   })
 })
 
@@ -340,6 +353,18 @@ describe('hasRenderableUsage for display-only providers', () => {
 
   it('is false for a display-only provider with no data (no managed-account fallback)', () => {
     expect(hasRenderableUsage(makeSnapshot(), 'grok')).toBe(false)
+  })
+
+  it('keeps display-only fetching and error states reachable on the home screen', () => {
+    const fetching = makeSnapshot({
+      grokLimits: makeLimits({ provider: 'grok', status: 'fetching' })
+    })
+    const error = makeSnapshot({
+      grokLimits: makeLimits({ provider: 'grok', status: 'error', error: 'temporary failure' })
+    })
+
+    expect(hasRenderableUsage(fetching, 'grok')).toBe(true)
+    expect(hasRenderableUsage(error, 'grok')).toBe(true)
   })
 })
 

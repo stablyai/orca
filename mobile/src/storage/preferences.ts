@@ -287,11 +287,8 @@ export async function saveVisibleUsageProviders(ids: ReadonlySet<UsageProviderKe
   )
 }
 
-// Serialize toggles so two fast switches can't lose each other through a
-// read-modify-write race on the same key: each toggle re-reads the latest
-// stored set and changes only its own provider, so it never clobbers a
-// provider it didn't touch. ponytail: a module-level chain is enough for the
-// single settings screen; revisit if more writers appear.
+// Why: serialize the settings screen's read-modify-write toggles so rapid
+// changes cannot overwrite a provider that another toggle just persisted.
 let visibleUsageWrite: Promise<Set<UsageProviderKey>> = Promise.resolve(new Set())
 
 export function setUsageProviderVisible(
