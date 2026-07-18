@@ -171,6 +171,10 @@ import {
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import {
+  parseCodexResetCreditAttemptLedger,
+  type CodexResetCreditAttemptLedger
+} from '../shared/codex-reset-credit-attempt-ledger'
 import { normalizeManualRepoOrder } from '../shared/manual-repo-order'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
@@ -3658,6 +3662,29 @@ export class Store {
 
   flushActiveViewPreferenceOrThrow(): void {
     this.activeViewPreference.flushOrThrow()
+  }
+
+  getCodexResetCreditAttemptLedger(): CodexResetCreditAttemptLedger {
+    return parseCodexResetCreditAttemptLedger(this.state.codexResetCreditAttemptLedger)
+  }
+
+  replaceCodexResetCreditAttemptLedgerAndFlush(ledger: CodexResetCreditAttemptLedger): void {
+    if (this.writesFrozen) {
+      throw new Error('Cannot persist Codex reset-credit attempts while writes are frozen')
+    }
+    const next = parseCodexResetCreditAttemptLedger(ledger)
+    const previous = this.state.codexResetCreditAttemptLedger
+      ? structuredClone(this.state.codexResetCreditAttemptLedger)
+      : undefined
+    this.state.codexResetCreditAttemptLedger = next
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      // Why: callers use a successful return as the durability barrier before
+      // handing a scarce-credit mutation to the provider.
+      this.state.codexResetCreditAttemptLedger = previous
+      throw error
+    }
   }
 
   // ── Repos ──────────────────────────────────────────────────────────

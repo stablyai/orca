@@ -10,6 +10,7 @@ import {
 import type { TerminalQuickCommand } from '../../src/shared/types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
+import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { FAKE_SCROLLBACK, STREAMING_CHUNKS } from './mock-server-terminal-fixtures'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
@@ -129,6 +130,9 @@ export function handleRequest(
   if (handleMockFilePreviewRequest(request, respond, success, error)) {
     return
   }
+  if (handleMockAccountRequest(request, respond, success, error)) {
+    return
+  }
 
   switch (request.method) {
     case 'status.get':
@@ -137,6 +141,7 @@ export function handleRequest(
           runtimeId: 'mock-runtime',
           protocolVersion: DESKTOP_PROTOCOL_VERSION,
           minCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION,
+          capabilities: ['accounts.codex-reset-credit.v1'],
           graphStatus: 'ready',
           windowCount: 1,
           tabCount: 2,

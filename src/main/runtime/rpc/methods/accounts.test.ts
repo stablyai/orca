@@ -27,6 +27,96 @@ describe('account RPC methods', () => {
     expect(runtime.refreshAccountsForMobile).toHaveBeenCalledOnce()
   })
 
+  it('forwards a client idempotency key when consuming a Codex reset credit', async () => {
+    const idempotencyKey = '11111111-1111-4111-8111-111111111111'
+    const expectedScope = {
+      target: { runtime: 'host' as const, wslDistro: null },
+      accountId: 'codex-account',
+      accountRevision: 42,
+      offerRevision: 'v1:offer'
+    }
+    const result = {
+      outcome: 'reset',
+      scope: expectedScope,
+      snapshot: { claude: null, codex: null }
+    }
+    const consumeCodexRateLimitResetCredit = vi.fn().mockResolvedValue(result)
+    const runtime = { consumeCodexRateLimitResetCredit } as unknown as OrcaRuntimeService
+    const reset = method('accounts.consumeCodexResetCredit')
+    if (isStreamingMethod(reset)) {
+      throw new Error('accounts.consumeCodexResetCredit must be a request method')
+    }
+
+    expect(reset.params?.parse({ idempotencyKey, expectedScope })).toEqual({
+      idempotencyKey,
+      expectedScope
+    })
+    expect(() => reset.params?.parse({ idempotencyKey: 'not-a-uuid', expectedScope })).toThrow()
+    expect(() =>
+      reset.params?.parse({
+        idempotencyKey,
+        expectedScope: {
+          ...expectedScope,
+          target: { runtime: 'host', wslDistro: 'Ubuntu' }
+        }
+      })
+    ).toThrow()
+    expect(() =>
+      reset.params?.parse({
+        idempotencyKey,
+        expectedScope: {
+          ...expectedScope,
+          target: { runtime: 'wsl', wslDistro: null }
+        }
+      })
+    ).toThrow()
+    expect(() => reset.params?.parse({ idempotencyKey, expectedScope, extra: true })).toThrow()
+    await expect(reset.handler({ idempotencyKey, expectedScope }, { runtime })).resolves.toBe(
+      result
+    )
+    expect(consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(idempotencyKey, expectedScope)
+  })
+
+  it('forwards the exact WSL target when selecting a Codex account', async () => {
+    const selectCodexAccountForTarget = vi
+      .fn()
+      .mockResolvedValue({ accounts: [], activeAccountId: null })
+    const runtime = { selectCodexAccountForTarget } as unknown as OrcaRuntimeService
+    const select = method('accounts.selectCodexForTarget')
+    if (isStreamingMethod(select)) {
+      throw new Error('accounts.selectCodexForTarget must be a request method')
+    }
+    const params = {
+      accountId: null,
+      target: { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+    }
+
+    expect(select.params?.parse(params)).toEqual(params)
+    expect(
+      select.params?.parse({
+        accountId: null,
+        target: { runtime: 'wsl', wslDistro: null }
+      })
+    ).toEqual({ accountId: null, target: { runtime: 'wsl', wslDistro: null } })
+    expect(() =>
+      select.params?.parse({
+        accountId: null,
+        target: { runtime: 'host', wslDistro: 'Ubuntu' }
+      })
+    ).toThrow()
+    expect(() =>
+      select.params?.parse({
+        accountId: null,
+        target: { runtime: 'wsl', wslDistro: '   ' }
+      })
+    ).toThrow()
+    await expect(select.handler(params, { runtime })).resolves.toEqual({
+      accounts: [],
+      activeAccountId: null
+    })
+    expect(selectCodexAccountForTarget).toHaveBeenCalledWith(null, params.target)
+  })
+
   it('uses a stale-aware refresh when a connection replays the subscription', async () => {
     const snapshot = { claude: null, codex: null }
     let cleanup: (() => void) | undefined

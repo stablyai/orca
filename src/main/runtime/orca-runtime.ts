@@ -809,11 +809,16 @@ import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { githubAvatarIcon } from '../../shared/repo-icon'
 import type { ClaudeAccountService } from '../claude-accounts/service'
-import type { CodexAccountService } from '../codex-accounts/service'
+import type {
+  CodexAccountService,
+  CodexResetCreditRejectedBeforeProviderReason
+} from '../codex-accounts/service'
+import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { RateLimitService } from '../rate-limits/service'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
-import type { RateLimitState } from '../../shared/rate-limit-types'
+import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
+import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
@@ -854,6 +859,18 @@ export type AccountsSnapshot = {
   codex: CodexRateLimitAccountsState
   rateLimits: RateLimitState
 }
+
+export type CodexRateLimitResetRpcResult = {
+  scope: CodexResetCreditExpectedScope
+  snapshot: AccountsSnapshot
+} & (
+  | { outcome: CodexRateLimitResetOutcome }
+  | {
+      status: 'rejectedBeforeProvider'
+      retryDisposition: 'discardAttempt'
+      reason: CodexResetCreditRejectedBeforeProviderReason
+    }
+)
 
 type RuntimeStore = {
   getRepos: Store['getRepos']
@@ -9375,6 +9392,42 @@ export class OrcaRuntimeService {
 
   selectCodexAccount(accountId: string | null): Promise<CodexRateLimitAccountsState> {
     return this.requireAccountServices().codexAccounts.selectAccount(accountId)
+  }
+
+  selectCodexAccountForTarget(
+    accountId: string | null,
+    target: CodexAccountSelectionTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.requireAccountServices().codexAccounts.selectAccountForTarget(accountId, target)
+  }
+
+  async consumeCodexRateLimitResetCredit(
+    idempotencyKey: string,
+    expectedScope: CodexResetCreditExpectedScope
+  ): Promise<CodexRateLimitResetRpcResult> {
+    const { claudeAccounts, codexAccounts } = this.requireAccountServices()
+    const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
+    // Why: Codex selection and usage were captured before its mutation queue
+    // advanced. Re-reading them here could pair scope A with queued selection B.
+    const snapshot = {
+      claude: claudeAccounts.listAccounts(),
+      codex: result.codex,
+      rateLimits: result.rateLimits
+    }
+    if ('status' in result) {
+      return {
+        status: result.status,
+        retryDisposition: result.retryDisposition,
+        reason: result.reason,
+        scope: result.scope,
+        snapshot
+      }
+    }
+    return {
+      outcome: result.outcome,
+      scope: result.scope,
+      snapshot
+    }
   }
 
   removeClaudeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {

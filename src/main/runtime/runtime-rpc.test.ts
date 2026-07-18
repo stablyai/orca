@@ -1318,6 +1318,17 @@ describe('OrcaRuntimeRpcServer', () => {
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
     const selectClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const selectCodexAccount = vi.fn().mockResolvedValue({ ok: true })
+    const expectedCodexResetScope = {
+      target: { runtime: 'host' as const, wslDistro: null },
+      accountId: 'codex-account',
+      accountRevision: 42,
+      offerRevision: 'v1:offer'
+    }
+    const consumeCodexRateLimitResetCredit = vi.fn().mockResolvedValue({
+      outcome: 'reset',
+      scope: expectedCodexResetScope,
+      snapshot: { claude: null, codex: null }
+    })
     const removeClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const readTerminal = vi.fn().mockResolvedValue({ tail: ['ok'] })
     const getRuntimeGitStatus = vi
@@ -1406,6 +1417,7 @@ describe('OrcaRuntimeRpcServer', () => {
       pushRuntimeGit,
       selectClaudeAccount,
       selectCodexAccount,
+      consumeCodexRateLimitResetCredit,
       removeClaudeAccount,
       readTerminal,
       getRuntimeGitStatus,
@@ -2041,6 +2053,19 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
+        id: 'req_consume_codex_reset',
+        method: 'accounts.consumeCodexResetCredit',
+        deviceToken: mobile.token,
+        params: {
+          idempotencyKey: '11111111-1111-4111-8111-111111111111',
+          expectedScope: expectedCodexResetScope
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
         id: 'req_remove_claude',
         method: 'accounts.removeClaude',
         deviceToken: mobile.token,
@@ -2244,6 +2269,9 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_consume_codex_reset', ok: true })
+    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_terminal_read', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_files_open_diff', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_diff', ok: true }))
@@ -2275,6 +2303,10 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(selectClaudeAccount).toHaveBeenCalledWith('claude-account')
     expect(selectCodexAccount).toHaveBeenCalledWith(null)
+    expect(consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expectedCodexResetScope
+    )
     expect(readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
     expect(getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
     expect(pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, undefined, undefined)

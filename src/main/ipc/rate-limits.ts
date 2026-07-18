@@ -1,15 +1,19 @@
 import { ipcMain } from 'electron'
 import type { RateLimitService } from '../rate-limits/service'
 import type { RateLimitRuntimeTarget } from '../../shared/rate-limit-types'
+import type { CodexAccountService } from '../codex-accounts/service'
 
-export function registerRateLimitHandlers(rateLimits: RateLimitService): void {
+export function registerRateLimitHandlers(
+  rateLimits: RateLimitService,
+  codexAccounts: CodexAccountService
+): void {
   ipcMain.handle('rateLimits:get', () => rateLimits.getState())
   ipcMain.handle('rateLimits:refresh', () => rateLimits.refresh())
   ipcMain.handle('rateLimits:refreshCodexForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshCodexForTarget(target)
   )
   ipcMain.handle('rateLimits:consumeCodexResetCredit', () =>
-    rateLimits.consumeCodexRateLimitResetCredit()
+    codexAccounts.consumeCurrentRateLimitResetCredit()
   )
   ipcMain.handle('rateLimits:refreshClaudeForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshClaudeForTarget(target)

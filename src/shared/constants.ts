@@ -10,6 +10,7 @@ import type {
   WorkspaceSessionState,
   AgentActivityDisplayMode
 } from './types'
+import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
@@ -423,7 +424,8 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     automations: [],
     automationRuns: [],
     onboarding: getDefaultOnboardingState(),
-    featureInteractionTelemetryBuckets: {}
+    featureInteractionTelemetryBuckets: {},
+    codexResetCreditAttemptLedger: structuredClone(EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER)
   }
 }
 
