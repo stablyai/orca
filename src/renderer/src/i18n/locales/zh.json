@@ -9215,6 +9215,20 @@
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
+        },
+        "PinnedTerminalPanelsSetting": {
+          "title": "Pinned terminal panels",
+          "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add"
+        },
+        "PinnedWebPanelsSetting": {
+          "title": "Pinned web panels",
+          "description": "Pin dashboards (Grafana, CI, issue boards) to the sidebar as persistent pages.",
+          "remove": "Remove panel",
+          "titlePlaceholder": "Title",
+          "add": "Add"
         }
       },
       "right": {
@@ -13224,6 +13238,17 @@
           },
           "undo": "撤销",
           "widthOption": "{{value0}} px"
+        }
+      },
+      "pinned-terminal-panels": {
+        "PinnedTerminalPanelPage": {
+          "close": "Close panel"
+        }
+      },
+      "pinned-web-panels": {
+        "PinnedWebPanelPage": {
+          "reload": "Reload panel",
+          "close": "Close panel"
         }
       }
     },

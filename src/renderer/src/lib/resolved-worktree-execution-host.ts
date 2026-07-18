@@ -4,7 +4,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { isSentinelWorktreeId } from '../../../shared/pinned-terminal-panels'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
@@ -50,7 +50,7 @@ export function getResolvedExecutionHostIdForWorktree(
   if (!worktreeId) {
     return null
   }
-  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+  if (isSentinelWorktreeId(worktreeId)) {
     return LOCAL_EXECUTION_HOST_ID
   }
   const scope = parseWorkspaceKey(worktreeId)

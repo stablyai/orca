@@ -1,4 +1,5 @@
 import type { PinnedTerminalPanel } from './types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 
 // Why: each panel owns a live PTY; a bound keeps a corrupted profile from
 // spawning an unbounded number of shells at startup.
@@ -13,6 +14,15 @@ const MAX_PANEL_COMMAND_LENGTH = 500
 /** Tab host for panel terminals — a sentinel workspace like the floating
  *  workspace, so panel tabs never attach to a real repo worktree. */
 export const PINNED_TERMINAL_PANELS_WORKTREE_ID = 'global-pinned-terminal-panels'
+
+/** True for tab-host ids that are not real repo worktrees (floating workspace,
+ *  pinned terminal panels) but still ride the normal terminal session pipeline. */
+export function isSentinelWorktreeId(worktreeId: string): boolean {
+  return (
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+    worktreeId === PINNED_TERMINAL_PANELS_WORKTREE_ID
+  )
+}
 
 function normalizePinnedTerminalPanelCommand(value: unknown): string | null {
   if (typeof value !== 'string') {

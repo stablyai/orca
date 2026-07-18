@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { isSentinelWorktreeId } from '../../../shared/pinned-terminal-panels'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -51,7 +51,7 @@ export function getConnectionIdFromState(
   state: ConnectionOwnerState,
   worktreeId: string | null
 ): string | null | undefined {
-  if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+  if (!worktreeId || isSentinelWorktreeId(worktreeId)) {
     return null
   }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)

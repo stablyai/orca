@@ -34,6 +34,7 @@ import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './termina
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { PINNED_TERMINAL_PANELS_WORKTREE_ID } from '../../../../shared/pinned-terminal-panels'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   addAdditionalValidWorkspaceKeys,
@@ -2070,6 +2071,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .map((w) => w.id)
     )
     validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    validWorktreeIds.add(PINNED_TERMINAL_PANELS_WORKTREE_ID)
     for (const workspace of state.folderWorkspaces) {
       validWorktreeIds.add(folderWorkspaceKey(workspace.id))
     }
