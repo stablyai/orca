@@ -82,6 +82,7 @@ export type NotificationPermissionState = {
   granted: boolean
   status: string
   canAskAgain: boolean
+  authorizationReflectsUserChoice: boolean
 }
 
 export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
@@ -89,7 +90,11 @@ export async function getNotificationPermissionState(): Promise<NotificationPerm
   return {
     granted: status === 'granted',
     status,
-    canAskAgain
+    canAskAgain,
+    // Why: Android before API 33 has no runtime notification permission, so
+    // Expo's default "granted" state is capability evidence, not user consent.
+    authorizationReflectsUserChoice:
+      status === 'granted' && (Platform.OS !== 'android' || Number(Platform.Version) >= 33)
   }
 }
 

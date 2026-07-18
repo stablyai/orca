@@ -3,6 +3,7 @@ import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import {
   CODEX_SESSION_ROLLOUT_EXTENSIONS,
   codexRolloutBaseName,
@@ -117,6 +118,10 @@ export async function resolveSessionFilePath(
   sessionId: string,
   options: ResolveSessionFileOptions = {}
 ): Promise<string | null> {
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  if (!transcriptAgent) {
+    return null
+  }
   // Why: the hook's transcript_path is the exact file the agent is writing, so it
   // beats reconstructing a path from the session id. Guard with existsSync so a
   // stale/remote path falls through to the id-based search rather than returning
@@ -144,13 +149,13 @@ export async function resolveSessionFilePath(
     return null
   }
 
-  if (agent === 'claude') {
+  if (transcriptAgent === 'claude') {
     return resolveClaudeSessionFile(trimmedId, options.claudeProjectsDir ?? claudeProjectsDir())
   }
-  if (agent === 'codex') {
+  if (transcriptAgent === 'codex') {
     return resolveCodexSessionFile(trimmedId, options.codexSessionsDirs ?? codexSessionsDirs())
   }
-  if (agent === 'grok') {
+  if (transcriptAgent === 'grok') {
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir())
   }
   return null

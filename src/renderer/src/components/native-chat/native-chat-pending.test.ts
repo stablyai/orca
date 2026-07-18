@@ -140,6 +140,26 @@ describe('prunePendingSends', () => {
       prunePendingSends(pending, [userMessage('u1', 'repeat'), assistantMessage('a1', 'done')])
     ).toEqual([pendingOf('p2', 'repeat')])
   })
+
+  it('prunes consecutive optimistic sends that were glued into one transcript user turn', () => {
+    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'tell me a jokecontinue'),
+        assistantMessage('a1', 'a joke')
+      ])
+    ).toEqual([])
+  })
+
+  it('does not treat an unrelated longer user turn as a glued match', () => {
+    const pending = [pendingOf('p1', 'hi')]
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'history of the project'),
+        assistantMessage('a1', 'ok')
+      ])
+    ).toEqual(pending)
+  })
 })
 
 describe('pendingSendsAsMessages', () => {
@@ -177,6 +197,13 @@ describe('pendingSendsAsMessages', () => {
 
     expect(pendingSendsAsMessages(pending, [userMessage('u1', 'first prompt')])).toEqual([])
     expect(pendingSendsAsMessages(pending, [])).toHaveLength(1)
+  })
+
+  it('hides consecutive optimistic sends once a glued transcript user turn lands', () => {
+    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
+    expect(pendingSendsAsMessages(pending, [userMessage('u1', 'tell me a jokecontinue')])).toEqual(
+      []
+    )
   })
 
   it('keeps a repeated prompt visible when its only match predates the send boundary', () => {

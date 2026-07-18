@@ -100,7 +100,13 @@ export async function awaitWithSystemSshAbort<T>(
     // children to emit close after we've already signaled them.
     abortChildren()
     suppressLateOperationError = true
-    abortReject?.(createAbortError())
+    abortReject?.(
+      Object.assign(createAbortError(), {
+        // The child was signaled, but this fast abort path intentionally does
+        // not wait for process exit; callers holding remote locks must retain them.
+        sshChannelCloseConfirmed: false
+      })
+    )
   }
   signal.addEventListener('abort', abort, { once: true })
   if (signal.aborted) {

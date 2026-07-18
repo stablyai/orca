@@ -47,7 +47,6 @@ import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 import {
   appendNormalizedToTailBuffer,
-  appendRecentPtyOutput,
   appendRecentPtyPathCandidates,
   buildPreview,
   OrcaRuntimeService,
@@ -55,6 +54,7 @@ import {
   recentTerminalOutputIncludesPath,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -92,14 +92,17 @@ import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
+import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
+const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
 
 vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeLinkedPaths: vi.fn(),
+  findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
 }))
 
@@ -152,7 +155,22 @@ const electronMocks = vi.hoisted(() => {
   }
 })
 
+const closeLocalWatcherForWorktreePathMock = vi.hoisted(() => vi.fn())
+const closeRemoteWatcherForWorktreePathMock = vi.hoisted(() => vi.fn())
+const restoreLocalWatcherAfterFailedRemovalMock = vi.hoisted(() => vi.fn())
+const restoreRemoteWatcherAfterFailedRemovalMock = vi.hoisted(() => vi.fn())
+const forgetLocalWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
+const forgetRemoteWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
+
 vi.mock('electron', () => electronMocks)
+vi.mock('../ipc/filesystem-watcher', () => ({
+  closeLocalWatcherForWorktreePath: closeLocalWatcherForWorktreePathMock,
+  closeRemoteWatcherForWorktreePath: closeRemoteWatcherForWorktreePathMock,
+  restoreLocalWatcherAfterFailedRemoval: restoreLocalWatcherAfterFailedRemovalMock,
+  restoreRemoteWatcherAfterFailedRemoval: restoreRemoteWatcherAfterFailedRemovalMock,
+  forgetLocalWatcherRemovalSnapshot: forgetLocalWatcherRemovalSnapshotMock,
+  forgetRemoteWatcherRemovalSnapshot: forgetRemoteWatcherRemovalSnapshotMock
+}))
 
 const {
   MOCK_GIT_WORKTREES,
@@ -162,7 +180,9 @@ const {
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
   sshGitProviders,
+  sshProviderGenerations,
   getSshGitProviderMock,
+  getSshGitProviderGenerationMock,
   registerSshGitProviderMock,
   unregisterSshGitProviderMock,
   getActiveMultiplexerMock,
@@ -235,6 +255,7 @@ const {
   // Why: SSH runtime tests register providers through the public dispatcher API,
   // so the mock needs the same registry semantics as the real module.
   const sshGitProviders = new Map<string, unknown>()
+  const sshProviderGenerations = new Map<string, number>()
 
   return {
     MOCK_GIT_WORKTREES: [
@@ -252,12 +273,22 @@ const {
     computeWorktreePathMock: vi.fn(),
     ensurePathWithinWorkspaceMock: vi.fn(),
     sshGitProviders,
+    sshProviderGenerations,
     getSshGitProviderMock: vi.fn((connectionId: string) => sshGitProviders.get(connectionId)),
+    getSshGitProviderGenerationMock: vi.fn(
+      (connectionId: string) => sshProviderGenerations.get(connectionId) ?? 0
+    ),
     registerSshGitProviderMock: vi.fn((connectionId: string, provider: unknown) => {
       sshGitProviders.set(connectionId, provider)
+      sshProviderGenerations.set(connectionId, (sshProviderGenerations.get(connectionId) ?? 0) + 1)
     }),
     unregisterSshGitProviderMock: vi.fn((connectionId: string) => {
-      sshGitProviders.delete(connectionId)
+      if (sshGitProviders.delete(connectionId)) {
+        sshProviderGenerations.set(
+          connectionId,
+          (sshProviderGenerations.get(connectionId) ?? 0) + 1
+        )
+      }
     }),
     getActiveMultiplexerMock: vi.fn(),
     muxRequestMock: vi.fn(),
@@ -343,6 +374,7 @@ vi.mock('../terminal-history', () => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
+  getSshGitProviderGeneration: getSshGitProviderGenerationMock,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
     'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
   requireSshGitProvider: (connectionId: string) => {
@@ -558,17 +590,25 @@ function resetRuntimeTestMocks(): void {
   electronMocks.ipcMain.on.mockClear()
   electronMocks.ipcMain.removeListener.mockClear()
   electronMocks.ipcMain.emit.mockClear()
+  closeLocalWatcherForWorktreePathMock.mockReset().mockResolvedValue(undefined)
+  closeRemoteWatcherForWorktreePathMock.mockReset().mockResolvedValue(undefined)
+  restoreLocalWatcherAfterFailedRemovalMock.mockReset().mockResolvedValue(undefined)
+  restoreRemoteWatcherAfterFailedRemovalMock.mockReset().mockResolvedValue(undefined)
+  forgetLocalWatcherRemovalSnapshotMock.mockReset()
+  forgetRemoteWatcherRemovalSnapshotMock.mockReset()
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockReset()
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
+  findExistingWorktreeSymlinkPathsMock.mockReset().mockResolvedValue([])
   removeWorktreeLinkedPathsMock.mockReset()
   resolveLocalGitUsernameMock.mockReset().mockResolvedValue('')
   vi.mocked(forceDeleteLocalBranchMock).mockReset()
   vi.mocked(forceDeleteLocalBranchMock).mockResolvedValue(undefined)
   sshGitProviders.clear()
+  sshProviderGenerations.clear()
   getSshGitProviderMock.mockReset()
   getSshGitProviderMock.mockImplementation((connectionId: string) =>
     sshGitProviders.get(connectionId)
@@ -576,10 +616,13 @@ function resetRuntimeTestMocks(): void {
   registerSshGitProviderMock.mockReset()
   registerSshGitProviderMock.mockImplementation((connectionId: string, provider: unknown) => {
     sshGitProviders.set(connectionId, provider)
+    sshProviderGenerations.set(connectionId, (sshProviderGenerations.get(connectionId) ?? 0) + 1)
   })
   unregisterSshGitProviderMock.mockReset()
   unregisterSshGitProviderMock.mockImplementation((connectionId: string) => {
-    sshGitProviders.delete(connectionId)
+    if (sshGitProviders.delete(connectionId)) {
+      sshProviderGenerations.set(connectionId, (sshProviderGenerations.get(connectionId) ?? 0) + 1)
+    }
   })
   muxRequestMock.mockReset()
   muxRequestMock.mockResolvedValue(undefined)
@@ -1091,6 +1134,19 @@ function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
   }
 }
 
+function makeWorktreeInfo(
+  path: string,
+  head = 'head'
+): {
+  path: string
+  head: string
+  branch: string
+  isBare: boolean
+  isMainWorktree: boolean
+} {
+  return { path, head, branch: 'main', isBare: false, isMainWorktree: path.endsWith('/repo') }
+}
+
 function deferred<T>(): {
   promise: Promise<T>
   resolve: (value: T) => void
@@ -1362,6 +1418,81 @@ computeWorktreePathMock.mockImplementation(
 )
 ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
 
+describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
+  it('coalesces concurrent creates that share a clientMutationId', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let calls = 0
+    const factory = (): Promise<{ worktree: { id: string } }> => {
+      calls += 1
+      return Promise.resolve({ worktree: { id: 'wt' } })
+    }
+    const [a, b] = await Promise.all([
+      runtime.dedupeWorktreeCreate('id:r', 'key-1', factory),
+      runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+    ])
+    expect(calls).toBe(1)
+    expect(a).toBe(b)
+  })
+
+  it('reuses a settled success for a retry whose response was lost in a cutover', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let calls = 0
+    const factory = (): Promise<{ worktree: { id: string } }> => {
+      calls += 1
+      return Promise.resolve({ worktree: { id: `wt-${calls}` } })
+    }
+    const first = await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+    const retried = await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+    expect(calls).toBe(1)
+    expect(retried).toEqual(first)
+  })
+
+  it('expires settled successes after the reconnect window', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      let calls = 0
+      const factory = (): Promise<{ n: number }> => Promise.resolve({ n: (calls += 1) })
+      await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+      await vi.advanceTimersByTimeAsync(59_999)
+      await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+      expect(calls).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
+      expect(calls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a failed create so a genuine retry starts fresh', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let calls = 0
+    const factory = (): Promise<never> => {
+      calls += 1
+      return Promise.reject(new Error(`boom-${calls}`))
+    }
+    await expect(runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)).rejects.toThrow('boom-1')
+    await expect(runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)).rejects.toThrow('boom-2')
+    expect(calls).toBe(2)
+  })
+
+  it('never dedupes across repos or when no clientMutationId is supplied', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let calls = 0
+    const factory = (): Promise<{ n: number }> => {
+      calls += 1
+      return Promise.resolve({ n: calls })
+    }
+    await runtime.dedupeWorktreeCreate('id:a', 'key-1', factory)
+    await runtime.dedupeWorktreeCreate('id:b', 'key-1', factory)
+    await runtime.dedupeWorktreeCreate('id:a', undefined, factory)
+    await runtime.dedupeWorktreeCreate('id:a', undefined, factory)
+    expect(calls).toBe(4)
+  })
+})
+
 describe('OrcaRuntimeService', () => {
   it('projects runtime-backed settings to paired clients', () => {
     const runtime = new OrcaRuntimeService({
@@ -1474,6 +1605,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('terminal.binary-stream.v1')
     expect(status.capabilities).toContain('workspace-ports.v1')
     expect(status.capabilities).toContain('mobile.tasks.v1')
+    expect(status.capabilities).toContain('worktree.create-idempotency.v1')
     expect(status.capabilities).toContain('project-host-setup.v1')
     expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
     expect(status.capabilities).not.toContain('browser.screencast.v1')
@@ -1513,6 +1645,123 @@ describe('OrcaRuntimeService', () => {
     expect(capabilities).toContain('browser.screencast.v1')
     // ...and the headless marker tells clients not to fall back to a local tab.
     expect(capabilities).toContain('browser.headless.v1')
+    expect(capabilities).toContain('browser.certificate-trust.v1')
+  })
+
+  it('surfaces live offscreen load failures in headless browser snapshots', () => {
+    const runtime = createRuntime()
+    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setAgentBrowserBridge({
+      tabList: vi.fn(() => ({
+        tabs: [
+          {
+            browserPageId: 'page-certificate-error',
+            index: 0,
+            url: 'https://localhost:3443/',
+            title: 'Local HTTPS',
+            active: true,
+            loadError: {
+              code: -202,
+              description: 'ERR_CERT_AUTHORITY_INVALID',
+              validatedUrl: 'https://localhost:3443/'
+            },
+            certificateFailure: {
+              challengeId: 'challenge-1',
+              browserPageId: 'page-certificate-error',
+              errorCode: -202,
+              error: 'ERR_CERT_AUTHORITY_INVALID',
+              origin: 'https://localhost:3443',
+              displayHost: 'localhost:3443',
+              canProceed: true,
+              observedAt: 123
+            }
+          }
+        ]
+      }))
+    } as never)
+    const browserTabs = runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)
+    expect(browserTabs).toContainEqual(
+      expect.objectContaining({
+        type: 'browser',
+        browserPageId: 'page-certificate-error',
+        loadError: {
+          code: -202,
+          description: 'ERR_CERT_AUTHORITY_INVALID',
+          validatedUrl: 'https://localhost:3443/'
+        },
+        certificateFailure: {
+          challengeId: 'challenge-1',
+          browserPageId: 'page-certificate-error',
+          errorCode: -202,
+          error: 'ERR_CERT_AUTHORITY_INVALID',
+          origin: 'https://localhost:3443',
+          displayHost: 'localhost:3443',
+          canProceed: true,
+          observedAt: 123
+        }
+      })
+    )
+  })
+
+  it('detects headless browser-tab changes by field, treating absent and null loadError alike', () => {
+    const runtime = createRuntime()
+    const base = {
+      type: 'browser' as const,
+      id: 'page-1',
+      title: 'Local',
+      browserWorkspaceId: 'page-1',
+      browserPageId: 'page-1',
+      url: 'https://localhost:3443/',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      isActive: true
+    }
+    const err = {
+      code: -202,
+      description: 'ERR_CERT_AUTHORITY_INVALID',
+      validatedUrl: 'https://localhost:3443/'
+    }
+    const certificateFailure = {
+      challengeId: 'challenge-1',
+      browserPageId: 'page-1',
+      errorCode: -202,
+      error: 'ERR_CERT_AUTHORITY_INVALID',
+      origin: 'https://localhost:3443',
+      displayHost: 'localhost:3443',
+      canProceed: true,
+      observedAt: 123
+    }
+    const unchanged = (a: unknown[], b: unknown[]): boolean =>
+      runtime['headlessBrowserTabsUnchanged'](a as never, b as never)
+
+    // Absent vs explicit null loadError are equivalent (the JSON.stringify trap).
+    expect(unchanged([{ ...base }], [{ ...base, loadError: null }])).toBe(true)
+    expect(unchanged([{ ...base, loadError: err }], [{ ...base, loadError: { ...err } }])).toBe(
+      true
+    )
+    // A load-error-only change (identical ids/order) must not be missed.
+    expect(unchanged([{ ...base }], [{ ...base, loadError: err }])).toBe(false)
+    expect(
+      unchanged([{ ...base, loadError: err }], [{ ...base, loadError: { ...err, code: -200 } }])
+    ).toBe(false)
+    expect(
+      unchanged(
+        [{ ...base, certificateFailure }],
+        [{ ...base, certificateFailure: { ...certificateFailure } }]
+      )
+    ).toBe(true)
+    expect(unchanged([{ ...base }], [{ ...base, certificateFailure }])).toBe(false)
+    expect(
+      unchanged(
+        [{ ...base, certificateFailure }],
+        [{ ...base, certificateFailure: { ...certificateFailure, challengeId: 'challenge-2' } }]
+      )
+    ).toBe(false)
+    // Scalar and length changes are detected.
+    expect(unchanged([{ ...base }], [{ ...base, title: 'Changed' }])).toBe(false)
+    expect(unchanged([{ ...base }], [{ ...base, isActive: false }])).toBe(false)
+    expect(unchanged([{ ...base }], [{ ...base }, { ...base, id: 'page-2' }])).toBe(false)
   })
 
   it('does not advertise headless browser capability when a renderer window exists', () => {
@@ -1522,6 +1771,16 @@ describe('OrcaRuntimeService', () => {
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
 
     expect(runtime.getStatus().capabilities).not.toContain('browser.headless.v1')
+    // Desktop webviews still host certificate trust, so the proceed capability
+    // remains advertised for remote clients controlling those pages.
+    expect(runtime.getStatus().capabilities).toContain('browser.certificate-trust.v1')
+  })
+
+  it('does not advertise certificate trust when no browser backend is available', () => {
+    const runtime = createRuntime()
+
+    expect(runtime.getStatus().capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(runtime.getStatus().capabilities).not.toContain('browser.screencast.v1')
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
@@ -2837,6 +3096,11 @@ describe('OrcaRuntimeService', () => {
       id: result.worktree.id,
       path: createdWorktree.path
     })
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        worktrees: expect.arrayContaining([expect.objectContaining({ path: createdWorktree.path })])
+      }
+    )
   })
 
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
@@ -4766,7 +5030,20 @@ describe('OrcaRuntimeService', () => {
       removeWorktree: vi.fn().mockResolvedValue(undefined)
     }
     registerSshGitProvider('ssh-1', gitProvider as never)
-    const runtime = new OrcaRuntimeService(remoteStore as never)
+    const ptyProvider = {
+      listProcesses: vi.fn().mockResolvedValue([
+        {
+          id: 'pty-remote',
+          cwd: '/remote/feature',
+          title: 'shell',
+          worktreeId: `${TEST_REPO_ID}::/remote/feature`
+        }
+      ]),
+      shutdown: vi.fn().mockResolvedValue(undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
+      getSshProvider: () => ptyProvider as never
+    })
 
     try {
       await runtime.removeManagedWorktree('path:/remote/feature', true, false)
@@ -4775,6 +5052,14 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
+    expect(ptyProvider.shutdown).toHaveBeenCalledWith('pty-remote', { immediate: true })
+    expect(ptyProvider.shutdown.mock.invocationCallOrder[0]).toBeLessThan(
+      gitProvider.removeWorktree.mock.invocationCallOrder[0]
+    )
+    expect(closeRemoteWatcherForWorktreePathMock).toHaveBeenCalledWith('ssh-1', '/remote/feature')
+    expect(closeRemoteWatcherForWorktreePathMock.mock.invocationCallOrder[0]).toBeLessThan(
+      gitProvider.removeWorktree.mock.invocationCallOrder[0]
+    )
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(`${TEST_REPO_ID}::/remote/feature`)
@@ -5139,7 +5424,7 @@ describe('OrcaRuntimeService', () => {
     listGitHubLabelsMock.mockResolvedValueOnce([])
     listGitHubAssignableUsersMock.mockResolvedValueOnce([])
 
-    await runtime.listRepoWorkItems('id:repo-1', 7, 'is:open', 'cursor', true)
+    await runtime.listRepoWorkItems('id:repo-1', 7, 'is:open', 1, true)
     await runtime.countRepoWorkItems('id:repo-1', 'is:issue')
     await runtime.listRepoIssues('id:repo-1', 5)
     await runtime.getRepoIssue('id:repo-1', 12)
@@ -5153,7 +5438,7 @@ describe('OrcaRuntimeService', () => {
       TEST_REPO_PATH,
       7,
       'is:open',
-      'cursor',
+      1,
       undefined,
       null,
       true,
@@ -7117,6 +7402,153 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.getPtyOutputSequence('pty-1')).toBe(0)
     })
 
+    it('aligns a restored session and pre-response bytes to the provider sequence', async () => {
+      const { runtime } = createSideEffectRuntime()
+
+      // Simulate a stream-socket byte winning the race with the spawn response.
+      runtime.onPtyData('pty-restored', 'queued', 100)
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-restored',
+          { value: 900, generation: 'continued' },
+          0
+        )
+      ).toBe(906)
+      runtime.onPtyData('pty-restored', 'fresh', 101)
+
+      expect(runtime.getPtyOutputSequence('pty-restored')).toBe(911)
+      await expect(runtime.serializeMainTerminalBuffer('pty-restored')).resolves.toMatchObject({
+        data: expect.stringContaining('queuedfresh'),
+        seq: 911,
+        source: 'headless'
+      })
+    })
+
+    it('does not double a fresh daemon sequence on same-main reattach', () => {
+      const { runtime } = createSideEffectRuntime()
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-fresh',
+          { value: 0, generation: 'reset' },
+          0
+        )
+      ).toBe(0)
+      runtime.onPtyData('pty-fresh', 'fresh output', 100)
+      const sequenceBeforeReattach = runtime.getPtyOutputSequence('pty-fresh')
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-fresh',
+          { value: sequenceBeforeReattach, generation: 'continued' },
+          sequenceBeforeReattach
+        )
+      ).toBe(sequenceBeforeReattach)
+    })
+
+    it('does not jump ahead of delayed bytes covered by a reattach snapshot', () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-delayed',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-delayed', 'before', 100)
+      const sequenceBeforeReattach = runtime.getPtyOutputSequence('pty-delayed')
+      const delayedCoveredBytes = 'queued'
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-delayed',
+          {
+            value: sequenceBeforeReattach + delayedCoveredBytes.length,
+            generation: 'continued'
+          },
+          sequenceBeforeReattach
+        )
+      ).toBe(sequenceBeforeReattach)
+      runtime.onPtyData('pty-delayed', delayedCoveredBytes, 101)
+
+      expect(runtime.getPtyOutputSequence('pty-delayed')).toBe(
+        sequenceBeforeReattach + delayedCoveredBytes.length
+      )
+    })
+
+    it('retains bytes emitted before a fresh daemon spawn resolves', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const earlyOutput = '\x1b]0;Fresh shell\x07early prompt'
+      runtime.onPtyData('pty-fresh', earlyOutput, 100)
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-fresh',
+          { value: 0, generation: 'reset' },
+          0
+        )
+      ).toBe(earlyOutput.length)
+
+      await expect(runtime.serializeMainTerminalBuffer('pty-fresh')).resolves.toMatchObject({
+        data: expect.stringContaining('early prompt'),
+        lastTitle: 'Fresh shell',
+        seq: earlyOutput.length
+      })
+    })
+
+    it('drops stale headless state without rewinding the runtime sequence', async () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-restarted',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-restarted', 'old generation', 100)
+      const sequenceBeforeRespawn = runtime.getPtyOutputSequence('pty-restarted')
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-restarted',
+          { value: 0, generation: 'reset' },
+          sequenceBeforeRespawn
+        )
+      ).toBe(sequenceBeforeRespawn)
+      runtime.onPtyData('pty-restarted', 'new generation', 101)
+
+      await expect(runtime.serializeMainTerminalBuffer('pty-restarted')).resolves.toMatchObject({
+        data: expect.not.stringContaining('old generation'),
+        seq: sequenceBeforeRespawn + 'new generation'.length
+      })
+    })
+
+    it('keeps active listener sequences monotonic across a daemon reset', () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-reset',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-reset', 'old', 100)
+      const sequenceBeforeRespawn = runtime.getPtyOutputSequence('pty-reset')
+      const observedSequences: number[] = []
+      runtime.subscribeToTerminalData('pty-reset', (_data, meta) => {
+        if (typeof meta?.seq === 'number') {
+          observedSequences.push(meta.seq)
+        }
+      })
+
+      runtime.onPtyData('pty-reset', 'early', 101)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-reset',
+        { value: 0, generation: 'reset' },
+        sequenceBeforeRespawn
+      )
+      runtime.onPtyData('pty-reset', 'later', 102)
+
+      expect(observedSequences).toEqual([
+        sequenceBeforeRespawn + 'early'.length,
+        sequenceBeforeRespawn + 'early'.length + 'later'.length
+      ])
+    })
+
     it('carries the synthetic permission BEL as a bell fact', () => {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)
@@ -7215,6 +7647,318 @@ describe('OrcaRuntimeService', () => {
       const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 10 })
       expect(snapshot?.source).toBe('renderer')
       expect(snapshot?.lastTitle).toBe('⠋ Cursor Agent')
+    })
+
+    it('falls back to the provider snapshot for a restored PTY with no mounted renderer', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored', {
+        scrollbackRows: 5000
+      })
+
+      expect(serializeBuffer).not.toHaveBeenCalled()
+      expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-restored', {
+        scrollbackRows: 5000
+      })
+      expect(snapshot).toEqual({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+    })
+
+    it('falls back to provider history when a mounted renderer has not hydrated yet', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn().mockResolvedValue({
+        data: '',
+        cols: 80,
+        rows: 24
+      })
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: '',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        seq: 900,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => true
+      })
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored', {
+        scrollbackRows: 5000
+      })
+
+      expect(serializeBuffer).toHaveBeenCalledOnce()
+      expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-restored', {
+        scrollbackRows: 5000
+      })
+      expect(snapshot).toMatchObject({
+        data: '',
+        scrollbackAnsi: 'restored history\r\n',
+        source: 'headless'
+      })
+    })
+
+    it('keeps an empty renderer snapshot when the provider has no retained content', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: '',
+        scrollbackAnsi: '',
+        cols: 120,
+        rows: 40,
+        seq: 0,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer: vi.fn().mockResolvedValue({ data: '', cols: 51, rows: 40 }),
+        serializeProviderBuffer,
+        hasRendererSerializer: () => true
+      })
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-new')
+
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+      expect(snapshot).toMatchObject({ data: '', cols: 51, rows: 40, source: 'renderer' })
+    })
+
+    it('does not let pre-response bytes hide restored provider history', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored history\r\nqueued',
+        cols: 80,
+        rows: 24,
+        seq: 906,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.onPtyData('pty-restored', 'queued', 100)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-restored',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored', {
+        scrollbackRows: 5000
+      })
+
+      expect(snapshot?.data).toContain('restored history')
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    })
+
+    it('keeps restored provider history authoritative after later live output', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored history\r\nlater output',
+        cols: 80,
+        rows: 24,
+        seq: 912,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-restored',
+        { value: 900, generation: 'continued' },
+        0
+      )
+      runtime.onPtyData('pty-restored', 'later output', 100)
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored')
+
+      expect(snapshot?.data).toContain('restored history')
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    })
+
+    it('uses provider alternate-screen state while a partial model is unsafe', async () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer: vi.fn().mockResolvedValue({
+          data: 'restored tui',
+          cols: 80,
+          rows: 24,
+          seq: 903,
+          source: 'headless',
+          alternateScreen: true
+        }),
+        hasRendererSerializer: () => false
+      })
+      runtime.onPtyData('pty-tui', 'tui', 100)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-tui',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      await runtime.serializeTerminalBuffer('pty-tui')
+
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
+    })
+
+    it('tracks live alternate-screen transitions after a provider snapshot', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored tui',
+        cols: 80,
+        rows: 24,
+        seq: 900,
+        source: 'headless',
+        alternateScreen: true
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-tui',
+        { value: 900, generation: 'continued' },
+        0
+      )
+      await runtime.serializeTerminalBuffer('pty-tui')
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
+
+      runtime.onPtyData('pty-tui', '\x1b[?1049l', 100)
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(false)
+      runtime.onPtyData('pty-tui', '\x1b[?1049h', 101)
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
+    })
+
+    it('keeps mode transitions that race a provider snapshot response', async () => {
+      const { runtime } = createSideEffectRuntime()
+      let resolveProviderSnapshot:
+        | ((snapshot: {
+            data: string
+            cols: number
+            rows: number
+            seq: number
+            source: 'headless'
+            alternateScreen: boolean
+          }) => void)
+        | undefined
+      const serializeProviderBuffer = vi.fn(
+        () =>
+          new Promise<{
+            data: string
+            cols: number
+            rows: number
+            seq: number
+            source: 'headless'
+            alternateScreen: boolean
+          }>((resolve) => {
+            resolveProviderSnapshot = resolve
+          })
+      )
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-tui-race',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      const snapshotPromise = runtime.serializeTerminalBuffer('pty-tui-race')
+      await vi.waitFor(() => expect(resolveProviderSnapshot).toBeDefined())
+      runtime.onPtyData('pty-tui-race', '\x1b[?1049l', 100)
+      resolveProviderSnapshot?.({
+        data: 'captured alt screen',
+        cols: 80,
+        rows: 24,
+        seq: 900,
+        source: 'headless',
+        alternateScreen: true
+      })
+      await snapshotPromise
+
+      expect(runtime.isTerminalAlternateScreen('pty-tui-race')).toBe(false)
+    })
+
+    it('translates reset provider snapshots without retaining the old title', async () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-replaced',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-replaced', '\x1b]0;Old process\x07old', 100)
+      const sequenceBeforeRespawn = runtime.getPtyOutputSequence('pty-replaced')
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer: vi.fn().mockResolvedValue({
+          data: 'new process',
+          cols: 80,
+          rows: 24,
+          seq: 'new process'.length,
+          source: 'headless',
+          lastTitle: 'New process'
+        }),
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-replaced',
+        { value: 0, generation: 'reset' },
+        sequenceBeforeRespawn
+      )
+
+      await expect(runtime.serializeTerminalBuffer('pty-replaced')).resolves.toMatchObject({
+        lastTitle: 'New process',
+        seq: sequenceBeforeRespawn + 'new process'.length
+      })
     })
 
     it('prefers the tracked title over the headless emulator lastTitle', async () => {
@@ -7671,6 +8415,28 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
       true
     )
+  })
+
+  it('replaces suffix-only headless state with the recovered renderer snapshot', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    runtime.seedHeadlessTerminal('pty-1', 'suffix-only redraw', { cols: 80, rows: 24 })
+
+    runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery('pty-1', {
+      data: 'restored history\r\nprompt $ ',
+      cols: 80,
+      rows: 24,
+      cwd: '/projects/restored'
+    })
+    runtime.onPtyData('pty-1', 'after recovery\r\n', 100)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', {
+      scrollbackRows: 100
+    })
+    expect(snapshot?.data).toContain('restored history')
+    expect(snapshot?.data).toContain('after recovery')
+    expect(snapshot?.data).not.toContain('suffix-only redraw')
+    expect(snapshot?.cwd).toBe('/projects/restored')
   })
 
   it('adopts OSC7 host metadata from seeded headless terminal scrollback', async () => {
@@ -9125,6 +9891,8 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps ordinary terminal send suffix failures on the existing not-writable contract', async () => {
     const writes: string[] = []
+    const beforeWrite = vi.fn()
+    const afterWrite = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
@@ -9160,9 +9928,15 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
 
     await expect(
-      runtime.sendTerminal(terminal.handle, { text: 'notes', enter: true })
+      runtime.sendTerminal(
+        terminal.handle,
+        { text: 'notes', enter: true },
+        { beforeWrite, afterWrite }
+      )
     ).rejects.toThrow('terminal_not_writable')
     expect(writes).toEqual(['notes', '\r'])
+    expect(beforeWrite).toHaveBeenCalledTimes(2)
+    expect(afterWrite).toHaveBeenCalledOnce()
   })
 
   it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
@@ -9791,6 +10565,8 @@ describe('OrcaRuntimeService', () => {
         agentEnv: { CLAUDE_PROFILE: 'captured' }
       }
     })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ launchAgent: 'claude' }))
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
     const spawnedEnv = spawnCall?.env ?? {}
@@ -12130,6 +12906,497 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('reads and shows the runtime-owned alternate-screen grid without serialization', async () => {
+    const serializeBuffer = vi.fn()
+    const serializeProviderBuffer = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      serializeProviderBuffer
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData(
+      'pty-1',
+      'shell history\r\n\x1b[?1049h\x1b[2J\x1b[HClaude Code\r\nWorking on fix\r\nTool: Read\r\n',
+      100
+    )
+
+    const read = await runtime.readTerminal(terminal.handle)
+    const shown = await runtime.showTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['Claude Code', 'Working on fix', 'Tool: Read'])
+    expect(shown.preview).toBe('Claude Code\nWorking on fix\nTool: Read')
+    expect(serializeBuffer).not.toHaveBeenCalled()
+    expect(serializeProviderBuffer).not.toHaveBeenCalled()
+  })
+
+  it('classifies older provider alternate-screen snapshots from ANSI', async () => {
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049h\x1b[2J\x1b[HRemote Vim\r\nediting README.md\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless'
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const read = await runtime.readTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['Remote Vim', 'editing README.md'])
+    expect(runtime.isTerminalAlternateScreen('pty-1')).toBe(true)
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+  })
+
+  it('honors the last ANSI screen transition when older provider metadata is absent', async () => {
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049hOld TUI\r\n\x1b[?1049l',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless'
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const read = await runtime.readTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['shell history'])
+    expect(runtime.isTerminalAlternateScreen('pty-1')).toBe(false)
+  })
+
+  it.each([
+    {
+      name: 'live exit wins over an alternate provider snapshot',
+      snapshotData: '\x1b[?1049h\x1b[2J\x1b[HStale TUI\r\n',
+      snapshotMode: true,
+      liveData: '\x1b[?1049lreturned shell\r\n',
+      expectedMode: false,
+      expectedLine: 'shell history'
+    },
+    {
+      name: 'live entry wins over a primary provider snapshot',
+      snapshotData: 'stale shell\r\n',
+      snapshotMode: false,
+      liveData: '\x1b[?1049h\x1b[2J\x1b[HLive TUI\r\nnew frame\r\n',
+      expectedMode: true,
+      expectedLine: 'Live TUI'
+    }
+  ])('$name', async ({ snapshotData, snapshotMode, liveData, expectedMode, expectedLine }) => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle)
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    runtime.onPtyData('pty-1', liveData, 101)
+    resolveSnapshot({
+      data: snapshotData,
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: snapshotMode
+    })
+
+    const read = await readPromise
+    expect(runtime.isTerminalAlternateScreen('pty-1')).toBe(expectedMode)
+    expect(read.tail.join('\n')).toContain(expectedLine)
+    expect(read.tail.join('\n')).not.toContain('Stale TUI')
+  })
+
+  it('shares one provider snapshot between concurrent read and show calls', async () => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle)
+    const showPromise = runtime.showTerminal(terminal.handle)
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    resolveSnapshot({
+      data: '\x1b[?1049h\x1b[2J\x1b[HShared TUI frame\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+
+    const [read, shown] = await Promise.all([readPromise, showPromise])
+    expect(read.tail).toEqual(['Shared TUI frame'])
+    expect(shown.preview).toBe('Shared TUI frame')
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+  })
+
+  it('keeps cursor reads provider-free on restored alternate-screen PTYs', async () => {
+    const serializeProviderBuffer = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const read = await runtime.readTerminal(terminal.handle, { cursor: 0 })
+
+    expect(read.tail).toEqual(['shell history'])
+    expect(serializeProviderBuffer).not.toHaveBeenCalled()
+  })
+
+  it('backs off after a provider snapshot failure instead of retrying for show', async () => {
+    const serializeProviderBuffer = vi.fn().mockRejectedValue(new Error('provider unavailable'))
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const read = await runtime.readTerminal(terminal.handle)
+    const shown = await runtime.showTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['shell history'])
+    expect(shown.preview).toBe('shell history')
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+  })
+
+  it('falls back once to a mounted renderer when a known alternate provider fails', async () => {
+    const serializeProviderBuffer = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: '\x1b[?1049h\x1b[2J\x1b[HProvider TUI\r\n',
+        cols: 80,
+        rows: 24,
+        seq: 900,
+        source: 'headless',
+        alternateScreen: true
+      })
+      .mockRejectedValue(new Error('provider unavailable'))
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049h\x1b[2J\x1b[HRenderer TUI\r\n',
+      cols: 80,
+      rows: 24
+    })
+    let rendererMounted = false
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => rendererMounted
+    })
+    syncSinglePty(runtime)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
+      tail: ['Provider TUI']
+    })
+    runtime.onPtyData('pty-1', 'new output', 100)
+    rendererMounted = true
+
+    const read = await runtime.readTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['Renderer TUI'])
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(2)
+    expect(serializeBuffer).toHaveBeenCalledOnce()
+  })
+
+  it('bounds a stuck provider snapshot and shares the timed-out request', async () => {
+    vi.useFakeTimers()
+    try {
+      const serializeProviderBuffer = vi.fn(() => new Promise<never>(() => undefined))
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      syncSinglePty(runtime)
+      runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-1',
+        { value: 900, generation: 'continued' },
+        0
+      )
+      const [terminal] = (await runtime.listTerminals()).terminals
+
+      const reads = Promise.all([
+        runtime.readTerminal(terminal.handle),
+        runtime.showTerminal(terminal.handle)
+      ])
+      await vi.advanceTimersByTimeAsync(750)
+      const [read, shown] = await reads
+
+      expect(read.tail).toEqual(['shell history'])
+      expect(shown.preview).toBe('shell history')
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('discards a provider frame when the PTY generation resets during capture', async () => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', 'old shell\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle)
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 0, generation: 'reset' },
+      runtime.getPtyOutputSequence('pty-1')
+    )
+    resolveSnapshot({
+      data: '\x1b[?1049hStale generation TUI\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+
+    const read = await readPromise
+    expect(read.tail.join('\n')).not.toContain('Stale generation TUI')
+    expect(runtime.isTerminalAlternateScreen('pty-1')).toBe(false)
+  })
+
+  it('rejects a visible frame when its terminal handle changes during capture', async () => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle)
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    syncSinglePty(runtime, 'pty-2')
+    resolveSnapshot({
+      data: '\x1b[?1049hWrong terminal frame\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+
+    await expect(readPromise).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('bounds provider visible frames for read and show responses', async () => {
+    const visibleLines = [
+      'skip-1',
+      'skip-2',
+      'A'.repeat(49),
+      'B'.repeat(49),
+      'C'.repeat(49),
+      'D'.repeat(49),
+      'E'.repeat(49),
+      'F'.repeat(50)
+    ]
+    const expectedTail = visibleLines.slice(-6)
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: `\x1b[?1049h\x1b[2J\x1b[H${visibleLines.join('\r\n')}\r\n`,
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const read = await runtime.readTerminal(terminal.handle, { limit: 6 })
+    const shown = await runtime.showTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(expectedTail)
+    expect(read.returnedLineCount).toBe(6)
+    expect(shown.preview).toBe(expectedTail.join('\n'))
+    expect(shown.preview.length).toBe(300)
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+  })
+
   it('returns renderer visible screen lines through terminal.read RPC JSON result', async () => {
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: '\x1b[?1049hClaude Code\r\nChecking files\r\nWaiting for input\r\n',
@@ -12282,11 +13549,20 @@ describe('OrcaRuntimeService', () => {
     const previous = 'old-output'.repeat(1000)
     const data = 'new-output'.repeat(1000)
     const outputLimit = 64 * 1024
-    const expected = `${previous}${data}`.slice(-outputLimit)
 
-    expect(appendRecentPtyOutput(previous, 'tail')).toBe(`${previous}tail`.slice(-outputLimit))
-    expect(appendRecentPtyOutput(previous, data)).toBe(expected)
-    expect(appendRecentPtyOutput(undefined, data)).toBe(data.slice(-outputLimit))
+    const smallTail = new RecentPtyOutputBuffer()
+    smallTail.append(previous)
+    smallTail.append('tail')
+    expect(smallTail.read()).toBe(`${previous}tail`.slice(-outputLimit))
+
+    const combined = new RecentPtyOutputBuffer()
+    combined.append(previous)
+    combined.append(data)
+    expect(combined.read()).toBe(`${previous}${data}`.slice(-outputLimit))
+
+    const fresh = new RecentPtyOutputBuffer()
+    fresh.append(data)
+    expect(fresh.read()).toBe(data.slice(-outputLimit))
   })
 
   it('keeps mobile-visible artifact paths in bounded PTY path candidates', () => {
@@ -12659,7 +13935,7 @@ describe('OrcaRuntimeService', () => {
       cursor: Number(beforeRedraw.nextCursor)
     })
     expect(cursorRead.tail).toEqual(['• Working.', 'Tool call finished'])
-    expect(cursorRead.oldestCursor).toBe('2')
+    expect(cursorRead.oldestCursor).toBe('0')
     expect(cursorRead.nextCursor).toBe('4')
   })
 
@@ -12683,8 +13959,83 @@ describe('OrcaRuntimeService', () => {
       cursor: Number(beforeRedraw.nextCursor)
     })
     expect(cursorRead.tail).toEqual(['B2'])
-    expect(cursorRead.oldestCursor).toBe('2')
+    expect(cursorRead.oldestCursor).toBe('0')
     expect(cursorRead.nextCursor).toBe('4')
+  })
+
+  it('keeps cursor pagination stable across a CUU redraw of the live screen', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const liveScreen = new HeadlessEmulator({ cols: 80, rows: 24 })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const initialOutput = 'A\r\nB\r\nC\r\n'
+    const redraw = '\x1b[2A\x1b[2K\x1b[1GB2\r\n'
+    runtime.onPtyData('pty-1', initialOutput, 100)
+    await liveScreen.write(initialOutput)
+
+    const firstPage = await runtime.readTerminal(terminal.handle, { cursor: 0, limit: 2 })
+    expect(firstPage).toMatchObject({
+      tail: ['A', 'B'],
+      truncated: false,
+      limited: true,
+      oldestCursor: '0',
+      nextCursor: '2',
+      latestCursor: '3',
+      returnedLineCount: 2
+    })
+
+    runtime.onPtyData('pty-1', redraw, 101)
+    await liveScreen.write(redraw)
+
+    // Why: CUU changes the mutable screen, but completed-line pagination is a distinct contract.
+    expect(liveScreen.getVisibleLines().filter((line) => line.length > 0)).toEqual(['A', 'B2', 'C'])
+    await expect(runtime.readTerminal(terminal.handle, { cursor: 2 })).resolves.toMatchObject({
+      tail: ['C', 'B2'],
+      truncated: false,
+      limited: false,
+      oldestCursor: '0',
+      nextCursor: '4',
+      latestCursor: '4',
+      returnedLineCount: 2
+    })
+
+    liveScreen.dispose()
+  })
+
+  it('records completed transcript lines before later CUU redraws in the same PTY chunk', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'A\r\nB\r\nC\r\n\x1b[2A\x1b[2K\x1b[1GB2\r\n', 100)
+
+    await expect(runtime.readTerminal(terminal.handle, { cursor: 0 })).resolves.toMatchObject({
+      tail: ['A', 'B', 'C', 'B2'],
+      truncated: false,
+      oldestCursor: '0',
+      nextCursor: '4',
+      latestCursor: '4'
+    })
+  })
+
+  it('bounds completed transcript entries from a single multi-line redraw chunk', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const lines = Array.from({ length: 2100 }, (_, index) => `redraw-${index}`)
+    runtime.onPtyData('pty-1', `\x1b[1A${lines.join('\n')}\n`, 100)
+
+    await expect(
+      runtime.readTerminal(terminal.handle, { cursor: 0, limit: 3 })
+    ).resolves.toMatchObject({
+      tail: ['redraw-100', 'redraw-101', 'redraw-102'],
+      truncated: true,
+      oldestCursor: '100',
+      nextCursor: '103',
+      latestCursor: '2100'
+    })
   })
 
   it('retains multi-line ANSI redraws when the last footer row stays partial', async () => {
@@ -12710,7 +14061,7 @@ describe('OrcaRuntimeService', () => {
       cursor: Number(beforeRedraw.nextCursor)
     })
     expect(cursorRead.tail).toEqual(['• Working.'])
-    expect(cursorRead.oldestCursor).toBe('2')
+    expect(cursorRead.oldestCursor).toBe('0')
     expect(cursorRead.nextCursor).toBe('3')
 
     runtime.onPtyData('pty-1', '\n', 102)
@@ -17909,6 +19260,110 @@ describe('OrcaRuntimeService', () => {
     expect(kill).toHaveBeenCalledWith('laptop-created-pty')
   })
 
+  it('waits for renderer acknowledgement before returning a whole-tab close receipt', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    const acknowledged = makeDeferred()
+    const closeTerminalTab = vi.fn(() => acknowledged.promise)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Durable',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'persisted-pty'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const pending = runtime.closeTerminalTab(terminal.handle)
+    let settled = false
+    void pending.finally(() => {
+      settled = true
+    })
+
+    await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
+    expect(settled).toBe(false)
+
+    acknowledged.resolve()
+    await expect(pending).resolves.toEqual({
+      handle: terminal.handle,
+      tabId: 'host-tab',
+      closeMode: 'tab',
+      ptyKilled: false
+    })
+  })
+
+  it('durably closes every split leaf without a renderer', async () => {
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'durable-tab',
+              ptyId: null,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Durable',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'durable-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: undefined })
+        }
+      })
+    )
+    const flushOrThrow = vi.fn()
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'headless-left' })
+      .mockResolvedValueOnce({ id: 'headless-right' })
+    const kill = vi.fn(() => true)
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'durable-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    await runtime.splitTerminal(terminal.handle, { direction: 'vertical' })
+
+    await runtime.closeTerminalTab(terminal.handle)
+
+    expect(kill).toHaveBeenCalledWith('headless-left')
+    expect(kill).toHaveBeenCalledWith('headless-right')
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    expect(getSession().terminalLayoutsByTabId['durable-tab']).toBeUndefined()
+    expect(flushOrThrow).toHaveBeenCalledTimes(1)
+  })
+
   it('lists PTY-backed mobile session terminals without a renderer graph', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
@@ -19079,6 +20534,134 @@ describe('OrcaRuntimeService', () => {
     expect(kill).toHaveBeenCalledWith(persistedPtyId)
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+  })
+
+  it('durably tears down a runtime-owned SSH headless tab when renderer cleanup fails', async () => {
+    // #8958 regression: the acknowledged renderer relay cannot see headless tabs;
+    // its advisory fallback must not prevent authoritative teardown or flushing.
+    const persistedPtyId = 'ssh:ssh-1@@relay-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: persistedPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Remote Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: persistedPtyId })
+        }
+      })
+    )
+    const kill = vi.fn(() => true)
+    const flushOrThrow = vi.fn()
+    const rendererError = new Error('renderer unavailable')
+    const closeTerminal = vi.fn(() => {
+      throw rendererError
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const closeTerminalTab = vi.fn(async () => {})
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: persistedPtyId, cwd: TEST_WORKTREE_PATH, title: 'Remote' }]
+    })
+    runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    expect(kill).toHaveBeenCalledWith(persistedPtyId)
+    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expect(flushOrThrow).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(
+      '[runtime] failed to notify renderer after headless terminal close',
+      { parentTabId: 'host-tab', error: rendererError }
+    )
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+  })
+
+  it('keeps the renderer close transaction for an adopted runtime-owned tab', async () => {
+    // The renderer pin state can be newer than the debounced workspace session.
+    // Once adopted, its live close guard must win over stale persisted metadata.
+    const servePtyId = 'serve-adopted-1'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: servePtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Adopted Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              isPinned: false
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: servePtyId })
+        }
+      })
+    )
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const closeTerminalTab = vi.fn(async () => {
+      throw new Error('terminal_tab_pinned')
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: servePtyId, cwd: TEST_WORKTREE_PATH, title: 'Adopted' }]
+    })
+    runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Adopted Terminal',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: servePtyId
+        }
+      ]
+    })
+
+    await expect(
+      runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+    ).rejects.toThrow('terminal_tab_pinned')
+
+    expect(closeTerminalTab).toHaveBeenCalledWith('host-tab')
+    expect(closeTerminal).not.toHaveBeenCalled()
+    expect(kill).not.toHaveBeenCalled()
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
   })
 
   it('materializes hydrated pending headless terminals with the persisted session identity', async () => {
@@ -21463,6 +23046,70 @@ describe('OrcaRuntimeService', () => {
     expect(secondStop).toHaveBeenCalledTimes(1)
   })
 
+  it('dedupes async subscription cleanup and retains a failed cleanup for retry', async () => {
+    const runtime = createRuntime()
+    const cleanupError = new Error('physical teardown incomplete')
+    const firstCleanup = deferred<void>()
+    const cleanup = vi
+      .fn()
+      .mockReturnValueOnce(firstCleanup.promise)
+      .mockRejectedValue(cleanupError)
+    runtime.registerSubscriptionCleanup('files-watch-1', cleanup, 'conn-1')
+
+    const first = runtime.cleanupSubscriptionAndWait('files-watch-1')
+    const duplicate = runtime.cleanupSubscriptionAndWait('files-watch-1')
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    firstCleanup.reject(cleanupError)
+    await expect(first).rejects.toBe(cleanupError)
+    await expect(duplicate).rejects.toBe(cleanupError)
+
+    await expect(runtime.cleanupSubscriptionAndWait('files-watch-1')).rejects.toBe(cleanupError)
+    expect(cleanup).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an old connection cleanup tear down its replacement subscription', async () => {
+    const runtime = createRuntime()
+    const oldDone = deferred<void>()
+    const oldCleanup = vi.fn(() => oldDone.promise)
+    const replacementCleanup = vi.fn()
+
+    runtime.registerSubscriptionCleanup('terminal:stable', oldCleanup, 'conn-old')
+    runtime.registerSubscriptionCleanup('terminal:stable', replacementCleanup, 'conn-new')
+    expect(oldCleanup).toHaveBeenCalledTimes(1)
+
+    runtime.cleanupSubscriptionsForConnection('conn-old')
+    expect(replacementCleanup).not.toHaveBeenCalled()
+
+    runtime.cleanupSubscriptionsForConnection('conn-new')
+    expect(replacementCleanup).toHaveBeenCalledTimes(1)
+    oldDone.resolve()
+    await Promise.resolve()
+  })
+
+  it('does not let a delayed cleanup retry tear down its replacement subscription', async () => {
+    const runtime = createRuntime()
+    const physicalExit = deferred<void>()
+    const oldDone = deferred<void>()
+    const cleanupError = new Error('physical teardown incomplete')
+    const oldCleanup = vi.fn(() => oldDone.promise)
+    const replacementCleanup = vi.fn()
+
+    runtime.registerSubscriptionCleanup('files-watch:stable', oldCleanup, 'conn-old')
+    const oldAttempt = runtime.cleanupSubscriptionAndWait('files-watch:stable')
+    runtime.retrySubscriptionCleanupAfter('files-watch:stable', oldCleanup, physicalExit.promise)
+    runtime.registerSubscriptionCleanup('files-watch:stable', replacementCleanup, 'conn-new')
+
+    oldDone.reject(cleanupError)
+    await expect(oldAttempt).rejects.toBe(cleanupError)
+    physicalExit.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(oldCleanup).toHaveBeenCalledTimes(1)
+    expect(replacementCleanup).not.toHaveBeenCalled()
+    await runtime.cleanupSubscriptionAndWait('files-watch:stable')
+    expect(replacementCleanup).toHaveBeenCalledTimes(1)
+  })
+
   it('does not deliver or accept browser screencast frames before ready', async () => {
     const runtime = createRuntime()
     const done = deferred<void>()
@@ -22059,6 +23706,124 @@ describe('OrcaRuntimeService', () => {
       hasHostSidebarActivity: true,
       status: 'active',
       liveTerminalCount: 1
+    })
+  })
+
+  it('attributes live legacy PTYs from saved layout bindings when their panes are hidden', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          ptyId: null
+        }))
+      }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      // Legacy local PTYs have opaque ids and the local provider cannot recover cwd.
+      listProcesses: vi.fn(async () => [{ id: 'persisted-pty', cwd: '', title: 'shell' }])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1
+    })
+  })
+
+  it('prefers migrated layout ownership over a worktree id frozen in the PTY id', async () => {
+    const priorWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-before-rename`
+    const migratedPtyId = `${priorWorktreeId}@@daemon-controller-pty`
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          ptyId: null
+        }))
+      },
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: migratedPtyId })
+      }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      listProcesses: vi.fn(async () => [{ id: migratedPtyId, cwd: '', title: 'shell' }])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1
+    })
+  })
+
+  it('preserves deferred startup activity before restored terminal panes mount', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      activeWorktreeIdsOnShutdown: [TEST_WORKTREE_ID]
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      listProcesses: vi.fn(async () => [])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true
+    })
+  })
+
+  it('marks saved browser tabs as host sidebar activity like desktop', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        browserTabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'browser-1',
+              worktreeId: TEST_WORKTREE_ID,
+              url: 'https://example.com',
+              title: 'Example',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: false,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 1
+            }
+          ]
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true
     })
   })
 
@@ -23015,6 +24780,40 @@ describe('OrcaRuntimeService', () => {
     expect(killed).toBe(false)
   })
 
+  it('awaits physical PTY stop when destructive teardown supplies shared dedupe', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const physicalStop = makeDeferred()
+    const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => {
+      await physicalStop.promise
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+      stopped: await stop(),
+      owner: true
+    }))
+
+    const stopping = runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { stopPty })
+    await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledWith('pty-1'))
+    expect(kill).not.toHaveBeenCalled()
+    let settled = false
+    void stopping.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    physicalStop.resolve()
+    await expect(stopping).resolves.toEqual({ stopped: 1 })
+  })
+
   it('fails terminal listing closed if the graph reloads during selector resolution', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -23103,6 +24902,59 @@ describe('OrcaRuntimeService', () => {
 
     await expect(stopPromise).rejects.toThrow('runtime_unavailable')
     expect(killed).toBe(false)
+  })
+
+  it('does not stop a reused PTY after the teardown deadline passes', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const killed = vi.fn(() => true)
+      runtime.setPtyController({
+        write: () => true,
+        kill: killed,
+        getForegroundProcess: async () => null
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            title: 'Claude',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'reused-pty'
+          }
+        ]
+      })
+
+      let releaseListWorktrees = () => {}
+      vi.mocked(listWorktrees).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseListWorktrees = () => resolve(MOCK_GIT_WORKTREES)
+          })
+      )
+      const stopPromise = runtime.stopTerminalsForWorktree('branch:feature/foo', {
+        deadline: Date.now() + 25
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      releaseListWorktrees()
+
+      await expect(stopPromise).resolves.toEqual({ stopped: 0 })
+      expect(killed).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stops exactly the expected live PTYs for a worktree', async () => {
@@ -24378,6 +26230,379 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
+  })
+
+  it('bounds repeated detected worktree scans across the reported 15-repo shape', async () => {
+    vi.mocked(listWorktrees).mockReset()
+    const repos = Array.from({ length: 15 }, (_, index) => ({
+      id: `repo-${index + 1}`,
+      path: `/tmp/repo-${index + 1}`,
+      displayName: `repo-${index + 1}`,
+      badgeColor: 'blue' as const,
+      addedAt: 1
+    }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    } as never)
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [
+      {
+        path: `${repoPath}/main`,
+        head: repoPath,
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    const poll = async () =>
+      Promise.all(repos.map((repo) => runtime.listDetectedManagedWorktrees(`id:${repo.id}`)))
+    const first = await poll()
+    expect(listWorktrees).toHaveBeenCalledTimes(15)
+    const second = await poll()
+
+    expect(first.flatMap((result) => result.worktrees)).toHaveLength(15)
+    expect(second.flatMap((result) => result.worktrees)).toHaveLength(15)
+    expect(second.flatMap((result) => result.worktrees).map((worktree) => worktree.path)).toEqual(
+      repos.map((repo) => `${repo.path}/main`)
+    )
+    expect(listWorktrees).toHaveBeenCalledTimes(15)
+  })
+
+  it('worktree scan cache: shares one in-flight repo scan across concurrent consumers', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const pending = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+    vi.mocked(listWorktrees).mockReturnValueOnce(pending.promise)
+    const runtime = createRuntime()
+
+    const detected = runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    const resolved = runtime.listManagedWorktrees()
+    await Promise.resolve()
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+
+    pending.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+    await expect(Promise.all([detected, resolved])).resolves.toBeTruthy()
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('worktree scan cache: rescans immediately after worktree invalidation', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    runtime.notifyBranchRenamed(TEST_REPO_ID)
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('worktree scan cache: repo invalidation preserves sibling raw scans', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const repos = [
+      { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
+      { ...store.getRepos()[0], id: 'repo-b', path: '/tmp/repo-b' }
+    ]
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    } as never)
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
+
+    await runtime.listDetectedManagedWorktrees('id:repo-a')
+    await runtime.listDetectedManagedWorktrees('id:repo-b')
+    runtime.notifyBranchRenamed('repo-a')
+    await runtime.listDetectedManagedWorktrees('id:repo-b')
+    await runtime.listDetectedManagedWorktrees('id:repo-a')
+
+    expect(listWorktrees).toHaveBeenCalledTimes(3)
+    expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+  })
+
+  it('worktree scan cache: metadata invalidation preserves raw scans', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    runtime.notifyWorktreesChangedForRemoteClients(TEST_REPO_ID)
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('worktree scan cache: folder metadata invalidation preserves raw scans', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    runtime.notifyFolderWorkspaceChanged()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.useFakeTimers({ now: 0 })
+    try {
+      const repos = [
+        { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
+        { ...store.getRepos()[0], id: 'repo-b', path: '/tmp/repo-b' }
+      ]
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getRepos: () => repos,
+        getRepo: (id: string) => repos.find((repo) => repo.id === id)
+      } as never)
+      vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
+
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      await vi.advanceTimersByTimeAsync(10_000)
+      await runtime.listDetectedManagedWorktrees('id:repo-b')
+      await vi.advanceTimersByTimeAsync(20_000)
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      await runtime.listDetectedManagedWorktrees('id:repo-b')
+
+      expect(listWorktrees).toHaveBeenCalledTimes(3)
+      expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('worktree scan cache: does not cache non-authoritative scan failures', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    vi.mocked(listWorktrees)
+      .mockRejectedValueOnce(new Error('git unavailable'))
+      .mockResolvedValueOnce([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        authoritative: false
+      }
+    )
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        authoritative: true
+      }
+    )
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('worktree scan cache: invalidates when SSH availability changes', async () => {
+    const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+    const remoteStore = {
+      ...store,
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo]
+    }
+    const provider = { listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES) }
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+
+    try {
+      await expect(
+        runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      ).resolves.toMatchObject({ authoritative: true })
+      unregisterSshGitProvider('ssh-1')
+      await expect(
+        runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      ).resolves.toMatchObject({ authoritative: false })
+      expect(provider.listWorktrees).toHaveBeenCalledTimes(1)
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+  })
+
+  it('worktree scan cache: SSH state changes do not evict local repo scans', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const localRepo = { ...store.getRepo(TEST_REPO_ID)!, id: 'local-repo' }
+    const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, id: 'remote-repo', connectionId: 'ssh-1' }
+    const repos = [localRepo, remoteRepo]
+    const remoteStore = {
+      ...store,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getRepos: () => repos
+    }
+    const provider = { listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES) }
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+
+    try {
+      await runtime.listDetectedManagedWorktrees('id:local-repo')
+      await runtime.listDetectedManagedWorktrees('id:remote-repo')
+      runtime.notifySshStateChanged('ssh-1', {
+        targetId: 'ssh-1',
+        status: 'disconnected',
+        error: null,
+        reconnectAttempt: 0
+      })
+      await runtime.listDetectedManagedWorktrees('id:local-repo')
+      await runtime.listDetectedManagedWorktrees('id:remote-repo')
+
+      expect(listWorktrees).toHaveBeenCalledTimes(1)
+      expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+  })
+
+  it('worktree scan cache: SSH state changes invalidate empty resolved snapshots', async () => {
+    const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-empty' }
+    const remoteStore = {
+      ...store,
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo]
+    }
+    const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
+    registerSshGitProvider('ssh-empty', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+
+    try {
+      await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 0 })
+      runtime.notifySshStateChanged('ssh-empty', {
+        targetId: 'ssh-empty',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+      await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 0 })
+      expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
+    } finally {
+      unregisterSshGitProvider('ssh-empty')
+    }
+  })
+
+  it('worktree scan cache: SSH state changes for unknown targets keep local snapshots in flight', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const pending = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+    vi.mocked(listWorktrees).mockReturnValueOnce(pending.promise)
+    const runtime = new OrcaRuntimeService(store)
+
+    const first = runtime.listManagedWorktrees()
+    await Promise.resolve()
+    runtime.notifySshStateChanged('ssh-unknown', {
+      targetId: 'ssh-unknown',
+      status: 'disconnected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    pending.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+    await expect(first).resolves.toMatchObject({ totalCount: 1 })
+    await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 1 })
+
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('worktree scan cache: separates local project runtime changes', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    let runtimeDefault: unknown = { kind: 'windows-host' }
+    const runtimeStore = {
+      ...store,
+      getProjects: () => [{ id: 'project-1', sourceRepoIds: [TEST_REPO_ID] }],
+      getSettings: () => ({ ...store.getSettings(), localWindowsRuntimeDefault: runtimeDefault })
+    }
+
+    await withPlatform('win32', async () => {
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      runtimeDefault = { kind: 'wsl', distro: 'Ubuntu' }
+      await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    })
+
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('worktree scan cache: ignores a late result from an older runtime key', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    let runtimeDefault: unknown = { kind: 'windows-host' }
+    const runtimeStore = {
+      ...store,
+      getProjects: () => [{ id: 'project-1', sourceRepoIds: [TEST_REPO_ID] }],
+      getSettings: () => ({ ...store.getSettings(), localWindowsRuntimeDefault: runtimeDefault })
+    }
+    const firstScan = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+    const secondScan = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+    vi.mocked(listWorktrees)
+      .mockReturnValueOnce(firstScan.promise)
+      .mockReturnValueOnce(secondScan.promise)
+
+    await withPlatform('win32', async () => {
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      const first = runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      await Promise.resolve()
+      expect(listWorktrees).toHaveBeenCalledTimes(1)
+
+      runtimeDefault = { kind: 'wsl', distro: 'Ubuntu' }
+      const second = runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      await Promise.resolve()
+      expect(listWorktrees).toHaveBeenCalledTimes(2)
+
+      secondScan.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+      await second
+      firstScan.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+      await first
+      await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    })
+
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('worktree scan cache: keeps lineage shaping outside the raw scan cache', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const paths = ['orchestration', 'cli', 'manual']
+    const metaById: Record<string, WorktreeMeta> = {}
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const worktrees = paths.flatMap((origin, index) => {
+      const parentPath = `/tmp/${origin}-parent`
+      const childPath = `/tmp/${origin}-child`
+      const parentId = `${TEST_REPO_ID}::${parentPath}`
+      const childId = `${TEST_REPO_ID}::${childPath}`
+      metaById[parentId] = makeWorktreeMeta({ instanceId: `parent-${index}` })
+      metaById[childId] = makeWorktreeMeta({ instanceId: `child-${index}` })
+      lineageById[childId] = {
+        worktreeId: childId,
+        worktreeInstanceId: `child-${index}`,
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: `parent-${index}`,
+        origin: origin === 'orchestration' ? 'orchestration' : origin === 'cli' ? 'cli' : 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+      return [
+        { path: parentPath, head: 'parent', branch: origin, isBare: false, isMainWorktree: false },
+        {
+          path: childPath,
+          head: 'child',
+          branch: `${origin}-child`,
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getAllWorktreeLineage: () => lineageById
+    }
+    vi.mocked(listWorktrees).mockResolvedValue(worktrees)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    const listed = await runtime.listManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(
+      listed.worktrees
+        .filter((worktree) => worktree.lineage)
+        .map((worktree) => worktree.lineage?.origin)
+    ).toEqual(paths)
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
   it('does not prune lineage when an SSH runtime provider is unavailable', async () => {
@@ -28470,8 +30695,19 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  function createWorktreeRemovalRuntime(runtimeStore: unknown = store): OrcaRuntimeService {
+    const emptyPtyProvider = {
+      listProcesses: vi.fn(async () => []),
+      shutdown: vi.fn(async () => {})
+    }
+    return new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getLocalProvider: () => emptyPtyProvider as never,
+      getSshProvider: () => emptyPtyProvider as never
+    })
+  }
+
   it('skips archive hooks for CLI worktree removal by default', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue({
       scripts: {
         archive: 'pnpm worktree:archive'
@@ -28496,9 +30732,120 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('does not remove a runtime worktree when watcher teardown cannot release it', async () => {
+    const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
+    const runtimeStore = { ...store, getRepos: () => [repo], getRepo: () => repo }
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    deleteWorktreeHistoryDirMock.mockClear()
+    closeLocalWatcherForWorktreePathMock.mockRejectedValue(
+      new Error('file watcher process did not exit after termination deadline')
+    )
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      'file watcher process did not exit after termination deadline'
+    )
+
+    expect(removeWorktree).not.toHaveBeenCalled()
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+  })
+
+  it('stops worktree PTYs before removing linked paths', async () => {
+    const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
+    const runtimeStore = { ...store, getRepos: () => [repo], getRepo: () => repo }
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
+    const stopAndWait = vi.fn().mockResolvedValue(true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+    vi.mocked(removeWorktree).mockResolvedValue({})
+    removeWorktreeLinkedPathsMock.mockImplementationOnce(async () => {
+      expect(stopAndWait).toHaveBeenCalledWith('pty-1')
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH, ['node_modules'])
+  })
+
+  it('waits for every watcher layer to settle before restoring after teardown failure', async () => {
+    const runtime = createRuntime()
+    let finishRuntimeClose: () => void = () => {}
+    const runtimeClose = new Promise<void>((resolve) => {
+      finishRuntimeClose = resolve
+    })
+    const fileCommands = (
+      runtime as unknown as {
+        fileCommands: {
+          closeFileExplorerWatchersForPath: (path: string) => Promise<void>
+          restoreFileExplorerWatchersAfterFailedRemoval: (path: string) => Promise<void>
+        }
+      }
+    ).fileCommands
+    vi.spyOn(fileCommands, 'closeFileExplorerWatchersForPath').mockReturnValueOnce(runtimeClose)
+    const restoreRuntime = vi
+      .spyOn(fileCommands, 'restoreFileExplorerWatchersAfterFailedRemoval')
+      .mockResolvedValue(undefined)
+    closeLocalWatcherForWorktreePathMock.mockRejectedValueOnce(
+      new Error('desktop watcher close failed')
+    )
+
+    const result = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH).catch((error) => error)
+    await Promise.resolve()
+    expect(restoreLocalWatcherAfterFailedRemovalMock).not.toHaveBeenCalled()
+    expect(restoreRuntime).not.toHaveBeenCalled()
+
+    finishRuntimeClose()
+    await expect(result).resolves.toEqual(
+      expect.objectContaining({
+        message: 'desktop watcher close failed'
+      })
+    )
+    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+    expect(restoreRuntime).toHaveBeenCalledWith(TEST_WORKTREE_PATH, undefined)
+  })
+
+  it('restores runtime watchers when CLI worktree deletion fails after teardown', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree).mockRejectedValue(new Error('delete failed'))
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow('delete failed')
+
+    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+    expect(forgetLocalWatcherRemovalSnapshotMock).not.toHaveBeenCalled()
+    const finishRetry = beginWatcherInstall(TEST_WORKTREE_PATH)
+    finishRetry()
+  })
+
+  it('closes before and after draining a pre-removal watcher install', async () => {
+    const runtime = createRuntime()
+    const finishInstall = beginWatcherInstall(TEST_WORKTREE_PATH)
+
+    const acquiring = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH)
+    await vi.waitFor(() => expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledTimes(1))
+    expect(() => beginWatcherInstall(TEST_WORKTREE_PATH)).toThrow(
+      'cannot start while the worktree is being removed'
+    )
+
+    finishInstall()
+    const gate = await acquiring
+    expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledTimes(2)
+    await gate.finish(false)
+    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
+
+    const finishRetry = beginWatcherInstall(TEST_WORKTREE_PATH)
+    finishRetry()
+  })
+
   it('recovers forced Windows runtime long-path removal and keeps skipped-hook warnings', async () => {
     setPlatform('win32')
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     await mkdir(TEST_WORKTREE_PATH, { recursive: true })
     await writeFile(join(TEST_WORKTREE_PATH, 'scratch.txt'), 'delete me')
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
@@ -28547,7 +30894,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       removeWorktreeMeta
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
@@ -28580,7 +30927,7 @@ describe('OrcaRuntimeService', () => {
     const missingWorktreePath = 'C:\\workspace\\already-removed'
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const registeredWorktrees = [
       {
         path: TEST_REPO_PATH,
@@ -28631,7 +30978,7 @@ describe('OrcaRuntimeService', () => {
     const missingWorktreePath = 'C:\\workspace\\locked-already-removed'
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const registeredWorktrees = [
       {
         path: missingWorktreePath,
@@ -28674,7 +31021,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(removeWorktree).mockResolvedValue({})
 
@@ -28731,7 +31078,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(listWorktrees).mockResolvedValue([
       {
@@ -28788,7 +31135,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
     vi.mocked(listWorktreesStrict).mockRejectedValue(new Error('wsl git list failed'))
 
@@ -28803,7 +31150,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('force-deletes a branch that was preserved by runtime worktree removal', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     vi.mocked(removeWorktree).mockResolvedValue({
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
@@ -28872,7 +31219,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
     registerSshGitProvider('ssh-1', provider as never)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
       await runtime.removeManagedWorktree(remoteWorktreeId)
@@ -28914,7 +31261,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(removeWorktree).mockResolvedValue({
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
@@ -28936,7 +31283,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rejects stale preserved-branch runtime cleanup actions with an old head', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     vi.mocked(removeWorktree).mockResolvedValue({
       preservedBranch: { branchName: 'feature/test', head: 'new456' }
     })
@@ -28950,7 +31297,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('coalesces concurrent runtime worktree removals for the same worktree id', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     const removeStarted = deferred<void>()
     const finishRemoval = deferred<void>()
     vi.mocked(removeWorktree).mockImplementation(async () => {
@@ -28971,7 +31318,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rejects concurrent runtime worktree removals for the same id with different options', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     const removeStarted = deferred<void>()
     const finishRemoval = deferred<void>()
     vi.mocked(removeWorktree).mockImplementation(async () => {
@@ -28997,7 +31344,7 @@ describe('OrcaRuntimeService', () => {
     const missingWorktreePath = join(parentDir, 'already-deleted')
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
 
@@ -29021,7 +31368,7 @@ describe('OrcaRuntimeService', () => {
     const missingWorktreePath = join(parentDir, 'already-deleted')
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
 
@@ -29075,7 +31422,7 @@ describe('OrcaRuntimeService', () => {
             }
           : undefined
     }
-    const runtime = new OrcaRuntimeService(runtimeStoreWithRepoPath as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
 
@@ -29085,6 +31432,7 @@ describe('OrcaRuntimeService', () => {
       await expect(runtime.removeManagedWorktree(worktreeId, true)).resolves.toEqual({})
 
       await expect(lstat(orphanPath)).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(closeLocalWatcherForWorktreePathMock).toHaveBeenCalledWith(orphanPath)
       expect(removeWorktree).not.toHaveBeenCalled()
       expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
@@ -29129,7 +31477,7 @@ describe('OrcaRuntimeService', () => {
             }
           : undefined
     }
-    const runtime = new OrcaRuntimeService(runtimeStoreWithRepoPath as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
@@ -29198,7 +31546,7 @@ describe('OrcaRuntimeService', () => {
             }
           : undefined
     }
-    const runtime = new OrcaRuntimeService(runtimeStoreWithRepoPath as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
 
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
@@ -29259,7 +31607,7 @@ describe('OrcaRuntimeService', () => {
       ])
     }
     registerSshGitProvider(repo.connectionId, gitProvider as never)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
       await expect(runtime.removeManagedWorktree(`id:${worktreeId}`, true)).rejects.toThrow(
@@ -29279,7 +31627,7 @@ describe('OrcaRuntimeService', () => {
     const existingWorktreePath = await mkdtemp(join(tmpdir(), 'orca-runtime-remove-existing-'))
     const worktreeId = `${TEST_REPO_ID}::${existingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
@@ -29296,7 +31644,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('rejects CLI worktree removal when the target contains another registered worktree', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     vi.mocked(listWorktrees).mockResolvedValue([
       {
         path: TEST_REPO_PATH,
@@ -29359,7 +31707,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('fails dirty non-force deletes before PTY teardown', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     const killSpy = vi.fn().mockReturnValue(true)
     runtime.setPtyController({
       write: () => true,
@@ -29378,6 +31726,8 @@ describe('OrcaRuntimeService', () => {
       `Failed to delete worktree at ${TEST_WORKTREE_PATH}. ?? scratch.txt`
     )
 
+    expect(closeLocalWatcherForWorktreePathMock).not.toHaveBeenCalled()
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
     expect(killSpy).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
   })
@@ -29389,7 +31739,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [repo],
       getRepo: () => repo
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const killSpy = vi.fn().mockReturnValue(true)
     runtime.setPtyController({
       write: () => true,
@@ -29426,7 +31776,7 @@ describe('OrcaRuntimeService', () => {
       getRepos: () => [repo],
       getRepo: () => repo
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
     const killSpy = vi.fn().mockReturnValue(true)
     runtime.setPtyController({
       write: () => true,
@@ -29460,7 +31810,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('formats preflight subprocess failures and skips PTY teardown', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     const killSpy = vi.fn().mockReturnValue(true)
     runtime.setPtyController({
       write: () => true,
@@ -29484,7 +31834,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('falls through to orphan cleanup when preflight reports missing/non-repo worktree', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
       Object.assign(new Error('status failed'), {
@@ -29510,8 +31860,37 @@ describe('OrcaRuntimeService', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
   })
 
+  it('drops the bounded scan cache when orphan-cleanup removal completes', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
+      })
+    )
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+
+    // Prime the bounded raw scan cache with the worktree still present.
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
+
+    // Regression (#8882): the orphan-cleanup removal path must also drop the
+    // bounded raw scan cache, or the removed worktree lingers in listings until
+    // the 30s TTL. Git tracking is now gone, so a fresh scan is empty.
+    vi.mocked(listWorktrees).mockResolvedValue([])
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      { worktrees: [] }
+    )
+  })
+
   it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue({
       scripts: {
         archive: 'pnpm worktree:archive'
@@ -29540,7 +31919,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('clears optimistic reconcile tokens when a CLI worktree removal succeeds', async () => {
-    const runtime = new OrcaRuntimeService(store)
+    const runtime = createWorktreeRemovalRuntime()
     const worktreeBaseStatus = vi.fn()
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -30127,11 +32506,14 @@ describe('OrcaRuntimeService', () => {
       }
     }
 
-    it('RPC-initiated delete kills matching PTYs before git', async () => {
+    it('RPC-initiated delete awaits matching PTYs before git', async () => {
       // Seed the runtime with a live leaf whose worktreeId matches the target.
-      const killSpy = vi.fn().mockReturnValue(true)
-      const localProvider = createProviderStub(async () => [])
       const callOrder: string[] = []
+      const stopAndWait = vi.fn(async (id: string) => {
+        callOrder.push(`stop-and-wait:${id}`)
+        return true
+      })
+      const localProvider = createProviderStub(async () => [])
       vi.mocked(assertWorktreeCleanForRemoval).mockImplementation(async () => {
         callOrder.push('preflight')
       })
@@ -30148,26 +32530,44 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.setPtyController({
         write: () => true,
-        kill: (id) => {
-          callOrder.push(`kill:${id}`)
-          return killSpy(id) as boolean
-        },
+        kill: vi.fn(() => true),
+        stopAndWait,
         getForegroundProcess: async () => null
       })
       syncSinglePty(runtime, 'pty-1')
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-      expect(killSpy).toHaveBeenCalledWith('pty-1')
+      expect(stopAndWait).toHaveBeenCalledWith('pty-1')
       // The provider-prefix sweep and the git removal must happen AFTER the
-      // runtime-graph kill. Git removal must NOT happen before any kill.
+      // runtime-graph physical stop. Git removal must NOT start before it.
       const preflightIdx = callOrder.indexOf('preflight')
-      const killIdx = callOrder.indexOf('kill:pty-1')
+      const stopIdx = callOrder.indexOf('stop-and-wait:pty-1')
       const gitIdx = callOrder.indexOf('git-removeWorktree')
       expect(preflightIdx).toBeGreaterThanOrEqual(0)
-      expect(killIdx).toBeGreaterThan(preflightIdx)
-      expect(killIdx).toBeGreaterThanOrEqual(0)
-      expect(gitIdx).toBeGreaterThan(killIdx)
+      expect(stopIdx).toBeGreaterThan(preflightIdx)
+      expect(stopIdx).toBeGreaterThanOrEqual(0)
+      expect(gitIdx).toBeGreaterThan(stopIdx)
+    })
+
+    it('does not start Git removal when physical PTY stop cannot be proven', async () => {
+      const localProvider = createProviderStub(async () => [])
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getLocalProvider: () => localProvider as never
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: vi.fn(() => true),
+        stopAndWait: vi.fn(async () => false),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime, 'pty-1')
+
+      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+        'Failed to physically stop every PTY'
+      )
+
+      expect(removeWorktree).not.toHaveBeenCalled()
     })
 
     it('thunk resolves the installed provider lazily, not at construction time', async () => {

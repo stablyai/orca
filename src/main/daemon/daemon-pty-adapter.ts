@@ -11,6 +11,7 @@ import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
+  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   type CreateOrAttachResult,
   type DaemonEvent,
@@ -35,6 +36,8 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 type ColdRestorePayload = {
   scrollback: string
   cwd: string
+  cols: number
+  rows: number
   oscLinks?: TerminalOscLinkRange[]
 }
 
@@ -44,6 +47,17 @@ function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
   return restoreInfo.modes.alternateScreen
     ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
     : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+}
+
+function providerSequenceForSpawn(
+  result: CreateOrAttachResult
+): PtySpawnResult['providerSequence'] {
+  if (result.isNew) {
+    return { value: 0, generation: 'reset' }
+  }
+  return typeof result.snapshot?.outputSequence === 'number'
+    ? { value: result.snapshot.outputSequence, generation: 'continued' }
+    : undefined
 }
 
 export type DaemonPtyAdapterOptions = {
@@ -139,6 +153,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // unaffected and bypass this) for a ~9x cut in worst-case write volume.
   private static FULL_CHECKPOINT_COOLDOWN_MS = 45_000
   private lastFullCheckpointAt = new Map<string, number>()
+
+  supportsGitCredentialGuardHost(): boolean {
+    return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
+  }
+
+  canProvideAuthoritativeBufferSnapshot(_id: string): boolean {
+    return this.supportsAuthoritativeBufferSnapshots
+  }
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
@@ -317,6 +339,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
     this.activeSessionIds.add(sessionId)
+    const providerSequence = providerSequenceForSpawn(result)
 
     // Cold restore: daemon created a new session but disk history shows
     // an unclean shutdown → return saved scrollback so the renderer can
@@ -348,10 +371,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
           pid,
           ...launchIdentity(),
           coldRestore,
+          ...(providerSequence ? { providerSequence } : {}),
           ...(!result.isNew ? { isReattach: true } : {})
         }
       }
-      return { id: sessionId, pid, ...launchIdentity() }
+      return {
+        id: sessionId,
+        pid,
+        ...launchIdentity(),
+        ...(providerSequence ? { providerSequence } : {})
+      }
     }
 
     if (this.historyManager && result.isNew) {
@@ -389,6 +418,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
+        ...(providerSequence ? { providerSequence } : {}),
         ...(isReattach ? { isReattach: true } : {})
       }
     }
@@ -410,6 +440,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
+      ...(providerSequence ? { providerSequence } : {}),
       ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),
@@ -486,6 +517,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    // Why: shutdown can be the first lazy-client operation after restart; connect
+    // before killing so a healthy daemon session is not orphaned (#7742).
+    await this.ensureConnected()
     // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
     // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
@@ -498,6 +532,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (coldRestore) {
         this.coldRestoreCache.set(id, coldRestore)
         this.sleepRestoreSessionIds.add(id)
+        // Why: physical exit must not mark intentional sleep as a clean end;
+        // the final checkpoint remains the wake-time recovery authority.
+        this.historyManager?.suspendSession(id)
       }
     }
     await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
@@ -563,7 +600,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!scrollback) {
       return null
     }
-    return { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
+    return {
+      scrollback,
+      cwd: restoreInfo.cwd,
+      cols: restoreInfo.cols,
+      rows: restoreInfo.rows,
+      oscLinks: restoreInfo.oscLinks
+    }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -750,7 +793,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       .filter((s) => s.isAlive)
       .map((s) => ({
         id: s.sessionId,
-        cwd: s.cwd ?? '',
+        // Why: OSC 7 may not arrive before destructive cleanup. Spawn cwd is
+        // still authoritative ownership until the daemon reports a live cwd.
+        cwd: s.cwd ?? this.initialCwds.get(s.sessionId) ?? '',
         title: 'shell',
         ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
       }))

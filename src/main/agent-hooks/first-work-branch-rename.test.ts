@@ -140,7 +140,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('strips a prefix the model leaked into the slug from both branch and display name', async () => {
-    // Model ignored "no prefixes" and echoed `you/worktree-spinner`, which the
+    // Model echoed `you/worktree-spinner`, which the
     // sanitizer folds to `you-worktree-spinner`; without stripping it would
     // double-prefix the branch (`you/you-...`) and show "You worktree spinner".
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'you-worktree-spinner' })

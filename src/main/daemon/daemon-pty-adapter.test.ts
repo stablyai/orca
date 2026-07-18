@@ -11,6 +11,7 @@ import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
 import type { HistoryReader } from './history-reader'
 import type { SubprocessHandle } from './session'
+import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
 
@@ -50,7 +51,7 @@ function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
     pause: vi.fn<() => void>(),
     resume: vi.fn<() => void>(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -97,6 +98,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     command?: string
   } | null
   let subprocessDataOnSubscribe: string | undefined
+  let daemonLog: DaemonFileLog
+  let daemonLogEvents: string[]
 
   beforeEach(async () => {
     subprocessDataOnSubscribe = undefined
@@ -104,9 +107,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
 
+    daemonLogEvents = []
+    daemonLog = {
+      log: (event) => daemonLogEvents.push(event),
+      close() {}
+    }
     server = new DaemonServer({
       socketPath,
       tokenPath,
+      log: daemonLog,
       spawnSubprocess: (opts) => {
         lastSpawnOpts = opts
         lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
@@ -132,6 +141,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const result = await adapter.spawn({ cols: 80, rows: 24 })
       expect(result.id).toBeDefined()
       expect(typeof result.id).toBe('string')
+      expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
 
     it('uses worktreeId as session prefix when provided', async () => {
@@ -261,6 +271,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('background stream thinning compatibility', () => {
+    it('reports authoritative snapshot support only for protocol v20 and newer', () => {
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      try {
+        expect(legacy.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
+        expect(adapter.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
+      } finally {
+        legacy.dispose()
+      }
+    })
+
     it('reports background state on the authoritative-snapshot protocol', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       try {
@@ -314,6 +334,42 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         legacy.dispose()
         notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('still returns the v19 attach snapshot for a desktop renderer replay', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        pid: 123,
+        shellState: 'unsupported',
+        snapshot: {
+          scrollbackAnsi: 'legacy history\r\n',
+          rehydrateSequences: '\x1b[?2004h',
+          snapshotAnsi: 'legacy prompt',
+          modes: { alternateScreen: false },
+          cols: 80,
+          rows: 24
+        }
+      } as never)
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      try {
+        const result = await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+
+        expect(result).toMatchObject({
+          id: 'legacy-session',
+          isReattach: true,
+          snapshot: expect.stringContaining('legacy history')
+        })
+        expect(result.snapshot).toContain('legacy prompt')
+        expect(result.providerSequence).toBeUndefined()
+        await expect(legacy.getBufferSnapshot('legacy-session')).resolves.toBeNull()
+      } finally {
+        legacy.dispose()
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
       }
@@ -389,6 +445,42 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.shutdown(id, { immediate: true })
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    })
+
+    // Why: shutdown can be the first lazy-client operation after restart; it
+    // must connect before killing so a healthy session is not orphaned (#7742).
+    it('kills a live session from a fresh adapter that has not connected yet', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      try {
+        await freshAdapter.shutdown(id, { immediate: true })
+      } finally {
+        freshAdapter.dispose()
+      }
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      await expect(adapter.listProcesses()).resolves.not.toContainEqual(
+        expect.objectContaining({ id })
+      )
+    })
+
+    it('coalesces the lazy connection when a fresh adapter shuts down concurrent sessions', async () => {
+      const ids = await Promise.all(
+        ['concurrent-kill-a', 'concurrent-kill-b'].map(async (sessionId) =>
+          adapter.spawn({ cols: 80, rows: 24, sessionId }).then((result) => result.id)
+        )
+      )
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      daemonLogEvents.length = 0
+
+      try {
+        await Promise.all(ids.map((id) => freshAdapter.shutdown(id, { immediate: true })))
+      } finally {
+        freshAdapter.dispose()
+      }
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
+      expect(daemonLogEvents.filter((event) => event === 'client-hello-accepted')).toHaveLength(2)
     })
   })
 
@@ -506,6 +598,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(second.launchAgent).toBe('droid')
       expect(second.snapshot).toBeDefined()
       expect(second.snapshot).toContain('hello from shell')
+      expect(second.providerSequence).toEqual({
+        value: 'hello from shell\r\n'.length,
+        generation: 'continued'
+      })
     })
 
     it('includes rehydrateSequences in snapshot when terminal modes are active', async () => {
@@ -528,6 +624,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.id).toBe('brand-new')
       expect(result.isReattach).toBeUndefined()
       expect(result.snapshot).toBeUndefined()
+      expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
   })
 
@@ -552,7 +649,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('listProcesses', () => {
     it('returns active sessions', async () => {
-      await adapter.spawn({ cols: 80, rows: 24 })
+      await adapter.spawn({ cols: 80, rows: 24, cwd: '/repo/owned-before-osc7' })
       await adapter.spawn({ cols: 80, rows: 24 })
 
       const procs = await adapter.listProcesses()
@@ -560,6 +657,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0]).toHaveProperty('id')
       expect(procs[0]).toHaveProperty('cwd')
       expect(procs[0]).toHaveProperty('title')
+      expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
     })
   })
 
@@ -1243,6 +1341,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Server running')
       expect(result.coldRestore!.cwd).toBe('/projects/myapp')
+      expect(result.coldRestore).toMatchObject({ cols: 120, rows: 40 })
       expect(lastSpawnOpts).toMatchObject({
         sessionId,
         cwd: '/projects/myapp',

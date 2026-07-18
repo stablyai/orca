@@ -193,6 +193,87 @@ describe('mobile presence lock — driver state machine', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
   })
 
+  it('restores the pre-write driver after overlapping claims from one phone both fail', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    await runtime.reclaimTerminalForDesktop('pty-1')
+
+    const first = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const second = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    first.rollback()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    second.rollback()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+  })
+
+  it('keeps a successful overlapping claim as the rollback baseline', async () => {
+    const { runtime, ptySizes } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    await runtime.reclaimTerminalForDesktop('pty-1')
+
+    const successful = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const rejected = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    await successful.commit()
+    rejected.rollback()
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+  })
+
+  it('does not let an older phone-fit completion retake a newer writer floor', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-1', 'phone-B', { cols: 38, rows: 18 })
+    await runtime.reclaimTerminalForDesktop('pty-1')
+
+    let releaseFirstLayout!: () => void
+    vi.spyOn(runtime, 'applyMobileDisplayMode').mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseFirstLayout = () => resolve(true)
+        })
+    )
+    const first = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const firstCommit = first.commit()
+    await vi.waitFor(() => expect(releaseFirstLayout).toBeTypeOf('function'))
+
+    const second = runtime.beginMobileInputFloor('pty-1', 'phone-B')!
+    await second.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
+
+    releaseFirstLayout()
+    await firstCommit
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
+  })
+
+  it('mobile input without an active subscriber cannot create an orphaned floor lock', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+    await vi.advanceTimersByTimeAsync(250)
+
+    await runtime.mobileTookFloor('pty-1', 'phone-A')
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+  })
+
+  it('admits a soft-leaving client to reserve the input floor within the grace window', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+
+    // Inside the soft-leave grace a late write still reserves and commits the floor.
+    const claim = runtime.beginMobileInputFloor('pty-1', 'phone-A')
+    expect(claim).not.toBeNull()
+    await claim!.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+
+    // Past the grace the client is fully gone and is rejected.
+    await vi.advanceTimersByTimeAsync(250)
+    expect(runtime.beginMobileInputFloor('pty-1', 'phone-A')).toBeNull()
+  })
+
   it('handleMobileUnsubscribe last leaver flips driver to idle after soft-leave grace', async () => {
     const { runtime, driverEvents } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })

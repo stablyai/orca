@@ -20,7 +20,8 @@ export async function listQuickOpenFiles(
   rootPath: string,
   store: Store,
   excludePaths?: string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxResults?: number
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -41,11 +42,21 @@ export async function listQuickOpenFiles(
   // can run.
   const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
   if (!rgAvailable) {
-    return listFilesWithGit(authorizedRootPath, excludePathPrefixes, localGitOptions, signal)
+    return listFilesWithGit(
+      authorizedRootPath,
+      excludePathPrefixes,
+      localGitOptions,
+      signal,
+      maxResults
+    )
   }
 
   const files = new Set<string>()
-  const children: ChildProcess[] = []
+  const children: {
+    child: ChildProcess
+    isDone: () => boolean
+    finish: () => void
+  }[] = []
   // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
   // their distro in the path; Windows-path repos carry it in project runtime.
   const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
@@ -67,7 +78,7 @@ export async function listQuickOpenFiles(
       let done = false
       let parseablePathCount = 0
 
-      const processLine = (rawLine: string): void => {
+      const processLine = (rawLine: string): boolean => {
         const translated =
           wslDistroForOutput && rawLine.startsWith('/')
             ? toWindowsWslPath(rawLine, wslDistroForOutput)
@@ -77,16 +88,20 @@ export async function listQuickOpenFiles(
           getQuickOpenRgOutputMode(rawLine, translated, authorizedRootPath)
         )
         if (relPath === null) {
-          return
+          return false
         }
         parseablePathCount++
         if (!shouldIncludeQuickOpenPath(relPath)) {
-          return
+          return false
         }
         if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
-          return
+          return false
+        }
+        if (maxResults !== undefined && files.size >= maxResults) {
+          return true
         }
         files.add(relPath)
+        return maxResults !== undefined && files.size >= maxResults
       }
 
       const child = wslAwareSpawn('rg', args, {
@@ -94,14 +109,17 @@ export async function listQuickOpenFiles(
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
-      children.push(child)
       let timer: ReturnType<typeof setTimeout>
       const handleStdoutData = (chunk: string): void => {
         buf += chunk
         let start = 0
         let newlineIdx = buf.indexOf('\n', start)
         while (newlineIdx !== -1) {
-          processLine(buf.substring(start, newlineIdx))
+          if (processLine(buf.substring(start, newlineIdx))) {
+            buf = ''
+            finishAtLimit()
+            return
+          }
           start = newlineIdx + 1
           newlineIdx = buf.indexOf('\n', start)
         }
@@ -125,8 +143,10 @@ export async function listQuickOpenFiles(
           finish(new Error(`rg killed by ${signal}`))
           return
         }
-        if (buf) {
-          processLine(buf)
+        if (buf && processLine(buf)) {
+          buf = ''
+          finishAtLimit()
+          return
         }
         if (code === 0 || code === 1) {
           finish()
@@ -157,6 +177,8 @@ export async function listQuickOpenFiles(
         }
       }
 
+      children.push({ child, isDone: () => done, finish })
+
       child.stdout!.setEncoding('utf-8')
       child.stdout!.on('data', handleStdoutData)
       child.stderr!.on('data', handleStderrData)
@@ -176,20 +198,45 @@ export async function listQuickOpenFiles(
     // Why: if one rg pass fails, Promise.all rejects immediately while the
     // sibling scan can keep walking a huge tree until timeout. Stop it so
     // repeated Quick Open attempts do not accumulate local rg processes.
-    for (const child of children) {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill()
+    for (const entry of children) {
+      if (entry.isDone()) {
+        continue
+      }
+      entry.finish()
+      if (entry.child.exitCode === null && entry.child.signalCode === null) {
+        entry.child.kill()
+      }
+    }
+  }
+
+  function finishAtLimit(): void {
+    for (const entry of children) {
+      if (entry.isDone()) {
+        continue
+      }
+      entry.finish()
+      if (entry.child.exitCode === null && entry.child.signalCode === null) {
+        entry.child.kill()
       }
     }
   }
 
   try {
-    await Promise.all([runRg(primary), runRg(ignoredPass)])
+    if (maxResults === undefined) {
+      await Promise.all([runRg(primary), runRg(ignoredPass)])
+    } else {
+      // Why: ignored-file output can be much larger and faster than the primary
+      // pass; let source files claim the bounded autocomplete budget first.
+      await runRg(primary)
+      if (files.size < maxResults) {
+        await runRg(ignoredPass)
+      }
+    }
   } catch (err) {
     killSurvivors()
     throw err
   }
-  return Array.from(files)
+  return Array.from(files).slice(0, maxResults)
 }
 
 function getQuickOpenRgOutputMode(

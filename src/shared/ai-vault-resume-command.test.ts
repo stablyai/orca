@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { buildAiVaultResumeCommand } from './ai-vault-types'
 
 describe('buildAiVaultResumeCommand', () => {
+  it('uses Antigravity conversation ids instead of Gemini resume flags', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'antigravity',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && agy --conversation 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'")
+  })
+
   it('builds a self-contained cmd wrapper when no live shell is known', () => {
     expect(
       buildAiVaultResumeCommand({

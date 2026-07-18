@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clearTerminalProviderSnapshotCapabilities,
+  synchronizeTerminalProviderSnapshotCapabilities
+} from '../terminal/terminal-provider-snapshot-capability'
+import {
   TERMINAL_TAB_HOT_RETAIN_MS,
   TERMINAL_WORKTREE_HOT_RETAIN_MS,
   TERMINAL_WORKTREE_PARK_DELAY_MS,
@@ -58,6 +62,16 @@ describe('canParkTerminalWorktreeRenderers', () => {
   }
 
   it('parks hidden local terminal renderers after the idle delay', () => {
+    expect(canParkTerminalWorktreeRenderers(base)).toBe(true)
+  })
+
+  it('keeps a previously mounted v19 terminal eligible for ordinary parking', () => {
+    const legacyPtyId = 'repo::/worktree@@session-1'
+    clearTerminalProviderSnapshotCapabilities()
+    synchronizeTerminalProviderSnapshotCapabilities([legacyPtyId], (ids) =>
+      ids.map((id) => ({ id, authoritative: false }))
+    )
+
     expect(canParkTerminalWorktreeRenderers(base)).toBe(true)
   })
 

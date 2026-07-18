@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
@@ -1771,6 +1772,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           // recordReplacedPreview so file-explorer single-click (which
           // semantically *wants* silent eviction) is unaffected.
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
+          let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
           if (recordReplacedPreview && replacedPreview.id !== id) {
             const {
               id: _rid,
@@ -1786,6 +1788,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                 MAX_RECENT_CLOSED_EDITOR_TABS
               )
             }
+            nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
+              s.recentlyClosedTabKindsByWorktree,
+              worktreeId,
+              'editor'
+            )
           }
           return {
             openFiles: newFiles,
@@ -1796,6 +1803,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
             markdownTableOfContentsVisible: nextMarkdownTableOfContentsVisible,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
+            recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds,
             ...previewTabBarUpdate,
             ...activeResult
           }
@@ -2135,6 +2143,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : s.tabBarOrderByWorktree
 
       let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
+      let nextRecentlyClosedKinds = s.recentlyClosedTabKindsByWorktree
       const wtRecent = closedFile?.worktreeId
       // Why: untitled files that were never edited will be deleted from disk
       // after close. Adding them to the reopen stack would let Cmd+Shift+T
@@ -2160,6 +2169,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             MAX_RECENT_CLOSED_EDITOR_TABS
           )
         }
+        nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
+          s.recentlyClosedTabKindsByWorktree,
+          wtRecent,
+          'editor'
+        )
       }
 
       return {
@@ -2186,7 +2200,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingEditorReveal: null,
-        recentlyClosedEditorTabsByWorktree: nextRecentlyClosed
+        recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
+        recentlyClosedTabKindsByWorktree: nextRecentlyClosedKinds
       }
     })
 
@@ -2336,6 +2351,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       const closingFiles = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
       let nextRecentClosed = s.recentlyClosedEditorTabsByWorktree[activeWorktreeId] ?? []
+      let capturedCloseCount = 0
       for (const f of [...closingFiles].toReversed()) {
         // Why: untitled non-dirty files are deleted from disk after close —
         // skip them so the reopen stack doesn't reference vanished paths.
@@ -2351,6 +2367,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           0,
           MAX_RECENT_CLOSED_EDITOR_TABS
         )
+        capturedCloseCount += 1
       }
 
       return {
@@ -2385,7 +2402,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         recentlyClosedEditorTabsByWorktree: {
           ...s.recentlyClosedEditorTabsByWorktree,
           [activeWorktreeId]: nextRecentClosed
-        }
+        },
+        recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
+          s.recentlyClosedTabKindsByWorktree,
+          activeWorktreeId,
+          'editor',
+          capturedCloseCount
+        )
       }
     })
     if (typeof window !== 'undefined') {

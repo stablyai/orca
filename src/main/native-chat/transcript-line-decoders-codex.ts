@@ -1,6 +1,10 @@
 // Codex JSONL line → NativeChatMessage decoder.
 
-import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
+import {
+  NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
+  type NativeChatBlock,
+  type NativeChatMessage
+} from '../../shared/native-chat-types'
 import {
   asRecord,
   extractString,
@@ -9,6 +13,7 @@ import {
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
 import { codexTurnItem } from './transcript-codex-turn-items'
+import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
 export function decodeCodexTranscriptLine(
   line: string,
@@ -30,8 +35,11 @@ export function createCodexTranscriptLineDecoder(): (
     if (decoded.historyMode !== undefined) {
       historyMode = decoded.historyMode
     }
-    if (!decoded.message || !decoded.source) {
+    if (!decoded.message) {
       return null
+    }
+    if (!decoded.source) {
+      return decoded.message
     }
     const fingerprint = messageFingerprint(decoded.message)
     if (
@@ -147,6 +155,15 @@ function codexEventMessage(
   id: string,
   timestamp: number | null
 ): NativeChatMessage | null {
+  if (payload.type === CODEX_EVENT_TURN_ABORTED) {
+    return {
+      id,
+      role: 'system',
+      blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
+      timestamp,
+      source: 'transcript'
+    }
+  }
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
     return text

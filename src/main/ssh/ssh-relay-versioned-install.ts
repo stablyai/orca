@@ -15,16 +15,21 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { probeInstallLockExistsCommand } from './ssh-relay-install-lock-commands'
+import { isRelayInstallLockStale, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import {
-  acquireInstallLockParentCommand,
+  isRelayGcClaimOwned,
+  releaseRelayGcClaimWithRetry,
+  tryAcquireRelayGcClaim
+} from './ssh-relay-gc-claim'
+import { cleanupRelayGcTombstones } from './ssh-relay-gc-tombstone'
+import {
   listRelayBaseDirsCommand,
-  lockMtimeEpochCommand,
-  probeDirectoryExistsCommand,
+  moveRemoteTreeCommand,
   probeFileExistsCommand,
   probeRelayInstalledCommand,
   relayLivenessProbeCommand,
   removeRemoteTreeCommand,
-  tryCreateInstallLockCommand,
   writeRemoteEmptyFileCommand
 } from './ssh-remote-commands'
 import {
@@ -36,6 +41,7 @@ import {
   type RemotePathFlavor
 } from './ssh-remote-platform'
 import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 // Why: the GC pass and the version-dir parser must agree on what counts as a
@@ -51,18 +57,7 @@ const RELAY_VERSION_DIR_REGEX = /^relay-(v?\d+\.\d+\.\d+(\+[0-9a-f]+)?)$/
 // living on remote disks forever.
 const LEGACY_RELAY_DIR_REGEX = /^relay-v\d+\.\d+\.\d+$/
 
-const INSTALL_LOCK_NAME = '.install-lock'
 const INSTALL_COMPLETE_NAME = '.install-complete'
-
-const INSTALL_LOCK_POLL_MS = 1_000
-const INSTALL_LOCK_TIMEOUT_MS = 120_000
-// Why: a stale lock dir from a crashed installer must be recoverable without
-// user intervention. After the timeout we check the lock's mtime; if it's
-// older than this window the previous installer is assumed dead and we steal
-// the lock. 2 minutes is well above a normal `npm install node-pty` runtime
-// (10–60s on slow hosts) so a slow concurrent installer is not falsely
-// declared dead.
-const INSTALL_LOCK_STALE_MS = 120_000
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 type RelayInstalledProbeOptions = {
@@ -145,6 +140,7 @@ export async function isRelayAlreadyInstalled(
     )
     return probe.trim() === 'OK'
   } catch (err) {
+    options?.signal?.throwIfAborted()
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
@@ -153,101 +149,27 @@ export async function isRelayAlreadyInstalled(
 }
 
 /**
- * Acquire the per-version install lock via atomic `mkdir`. Returns when the
- * caller owns the lock; throws if the lock could not be acquired within
- * INSTALL_LOCK_TIMEOUT_MS even after one stale-lock recovery attempt.
- *
- * Why mkdir: POSIX `mkdir` is atomic and fails with EEXIST if the dir already
- * exists, giving us a free mutex. A second concurrent caller polls and
- * eventually either acquires the lock or steals it after the stale window.
- */
-export async function acquireInstallLock(
-  conn: SshConnection,
-  remoteRelayDir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
-): Promise<void> {
-  const lockDir = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
-  // Why: the parent dir may not exist yet on a first install. mkdir -p is
-  // safe to run multiple times — it's a no-op if the dir already exists.
-  await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir))
-
-  let start = Date.now()
-  let recoveredOnce = false
-  while (true) {
-    try {
-      const result = await execHostCommand(conn, host, tryCreateInstallLockCommand(host, lockDir))
-      if (result.trim().endsWith('OK')) {
-        return
-      }
-    } catch {
-      /* mkdir failed with non-zero — fall through to BUSY treatment */
-    }
-    if (Date.now() - start >= INSTALL_LOCK_TIMEOUT_MS) {
-      if (recoveredOnce) {
-        throw new Error(
-          `Could not acquire relay install lock at ${lockDir} after ${
-            INSTALL_LOCK_TIMEOUT_MS / 1000
-          }s; another install is in progress or the lock is wedged.`
-        )
-      }
-      // Stale-lock recovery: if the lock dir's mtime is older than the stale
-      // window, the previous installer crashed. Steal it and retry once,
-      // resetting the timeout window so a single post-recovery race doesn't
-      // immediately exhaust the budget.
-      const ageOk = await isLockStale(conn, lockDir, host)
-      if (ageOk) {
-        console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
-        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
-        recoveredOnce = true
-        start = Date.now()
-        continue
-      }
-      throw new Error(
-        `Could not acquire relay install lock at ${lockDir} after ${
-          INSTALL_LOCK_TIMEOUT_MS / 1000
-        }s and the lock is not yet stale.`
-      )
-    }
-    await new Promise((r) => setTimeout(r, INSTALL_LOCK_POLL_MS))
-  }
-}
-
-async function isLockStale(
-  conn: SshConnection,
-  lockDir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
-): Promise<boolean> {
-  try {
-    // Why: `stat` flags differ between GNU coreutils (Linux) and BSD (macOS).
-    // We try GNU first, then BSD; both produce a Unix epoch in seconds on
-    // stdout. If both fail we conservatively treat the lock as not stale.
-    const out = await execHostCommand(conn, host, lockMtimeEpochCommand(host, lockDir))
-    const mtimeSec = Number.parseInt(out.trim(), 10)
-    if (!Number.isFinite(mtimeSec)) {
-      return false
-    }
-    const ageMs = Date.now() - mtimeSec * 1000
-    return ageMs > INSTALL_LOCK_STALE_MS
-  } catch {
-    return false
-  }
-}
-
-/**
- * Mark the install as complete and release the lock. Sentinel ordering is:
- * write `.install-complete` FIRST, then remove `.install-lock`. This ensures
- * a sibling dir is never observed by GC as "complete but locked", which
- * would lead GC to skip a recoverable dir indefinitely.
+ * Mark the install as complete, then normally release the lock. Deploy keeps
+ * the lock through first launch so cross-version GC cannot move the directory
+ * between finalization and daemon liveness becoming observable.
  */
 export async function finalizeInstall(
   conn: SshConnection,
   remoteRelayDir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: { signal?: AbortSignal; releaseLock?: boolean }
 ): Promise<void> {
   const sentinel = joinRemotePath(host, remoteRelayDir, INSTALL_COMPLETE_NAME)
-  const lock = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
-  await execHostCommand(conn, host, writeRemoteEmptyFileCommand(host, sentinel))
-  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
+  const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
+  await execHostCommand(conn, host, writeRemoteEmptyFileCommand(host, sentinel), {
+    signal: options?.signal
+  })
+  if (options?.releaseLock !== false) {
+    await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock), {
+      signal: options?.signal
+    }).catch(() => {})
+  }
+  options?.signal?.throwIfAborted()
 }
 
 /**
@@ -260,7 +182,7 @@ export async function abandonInstall(
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<void> {
-  const lock = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
+  const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
   await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
 }
 
@@ -295,10 +217,14 @@ export async function gcOldRelayVersions(
   } catch {
     return
   }
-  const candidates = listing
+  const entries = listing
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean)
+
+  await cleanupRelayGcTombstones(conn, baseDir, entries, host)
+
+  const candidates = entries
     .filter((name) => RELAY_VERSION_DIR_REGEX.test(name))
     .filter((name) => name !== currentDirName)
 
@@ -316,7 +242,47 @@ export async function gcOldRelayVersions(
         kept.push(name)
         continue
       }
-      await execHostCommand(conn, host, removeRemoteTreeCommand(host, dir))
+      // Why: the claim is a sibling, so it survives moving/deleting the
+      // candidate and lets installers back out before mutating the old path.
+      const gcClaimToken = await tryAcquireRelayGcClaim(conn, dir, host)
+      if (!gcClaimToken) {
+        kept.push(name)
+        continue
+      }
+      let preserveGcClaim = false
+      let gcClaimReleaseNeeded = true
+      try {
+        // Recheck under the stable claim. New installers probe the claim both
+        // before and after creating their in-tree lock, closing both orders.
+        if (!(await isCandidateSafeToRemove(conn, dir, name, host, options))) {
+          kept.push(name)
+          continue
+        }
+        if (!(await isRelayGcClaimOwned(conn, dir, gcClaimToken, host))) {
+          kept.push(name)
+          continue
+        }
+        const tombstone = `${dir}.gc-tombstone.${process.pid}.${Date.now()}`
+        const moved = await execHostCommand(conn, host, moveRemoteTreeCommand(host, dir, tombstone))
+        if (moved.trim() !== 'MOVED') {
+          kept.push(name)
+          continue
+        }
+        // Once renamed, a fresh install at the original path is isolated from
+        // deletion of the tombstone, so the sibling claim can be released.
+        const release = await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
+        gcClaimReleaseNeeded = release === 'unknown'
+        await execHostCommand(conn, host, removeRemoteTreeCommand(host, tombstone))
+      } catch (err) {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          preserveGcClaim = true
+        }
+        throw err
+      } finally {
+        if (!preserveGcClaim && gcClaimReleaseNeeded) {
+          await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
+        }
+      }
       removed.push(name)
     } catch (err) {
       console.warn(
@@ -346,23 +312,28 @@ async function isCandidateSafeToRemove(
 ): Promise<boolean> {
   const isLegacy = LEGACY_RELAY_DIR_REGEX.test(name)
 
-  const lockDir = joinRemotePath(host, dir, INSTALL_LOCK_NAME)
-  const lockProbe = await execHostCommand(
-    conn,
-    host,
-    probeDirectoryExistsCommand(host, lockDir)
-  ).catch(() => 'OPEN')
-  const locked = lockProbe.trim() === 'LOCKED'
+  const lockDir = joinRemotePath(host, dir, RELAY_INSTALL_LOCK_NAME)
+  let lockProbe: string
+  try {
+    lockProbe = await execHostCommand(conn, host, probeInstallLockExistsCommand(host, lockDir))
+  } catch {
+    return false
+  }
+  const lockState = lockProbe.trim()
+  if (lockState !== 'OPEN' && lockState !== 'LOCKED') {
+    return false
+  }
+  const locked = lockState === 'LOCKED'
 
   if (locked) {
     // Why: a locked dir is normally unsafe to remove — but a STALE lock
-    // (mtime older than INSTALL_LOCK_STALE_MS) means the previous installer
+    // (remote age older than INSTALL_LOCK_STALE_MS) means the previous installer
     // crashed and is never coming back. If the dir also has the
     // .install-complete sentinel (touch succeeded but the rm-lock at the
     // end of finalizeInstall failed), removing the dir is safe — no
     // installer is racing us, and the daemon (if any) keeps running off
     // its already-loaded code regardless of disk state.
-    if (!(await isLockStale(conn, lockDir, host))) {
+    if (!(await isRelayInstallLockStale(conn, lockDir, host))) {
       return false
     }
     process.stderr.write?.(`[ssh-relay] GC: lock at ${lockDir} is stale; treating as recoverable\n`)
@@ -419,8 +390,10 @@ async function hasLiveRelaySocket(
       host,
       relayLivenessProbeCommand(host, dir, windowsOptions)
     )
-    return out.includes('ALIVE')
+    const state = out.trim()
+    return state !== 'DEAD' && state !== 'WAITING'
   } catch {
-    return false
+    // Why: an inconclusive liveness probe must never authorize deletion.
+    return true
   }
 }

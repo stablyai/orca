@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
+import { cancelTrackingResponse } from '../../lib/unread-response-body.test-fixtures'
 import { exchangeRelayAuthorization, requestRelayAssignment } from './relay-http-client'
 
 describe('relay HTTP client', () => {
@@ -71,5 +72,36 @@ describe('relay HTTP client', () => {
         fetch
       })
     ).rejects.toThrow('relay_assignment_failed_502')
+  })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    const keypair = nacl.box.keyPair()
+    let cancelledBodies = 0
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      cancelTrackingResponse(503, () => {
+        cancelledBodies += 1
+      })
+    )
+
+    await expect(
+      exchangeRelayAuthorization({
+        endpoint: 'https://auth.example/v1/desktop/auth/relay-token',
+        accessToken: 'ordinary-access-token',
+        keypair: {
+          ...keypair,
+          publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
+        },
+        fetch
+      })
+    ).rejects.toThrow()
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        fetch
+      })
+    ).rejects.toThrow()
+    expect(cancelledBodies).toBe(2)
   })
 })

@@ -259,6 +259,29 @@ describe('parcel watcher process canary', () => {
     expect(sendMock).not.toHaveBeenCalledWith({ op: 'cancel-requires-restart', id: 1 })
   })
 
+  it('reports native unsubscribe rejection without acknowledging handle release', async () => {
+    const unsubscribeError = new Error('native handle still active')
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockResolvedValueOnce({ unsubscribe: vi.fn().mockRejectedValue(unsubscribeError) })
+    const sendMock = vi.fn()
+    process.send = sendMock
+
+    await import('./parcel-watcher-process-entry')
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+    await vi.advanceTimersByTimeAsync(0)
+    process.emit('message', { op: 'unsubscribe', id: 1 })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(sendMock).toHaveBeenCalledWith({
+      op: 'unsubscribe-failed',
+      id: 1,
+      message: 'native handle still active'
+    })
+    expect(sendMock).not.toHaveBeenCalledWith({ op: 'unsubscribed', id: 1 })
+  })
+
   it('asks the host to restart when an active crawl is cancelled', async () => {
     let finishCrawl: ((subscription: { unsubscribe: () => Promise<void> }) => void) | undefined
     subscribeMock.mockResolvedValueOnce({ unsubscribe: vi.fn() }).mockReturnValueOnce(

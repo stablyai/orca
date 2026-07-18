@@ -932,6 +932,7 @@ export class SshRelaySession {
         toolAgentType?: unknown
         isReplay?: unknown
         providerSession?: unknown
+        providerSessionOnly?: unknown
         payload?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
@@ -963,6 +964,7 @@ export class SshRelaySession {
             typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
           isReplay: envelope.isReplay === true ? true : undefined,
           providerSession: envelope.providerSession,
+          providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
           payload: envelope.payload
         },
         this.targetId

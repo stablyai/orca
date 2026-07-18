@@ -258,6 +258,7 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
+  isCreatePrIntentSyncConflictError,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
@@ -2483,7 +2484,10 @@ function SourceControlInner(): React.JSX.Element {
         target?: SourceControlOperationTarget
         baseRef?: string | null
       }
-    ): Promise<boolean> => {
+      // Why: return the failure inline (null error = success or superseded) so
+      // callers like the Create PR intent flow can classify it without a
+      // stale-prone mirror of remoteActionErrors.
+    ): Promise<{ ok: boolean; error: SourceControlActionError | null }> => {
       const target =
         options?.target ??
         (activeWorktreeId && worktreePath
@@ -2496,7 +2500,7 @@ function SourceControlInner(): React.JSX.Element {
             }
           : null)
       if (!target) {
-        return false
+        return { ok: false, error: null }
       }
       const sequence = (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] ?? 0) + 1
       remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] = sequence
@@ -2522,7 +2526,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'push') {
           // Why: kind 'push' must stay a regular push. Force-with-lease is only
@@ -2537,7 +2541,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'force_push') {
           await pushBranch(
@@ -2548,7 +2552,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { forceWithLease: true, runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'pull') {
           await pullBranch(
@@ -2560,7 +2564,7 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'fast_forward') {
           await fastForwardBranch(
@@ -2570,7 +2574,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'fetch') {
           await fetchBranch(
@@ -2582,12 +2586,12 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'rebase') {
           const baseRef = options?.baseRef ?? effectiveBaseRef
           if (!baseRef) {
-            return false
+            return { ok: false, error: null }
           }
           await rebaseFromBase(
             target.worktreeId,
@@ -2597,7 +2601,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         await syncBranch(
           target.worktreeId,
@@ -2611,30 +2615,28 @@ function SourceControlInner(): React.JSX.Element {
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
           setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
         }
-        return true
+        return { ok: true, error: null }
       } catch (error) {
         // Why: remote action failures are surfaced by editor-slice actions to keep
         // one consistent toast path and avoid duplicate notifications in the UI.
         // Keep the latest failure inline too: dropdown-only actions like Fetch can
         // otherwise look like nothing happened once the menu closes.
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
-          return false
+          return { ok: false, error: null }
         }
-        setRemoteActionErrors((prev) => ({
-          ...prev,
-          [target.worktreeId]: {
-            kind,
-            message: resolveRemoteActionError(kind, error),
-            rawError: error instanceof Error ? error.message : String(error),
-            syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
-            branchName: failureBranchName,
-            worktreePath: target.worktreePath,
-            entriesSnapshot: recoveryEntrySnapshot.entries,
-            entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
-            sequence
-          }
-        }))
-        return false
+        const actionError: SourceControlActionError = {
+          kind,
+          message: resolveRemoteActionError(kind, error),
+          rawError: error instanceof Error ? error.message : String(error),
+          syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
+          branchName: failureBranchName,
+          worktreePath: target.worktreePath,
+          entriesSnapshot: recoveryEntrySnapshot.entries,
+          entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
+          sequence
+        }
+        setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: actionError }))
+        return { ok: false, error: actionError }
       } finally {
         if (!options?.target) {
           refreshSourceControlAfterRemoteAction({
@@ -4015,47 +4017,68 @@ function SourceControlInner(): React.JSX.Element {
       if (remoteStep === 'blocked' || remoteStep === 'none') {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'muted',
-          message: translate(
+          // Why: a diverged branch is deliberately not auto-synced (that would
+          // merge without consent), so keep the explicit sync-first guidance.
+          message:
             eligibility.blockedReason === 'needs_sync'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentNeedsSync'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
-            eligibility.blockedReason === 'needs_sync'
-              ? 'Sync this branch before creating a review.'
-              : 'Branch is not ready to create a review yet.'
-          )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentNeedsSync',
+                  'Sync this branch before creating a review.'
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
+                  'Branch is not ready to create a review yet.'
+                )
         })
         return
       }
 
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: 'muted',
-        message: translate(
+        // Why: keep each translate() call on a string-literal key so the
+        // localization-catalog verifier can statically detect every key.
+        message:
           remoteStep === 'publish'
-            ? 'auto.components.right.sidebar.SourceControl.createPrIntentPublishing'
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentPublishing',
+                'Publishing branch…'
+              )
             : remoteStep === 'force_push'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
-          remoteStep === 'publish'
-            ? 'Publishing branch…'
-            : remoteStep === 'force_push'
-              ? 'Force pushing with lease…'
-              : 'Pushing commits…'
-        )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing',
+                  'Force pushing with lease…'
+                )
+              : remoteStep === 'sync'
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentSyncing',
+                    'Syncing branch…'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
+                    'Pushing commits…'
+                  )
       })
-      const remoteOk = await runRemoteAction(remoteStep, {
+      const remoteResult = await runRemoteAction(remoteStep, {
         target: operationTarget,
         baseRef: token.baseRef
       })
       if (abortIfStale()) {
         return
       }
-      if (!remoteOk) {
+      if (!remoteResult.ok) {
+        // A sync push-stage rejection is not a conflict — it falls to the generic
+        // copy so the push-recovery panel drives the fix.
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
-          message: translate(
-            'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
-            'Could not update the remote branch. Retry Create PR.'
-          )
+          message: isCreatePrIntentSyncConflictError(remoteResult.error)
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentSyncConflicts',
+                'Sync hit conflicts. Resolve them, then retry Create PR.'
+              )
+            : translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
+                'Could not update the remote branch. Retry Create PR.'
+              )
         })
         return
       }

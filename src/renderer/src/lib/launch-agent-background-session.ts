@@ -326,7 +326,11 @@ export async function launchAgentBackgroundSession(
     if (ptyId) {
       await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle })
     }
-    runBestEffortAgentBackgroundCleanups(() => store.closeTab(tab.id, { recordInteraction: false }))
+    // Why: a launch-failure cleanup close is not a user close — keep it out of
+    // the Cmd+Shift+T reopen stack.
+    runBestEffortAgentBackgroundCleanups(() =>
+      store.closeTab(tab.id, { recordInteraction: false, reason: 'cleanup' })
+    )
     throw error
   }
 }

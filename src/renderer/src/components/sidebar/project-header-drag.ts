@@ -72,13 +72,13 @@ export function useRepoHeaderDrag({
       if (!session || !container) {
         return null
       }
-      const containerRect = container.getBoundingClientRect()
       return computeProjectHeaderDropPreview({
         pointerY,
-        containerTop: containerRect.top,
+        containerTop: container.getBoundingClientRect().top,
         scrollTop: container.scrollTop,
         rects: session.headerRects,
-        sidebarRepoHeaderIds: session.sidebarRepoHeaderIds
+        sidebarRepoHeaderIds: session.sidebarRepoHeaderIds,
+        contentBottom: container.scrollHeight
       })
     },
     []

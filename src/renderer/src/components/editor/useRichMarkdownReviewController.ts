@@ -201,41 +201,51 @@ export function useRichMarkdownReviewController({
     ]
   )
 
-  const openAnnotationPopover = useCallback((): void => {
-    if (!annotationTarget || !canAnnotateRichMarkdown) {
-      return
-    }
-    const editor = editorRef.current
-    const root = rootRef.current
-    const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
-    const target = editor
-      ? clampRichMarkdownAnnotationTarget(editor, liveTarget ?? annotationTarget)
-      : annotationTarget
-    if (
-      !target ||
-      hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)
-    ) {
+  // Why: reports whether a composer actually opened so keyboard callers can
+  // leave the chord unconsumed when this no-ops (mouse callers ignore it).
+  const openAnnotationPopover = useCallback(
+    (requireLiveSelection = false): boolean => {
+      if (!canAnnotateRichMarkdown) {
+        return false
+      }
+      const editor = editorRef.current
+      const root = rootRef.current
+      // Why: keyboard callers require the live selection to avoid stale-target
+      // races; the mouse button may use the target from the render that exposed it.
+      const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
+      const baseTarget = liveTarget ?? (requireLiveSelection ? null : annotationTarget)
+      if (!baseTarget) {
+        return false
+      }
+      const target = editor ? clampRichMarkdownAnnotationTarget(editor, baseTarget) : baseTarget
+      if (
+        !target ||
+        hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)
+      ) {
+        setAnnotationTarget(null)
+        return false
+      }
+      editor?.view.dispatch(
+        editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
+          activeRange: { from: target.from, to: target.to }
+        })
+      )
+      // Why: opening a draft should reserve the notes rail immediately; saved notes stay visible.
+      setReviewRailOpen(true)
+      setAnnotationPopover(target)
       setAnnotationTarget(null)
-      return
-    }
-    editor?.view.dispatch(
-      editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-        activeRange: { from: target.from, to: target.to }
-      })
-    )
-    // Why: opening a draft should reserve the notes rail immediately; saved notes stay visible.
-    setReviewRailOpen(true)
-    setAnnotationPopover(target)
-    setAnnotationTarget(null)
-  }, [
-    annotationTarget,
-    canAnnotateRichMarkdown,
-    editorRef,
-    markdownComments,
-    markdownSourceLineOffset,
-    rootRef,
-    setReviewRailOpen
-  ])
+      return true
+    },
+    [
+      annotationTarget,
+      canAnnotateRichMarkdown,
+      editorRef,
+      markdownComments,
+      markdownSourceLineOffset,
+      rootRef,
+      setReviewRailOpen
+    ]
+  )
 
   useEffect(() => {
     if (canAnnotateRichMarkdown) {

@@ -107,7 +107,9 @@ import {
 } from '../native-chat/native-chat-leaf-routing'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
-import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
+import { applyDesktopFitFallbackAfterReplay } from './desktop-fit-fallback'
+import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
 import {
@@ -213,6 +215,9 @@ type TerminalPaneProps = {
   // or persist to the layout snapshot, so returning to the workspace shows
   // the original split layout unchanged.
   isolatedPaneKey?: string | null
+  // Why: ephemeral one-off command terminals don't need the regular pane header's
+  // prominent split affordance, though standard split shortcuts remain available.
+  showSplitButton?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -279,6 +284,7 @@ export default function TerminalPane({
   isVisible = true,
   isWorktreeActive = isVisible,
   isolatedPaneKey = null,
+  showSplitButton = true,
   onPtyExit,
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
@@ -517,15 +523,12 @@ export default function TerminalPane({
             if (rect.width === 0 || rect.height === 0) {
               continue
             }
-            safeFit(pane)
-            const stuckAtMobile =
-              event.priorCols != null &&
-              event.priorRows != null &&
-              pane.terminal.cols === event.priorCols &&
-              pane.terminal.rows === event.priorRows
-            if (stuckAtMobile && event.cols > 0 && event.rows > 0) {
-              pane.terminal.resize(event.cols, event.rows)
-            }
+            applyDesktopFitFallbackAfterReplay(pane, {
+              ...event,
+              // Why: the timeout/replay queue can outlive this pane binding;
+              // never apply old server dimensions to a replacement PTY.
+              shouldApply: () => getAffectedPanes().includes(pane)
+            })
           }
         })
       }
@@ -814,6 +817,13 @@ export default function TerminalPane({
     }
     toggleNativeChatForLeaf(activeLeafId)
   }, [toggleNativeChatForLeaf])
+  const readNativeChatTerminalScreen = useCallback((): string | null => {
+    if (!chatLeafId) {
+      return null
+    }
+    const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
+    return pane?.serializeAddon.serialize({ scrollback: 0 }) ?? null
+  }, [chatLeafId])
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
@@ -1130,7 +1140,7 @@ export default function TerminalPane({
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {
       clearedScrollbackLeafIdsRef.current.add(pane.leafId)
-      pane.terminal.clear()
+      clearTerminalScrollbackAndFollowOutput(pane.terminal)
       // Why: also clear the host buffer for remote-server panes, or the next
       // host snapshot replays the scrollback we just cleared locally.
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
@@ -1884,26 +1894,27 @@ export default function TerminalPane({
         return
       }
       for (const pane of manager.getPanes()) {
-        safeFit(pane)
-        const transport = paneTransportsRef.current.get(pane.id)
-        if (!transport?.isConnected()) {
-          continue
-        }
-        const ptyId = transport.getPtyId()
-        if (!ptyId) {
-          continue
-        }
-        // Why: match pty-connection resize guards so web refit retries do not
-        // forward SIGWINCH while mobile-lock or phone-fit overrides are active.
-        if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
-          continue
-        }
-        // Why: skip forwarding a stale near-zero fit to the host PTY while the
-        // overlay is still settling after a worktree switch.
-        if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
-          continue
-        }
-        transport.resize(pane.terminal.cols, pane.terminal.rows)
+        safeFitAndThen(pane, 'web-client-pty-resize', () => {
+          const transport = paneTransportsRef.current.get(pane.id)
+          if (!transport?.isConnected()) {
+            return
+          }
+          const ptyId = transport.getPtyId()
+          if (!ptyId) {
+            return
+          }
+          // Why: match pty-connection resize guards so web refit retries do not
+          // forward SIGWINCH while mobile-lock or phone-fit overrides are active.
+          if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
+            return
+          }
+          // Why: skip forwarding a stale near-zero fit to the host PTY while the
+          // overlay is still settling after a worktree switch.
+          if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
+            return
+          }
+          transport.resize(pane.terminal.cols, pane.terminal.rows)
+        })
       }
     }
     const scheduleFrame = (): void => {
@@ -3112,6 +3123,7 @@ export default function TerminalPane({
                 launchAgent={chatPaneLaunchAgent}
                 resolvedAgent={chatPaneResolvedAgent}
                 onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
+                readTerminalScreen={readNativeChatTerminalScreen}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
                   onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
@@ -3200,6 +3212,7 @@ export default function TerminalPane({
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
+        showSplitButton={showSplitButton}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

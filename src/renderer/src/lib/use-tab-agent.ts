@@ -168,7 +168,13 @@ export function resolveTabAgentFromSignals(args: {
     processShellForeground: args.processShellForeground
   })
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
-  const processAgent = args.processAgent ?? null
+  // Why: the foreground process, like the hook and title signals, must be
+  // re-owned within its title-identity group. OMP wraps Pi as `shell → omp → pi`,
+  // so the foreground reader oscillates between reporting `omp` and `pi` across
+  // command boundaries; taken raw it outranks launchAgent and flips an OMP-owned
+  // tab's icon between the two glyphs. Re-owning collapses the same-group read
+  // onto the durable owner while a genuine cross-group process still stands.
+  const processAgent = resolveSignalAgentForLaunchOwner(args.processAgent, owner)
   const sleepingSessionAgent = args.sleepingSessionAgent ?? null
   // Identity-first precedence. The live focused hook is ground truth while the
   // agent works; process identity covers agents with neither hook nor title; the
@@ -199,7 +205,8 @@ export function resolveTabAgentFromSignals(args: {
  * 2. Process identity — the recognized foreground process, read at OSC 133
  *    command boundaries (local panes only); covers agents that emit neither
  *    hooks nor titles, and its shell-foreground mark is title-independent exit
- *    evidence.
+ *    evidence. Re-owned within its title-identity group, so OMP's nested `pi`
+ *    child (the `shell → omp → pi` tree) cannot flip the icon back to Pi.
  * 3. Title — only as a reuse override (it names a DIFFERENT-group agent than the
  *    pane's known identity, proving reuse) or as a legacy standalone identity
  *    when the pane has no hook. Within the same title-identity group it carries

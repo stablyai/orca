@@ -5,7 +5,7 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type Tray } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
 import {
@@ -18,6 +18,7 @@ import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/p
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { applyAppIcon } from './app-icon'
+import { relaunchApp } from './app-relaunch'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
@@ -54,6 +55,7 @@ import {
   rebuildAppMenu
 } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
+import type { UpdateCheckOptions } from '../shared/types'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
   configureElectronNetworkCompatibility,
@@ -118,7 +120,13 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
-import { createSystemTray, destroySystemTray, setTrayAttention } from './tray/system-tray'
+import {
+  createSystemTray,
+  destroySystemTray,
+  setMacMenuBarIconVisible,
+  setTrayAttention,
+  type SystemTrayOptions
+} from './tray/system-tray'
 import { focusExistingMainWindow } from './window/focus-existing-window'
 import { notifyMainWindowBecameVisible } from './window/main-window-visibility'
 import { CodexAccountService } from './codex-accounts/service'
@@ -151,12 +159,12 @@ import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
   getLocalPtyProvider,
+  getSshPtyProvider,
   registerHeadlessPtyRuntime
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { EmulatorBridge } from './emulator/emulator-bridge'
-import { serveSimStateWatcher } from './emulator/serve-sim-state-watcher'
-import { browserManager } from './browser/browser-manager'
+import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
@@ -169,6 +177,8 @@ import {
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-reporting/crash-breadcrumb-store'
+import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
+import { getMainProcessLifecycleIdentity } from './crash-reporting/main-process-lifecycle-identity'
 import { CrashReportStore } from './crash-reporting/crash-report-store'
 import {
   shouldRecoverRendererAfterProcessGone,
@@ -239,6 +249,9 @@ let keybindings: KeybindingService | null = null
 // sweep spare live sessions across that one reload (#5787).
 const expectedRendererReload = createWebContentsTimedFlag()
 const recoveryReloadInFlight = createWebContentsTimedFlag()
+// Why: a tray/menu-bar "Settings…" click can precede the renderer attaching
+// its ui:openSettings listener; the renderer pulls this one-shot on mount.
+const pendingOpenSettings = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
@@ -255,6 +268,7 @@ const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
 })
 let gpuFallbackActiveThisLaunch = false
 let localPtyStartupReady: Promise<void> = Promise.resolve()
+let localPtyProviderStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
 const desktopActivationGate = createServeDesktopActivationGate({
@@ -646,7 +660,8 @@ if (hasSingleInstanceLock) {
   crashReports = CrashReportStore.fromUserData()
   recordCrashBreadcrumb('app_started', {
     packaged: app.isPackaged,
-    platform: process.platform
+    platform: process.platform,
+    ...getMainProcessLifecycleIdentity()
   })
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
@@ -665,6 +680,12 @@ ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
   // WSL terminals get a bounded chance to receive launcher repairs first.
   await Promise.all([firstWindowStartupServicesReady, managedWslCliStartupBarrierReady])
 })
+
+// Why: the renderer pulls this once its ui:openSettings listener is attached so
+// a tray/menu-bar Settings request queued before mount is not lost to a race.
+ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
+  pendingOpenSettings.matches(event.sender.id, { consume: true })
+)
 
 ipcMain.handle(
   'app:startupDiagnostic',
@@ -723,6 +744,7 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
   })
   firstWindowStartupServicesReady = startupServices.firstWindowReady
   localPtyStartupReady = startupServices.localPtyReady
+  localPtyProviderStartupReady = startupServices.localPtyProviderReady
   void firstWindowStartupServicesReady.then(() => {
     logStartupMilestone('first-window-startup-services-ready')
   })
@@ -786,6 +808,71 @@ function showMainWindowFromTray(): void {
   if (!isQuittingForUpdate()) {
     openMainWindow()
   }
+}
+
+function openSettingsFromSystemMenu(): void {
+  showMainWindowFromTray()
+  const targetWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+  if (!targetWindow) {
+    return
+  }
+  recordCrashBreadcrumb('settings_opened')
+
+  // Why: no main-side signal proves the renderer listener is attached, so push
+  // and leave a one-shot intent — a mounted renderer acts on the push, an
+  // unmounted one pulls the intent at mount; only one fires per renderer life.
+  targetWindow.webContents.send('ui:openSettings')
+  // Why: leave an untimed intent — any TTL can be outrun by a slow cold start and
+  // would silently drop the Settings click. webContents-id scoping plus consume-on-
+  // read still prevents the intent from leaking to a later, unrelated renderer.
+  pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
+}
+
+function quitFromSystemTray(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    // Why: a real quit can still surface renderer save/discard prompts; the
+    // window must be visible if a hidden session vetoes shutdown.
+    showMainWindowFromTray()
+  }
+  // Why: set the quit latch before app.quit() so the window 'close' handler
+  // proceeds to teardown instead of re-hiding to the Windows tray.
+  isQuitting = true
+  app.quit()
+}
+
+// Why: a manual check must run against a configured updater; the menu and
+// tray are both clickable before anything else configures it.
+function runUserInitiatedUpdateCheck(options?: UpdateCheckOptions): void {
+  ensureAutoUpdaterConfigured()
+  checkForUpdatesFromMenu(options)
+}
+
+function getSystemTrayOptions(): SystemTrayOptions | null {
+  if (!store) {
+    return null
+  }
+  return {
+    appIcon: store.getSettings().appIcon,
+    isDevInstance: devInstanceIdentity.isDev,
+    devInstanceLabel: devInstanceIdentity.devLabel,
+    onOpen: showMainWindowFromTray,
+    onOpenSettings: openSettingsFromSystemMenu,
+    onCheckForUpdates: () => {
+      // Why: updater status renders in the main window; with every window
+      // closed a bare check would complete invisibly.
+      showMainWindowFromTray()
+      runUserInitiatedUpdateCheck()
+    },
+    onQuit: quitFromSystemTray
+  }
+}
+
+function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
+  if (process.platform !== 'darwin' || isServeMode) {
+    return null
+  }
+  const options = getSystemTrayOptions()
+  return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
 function openMainWindow(): BrowserWindow {
@@ -874,7 +961,7 @@ function openMainWindow(): BrowserWindow {
         expectedTeardown: getExpectedTeardownScope(webContentsId)
       }),
     onRendererRecoveryExhausted: ({ details, recentRecoveryCount }) => {
-      recordCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
+      recordDurableCrashBreadcrumb('renderer_recovery_circuit_breaker_open', {
         reason: details.reason,
         exitCode: details.exitCode ?? null,
         recentRecoveryCount
@@ -894,43 +981,31 @@ function openMainWindow(): BrowserWindow {
     // local-PTY orphan sweep is skipped for that one reload (#5787).
     onBeforeRecoveryReload: (webContentsId) => {
       markRecoveryReloadInFlight(webContentsId)
-      recordCrashBreadcrumb('renderer_recovery_reload')
+      recordDurableCrashBreadcrumb('renderer_recovery_reload')
     }
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
-  // Why: new Tray() is a synchronous Shell_NotifyIcon call that can block for
-  // seconds while explorer.exe's notification area is busy (part of issue
-  // #7225's pre-paint stall), so create it after first paint. The timer
-  // fallback covers windows revealed without ready-to-show ever firing
-  // (createMainWindow's 10s reveal fallback) — those can still be
-  // hidden to the tray on close, so the icon must exist by then.
+  // Why: Windows Tray construction can synchronously block on Shell_NotifyIcon,
+  // so both desktop status-item platforms defer creation to after first paint.
   let trayCreated = false
   const createSystemTrayDeferred = (): void => {
     if (trayCreated || window.isDestroyed() || isQuitting || !store) {
       return
     }
     trayCreated = true
-    // Why: Windows-only system tray. createSystemTray is idempotent and a
-    // no-op off win32, so calling it on each window open keeps exactly one
-    // live icon.
-    createSystemTray({
-      appIcon: store.getSettings().appIcon,
-      onOpen: showMainWindowFromTray,
-      onQuit: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          // Why: a real quit can still surface renderer save/discard prompts;
-          // the window must be visible if a hidden-to-tray session vetoes
-          // shutdown.
-          showMainWindowFromTray()
-        }
-        // Why: set the quit latch before app.quit() so the window 'close'
-        // handler proceeds to teardown instead of re-hiding to the tray.
-        isQuitting = true
-        app.quit()
+    if (process.platform === 'darwin') {
+      // Why: route through syncMacMenuBarIcon so startup and the live toggle
+      // share one serve-mode/visibility policy.
+      if (syncMacMenuBarIcon(store.getSettings().showMenuBarIcon !== false)) {
+        logStartupMilestone('tray-created')
       }
-    })
-    logStartupMilestone('tray-created')
+      return
+    }
+    const options = getSystemTrayOptions()
+    if (options && createSystemTray(options)) {
+      logStartupMilestone('tray-created')
+    }
   }
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
@@ -1000,6 +1075,7 @@ function openMainWindow(): BrowserWindow {
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
       awaitLocalPtyStartup: () => localPtyStartupReady,
+      awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
           markExpectedRendererReload(webContentsId)
@@ -1063,10 +1139,28 @@ function openMainWindow(): BrowserWindow {
       stateStartedAt,
       launchToken,
       providerSession,
+      providerSessionOnly,
       promptInteractionKey,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
+        return
+      }
+      if (providerSessionOnly) {
+        // Why: session_start refreshes durable resume identity while Pi is
+        // idle; forward it without driving titles, telemetry, or status UI.
+        mainWindow?.webContents.send('agentStatus:set', {
+          ...payload,
+          paneKey,
+          ...(launchToken ? { launchToken } : {}),
+          tabId,
+          worktreeId,
+          connectionId,
+          receivedAt,
+          stateStartedAt,
+          ...(providerSession ? { providerSession } : {}),
+          providerSessionOnly: true
+        })
         return
       }
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
@@ -1170,7 +1264,7 @@ async function presentRendererRecoveryPrompt(recentRecoveryCount: number): Promi
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options)
   if (response === 0 && mainWindow && !mainWindow.isDestroyed()) {
-    recordCrashBreadcrumb('renderer_recovery_manual_retry')
+    recordDurableCrashBreadcrumb('renderer_recovery_manual_retry')
     loadMainWindow(mainWindow)
   } else if (response === 1) {
     isQuitting = true
@@ -1249,7 +1343,11 @@ function handleGpuChildCrash(reason: string, exitCode: number | null): void {
     return
   }
   isQuitting = true
-  app.relaunch()
+  relaunchApp('gpu-fallback', {
+    processReason: reason,
+    exitCode,
+    crashesInWindow: result.crashesInWindow
+  })
   app.exit(0)
 }
 
@@ -1643,6 +1741,22 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 
 app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
+  // Why: certificate decisions must be installed before either desktop
+  // webviews or headless browser windows can issue their first TLS request.
+  app.on(
+    'certificate-error',
+    (event, webContents, url, error, certificate, callback, isMainFrame) => {
+      browserCertificateTrustController.handleCertificateError({
+        event,
+        webContents,
+        url,
+        error,
+        certificate,
+        callback,
+        isMainFrame
+      })
+    }
+  )
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   app.setName(devInstanceIdentity.name)
 
@@ -1680,6 +1794,13 @@ app.whenReady().then(async () => {
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   logStartupMilestone('store-loaded')
+  store.onSettingsChanged((updates, settings) => {
+    if ('showMenuBarIcon' in updates) {
+      // Why: Store is the mutation authority for renderer, RPC, and future
+      // settings writes, so every macOS toggle updates the native item live.
+      syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+    }
+  })
   // Why: must run before ClaudeRuntimeAuthService's constructor sync — a Claude
   // CLI that survived the restart inside the daemon still holds the current
   // single-use refresh token, and an unguarded early refresh would rotate it
@@ -1734,6 +1855,10 @@ app.whenReady().then(async () => {
   // Honors DO_NOT_TRACK / ORCA_TELEMETRY_DISABLED / ORCA_DIAGNOSTICS_DISABLED
   // / CI internally; those gates do not need to be re-checked here.
   initObservability()
+  recordDurableCrashBreadcrumb('main_process_lifecycle_started', {
+    packaged: app.isPackaged,
+    platform: process.platform
+  })
   // Why: cohort-classifier reads the repo count synchronously at every emit
   // for cohort-extended events. The Store has been sync-loaded above, and
   // this init runs before any IPC handler is registered and before any
@@ -1778,7 +1903,13 @@ app.whenReady().then(async () => {
   rateLimits.setNetworkProxySettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
-    getLegacyOverrides: () => store!.getSettings().keybindings
+    getLegacyOverrides: () => store!.getSettings().keybindings,
+    legacyTabSwitchSeed: {
+      isPending: () => store!.getSettings().tabSwitchKeybindingSeed === 'pending',
+      markSeeded: () => {
+        store!.updateSettings({ tabSwitchKeybindingSeed: 'done' })
+      }
+    }
   })
   browserManager.setSettingsResolver(() => ({ keybindings: keybindings?.getOverrides() }))
   rateLimits.setInactiveClaudeAccountsResolver(() => {
@@ -1818,6 +1949,9 @@ app.whenReady().then(async () => {
     // provider reference eagerly here would freeze the pre-daemon LocalPtyProvider
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider(),
+    // Why: SSH relay providers are registered after runtime construction and
+    // may reconnect; destructive cleanup must resolve the current generation.
+    getSshProvider: (connectionId) => getSshPtyProvider(connectionId),
     onPtyStopped: clearProviderPtyState,
     onTerminalAgentStatus: (event) => {
       agentHookServer.ingestTerminalStatus(event)
@@ -1832,7 +1966,8 @@ app.whenReady().then(async () => {
     getDesktopWindowStatus: getDesktopWindowStatus,
     // Why: hook-reported agent status is the same source the desktop sidebar
     // reads. worktree.ps pulls it at query time so mobile shows the same agents.
-    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
+    getAgentStatusSnapshot: () =>
+      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
     // Why: source codex-home here (runs in BOTH window and serve modes) so the
     // aiVault.listSessions RPC includes managed-Codex sessions on remote/SSH
     // hosts; the window-only registerCoreHandlers path never runs under serve.
@@ -1842,6 +1977,9 @@ app.whenReady().then(async () => {
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
   runtime = runtimeService
+  browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
+    runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+  })
   automations = new AutomationService(store, {
     claudeUsage,
     codexUsage,
@@ -1954,16 +2092,10 @@ app.whenReady().then(async () => {
   )
 
   // Emulator bridge (serve-sim). macOS-only feature (gated in CLI/runtime); always ship like agent-browser.
+  // Why: only Orca-managed or explicitly attached helpers belong to a workspace;
+  // externally started serve-sim processes must remain independent from Orca.
   const emulatorBridge = new EmulatorBridge()
   runtimeService.setEmulatorBridge(emulatorBridge)
-  serveSimStateWatcher.start()
-  serveSimStateWatcher.onDetected(({ worktreeId, info }) => {
-    runtimeService.getEmulatorBridge()?.registerActiveEmulator(worktreeId, info, {
-      managed: false
-    })
-    serveSimStateWatcher.markOrcaManaged(info)
-    runtimeService.notifyEmulatorAutoAttachFromWatcher(worktreeId, info)
-  })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so
@@ -1998,22 +2130,14 @@ app.whenReady().then(async () => {
   logStartupMilestone('i18n-ready')
 
   registerAppMenu({
-    onCheckForUpdates: (options) => {
-      // Why: the menu is clickable before first paint; a manual check must
-      // run against a configured updater (see attach-main-window-services).
-      ensureAutoUpdaterConfigured()
-      return checkForUpdatesFromMenu(options)
-    },
+    onCheckForUpdates: (options) => runUserInitiatedUpdateCheck(options),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
-    onOpenSettings: () => {
-      recordCrashBreadcrumb('settings_opened')
-      mainWindow?.webContents.send('ui:openSettings')
-    },
+    onOpenSettings: openSettingsFromSystemMenu,
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')
       const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
@@ -2115,7 +2239,15 @@ app.whenReady().then(async () => {
     enableWebSocket: true,
     ...(isE2E ? { wsPort: 0 } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
-    ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {}),
+    ...(serveOptions?.wsPort !== undefined
+      ? {
+          wsPort: serveOptions.wsPort,
+          // Why: only an explicit `orca serve --port` pin prefers the requested
+          // port over a stale STA-1511 fallback (issue #8535). Default 6768 /
+          // dev 6769 keep fallback-first so mobile pairings stay stable.
+          preferPinnedWsPort: true
+        }
+      : {}),
     webClientRoot: getBundledWebClientRoot()
   })
   registerMobileHandlers(runtimeRpc, { getRelayStatus: () => desktopRelayStatus })
@@ -2330,8 +2462,8 @@ app.on('will-quit', (e) => {
   // Why: headless offscreen browser windows are main-process owned; tear them
   // down explicitly on quit alongside the other browser/session shutdowns.
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+  browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-  serveSimStateWatcher.stop()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()

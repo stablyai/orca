@@ -1217,6 +1217,31 @@ describe('createFilePathLinkProvider range bounds', () => {
     )
   })
 
+  it('recovers with no links when a path-existence probe rejects (SSH teardown)', async () => {
+    // Regression: a rejected probe used to escape the void Promise.all as an
+    // unhandled rejection the crash-breadcrumb buffer retained, leaking heap (#8260).
+    const shellPathExists = vi.mocked(window.api.shell.pathExists)
+    shellPathExists.mockRejectedValueOnce(new Error('Remote connection dropped/reconnecting'))
+    const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')], new Map())
+
+    const links = await new Promise<ILink[]>((resolve) => {
+      provider.provideLinks(1, (provided) => resolve(provided ?? []))
+    })
+
+    expect(links).toEqual([])
+    expect(shellPathExists).toHaveBeenCalled()
+  })
+
+  it('does not invoke the xterm callback twice when the callback throws', async () => {
+    const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')])
+    const callback = vi.fn(() => {
+      throw new Error('terminal was disposed')
+    })
+
+    provider.provideLinks(1, callback)
+    await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
+  })
+
   it('shows switch and external-open hint for known worktree root hover', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {

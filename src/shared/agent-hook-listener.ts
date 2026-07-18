@@ -34,15 +34,15 @@ import {
   type AgentSubagentSnapshot,
   type ParsedAgentStatusPayload
 } from './agent-status-types'
+import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   finishClaudeSubagent,
   foldClaudeBackgroundTasksIntoRoster,
-  isClaudeTeammateLifecycleId,
-  markClaudeTeammateIdleByName,
   readClaudeBackgroundAgentTasks,
+  removeClaudeTeammateByName,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
@@ -297,6 +297,9 @@ export type AgentHookEventPayload = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
+  /** Session identity update with no turn-state transition. The receiver uses
+   *  this to refresh durable resume metadata without showing a fake status row. */
+  providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
   payload: ParsedAgentStatusPayload
@@ -743,14 +746,6 @@ function clearActiveToolFieldsUpdate(): ToolSnapshot {
     { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
     { hasToolInputField: true }
   )
-}
-
-/** True for the AskUserQuestion tool across the casing variants different
- *  agents emit (`AskUserQuestion` / `ask_user_question` / `askUserQuestion`).
- *  Why: this is the structured "pick an option" prompt whose full input the
- *  clients render as a live card. */
-function isAskUserQuestionTool(toolName: string | undefined): boolean {
-  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
 }
 
 /** Capture the full AskUserQuestion tool input as a JSON string when the tool
@@ -2436,7 +2431,10 @@ function normalizeClaudeSubagentLifecycleEvent(
     if (!teammateName) {
       return null
     }
-    markClaudeTeammateIdleByName(roster, teammateName)
+    // Why: idle means not working, and only working children keep a row. This
+    // is the fallback finish signal for a named agent whose SubagentStop was
+    // lost — its background_tasks entry never stops reading "running".
+    removeClaudeTeammateByName(roster, teammateName)
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
     )
@@ -2453,14 +2451,11 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      // Why: SubagentStop carries the session's task inventory; a stopping
-      // agent listed id-exact as a subagent task is a workflow/named one-shot
-      // (teammate lifecycle ids never appear there), not a resumable teammate.
-      const stopTasks = readClaudeBackgroundAgentTasks(hookPayload)
-      finishClaudeSubagent(roster, agentId, {
-        listedAsSubagentTask:
-          stopTasks.present && stopTasks.tasks.some((task) => !task.teammate && task.id === agentId)
-      })
+      // Why: a finished child (one-shot, workflow lane, or named teammate)
+      // leaves the sidebar at once. SubagentStop is the reliable finish
+      // signal even for teammate-shaped ids — their background_tasks entries
+      // stay "running" forever — and a resumed teammate re-earns its row.
+      finishClaudeSubagent(roster, agentId)
       // Why: a blocked child that dies (killed, errored) without another tool
       // event would otherwise pin its permission/question wait on the pane
       // forever — nothing else references that agent again.
@@ -2478,11 +2473,9 @@ export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey:
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
 }
 
-/** Rebuild a pane's roster from a persisted status snapshot during hydration.
- *  Restart loses the in-memory roster while the renderer replays the child
- *  rows from disk; without reseeding, the next teammate-bearing Stop (whose
- *  task ids never match lifecycle ids) would silently drop those rows. Stale
- *  seeds self-heal: an empty background_tasks clears, activity refreshes. */
+/** Rebuild a pane's working roster from a persisted status snapshot. Live
+ *  activity confirms a seed after restart; a complete task inventory may reap
+ *  an unconfirmed seed whose finish hook arrived while Orca was offline. */
 export function seedClaudeSubagentRosterFromSnapshots(
   state: HookListenerState,
   paneKey: string,
@@ -2493,18 +2486,19 @@ export function seedClaudeSubagentRosterFromSnapshots(
   }
   const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
   for (const snapshot of snapshots) {
+    // Why: the roster only tracks working children now. A persisted idle
+    // snapshot (from a build that kept idle rows) is a finished child — drop
+    // it so restart doesn't resurrect the stale pile this fix removes.
+    if (snapshot.state !== 'working') {
+      continue
+    }
     roster.set(snapshot.id, {
-      state: snapshot.state === 'working' ? 'working' : 'idle',
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
-      // Why: teammate name and agent type can differ, but the provider id
-      // shape survives persistence and keeps the row across restart folds.
-      ...(isClaudeTeammateLifecycleId(snapshot.id) ? { teammate: true as const } : {}),
       // Why: the seed can be a phantom (child finished while Orca was down,
       // its SubagentStop lost). Let a PRESENT background_tasks list that
-      // omits the id remove it (or demote a teammate) instead of gating the
-      // pane 'working' forever.
+      // omits the id remove it instead of gating the pane 'working' forever.
       backgroundTasksAuthoritative: true
     })
   }
@@ -2525,6 +2519,36 @@ function clearClaudePendingWaitForAgent(
     return
   }
   state.claudeLeadStateByPaneKey.set(paneKey, lead.stateBeforeWait ?? { state: 'working' })
+}
+
+/** Clear an AskUserQuestion wait after the user's answer was typed into the
+ *  terminal. Answering emits no hook event, so the caller infers it from the
+ *  submit keystroke. Restores the stashed pre-wait lead state (child-induced
+ *  question) or falls back to 'working' (lead question), and drops the cached
+ *  question card so later child-driven refreshes cannot re-emit the stale
+ *  wait. Returns the pane state to emit, gated up to 'working' while children
+ *  still run. */
+export function clearClaudeAnsweredQuestionWait(
+  state: HookListenerState,
+  paneKey: string
+): Pick<ClaudeLeadTurnState, 'state' | 'interrupted'> {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const restored =
+    lead?.state === 'waiting'
+      ? (lead.stateBeforeWait ?? { state: 'working' as const })
+      : { state: 'working' as const }
+  state.claudeLeadStateByPaneKey.set(paneKey, { ...restored })
+  const previousTool = state.lastToolByPaneKey.get(paneKey)
+  state.lastToolByPaneKey.set(
+    paneKey,
+    previousTool?.lastAssistantMessage
+      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      : {}
+  )
+  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  return restored.state === 'done' && claudeRosterHasWorkingSubagent(roster)
+    ? { state: 'working' }
+    : restored
 }
 
 /** Emit a pane status refresh driven by child activity (lifecycle events and
@@ -3391,6 +3415,13 @@ function normalizePiCompatibleEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  if (agentType === 'pi' && eventName === 'session_start') {
+    // Why: Pi emits session_start when the TUI opens or resumes; discard stale
+    // turn details without creating a visible working row before user activity.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
   const stateName =
     eventName === 'before_agent_start' ||
     eventName === 'agent_start' ||
@@ -3868,7 +3899,17 @@ export function normalizeHookPayload(
   // stamps the real value from `mux` identity on receive. See
   // docs/design/agent-status-over-ssh.md §5.
   const providerSession = extractAgentProviderSession(source, hookPayloadRecord)
-  return payload
+  const providerSessionOnly =
+    source === 'pi' && eventName === 'session_start' && providerSession !== null
+  // Why: session_start establishes resume identity while Pi is idle. Carry a
+  // valid placeholder through the status-shaped transport; receivers discard
+  // it when providerSessionOnly is set, so no working/done row is fabricated.
+  const transportPayload =
+    payload ??
+    (providerSessionOnly
+      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
+      : null)
+  return transportPayload
     ? {
         paneKey,
         launchToken,
@@ -3893,7 +3934,8 @@ export function normalizeHookPayload(
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         ...(providerSession ? { providerSession } : {}),
-        payload
+        ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+        payload: transportPayload
       }
     : null
 }

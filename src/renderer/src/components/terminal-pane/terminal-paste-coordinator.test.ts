@@ -204,6 +204,27 @@ describe('terminal paste coordinator', () => {
     expect(chunks.slice(1, -1).join('')).not.toContain('\x1b[201~')
   })
 
+  it('normalizes forced multiline chunked paste line endings like xterm native paste', () => {
+    // Why: 4-byte chunks would split this CRLF pair ('abc\r' | '\ndef'), so the
+    // pre-chunk normalization is what keeps the LF half away from ConPTY.
+    const plan = planTerminalPaste({
+      text: 'abc\r\ndef\nghi',
+      source: 'keyboard',
+      target: terminalTarget(),
+      forceBracketedPasteForMultiline: true,
+      maxDirectBytes: 4,
+      maxChunkBytes: 4
+    })
+    const chunks = chunkTerminalPastePlan(plan)
+
+    expect(plan.mode).toBe('chunked')
+    expect(plan.newlinePolicy).toBe('terminal-cr')
+    expect(chunks[0]).toBe(BRACKETED_PASTE_START)
+    expect(chunks.at(-1)).toBe(BRACKETED_PASTE_END)
+    expect(chunks.slice(1, -1).join('')).toBe('abc\rdef\rghi')
+    expect(chunks.join('')).not.toContain('\n')
+  })
+
   it('chunks escape-heavy bracketed paste without per-character string sanitizer scans', () => {
     const text = Array.from({ length: 64 }, (_value, index) => `part-${index}\x1b[201~`).join('')
     const plan = planTerminalPaste({

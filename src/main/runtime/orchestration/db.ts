@@ -62,6 +62,29 @@ function addLifecycleRejectionMarker(payload: string | null, reason: string): st
   })
 }
 
+const SQLITE_UTC_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/
+
+function exposeUtcTimestamp(timestamp: string | null): string | null {
+  if (!timestamp || !SQLITE_UTC_TIMESTAMP_RE.test(timestamp)) {
+    return timestamp
+  }
+  return `${timestamp.replace(' ', 'T')}Z`
+}
+
+function exposeMessageTimestamps(message: MessageRow): MessageRow {
+  // Why: SQLite stores UTC as a timezone-less space format for internal SQL
+  // ordering, but RPC/CLI consumers need an explicit offset to interpret it.
+  return {
+    ...message,
+    created_at: exposeUtcTimestamp(message.created_at) ?? message.created_at,
+    delivered_at: exposeUtcTimestamp(message.delivered_at)
+  }
+}
+
+function exposeMessageListTimestamps(messages: MessageRow[]): MessageRow[] {
+  return messages.map(exposeMessageTimestamps)
+}
+
 // Why: v1 → v2 added `'heartbeat'` to messages.type CHECK + `last_heartbeat_at`
 // column (preamble-hardening PR). v2 → v3 adds `delivered_at` column so
 // push-on-idle can distinguish queued-but-undelivered from user-acknowledged
@@ -353,21 +376,27 @@ export class OrchestrationDb {
       msg.payload ?? null,
       msg.senderPaneKey ?? null
     )
-    return this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
+    return exposeMessageTimestamps(
+      this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
+    )
   }
 
   getUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
     if (types && types.length > 0) {
       const placeholders = types.map(() => '?').join(',')
-      return this.db
-        .prepare(
-          `SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND type IN (${placeholders}) ORDER BY sequence`
-        )
-        .all(toHandle, ...types) as MessageRow[]
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            `SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND type IN (${placeholders}) ORDER BY sequence`
+          )
+          .all(toHandle, ...types) as MessageRow[]
+      )
     }
-    return this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? AND read = 0 ORDER BY sequence')
-      .all(toHandle) as MessageRow[]
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare('SELECT * FROM messages WHERE to_handle = ? AND read = 0 ORDER BY sequence')
+        .all(toHandle) as MessageRow[]
+    )
   }
 
   convertLifecycleMessageToRejection(messageId: string, reason: string): MessageRow | undefined {
@@ -400,27 +429,36 @@ export class OrchestrationDb {
   getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
     if (types && types.length > 0) {
       const placeholders = types.map(() => '?').join(',')
-      return this.db
-        .prepare(
-          `SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL AND type IN (${placeholders}) ORDER BY sequence`
-        )
-        .all(toHandle, ...types) as MessageRow[]
-    }
-    return this.db
-      .prepare(
-        'SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL ORDER BY sequence'
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            `SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL AND type IN (${placeholders}) ORDER BY sequence`
+          )
+          .all(toHandle, ...types) as MessageRow[]
       )
-      .all(toHandle) as MessageRow[]
+    }
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare(
+          'SELECT * FROM messages WHERE to_handle = ? AND read = 0 AND delivered_at IS NULL ORDER BY sequence'
+        )
+        .all(toHandle) as MessageRow[]
+    )
   }
 
   getAllMessages(toHandle: string, limit = 20): MessageRow[] {
-    return this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
-      .all(toHandle, limit) as MessageRow[]
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
+        .all(toHandle, limit) as MessageRow[]
+    )
   }
 
   getMessageById(id: string): MessageRow | undefined {
-    return this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow | undefined
+    const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
+      | MessageRow
+      | undefined
+    return message ? exposeMessageTimestamps(message) : undefined
   }
 
   markAsRead(ids: string[]): void {
@@ -461,9 +499,11 @@ export class OrchestrationDb {
   }
 
   getInbox(limit = 20): MessageRow[] {
-    return this.db
-      .prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?')
-      .all(limit) as MessageRow[]
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?')
+        .all(limit) as MessageRow[]
+    )
   }
 
   // Why: used by `check --all` and `inbox --terminal <handle>` — returns every
@@ -473,15 +513,19 @@ export class OrchestrationDb {
   getAllMessagesForHandle(toHandle: string, limit = 100, types?: MessageType[]): MessageRow[] {
     if (types && types.length > 0) {
       const placeholders = types.map(() => '?').join(',')
-      return this.db
-        .prepare(
-          `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
-        )
-        .all(toHandle, ...types, limit) as MessageRow[]
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
+          )
+          .all(toHandle, ...types, limit) as MessageRow[]
+      )
     }
-    return this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
-      .all(toHandle, limit) as MessageRow[]
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
+        .all(toHandle, limit) as MessageRow[]
+    )
   }
 
   // Why: thread-scoped read for the `orchestration.ask` wait loop. Filtered
@@ -492,15 +536,21 @@ export class OrchestrationDb {
   // the existing idx_thread index (see createTables) — no new index.
   getThreadMessagesFor(threadId: string, toHandle: string, afterSequence?: number): MessageRow[] {
     if (afterSequence !== undefined) {
-      return this.db
-        .prepare(
-          'SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? AND sequence > ? ORDER BY sequence ASC'
-        )
-        .all(threadId, toHandle, afterSequence) as MessageRow[]
+      return exposeMessageListTimestamps(
+        this.db
+          .prepare(
+            'SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? AND sequence > ? ORDER BY sequence ASC'
+          )
+          .all(threadId, toHandle, afterSequence) as MessageRow[]
+      )
     }
-    return this.db
-      .prepare('SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? ORDER BY sequence ASC')
-      .all(threadId, toHandle) as MessageRow[]
+    return exposeMessageListTimestamps(
+      this.db
+        .prepare(
+          'SELECT * FROM messages WHERE thread_id = ? AND to_handle = ? ORDER BY sequence ASC'
+        )
+        .all(threadId, toHandle) as MessageRow[]
+    )
   }
 
   // ── Tasks ──

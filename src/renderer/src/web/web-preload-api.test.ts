@@ -702,6 +702,88 @@ describe('web settings preload API', () => {
   })
 })
 
+describe('web native chat preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('forwards validated lifecycle metadata from reads and stream frames', async () => {
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+    const message = {
+      id: 'a-1',
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: 'done' }],
+      timestamp: 42,
+      source: 'transcript' as const
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'read-1',
+            ok: true,
+            result: { messages: [message], lifecycle },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        subscribe(
+          _method: string,
+          _params: unknown,
+          callbacks: { onResponse: (response: RuntimeRpcResponse<unknown>) => void }
+        ): Promise<{ unsubscribe: () => void }> {
+          callbacks.onResponse({
+            id: 'stream-1',
+            ok: true,
+            result: {
+              type: 'snapshot',
+              messages: [message],
+              hasMore: false,
+              lifecycle
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.nativeChat.readSession('claude', 'session-1')).resolves.toEqual(
+      {
+        messages: [message],
+        lifecycle
+      }
+    )
+    const frames: unknown[] = []
+    globals.window.api.nativeChat.subscribe(
+      { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1' },
+      (frame) => frames.push(frame)
+    )
+    await Promise.resolve()
+
+    expect(frames).toEqual([
+      {
+        type: 'snapshot',
+        messages: [message],
+        hasMore: false,
+        lifecycle
+      }
+    ])
+  })
+})
+
 describe('web MiniMax preload API', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -1780,6 +1862,14 @@ describe('web repos preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('rejects desktop host-scoped reorders in paired web clients', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(
+      api.repos.reorderForHost({ hostId: 'ssh:target', orderedIds: ['repo-1'] })
+    ).rejects.toThrow('Host-scoped project reordering is unavailable in paired web clients.')
+  })
+
   it.each([
     ['/home/alice', '/home/alice/orca/projects'],
     ['/', '/orca/projects'],
@@ -2513,13 +2603,13 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listWorkItems',
-        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor', noCache: true },
+        args: { repoPath, limit: 20, query: 'is:pr', page: 2, noCache: true },
         expectedMethod: 'github.listWorkItems',
         expectedParams: withRepo({
           repoPath,
           limit: 20,
           query: 'is:pr',
-          before: 'cursor',
+          page: 2,
           noCache: true
         })
       },

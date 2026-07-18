@@ -18,9 +18,11 @@ import {
   type PreProfilePairingAttempt
 } from '../src/transport/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
+import { useCloseHost } from '../src/transport/client-context'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ConnectionLog } from '../src/components/ConnectionLog'
+import { shouldPresentNotificationOptIn } from '../src/notifications/notification-opt-in-gate'
 
 // Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
 // route surfaces as a real error with the log visible instead of a
@@ -42,6 +44,7 @@ function Step({ number, text }: { number: number; text: string }) {
 
 export default function PairScanScreen() {
   const router = useRouter()
+  const closeHost = useCloseHost()
   const insets = useSafeAreaInsets()
   const [permission, requestPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
@@ -147,7 +150,22 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      router.replace(`/h/${hostId}`)
+      // Why: re-pairing the same desktop now reuses its existing host id
+      // (STA-1840 dedup), so a client cached under that id from an earlier
+      // pairing would keep the stale endpoint/relay. Close it so the
+      // destination screen opens a fresh client with the newly-paired
+      // profile — the removeHost() path already refreshes on re-pair, and a
+      // brand-new host has no cached entry so this is a no-op.
+      closeHost(hostId)
+      const showNotificationOptIn = await shouldPresentNotificationOptIn()
+      if (!mountedRef.current) {
+        return
+      }
+      router.replace(
+        showNotificationOptIn
+          ? { pathname: '/notification-opt-in', params: { hostId } }
+          : `/h/${hostId}`
+      )
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt

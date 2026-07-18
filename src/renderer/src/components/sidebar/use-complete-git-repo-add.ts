@@ -6,6 +6,7 @@ import {
   buildAddRepoExistingWorkspacesTelemetry,
   shouldTrackAddRepoExistingWorkspacesDetected
 } from './add-repo-existing-workspaces-telemetry'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 
 type CompleteGitRepoAddOptions = {
@@ -29,7 +30,7 @@ export function useCompleteGitRepoAdd({
         if (a.lastActivityAt !== b.lastActivityAt) {
           return b.lastActivityAt - a.lastActivityAt
         }
-        return a.displayName.localeCompare(b.displayName)
+        return compareWorktreeDisplayName(a, b)
       })
       const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesTelemetry(
         source,

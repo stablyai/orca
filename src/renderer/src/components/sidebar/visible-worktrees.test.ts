@@ -329,6 +329,25 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([local.id])
   })
 
+  it('uses explicit worktree ownership when it differs from the repo host', () => {
+    const runtime = makeWorktree('runtime', 'repo1')
+    runtime.hostId = 'runtime:env-1'
+
+    const runtimeResult = computeVisibleWorktreeIds(
+      { repo1: [runtime] },
+      [runtime.id],
+      visibleOptions({ workspaceHostScope: 'runtime:env-1' })
+    )
+    const localResult = computeVisibleWorktreeIds(
+      { repo1: [runtime] },
+      [runtime.id],
+      visibleOptions({ workspaceHostScope: 'local' })
+    )
+
+    expect(runtimeResult).toEqual([runtime.id])
+    expect(localResult).toEqual([])
+  })
+
   it('keeps every host visible when workspace host scope is all', () => {
     const local = makeWorktree('local', 'repo1')
     const remote = makeWorktree('remote', 'repo2')
