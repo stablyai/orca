@@ -307,6 +307,27 @@ export function handleRequest(
       break
     }
 
+    case 'session.tabs.list':
+      respond(
+        success(request.id, {
+          worktree: request.params?.worktree ?? 'id:mock',
+          snapshotVersion: 1,
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1',
+              title: 'zsh',
+              status: 'ready',
+              terminal: 'term-1',
+              isActive: true
+            }
+          ],
+          activeTabId: 'tab-1',
+          activeTabType: 'terminal'
+        })
+      )
+      break
+
     case 'terminal.send':
       respond(success(request.id, { send: { handle: 'term-1', ok: true } }))
       break
