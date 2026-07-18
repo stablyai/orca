@@ -257,6 +257,7 @@ type WebGitHubRouteKey =
   | 'mergePR'
   | 'setPRAutoMerge'
   | 'updatePRState'
+  | 'markPRReady'
   | 'requestPRReviewers'
   | 'removePRReviewers'
   | 'updateIssue'
@@ -305,6 +306,7 @@ type WebGitHubRuntimeMethod =
   | 'github.mergePR'
   | 'github.setPRAutoMerge'
   | 'github.updatePRState'
+  | 'github.markPRReady'
   | 'github.requestPRReviewers'
   | 'github.removePRReviewers'
   | 'github.updateIssue'
@@ -406,6 +408,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   mergePR: 'github.mergePR',
   setPRAutoMerge: 'github.setPRAutoMerge',
   updatePRState: 'github.updatePRState',
+  markPRReady: 'github.markPRReady',
   requestPRReviewers: 'github.requestPRReviewers',
   removePRReviewers: 'github.removePRReviewers',
   updateIssue: 'github.updateIssue',
@@ -2180,6 +2183,8 @@ function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'setPRAutoMerge'>>(GITHUB_WEB_RPC_METHODS.setPRAutoMerge, args),
     updatePRState: (args) =>
       route<WebGitHubResult<'updatePRState'>>(GITHUB_WEB_RPC_METHODS.updatePRState, args),
+    markPRReady: (args) =>
+      route<WebGitHubResult<'markPRReady'>>(GITHUB_WEB_RPC_METHODS.markPRReady, args),
     requestPRReviewers: (args) =>
       route<WebGitHubResult<'requestPRReviewers'>>(GITHUB_WEB_RPC_METHODS.requestPRReviewers, args),
     removePRReviewers: (args) =>

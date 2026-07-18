@@ -274,6 +274,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'github.updatePR',
   'github.updatePRTitle',
   'github.updatePRState',
+  'github.markPRReady',
   'github.repoSlug',
   'github.workItem',
   // Cross-repo GitHub work-item lookup: lets the mobile create-workspace Smart

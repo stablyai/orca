@@ -1,6 +1,7 @@
 import { CircleDot, LoaderCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import type { HostedReviewStateUpdating } from './use-hosted-review-actions'
 
 export function HostedReviewActionError({
   message
@@ -17,7 +18,7 @@ export function ClosedReviewActions({
   onReopenReview
 }: {
   shortLabel: string
-  stateUpdating: 'open' | 'closed' | null
+  stateUpdating: HostedReviewStateUpdating | null
   actionError: string | null
   onReopenReview: () => void
 }): React.JSX.Element {

@@ -396,6 +396,7 @@ import {
   mergePR,
   setPRAutoMerge,
   updatePRState,
+  markPRReadyForReview,
   requestPRReviewers,
   removePRReviewers,
   createIssue,
@@ -14347,6 +14348,21 @@ export class OrcaRuntimeService {
       prNumber,
       updates,
       repo.connectionId ?? null,
+      ...this.getLocalGitExecutionOptionArgs(repo)
+    )
+  }
+
+  async markRepoPRReady(
+    repoSelector: string,
+    prNumber: number,
+    prRepo?: GitHubOwnerRepo | null
+  ): Promise<Awaited<ReturnType<typeof markPRReadyForReview>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return markPRReadyForReview(
+      repo.path,
+      prNumber,
+      repo.connectionId ?? null,
+      prRepo ?? null,
       ...this.getLocalGitExecutionOptionArgs(repo)
     )
   }

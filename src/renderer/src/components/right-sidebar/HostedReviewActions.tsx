@@ -1,5 +1,11 @@
 import React, { useCallback, useMemo } from 'react'
-import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed } from 'lucide-react'
+import {
+  LoaderCircle,
+  GitMerge,
+  ChevronDown,
+  GitPullRequestArrow,
+  GitPullRequestClosed
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -75,7 +81,8 @@ export default function HostedReviewActions({
     handleMerge,
     handleAutoMerge,
     handleCloseReview,
-    handleReopenReview
+    handleReopenReview,
+    handleMarkReady
   } = useHostedReviewActions({
     review,
     githubPR,
@@ -246,6 +253,39 @@ export default function HostedReviewActions({
         isDeletingWorktree={isDeletingWorktree}
         onDeleteWorktree={handleDeleteWorktree}
       />
+    )
+  }
+
+  // Why: `gh pr ready` has no equivalent wired for other providers yet, so the
+  // draft action stays GitHub-only.
+  if (review.state === 'draft' && review.provider === 'github') {
+    return (
+      <div className="flex flex-col items-start gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => void handleMarkReady()}
+          disabled={isUpdatingReviewState}
+        >
+          {stateUpdating === 'ready' ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : (
+            <GitPullRequestArrow className="size-3.5" />
+          )}
+          {stateUpdating === 'ready'
+            ? translate(
+                'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
+                'Working...'
+              )
+            : translate(
+                'auto.components.right.sidebar.HostedReviewActions.50e3f4f0e0',
+                'Ready for review'
+              )}
+        </Button>
+        <HostedReviewActionError message={actionError} />
+      </div>
     )
   }
 
