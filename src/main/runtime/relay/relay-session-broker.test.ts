@@ -26,6 +26,9 @@ const fakes = vi.hoisted(() => ({
     pendingRequestCount: number
   }[],
   transports: [] as {
+    options: {
+      onConnectionClosed?: (connectionId: string) => void
+    }
     start: ReturnType<typeof vi.fn>
     stop: ReturnType<typeof vi.fn>
     setGeneration: ReturnType<typeof vi.fn>
@@ -80,7 +83,7 @@ vi.mock('../rpc/relay-transport', () => ({
     metadataFor = vi.fn()
     openConnection = vi.fn().mockResolvedValue(undefined)
 
-    constructor() {
+    constructor(readonly options: (typeof fakes.transports)[number]['options']) {
       fakes.transports.push(this)
     }
   }
@@ -291,6 +294,52 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(fakes.controls[2]!.options.controlResumeSecret).toBeUndefined()
     expect(fakes.transports).toHaveLength(2)
     await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('registered'))
+    expect(broker.endpoint?.cellUrl).toBe('https://relay.example.test')
+  })
+
+  it('opens a fresh generation after the last relay data connection closes', async () => {
+    const ack: RelayHostHelloAckMessage = {
+      type: 'host-hello-ack',
+      v: 1,
+      generation: 7,
+      controlResumeSecret: 'R'.repeat(43),
+      leaseExpiresAt: 1_000_000,
+      activeConnIds: [],
+      pendingConns: []
+    }
+    fakes.controlConnect.mockResolvedValueOnce(ack).mockResolvedValueOnce({
+      ...ack,
+      generation: 8,
+      controlResumeSecret: 'N'.repeat(43)
+    })
+    const broker = await RelaySessionBroker.connect(brokerOptions())
+    fakes.controls[0]!.options.onConnectionOpen({
+      connId: 'closed-basis',
+      connTicket: 'T'.repeat(43),
+      kind: 'resume',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 1_000
+    })
+    fakes.controls[0]!.options.onConnectionOpen({
+      connId: 'remaining-basis',
+      connTicket: 'U'.repeat(43),
+      kind: 'resume',
+      relayDeviceId: 'device-2',
+      attachDeadlineMs: 1_000
+    })
+    expect(brokerBasisIds(broker)).toEqual(['closed-basis', 'remaining-basis'])
+
+    fakes.transports[0]!.options.onConnectionClosed?.('closed-basis')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(fakes.controls).toHaveLength(1)
+
+    fakes.transports[0]!.options.onConnectionClosed?.('remaining-basis')
+    await vi.waitFor(() => expect(fakes.controls).toHaveLength(2))
+
+    expect(fakes.controls[1]!.options.previousGeneration).toBeUndefined()
+    expect(fakes.controls[1]!.options.controlResumeSecret).toBeUndefined()
+    expect(fakes.transports).toHaveLength(2)
+    expect(fakes.controls[0]!.closeNow).toHaveBeenCalledOnce()
     expect(broker.endpoint?.cellUrl).toBe('https://relay.example.test')
   })
 })

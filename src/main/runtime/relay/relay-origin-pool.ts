@@ -113,6 +113,13 @@ export class RelayOriginPool {
           this.basisOrigins.delete(connectionId)
         }
         this.maybeCloseDrainedOrigin(origin)
+        if (![...this.basisOrigins.values()].includes(origin)) {
+          this.handleDrain(
+            origin,
+            { type: 'drain', graceMs: 0, recovery: 'resolve-director' },
+            true
+          )
+        }
       },
       onDrain: (origin, message) => this.handleDrain(origin, message),
       onClose: (origin) => {
@@ -128,7 +135,11 @@ export class RelayOriginPool {
     })
   }
 
-  private handleDrain(origin: RelayControlOrigin, message: RelayDrainMessage): void {
+  private handleDrain(
+    origin: RelayControlOrigin,
+    message: RelayDrainMessage,
+    forceFreshGeneration = false
+  ): void {
     if (!this.isCurrent() || origin !== this.activeOrigin) {
       return
     }
@@ -136,15 +147,18 @@ export class RelayOriginPool {
     this.drainingOrigins.add(origin)
     this.options.onStatus('draining')
     if (!this.rotationPromise) {
-      this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
-        this.rotationPromise = null
-      })
+      this.rotationPromise = this.resolveDrainTarget(origin, message, forceFreshGeneration).finally(
+        () => {
+          this.rotationPromise = null
+        }
+      )
     }
   }
 
   private async resolveDrainTarget(
     origin: RelayControlOrigin,
-    message: RelayDrainMessage
+    message: RelayDrainMessage,
+    forceFreshGeneration: boolean
   ): Promise<void> {
     try {
       if (!this.relayJwt) {
@@ -158,7 +172,7 @@ export class RelayOriginPool {
         fetch: this.options.fetch
       })
       this.assertCurrent()
-      if (assignment.cellUrl === origin.cellUrl) {
+      if (assignment.cellUrl === origin.cellUrl && !forceFreshGeneration) {
         let rebound = false
         try {
           await origin.rebind(this.relayJwt, assignment)
@@ -182,7 +196,10 @@ export class RelayOriginPool {
     } catch {
       if (this.isCurrent()) {
         const random = this.options.random ?? Math.random
-        setTimeout(() => this.handleDrain(origin, message), 250 + Math.floor(random() * 751))
+        setTimeout(
+          () => this.handleDrain(origin, message, forceFreshGeneration),
+          250 + Math.floor(random() * 751)
+        )
       }
     }
   }
