@@ -127,6 +127,7 @@
 - 07/18 fragmented·coalesced·malformed·oversized frame, Windows named-pipe 경로, POSIX 소켓 디렉토리 소유권·권한·symlink·regular-file 방어 테스트 추가
 - 07/18 hardening 포함 전체 unpack 앱을 재빌드·심층 서명 검증하고 `/Applications/Orca.app`에 재설치
 - 07/18 재시작한 설치 앱에서 공식 Browser가 테스트 탭을 발견하고 동일 객체로 `example.com` → `example.org` 이동, 새 Browser 연결 재발견까지 통과. 테스트 탭만 정리하고 기존 사용자 탭 보존
+- 07/18 최종 실행 프로세스에서 macOS가 부착한 번들 루트 Finder 메타데이터를 제거하고, 앱 실행 상태의 strict 심층 서명과 새 runtime의 Browser 동일 탭 이동·재발견을 다시 통과
 - 07/18 원본 저장소 PR #9249 생성. GitHub 기준 mergeable이며 현재 자동 체크 통과
 
 ## Recent Changes
@@ -154,7 +155,7 @@
 
 ## Verification
 - 명령/방법: 관련 테스트, 타입 검사, 별도 dev 런타임의 Browser 플러그인 직접 연결
-- 결과: Browser 연결·protocol hardening과 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 107개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, hardening 포함 전체 desktop/native unpack 빌드와 설치 전·후 strict 심층 서명 검증 통과. 교체·재시작한 실사용 Orca에서도 공식 Browser가 `example.com`을 직접 발견하고 같은 객체로 `example.org` 이동 후 URL·제목·본문을 읽었으며, 별도 새 Browser 연결에서 같은 탭을 재인식했습니다. 검증용 탭은 정리하고 기존 사용자 탭은 보존했습니다.
+- 결과: Browser 연결·protocol hardening과 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 107개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, hardening 포함 전체 desktop/native unpack 빌드와 설치 전·실행 중 strict 심층 서명 검증 통과. 최종 실행 runtime의 실사용 Orca에서도 공식 Browser가 `example.com`을 직접 발견하고 같은 객체로 `example.org` 이동 후 URL·제목·본문을 읽었으며, 별도 새 Browser 연결에서 같은 탭을 재인식했습니다. 검증용 탭은 정리하고 기존 사용자 탭은 보존했습니다.
 
 ## Release / Handoff
 - 배포/반영 방식: 서명된 macOS unpack 앱을 `/Applications/Orca.app`에 반영하고 재시작
