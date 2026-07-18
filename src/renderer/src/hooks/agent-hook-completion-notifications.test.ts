@@ -56,6 +56,9 @@ type MockStoreState = {
 
 let mockStoreState: MockStoreState
 const HOOK_DONE_QUIET_MS = 1_500
+// Why: Codex attention notifications are debounced (issue #8387), so a genuine
+// permission pause only notifies once this quiet window elapses without resuming.
+const CODEX_ATTENTION_QUIET_MS = 1_500
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -105,6 +108,30 @@ function seedCodexPaneLaunchConfig(
 
 describe('agent hook completion notifications', () => {
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+
+  // Why: the Codex permission-pause tests share a working→pause→quiet-window
+  // sequence; centralizing it keeps the debounce advance (issue #8387) in one spot.
+  async function observeCodexPermissionPause(state: 'waiting' | 'blocked'): Promise<void> {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state,
+        prompt: 'implement notifications',
+        agentType: 'codex',
+        toolName: 'exec_command',
+        toolInput: 'git status'
+      }
+    })
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+  }
 
   beforeEach(() => {
     vi.resetModules()
@@ -560,50 +587,14 @@ describe('agent hook completion notifications', () => {
 
   it('fails open for Codex auto-approved permission requests without launch proof', async () => {
     seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: {
-        state: 'waiting',
-        prompt: 'implement notifications',
-        agentType: 'codex',
-        toolName: 'exec_command',
-        toolInput: 'git status'
-      }
-    })
+    await observeCodexPermissionPause('waiting')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
 
   it('still notifies for manual Codex permission requests', async () => {
     seedCodexPaneLaunchConfig(paneKey, '')
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: {
-        state: 'waiting',
-        prompt: 'implement notifications',
-        agentType: 'codex',
-        toolName: 'exec_command',
-        toolInput: 'git status'
-      }
-    })
+    await observeCodexPermissionPause('waiting')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
@@ -618,25 +609,7 @@ describe('agent hook completion notifications', () => {
 
   it('fails open for Codex auto-approved blocked permission requests without launch proof', async () => {
     seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: {
-        state: 'blocked',
-        prompt: 'implement notifications',
-        agentType: 'codex',
-        toolName: 'exec_command',
-        toolInput: 'git status'
-      }
-    })
+    await observeCodexPermissionPause('blocked')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })

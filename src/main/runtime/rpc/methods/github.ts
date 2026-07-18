@@ -10,7 +10,7 @@ const RepoSelector = z.object({
 const WorkItemsList = RepoSelector.extend({
   limit: OptionalFiniteNumber,
   query: OptionalString,
-  before: OptionalString,
+  page: z.number().int().positive().optional(),
   noCache: z.boolean().optional()
 })
 
@@ -306,7 +306,7 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.repo,
         params.limit,
         params.query,
-        params.before,
+        params.page,
         params.noCache
       )
   }),

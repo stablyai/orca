@@ -102,11 +102,21 @@ export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null)
   getStoreState = getter
 }
 
+/** True while a TerminalPane for this tab is mounted (lifecycle effect ran). */
+export function hasRegisteredRuntimeTerminalTab(tabId: string): boolean {
+  return registeredTabs.has(tabId)
+}
+
 export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => void {
   registeredTabs.set(tab.tabId, tab)
   tabRegisteredAt.set(tab.tabId, Date.now())
   scheduleRuntimeGraphSync()
   return () => {
+    // Why: React can mount a replacement surface before the prior effect
+    // cleans up. Stale cleanup must not erase the successor's live registry.
+    if (registeredTabs.get(tab.tabId) !== tab) {
+      return
+    }
     registeredTabs.delete(tab.tabId)
     tabRegisteredAt.delete(tab.tabId)
     scheduleRuntimeGraphSync()
@@ -1482,6 +1492,12 @@ function buildMobileBrowserTab(
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
+    // Why: null means the active page successfully cleared its failure. Falling
+    // back through ?? would resurrect a stale workspace-level error.
+    loadError: activePage ? activePage.loadError : workspace.loadError,
+    certificateFailure: activePage
+      ? (state.browserCertificateFailuresByPageId?.[activePage.id] ?? null)
+      : null,
     color: unifiedTab?.color ?? null,
     isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId

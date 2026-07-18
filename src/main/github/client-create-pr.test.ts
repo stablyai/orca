@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 const {
   ghExecFileAsyncMock,
   getOwnerRepoMock,
+  getEnterpriseGitHubRepoSlugMock,
   extractExecErrorMock,
   acquireMock,
   releaseMock,
@@ -11,6 +12,7 @@ const {
 } = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
+  getEnterpriseGitHubRepoSlugMock: vi.fn(),
   extractExecErrorMock: vi.fn((error: unknown) => {
     const value = error as { stderr?: string; stdout?: string; message?: string }
     return {
@@ -52,12 +54,18 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: vi.fn()
 }))
 
+vi.mock('./github-enterprise-repository', () => ({
+  getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
+}))
+
 import { createGitHubPullRequest } from './client'
 
 describe('createGitHubPullRequest', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
+    getEnterpriseGitHubRepoSlugMock.mockReset()
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
     extractExecErrorMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
@@ -113,6 +121,78 @@ describe('createGitHubPullRequest', () => {
     })
     expect(acquireMock).toHaveBeenCalledOnce()
     expect(releaseMock).toHaveBeenCalledOnce()
+  })
+
+  it('host-qualifies --repo for a GHES remote so gh targets the Enterprise server (#8312)', async () => {
+    // github.com-only slug parsing misses GHES, so creation comes from the
+    // enterprise resolver, which carries the host.
+    getOwnerRepoMock.mockResolvedValueOnce(null)
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce({
+      owner: 'team',
+      repo: 'orca',
+      host: 'github.acme-corp.com'
+    })
+    // gh prints the PR URL (not JSON); the GHES host must still parse directly.
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'https://github.acme-corp.com/team/orca/pull/7\n'
+    })
+
+    await expect(
+      createGitHubPullRequest('/repo-root', {
+        provider: 'github',
+        base: 'main',
+        head: 'feature/create-pr',
+        title: 'GHES PR'
+      })
+    ).resolves.toEqual({
+      ok: true,
+      number: 7,
+      url: 'https://github.acme-corp.com/team/orca/pull/7'
+    })
+
+    const [args] = ghExecFileAsyncMock.mock.calls[0]
+    // Bare "team/orca" would resolve against gh's default host (github.com);
+    // the host prefix pins the command to the Enterprise server.
+    expect(args[args.indexOf('--repo') + 1]).toBe('github.acme-corp.com/team/orca')
+  })
+
+  it('host-qualifies --repo for the GHES existing-PR fallback lookup (#8312)', async () => {
+    getOwnerRepoMock.mockResolvedValue(null)
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
+      owner: 'team',
+      repo: 'orca',
+      host: 'github.acme-corp.com'
+    })
+    // Create reports "already exists", forcing the pr-list fallback.
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('exists'), {
+          stderr: 'a pull request for branch "feature/create-pr" already exists',
+          stdout: ''
+        })
+      )
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          { number: 9, url: 'https://github.acme-corp.com/team/orca/pull/9' }
+        ])
+      })
+
+    await expect(
+      createGitHubPullRequest('/repo-root', {
+        provider: 'github',
+        base: 'main',
+        head: 'feature/create-pr',
+        title: 'GHES PR'
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      code: 'already_exists',
+      existingReview: { number: 9, url: 'https://github.acme-corp.com/team/orca/pull/9' }
+    })
+
+    const [listArgs] = ghExecFileAsyncMock.mock.calls[1]
+    expect(listArgs).toEqual(expect.arrayContaining(['pr', 'list']))
+    expect(listArgs[listArgs.indexOf('--repo') + 1]).toBe('github.acme-corp.com/team/orca')
   })
 
   it('runs local WSL project pull request creation through the selected distro', async () => {

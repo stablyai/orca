@@ -140,7 +140,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   })
 
   it('strips a prefix the model leaked into the slug from both branch and display name', async () => {
-    // Model ignored "no prefixes" and echoed `you/worktree-spinner`, which the
+    // Model echoed `you/worktree-spinner`, which the
     // sanitizer folds to `you-worktree-spinner`; without stripping it would
     // double-prefix the branch (`you/you-...`) and show "You worktree spinner".
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'you-worktree-spinner' })
@@ -183,6 +183,19 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, onRenamed } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('runs Git against the backing folder for a folder-workspace instance id', async () => {
+    // Why: instance ids carry a synthetic `::workspace:<uuid>` suffix that is not
+    // a real directory. The Git cwd must resolve to the folder or `rev-parse`
+    // spawns against a nonexistent path (ENOENT).
+    const instanceId = `${WORKTREE_ID}::workspace:123e4567-e89b-12d3-a456-426614174000`
+    const { deps } = makeDeps({ resolveWorktreeIdForTab: () => instanceId })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ worktreeId: undefined }), deps)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '-m', 'you/fix-auth'],
+      expect.objectContaining({ cwd: '/repo/wt' })
+    )
   })
 
   it('skips when no worktree can be resolved for the tab', async () => {

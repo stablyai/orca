@@ -734,7 +734,19 @@ describePosix('local PTY shell-ready launch config', () => {
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
 
-    expect(zshenv).toContain('_orca_wrapper_zdotdir_self="${ZDOTDIR:-}"')
+    // Why: derive the wrapper dir from %x (zsh's internal script name), not the
+    // env-imported $ZDOTDIR — zsh corrupts environment values whose UTF-8 bytes
+    // fall in its 0x84-0x9D token range (non-ASCII Windows usernames), which
+    // would fail the self-check and fall back to the unusable baked literal.
+    expect(zshenv).toContain('_orca_wrapper_zdotdir_self="${${(%):-%x}:h}"')
+    // Keep $ZDOTDIR only as a fallback when %x expansion yields nothing. The
+    // final restore below re-validates with -f before trusting the value, so no
+    // stat is needed here.
+    expect(zshenv).toContain(
+      'if [[ -z "${_orca_wrapper_zdotdir_self:-}" ]]; then\n' +
+        '  _orca_wrapper_zdotdir_self="${ZDOTDIR:-}"\n' +
+        'fi'
+    )
     // The runtime path is only trusted when it still holds a wrapper .zshenv;
     // otherwise the generation-time literal remains as the fallback.
     expect(zshenv).toContain(
@@ -745,7 +757,7 @@ describePosix('local PTY shell-ready launch config', () => {
         'fi'
     )
     // Capture must happen before the wrapper unsets ZDOTDIR to source user files.
-    expect(zshenv.indexOf('_orca_wrapper_zdotdir_self="${ZDOTDIR:-}"')).toBeLessThan(
+    expect(zshenv.indexOf('_orca_wrapper_zdotdir_self="${${(%):-%x}:h}"')).toBeLessThan(
       zshenv.indexOf('unset ZDOTDIR')
     )
   })
@@ -889,6 +901,52 @@ path=(/custom/bin $path)
         }
       } finally {
         rmSync(movedUserData, { recursive: true, force: true })
+      }
+    })
+
+    it('loads user .zshrc when the wrapper dir contains a non-ASCII (token-range) path', async () => {
+      // Why: issue #8003 second trigger — a non-ASCII Windows username (e.g. a
+      // Korean login) puts UTF-8 bytes in zsh's 0x84-0x9D token range into the
+      // wrapper path. zsh corrupts the env-imported $ZDOTDIR while processing
+      // startup files, so deriving the wrapper dir from $ZDOTDIR fails the
+      // self-check and falls back to the unusable baked literal, leaving the
+      // user's .zshrc unloaded. Deriving from %x sidesteps the corruption.
+      writeFileSync(join(testHome, '.zshrc'), 'export USER_ZSHRC_LOADED=yes\n')
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      getShellReadyLaunchConfig('/bin/zsh')
+
+      // Move the generated wrappers under a non-ASCII runtime root so the baked
+      // literal is unusable and the runtime $ZDOTDIR gets corrupted on import.
+      const nonAsciiUserData = join(dirname(userDataPath), '홍길동-wsl-view')
+      renameSync(userDataPath, nonAsciiUserData)
+      try {
+        const cleanEnv: Record<string, string | undefined> = {
+          ...process.env,
+          HOME: testHome,
+          PATH: '/usr/bin:/bin'
+        }
+        delete cleanEnv.ZDOTDIR
+        delete cleanEnv.ORCA_ORIG_ZDOTDIR
+        delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
+        delete cleanEnv.USER_ZSHRC_LOADED
+        cleanEnv.ZDOTDIR = join(nonAsciiUserData, 'shell-ready', 'zsh')
+
+        for (const args of [['-i'], ['-l', '-i']] as const) {
+          const result = spawnSync(
+            'zsh',
+            [...args, '-c', 'echo "USER_ZSHRC_LOADED=${USER_ZSHRC_LOADED:-no}"'],
+            {
+              env: cleanEnv as NodeJS.ProcessEnv,
+              encoding: 'utf8'
+            }
+          )
+
+          expect(result.status, `zsh ${args.join(' ')} failed: ${result.stderr}`).toBe(0)
+          expect(result.stdout).toContain('USER_ZSHRC_LOADED=yes')
+        }
+      } finally {
+        rmSync(nonAsciiUserData, { recursive: true, force: true })
       }
     })
 

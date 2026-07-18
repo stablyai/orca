@@ -1,4 +1,8 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import {
+  formatResetCountdown,
+  formatResetDuration
+} from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
@@ -9,6 +13,7 @@ import {
 } from './usage-error-copy'
 import {
   clampUsedPercent,
+  getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -39,28 +44,9 @@ export function formatTimeAgo(ts: number): string {
   return `${hours}h ago`
 }
 
-function formatDuration(ms: number): string {
-  if (ms <= 0) {
-    return 'now'
-  }
-  const totalMins = Math.floor(ms / 60_000)
-  if (totalMins < 60) {
-    return `${totalMins}m`
-  }
-  const hours = Math.floor(totalMins / 60)
-  const mins = totalMins % 60
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remHours = hours % 24
-    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
-  }
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
-}
-
-export function formatResetCountdown(ms: number): string {
-  const duration = formatDuration(ms)
-  return duration === 'now' ? 'Resets now' : `Resets in ${duration}`
-}
+// Re-export so existing tooltip consumers/tests keep their import path; the
+// implementation is shared with mobile in src/shared/rate-limit-reset-format.
+export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
@@ -69,7 +55,7 @@ export function formatResetCreditExpiry(
   if (!expiresAt) {
     return null
   }
-  const duration = formatDuration(expiresAt - Date.now())
+  const duration = formatResetDuration(expiresAt - Date.now())
   if (duration === 'now') {
     return count > 1
       ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
@@ -199,8 +185,8 @@ export function getWindowSections(
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
-// Why: color-coded by consumption so users can quickly gauge urgency.
-// Matches common harness usage meters (Claude/Codex): bars fill with % used.
+// Why: color always tracks % used so urgency reads correctly even when the meter
+// fills with % remaining (#8560) — low remaining still turns red, not green.
 // Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
 export function barColor(usedPct: number): string {
   if (usedPct < 60) {
@@ -293,18 +279,18 @@ export function ProviderPanel({
     if (!w) {
       return null
     }
-    // Why: preference changes the copy only; consumption-based bar direction
-    // preserves the empty/green to full/red meter convention from #8167.
     const usedPct = clampUsedPercent(w.usedPercent)
+    const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
     const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
     return (
       <div className="space-y-1">
         <div className={`font-medium ${textClass}`}>{label}</div>
         <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+          {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
           <div
             className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-            style={{ width: `${usedPct}%` }}
+            style={{ width: `${displayedPct}%` }}
           />
         </div>
         <div className={`flex justify-between ${mutedClass}`}>

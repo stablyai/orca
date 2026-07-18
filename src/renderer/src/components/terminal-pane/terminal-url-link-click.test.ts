@@ -379,6 +379,44 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledWith('http://example.com/')
   })
 
+  it('does not glue the next logical line onto a URL that ends mid-row (#8832)', () => {
+    const { terminal, registrations } = makeTerminal({
+      cols: 80,
+      urlRows: ['Repo: https://github.com/stablyai/orca/', 'Description: 123'],
+      softWrapped: false
+    })
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+
+    const fallback = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options === undefined
+    )?.[1]
+    fallback!(mouseEventForRow(0))
+
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith('https://github.com/stablyai/orca/')
+    disposable.dispose()
+  })
+
+  it('still joins a URL hard-wrapped at the row edge without native wrap metadata', () => {
+    const cols = 40
+    const url = 'https://example.com/very/long/path/segments/that/continue/more'
+    const { terminal, registrations } = makeTerminal({
+      cols,
+      urlRows: [url.slice(0, cols), url.slice(cols)],
+      softWrapped: false
+    })
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+
+    const fallback = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options === undefined
+    )?.[1]
+    fallback!(mouseEventForRow(0))
+
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(url)
+    disposable.dispose()
+  })
+
   it('does not suppress a modifier-click when the buffer position is not an HTTP link', () => {
     const { terminal, registrations } = makeTerminal({ urlRows: ['not-a-link'] })
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })

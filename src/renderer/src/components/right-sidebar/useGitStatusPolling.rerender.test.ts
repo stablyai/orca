@@ -10,6 +10,8 @@ import { makeOpenFile, makeWorktree, TEST_REPO } from '@/store/slices/store-test
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import { useGitStatusPolling } from './useGitStatusPolling'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 // Mock the refresh boundary so we count invocations precisely without
 // triggering real IPC cascades (upstream probes, store mutations, etc.).
 const refreshMock = vi.hoisted(() => vi.fn())
@@ -50,7 +52,7 @@ function HookProbe(): null {
   return null
 }
 
-async function renderHook(): Promise<void> {
+async function renderHook(): Promise<Root> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -58,6 +60,7 @@ async function renderHook(): Promise<void> {
   await act(async () => {
     root.render(createElement(HookProbe))
   })
+  return root
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -99,7 +102,7 @@ describe('useGitStatusPolling rerender stability', () => {
     vi.useRealTimers()
   })
 
-  it('keeps the poll runner stable when openFiles changes mid-cooldown', async () => {
+  it('keeps the refresh scheduler stable when openFiles changes mid-signal debounce', async () => {
     // Spy on addEventListener so we can guard that the file-watch listener
     // registered before emitting — otherwise the test would prove nothing.
     const addSpy = vi.spyOn(window, 'addEventListener')
@@ -111,10 +114,8 @@ describe('useGitStatusPolling rerender stability', () => {
     // run() once at install time).
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
-    // Rerender: change openFiles in the store. This gives runFetchStatus a new
-    // identity (it lists openFiles in its useCallback deps). With the old
-    // useMemo([runFetchStatus]) the runner would be recreated here, resetting
-    // lastRunEndedAt to -Infinity and bypassing the cooldown.
+    // Rerender: change openFiles in the store while the file-watch/scheduler
+    // debounce is pending. The active-worktree scheduler must survive it.
     await act(async () => {
       useAppStore.setState({
         openFiles: [makeOpenFile({ id: `${WORKTREE_PATH}/a.ts`, worktreeId: WORKTREE_ID })]
@@ -139,18 +140,15 @@ describe('useGitStatusPolling rerender stability', () => {
       })
     )
 
-    // Advance past the 125 ms file-watch debounce. fetchStatus is called, but
-    // the runner's cooldown (POLL_INTERVAL_MS = 3000 ms from first run end)
-    // should suppress the second refresh.
+    // Advance past the 125 ms file-watch debounce. The scheduler coalesces the
+    // signal and paces it behind the 3 s anti-churn floor from the mount run.
     await vi.advanceTimersByTimeAsync(200)
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
-    // Mid-cooldown: still no second refresh.
-    await vi.advanceTimersByTimeAsync(1300)
+    await vi.advanceTimersByTimeAsync(2799)
     expect(refreshMock).toHaveBeenCalledTimes(1)
 
-    // After the full 3 s cooldown the trailing refresh fires.
-    await vi.advanceTimersByTimeAsync(1500)
+    await vi.advanceTimersByTimeAsync(1)
     await flushMicrotasks()
     expect(refreshMock).toHaveBeenCalledTimes(2)
 
@@ -174,5 +172,124 @@ describe('useGitStatusPolling rerender stability', () => {
     // Should trigger an immediate poll on the new worktree (total 2 calls)
     // without having to wait for the 3000ms timer.
     expect(refreshMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes immediately when Source Control becomes visible', async () => {
+    useAppStore.setState({ rightSidebarOpen: false })
+    await renderHook()
+    await flushMicrotasks()
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    // Let the 3 s anti-churn floor from the mount refresh elapse first.
+    await vi.advanceTimersByTimeAsync(3000)
+    await act(async () => {
+      useAppStore.setState({ rightSidebarOpen: true })
+    })
+    await flushMicrotasks()
+
+    expect(refreshMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes immediately when the Files tab becomes visible', async () => {
+    useAppStore.setState({ rightSidebarOpen: false, rightSidebarTab: 'explorer' })
+    await renderHook()
+    await flushMicrotasks()
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    // Let the 3 s anti-churn floor from the mount refresh elapse first.
+    await vi.advanceTimersByTimeAsync(3000)
+    await act(async () => {
+      useAppStore.setState({ rightSidebarOpen: true })
+    })
+    await flushMicrotasks()
+
+    expect(refreshMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes immediately when an SSH execution host reconnects', async () => {
+    useAppStore.setState({
+      repos: [{ ...repo, connectionId: 'ssh-1' }],
+      sshConnectionStates: new Map([
+        ['ssh-1', { status: 'disconnected', error: null, reconnectAttempt: 0 }]
+      ])
+    } as Partial<AppState>)
+    await renderHook()
+    await flushMicrotasks()
+    expect(refreshMock).not.toHaveBeenCalled()
+
+    await act(async () => {
+      useAppStore.setState({
+        sshConnectionStates: new Map([
+          ['ssh-1', { status: 'connected', error: null, reconnectAttempt: 0 }]
+        ])
+      } as Partial<AppState>)
+    })
+    await flushMicrotasks()
+
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks only the 60-second safety refresh for line-stat reuse', async () => {
+    await renderHook()
+    await flushMicrotasks()
+
+    expect(refreshMock.mock.calls[0]?.[0].request.reuseLineStats).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(60_000)
+    await flushMicrotasks()
+
+    expect(refreshMock).toHaveBeenCalledTimes(2)
+    expect(refreshMock.mock.calls[1]?.[0].request.reuseLineStats).toBe(true)
+  })
+
+  it('aborts and rejects stale work when the execution host changes', async () => {
+    let resolveFirst!: () => void
+    const firstRefresh = new Promise<void>((resolve) => {
+      resolveFirst = resolve
+    })
+    let firstRequest!: { signal: AbortSignal; shouldApply: () => boolean }
+    refreshMock.mockImplementationOnce(
+      (args: { request: { signal: AbortSignal; shouldApply: () => boolean } }) => {
+        firstRequest = args.request
+        return firstRefresh
+      }
+    )
+    await renderHook()
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      useAppStore.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-2' } as AppState['settings']
+      })
+    })
+    await flushMicrotasks()
+
+    expect(firstRequest.signal.aborted).toBe(true)
+    expect(firstRequest.shouldApply()).toBe(false)
+    expect(refreshMock).toHaveBeenCalledTimes(2)
+    resolveFirst()
+    await flushMicrotasks()
+  })
+
+  it('aborts and rejects stale work on unmount', async () => {
+    let resolveFirst!: () => void
+    const firstRefresh = new Promise<void>((resolve) => {
+      resolveFirst = resolve
+    })
+    let firstRequest!: { signal: AbortSignal; shouldApply: () => boolean }
+    refreshMock.mockImplementationOnce(
+      (args: { request: { signal: AbortSignal; shouldApply: () => boolean } }) => {
+        firstRequest = args.request
+        return firstRefresh
+      }
+    )
+    const root = await renderHook()
+
+    act(() => root.unmount())
+    roots.splice(roots.indexOf(root), 1)
+
+    expect(firstRequest.signal.aborted).toBe(true)
+    expect(firstRequest.shouldApply()).toBe(false)
+    resolveFirst()
+    await flushMicrotasks()
   })
 })

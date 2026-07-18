@@ -12,6 +12,7 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
+import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -222,6 +223,10 @@ export function FloatingTerminalPanel({
   }
   const shortcutFocusFrameRef = useRef<number | null>(null)
   const shortcutFocusTimeoutRef = useRef<number | null>(null)
+  const reclaimTerminalInputOnWindowFocusRef = useRef<{
+    helper: HTMLElement
+    leafId: string | null
+  } | null>(null)
   const mountedRef = useMountedRef()
   const dragRef = useRef<{
     pointerId: number
@@ -578,7 +583,11 @@ export function FloatingTerminalPanel({
     if (!open || !activeTerminalId) {
       return
     }
-    focusTerminalTabSurface(activeTerminalId)
+    focusTerminalTabSurface(activeTerminalId, null, {
+      onImeRefocusSkipped: (active) =>
+        setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(active)),
+      refreshImeContext: true
+    })
   }, [activeTerminalId, open])
 
   useEffect(() => {
@@ -748,7 +757,7 @@ export function FloatingTerminalPanel({
       const dirtyEditorFileIds: string[] = []
       for (const item of items) {
         if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
+          closeTab(item.entityId, { reason: 'cleanup' })
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
@@ -1313,22 +1322,69 @@ export function FloatingTerminalPanel({
     const handleWindowBlur = (): void => {
       const panel = panelRef.current
       const active = document.activeElement
+      reclaimTerminalInputOnWindowFocusRef.current = null
       if (!panel || !(active instanceof HTMLElement) || !panel.contains(active)) {
         return
       }
       // Why: browser webviews focus out-of-process and do not emit renderer
       // pointerdown events, so release floating ownership on renderer blur too.
       setFloatingTerminalInputFocusedInMain(false)
+      if (isFloatingWorkspaceTerminalInputTarget(active)) {
+        // Why: the terminal focus lifecycle preserves this exact helper across
+        // app blur so macOS can rebuild its native input context on return.
+        reclaimTerminalInputOnWindowFocusRef.current = {
+          helper: active,
+          leafId: active.closest('[data-leaf-id]')?.getAttribute('data-leaf-id') ?? null
+        }
+        return
+      }
       active.blur()
+    }
+
+    const handleWindowFocus = (): void => {
+      const reclaim = reclaimTerminalInputOnWindowFocusRef.current
+      if (!reclaim) {
+        return
+      }
+      reclaimTerminalInputOnWindowFocusRef.current = null
+      const panel = panelRef.current
+      const active = document.activeElement
+      if (
+        panel &&
+        active instanceof HTMLElement &&
+        panel.contains(active) &&
+        isFloatingWorkspaceTerminalInputTarget(active)
+      ) {
+        setFloatingTerminalInputFocusedInMain(true)
+        return
+      }
+      if ((active === null || active === document.body) && activeTerminalId) {
+        if (reclaim.helper.isConnected && panel?.contains(reclaim.helper)) {
+          // Why: TerminalPane owns exact-helper reclaim and IME refresh. Avoid
+          // racing it with a second floating-layer blur/refocus cycle.
+          return
+        }
+        // Why: only a helper that genuinely remounted while backgrounded needs
+        // tab/leaf recovery; the shared TerminalPane owner cannot reclaim it.
+        focusTerminalTabSurface(activeTerminalId, reclaim.leafId, {
+          onlyIfFocusUnclaimed: true,
+          onImeRefocusSkipped: (active) =>
+            setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(active)),
+          refreshImeContext: true
+        })
+      }
     }
 
     document.addEventListener('pointerdown', handleOutsidePointerDown, true)
     window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('focus', handleWindowFocus)
     return () => {
+      reclaimTerminalInputOnWindowFocusRef.current = null
       document.removeEventListener('pointerdown', handleOutsidePointerDown, true)
       window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('focus', handleWindowFocus)
     }
-  }, [open])
+  }, [activeTerminalId, open])
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
       return
@@ -1423,7 +1479,13 @@ export function FloatingTerminalPanel({
         commitUserBounds({ ...stagedBoundsRef.current, width: rect.width, height: rect.height })
       }}
       onFocusCapture={(event) => setFloatingTerminalInputFocused(event.target)}
-      onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
+      onBlurCapture={(event) => {
+        // Why: keep terminal-first shortcut ownership latched during the
+        // synchronous macOS IME refresh blur; refocus or its skip callback settles it.
+        if (!isTerminalImeInputContextRefreshing(event.target)) {
+          setFloatingTerminalInputFocused(event.relatedTarget)
+        }
+      }}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
       <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
@@ -1519,7 +1581,7 @@ export function FloatingTerminalPanel({
                       // atlas to corrupt) while hidden, and the resume on
                       // reopen rebuilds the renderer from scratch.
                       isVisible={isActive && open}
-                      onPtyExit={() => closeTab(tab.id)}
+                      onPtyExit={() => closeTab(tab.id, { reason: 'pty-exit' })}
                       onCloseTab={() => closeFloatingItem(tab.id)}
                     />
                   </div>

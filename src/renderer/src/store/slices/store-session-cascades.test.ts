@@ -2079,7 +2079,7 @@ describe('hydrateEditorSession', () => {
       },
       activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
       activeTabTypeByWorktree: { [wt]: 'editor' },
-      markdownFrontmatterVisible: { '/path/wt1/README.md': true }
+      markdownFrontmatterVisible: { '/path/wt1/README.md': false }
     })
 
     const s = store.getState()
@@ -2088,7 +2088,7 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[0].mode).toBe('edit')
     expect(s.openFiles[0].isDirty).toBe(false)
     expect(s.openFiles[1].isPreview).toBe(true)
-    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': true })
+    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': false })
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
   })
@@ -2167,10 +2167,46 @@ describe('hydrateEditorSession', () => {
         [FLOATING_TERMINAL_WORKTREE_ID]: filePath
       },
       activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      markdownFrontmatterVisible: { [filePath]: false }
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: false })
+  })
+
+  it('drops legacy visible=true front-matter entries so upgraded sessions fall back to the visible default', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: filePath
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      // Pre-flip sessions stored `true` for the (then non-default) visible state.
       markdownFrontmatterVisible: { [filePath]: true }
     })
 
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: true })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+    expect(fileId in store.getState().markdownFrontmatterVisible).toBe(false)
   })
 
   it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {

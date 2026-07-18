@@ -71,7 +71,7 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('42% used Fable')
   })
 
-  it('shows remaining copy without reversing consumption meter fill', async () => {
+  it('shows remaining copy and remaining meter fill', async () => {
     mocks.usagePercentageDisplay = 'remaining'
     const { InlineUsageBars } = await import('./StatusBar')
 
@@ -82,6 +82,9 @@ describe('InlineUsageBars', () => {
     expect(markup).toContain('68% left 5h')
     expect(markup).toContain('84% left wk')
     expect(markup).toContain('58% left Fable')
-    expect(markup).toContain('width:32%')
+    expect(markup).toContain('width:68%')
+    expect(markup).toContain('width:84%')
+    expect(markup).toContain('width:58%')
+    expect(markup).not.toContain('width:32%')
   })
 })

@@ -7,6 +7,19 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
+  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
+    const patch = readFileSync(
+      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
+      'utf8'
+    )
+
+    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
+    expect(patch).toContain('readonly clearModelGeneration: number')
+    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
+    expect(patch).toContain('this.clearModelGeneration++')
+    expect(patch).toContain('this._atlas._clearModelGeneration||0')
+  })
+
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
@@ -361,16 +374,27 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
-  it('lets release-cut tag a version that is already present on main', () => {
+  it('keeps release-cut version commits skill-independent and taggable on retries', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const checkoutStep = parsedWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
     const bumpStep = parsedWorkflow.jobs.cut.steps.find(
       (step) => step.name === 'Bump package.json and tag'
     )
 
+    const bumpIndex = bumpStep.run.indexOf(
+      'npm version "$VERSION" --no-git-tag-version --allow-same-version'
+    )
+    const stageIndex = bumpStep.run.indexOf('git add package.json')
+    expect(checkoutStep.with['fetch-depth']).toBe(0)
+    expect(bumpIndex).toBeGreaterThanOrEqual(0)
+    expect(stageIndex).toBeGreaterThan(bumpIndex)
+    // Why: version-only cuts must not mutate content-addressed skill artifacts.
+    expect(bumpStep.run).not.toContain('generate-skill-bundle-manifest')
+    expect(bumpStep.run).not.toContain('resources/skills')
     expect(bumpStep.run).toContain('git diff --cached --quiet')
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })
@@ -535,6 +559,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
       'terminal-raw-emoji-table-scroll-restore.spec.ts'
     )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-webgl-atlas-budget.spec.ts'
+    )
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
@@ -548,6 +575,8 @@ describe('Electron runtime package contract', () => {
       expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
     expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-webgl-atlas-budget.spec.ts')
+    expect(pullRequestPaths).toContain('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
     expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
     expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')

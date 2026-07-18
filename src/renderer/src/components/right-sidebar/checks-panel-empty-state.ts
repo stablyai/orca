@@ -1,11 +1,17 @@
 import type { HostedReviewCreationBlockedReason } from '../../../../shared/hosted-review'
+import type { PRRefreshUpstreamErrorType } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { getGitHubUnavailableEmptyStateCopy } from './github-refresh-error-copy'
 
 type PRRefreshStatus = 'queued' | 'in-flight' | 'paused' | 'error' | 'skipped' | undefined
 
 type ChecksPanelEmptyStateInput = {
   operationLabel: string | null
   prRefreshStatus: PRRefreshStatus
+  // Why: lets the error empty-state attribute a GitHub outage (5xx/network/rate
+  // limit) instead of showing generic "could not refresh" copy that reads like
+  // an Orca bug.
+  prRefreshErrorType?: PRRefreshUpstreamErrorType
   hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
   hasUpstream: boolean | undefined
   hasCurrentBranch?: boolean
@@ -52,16 +58,18 @@ export function getChecksPanelEmptyStateCopy(
   // hard refresh error still surfaces a distinct — but equally stable — message.
   if (input.hasAmbiguousGitHubHostedReview === true) {
     if (input.prRefreshStatus === 'error') {
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
-          'Could not refresh pull request'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
-          'GitHub status could not be refreshed. Existing cached data was preserved.'
-        )
-      }
+      return (
+        getGitHubUnavailableEmptyStateCopy(input.prRefreshErrorType) ?? {
+          title: translate(
+            'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
+            'Could not refresh pull request'
+          ),
+          description: translate(
+            'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
+            'GitHub status could not be refreshed. Existing cached data was preserved.'
+          )
+        }
+      )
     }
     return {
       title: translate(
@@ -113,16 +121,18 @@ export function getChecksPanelEmptyStateCopy(
 
   switch (input.prRefreshStatus) {
     case 'error':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
-          'Could not refresh pull request'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
-          'GitHub status could not be refreshed. Existing cached data was preserved.'
-        )
-      }
+      return (
+        getGitHubUnavailableEmptyStateCopy(input.prRefreshErrorType) ?? {
+          title: translate(
+            'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
+            'Could not refresh pull request'
+          ),
+          description: translate(
+            'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
+            'GitHub status could not be refreshed. Existing cached data was preserved.'
+          )
+        }
+      )
     case 'queued':
       return {
         title: translate(

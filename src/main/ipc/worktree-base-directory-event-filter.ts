@@ -11,6 +11,10 @@ type WorktreeBaseWatcherEvent = {
 export type WorktreeBaseChangeClass = {
   structureRepoIds: string[]
   gitStatusRepoIds: string[]
+  // logs/HEAD and other true head-move triggers: notify Source Control like
+  // status churn, but distinct so only these re-read head identities. An index
+  // rewrite cannot move HEAD, so it must never land here.
+  headIdentityRepoIds: string[]
 }
 
 export type WorktreeBaseWatchKind = 'base' | 'git-common'
@@ -98,15 +102,46 @@ const GIT_COMMON_PRIMARY_STATUS_FILES = new Set(['index'])
 const GIT_COMMON_LINKED_STRUCTURAL_FILES = new Set(['HEAD', 'gitdir', 'locked', 'config.worktree'])
 const GIT_COMMON_LINKED_STATUS_FILES = new Set(['index'])
 
-// `logs/HEAD` is the status-only trigger for head moves that rewrite no
+// `logs/HEAD` is the head-identity trigger for head moves that rewrite no
 // watched leaf (commit --amend, reset --soft): every ref update through a
-// checkout appends there, while `git status` churn never touches it.
+// checkout appends there, while `git status` churn never touches it. It is
+// kept separate from index churn so only these events re-read head identities.
 function isHeadLogParts(parts: string[], offset: number): boolean {
   return parts.length === offset + 2 && parts[offset] === 'logs' && parts[offset + 1] === 'HEAD'
 }
 
 function allRepoIds(target: WorktreeBaseWatchTarget): string[] {
   return [...target.repos.keys()]
+}
+
+const NO_CHANGE: WorktreeBaseChangeClass = {
+  structureRepoIds: [],
+  gitStatusRepoIds: [],
+  headIdentityRepoIds: []
+}
+
+function structuralChange(repoIds: string[]): WorktreeBaseChangeClass {
+  return {
+    structureRepoIds: repoIds,
+    gitStatusRepoIds: [],
+    headIdentityRepoIds: []
+  }
+}
+
+function gitStatusChange(repoIds: string[]): WorktreeBaseChangeClass {
+  return {
+    structureRepoIds: [],
+    gitStatusRepoIds: repoIds,
+    headIdentityRepoIds: []
+  }
+}
+
+function headIdentityChange(repoIds: string[]): WorktreeBaseChangeClass {
+  return {
+    structureRepoIds: [],
+    gitStatusRepoIds: [],
+    headIdentityRepoIds: repoIds
+  }
 }
 
 // Why: Git records linked worktrees under the common dir's `worktrees`
@@ -117,54 +152,49 @@ function classifyGitCommonEvent(
 ): WorktreeBaseChangeClass {
   const parts = pathRelativeToWorktreeWatchRoot(target.path, event.path)
   if (!parts) {
-    return { structureRepoIds: [], gitStatusRepoIds: [] }
+    return NO_CHANGE
   }
   const repoIds = allRepoIds(target)
   if (parts.length === 1) {
     if (parts[0] === 'worktrees') {
-      return { structureRepoIds: repoIds, gitStatusRepoIds: [] }
+      return structuralChange(repoIds)
     }
     if (GIT_COMMON_PRIMARY_STRUCTURAL_FILES.has(parts[0])) {
-      return { structureRepoIds: repoIds, gitStatusRepoIds: [] }
+      return structuralChange(repoIds)
     }
     if (GIT_COMMON_PRIMARY_STATUS_FILES.has(parts[0])) {
-      return { structureRepoIds: [], gitStatusRepoIds: repoIds }
+      return gitStatusChange(repoIds)
     }
-    return { structureRepoIds: [], gitStatusRepoIds: [] }
+    return NO_CHANGE
   }
   if (parts[0] !== 'worktrees') {
     if (isHeadLogParts(parts, 0)) {
-      return { structureRepoIds: [], gitStatusRepoIds: repoIds }
+      return headIdentityChange(repoIds)
     }
-    return { structureRepoIds: [], gitStatusRepoIds: [] }
+    return NO_CHANGE
   }
   if (parts.length === 2) {
-    return event.type === 'update'
-      ? { structureRepoIds: [], gitStatusRepoIds: [] }
-      : { structureRepoIds: repoIds, gitStatusRepoIds: [] }
+    return event.type === 'update' ? NO_CHANGE : structuralChange(repoIds)
   }
   if (parts.length === 3) {
     if (GIT_COMMON_LINKED_STRUCTURAL_FILES.has(parts[2])) {
-      return { structureRepoIds: repoIds, gitStatusRepoIds: [] }
+      return structuralChange(repoIds)
     }
     if (GIT_COMMON_LINKED_STATUS_FILES.has(parts[2])) {
-      return { structureRepoIds: [], gitStatusRepoIds: repoIds }
+      return gitStatusChange(repoIds)
     }
   }
   if (isHeadLogParts(parts, 2)) {
-    return { structureRepoIds: [], gitStatusRepoIds: repoIds }
+    return headIdentityChange(repoIds)
   }
-  return { structureRepoIds: [], gitStatusRepoIds: [] }
+  return NO_CHANGE
 }
 
 function classifyBaseEvent(
   target: WorktreeBaseWatchTarget,
   event: WorktreeBaseWatcherEvent
 ): WorktreeBaseChangeClass {
-  return {
-    structureRepoIds: matchingBaseRepoIds(target, event.path, event.type),
-    gitStatusRepoIds: []
-  }
+  return structuralChange(matchingBaseRepoIds(target, event.path, event.type))
 }
 
 export function classifyWorktreeBaseChange(

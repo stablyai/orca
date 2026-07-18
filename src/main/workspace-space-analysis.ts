@@ -850,9 +850,12 @@ async function scanRepo(
     }
   }
 
-  const worktrees = listed.worktrees.map((gitWorktree) =>
-    mergeForSpaceScan(repo, gitWorktree, store)
-  )
+  // Why: a prunable registration has no directory to size or reclaim (issue
+  // #8389); it would only render a dead "Missing" row with no available
+  // action. Removal flows list worktrees separately and still see it.
+  const worktrees = listed.worktrees
+    .filter((gitWorktree) => !gitWorktree.prunable)
+    .map((gitWorktree) => mergeForSpaceScan(repo, gitWorktree, store))
   reportProgress(
     progress,
     { totalWorktreeCount: progress.totalWorktreeCount + worktrees.length },

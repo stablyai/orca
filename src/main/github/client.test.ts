@@ -926,7 +926,11 @@ describe('getPRForBranch', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({
       kind: 'found',
-      pr: { number: 6012, confirmedContainedHeadOid: 'cccc3333cccc3333' }
+      pr: {
+        number: 6012,
+        headRefName: 'fix-hibernation-wake',
+        confirmedContainedHeadOid: 'cccc3333cccc3333'
+      }
     })
   })
 
@@ -1390,6 +1394,23 @@ describe('getPRForBranch', () => {
     expect(outcome).toMatchObject({
       kind: 'upstream-error',
       errorType: 'network'
+    })
+  })
+
+  it('reports a GitHub server error when fallback branch discovery receives 5xx responses', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: null
+    })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+
+    expect(outcome).toMatchObject({
+      kind: 'upstream-error',
+      errorType: 'server_error'
     })
   })
 

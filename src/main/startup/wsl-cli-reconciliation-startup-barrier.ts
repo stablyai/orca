@@ -5,7 +5,7 @@ type WslCliReconciliationStartupBarrierOptions = {
 }
 
 /**
- * Briefly gates restored terminals while managed WSL registrations reconcile.
+ * Briefly gates terminal startup while managed WSL registrations reconcile.
  */
 export function createWslCliReconciliationStartupBarrier(
   reconciliation: Promise<unknown>,
@@ -22,8 +22,8 @@ export function createWslCliReconciliationStartupBarrier(
       }
     })
 
-  // Why: reconciliation may outlive a slow or unavailable WSL distro; restored
-  // terminals should wait briefly without turning WSL discovery into an app hang.
+  // Why: reconciliation may outlive a slow or unavailable WSL distro; terminal
+  // startup should wait briefly without turning WSL discovery into an app hang.
   return Promise.race([
     settled,
     new Promise<void>((resolve) => {

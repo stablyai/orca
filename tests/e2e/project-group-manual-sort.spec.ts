@@ -300,7 +300,7 @@ test.describe('Project Group manual sorting', () => {
       .toEqual([projects.alphaId, projects.charlieId, projects.bravoId])
   })
 
-  test('dropping a project over another project body does not reorder projects', async ({
+  test('dropping a project over another project body snaps to that section boundary', async ({
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
@@ -314,6 +314,10 @@ test.describe('Project Group manual sorting', () => {
       })
       .toEqual([projects.alphaId, projects.bravoId, projects.charlieId])
 
+    // Dragging alpha into bravo's expanded body drops the pointer 32px below
+    // bravo's header. Both nearest boundaries (bravo's section bottom and
+    // charlie's top) map to the slot after bravo, so alpha lands between bravo
+    // and charlie deterministically regardless of the exact section height.
     await dragProjectIntoProjectBody({
       page: orcaPage,
       draggedProjectId: projects.alphaId,
@@ -323,9 +327,9 @@ test.describe('Project Group manual sorting', () => {
     await expect
       .poll(() => getProjectHeaderOrder(orcaPage, projects), {
         timeout: 12_000,
-        message: 'Dropping on a project body should not persist a project reorder'
+        message: 'Dropping into a project body should snap to the nearest boundary slot'
       })
-      .toEqual([projects.alphaId, projects.bravoId, projects.charlieId])
+      .toEqual([projects.bravoId, projects.alphaId, projects.charlieId])
   })
 
   test('dragging a duplicate-ranked Project Group header reorders the visible headers', async ({

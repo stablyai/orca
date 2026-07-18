@@ -285,8 +285,12 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // Why: calling window.api.repos.add() goes through the same code path as
     // the "Add Project" UI flow, ensuring worktrees are fetched and the session
     // initializes properly.
-    await page.evaluate(async (repoPath) => {
-      await window.api.repos.add({ path: repoPath })
+    const seededRepoId = await page.evaluate(async (repoPath) => {
+      const result = await window.api.repos.add({ path: repoPath })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      return result.repo.id
     }, repoPath)
 
     // Fetch repos in the renderer store so it picks up the new repo, then opt
@@ -300,13 +304,13 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await playwrightExpect
       .poll(
         () =>
-          page.evaluate(async (repoPath) => {
+          page.evaluate(async (repoId) => {
             const store = window.__store
             if (!store) {
               return false
             }
             await store.getState().fetchRepos()
-            const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+            const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
             if (!repo) {
               return false
             }
@@ -314,7 +318,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
             // repos hide those by default after the visibility rollout.
             await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
             return true
-          }, repoPath),
+          }, seededRepoId),
         {
           timeout: 30_000,
           message: `Expected e2e repo to be loaded: ${repoPath}`
@@ -322,21 +326,18 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       )
       .toBe(true)
 
-    // Best-effort fetch of every repo's worktrees. Why: the renderer can still
+    // Best-effort fetch of the seeded repo's worktrees. Why: the renderer can still
     // re-navigate during initial hydration and destroy the execution context
     // mid-evaluate; the authoritative seeded-worktree poll below is the real wait,
     // so swallow a hydration-reload failure here instead of failing setup.
     await page
-      .evaluate(async () => {
+      .evaluate(async (repoId) => {
         const store = window.__store
         if (!store) {
           return
         }
-        const repos = store.getState().repos
-        for (const repo of repos) {
-          await store.getState().fetchWorktrees(repo.id)
-        }
-      })
+        await store.getState().fetchWorktrees(repoId)
+      }, seededRepoId)
       .catch(() => false)
 
     // Why: parallel specs mutate real git worktrees in the shared fixture repo.
@@ -345,18 +346,14 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await playwrightExpect
       .poll(
         () =>
-          page.evaluate(async (repoPath) => {
+          page.evaluate(async (repoId) => {
             const store = window.__store
             if (!store) {
               return 0
             }
-            const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
-            if (!repo) {
-              return 0
-            }
-            await store.getState().fetchWorktrees(repo.id)
-            return store.getState().worktreesByRepo[repo.id]?.length ?? 0
-          }, repoPath),
+            await store.getState().fetchWorktrees(repoId)
+            return store.getState().worktreesByRepo[repoId]?.length ?? 0
+          }, seededRepoId),
         {
           timeout: 30_000,
           message: 'seeded e2e worktrees did not load'
@@ -378,21 +375,22 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // Why: workspaceSessionReady restoration can overwrite activeWorktreeId
     // after earlier setup calls. Selecting it here ensures every test starts on
     // the seeded repo instead of the "Select a worktree" empty state.
-    await page.evaluate((repoPath: string) => {
+    await page.evaluate((repoId: string) => {
       const store = window.__store
       if (!store) {
         return
       }
 
       const state = store.getState()
-      const allWorktrees = Object.values(state.worktreesByRepo).flat()
-      const testWorktree = allWorktrees.find(
-        (worktree) => worktree.path === repoPath || worktree.path.startsWith(repoPath)
+      // Why: provider-returned identity is stable across Windows path casing
+      // and separator normalization, unlike comparing renderer path strings.
+      const testWorktree = state.worktreesByRepo[repoId]?.find(
+        (worktree) => worktree.isMainWorktree
       )
       if (testWorktree) {
         state.setActiveWorktree(testWorktree.id)
       }
-    }, repoPath)
+    }, seededRepoId)
 
     // Best-effort seed of a baseline terminal tab when a fresh isolated
     // profile has none yet.

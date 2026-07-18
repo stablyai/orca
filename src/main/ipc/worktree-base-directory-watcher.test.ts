@@ -116,7 +116,10 @@ describe('worktree base directory watcher', () => {
 
     emit(WORKTREE_ROOT, [
       { type: 'create', path: join(WORKTREE_ROOT, 'project', 'external-5104') },
-      { type: 'create', path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git') }
+      {
+        type: 'create',
+        path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git')
+      }
     ])
 
     await vi.advanceTimersByTimeAsync(300)
@@ -133,7 +136,10 @@ describe('worktree base directory watcher', () => {
     )
 
     emit(WORKTREE_ROOT, [
-      { type: 'create', path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git') }
+      {
+        type: 'create',
+        path: join(WORKTREE_ROOT, 'project', 'external-5104', '.git')
+      }
     ])
     destroyed = true
     await vi.advanceTimersByTimeAsync(300)
@@ -145,7 +151,10 @@ describe('worktree base directory watcher', () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
 
     emit(WORKTREE_ROOT, [
-      { type: 'update', path: join(WORKTREE_ROOT, 'project', 'existing', 'src', 'file.ts') }
+      {
+        type: 'update',
+        path: join(WORKTREE_ROOT, 'project', 'existing', 'src', 'file.ts')
+      }
     ])
     await vi.advanceTimersByTimeAsync(300)
 
@@ -156,7 +165,10 @@ describe('worktree base directory watcher', () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
 
     emit(PROJECT_GIT_COMMON_DIR, [
-      { type: 'create', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'gitdir') }
+      {
+        type: 'create',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'gitdir')
+      }
     ])
     await vi.advanceTimersByTimeAsync(300)
 
@@ -167,9 +179,18 @@ describe('worktree base directory watcher', () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
 
     emit(PROJECT_GIT_COMMON_DIR, [
-      { type: 'create', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index') },
-      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index') },
-      { type: 'delete', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index') }
+      {
+        type: 'create',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index')
+      },
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index')
+      },
+      {
+        type: 'delete',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index')
+      }
     ])
     await vi.advanceTimersByTimeAsync(300)
 
@@ -182,8 +203,14 @@ describe('worktree base directory watcher', () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
 
     emit(PROJECT_GIT_COMMON_DIR, [
-      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'HEAD') },
-      { type: 'create', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'locked') }
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'HEAD')
+      },
+      {
+        type: 'create',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'locked')
+      }
     ])
     await vi.advanceTimersByTimeAsync(300)
 
@@ -192,17 +219,25 @@ describe('worktree base directory watcher', () => {
     expect(notifyWorktreeGitStatusMetadataChanged).not.toHaveBeenCalled()
   })
 
-  it('emits head identities for status-only head moves without structural fanout', async () => {
+  it('emits head identities for a linked reflog head move without structural fanout', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
     vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
-      { worktreePath: linkedWorktree, head: 'aaa111', branch: 'refs/heads/feature' }
+      {
+        worktreePath: linkedWorktree,
+        head: 'aaa111',
+        branch: 'refs/heads/feature'
+      }
     ])
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
     await vi.advanceTimersByTimeAsync(0)
 
     // External commit --amend: only logs/HEAD moves, no index write.
     vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
-      { worktreePath: linkedWorktree, head: 'bbb222', branch: 'refs/heads/feature' }
+      {
+        worktreePath: linkedWorktree,
+        head: 'bbb222',
+        branch: 'refs/heads/feature'
+      }
     ])
     emit(PROJECT_GIT_COMMON_DIR, [
       {
@@ -217,50 +252,181 @@ describe('worktree base directory watcher', () => {
     expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
     expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledTimes(1)
     expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
-      { worktreePath: linkedWorktree, head: 'bbb222', branch: 'refs/heads/feature' }
+      {
+        worktreePath: linkedWorktree,
+        head: 'bbb222',
+        branch: 'refs/heads/feature'
+      }
     ])
   })
 
-  it('does not emit head identities when a status-only burst leaves heads unchanged', async () => {
+  it('makes zero head-identity reads on an index-only burst across linked and primary checkouts', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
     vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
-      { worktreePath: linkedWorktree, head: 'aaa111', branch: 'refs/heads/feature' }
+      {
+        worktreePath: linkedWorktree,
+        head: 'aaa111',
+        branch: 'refs/heads/feature'
+      }
     ])
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
     await vi.advanceTimersByTimeAsync(0)
+    // Subscribe baselines heads once; the index burst must add no further reads.
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
 
     emit(PROJECT_GIT_COMMON_DIR, [
-      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index') }
+      {
+        type: 'create',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index')
+      },
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index')
+      },
+      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'index') }
     ])
     await vi.advanceTimersByTimeAsync(300)
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
+    // An index rewrite cannot move HEAD, so the linked-worktree scan is skipped.
+    expect(readGitCommonHeadIdentities).not.toHaveBeenCalled()
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
+    // Source Control still refreshes for the status churn, coalesced to one call.
+    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
+    expect(notifyWorktreesChanged).not.toHaveBeenCalled()
+  })
+
+  it('emits head identities for a primary-checkout reflog head move', async () => {
+    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+      { worktreePath: PROJECT_ROOT, head: 'aaa111', branch: 'refs/heads/main' }
+    ])
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    await vi.advanceTimersByTimeAsync(0)
+
+    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+      { worktreePath: PROJECT_ROOT, head: 'bbb222', branch: 'refs/heads/main' }
+    ])
+    emit(PROJECT_GIT_COMMON_DIR, [
+      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'logs', 'HEAD') }
+    ])
+    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(notifyWorktreesChanged).not.toHaveBeenCalled()
+    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1', [
+      {
+        worktreePath: PROJECT_ROOT,
+        head: 'bbb222',
+        branch: 'refs/heads/main'
+      }
+    ])
+  })
+
+  it('coalesces an index and reflog burst into one head read and one status refresh', async () => {
+    const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
+    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+      {
+        worktreePath: linkedWorktree,
+        head: 'aaa111',
+        branch: 'refs/heads/feature'
+      }
+    ])
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    await vi.advanceTimersByTimeAsync(0)
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+
+    // reset --soft rewrites the index and appends logs/HEAD in the same burst.
+    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+      {
+        worktreePath: linkedWorktree,
+        head: 'bbb222',
+        branch: 'refs/heads/feature'
+      }
+    ])
+    emit(PROJECT_GIT_COMMON_DIR, [
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index')
+      },
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
+      }
+    ])
+    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(readGitCommonHeadIdentities).toHaveBeenCalledTimes(1)
+    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
+    expect(notifyWorktreeHeadIdentitiesChanged).toHaveBeenCalledTimes(1)
+    expect(notifyWorktreesChanged).not.toHaveBeenCalled()
+  })
+
+  it('debounces successive reflog events into a single head read', async () => {
+    const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
+    vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
+      {
+        worktreePath: linkedWorktree,
+        head: 'aaa111',
+        branch: 'refs/heads/feature'
+      }
+    ])
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    await vi.advanceTimersByTimeAsync(0)
+    vi.mocked(readGitCommonHeadIdentities).mockClear()
+
+    const reflog = {
+      type: 'update' as const,
+      path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
+    }
+    emit(PROJECT_GIT_COMMON_DIR, [reflog])
+    // Second burst arrives before the debounce window elapses and resets it.
+    await vi.advanceTimersByTimeAsync(100)
+    emit(PROJECT_GIT_COMMON_DIR, [reflog])
+    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(readGitCommonHeadIdentities).toHaveBeenCalledTimes(1)
+    expect(notifyWorktreeGitStatusMetadataChanged).toHaveBeenCalledTimes(1)
   })
 
   it('re-baselines head identities silently on structural notifications', async () => {
     const linkedWorktree = absolutePath('workspace', 'worktrees', 'project', 'external-5104')
     vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
-      { worktreePath: linkedWorktree, head: 'aaa111', branch: 'refs/heads/feature' }
+      {
+        worktreePath: linkedWorktree,
+        head: 'aaa111',
+        branch: 'refs/heads/feature'
+      }
     ])
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
     await vi.advanceTimersByTimeAsync(0)
 
     // Branch switch: structural path owns the refresh via the full listing.
     vi.mocked(readGitCommonHeadIdentities).mockResolvedValue([
-      { worktreePath: linkedWorktree, head: 'ccc333', branch: 'refs/heads/other' }
+      {
+        worktreePath: linkedWorktree,
+        head: 'ccc333',
+        branch: 'refs/heads/other'
+      }
     ])
     emit(PROJECT_GIT_COMMON_DIR, [
-      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'HEAD') }
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'HEAD')
+      }
     ])
     await vi.advanceTimersByTimeAsync(300)
     await vi.advanceTimersByTimeAsync(0)
     expect(notifyWorktreeHeadIdentitiesChanged).not.toHaveBeenCalled()
 
-    // A later status-only event diffs against the re-baselined heads.
+    // A later reflog event diffs against the re-baselined heads, so an
+    // unchanged head is not re-reported.
     emit(PROJECT_GIT_COMMON_DIR, [
-      { type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'index') }
+      {
+        type: 'update',
+        path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
+      }
     ])
     await vi.advanceTimersByTimeAsync(300)
     await vi.advanceTimersByTimeAsync(0)

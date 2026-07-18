@@ -495,7 +495,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle: params.to ?? 'worker',
-          devMode: params.devMode
+          devMode: params.devMode,
+          ...(params.to
+            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
+            : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
@@ -540,7 +543,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
         workerHandle: to,
-        devMode: params.devMode
+        devMode: params.devMode,
+        cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
       })
 
       let injected = false
@@ -583,6 +587,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
         }
+        const workerHandle = ctx?.assignee_handle ?? 'worker'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           // Why: prefer the existing dispatch context's id if we have one
@@ -591,8 +596,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           dispatchId: ctx?.id ?? 'ctx_preview',
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: ctx?.assignee_handle ?? 'worker',
-          devMode: params.devMode
+          workerHandle,
+          devMode: params.devMode,
+          ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })
         return { dispatch: ctx ?? null, preamble }
       }

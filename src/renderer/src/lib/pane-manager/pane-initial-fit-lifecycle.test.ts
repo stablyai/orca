@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { disposePane } from './pane-lifecycle'
+import { restoreScrollStateAfterFit } from './pane-scroll'
 
 function createPane(pendingInitialFitRafId: number | null): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
@@ -53,5 +54,32 @@ describe('pane initial fit lifecycle', () => {
     expect(cancelAnimationFrame).toHaveBeenCalledWith(17)
     expect(pane.pendingInitialFitRafId).toBeNull()
     expect(panes.has(pane.id)).toBe(false)
+  })
+
+  it('cancels pending fit scroll restoration before terminal disposal', () => {
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 23)
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+    const pane = createPane(null)
+    const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
+
+    restoreScrollStateAfterFit(
+      pane.terminal,
+      {
+        bufferType: 'normal',
+        wasAtBottom: false,
+        viewportY: 42,
+        baseY: 100,
+        firstVisibleLineMarker: marker as never
+      },
+      { onRestored: vi.fn(), shouldRestore: () => true }
+    )
+    disposePane(pane, new Map([[pane.id, pane]]))
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(23)
+    expect(marker.dispose).toHaveBeenCalledTimes(1)
   })
 })

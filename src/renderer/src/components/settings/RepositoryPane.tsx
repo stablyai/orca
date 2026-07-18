@@ -7,6 +7,7 @@ import type {
   RepoHookSettings
 } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
@@ -47,7 +48,11 @@ type RepositoryPaneProps = {
   hasHooksFile: boolean
   hooksInspectionReady: boolean
   mayNeedUpdate: boolean
-  updateRepo: (repoId: string, updates: RepositoryPaneRepoUpdate) => void
+  updateRepo: (
+    repoId: string,
+    updates: RepositoryPaneRepoUpdate,
+    options?: { hostId?: ExecutionHostId }
+  ) => void
   removeProject: (repoId: string) => void
   project?: Project | null
   isLocalWindowsProject?: boolean
@@ -76,6 +81,16 @@ export function RepositoryPane({
   updateProject
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
+  // Why: this pane renders the switcher-selected host's repo row. Bind every
+  // edit to that host so identity/host-specific writes land on the selected
+  // host, not findRepoForHost's focused-host fallback (the same-id/self-pair
+  // case where local and a runtime share one repo id).
+  const selectedHostId = getRepoExecutionHostId(repo)
+  const updateSelectedRepo = useCallback(
+    (repoId: string, updates: RepositoryPaneRepoUpdate) =>
+      updateRepo(repoId, updates, { hostId: selectedHostId }),
+    [updateRepo, selectedHostId]
+  )
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const settings = useAppStore((state) => state.settings)
   const runtimeSessionSummary = useAppStore(
@@ -119,7 +134,7 @@ export function RepositoryPane({
   }
 
   const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
-    updateRepo(repo.id, {
+    updateSelectedRepo(repo.id, {
       hookSettings: nextSettings
     })
   }
@@ -229,8 +244,8 @@ export function RepositoryPane({
               'Remove Project'
             )}
             description={translate(
-              'auto.components.settings.RepositoryPane.170624bdfb',
-              'Remove this project from Orca.'
+              'auto.components.settings.RepositoryPane.removeProjectAllHosts',
+              'Remove this project from Orca on all configured hosts.'
             )}
             keywords={[repo.displayName, 'delete', 'project', 'repository']}
             className="absolute top-0 right-0 z-10 w-auto max-w-none"
@@ -273,7 +288,7 @@ export function RepositoryPane({
             id={`repo-display-name-${repo.id}`}
             repoId={repo.id}
             storeValue={repo.displayName}
-            onTextChange={(text) => updateRepo(repo.id, { displayName: text })}
+            onTextChange={(text) => updateSelectedRepo(repo.id, { displayName: text })}
             className="h-9 text-sm"
           />
         </SearchableSetting>
@@ -298,7 +313,7 @@ export function RepositoryPane({
           id={getRepositoryIconSectionId(repo.id)}
           forceVisible={forceFullPaneForRepoMatch}
         >
-          <RepositoryIconPicker repo={repo} updateRepo={updateRepo} />
+          <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
 
         {!isFolder ? (
@@ -327,14 +342,14 @@ export function RepositoryPane({
 
             <RepositoryForkSyncSection
               repo={repo}
-              updateRepo={updateRepo}
+              updateRepo={updateSelectedRepo}
               forceVisible={forceFullPaneForRepoMatch}
             />
 
             <RepositoryWorktreeDefaultsSection
               repo={repo}
               settings={settings}
-              updateRepo={updateRepo}
+              updateRepo={updateSelectedRepo}
               forceVisible={forceFullPaneForRepoMatch}
             />
           </>
@@ -347,13 +362,13 @@ export function RepositoryPane({
       <RepositorySourceControlAiSection
         key="source-control-ai"
         repo={repo}
-        updateRepo={updateRepo}
+        updateRepo={updateSelectedRepo}
       />
     ) : null,
     !isFolder &&
     !repo.connectionId &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, symlinkEntries)) ? (
-      <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateRepo} />
+      <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateSelectedRepo} />
     ) : null,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sparsePresetEntries)) ? (
