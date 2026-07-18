@@ -14,8 +14,13 @@ export const NIX_TEXTMATE_SCOPE = 'source.nix'
 const NIX_WORD_PATTERN =
   /(-?\d*\.\d\w*)|((~|[^`~!@#%^&*()=+[{\]}\\|;:'",<>/?\s]+)\/[^`~!@#%^&*()=+[{\]}\\|;:'",<>?\s]+)|([^`~!@#%^&*()=+[{\]}\\|;:'",.<>/?\s]+)/g
 
-// Why: the configuration is a factory because onEnterRules needs the runtime
-// monaco.languages.IndentAction enum, which type-only imports cannot provide.
+/**
+ * Build the Monaco language configuration for Nix (comments, brackets,
+ * auto-closing pairs, word pattern, indentation rules).
+ *
+ * Why a factory: onEnterRules needs the runtime monaco.languages.IndentAction
+ * enum, which type-only imports cannot provide.
+ */
 export function createNixLanguageConfiguration(
   monaco: MonacoModule
 ): Monaco.languages.LanguageConfiguration {
@@ -91,6 +96,10 @@ export function createNixLanguageConfiguration(
   }
 }
 
+/**
+ * Lazily load the vendored Nix TextMate grammar for the `source.nix` scope;
+ * returns null for any other scope so the registry falls through.
+ */
 export async function loadNixTextMateGrammar(scopeName: string): Promise<IRawGrammar | null> {
   if (scopeName !== NIX_TEXTMATE_SCOPE) {
     return null
@@ -102,6 +111,10 @@ export async function loadNixTextMateGrammar(scopeName: string): Promise<IRawGra
   return grammarModule.default as unknown as IRawGrammar
 }
 
+/**
+ * Register the `nix` language with Monaco: `.nix` extension mapping, editor
+ * configuration, and the TextMate-backed tokenizer.
+ */
 export function registerNixLanguage(monaco: MonacoModule): void {
   registerTextMateLanguage(monaco, {
     language: {
