@@ -274,6 +274,7 @@ import { useHostHeaderDrag } from './host-header-drag'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
+import { ActiveProjectGitChanges } from './ActiveProjectGitChanges'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey, getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
@@ -4162,6 +4163,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const isRepoHeader = groupBy === 'repo' && row.repo !== undefined
               const isProjectGroupHeader = groupBy === 'repo' && row.projectGroup !== undefined
               const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
+              const activeProjectWorktreeId =
+                projectIdForHeader &&
+                activeWorktreeId &&
+                worktreeMap.get(activeWorktreeId)?.repoId === projectIdForHeader
+                  ? activeWorktreeId
+                  : null
               const projectGroupIdForHeader =
                 isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
                   ? row.projectGroup.id
@@ -4399,6 +4406,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
                           {row.label}
                         </div>
+                        <ActiveProjectGitChanges worktreeId={activeProjectWorktreeId} />
                         <RepoForkIndicator upstream={row.repo?.upstream} />
                         <FolderPathStatusIndicator status={projectGroupPathStatus} />
                       </div>
