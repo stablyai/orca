@@ -1,9 +1,19 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync
+} from 'node:fs'
+import { dirname, join } from 'node:path'
 
 export type ServeSimRuntimeMaterializerOptions = {
   bundledPackageDir: string
+  bundledNodeModulesDir?: string
   targetRootDir: string
   version: string
   clearQuarantine?: (dir: string) => void
@@ -13,6 +23,40 @@ const EXECUTABLE_RELATIVE_PATHS = [
   join('bin', 'serve-sim-bin'),
   join('dist', 'simcam', 'serve-sim-camera-helper')
 ]
+
+function packagePath(nodeModulesDir: string, packageName: string): string {
+  return join(nodeModulesDir, ...packageName.split('/'))
+}
+
+function readRuntimeDependencyNames(packageDir: string): string[] {
+  const packageJson = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+  return Object.keys(packageJson.dependencies ?? {})
+}
+
+function copyRuntimeDependencyClosure(
+  dependencyNames: string[],
+  bundledNodeModulesDir: string,
+  targetNodeModulesDir: string
+): void {
+  const copied = new Set<string>()
+  const copyDependency = (packageName: string): void => {
+    if (copied.has(packageName)) {
+      return
+    }
+    copied.add(packageName)
+    const sourceDir = packagePath(bundledNodeModulesDir, packageName)
+    const targetDir = packagePath(targetNodeModulesDir, packageName)
+    const dependencies = readRuntimeDependencyNames(sourceDir)
+    mkdirSync(dirname(targetDir), { recursive: true })
+    cpSync(sourceDir, targetDir, { recursive: true })
+    for (const dependencyName of dependencies) {
+      copyDependency(dependencyName)
+    }
+  }
+  for (const dependencyName of dependencyNames) {
+    copyDependency(dependencyName)
+  }
+}
 
 function defaultClearQuarantine(dir: string): void {
   if (process.platform !== 'darwin') {
@@ -56,7 +100,7 @@ function pruneStaleServeSimRuntimes(targetRootDir: string, keepVersion: string):
 export function materializeServeSimRuntime(
   options: ServeSimRuntimeMaterializerOptions
 ): string | null {
-  const { bundledPackageDir, targetRootDir, version } = options
+  const { bundledNodeModulesDir, bundledPackageDir, targetRootDir, version } = options
   const clearQuarantine = options.clearQuarantine ?? defaultClearQuarantine
   const targetDir = join(targetRootDir, version)
   const entryPath = join(targetDir, 'dist', 'serve-sim.js')
@@ -70,6 +114,15 @@ export function materializeServeSimRuntime(
     rmSync(stagingDir, { recursive: true, force: true })
     rmSync(targetDir, { recursive: true, force: true })
     cpSync(bundledPackageDir, stagingDir, { recursive: true })
+    if (bundledNodeModulesDir) {
+      // Why: serve-sim is executed from this relocated ESM package, so Node cannot
+      // resolve dependencies that remain beside the original app-bundle copy.
+      copyRuntimeDependencyClosure(
+        readRuntimeDependencyNames(bundledPackageDir),
+        bundledNodeModulesDir,
+        join(stagingDir, 'node_modules')
+      )
+    }
     for (const relativePath of EXECUTABLE_RELATIVE_PATHS) {
       const executablePath = join(stagingDir, relativePath)
       if (existsSync(executablePath)) {

@@ -19,6 +19,7 @@ async function createBundledServeSimPackage(root: string): Promise<string> {
     mode: 0o644
   })
   await writeFile(join(packageDir, 'bin', 'serve-sim-bin'), 'bin', { mode: 0o644 })
+  await writeFile(join(packageDir, 'package.json'), JSON.stringify({ dependencies: {} }))
   return packageDir
 }
 
@@ -81,6 +82,41 @@ describe('materializeServeSimRuntime', () => {
 
     expect(second).toBe(first)
     expect(clearQuarantine).toHaveBeenCalledTimes(1)
+  })
+
+  it('copies the runtime dependency closure beside the relocated ESM entry', async () => {
+    const root = await createRoot()
+    const bundledPackageDir = await createBundledServeSimPackage(root)
+    const bundledNodeModulesDir = join(root, 'node_modules')
+    await writeFile(
+      join(bundledPackageDir, 'package.json'),
+      JSON.stringify({ dependencies: { ws: '^8.0.0' } })
+    )
+    await mkdir(join(bundledNodeModulesDir, 'ws'), { recursive: true })
+    await writeFile(
+      join(bundledNodeModulesDir, 'ws', 'package.json'),
+      JSON.stringify({ dependencies: { transitive: '^1.0.0' } })
+    )
+    await mkdir(join(bundledNodeModulesDir, 'transitive'), { recursive: true })
+    await writeFile(
+      join(bundledNodeModulesDir, 'transitive', 'package.json'),
+      JSON.stringify({ dependencies: {} })
+    )
+
+    const materialized = materializeServeSimRuntime({
+      bundledPackageDir,
+      bundledNodeModulesDir,
+      targetRootDir: join(root, 'runtime'),
+      version: '1.2.3',
+      clearQuarantine: () => {}
+    })
+
+    await expect(
+      stat(join(materialized!, 'node_modules', 'ws', 'package.json'))
+    ).resolves.toBeDefined()
+    await expect(
+      stat(join(materialized!, 'node_modules', 'transitive', 'package.json'))
+    ).resolves.toBeDefined()
   })
 
   it('prunes runtimes left behind by older app versions', async () => {

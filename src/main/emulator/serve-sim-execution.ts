@@ -77,6 +77,7 @@ function resolveMaterializedServeSimPackageDir(bundledPackageDir: string): strin
   }
   materializedServeSimPackageDir = materializeServeSimRuntime({
     bundledPackageDir,
+    bundledNodeModulesDir: join(dirname(bundledPackageDir), 'node_modules'),
     targetRootDir: join(app.getPath('userData'), 'serve-sim-runtime'),
     version: app.getVersion()
   })
