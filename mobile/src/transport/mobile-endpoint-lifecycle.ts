@@ -2,6 +2,7 @@ import * as ExpoCrypto from 'expo-crypto'
 import type { ConnectionLogSink, HostProfile } from './types'
 import { connect } from './rpc-client'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+import { MobileRelayFallbackController } from './mobile-relay-fallback-controller'
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import {
@@ -33,21 +34,26 @@ export function startMobileEndpointLifecycle(
   let foreground = true
   let owner: EndpointOwner
 
-  const startSupervisor = async (host: HostProfile): Promise<void> => {
+  const startManagedOwner = async (host: HostProfile): Promise<void> => {
     if (stopped) {
       return
     }
-    const supervisor = createSupervisor(logical, host, onLog)
+    const supervisor = hasAuthoritativeMobileRouteOrder(host)
+      ? createSupervisor(logical, host, onLog)
+      : createRelayFallbackController(logical, host, onLog)
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
     await supervisor.start()
   }
 
-  // Why: explicit ordered hosts need one bounded route owner even without
-  // Relay; unmarked Relay hosts keep the released startup path.
-  if (initialHost.relay || hasAuthoritativeMobileRouteOrder(initialHost)) {
+  if (hasAuthoritativeMobileRouteOrder(initialHost)) {
     owner = createSupervisor(logical, initialHost, onLog)
+    void owner.start()
+  } else if (initialHost.relay) {
+    // Why: unmarked hosts must retain the released direct/Relay race and
+    // authenticated direct probe-back rather than inheriting custom order.
+    owner = createRelayFallbackController(logical, initialHost, onLog)
     void owner.start()
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
@@ -57,7 +63,7 @@ export function startMobileEndpointLifecycle(
           host,
           dependencies: { randomBytes: ExpoCrypto.getRandomBytes }
         }),
-      onUpgraded: ({ host }) => startSupervisor(host)
+      onUpgraded: ({ host }) => startManagedOwner(host)
     })
     void owner.start()
   }
@@ -72,6 +78,33 @@ export function startMobileEndpointLifecycle(
       owner.stop()
     }
   }
+}
+
+function createRelayFallbackController(
+  logical: StableLogicalRpcClient,
+  host: HostProfile,
+  onLog: ConnectionLogSink
+): MobileRelayFallbackController {
+  return new MobileRelayFallbackController(logical, host, {
+    openDirect: (endpoint) => connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openRelay: (relay, credential, confirmReqId) =>
+      connectMobileRelayRpcSession({
+        relay,
+        resumeToken: credential.token,
+        resumeCredentialVersion: credential.version,
+        resumeConfirmReqId: confirmReqId,
+        deviceToken: host.deviceToken,
+        desktopPublicKeyB64: host.publicKeyB64
+      }),
+    resolveRelay: resolveMobileRelayEndpoint,
+    readBundle: readMobileRelayCredentialBundle,
+    writeBundle: writeMobileRelayCredentialBundle,
+    saveHost,
+    now: Date.now,
+    randomBytes: ExpoCrypto.getRandomBytes,
+    setTimer: setTimeout,
+    clearTimer: clearTimeout
+  })
 }
 
 function createSupervisor(

@@ -14,6 +14,52 @@ export type MobileRelayRouteConnectionResult =
   | { ok: true; bundle: MobileRelayCredentialBundle; session: MobileRelayRpcSession }
   | { ok: false; error: Error; authenticationFailed: boolean }
 
+export function releaseInactiveMobileRelayRoute(args: {
+  logical: StableLogicalRpcClient
+  stopped: boolean
+  foreground: boolean
+}): boolean {
+  if (!args.stopped && args.foreground) {
+    return false
+  }
+  // Why: backgrounding can race a successful Relay migration; release the
+  // late splice immediately instead of leaving a billed session active.
+  if (args.logical.getActivePath() === 'relay') {
+    args.logical.suspendActiveSession()
+  }
+  return true
+}
+
+export async function keepMobileRelayRouteActive(args: {
+  result: Extract<MobileRelayRouteConnectionResult, { ok: true }>
+  logical: StableLogicalRpcClient
+  isStopped: () => boolean
+  isForeground: () => boolean
+  recordLastGood: () => Promise<void>
+  scheduleLease: (session: MobileRelayRpcSession) => void
+}): Promise<MobileRelayRouteConnectionResult> {
+  const inactive = (): MobileRelayRouteConnectionResult => ({
+    ok: false,
+    error: new Error('relay route became inactive'),
+    authenticationFailed: false
+  })
+  const releaseIfInactive = (): boolean =>
+    releaseInactiveMobileRelayRoute({
+      logical: args.logical,
+      stopped: args.isStopped(),
+      foreground: args.isForeground()
+    })
+  if (releaseIfInactive()) {
+    return inactive()
+  }
+  await args.recordLastGood()
+  if (releaseIfInactive()) {
+    return inactive()
+  }
+  args.scheduleLease(args.result.session)
+  return args.result
+}
+
 export async function openMobileRelayRoute(args: {
   relay: MobileRelayEndpoint
   bundle: MobileRelayCredentialBundle

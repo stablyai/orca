@@ -200,7 +200,11 @@ export function useMobileAdvertiseAddresses({
       )
       setSelectedAddresses(addresses)
       setCustomAddresses(nextCustoms)
-      const nextRelayIndex = Math.min(relayPreferenceIndex, addresses.length)
+      const nextRelayIndex = reconcileRelayPreferenceIndex(
+        selectedAddressesRef.current,
+        addresses,
+        relayPreferenceIndex
+      )
       selectedAddressesRef.current = addresses
       customAddressesRef.current = nextCustoms
       relayPreferenceIndexRef.current = nextRelayIndex

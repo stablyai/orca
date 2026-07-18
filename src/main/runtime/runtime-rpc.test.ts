@@ -587,6 +587,37 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('rejects unbounded pairing address inputs before creating a pending credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(
+        server.createPairingOffer({
+          addresses: Array.from({ length: 5 }, (_, index) => `192.168.1.${index + 1}`)
+        })
+      ).toEqual({ available: false })
+      expect(server.createPairingOffer({ address: 'a'.repeat(321) })).toEqual({
+        available: false
+      })
+      await expect(
+        server.createMobilePairingOffer({
+          addresses: Array.from({ length: 5 }, (_, index) => `10.0.0.${index + 1}`),
+          rotate: true
+        })
+      ).resolves.toEqual({ available: false })
+      expect(server.getDeviceRegistry()?.listDevices()).toEqual([])
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('includes a web client URL when the web bundle is served by the runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()

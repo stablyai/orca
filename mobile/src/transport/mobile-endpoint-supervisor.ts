@@ -12,7 +12,7 @@ import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bund
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import { orderedHostAccessRoutes, relayWebSocketUrl } from './mobile-access-route-order'
-import { openMobileRelayRoute } from './mobile-relay-route-connection'
+import { keepMobileRelayRouteActive, openMobileRelayRoute } from './mobile-relay-route-connection'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import type { RpcClient } from './rpc-client'
 import {
@@ -152,10 +152,14 @@ export class MobileEndpointSupervisor {
     } finally {
       this.operationInFlight = false
     }
-    const delay = forceReplacement
-      ? this.reconnectPolicy.retryDelay()
+    const replacingLiveSession = forceReplacement && this.logical.getState() === 'connected'
+    const delay = replacingLiveSession
+      ? this.reconnectPolicy.recordReplacementFailure()
       : this.reconnectPolicy.recordPassFailure(this.logical)
-    this.timers.scheduleRetry(delay, () => void this.reconnectInOrder(forceReplacement))
+    this.timers.scheduleRetry(
+      delay,
+      () => void this.reconnectInOrder(forceReplacement && this.logical.getState() === 'connected')
+    )
   }
 
   private async tryRoute(route: MobileAccessEndpoint, passDeadline: number): Promise<boolean> {
@@ -255,13 +259,19 @@ export class MobileEndpointSupervisor {
     })
     if (result.ok) {
       this.bundle = result.bundle
-      await this.recordLastGood(relayWebSocketUrl(this.host.relay))
-      this.timers.scheduleLease(
-        result.session,
-        this.dependencies.now,
-        () => void this.reconnectInOrder(true)
-      )
-      return { ok: true }
+      return keepMobileRelayRouteActive({
+        result,
+        logical: this.logical,
+        isStopped: () => this.stopped,
+        isForeground: () => this.foreground,
+        recordLastGood: () => this.recordLastGood(relayWebSocketUrl(this.host.relay!)),
+        scheduleLease: (session) =>
+          this.timers.scheduleLease(
+            session,
+            this.dependencies.now,
+            () => void this.reconnectInOrder(true)
+          )
+      })
     }
     if (result.authenticationFailed) {
       this.logical.publishRouteOwnerState('auth-failed')

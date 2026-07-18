@@ -27,7 +27,10 @@ import {
   type AuthenticatedMobileSocket,
   type MobileSocketTransportMetadata
 } from './rpc/mobile-socket-wiring'
-import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
+import {
+  MAX_PAIRING_ENDPOINT_BYTES,
+  type PairingRelay
+} from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import {
   mobileRelayMintFailureFromUnknown,
@@ -46,6 +49,7 @@ import type {
 } from '../../shared/mobile-relay-credential-contract'
 import {
   encodePairingOffer,
+  MAX_PAIRING_ENDPOINTS,
   normalizePairingEndpoints,
   PAIRING_OFFER_VERSION
 } from '../../shared/pairing'
@@ -56,6 +60,29 @@ import {
 } from '../../shared/terminal-stream-protocol'
 
 const DEFAULT_WS_PORT = 6768
+
+function hasBoundedPairingAddressInput(address: unknown, addresses: unknown): boolean {
+  if (address != null && typeof address !== 'string') {
+    return false
+  }
+  if (
+    typeof address === 'string' &&
+    Buffer.byteLength(address, 'utf8') > MAX_PAIRING_ENDPOINT_BYTES
+  ) {
+    return false
+  }
+  if (addresses == null) {
+    return true
+  }
+  if (!Array.isArray(addresses) || addresses.length > MAX_PAIRING_ENDPOINTS) {
+    return false
+  }
+  return addresses.every(
+    (candidate) =>
+      typeof candidate === 'string' &&
+      Buffer.byteLength(candidate, 'utf8') <= MAX_PAIRING_ENDPOINT_BYTES
+  )
+}
 
 type OrcaRuntimeRpcServerOptions = {
   runtime: OrcaRuntimeService
@@ -658,6 +685,14 @@ export class OrcaRuntimeRpcServer {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
     }
+    // Why: renderer/CLI inputs are untrusted; reject oversized collections
+    // before URL resolution or pending-credential mutation can amplify them.
+    if (!hasBoundedPairingAddressInput(args.address, args.addresses)) {
+      return pairingUnavailable(
+        'invalid_advertised_endpoint',
+        'Use at most four bounded pairing addresses.'
+      )
+    }
     const rawEndpoint = this.getWebSocketEndpoint()
     if (!rawEndpoint) {
       return pairingUnavailable(
@@ -783,6 +818,12 @@ export class OrcaRuntimeRpcServer {
     },
     generation: number
   ): Promise<MobilePairingOffer> {
+    if (!hasBoundedPairingAddressInput(args.address, args.addresses)) {
+      return pairingUnavailable(
+        'invalid_advertised_endpoint',
+        'Use at most four bounded pairing addresses.'
+      )
+    }
     // Why: the renderer is outside the trust boundary, so only an explicit local-only value may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
     const pending = this.deviceRegistry?.getPendingDevice('mobile')

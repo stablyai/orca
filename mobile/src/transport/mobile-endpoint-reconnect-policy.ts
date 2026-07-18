@@ -22,8 +22,13 @@ export class MobileEndpointReconnectPolicy {
   }
 
   recordPassFailure(logical: StableLogicalRpcClient): number {
-    this.attempt = Math.min(GIVE_UP_AFTER_ATTEMPTS, this.attempt + 1)
+    this.incrementAttempt()
     this.publish(logical, 'reconnecting')
+    return this.retryDelay()
+  }
+
+  recordReplacementFailure(): number {
+    this.incrementAttempt()
     return this.retryDelay()
   }
 
@@ -34,6 +39,10 @@ export class MobileEndpointReconnectPolicy {
     return RECONNECT_DELAYS_MS[
       Math.min(Math.max(0, this.attempt - 1), RECONNECT_DELAYS_MS.length - 1)
     ]!
+  }
+
+  private incrementAttempt(): void {
+    this.attempt = Math.min(GIVE_UP_AFTER_ATTEMPTS, this.attempt + 1)
   }
 
   private publish(logical: StableLogicalRpcClient, state: 'connecting' | 'reconnecting'): void {

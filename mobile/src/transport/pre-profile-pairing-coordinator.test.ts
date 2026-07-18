@@ -486,4 +486,38 @@ describe('pre-profile pairing coordinator', () => {
     expect(client.close).toHaveBeenCalledOnce()
     expect(deps.saveHost).not.toHaveBeenCalled()
   })
+
+  it('rejects at the overall deadline even when host persistence is stalled', async () => {
+    vi.useFakeTimers()
+    try {
+      let finishSave!: () => void
+      const client = fakeClient([success({ version: '1.0.0' })])
+      const deps = dependencies(client, [])
+      deps.saveHost = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSave = resolve
+          })
+      )
+      const attempt = startPreProfilePairing({
+        offer: directOffer,
+        timeoutMs: 25,
+        dependencies: deps
+      })
+
+      for (let i = 0; i < 20 && deps.saveHost.mock.calls.length === 0; i += 1) {
+        await Promise.resolve()
+      }
+      expect(deps.saveHost).toHaveBeenCalledOnce()
+      const rejected = expect(attempt.result).rejects.toThrow('mobile pairing timed out')
+      await vi.advanceTimersByTimeAsync(25)
+      await rejected
+      expect(attempt.timedOut).toBe(true)
+
+      finishSave()
+      await Promise.resolve()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

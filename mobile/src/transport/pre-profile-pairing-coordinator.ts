@@ -78,6 +78,10 @@ export function startPreProfilePairing(args: {
   let disposed = false
   let timedOut = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  let rejectDeadline!: (error: Error) => void
+  const deadline = new Promise<never>((_resolve, reject) => {
+    rejectDeadline = reject
+  })
 
   const dispose = (): void => {
     if (disposed) {
@@ -97,9 +101,10 @@ export function startPreProfilePairing(args: {
   timer = setTimeout(() => {
     timedOut = true
     dispose()
+    rejectDeadline(new Error('mobile pairing timed out'))
   }, args.timeoutMs)
 
-  const result = runPairing(
+  const operation = runPairing(
     args.offer,
     args.connectOptions,
     dependencies,
@@ -107,22 +112,18 @@ export function startPreProfilePairing(args: {
     () => disposed,
     pairingDeadlineAt
   )
-    .catch((error: unknown) => {
-      if (timedOut) {
-        throw new Error('mobile pairing timed out')
-      }
-      throw error
-    })
-    .finally(() => {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
-      for (const client of clients) {
-        client.close()
-      }
-      clients.clear()
-    })
+  // Why: closing sockets alone cannot cancel a stalled secure-store write;
+  // the caller still needs a deterministic terminal result at the deadline.
+  const result = Promise.race([operation, deadline]).finally(() => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    for (const client of clients) {
+      client.close()
+    }
+    clients.clear()
+  })
 
   return {
     result,
@@ -175,6 +176,7 @@ async function runPairing(
   assertActive(isDisposed)
 
   if (!journal) {
+    assertActive(isDisposed)
     await dependencies.saveHost(
       hostProfileFromPairingOffer({
         id: hostId,
@@ -184,6 +186,7 @@ async function runPairing(
         lastGoodEndpoint: winner.url
       })
     )
+    assertActive(isDisposed)
     return { hostId }
   }
 
@@ -196,14 +199,17 @@ async function runPairing(
     }
   }
   await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
+  assertActive(isDisposed)
   const provision = await winner.client.sendRequest('pairing.provisionRelay', {
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
+  assertActive(isDisposed)
   if (isMethodNotFound(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
+    assertActive(isDisposed)
     await dependencies.saveHost(
       hostProfileFromPairingOffer({
         id: hostId,
@@ -213,7 +219,9 @@ async function runPairing(
         lastGoodEndpoint: winner.url
       })
     )
+    assertActive(isDisposed)
     await dependencies.clearJournal(journal.metadata.journalId)
+    assertActive(isDisposed)
     return { hostId }
   }
   const installed = DeviceCredentialInstalledSchema.parse(requireSuccess(provision))
@@ -224,12 +232,14 @@ async function runPairing(
       })
     )
   )
+  assertActive(isDisposed)
   assertCommittedInstall(endpoints.installStatus, installed)
   if (!endpoints.relay) {
     throw new Error('desktop returned no relay endpoint after credential install')
   }
   assertActive(isDisposed)
   await dependencies.writeCredentialBundle(promotePairingJournalCredential({ journal, installed }))
+  assertActive(isDisposed)
   await dependencies.saveHost(
     relayHostProfileFromPairing(
       journal,
@@ -237,7 +247,9 @@ async function runPairing(
       winner.path === 'relay' ? relayWebSocketUrl(endpoints.relay) : winner.url
     )
   )
+  assertActive(isDisposed)
   await dependencies.clearJournal(journal.metadata.journalId)
+  assertActive(isDisposed)
   return { hostId }
 }
 
