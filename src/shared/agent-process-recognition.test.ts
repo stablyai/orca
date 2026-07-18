@@ -130,6 +130,33 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('recognizes the Gajae Code (gjc) foreground process', () => {
+    expect(recognizeAgentProcess('gjc')).toEqual({ agent: 'gjc', processName: 'gjc' })
+    expect(recognizeAgentProcess('/Users/dev/.bun/bin/gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.bun/bin/gjc', 'gjc')).toBe(true)
+    expect(isRecognizedAgentType('gjc')).toBe(true)
+    expect(recognizeAgentProcess('gjc-helper')).toBeNull()
+  })
+
+  it('does not recognize Gajae Code headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('gjc -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --print "review this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('gjc --resume ses_123')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine('node /Users/dev/.bun/bin/gjc --print review')
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('node /Users/dev/.bun/bin/gjc')).toEqual({
+      agent: 'gjc',
+      processName: 'gjc'
+    })
+  })
+
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',

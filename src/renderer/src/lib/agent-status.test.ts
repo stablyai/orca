@@ -903,6 +903,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('ante')).toBe('Ante')
   })
 
+  it("maps 'gjc' to 'Gajae Code'", () => {
+    expect(formatAgentTypeLabel('gjc')).toBe('Gajae Code')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -927,6 +931,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
     expect(agentTypeToIconAgent('ante')).toBe('ante')
+    expect(agentTypeToIconAgent('gjc')).toBe('gjc')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

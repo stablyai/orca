@@ -130,6 +130,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // the composed prompt after startup to keep the hosted session alive.
     promptInjectionMode: 'stdin-after-start'
   },
+  gjc: {
+    detectCmd: 'gjc',
+    launchCmd: 'gjc',
+    expectedProcess: 'gjc',
+    // Why: `gjc "<prompt>"` starts the interactive TUI with the prompt as the
+    // first message (docs: "Interactive mode with initial prompt"), so argv
+    // injection keeps the hosted session alive without a paste race.
+    promptInjectionMode: 'argv'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
