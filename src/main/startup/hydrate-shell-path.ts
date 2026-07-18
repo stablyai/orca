@@ -54,6 +54,11 @@ export function _resetHydrateShellPathCache(): void {
   queuedForced = null
 }
 
+/**
+ * Select the user's login shell used for environment hydration.
+ *
+ * @returns Configured shell, a platform default, or null on Windows.
+ */
 function pickShell(): string | null {
   if (process.platform === 'win32') {
     return null
@@ -65,6 +70,12 @@ function pickShell(): string | null {
   return process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
 }
 
+/**
+ * Parse the delimited PATH value emitted by the login shell.
+ *
+ * @param stdout Captured shell output, including possible startup banners.
+ * @returns De-duplicated PATH segments in shell resolution order.
+ */
 function parseCapturedPath(stdout: string): string[] {
   const cleaned = stdout.replace(ANSI_RE, '')
   const first = cleaned.indexOf(DELIMITER)
@@ -141,6 +152,12 @@ function buildShellCaptureCommand(): string {
   return `${pathCapture}; ${proxyCapture}`
 }
 
+/**
+ * Spawn one login shell and capture its PATH and proxy environment.
+ *
+ * @param shell Login shell executable selected for hydration.
+ * @returns Hydration result classified by success or failure reason.
+ */
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
     // Why: printing $PATH between delimiters is resilient to rc-file banners,

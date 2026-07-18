@@ -12,10 +12,23 @@ const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
 
+/**
+ * Quote one literal argument for a POSIX shell command.
+ *
+ * @param value Argument value to protect from shell expansion.
+ * @returns Single-quoted shell token with embedded quotes escaped.
+ */
 export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
+/**
+ * Bound a preflight subprocess promise even when its runtime timeout does not fire.
+ *
+ * @param command Command label included in timeout errors.
+ * @param commandPromise Subprocess result to race against the preflight timeout.
+ * @returns The subprocess result when it settles within the timeout.
+ */
 async function withPreflightTimeout<T>(command: string, commandPromise: Promise<T>): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | null = null
   try {
@@ -40,6 +53,13 @@ async function withPreflightTimeout<T>(command: string, commandPromise: Promise<
   }
 }
 
+/**
+ * Execute a local-host command with Orca's hydrated CLI environment.
+ *
+ * @param command Executable name or path.
+ * @param args Literal argv entries passed without a shell.
+ * @returns Captured stdout and stderr.
+ */
 export async function execLocalPreflightCommand(
   command: string,
   args: string[]
@@ -54,6 +74,13 @@ export async function execLocalPreflightCommand(
   return withPreflightTimeout(command, commandPromise)
 }
 
+/**
+ * Execute a preflight command inside the selected WSL distribution.
+ *
+ * @param target WSL distribution and user context.
+ * @param command POSIX command string to run in WSL.
+ * @returns Captured stdout and stderr.
+ */
 export async function execCommandInWsl(
   target: WslPreflightTarget,
   command: string
@@ -62,6 +89,13 @@ export async function execCommandInWsl(
   return withPreflightTimeout('wsl.exe', commandPromise)
 }
 
+/**
+ * Check whether a CLI can execute its version command in the selected runtime.
+ *
+ * @param command Executable name.
+ * @param wslTarget Optional WSL runtime; omitted for the local host.
+ * @returns True when the version command succeeds.
+ */
 export async function isCommandAvailable(
   command: string,
   wslTarget?: WslPreflightTarget
@@ -76,6 +110,13 @@ export async function isCommandAvailable(
   }
 }
 
+/**
+ * Check whether a CLI resolves to an absolute executable path.
+ *
+ * @param command Executable name.
+ * @param wslTarget Optional WSL runtime; omitted for the local host.
+ * @returns True when the runtime path lookup returns an absolute path.
+ */
 export async function isCommandOnPath(
   command: string,
   wslTarget?: WslPreflightTarget

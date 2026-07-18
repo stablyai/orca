@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import type { CliAuthState } from '../../../shared/cli-auth-status'
+import type { CliAuthStatus } from '../../../shared/cli-auth-status'
 import type { Repo } from '../../../shared/types'
 
 export type PreflightIssue = {
@@ -16,18 +16,31 @@ export type PreflightIssue = {
 
 export type LandingPreflightStatus = {
   git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean; authState?: CliAuthState }
+  gh: CliAuthStatus
 }
 
 export type LandingPreflightIssueOptions = {
   hasGitHubBackedProject: boolean
 }
 
+/**
+ * Determine whether the landing page represents at least one GitHub-backed project.
+ *
+ * @param repos Repositories visible to the landing page.
+ * @returns True when any projected project uses GitHub.
+ */
 export function hasGitHubBackedProject(repos: readonly Repo[]): boolean {
   const projection = projectHostSetupProjectionFromRepos(repos)
   return projection.projects.some((project) => project.providerIdentity?.provider === 'github')
 }
 
+/**
+ * Build actionable landing-page issues for Git and GitHub CLI readiness.
+ *
+ * @param status Current local preflight result.
+ * @param options Provider context used to suppress irrelevant GitHub guidance.
+ * @returns Ordered setup and connectivity issues for display.
+ */
 export function getLandingPreflightIssues(
   status: LandingPreflightStatus,
   options: LandingPreflightIssueOptions
