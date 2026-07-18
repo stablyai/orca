@@ -307,6 +307,7 @@ describe('createMainWindow', () => {
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
       invalidate: vi.fn(),
+      isDestroyed: vi.fn(() => false),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
       isDevToolsOpened: vi.fn(),

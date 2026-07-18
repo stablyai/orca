@@ -51,7 +51,9 @@ import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId 
 import { resolveWindowCloseAction } from './window-close-decision'
 
 function forceRepaint(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
+  // Why: webContents can be destroyed a beat before the BrowserWindow during
+  // close, and this runs from timers/focus events that can land in that gap.
+  if (window.isDestroyed() || window.webContents.isDestroyed()) {
     return
   }
   window.webContents.invalidate()
@@ -94,7 +96,7 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
   // signal. Invalidate only — the setSize jiggle would SIGWINCH every terminal
   // on each Cmd+Tab.
   window.on('focus', () => {
-    if (!window.isDestroyed()) {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.invalidate()
     }
   })
