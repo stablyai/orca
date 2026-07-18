@@ -104,4 +104,11 @@
 
 ## Risks
 
-- 실제 OS 키 주입은 Accessibility 제한으로 자동화하지 못했다. 제품 E2E와 패키지 확인으로 보완했으며, 원격 반영 상태는 push 뒤 다시 확인한다.
+- 실제 OS 키 주입은 Accessibility 제한으로 자동화하지 못했다. 제품 E2E와 패키지 확인으로 보완했다.
+- 두 로컬 GitHub 계정 모두 공식 저장소에는 read 권한만 있어 main 반영은 maintainer merge가 필요하다. 개인 fork에 커밋을 push하고 공식 저장소 PR #9273을 생성해 소스 유실 가능성을 제거했다.
+
+## Release / Handoff
+
+- 로컬 배포: 서명된 Orca 1.4.144-rc.4 수정본을 설치하고 재시작했으며 기존 PTY 9/9가 유지됐다.
+- 원격 배포: `beige-ian/orca`의 `fix/codex-shift-enter-durable` 브랜치에 push했고, `stablyai/orca` main 대상 PR #9273이 열려 있다.
+- 현재 PR은 merge 가능한 상태이며 GitHub 검사가 실행 중이다. 공식 main 병합은 저장소 write 권한이 있는 maintainer가 수행한다.
