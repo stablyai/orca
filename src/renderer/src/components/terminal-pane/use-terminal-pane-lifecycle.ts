@@ -907,7 +907,9 @@ export function useTerminalPaneLifecycle({
           ? installTerminalImeLinuxCandidateState(pane.terminal.element)
           : null
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
-        const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element, {
+          isMac
+        })
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {
             imeCompositionTracker.dispose()

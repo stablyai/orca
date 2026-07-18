@@ -229,6 +229,59 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it('lets plain Enter reach xterm so macOS can finalize and submit the composition', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Enter', code: 'Enter', keyCode: 13, isComposing: true }),
+        composing
+      )
+    ).toBe(false)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Enter', code: 'Enter', keyCode: 13 }),
+        composing
+      )
+    ).toBe(false)
+  })
+
+  it('keeps Process Enter and modified Enter owned by the active macOS IME', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Enter', code: 'Enter', keyCode: 229, isComposing: true }),
+        composing
+      )
+    ).toBe(true)
+    for (const modifier of ['metaKey', 'ctrlKey', 'altKey', 'shiftKey'] as const) {
+      expect(
+        shouldSuppressTerminalImeKeyboardEvent(
+          event({ key: 'Enter', code: 'Enter', keyCode: 13, [modifier]: true }),
+          composing
+        )
+      ).toBe(true)
+    }
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ type: 'keyup', key: 'Enter', code: 'Enter', keyCode: 13 }),
+        composing
+      )
+    ).toBe(true)
+  })
+
+  it('keeps unidentified Enter events owned by the active macOS IME', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Enter', code: 'Enter', keyCode: 0, isComposing: true }),
+        composing
+      )
+    ).toBe(true)
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Enter', code: 'Enter', isComposing: true }),
+        composing
+      )
+    ).toBe(true)
+  })
+
   it('does not suppress ordinary text keys solely because composition is active', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(event({ key: 'a', code: 'KeyA' }), composing)

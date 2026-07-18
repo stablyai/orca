@@ -87,6 +87,22 @@ function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
 }
 
+function shouldLetXtermFinalizeMacComposition(
+  event: XtermBypassEvent,
+  options: XtermImeKeyboardOptions
+): boolean {
+  return (
+    options.isMac &&
+    event.type === 'keydown' &&
+    event.key === 'Enter' &&
+    event.keyCode === 13 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey
+  )
+}
+
 /** Returns whether xterm must not process an IME-owned keyboard event. */
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
@@ -114,6 +130,11 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     return suppressCandidateKey
   }
   if (!isXtermHandledKeyEvent(event.type)) {
+    return false
+  }
+  // Why: xterm's CompositionHelper must see macOS plain Enter so it can emit
+  // the final Hangul before CR; Process/229 Enter remains owned by the IME.
+  if (shouldLetXtermFinalizeMacComposition(event, options)) {
     return false
   }
   // Why: IMEs own Process-key / composing keystrokes — letting xterm translate

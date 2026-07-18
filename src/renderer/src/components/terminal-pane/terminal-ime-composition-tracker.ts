@@ -19,7 +19,7 @@ export const TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS = 250
 
 export function installTerminalImeCompositionTracker(
   terminalElement: HTMLElement | null | undefined,
-  options?: { now?: () => number }
+  options?: { isMac?: boolean; now?: () => number }
 ): TerminalImeCompositionTracker {
   const now = options?.now ?? ((): number => Date.now())
   let active = false
@@ -94,12 +94,28 @@ export function installTerminalImeCompositionTracker(
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
   }
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    // Why: xterm finalizes macOS composition on plain Enter even when Chromium
+    // misses compositionend; release Orca's guard with the same exact event.
+    if (
+      options?.isMac &&
+      event.key === 'Enter' &&
+      event.keyCode === 13 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      markInactive()
+    }
+  }
 
   terminalElement.addEventListener('compositionstart', markActive, true)
   terminalElement.addEventListener('compositionupdate', updateComposition, true)
   terminalElement.addEventListener('compositionend', handleCompositionEnd, true)
   terminalElement.addEventListener('input', handleInput, true)
   terminalElement.addEventListener('blur', markInactive, true)
+  terminalElement.addEventListener('keydown', handleKeyDown, true)
 
   return {
     isActive: () => isActiveAt(now()),
@@ -110,6 +126,7 @@ export function installTerminalImeCompositionTracker(
       terminalElement.removeEventListener('compositionend', handleCompositionEnd, true)
       terminalElement.removeEventListener('input', handleInput, true)
       terminalElement.removeEventListener('blur', markInactive, true)
+      terminalElement.removeEventListener('keydown', handleKeyDown, true)
     }
   }
 }

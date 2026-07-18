@@ -3,6 +3,7 @@ import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { CDPSession, Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { waitForRestoredTerminalInputReady } from './helpers/restored-terminal-input-readiness'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -79,6 +80,8 @@ function stripTerminalControls(value: string): string {
 const CODEX_READY_RE = /Ask Codex|OpenAI/i
 const CODEX_TRUST_PROMPT_RE = /Do you trust|trust this folder|Trust this/i
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now/i
+const MAC_IME_POLICY_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/146 Safari/537.36'
 const LINUX_IME_POLICY_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
 
@@ -244,17 +247,21 @@ async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
   })
 }
 
-async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
+async function reloadWithImePolicyUserAgent(page: Page, userAgent: string): Promise<void> {
   await page.addInitScript((userAgent) => {
     Object.defineProperty(navigator, 'userAgent', {
       get: () => userAgent,
       configurable: true
     })
-  }, LINUX_IME_POLICY_USER_AGENT)
-  // Why: the Sogou repro validates Linux-gated terminal IME policy on macOS
-  // runners; reload before the terminal pane mounts so lifecycle code sees it.
+  }, userAgent)
+  // Why: IME policy is selected while the terminal pane mounts; reload after
+  // installing the deterministic UA so this repro does not depend on CI OS.
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+}
+
+async function reloadWithLinuxImePolicy(page: Page): Promise<void> {
+  await reloadWithImePolicyUserAgent(page, LINUX_IME_POLICY_USER_AGENT)
 }
 
 async function readPromptState(page: Page): Promise<TerminalPromptState | null> {
@@ -335,6 +342,30 @@ async function dispatchImeProcessKey(session: CDPSession, code: string): Promise
     nativeVirtualKeyCode: 229,
     text: '',
     unmodifiedText: ''
+  })
+}
+
+async function dispatchImeEnter(
+  session: CDPSession,
+  keyCode: 13 | 229,
+  commitBetweenKeys?: () => Promise<void>
+): Promise<void> {
+  await session.send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: keyCode,
+    nativeVirtualKeyCode: keyCode,
+    text: '',
+    unmodifiedText: ''
+  })
+  await commitBetweenKeys?.()
+  await session.send('Input.dispatchKeyEvent', {
+    type: 'keyUp',
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: keyCode,
+    nativeVirtualKeyCode: keyCode
   })
 }
 
@@ -479,6 +510,117 @@ async function launchCodexTui(page: Page, ptyId: string): Promise<void> {
 }
 
 test.describe('Chinese IME terminal chat input repro', () => {
+  test('submits active Korean composition exactly once on macOS Enter and keeps Process/229 IME-owned', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await reloadWithImePolicyUserAgent(orcaPage, MAC_IME_POLICY_USER_AGENT)
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-korean-ime-harness-${runId}.cjs`)
+    let session: CDPSession | null = null
+    let harnessStarted = false
+
+    try {
+      expect(
+        await waitForRestoredTerminalInputReady(orcaPage, ptyId, 30_000),
+        'reloaded terminal did not become ready for keyboard input'
+      ).toBe(true)
+      writeFileSync(scriptPath, terminalImeHarnessScript(runId))
+      session = await orcaPage.context().newCDPSession(orcaPage)
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      harnessStarted = true
+      await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
+      await focusActiveTerminalInput(orcaPage)
+      await installImeEventProbe(orcaPage)
+
+      const submitLogStart = (await readImeEventLog(orcaPage)).length
+      await setImeComposition(session, '한글')
+      // Why: xterm updates the composition range on the next event loop before
+      // Enter finalizes it; wait for that deterministic boundary, not wall time.
+      await orcaPage.evaluate(() => new Promise<void>((resolve) => window.setTimeout(resolve, 0)))
+      await dispatchImeEnter(session, 13)
+
+      await expect
+        .poll(async () => (await readPromptState(orcaPage))?.submitted ?? [], {
+          timeout: 5_000,
+          message: 'macOS plain Enter did not submit the active Korean composition exactly once'
+        })
+        .toEqual(['한글'])
+
+      // Why: missed compositionend used to leave Orca's candidate guard stale
+      // for 10 seconds after a successful submit, swallowing these next keys.
+      await dispatchCandidateSelectionKey(session, { key: ' ', code: 'Space', keyCode: 32 })
+      await dispatchCandidateSelectionKey(session, { key: '1', code: 'Digit1', keyCode: 49 })
+      await waitForLivePrompt(orcaPage, ' 1')
+      await orcaPage.keyboard.press('Backspace')
+      await orcaPage.keyboard.press('Backspace')
+      await waitForLivePrompt(orcaPage, '')
+
+      const submitLog = await readImeEventLog(orcaPage)
+      const compositionStartIndex = submitLog.findIndex(
+        (entry, index) => index >= submitLogStart && entry.type === 'compositionstart'
+      )
+      const submitEnterIndex = submitLog.findIndex(
+        (entry, index) =>
+          index > compositionStartIndex &&
+          entry.type === 'keydown' &&
+          entry.key === 'Enter' &&
+          entry.keyCode === 13
+      )
+      expect(
+        compositionStartIndex,
+        'Korean repro must start composition before the submit Enter'
+      ).toBeGreaterThanOrEqual(submitLogStart)
+      expect(
+        submitEnterIndex,
+        'plain Enter must arrive while the Korean composition is active'
+      ).toBeGreaterThan(compositionStartIndex)
+      expect(submitLog[submitEnterIndex]?.isComposing).toBe(true)
+
+      // End the CDP composition session after xterm has synchronously finalized
+      // its own range, so the Process/229 case starts from a clean boundary.
+      await setImeComposition(session, '')
+      await commitImeText(session, '')
+
+      const processLogStart = (await readImeEventLog(orcaPage)).length
+      await setImeComposition(session, '입력중')
+      await orcaPage.evaluate(() => new Promise<void>((resolve) => window.setTimeout(resolve, 0)))
+      await dispatchImeEnter(session, 229, () => commitImeText(session!, '입력중'))
+      await waitForLivePrompt(orcaPage, '입력중')
+
+      const promptState = await readPromptState(orcaPage)
+      expect(
+        promptState?.submitted,
+        'Process/229 Enter must commit through the IME without submitting a second prompt'
+      ).toEqual(['한글'])
+      const processLog = await readImeEventLog(orcaPage)
+      const processEnter = processLog.find(
+        (entry, index) =>
+          index >= processLogStart &&
+          entry.type === 'keydown' &&
+          entry.key === 'Enter' &&
+          entry.keyCode === 229
+      )
+      expect(processEnter?.isComposing).toBe(true)
+      await attachImeEvidence(orcaPage, testInfo, 'korean-enter-boundaries')
+    } finally {
+      await attachImeEvidence(orcaPage, testInfo, 'korean-enter-final-evidence').catch(
+        () => undefined
+      )
+      await session?.detach().catch(() => undefined)
+      if (harnessStarted) {
+        await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      }
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
   test('keeps composed Chinese text, cursor movement, and Backspace stable in the agent input surface', async ({
     orcaPage,
     testRepoPath

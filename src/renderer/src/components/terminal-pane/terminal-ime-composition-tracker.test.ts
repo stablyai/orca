@@ -19,10 +19,13 @@ type TrackerHarness = {
   blur: () => void
 }
 
-function installTracker(): TrackerHarness {
+function installTracker(options?: { isMac?: boolean }): TrackerHarness {
   let now = 0
   const element = document.createElement('div')
-  const tracker = installTerminalImeCompositionTracker(element, { now: () => now })
+  const tracker = installTerminalImeCompositionTracker(element, {
+    isMac: options?.isMac,
+    now: () => now
+  })
   return {
     tracker,
     element,
@@ -86,6 +89,54 @@ describe('installTerminalImeCompositionTracker', () => {
     harness.blur()
     expect(harness.tracker.isActive()).toBe(false)
     expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
+  })
+
+  it('clears stale macOS composition state immediately on plain Enter', () => {
+    const harness = installTracker({ isMac: true })
+    harness.composition('compositionstart', '')
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    Object.defineProperty(enter, 'keyCode', { value: 13 })
+
+    harness.element.dispatchEvent(enter)
+
+    expect(harness.tracker.isActive()).toBe(false)
+    expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
+  })
+
+  it('keeps Process/229 and modified Enter owned by the active macOS IME', () => {
+    for (const event of [
+      { keyCode: 0 },
+      { keyCode: 229 },
+      { keyCode: 13, shiftKey: true },
+      { keyCode: 13, ctrlKey: true },
+      { keyCode: 13, altKey: true },
+      { keyCode: 13, metaKey: true }
+    ]) {
+      const harness = installTracker({ isMac: true })
+      harness.composition('compositionstart', '')
+      const enter = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        ...event
+      })
+      Object.defineProperty(enter, 'keyCode', { value: event.keyCode })
+
+      harness.element.dispatchEvent(enter)
+
+      expect(harness.tracker.isActive()).toBe(true)
+      harness.tracker.dispose()
+    }
+  })
+
+  it('does not clear a non-macOS composition on plain Enter', () => {
+    const harness = installTracker()
+    harness.composition('compositionstart', '')
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    Object.defineProperty(enter, 'keyCode', { value: 13 })
+
+    harness.element.dispatchEvent(enter)
+
+    expect(harness.tracker.isActive()).toBe(true)
   })
 
   describe('candidate key guard', () => {
