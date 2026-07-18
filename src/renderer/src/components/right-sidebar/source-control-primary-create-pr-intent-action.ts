@@ -52,18 +52,6 @@ export function resolveProvisionalHostedReviewProvider(input: {
   return 'github'
 }
 
-export function buildLoadingHostedReviewCreationEligibility(
-  provider: HostedReviewProvider
-): HostedReviewCreationEligibility {
-  return {
-    provider,
-    review: null,
-    canCreate: false,
-    blockedReason: null,
-    nextAction: null
-  }
-}
-
 function shouldOfferCreatePrHeaderChrome(
   hostedReviewCreation: HostedReviewCreationEligibility | null | undefined
 ): hostedReviewCreation is HostedReviewCreationEligibility {

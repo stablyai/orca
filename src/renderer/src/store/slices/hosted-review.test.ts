@@ -376,6 +376,22 @@ describe('hosted review slice', () => {
     })
   })
 
+  it('rejects a never-settling local eligibility probe after the timeout', async () => {
+    vi.useFakeTimers()
+    // A hung git/gh subprocess never resolves; the store must not wait forever.
+    mockApi.hostedReview.getCreationEligibility.mockReturnValueOnce(new Promise(() => {}))
+    const store = makeStore()
+
+    const pending = store.getState().getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+    const assertion = expect(pending).rejects.toThrow(/Timed out checking pull request creation/)
+    await vi.advanceTimersByTimeAsync(30_000)
+    await assertion
+  })
+
   it('uses the selected worktree selector for runtime pull request creation', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce({
       ok: true,

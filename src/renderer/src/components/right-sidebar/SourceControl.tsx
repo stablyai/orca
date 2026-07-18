@@ -266,6 +266,9 @@ import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-i
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
   buildLoadingHostedReviewCreationEligibility,
+  buildLocalBlockerHostedReviewCreationEligibility
+} from './source-control-hosted-review-creation-eligibility-snapshot'
+import {
   resolveCreatePrHeaderAction,
   resolveProvisionalHostedReviewProvider
 } from './source-control-primary-create-pr-intent-action'
@@ -1595,6 +1598,11 @@ function SourceControlInner(): React.JSX.Element {
       linkedGiteaPR
     ]
   )
+  // Why: the eligibility probe's failure fallback needs the current provider
+  // without adding it to the probe effect's deps (which would re-run the probe
+  // on every provider recompute).
+  const provisionalHostedReviewProviderRef = useRef(provisionalHostedReviewProvider)
+  provisionalHostedReviewProviderRef.current = provisionalHostedReviewProvider
   useEffect(() => {
     const hasConcreteProviderHint =
       hostedReview !== null ||
@@ -3275,15 +3283,39 @@ function SourceControlInner(): React.JSX.Element {
       })
       .catch((error) => {
         console.warn('[SourceControl] hosted review creation eligibility failed', error)
-        if (!stale) {
-          setHostedReviewCreationState(null)
-          setHostedReviewCreationRequestState({
+        if (stale) {
+          return
+        }
+        // Why: a failed/timed-out remote probe must not leave an inert disabled
+        // button. When the local git status determines a blocker (dirty, no
+        // upstream, needs push/sync), surface the actionable preparation intent;
+        // otherwise fall back to the retryable failed state.
+        const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
+          provisionalHostedReviewProviderRef.current,
+          {
+            hasUncommittedChanges: hasUncommittedEntries,
+            hasUpstream: remoteStatus?.hasUpstream,
+            ahead: remoteStatus?.ahead,
+            behind: remoteStatus?.behind
+          }
+        )
+        if (localBlocker) {
+          setHostedReviewCreationState({
             repoId: activeRepo.id,
             worktreeId: activeWorktreeId,
             branch: branchName,
-            status: 'failed'
+            data: localBlocker
           })
+          setHostedReviewCreationRequestState(null)
+          return
         }
+        setHostedReviewCreationState(null)
+        setHostedReviewCreationRequestState({
+          repoId: activeRepo.id,
+          worktreeId: activeWorktreeId,
+          branch: branchName,
+          status: 'failed'
+        })
       })
     return () => {
       stale = true
