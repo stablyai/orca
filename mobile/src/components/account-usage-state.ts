@@ -34,6 +34,7 @@ export type ManagedAccountProviderKey = 'claude' | 'codex'
 export type UsageProviderKey =
   | ManagedAccountProviderKey
   | 'gemini'
+  | 'antigravity'
   | 'opencode-go'
   | 'kimi'
   | 'minimax'
@@ -49,6 +50,7 @@ type ProviderSnapshotField =
   | 'claude'
   | 'codex'
   | 'gemini'
+  | 'antigravity'
   | 'opencodeGo'
   | 'kimi'
   | 'minimax'
@@ -68,6 +70,7 @@ export const USAGE_PROVIDERS: readonly UsageProviderDescriptor[] = [
   { id: 'claude', label: 'Claude', snapshotField: 'claude', managed: true },
   { id: 'codex', label: 'Codex', snapshotField: 'codex', managed: true },
   { id: 'gemini', label: 'Gemini', snapshotField: 'gemini', managed: false },
+  { id: 'antigravity', label: 'Antigravity', snapshotField: 'antigravity', managed: false },
   { id: 'opencode-go', label: 'OpenCode Go', snapshotField: 'opencodeGo', managed: false },
   { id: 'kimi', label: 'Kimi', snapshotField: 'kimi', managed: false },
   { id: 'minimax', label: 'MiniMax', snapshotField: 'minimax', managed: false },

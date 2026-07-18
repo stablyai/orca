@@ -509,11 +509,11 @@ describe('visible usage providers preference', () => {
   })
 
   it('round-trips a saved set in canonical order', async () => {
-    await saveVisibleUsageProviders(new Set(['grok', 'claude', 'gemini']))
+    await saveVisibleUsageProviders(new Set(['grok', 'antigravity', 'claude', 'gemini']))
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'orca:visibleUsageProviders',
-      JSON.stringify(['claude', 'gemini', 'grok'])
+      JSON.stringify(['claude', 'gemini', 'antigravity', 'grok'])
     )
   })
 

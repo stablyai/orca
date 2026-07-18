@@ -353,7 +353,7 @@ export default function AccountsScreen() {
     )
   }
 
-  // Why: display-only providers (Gemini/OpenCode Go/Kimi/MiniMax/Grok) have no
+  // Why: display-only providers (Gemini/Antigravity/OpenCode Go/Kimi/MiniMax/Grok) have no
   // Orca-managed accounts and no interactive switching, so the section is a
   // non-pressable card that just surfaces the system-default target's usage.
   // Rendered windows come from getProviderUsageWindows so Gemini buckets and
