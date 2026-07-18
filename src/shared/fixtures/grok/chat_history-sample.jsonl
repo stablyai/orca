@@ -1,0 +1,4 @@
+{"type":"user","content":[{"type":"text","text":"<user_query>\nFix the flaky test\n</user_query>"}],"timestamp":"2026-07-18T12:00:01.000Z"}
+{"type":"assistant","content":[{"type":"text","text":"I'll look at the failing suite."}],"timestamp":"2026-07-18T12:00:02.000Z"}
+{"type":"user","content":[{"type":"text","text":"<user_info>\nos: macos\n</user_info>"}],"timestamp":"2026-07-18T12:00:00.500Z","synthetic_reason":"bootstrap"}
+{"type":"assistant","tool_calls":[{"id":"call_1","name":"run_terminal_command","arguments":{"command":"pnpm test"}}],"timestamp":"2026-07-18T12:00:03.000Z"}

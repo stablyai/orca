@@ -1,0 +1,31 @@
+{
+  "source": "xai-org/grok-build xai_grok_config::paths::encode_cwd_dirname",
+  "short": [
+    {
+      "cwd": "/tmp/work",
+      "encoded": "%2Ftmp%2Fwork"
+    }
+  ],
+  "long": [
+    {
+      "cwd": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "encoded": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-e22e6487078c7674"
+    },
+    {
+      "cwd": "/Users/dev/Documents/開発プロジェクト/機能追加/テスト環境/ソースコード/main-branch",
+      "encoded": "main-branch-6aaeefdde2a621aa"
+    },
+    {
+      "cwd": "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/项目文件/深层嵌套目录/更深层次的/工作区域/project",
+      "encoded": "project-5a22eee5d15e14bd"
+    },
+    {
+      "cwd": "/Users/user/Documents/工作文件夹/二零二六年项目/子目录一/子目录二/子目录三/源代码/code",
+      "encoded": "code-e5f13e136e4516ab"
+    },
+    {
+      "cwd": "/Users/user/Library/CloudStorage/OneDrive-대한민국회사/프로젝트/개발환경/소스코드/백엔드/서비스/my-app",
+      "encoded": "my-app-00d240a68a30d482"
+    }
+  ]
+}

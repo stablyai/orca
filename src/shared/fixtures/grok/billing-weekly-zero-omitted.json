@@ -1,0 +1,13 @@
+{
+  "config": {
+    "currentPeriod": {
+      "type": "USAGE_PERIOD_TYPE_WEEKLY",
+      "start": "2026-06-30T18:36:14.268512+00:00",
+      "end": "2026-07-07T18:36:14.268512+00:00"
+    },
+    "billingPeriodStart": "2026-06-30T18:36:14.268512+00:00",
+    "billingPeriodEnd": "2026-07-07T18:36:14.268512+00:00",
+    "subscriptionTier": "SuperGrok",
+    "isUnifiedBillingUser": true
+  }
+}

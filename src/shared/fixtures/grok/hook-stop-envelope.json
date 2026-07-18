@@ -1,0 +1,11 @@
+{
+  "hookEventName": "Stop",
+  "sessionId": "019e37f4-5135-7b63-a4ab-6d13aa6bf534",
+  "cwd": "/Users/dev/project",
+  "workspaceRoot": "/Users/dev/project",
+  "timestamp": "2026-07-18T12:00:00.000Z",
+  "payload": {
+    "hook_event_name": "stop",
+    "session_id": "019e37f4-5135-7b63-a4ab-6d13aa6bf534"
+  }
+}
