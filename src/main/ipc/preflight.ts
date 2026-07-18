@@ -21,6 +21,7 @@ import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from './preflight-remote-windows-terminal-capabilities'
+import { isConptyAvailable } from '../providers/windows-pty-backend'
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
@@ -302,6 +303,10 @@ export function registerPreflightHandlers(): void {
       return detectRemoteAgents(args)
     }
   )
+
+  ipcMain.handle('preflight:isConptyAvailable', async (): Promise<boolean> => {
+    return isConptyAvailable()
+  })
 
   ipcMain.handle(
     'preflight:detectRemoteWindowsTerminalCapabilities',

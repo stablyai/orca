@@ -366,6 +366,7 @@ export type CreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
+  warning?: string
 }
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null

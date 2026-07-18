@@ -17,6 +17,7 @@ import {
   resolveUnixShellPath,
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
+import { isConptyAvailable } from '../providers/windows-pty-backend'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import {
@@ -1041,10 +1042,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
   })
 
+  const conptyWarning =
+    process.platform === 'win32' && !isConptyAvailable()
+      ? "This Windows version doesn't support ConPTY — full-screen terminal apps (tmux, vim, htop) may not render correctly."
+      : undefined
+
   return {
     pid: proc.pid,
     shellPath,
     ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
+    ...(conptyWarning ? { warning: conptyWarning } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` getter reports the PTY's live foreground
       // process name (the agent running in the shell, or the shell itself) and

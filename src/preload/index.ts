@@ -2063,6 +2063,8 @@ const api = {
       ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectRemoteAgents', args),
+    isConptyAvailable: (): Promise<boolean> =>
+      ipcRenderer.invoke('preflight:isConptyAvailable'),
     detectRemoteWindowsTerminalCapabilities: (args: {
       connectionId: string
     }): Promise<{
@@ -2071,6 +2073,7 @@ const api = {
       pwshAvailable: boolean
       gitBashAvailable: boolean
       hostPlatform: NodeJS.Platform | null
+      conptyAvailable: boolean
     }> => ipcRenderer.invoke('preflight:detectRemoteWindowsTerminalCapabilities', args)
   },
 

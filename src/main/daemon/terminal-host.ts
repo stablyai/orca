@@ -187,7 +187,8 @@ export class TerminalHost {
       shellState: session.shellState,
       ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
       ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
-      attachToken: token
+      attachToken: token,
+      ...(subprocess.warning ? { warning: subprocess.warning } : {})
     }
   }
 

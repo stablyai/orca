@@ -419,7 +419,8 @@ export class DaemonServer {
           pid: result.pid,
           shellState: result.shellState,
           ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
+          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
+          ...(result.warning ? { warning: result.warning } : {})
         }
       }
 

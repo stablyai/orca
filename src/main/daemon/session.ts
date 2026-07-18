@@ -48,6 +48,8 @@ export type SubprocessHandle = {
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  /** Non-fatal warning attached to spawn (e.g. ConPTY unavailable). */
+  warning?: string
   /** Await process-table evidence captured after this confirmation request. */
   confirmForegroundProcess?(): Promise<string | null>
   /** True when shell launch args already delivered the startup command, so the

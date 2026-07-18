@@ -111,6 +111,8 @@ export type PtySpawnResult = {
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
+  /** Non-fatal warning attached to the spawn result (e.g. ConPTY unavailable). */
+  warning?: string
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string

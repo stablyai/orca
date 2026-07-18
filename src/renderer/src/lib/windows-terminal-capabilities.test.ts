@@ -3,6 +3,16 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { toastWarningMock } = vi.hoisted(() => ({
+  toastWarningMock: vi.fn()
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    warning: (...args: any[]) => toastWarningMock(...args)
+  }
+}))
 import {
   getCachedWindowsTerminalCapabilities,
   getWindowsTerminalCapabilityOwnerKey,
@@ -20,12 +30,14 @@ function stubTerminalCapabilityApi(args: {
   wslDistros?: string[]
   gitBashAvailable?: boolean
   hostPlatform?: NodeJS.Platform | null
+  conptyAvailable?: boolean
 }): {
   wslIsAvailable: ReturnType<typeof vi.fn>
   wslListDistros: ReturnType<typeof vi.fn>
   pwshIsAvailable: ReturnType<typeof vi.fn>
   isGitBashAvailable: ReturnType<typeof vi.fn>
   runtimeGetStatus: ReturnType<typeof vi.fn>
+  isConptyAvailable: ReturnType<typeof vi.fn>
 } {
   const wslIsAvailable = vi.fn().mockResolvedValue(args.wslAvailable)
   const wslListDistros = vi.fn().mockResolvedValue(args.wslDistros ?? [])
@@ -34,17 +46,26 @@ function stubTerminalCapabilityApi(args: {
   const runtimeGetStatus = vi
     .fn()
     .mockResolvedValue({ hostPlatform: 'hostPlatform' in args ? args.hostPlatform : 'win32' })
+  const isConptyAvailable = vi.fn().mockResolvedValue(args.conptyAvailable ?? false)
 
   vi.stubGlobal('window', {
     api: {
       wsl: { isAvailable: wslIsAvailable, listDistros: wslListDistros },
       pwsh: { isAvailable: pwshIsAvailable },
       gitBash: { isAvailable: isGitBashAvailable },
-      runtime: { getStatus: runtimeGetStatus }
+      runtime: { getStatus: runtimeGetStatus },
+      preflight: { isConptyAvailable }
     }
   })
 
-  return { wslIsAvailable, wslListDistros, pwshIsAvailable, isGitBashAvailable, runtimeGetStatus }
+  return {
+    wslIsAvailable,
+    wslListDistros,
+    pwshIsAvailable,
+    isGitBashAvailable,
+    runtimeGetStatus,
+    isConptyAvailable
+  }
 }
 
 describe('windows terminal capabilities', () => {
@@ -56,6 +77,7 @@ describe('windows terminal capabilities', () => {
     }
     resetWindowsTerminalCapabilitiesForTests()
     vi.unstubAllGlobals()
+    toastWarningMock.mockReset()
   })
 
   it('shares WSL, PowerShell, and Git Bash availability between terminal UI consumers', async () => {
@@ -79,6 +101,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: null,
+      conptyAvailable: false,
       isLoading: false
     })
 
@@ -88,6 +111,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: true,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     }
     await expect(loadWindowsTerminalCapabilities()).resolves.toEqual(expected)
@@ -120,6 +144,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
   })
@@ -249,6 +274,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: false,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
 
@@ -296,6 +322,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: true,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
 
@@ -308,6 +335,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: true,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
   })
@@ -344,6 +372,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: true,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
 
@@ -353,6 +382,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: true,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
     expect(getCachedWindowsTerminalCapabilities()).toEqual({
@@ -361,6 +391,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: null,
+      conptyAvailable: false,
       isLoading: false
     })
 
@@ -372,6 +403,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: false,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
 
@@ -381,6 +413,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: false,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
   })
@@ -433,6 +466,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: false,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
 
@@ -450,6 +484,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: true,
       gitBashAvailable: false,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
     expect(getCachedWindowsTerminalCapabilities('ssh:ssh-1')).toEqual({
@@ -458,6 +493,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: null,
+      conptyAvailable: false,
       isLoading: false
     })
   })
@@ -529,6 +565,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: null,
+      conptyAvailable: false,
       isLoading: false
     })
   })
@@ -550,6 +587,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: null,
+      conptyAvailable: false,
       isLoading: false
     })
     expect(getCachedWindowsTerminalCapabilities('runtime:host-32')).toMatchObject({
@@ -585,6 +623,7 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: null,
+      conptyAvailable: false,
       isLoading: false
     })
   })
@@ -608,7 +647,55 @@ describe('windows terminal capabilities', () => {
       pwshAvailable: false,
       gitBashAvailable: false,
       hostPlatform: 'win32',
+      conptyAvailable: false,
       isLoading: false
     })
+  })
+
+  it('triggers a warning toast when ConPTY is not available on win32 host', async () => {
+    stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      hostPlatform: 'win32',
+      conptyAvailable: false
+    })
+
+    await loadWindowsTerminalCapabilities()
+    expect(toastWarningMock).toHaveBeenCalledOnce()
+    expect(toastWarningMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        description: expect.stringContaining("doesn't support ConPTY")
+      })
+    )
+
+    // Verify it only triggers once per owner key (session-level warning)
+    toastWarningMock.mockClear()
+    await loadWindowsTerminalCapabilities({ force: true })
+    expect(toastWarningMock).not.toHaveBeenCalled()
+  })
+
+  it('does not trigger a warning toast when ConPTY is available on win32 host', async () => {
+    stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      hostPlatform: 'win32',
+      conptyAvailable: true
+    })
+
+    await loadWindowsTerminalCapabilities()
+    expect(toastWarningMock).not.toHaveBeenCalled()
+  })
+
+  it('does not trigger a warning toast on non-win32 host even when ConPTY is unavailable', async () => {
+    stubTerminalCapabilityApi({
+      wslAvailable: false,
+      pwshAvailable: false,
+      hostPlatform: 'linux',
+      conptyAvailable: false
+    })
+
+    await loadWindowsTerminalCapabilities()
+    expect(toastWarningMock).not.toHaveBeenCalled()
   })
 })

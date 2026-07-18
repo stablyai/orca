@@ -6,6 +6,7 @@ export type RemoteWindowsTerminalCapabilities = {
   pwshAvailable: boolean
   gitBashAvailable: boolean
   hostPlatform: NodeJS.Platform | null
+  conptyAvailable: boolean
 }
 
 const EMPTY_REMOTE_WINDOWS_TERMINAL_CAPABILITIES: RemoteWindowsTerminalCapabilities = {
@@ -13,7 +14,8 @@ const EMPTY_REMOTE_WINDOWS_TERMINAL_CAPABILITIES: RemoteWindowsTerminalCapabilit
   wslDistros: [],
   pwshAvailable: false,
   gitBashAvailable: false,
-  hostPlatform: null
+  hostPlatform: null,
+  conptyAvailable: false
 }
 
 export async function detectRemoteWindowsTerminalCapabilities(args: {

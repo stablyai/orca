@@ -5,13 +5,32 @@ const { execFileAsyncMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn()
 }))
 
-const { isPwshAvailableMock, isWslAvailableMock, listWslDistrosMock, isGitBashAvailableMock } =
-  vi.hoisted(() => ({
-    isPwshAvailableMock: vi.fn(),
-    isWslAvailableMock: vi.fn(),
-    listWslDistrosMock: vi.fn(),
-    isGitBashAvailableMock: vi.fn()
-  }))
+const {
+  isPwshAvailableMock,
+  isWslAvailableMock,
+  listWslDistrosMock,
+  isGitBashAvailableMock,
+  osReleaseMock
+} = vi.hoisted(() => ({
+  isPwshAvailableMock: vi.fn(),
+  isWslAvailableMock: vi.fn(),
+  listWslDistrosMock: vi.fn(),
+  isGitBashAvailableMock: vi.fn(),
+  osReleaseMock: vi.fn()
+}))
+
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<any>('node:os')
+  const mockRelease = () => osReleaseMock()
+  return {
+    ...actual,
+    release: mockRelease,
+    default: {
+      ...actual.default,
+      release: mockRelease
+    }
+  }
+})
 
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
@@ -65,6 +84,8 @@ beforeEach(() => {
   isWslAvailableMock.mockReset()
   listWslDistrosMock.mockReset()
   isGitBashAvailableMock.mockReset()
+  osReleaseMock.mockReset()
+  osReleaseMock.mockReturnValue('10.0.19041')
 })
 
 describe('buildCommandLookupSpec', () => {
@@ -338,12 +359,24 @@ describe('PreflightHandler', () => {
     try {
       const handler = requestHandlers.get('preflight.detectWindowsTerminalCapabilities')
       expect(handler).toBeDefined()
+      osReleaseMock.mockReturnValue('10.0.19041')
       await expect(handler!({})).resolves.toEqual({
         wslAvailable: true,
         wslDistros: ['Ubuntu'],
         pwshAvailable: true,
         gitBashAvailable: true,
-        hostPlatform: 'win32'
+        hostPlatform: 'win32',
+        conptyAvailable: true
+      })
+
+      osReleaseMock.mockReturnValue('10.0.17763')
+      await expect(handler!({})).resolves.toEqual({
+        wslAvailable: true,
+        wslDistros: ['Ubuntu'],
+        pwshAvailable: true,
+        gitBashAvailable: true,
+        hostPlatform: 'win32',
+        conptyAvailable: false
       })
     } finally {
       Object.defineProperty(process, 'platform', {

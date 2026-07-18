@@ -305,7 +305,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
         pid,
         ...launchIdentity(),
         coldRestore: cachedRestore,
-        ...(!result.isNew ? { isReattach: true } : {})
+        ...(!result.isNew ? { isReattach: true } : {}),
+        ...(result.warning ? { warning: result.warning } : {})
       }
     }
 
@@ -372,14 +373,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
           ...launchIdentity(),
           coldRestore,
           ...(providerSequence ? { providerSequence } : {}),
-          ...(!result.isNew ? { isReattach: true } : {})
+          ...(!result.isNew ? { isReattach: true } : {}),
+          ...(result.warning ? { warning: result.warning } : {})
         }
       }
       return {
         id: sessionId,
         pid,
         ...launchIdentity(),
-        ...(providerSequence ? { providerSequence } : {})
+        ...(providerSequence ? { providerSequence } : {}),
+        ...(result.warning ? { warning: result.warning } : {})
       }
     }
 
@@ -419,7 +422,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
         pid,
         ...launchIdentity(),
         ...(providerSequence ? { providerSequence } : {}),
-        ...(isReattach ? { isReattach: true } : {})
+        ...(isReattach ? { isReattach: true } : {}),
+        ...(result.warning ? { warning: result.warning } : {})
       }
     }
 
@@ -451,7 +455,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       // split escape's continuation literally, unlike the remote path (#7329).
       ...(result.snapshot.pendingEscapeTailAnsi
         ? { pendingEscapeTailAnsi: result.snapshot.pendingEscapeTailAnsi }
-        : {})
+        : {}),
+      ...(result.warning ? { warning: result.warning } : {})
     }
   }
 

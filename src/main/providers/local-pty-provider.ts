@@ -22,6 +22,7 @@ import {
   logHistoryInjection
 } from '../terminal-history'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import { isConptyAvailable } from './windows-pty-backend'
 import {
   ensureNodePtySpawnHelperExecutable,
   validateWorkingDirectory,
@@ -988,7 +989,11 @@ export class LocalPtyProvider implements IPtyProvider {
     // briefly 0/undefined if node-pty hasn't observed the forked child yet.
     const rawPid = proc.pid
     const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
-    return { id, pid }
+    const conptyWarning =
+      process.platform === 'win32' && !isConptyAvailable()
+        ? "This Windows version doesn't support ConPTY — full-screen terminal apps (tmux, vim, htop) may not render correctly."
+        : undefined
+    return { id, pid, ...(conptyWarning ? { warning: conptyWarning } : {}) }
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
