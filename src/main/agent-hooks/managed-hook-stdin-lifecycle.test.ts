@@ -78,6 +78,7 @@ import { GrokHookService } from '../grok/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import {
+  WINDOWS_GIT_BASH_SAFE_PATH,
   wrapPosixHookCommand,
   wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand
@@ -198,6 +199,56 @@ function hookEnvironment(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     ORCA_AGENT_HOOK_ENDPOINT: '',
     ...extraEnv
   }
+}
+
+/** Prefer a real Git Bash on Windows; Store `bash.exe` stubs often exit 127. */
+function resolveWindowsTestBash(): string {
+  if (process.env.KIMI_SHELL_PATH) {
+    return process.env.KIMI_SHELL_PATH
+  }
+  const candidates = [
+    join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
+    join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe'),
+    // Why: derive Git Bash from a Git dir on PATH instead of hardcoding an
+    // install location, so a non-default Git resolves on any Windows dev/CI box.
+    // Cover both the `Git\bin` and `Git\cmd` PATH layouts (bash lives under bin).
+    ...(process.env.PATH ?? '')
+      .split(';')
+      .filter((dir) => /\bgit\b/i.test(dir))
+      .flatMap((dir) => [
+        join(dir, 'bash.exe'),
+        join(dir, '..', 'bin', 'bash.exe'),
+        join(dir, '..', 'usr', 'bin', 'bash.exe')
+      ])
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate
+    }
+  }
+  return 'bash.exe'
+}
+
+// Why: the Git Bash safe-path tests only exercise the bare `.cmd` fast path when
+// the fixture home is bash-safe (WINDOWS_GIT_BASH_SAFE_PATH). tmpdir() alone can
+// carry spaces/metacharacters (spaced usernames, redirected TEMP), which would
+// silently route to the PowerShell fallback and make those tests vacuously pass.
+// Try each writable root until mkdtemp yields a bash-safe path; '' means no safe
+// root exists here, so the caller skips instead of asserting nothing.
+function mkdtempBashSafe(prefix: string): string {
+  for (const root of [tmpdir(), process.cwd()]) {
+    let dir: string
+    try {
+      dir = mkdtempSync(join(root, prefix))
+    } catch {
+      continue
+    }
+    if (WINDOWS_GIT_BASH_SAFE_PATH.test(dir.replaceAll('\\', '/'))) {
+      return dir
+    }
+    rmSync(dir, { recursive: true, force: true })
+  }
+  return ''
 }
 
 function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<HookRun> {
@@ -341,31 +392,124 @@ describe('Windows managed hook stdin structure', () => {
           expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
         }
 
-        const missingScript = 'C:\\missing\\orca-hook.cmd'
-        // Why: the cmd fast path is intentionally a bare, directly-spawnable .cmd
-        // path (Codex/Antigravity/Devin launch it as argv[0], not via cmd.exe), so
-        // it cannot own stdin for a missing script — a cmd-builtin drain would make
-        // argv[0] unspawnable and fail every hook (#8430 regression). Only launchers
-        // that already require a real interpreter (encoded PowerShell, Git Bash)
-        // drain a missing script; the bare path's missing-script behavior is a
-        // normal launch failure, covered in installer-utils.test.ts.
+        // Why: cmd + Claude Git Bash *safe-path* fast paths are bare, directly
+        // spawnable `.cmd` paths (argv[0] / Grok CreateProcess / Claude Git Bash).
+        // A shell-builtin `if` drain is unspawnable or non-portable (#8430 / Grok
+        // compat loading Claude settings), so missing-script drain lives only on
+        // launchers that already require a real interpreter (encoded PowerShell).
+        // Use a spaced path so wrapWindowsGitBashHookCommand takes that fallback.
+        const missingUnsafeScript = 'C:\\missing path\\orca-hook.cmd'
         const launcherCases = [
           {
             name: 'encoded PowerShell',
             executable: 'cmd.exe',
-            args: ['/d', '/c', wrapWindowsHookCommand(missingScript)]
+            args: ['/d', '/c', wrapWindowsHookCommand(missingUnsafeScript)]
           },
           {
-            name: 'Git Bash fast path',
-            executable: gitBash,
-            args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
+            name: 'Git Bash unsafe-path encoded fallback',
+            executable: 'cmd.exe',
+            args: ['/d', '/c', wrapWindowsGitBashHookCommand(missingUnsafeScript)]
           }
         ]
         for (const launcher of launcherCases) {
+          expect(launcher.args[2], `${launcher.name} uses encoded launcher`).toMatch(
+            /powershell\.exe/i
+          )
           const result = await runHookProcess(launcher.executable, launcher.args, hookEnvironment())
           expect(result.exitCode, `${launcher.name} exit code`).toBe(0)
           expect(result.stdinErrors, `${launcher.name} stdin errors`).toHaveLength(0)
         }
+      } finally {
+        homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+        rmSync(home, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'runs the Claude Git Bash safe-path launcher (bare .cmd) under a real Git Bash',
+    async (ctx) => {
+      // Why: the Claude/OpenClaude launcher is now a bare forward-slash `.cmd`
+      // so Grok's CreateProcess can spawn it. Grok's native spawn can't be
+      // reproduced from Node (spawn rejects `.cmd` without a shell), but the
+      // primary consumer — Claude's Git Bash runner — must exec the bare `.cmd`
+      // and own stdin. Prove that end to end so a regression in bash `.cmd`
+      // execution can't hide behind the string-shape unit test.
+      const home = mkdtempBashSafe('orca-hook-stdin-gitbash-')
+      if (!home) {
+        // No bash-safe temp root on this host; skip loudly rather than let the
+        // bare `.cmd` assertions never run and pass vacuously (unsafe paths are
+        // already covered by the encoded-fallback matrix above).
+        ctx.skip()
+        return
+      }
+      homedirMock.mockReturnValue(home)
+      try {
+        expect(new ClaudeHookService().install().state).toBe('installed')
+        const claudeScript = join(home, '.orca', 'agent-hooks', 'claude-hook.cmd')
+        const command = wrapWindowsGitBashHookCommand(claudeScript)
+        // home is guaranteed bash-safe, so the launcher MUST be the bare
+        // forward-slash `.cmd` fast path, never the PowerShell fallback.
+        expect(command, 'safe path must take the bare .cmd fast path').not.toMatch(
+          /powershell\.exe/i
+        )
+        expect(command).toBe(claudeScript.replaceAll('\\', '/'))
+        const result = await runHookProcess(
+          resolveWindowsTestBash(),
+          ['-c', command],
+          hookEnvironment()
+        )
+        expect(result.exitCode, 'claude git bash bare .cmd exit code').toBe(0)
+        expect(result.stdinErrors, 'claude git bash bare .cmd stdin errors').toHaveLength(0)
+      } finally {
+        homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+        rmSync(home, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'runs the safe-path launcher under a cmd shell and rejects the old bash compound (Grok compat)',
+    async (ctx) => {
+      // Why: Grok's [compat.claude] loads the same settings.json command and
+      // runs it through its Windows shell (cmd/PowerShell), not Git Bash. The
+      // bare forward-slash `.cmd` must run there and own stdin; the pre-fix
+      // `if [ -f … ]` compound fails with "-f was unexpected" under cmd. Lock
+      // both so a revert to the compound form can't slip back.
+      // NB: never model this as spawn(bareCmd, {shell:false}) — Node rejects a
+      // bare `.cmd` with EINVAL, a false negative unrelated to Grok's runtime.
+      const home = mkdtempBashSafe('orca-hook-stdin-grokcompat-')
+      if (!home) {
+        // No bash-safe temp root on this host; skip loudly rather than let the
+        // bare `.cmd` assertions never run and pass vacuously.
+        ctx.skip()
+        return
+      }
+      homedirMock.mockReturnValue(home)
+      try {
+        expect(new ClaudeHookService().install().state).toBe('installed')
+        const claudeScript = join(home, '.orca', 'agent-hooks', 'claude-hook.cmd')
+        const command = wrapWindowsGitBashHookCommand(claudeScript)
+        // home is guaranteed bash-safe, so the launcher MUST be the bare
+        // forward-slash `.cmd` fast path, never the PowerShell fallback.
+        expect(command, 'safe path must take the bare .cmd fast path').not.toMatch(
+          /powershell\.exe/i
+        )
+        const forwardSlash = claudeScript.replaceAll('\\', '/')
+        expect(command).toBe(forwardSlash)
+
+        const fixed = await runHookProcess('cmd.exe', ['/d', '/c', command], hookEnvironment())
+        expect(fixed.exitCode, 'bare .cmd under cmd shell exit code').toBe(0)
+        expect(fixed.stdinErrors, 'bare .cmd under cmd shell stdin errors').toHaveLength(0)
+
+        const quoted = `'${forwardSlash}'`
+        const oldCompound = `if [ -f ${quoted} ]; then ${quoted}; else cat >/dev/null 2>&1 || :; fi`
+        const regressed = await runHookProcess(
+          'cmd.exe',
+          ['/d', '/c', oldCompound],
+          hookEnvironment()
+        )
+        expect(regressed.exitCode, 'old bash compound must fail under a cmd spawn').not.toBe(0)
       } finally {
         homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
         rmSync(home, { recursive: true, force: true })

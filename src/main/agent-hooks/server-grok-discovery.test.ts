@@ -3,12 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as agentHookListener from '../../shared/agent-hook-listener'
+import {
+  clearGrokSessionPathLookupCacheForTests,
+  setGrokSessionPathScannerForTests
+} from '../../shared/grok-session-paths'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 
 afterEach(() => {
+  clearGrokSessionPathLookupCacheForTests()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
@@ -38,6 +43,35 @@ async function postGrokHook(
 }
 
 describe('AgentHookServer Grok discovery retries', () => {
+  it('runs slug-group discovery once while bounded content retries continue', async () => {
+    let scanCount = 0
+    setGrokSessionPathScannerForTests(async () => {
+      scanCount += 1
+      return null
+    })
+    const server = new AgentHookServer()
+    const root = mkdtempSync(join(tmpdir(), 'orca-grok-discovery-count-'))
+    vi.stubEnv('HOME', root)
+    vi.stubEnv('USERPROFILE', root)
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }
+
+      await postGrokHook(endpoint, {
+        hookEventName: 'Stop',
+        sessionId: '019e37f4-5135-7b63-a4ab-6d13aa6bf534',
+        cwd: join(root, 'workspace')
+      })
+      await new Promise((resolve) => setTimeout(resolve, 400))
+
+      expect(scanCount).toBe(1)
+    } finally {
+      server.stop()
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('waits for delayed discovery beyond the transcript retry window', async () => {
     let releaseDiscovery!: () => void
     const discovery = new Promise<void>((resolve) => {

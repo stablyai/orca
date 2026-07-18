@@ -1267,12 +1267,9 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     const transcriptPath = record.transcriptPath ?? record.transcript_path
     return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
   }
-  const pendingGrokDiscovery = preparePendingGrokResultDiscovery(source, body)
-  if (pendingGrokDiscovery) {
-    void pendingGrokDiscovery
-    return true
-  }
-  return false
+  // Why: this predicate runs before every bounded content retry. Starting path
+  // discovery here repeated a full Grok sessions-root scan on every retry.
+  return readPendingGrokResultMetadata(source, body) !== undefined
 }
 
 function hasNonEmptyString(value: unknown): boolean {
@@ -1286,19 +1283,18 @@ function hasExplicitLastAssistantResult(record: Record<string, unknown>): boolea
   )
 }
 
-/** Start bounded discovery only for a Grok completion that still needs result text. */
-export function preparePendingGrokResultDiscovery(
+function readPendingGrokResultMetadata(
   source: AgentHookSource,
   body: unknown
-): Promise<void> | null {
+): GrokSessionMetadata | undefined {
   if (source !== 'grok') {
-    return null
+    return undefined
   }
   const envelope =
     typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
   const record = parseHookBodyPayloadRecord(body)
   if (!record || hasExplicitLastAssistantResult(record)) {
-    return null
+    return undefined
   }
   const eventName =
     envelope?.hook_event_name ??
@@ -1306,12 +1302,17 @@ export function preparePendingGrokResultDiscovery(
     record.hook_event_name ??
     record.hookEventName
   if (!isGrokEvent(eventName, 'stop', 'session_end')) {
-    return null
+    return undefined
   }
-  const metadata = readGrokSessionMetadata(
-    record,
-    envelope ? readGrokHomeEnvelope(envelope) : undefined
-  )
+  return readGrokSessionMetadata(record, envelope ? readGrokHomeEnvelope(envelope) : undefined)
+}
+
+/** Start bounded discovery only for a Grok completion that still needs result text. */
+export function preparePendingGrokResultDiscovery(
+  source: AgentHookSource,
+  body: unknown
+): Promise<void> | null {
+  const metadata = readPendingGrokResultMetadata(source, body)
   if (!metadata) {
     return null
   }
