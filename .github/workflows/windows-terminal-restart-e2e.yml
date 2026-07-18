@@ -84,8 +84,10 @@ jobs:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
           ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E: '1'
+        # Why: pnpm forwards a literal `--` to Playwright, which makes the
+        # grep and worker flags positional filters instead of CLI options.
         run: >-
-          pnpm run test:e2e --
+          pnpm run test:e2e
           tests/e2e/restart-restore-terminal-input.spec.ts
           tests/e2e/terminal-restart-persistence.spec.ts
           --grep "clean restart with a live daemon session|cold-restored pane accepts typing|daemon snapshot relaunch preserves"
