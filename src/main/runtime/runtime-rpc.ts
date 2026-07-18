@@ -297,6 +297,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'host.gitBash.isAvailable',
   'host.platform',
   'host.pwsh.isAvailable',
+  'host.tailscale.discoverPeers',
   'host.wsl.isAvailable',
   'host.wsl.listDistros',
   'hostedReview.create',

@@ -2,6 +2,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import { isPwshAvailable } from '../../../pwsh'
 import { isWslAvailable, listWslDistros } from '../../../wsl'
 import { isGitBashAvailable } from '../../../git-bash'
+import { discoverTailnetPeers } from '../../../network/tailscale-peer-discovery'
 
 export const HOST_CAPABILITY_METHODS: RpcMethod[] = [
   defineMethod({
@@ -23,6 +24,11 @@ export const HOST_CAPABILITY_METHODS: RpcMethod[] = [
     name: 'host.pwsh.isAvailable',
     params: null,
     handler: async () => isPwshAvailable()
+  }),
+  defineMethod({
+    name: 'host.tailscale.discoverPeers',
+    params: null,
+    handler: async () => discoverTailnetPeers()
   }),
   defineMethod({
     name: 'host.gitBash.isAvailable',

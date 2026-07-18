@@ -8,7 +8,12 @@ import {
   hasAdvancedConnectionValues
 } from './SshTargetAdvancedConnectionSection'
 import { SshTargetTerminalPersistenceSection } from './SshTargetTerminalPersistenceSection'
-import { applyParsedSshHostInput, type EditingTarget } from './ssh-target-draft'
+import { TailnetPeerSuggestionSection } from './TailnetPeerSuggestionSection'
+import {
+  applyParsedSshHostInput,
+  applyTailnetPeerToDraft,
+  type EditingTarget
+} from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 export { EMPTY_FORM, type EditingTarget } from './ssh-target-draft'
 
@@ -56,6 +61,11 @@ export function SshTargetForm({
       </p>
 
       <div className="grid grid-cols-2 gap-4">
+        {editingId === null && (
+          <TailnetPeerSuggestionSection
+            onPick={(peer) => onFormChange((f) => applyTailnetPeerToDraft(f, peer))}
+          />
+        )}
         <div className="space-y-1.5">
           <Label>{translate('auto.components.settings.SshTargetForm.298de87a88', 'Label')}</Label>
           <Input

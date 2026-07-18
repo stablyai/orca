@@ -141,6 +141,7 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import type { TailnetPeerDiscovery } from '../shared/tailnet-peers'
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -4133,6 +4134,11 @@ const api = {
 
   grokAccounts: {
     getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
+  },
+
+  tailscale: {
+    discoverPeers: (): Promise<TailnetPeerDiscovery> =>
+      ipcRenderer.invoke('tailscale:discoverPeers')
   },
 
   ssh: {
