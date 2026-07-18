@@ -51,7 +51,7 @@ test('pinned terminal panel: sidebar entry, lazy PTY spawn, command output, clos
   const tabsBeforeVisit = await orcaPage.evaluate(() => {
     const store = window.__store
     return store
-      ? (store.getState().tabsByWorktree['global-pinned-terminal-panels'] ?? []).length
+      ? (store.getState().tabsByWorktree['global-pinned-terminal-panels::e2e-panel-1'] ?? []).length
       : -1
   })
   expect(tabsBeforeVisit).toBe(0)

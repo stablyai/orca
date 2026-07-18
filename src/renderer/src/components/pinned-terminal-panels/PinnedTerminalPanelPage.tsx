@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { PinnedTerminalPanel } from '../../../../shared/types'
-import { PINNED_TERMINAL_PANELS_WORKTREE_ID } from '../../../../shared/pinned-terminal-panels'
+import { pinnedTerminalPanelWorktreeId } from '../../../../shared/pinned-terminal-panels'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
@@ -15,12 +15,14 @@ function PinnedTerminalPanelViewport({
   panel,
   visible,
   tabId,
+  worktreeId,
   onPtyExit
 }: {
   panel: PinnedTerminalPanel
   visible: boolean
   tabId: string
-  onPtyExit: (panelId: string) => void
+  worktreeId: string
+  onPtyExit: (worktreeId: string, tabId: string) => void
 }): React.JSX.Element {
   return (
     <div
@@ -34,19 +36,22 @@ function PinnedTerminalPanelViewport({
     >
       <TerminalPane
         tabId={tabId}
-        worktreeId={PINNED_TERMINAL_PANELS_WORKTREE_ID}
+        worktreeId={worktreeId}
         isActive={visible}
         isVisible={visible}
         showSplitButton={false}
-        onPtyExit={() => onPtyExit(panel.id)}
-        onCloseTab={() => onPtyExit(panel.id)}
+        onPtyExit={() => onPtyExit(worktreeId, tabId)}
+        onCloseTab={() => onPtyExit(worktreeId, tabId)}
       />
     </div>
   )
 }
 
 /** Hosts every visited pinned terminal panel; inactive ones stay mounted but
- *  parked so their TUIs (nvtop, btop, watch …) keep running off-screen. */
+ *  parked so their TUIs (nvtop, btop, watch …) keep running off-screen. Each
+ *  panel owns a per-panel sentinel worktree id, which is what routes its PTY
+ *  to the panel's configured SSH host (or local) and lets tabs from a prior
+ *  app run be re-adopted instead of leaked. */
 const PinnedTerminalPanelPage = React.memo(
   function PinnedTerminalPanelPage(): React.JSX.Element | null {
     useTranslation()
@@ -54,58 +59,59 @@ const PinnedTerminalPanelPage = React.memo(
     const activeView = useAppStore((s) => s.activeView)
     const activePanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
     const closePinnedTerminalPanelPage = useAppStore((s) => s.closePinnedTerminalPanelPage)
-    const [tabIdByPanelId, setTabIdByPanelId] = React.useState<Readonly<Record<string, string>>>({})
+    const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
 
     const pageVisible = activeView === 'terminal-panel' && activePanelId !== null
     const activePanel = panels.find((panel) => panel.id === activePanelId)
 
     // Why: the tab (and its PTY) is created on first visit, not at startup —
-    // eight configured panels must not spawn eight shells on app boot.
+    // eight configured panels must not spawn eight shells on app boot. A tab
+    // surviving from a prior run (session restore) is adopted, not duplicated.
     React.useEffect(() => {
-      if (!pageVisible || activePanelId === null || tabIdByPanelId[activePanelId]) {
+      if (!pageVisible || activePanelId === null) {
         return
       }
       const panel = panels.find((entry) => entry.id === activePanelId)
       if (!panel) {
         return
       }
+      const worktreeId = pinnedTerminalPanelWorktreeId(panel.id)
       const state = useAppStore.getState()
-      const tab = state.createTab(PINNED_TERMINAL_PANELS_WORKTREE_ID, undefined, undefined, {
+      if ((state.tabsByWorktree[worktreeId] ?? []).length > 0) {
+        return
+      }
+      const tab = state.createTab(worktreeId, undefined, undefined, {
         activate: false,
         quickCommandLabel: panel.title
       })
       state.queueTabStartupCommand(tab.id, { command: panel.command })
-      setTabIdByPanelId((prev) => ({ ...prev, [activePanelId]: tab.id }))
-    }, [pageVisible, activePanelId, panels, tabIdByPanelId])
+    }, [pageVisible, activePanelId, panels])
 
-    const releasePanelTab = React.useCallback((panelId: string) => {
-      setTabIdByPanelId((prev) => {
-        if (!prev[panelId]) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[panelId]
-        return next
-      })
+    const releasePanelTab = React.useCallback((worktreeId: string, tabId: string) => {
+      const state = useAppStore.getState()
+      if ((state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)) {
+        state.closeTab(tabId, { reason: 'cleanup' })
+      }
     }, [])
 
     // Why: a panel deleted in Settings must release its PTY immediately — the
     // command keeps running otherwise, invisible, until app exit.
     React.useEffect(() => {
-      const panelIds = new Set(panels.map((panel) => panel.id))
-      setTabIdByPanelId((prev) => {
-        const removed = Object.keys(prev).filter((panelId) => !panelIds.has(panelId))
-        if (removed.length === 0) {
-          return prev
+      const panelWorktreeIds = new Set(
+        panels.map((panel) => pinnedTerminalPanelWorktreeId(panel.id))
+      )
+      const state = useAppStore.getState()
+      for (const worktreeId of Object.keys(state.tabsByWorktree)) {
+        if (!worktreeId.startsWith(pinnedTerminalPanelWorktreeId(''))) {
+          continue
         }
-        const state = useAppStore.getState()
-        const next = { ...prev }
-        for (const panelId of removed) {
-          state.closeTab(next[panelId], { reason: 'cleanup' })
-          delete next[panelId]
+        if (panelWorktreeIds.has(worktreeId)) {
+          continue
         }
-        return next
-      })
+        for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+          state.closeTab(tab.id, { reason: 'cleanup' })
+        }
+      }
     }, [panels])
 
     React.useEffect(() => {
@@ -114,7 +120,15 @@ const PinnedTerminalPanelPage = React.memo(
       }
     }, [activeView, activePanel, closePinnedTerminalPanelPage])
 
-    const mountedPanels = panels.filter((panel) => tabIdByPanelId[panel.id])
+    const mountedPanels = panels
+      .map((panel) => {
+        const worktreeId = pinnedTerminalPanelWorktreeId(panel.id)
+        const tab = (tabsByWorktree[worktreeId] ?? [])[0]
+        return tab ? { panel, worktreeId, tabId: tab.id } : null
+      })
+      .filter((entry): entry is { panel: PinnedTerminalPanel; worktreeId: string; tabId: string } =>
+        Boolean(entry)
+      )
     if (mountedPanels.length === 0) {
       return null
     }
@@ -125,6 +139,11 @@ const PinnedTerminalPanelPage = React.memo(
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-tight">
             {activePanel?.title ?? ''}
           </span>
+          {activePanel?.host ? (
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              {activePanel.host}
+            </span>
+          ) : null}
           <Button
             variant="ghost"
             size="icon"
@@ -138,11 +157,12 @@ const PinnedTerminalPanelPage = React.memo(
             <X className="size-3.5" strokeWidth={1.75} />
           </Button>
         </div>
-        {mountedPanels.map((panel) => (
+        {mountedPanels.map(({ panel, worktreeId, tabId }) => (
           <PinnedTerminalPanelViewport
             key={panel.id}
             panel={panel}
-            tabId={tabIdByPanelId[panel.id]}
+            worktreeId={worktreeId}
+            tabId={tabId}
             visible={pageVisible && panel.id === activePanelId}
             onPtyExit={releasePanelTab}
           />

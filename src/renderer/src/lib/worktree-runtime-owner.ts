@@ -12,7 +12,11 @@ import type {
   Worktree
 } from '../../../shared/types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { isSentinelWorktreeId } from '../../../shared/pinned-terminal-panels'
+import {
+  getPinnedTerminalPanelHostForWorktreeId,
+  isPinnedTerminalPanelWorktreeId,
+  isSentinelWorktreeId
+} from '../../../shared/pinned-terminal-panels'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedFolderWorkspaceOwner,
@@ -248,6 +252,13 @@ export function getExecutionHostIdForWorktree(
 ): ExecutionHostId {
   if (!worktreeId) {
     return 'local'
+  }
+  if (isPinnedTerminalPanelWorktreeId(worktreeId)) {
+    const host = getPinnedTerminalPanelHostForWorktreeId(
+      state.settings?.pinnedTerminalPanels,
+      worktreeId
+    )
+    return host !== null ? `ssh:${encodeURIComponent(host)}` : 'local'
   }
   if (isSentinelWorktreeId(worktreeId)) {
     return 'local'

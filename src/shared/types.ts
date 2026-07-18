@@ -3335,6 +3335,8 @@ export type PinnedTerminalPanel = {
   /** Sanitized by normalizePinnedTerminalPanels on every write: trimmed,
    *  length-capped, control characters rejected. */
   command: string
+  /** SSH target id to run the command on; absent means the local machine. */
+  host?: string
 }
 
 /** The active top-level section shown in the main content area. */

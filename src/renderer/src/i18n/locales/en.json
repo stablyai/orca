@@ -9244,7 +9244,8 @@
           "description": "Pin observability commands (nvtop, btop, watch …) to the sidebar as persistent terminals.",
           "remove": "Remove panel",
           "titlePlaceholder": "Title",
-          "add": "Add"
+          "add": "Add",
+          "hostPlaceholder": "SSH host (optional)"
         },
         "PinnedWebPanelsSetting": {
           "title": "Pinned web panels",

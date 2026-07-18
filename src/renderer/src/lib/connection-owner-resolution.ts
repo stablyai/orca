@@ -1,6 +1,10 @@
 import type { AppState } from '@/store/types'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { isSentinelWorktreeId } from '../../../shared/pinned-terminal-panels'
+import {
+  getPinnedTerminalPanelHostForWorktreeId,
+  isPinnedTerminalPanelWorktreeId,
+  isSentinelWorktreeId
+} from '../../../shared/pinned-terminal-panels'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -15,7 +19,8 @@ import {
 type ConnectionOwnerState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'settings'>>
 
 export function createConnectionIdForFileSelector(
   worktreeId: string | null,
@@ -51,7 +56,13 @@ export function getConnectionIdFromState(
   state: ConnectionOwnerState,
   worktreeId: string | null
 ): string | null | undefined {
-  if (!worktreeId || isSentinelWorktreeId(worktreeId)) {
+  if (!worktreeId) {
+    return null
+  }
+  if (isPinnedTerminalPanelWorktreeId(worktreeId)) {
+    return getPinnedTerminalPanelHostForWorktreeId(state.settings?.pinnedTerminalPanels, worktreeId)
+  }
+  if (isSentinelWorktreeId(worktreeId)) {
     return null
   }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)

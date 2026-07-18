@@ -4,7 +4,11 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { isSentinelWorktreeId } from '../../../shared/pinned-terminal-panels'
+import {
+  getPinnedTerminalPanelHostForWorktreeId,
+  isPinnedTerminalPanelWorktreeId,
+  isSentinelWorktreeId
+} from '../../../shared/pinned-terminal-panels'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
@@ -49,6 +53,13 @@ export function getResolvedExecutionHostIdForWorktree(
 ): ExecutionHostId | null {
   if (!worktreeId) {
     return null
+  }
+  if (isPinnedTerminalPanelWorktreeId(worktreeId)) {
+    const host = getPinnedTerminalPanelHostForWorktreeId(
+      state.settings?.pinnedTerminalPanels,
+      worktreeId
+    )
+    return host !== null ? toSshExecutionHostId(host) : LOCAL_EXECUTION_HOST_ID
   }
   if (isSentinelWorktreeId(worktreeId)) {
     return LOCAL_EXECUTION_HOST_ID

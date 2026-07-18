@@ -56,6 +56,7 @@ export function PinnedTerminalPanelsSetting({
   const panels = settings.pinnedTerminalPanels ?? []
   const [draftTitle, setDraftTitle] = React.useState('')
   const [draftCommand, setDraftCommand] = React.useState('')
+  const [draftHost, setDraftHost] = React.useState('')
 
   const draftCommandValid = draftCommand.trim().length > 0
 
@@ -63,14 +64,17 @@ export function PinnedTerminalPanelsSetting({
     if (!draftCommandValid || panels.length >= MAX_PINNED_TERMINAL_PANELS) {
       return
     }
+    const trimmedHost = draftHost.trim()
     const panel: PinnedTerminalPanel = {
       id: crypto.randomUUID(),
       title: draftTitle.trim(),
-      command: draftCommand.trim()
+      command: draftCommand.trim(),
+      ...(trimmedHost.length > 0 ? { host: trimmedHost } : {})
     }
     updateSettings({ pinnedTerminalPanels: [...panels, panel] })
     setDraftTitle('')
     setDraftCommand('')
+    setDraftHost('')
   }
 
   const removePanel = (id: string): void => {
@@ -87,6 +91,7 @@ export function PinnedTerminalPanelsSetting({
                 <div className="truncate text-[13px] font-medium">{panel.title}</div>
                 <div className="truncate font-mono text-[11px] text-muted-foreground">
                   {panel.command}
+                  {panel.host ? ` @ ${panel.host}` : ''}
                 </div>
               </div>
               <Button
@@ -126,6 +131,20 @@ export function PinnedTerminalPanelsSetting({
             }}
             placeholder="nvtop"
             className="h-7 flex-1 font-mono text-[12px]"
+          />
+          <Input
+            value={draftHost}
+            onChange={(e) => setDraftHost(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                addPanel()
+              }
+            }}
+            placeholder={translate(
+              'auto.components.settings.PinnedTerminalPanelsSetting.hostPlaceholder',
+              'SSH host (optional)'
+            )}
+            className="h-7 w-36 font-mono text-[12px]"
           />
           <Button
             variant="secondary"

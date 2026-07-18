@@ -11,17 +11,55 @@ const MAX_PANEL_TITLE_LENGTH = 60
 // payloads into every settings broadcast.
 const MAX_PANEL_COMMAND_LENGTH = 500
 
+// Why: hosts are SSH target ids typed into settings; anything longer is a
+// corrupted profile, not a hostname.
+const MAX_PANEL_HOST_LENGTH = 128
+
 /** Tab host for panel terminals — a sentinel workspace like the floating
  *  workspace, so panel tabs never attach to a real repo worktree. */
 export const PINNED_TERMINAL_PANELS_WORKTREE_ID = 'global-pinned-terminal-panels'
 
+const PANEL_WORKTREE_ID_PREFIX = `${PINNED_TERMINAL_PANELS_WORKTREE_ID}::`
+
+/** Per-panel tab host id. Panel identity rides the worktree id so host
+ *  resolution (connection, execution host), which only ever sees a worktree
+ *  id, can find the panel's configured SSH host. */
+export function pinnedTerminalPanelWorktreeId(panelId: string): string {
+  return `${PANEL_WORKTREE_ID_PREFIX}${panelId}`
+}
+
+export function getPinnedTerminalPanelIdFromWorktreeId(worktreeId: string): string | null {
+  if (!worktreeId.startsWith(PANEL_WORKTREE_ID_PREFIX)) {
+    return null
+  }
+  const panelId = worktreeId.slice(PANEL_WORKTREE_ID_PREFIX.length)
+  return panelId.length > 0 ? panelId : null
+}
+
+export function isPinnedTerminalPanelWorktreeId(worktreeId: string): boolean {
+  return (
+    worktreeId === PINNED_TERMINAL_PANELS_WORKTREE_ID ||
+    getPinnedTerminalPanelIdFromWorktreeId(worktreeId) !== null
+  )
+}
+
+/** SSH target id for a panel tab-host worktree id, or null for local panels,
+ *  unknown panels, and the legacy shared sentinel (always local). */
+export function getPinnedTerminalPanelHostForWorktreeId(
+  panels: readonly PinnedTerminalPanel[] | null | undefined,
+  worktreeId: string
+): string | null {
+  const panelId = getPinnedTerminalPanelIdFromWorktreeId(worktreeId)
+  if (panelId === null) {
+    return null
+  }
+  return panels?.find((panel) => panel.id === panelId)?.host ?? null
+}
+
 /** True for tab-host ids that are not real repo worktrees (floating workspace,
  *  pinned terminal panels) but still ride the normal terminal session pipeline. */
 export function isSentinelWorktreeId(worktreeId: string): boolean {
-  return (
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
-    worktreeId === PINNED_TERMINAL_PANELS_WORKTREE_ID
-  )
+  return worktreeId === FLOATING_TERMINAL_WORKTREE_ID || isPinnedTerminalPanelWorktreeId(worktreeId)
 }
 
 function normalizePinnedTerminalPanelCommand(value: unknown): string | null {
@@ -58,7 +96,7 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
     if (typeof entry !== 'object' || entry === null) {
       continue
     }
-    const { id, title, command } = entry as Record<string, unknown>
+    const { id, title, command, host } = entry as Record<string, unknown>
     const normalizedCommand = normalizePinnedTerminalPanelCommand(command)
     if (
       typeof id !== 'string' ||
@@ -70,6 +108,17 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
     }
     const trimmedTitle =
       typeof title === 'string' ? title.trim().slice(0, MAX_PANEL_TITLE_LENGTH) : ''
+    const trimmedHost = typeof host === 'string' ? host.trim() : ''
+    // Why: a present-but-malformed host drops the whole entry — silently
+    // degrading to local would run the command on the wrong machine.
+    if (
+      trimmedHost.length > MAX_PANEL_HOST_LENGTH ||
+      // eslint-disable-next-line no-control-regex -- intentional unicode range
+      /[\u0000-\u001f\u007f\s]/.test(trimmedHost)
+    ) {
+      continue
+    }
+    const normalizedHost = trimmedHost.length > 0 ? trimmedHost : null
     seenIds.add(id)
     panels.push({
       id,
@@ -77,7 +126,8 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
       // back to the command so the entry stays identifiable.
       title:
         trimmedTitle.length > 0 ? trimmedTitle : normalizedCommand.slice(0, MAX_PANEL_TITLE_LENGTH),
-      command: normalizedCommand
+      command: normalizedCommand,
+      ...(normalizedHost !== null ? { host: normalizedHost } : {})
     })
   }
   return panels
