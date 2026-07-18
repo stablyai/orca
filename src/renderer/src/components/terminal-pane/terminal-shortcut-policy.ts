@@ -1,5 +1,8 @@
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
-import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
+import type {
+  AgentShiftEnterEncoding,
+  WindowsShiftEnterEncoding
+} from './terminal-windows-shift-enter'
 
 export type TerminalShortcutEvent = {
   key: string
@@ -94,7 +97,8 @@ export function resolveTerminalShortcutAction(
   getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
   // Why: keybindings follow the client OS, but terminal byte protocols follow
   // the PTY host. They differ for macOS clients attached to Windows runtimes.
-  isWindowsTerminalHost: () => boolean = () => isWindows
+  isWindowsTerminalHost: () => boolean = () => isWindows,
+  getAgentShiftEnterEncoding?: () => AgentShiftEnterEncoding | null
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
@@ -161,6 +165,9 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
+    if (getAgentShiftEnterEncoding?.() === 'ctrl-j') {
+      return { type: 'sendInput', data: '\x0a' }
+    }
     // Why: negotiated KKP is authoritative on every host; trusted pane
     // evidence additionally preserves Droid's Windows encoding without KKP.
     const windowsHost = isWindowsTerminalHost()

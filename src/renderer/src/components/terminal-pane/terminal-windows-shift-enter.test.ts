@@ -1,8 +1,129 @@
 import { describe, expect, it } from 'vitest'
 import {
+  resolveAgentShiftEnterEncoding,
+  resolveAgentShiftEnterEncodingForPane,
   resolveWindowsShiftEnterEncoding,
   resolveWindowsShiftEnterEncodingForPane
 } from './terminal-windows-shift-enter'
+
+describe('resolveAgentShiftEnterEncoding', () => {
+  it('routes trusted Codex panes through Ctrl+J', () => {
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: 'codex', routingTrusted: true, shellForeground: false }
+      })
+    ).toBe('ctrl-j')
+  })
+
+  it('does not apply stale Codex routing to shells or newer null evidence', () => {
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: null, routingTrusted: true, shellForeground: true },
+        launchAgentType: 'codex'
+      })
+    ).toBeNull()
+  })
+
+  it('keeps Orca-known Codex routing available when remote process confirmation is unavailable', () => {
+    expect(
+      resolveAgentShiftEnterEncoding({
+        launchAgentType: 'codex',
+        allowUntrustedCodexFallback: true
+      })
+    ).toBe('ctrl-j')
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: 'codex', shellForeground: false },
+        launchAgentType: 'codex',
+        allowUntrustedCodexFallback: true
+      })
+    ).toBe('ctrl-j')
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: 'codex', shellForeground: false },
+        allowUntrustedCodexFallback: true
+      })
+    ).toBeNull()
+  })
+
+  it('keeps display-only Codex identity from routing bytes on local panes', () => {
+    expect(resolveAgentShiftEnterEncoding({ launchAgentType: 'codex' })).toBeNull()
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: 'codex', shellForeground: false },
+        launchAgentType: 'codex'
+      })
+    ).toBeNull()
+  })
+
+  it('does not reuse stale Codex launch identity after newer foreground evidence', () => {
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: null, shellForeground: false },
+        launchAgentType: 'codex'
+      })
+    ).toBeNull()
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: 'antigravity', shellForeground: false },
+        launchAgentType: 'codex'
+      })
+    ).toBeNull()
+  })
+
+  it('keeps routing scoped to the active leaf', () => {
+    const state = {
+      paneForegroundAgentByPaneKey: {
+        'tab:codex': { agent: 'codex' as const, routingTrusted: true, shellForeground: false }
+      },
+      agentLaunchConfigByPaneKey: {}
+    }
+
+    expect(resolveAgentShiftEnterEncodingForPane(state, 'tab:codex')).toBe('ctrl-j')
+    expect(resolveAgentShiftEnterEncodingForPane(state, 'tab:sibling')).toBeNull()
+  })
+
+  it('retires remote Codex fallback when pane launch ownership is cleared', () => {
+    const state = {
+      paneForegroundAgentByPaneKey: {
+        'tab:codex': { agent: 'codex' as const, shellForeground: false }
+      },
+      agentLaunchConfigByPaneKey: {
+        'tab:codex': { identity: { agentType: 'codex' as const } }
+      } as Record<string, { identity: { agentType: 'codex' } } | undefined>
+    }
+
+    expect(resolveAgentShiftEnterEncodingForPane(state, 'tab:codex', true)).toBe('ctrl-j')
+    delete state.agentLaunchConfigByPaneKey['tab:codex']
+    expect(resolveAgentShiftEnterEncodingForPane(state, 'tab:codex', true)).toBeNull()
+  })
+
+  it('blocks remote Codex fallback after explicit exit-risk evidence', () => {
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: { agent: 'codex', routingTrusted: false, shellForeground: false },
+        launchAgentType: 'codex',
+        allowUntrustedCodexFallback: true
+      })
+    ).toBeNull()
+  })
+
+  it('restores remote Codex fallback for a newer launch generation', () => {
+    expect(
+      resolveAgentShiftEnterEncoding({
+        foreground: {
+          agent: 'codex',
+          routingTrusted: false,
+          blockedLaunchRegisteredAt: 10,
+          shellForeground: false
+        },
+        launchAgentType: 'codex',
+        launchRegisteredAt: 11,
+        allowUntrustedCodexFallback: true
+      })
+    ).toBe('ctrl-j')
+  })
+})
 
 describe('resolveWindowsShiftEnterEncoding', () => {
   it('uses CSI-u only for trusted Droid process evidence', () => {

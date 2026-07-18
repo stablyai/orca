@@ -3,15 +3,70 @@ import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u'
+export type AgentShiftEnterEncoding = 'ctrl-j'
 
 type WindowsShiftEnterAgentSignals = {
   foreground?: PaneForegroundAgentEntry
   launchAgentType?: AgentType
+  launchRegisteredAt?: number
+  allowUntrustedCodexFallback?: boolean
 }
 
 type WindowsShiftEnterPaneState = {
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry | undefined>
-  agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
+  agentLaunchConfigByPaneKey: Record<
+    string,
+    { identity: { agentType?: AgentType }; registeredAt?: number } | undefined
+  >
+}
+
+export function resolveAgentShiftEnterEncoding(
+  signals: WindowsShiftEnterAgentSignals
+): AgentShiftEnterEncoding | null {
+  if (signals.foreground?.shellForeground) {
+    return null
+  }
+  // Why: remote panes cannot prove the next foreground process locally. An
+  // explicit false records newer exit-risk input and must block launch fallback.
+  if (
+    signals.foreground?.routingTrusted === false &&
+    (signals.foreground.blockedLaunchRegisteredAt ?? null) === (signals.launchRegisteredAt ?? null)
+  ) {
+    return null
+  }
+  const agent =
+    signals.foreground?.agent ??
+    (signals.foreground === undefined &&
+    signals.allowUntrustedCodexFallback === true &&
+    signals.launchAgentType === 'codex'
+      ? 'codex'
+      : null)
+  // Why: remote, SSH, and WSL panes cannot provide local process confirmation.
+  // A newer null or other foreground entry still blocks stale launch identity.
+  if (
+    agent === 'codex' &&
+    (signals.foreground?.routingTrusted === true ||
+      (signals.allowUntrustedCodexFallback === true && signals.launchAgentType === 'codex'))
+  ) {
+    return TUI_AGENT_CONFIG.codex.shiftEnterEncoding ?? null
+  }
+  if (signals.foreground?.routingTrusted !== true) {
+    return null
+  }
+  return agent ? (TUI_AGENT_CONFIG[agent].shiftEnterEncoding ?? null) : null
+}
+
+export function resolveAgentShiftEnterEncodingForPane(
+  state: WindowsShiftEnterPaneState,
+  paneKey: string,
+  allowUntrustedCodexFallback = false
+): AgentShiftEnterEncoding | null {
+  return resolveAgentShiftEnterEncoding({
+    foreground: state.paneForegroundAgentByPaneKey[paneKey],
+    launchAgentType: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType,
+    launchRegisteredAt: state.agentLaunchConfigByPaneKey[paneKey]?.registeredAt,
+    allowUntrustedCodexFallback
+  })
 }
 
 /** Resolve without key-path PTY I/O; current process/shell evidence overrides

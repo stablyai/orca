@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { TerminalTab } from '../../../../shared/types'
+import { resolveAgentShiftEnterEncodingForPane } from '../../components/terminal-pane/terminal-windows-shift-enter'
 
 function terminalTab(id: string, worktreeId: string): TerminalTab {
   return {
@@ -30,6 +31,48 @@ describe('pane foreground agent slice', () => {
 
     store.getState().clearPaneForegroundAgent('tab-1:leaf-1')
     expect(store.getState().paneForegroundAgentByPaneKey).toEqual({})
+  })
+
+  it('updates a remote exit tombstone for each new launch generation', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const paneKey = 'tab-1:leaf-1'
+    const launchConfig = { agentArgs: '', agentEnv: {} }
+
+    vi.setSystemTime(10)
+    store.getState().registerAgentLaunchConfig(paneKey, launchConfig, {
+      agentType: 'codex',
+      launchToken: 'launch-10'
+    })
+    const generation10 = store.getState().agentLaunchConfigByPaneKey[paneKey]!.registeredAt
+    store.getState().setPaneForegroundAgent(paneKey, {
+      agent: 'codex',
+      routingTrusted: false,
+      blockedLaunchRegisteredAt: generation10,
+      shellForeground: false
+    })
+    expect(resolveAgentShiftEnterEncodingForPane(store.getState(), paneKey, true)).toBeNull()
+
+    vi.setSystemTime(10)
+    store.getState().registerAgentLaunchConfig(paneKey, launchConfig, {
+      agentType: 'codex',
+      launchToken: 'launch-11'
+    })
+    const generation11 = store.getState().agentLaunchConfigByPaneKey[paneKey]!.registeredAt
+    expect(generation11).toBeGreaterThan(generation10)
+    expect(resolveAgentShiftEnterEncodingForPane(store.getState(), paneKey, true)).toBe('ctrl-j')
+
+    store.getState().setPaneForegroundAgent(paneKey, {
+      agent: 'codex',
+      routingTrusted: false,
+      blockedLaunchRegisteredAt: generation11,
+      shellForeground: false
+    })
+    expect(store.getState().paneForegroundAgentByPaneKey[paneKey]?.blockedLaunchRegisteredAt).toBe(
+      generation11
+    )
+    expect(resolveAgentShiftEnterEncodingForPane(store.getState(), paneKey, true)).toBeNull()
+    vi.useRealTimers()
   })
 
   it('sweeps only the closed tab prefix, not sibling tabs or prefix-share ids', () => {
