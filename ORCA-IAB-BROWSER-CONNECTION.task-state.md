@@ -3,7 +3,7 @@
 ## Linear Source
 - 이슈: N/A
 - 링크: N/A
-- 상태: completed
+- 상태: in-progress
 - 담당: Codex
 
 ## Goal
@@ -47,7 +47,7 @@
 - 07/17 패널 배치와 Orca 전용 제어는 확인했으나 Browser 플러그인의 직접 발견은 실패했습니다.
 
 ## Current Status
-- 직접 연결 구현, dev·실사용 앱 검증, 독립 리뷰, 전체 빌드, 커밋, 개인 fork 백업과 `/Applications/Orca.app` 반영을 완료했습니다. 재시작된 실사용 Orca에서 공식 Browser가 현재 폴더 브라우저를 직접 발견했고 동일 탭 이동과 새 연결 재인식을 확인했습니다.
+- macOS 실사용 직접 연결은 완료했습니다. 사용자의 완전한 완수 요청에 따라 protocol negative coverage, Windows 경로, SSH 오연결 방지 검증과 원본 저장소 병합 요청을 추가 완료 범위로 진행합니다.
 
 ## Context Lens
 - Required: yes
@@ -123,6 +123,7 @@
 - 07/18 렌더러 process swap 시 stale CDP 연결 종료·새 프록시 재생성·진행 중 명령 1회 재시도 경로 추가
 - 07/18 최상위 `Page.navigate`를 renderer 소유 탭 모델과 `<webview>.src` 갱신 경로에 연결
 - 07/18 최종 dev 빌드에서 같은 Browser/tab 객체의 `example.com` → `example.org` 이동과 URL·제목·본문 읽기 성공, 별도 새 Browser 연결에서도 같은 tabId와 동일 콘텐츠 재확인
+- 07/18 fragmented·coalesced·malformed·oversized frame, Windows named-pipe 경로, POSIX 소켓 디렉토리 소유권·권한·symlink·regular-file 방어 테스트 추가
 
 ## Recent Changes
 - 규칙 우회가 아니라 Orca main process가 Browser 플러그인의 native-pipe backend가 되도록 제품 연결 계층을 추가했습니다.
@@ -137,16 +138,19 @@
 - [x] 변경 로컬 커밋
 - [x] 개인 fork 원격 백업
 - [x] 실사용 Orca 앱 반영과 최종 QA
+- [x] protocol 분할·병합·초과 크기·malformed frame 방어 검증
+- [x] Windows named-pipe와 SSH 제외 경계 검증
+- [ ] 원본 저장소 병합 요청
 
 ## Risks / Blockers
 - macOS local Codex 직접 연결과 process-swap 이동에는 코드 blocker가 없습니다.
-- SSH 세션은 local pipe 대상에서 제외했습니다. Windows named pipe 경로는 구현했지만 이번 macOS 환경에서는 실행 검증하지 않았습니다.
-- 잘못되거나 분할된 JSON-RPC frame에 대한 추가 방어 테스트는 후속 hardening 후보이며 현재 macOS local 목표의 완료 차단 사항은 아닙니다.
+- SSH 세션은 local pipe 대상에서 제외했습니다. Windows named pipe 경로는 구현·단위 검증했습니다.
+- Windows named-pipe 문자열 계약과 SSH 세션 제외는 단위 테스트로 검증했습니다. 실제 Windows OS와 SSH 원격 GUI 실행은 해당 환경의 CI/실행 검증이 필요합니다.
 - 원본 `stablyai/orca`에는 두 개인 계정 모두 쓰기 권한이 없어, 사용자 승인에 따라 `jeonghoon0126/orca` 개인 fork에 백업했습니다.
 
 ## Verification
 - 명령/방법: 관련 테스트, 타입 검사, 별도 dev 런타임의 Browser 플러그인 직접 연결
-- 결과: Browser 연결 테스트 15개와 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 99개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, 전체 desktop/native 빌드와 서명 검증 통과. dev 앱뿐 아니라 교체·재시작한 실사용 Orca에서도 공식 Browser가 `example.com`을 직접 읽고 같은 객체로 `example.org` 이동 후 URL·제목·본문을 읽었으며, 새 Browser 연결에서 같은 탭을 재인식했습니다. 검증용 탭은 정리하고 기존 사용자 탭은 보존했습니다.
+- 결과: Browser 연결·protocol hardening과 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 107개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, 전체 desktop/native 빌드와 서명 검증 통과. dev 앱뿐 아니라 교체·재시작한 실사용 Orca에서도 공식 Browser가 `example.com`을 직접 읽고 같은 객체로 `example.org` 이동 후 URL·제목·본문을 읽었으며, 새 Browser 연결에서 같은 탭을 재인식했습니다. 검증용 탭은 정리하고 기존 사용자 탭은 보존했습니다.
 
 ## Release / Handoff
 - 배포/반영 방식: 서명된 macOS unpack 앱을 `/Applications/Orca.app`에 반영하고 재시작
@@ -154,14 +158,14 @@
 - 원격 반영: `jeonghoon0126/orca` 개인 fork의 해결 브랜치
 
 ## Final Outcome
-- Browser 패널 직접 발견 문제를 코드·dev 앱·실사용 앱에서 해결했습니다. 설치 앱 교체 후 동일 탭 이동과 새 연결 재인식까지 통과했으며 blocker는 없습니다.
+- Browser 패널 직접 발견과 protocol hardening을 코드·dev 앱·실사용 앱에서 해결했습니다. 설치 앱 최신 반영과 원본 저장소 병합 요청이 남았습니다.
 
 ## Independent Review
 - Contract met: yes
 - Out-of-scope preserved: yes
 - Verification evidence present: yes
 - Ready for next session: yes
-- Result: blocker 0개 / major 0개 / minor 2개. minor는 문서 최신화와 protocol negative coverage이며 현재 완료 범위를 막지 않음
+- Result: 기존 리뷰 blocker 0개 / major 0개. 당시 minor였던 문서 최신화와 protocol negative coverage도 반영 완료
 
 ## Compact Preservation
 - Current work / 현재 작업: Orca Browser 플러그인 직접 연결·교차 출처 이동·재접속 구현, dev·실사용 검증, 앱 반영 완료
@@ -170,10 +174,10 @@
 - Decisions / 확정 판단: 독립 worktree, 테스트 우선, dev 새 세션 직접 검증
 - Rejected paths / 버린 대안: Orca CLI만으로 완료 처리, 기존 dirty checkout 수정, 다른 브라우저 전환
 - Evidence source paths / 근거 경로: 현재 작업 문서와 조사 후 확정할 코드·테스트
-- Verification / 검증: 공식 Browser 런타임 `iab` 발견, 같은 tab 객체의 `example.com` → `example.org` 이동과 새 connection 재접속 성공, 관련 테스트 99개·typecheck·lint·diff check 통과
-- Remaining risk / 남은 리스크: Windows와 SSH 원격 실행, protocol negative coverage는 이번 macOS local 완료 범위 밖
-- Resume next action / 재개 첫 행동: 없음. 후속 hardening이 필요하면 별도 작업으로 시작
+- Verification / 검증: 공식 Browser 런타임 `iab` 발견, 같은 tab 객체의 `example.com` → `example.org` 이동과 새 connection 재접속 성공, 관련 테스트 107개·typecheck·lint·diff check 통과
+- Remaining risk / 남은 리스크: 실제 Windows OS와 SSH 원격 GUI 실행은 원본 저장소 CI/해당 환경 검증 대상
+- Resume next action / 재개 첫 행동: hardening 커밋·실사용 앱 재반영 후 원본 저장소 PR 생성
 
 ## Next Step
-- 다음 세션이 바로 실행할 첫 행동 1개: 없음 — 현재 완료 상태 유지
+- 다음 세션이 바로 실행할 첫 행동 1개: hardening 변경을 커밋하고 개인 fork에 push
 - 이어 쓰면 안 되는 별도 작업: 기존 Shift+Enter 및 다른 Orca 기능 수정

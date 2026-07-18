@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Socket } from 'node:net'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { CodexBrowserUseBackend } from './codex-browser-use-backend'
@@ -9,7 +9,51 @@ import {
   type CodexBrowserUseAdapter
 } from './codex-browser-use-protocol'
 
-type RpcResponse = { id: number; result?: unknown; error?: { message: string } }
+type RpcResponse = { id: number | null; result?: unknown; error?: { message: string } }
+
+function encodeFrame(message: unknown): Buffer {
+  const body = Buffer.from(typeof message === 'string' ? message : JSON.stringify(message))
+  const frame = Buffer.allocUnsafe(body.length + 4)
+  frame.writeUInt32LE(body.length, 0)
+  body.copy(frame, 4)
+  return frame
+}
+
+async function connectedSocket(socketPath: string): Promise<Socket> {
+  const socket = connect(socketPath)
+  await new Promise<void>((resolve, reject) => {
+    socket.once('connect', resolve)
+    socket.once('error', reject)
+  })
+  return socket
+}
+
+async function readResponses(socket: Socket, count: number): Promise<RpcResponse[]> {
+  return await new Promise<RpcResponse[]>((resolve, reject) => {
+    let pending = Buffer.alloc(0)
+    const responses: RpcResponse[] = []
+    const onData = (chunk: Buffer) => {
+      pending = Buffer.concat([pending, Buffer.from(chunk)])
+      while (pending.length >= 4) {
+        const length = pending.readUInt32LE(0)
+        if (pending.length < length + 4) {
+          return
+        }
+        responses.push(JSON.parse(pending.subarray(4, length + 4).toString('utf8')) as RpcResponse)
+        pending = pending.subarray(length + 4)
+        if (responses.length === count) {
+          socket.off('data', onData)
+          socket.off('error', onError)
+          resolve(responses)
+          return
+        }
+      }
+    }
+    const onError = (error: Error) => reject(error)
+    socket.on('data', onData)
+    socket.once('error', onError)
+  })
+}
 
 async function rpc(socketPath: string, method: string, params: object): Promise<RpcResponse> {
   const socket = connect(socketPath)
@@ -86,6 +130,135 @@ describe('CodexBrowserUseBackend', () => {
     expect(defaultCodexBrowserUseSocketPath('linux', 42)).toBe(
       '/tmp/codex-browser-use/orca-42.sock'
     )
+  })
+
+  it('uses a process-scoped Windows named pipe without a POSIX path', () => {
+    expect(defaultCodexBrowserUseSocketPath('win32', 42)).toBe(
+      '\\\\.\\pipe\\codex-browser-use-orca-42'
+    )
+  })
+
+  it('locks an existing POSIX socket directory and the created socket to the current user', async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'orca-iab-test-'))
+    await chmod(tempDirectory, 0o755)
+    const socketPath = join(tempDirectory, 'backend.sock')
+    service = new CodexBrowserUseBackend(testAdapter(), { socketPath })
+
+    await service.start()
+
+    expect((await lstat(tempDirectory)).mode & 0o777).toBe(0o700)
+    expect((await lstat(socketPath)).mode & 0o777).toBe(0o600)
+  })
+
+  it('rejects a symbolic-link socket directory', async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'orca-iab-test-'))
+    const targetDirectory = join(tempDirectory, 'target')
+    const linkedDirectory = join(tempDirectory, 'linked')
+    await mkdir(targetDirectory)
+    await symlink(targetDirectory, linkedDirectory)
+    service = new CodexBrowserUseBackend(testAdapter(), {
+      socketPath: join(linkedDirectory, 'backend.sock')
+    })
+
+    await expect(service.start()).rejects.toThrow('not owned by the current user')
+  })
+
+  it('does not replace a regular file at the socket path', async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'orca-iab-test-'))
+    const socketPath = join(tempDirectory, 'backend.sock')
+    await writeFile(socketPath, 'keep-me')
+    service = new CodexBrowserUseBackend(testAdapter(), { socketPath })
+
+    await expect(service.start()).rejects.toThrow('not a user-owned socket')
+    expect((await lstat(socketPath)).isFile()).toBe(true)
+  })
+
+  it('accepts a request split across multiple socket chunks', async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'orca-iab-test-'))
+    const socketPath = join(tempDirectory, 'backend.sock')
+    service = new CodexBrowserUseBackend(testAdapter(), { socketPath })
+    await service.start()
+    const socket = await connectedSocket(socketPath)
+    const frame = encodeFrame({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getInfo',
+      params: { session_id: 'codex-session' }
+    })
+    const response = readResponses(socket, 1)
+
+    socket.write(frame.subarray(0, 2))
+    socket.write(frame.subarray(2, 7))
+    socket.write(frame.subarray(7))
+
+    await expect(response).resolves.toMatchObject([{ id: 1, result: { type: 'iab' } }])
+    socket.end()
+  })
+
+  it('accepts multiple request frames coalesced into one socket chunk', async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'orca-iab-test-'))
+    const socketPath = join(tempDirectory, 'backend.sock')
+    service = new CodexBrowserUseBackend(testAdapter(), { socketPath })
+    await service.start()
+    const socket = await connectedSocket(socketPath)
+    const responses = readResponses(socket, 2)
+
+    socket.write(
+      Buffer.concat([
+        encodeFrame({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'getInfo',
+          params: { session_id: 'codex-session' }
+        }),
+        encodeFrame({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'getTabs',
+          params: { session_id: 'codex-session' }
+        })
+      ])
+    )
+
+    await expect(responses).resolves.toEqual([
+      expect.objectContaining({ id: 1, result: expect.objectContaining({ type: 'iab' }) }),
+      expect.objectContaining({ id: 2, result: expect.any(Array) })
+    ])
+    socket.end()
+  })
+
+  it('returns a parse error for malformed JSON and keeps the connection usable', async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'orca-iab-test-'))
+    const socketPath = join(tempDirectory, 'backend.sock')
+    service = new CodexBrowserUseBackend(testAdapter(), { socketPath })
+    await service.start()
+    const socket = await connectedSocket(socketPath)
+    const malformedResponse = readResponses(socket, 1)
+
+    socket.write(encodeFrame('{'))
+
+    await expect(malformedResponse).resolves.toMatchObject([
+      { id: null, error: { message: expect.stringContaining('JSON') } }
+    ])
+    await expect(
+      rpcOnSocket(socket, 2, 'getInfo', { session_id: 'codex-session' })
+    ).resolves.toMatchObject({ id: 2, result: { type: 'iab' } })
+    socket.end()
+  })
+
+  it('closes a connection that advertises an oversized frame', async () => {
+    tempDirectory = await mkdtemp(join(tmpdir(), 'orca-iab-test-'))
+    const socketPath = join(tempDirectory, 'backend.sock')
+    service = new CodexBrowserUseBackend(testAdapter(), { socketPath })
+    await service.start()
+    const socket = await connectedSocket(socketPath)
+    const closed = new Promise<void>((resolve) => socket.once('close', () => resolve()))
+    const header = Buffer.alloc(4)
+    header.writeUInt32LE(16 * 1024 * 1024 + 1, 0)
+
+    socket.write(header)
+
+    await expect(closed).resolves.toBeUndefined()
   })
 
   it('advertises only the worktree owned by the requesting Codex session', async () => {

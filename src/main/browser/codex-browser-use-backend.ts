@@ -1,6 +1,6 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { chmod, mkdir, rm } from 'node:fs/promises'
+import { chmod, lstat, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   defaultCodexBrowserUseSocketPath,
@@ -12,6 +12,36 @@ import {
 import { CodexBrowserUseRpcRouter } from './codex-browser-use-rpc-router'
 
 const MAX_FRAME_BYTES = 16 * 1024 * 1024
+
+async function preparePosixSocketPath(socketPath: string): Promise<void> {
+  const directory = dirname(socketPath)
+  await mkdir(directory, { recursive: true, mode: 0o700 })
+  const directoryStat = await lstat(directory)
+  const currentUserId = process.getuid?.()
+  if (
+    !directoryStat.isDirectory() ||
+    directoryStat.isSymbolicLink() ||
+    (currentUserId !== undefined && directoryStat.uid !== currentUserId)
+  ) {
+    throw new Error('Browser backend socket directory is not owned by the current user')
+  }
+  await chmod(directory, 0o700)
+
+  try {
+    const socketStat = await lstat(socketPath)
+    if (
+      !socketStat.isSocket() ||
+      (currentUserId !== undefined && socketStat.uid !== currentUserId)
+    ) {
+      throw new Error('Browser backend socket path is not a user-owned socket')
+    }
+    await rm(socketPath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error
+    }
+  }
+}
 
 export type CodexBrowserUseConnectionAttachment = {
   sessionId: string
@@ -32,6 +62,7 @@ export class CodexBrowserUseBackend {
   private server: Server | null = null
   private readonly router: CodexBrowserUseRpcRouter
   private readonly sockets = new Set<Socket>()
+  private ownsSocketPath = false
 
   constructor(
     private readonly adapter: CodexBrowserUseAdapter,
@@ -48,8 +79,7 @@ export class CodexBrowserUseBackend {
       return
     }
     if (process.platform !== 'win32') {
-      await mkdir(dirname(this.socketPath), { recursive: true, mode: 0o700 })
-      await rm(this.socketPath, { force: true })
+      await preparePosixSocketPath(this.socketPath)
     }
 
     const server = createServer((socket) => this.accept(socket))
@@ -63,11 +93,16 @@ export class CodexBrowserUseBackend {
         })
       })
       if (process.platform !== 'win32') {
+        this.ownsSocketPath = true
         await chmod(this.socketPath, 0o600)
       }
     } catch (error) {
       this.server = null
       server.close()
+      if (process.platform !== 'win32' && this.ownsSocketPath) {
+        this.ownsSocketPath = false
+        await rm(this.socketPath, { force: true })
+      }
       throw error
     }
   }
@@ -82,7 +117,8 @@ export class CodexBrowserUseBackend {
     if (server) {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
-    if (process.platform !== 'win32') {
+    if (process.platform !== 'win32' && this.ownsSocketPath) {
+      this.ownsSocketPath = false
       await rm(this.socketPath, { force: true })
     }
     this.router.clear()
@@ -106,7 +142,8 @@ export class CodexBrowserUseBackend {
       while (pending.length >= 4) {
         const length = pending.readUInt32LE(0)
         if (length > MAX_FRAME_BYTES) {
-          socket.destroy(new Error('Browser backend frame exceeds the size limit'))
+          // An oversized prefix is untrusted and has no safe request id to answer.
+          socket.destroy()
           return
         }
         if (pending.length < length + 4) {
