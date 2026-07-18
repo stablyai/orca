@@ -15098,7 +15098,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     // Why: cursor-agent's native OSC title is status-null by design, but still
-    // identifies a live Cursor session for guarded note sends (#7935).
+    // identifies a live Cursor session for guarded note sends.
     syncSinglePty(runtime, 'pty-1', { paneTitle: 'Cursor Agent' })
     const [terminal] = (await runtime.listTerminals()).terminals
 

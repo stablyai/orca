@@ -28374,7 +28374,7 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   }
   // Why: bare "Cursor Agent" is status-null by design (hooks own working/idle),
   // but it still identifies a live Cursor session for is-running-agent and
-  // guarded note sends — without this, native title frames refuse the send (#7935).
+  // guarded note sends — without this, native title frames refuse the send.
   if (isCursorAgentTitle(title)) {
     return 'agent'
   }
