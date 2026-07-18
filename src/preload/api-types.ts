@@ -660,12 +660,14 @@ export type PreflightApi = {
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
+  isConptyAvailable: () => Promise<boolean>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
     wslAvailable: boolean
     wslDistros: string[]
     pwshAvailable: boolean
     gitBashAvailable: boolean
     hostPlatform: NodeJS.Platform | null
+    conptyAvailable: boolean
   }>
 }
 

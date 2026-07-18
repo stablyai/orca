@@ -796,7 +796,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         registerPtyDataHandler(spawnResult.id)
         const exitedBeforeAttach = registerPtyExitHandler(spawnResult.id)
         if (exitedBeforeAttach) {
-          return { id: spawnResult.id, exitedBeforeAttach: true } satisfies PtyConnectResult
+          return {
+            id: spawnResult.id,
+            exitedBeforeAttach: true,
+            ...(spawnResult.warning ? { warning: spawnResult.warning } : {})
+          } satisfies PtyConnectResult
         }
         if (!connected || ptyId !== spawnResult.id) {
           return undefined
@@ -817,17 +821,24 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay,
-            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi
+            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi,
+            ...(spawnResult.warning ? { warning: spawnResult.warning } : {})
           } satisfies PtyConnectResult
         }
-        if (resultLaunchAgent || spawnResult.launchConfig || spawnResult.startupCwdFallback) {
+        if (
+          resultLaunchAgent ||
+          spawnResult.launchConfig ||
+          spawnResult.startupCwdFallback ||
+          spawnResult.warning
+        ) {
           return {
             id: spawnResult.id,
             ...(resultLaunchAgent ? { launchAgent: resultLaunchAgent } : {}),
             ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             ...(spawnResult.startupCwdFallback
               ? { startupCwdFallback: spawnResult.startupCwdFallback }
-              : {})
+              : {}),
+            ...(spawnResult.warning ? { warning: spawnResult.warning } : {})
           } satisfies PtyConnectResult
         }
         return spawnResult.id

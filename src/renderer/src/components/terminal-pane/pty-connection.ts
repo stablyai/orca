@@ -96,8 +96,12 @@ import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
+
+let conptyWarningShown = false
 import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
@@ -4688,6 +4692,24 @@ export function connectPanePty(
               writeTerminalOutput(pane.terminal, STARTUP_CWD_FALLBACK_NOTICE, {
                 foreground: shouldWritePtyOutputForeground(deps.isVisibleRef.current)
               })
+            }
+            if (
+              spawnedPtyId &&
+              typeof spawnedPtyId === 'object' &&
+              spawnedPtyId.warning &&
+              !conptyWarningShown
+            ) {
+              conptyWarningShown = true
+              toast.warning(
+                translate(
+                  'auto.components.terminal.pane.conpty.warning.title',
+                  'Terminal compatibility warning'
+                ),
+                {
+                  description: spawnedPtyId.warning,
+                  duration: 10000
+                }
+              )
             }
             if (coldRestoreOverride?.hasSleepingRecord) {
               showSessionRestoredBanner()

@@ -56,6 +56,7 @@ export type PtyConnectResult = {
    *  replay writes it LAST (after the reset) so a racing live continuation
    *  completes it instead of rendering literally (#7329). */
   pendingEscapeTailAnsi?: string
+  warning?: string
 }
 
 type PtyCallbacks = {

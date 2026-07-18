@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import {
   readWindowsTerminalCapabilities,
   type WindowsTerminalCapabilityLoadTarget
@@ -10,6 +12,7 @@ export type WindowsTerminalCapabilities = {
   pwshAvailable: boolean
   gitBashAvailable: boolean
   hostPlatform: NodeJS.Platform | null
+  conptyAvailable: boolean
   isLoading: boolean
 }
 
@@ -19,6 +22,7 @@ const UNAVAILABLE_CAPABILITIES: WindowsTerminalCapabilities = {
   pwshAvailable: false,
   gitBashAvailable: false,
   hostPlatform: null,
+  conptyAvailable: false,
   isLoading: false
 }
 
@@ -35,6 +39,7 @@ const subscribersByOwnerKey = new Map<
   string,
   Set<(capabilities: WindowsTerminalCapabilities) => void>
 >()
+const conptyWarningShownByOwnerKey = new Set<string>()
 
 type WindowsTerminalCapabilityHookState = {
   ownerKey: string
@@ -79,6 +84,26 @@ function publish(
   cachedCapabilitiesByOwnerKey.delete(ownerKey)
   cachedCapabilitiesByOwnerKey.set(ownerKey, { capabilities, loadedAt })
   trimCapabilityOwnerCaches()
+
+  if (
+    capabilities.hostPlatform === 'win32' &&
+    !capabilities.conptyAvailable &&
+    !conptyWarningShownByOwnerKey.has(ownerKey)
+  ) {
+    conptyWarningShownByOwnerKey.add(ownerKey)
+    toast.warning(
+      translate(
+        'auto.components.terminal.pane.conpty.warning.title',
+        'Terminal compatibility warning'
+      ),
+      {
+        description:
+          "This Windows version doesn't support ConPTY — full-screen terminal apps (tmux, vim, htop) may not render correctly.",
+        duration: 10000
+      }
+    )
+  }
+
   for (const subscriber of subscribersByOwnerKey.get(ownerKey) ?? []) {
     subscriber(capabilities)
   }
@@ -269,4 +294,5 @@ export function resetWindowsTerminalCapabilitiesForTests(): void {
   nextCapabilityRequestId = 0
   latestCapabilityRequestIdByOwnerKey.clear()
   subscribersByOwnerKey.clear()
+  conptyWarningShownByOwnerKey.clear()
 }

@@ -11,7 +11,8 @@ const {
   spawnMock,
   resolveAgentForegroundProcessMock,
   captureDescendantSnapshotMock,
-  terminateDescendantSnapshotMock
+  terminateDescendantSnapshotMock,
+  isConptyAvailableMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -21,7 +22,12 @@ const {
   spawnMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   captureDescendantSnapshotMock: vi.fn(),
-  terminateDescendantSnapshotMock: vi.fn()
+  terminateDescendantSnapshotMock: vi.fn(),
+  isConptyAvailableMock: vi.fn()
+}))
+
+vi.mock('./windows-pty-backend', () => ({
+  isConptyAvailable: isConptyAvailableMock
 }))
 
 vi.mock('fs', () => ({
@@ -140,6 +146,7 @@ describe('LocalPtyProvider', () => {
     captureDescendantSnapshotMock.mockResolvedValue(null)
     terminateDescendantSnapshotMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
+    isConptyAvailableMock.mockReturnValue(true)
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => ({
         available: true,
@@ -237,6 +244,22 @@ describe('LocalPtyProvider', () => {
           cwd: '/tmp'
         })
       )
+    })
+
+    it('attaches ConPTY warning on Windows when ConPTY is not available', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      isConptyAvailableMock.mockReturnValue(false)
+      const result = await provider.spawn({ cols: 80, rows: 24 })
+      expect(result.warning).toBe(
+        "This Windows version doesn't support ConPTY — full-screen terminal apps (tmux, vim, htop) may not render correctly."
+      )
+    })
+
+    it('does not attach ConPTY warning on Windows when ConPTY is available', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      isConptyAvailableMock.mockReturnValue(true)
+      const result = await provider.spawn({ cols: 80, rows: 24 })
+      expect(result.warning).toBeUndefined()
     })
 
     it('throws when cwd does not exist', async () => {

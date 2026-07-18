@@ -10,10 +10,12 @@ const {
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
   resolveUnixShellPathMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  isConptyAvailableMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
+  isConptyAvailableMock: vi.fn(),
   resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
@@ -23,6 +25,10 @@ const {
       )
     }
   })
+}))
+
+vi.mock('../providers/windows-pty-backend', () => ({
+  isConptyAvailable: isConptyAvailableMock
 }))
 
 vi.mock('node-pty', () => ({
@@ -124,6 +130,7 @@ describe('createPtySubprocess', () => {
     resolveUnixShellPathMock.mockReset()
     resolveUnixShellPathMock.mockImplementation((shellPath: string) => shellPath)
     isPwshAvailableMock.mockReturnValue(false)
+    isConptyAvailableMock.mockReturnValue(true)
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     previousPowerlevelWizardDisable = process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-subprocess-test-'))
@@ -186,6 +193,54 @@ describe('createPtySubprocess', () => {
         name: 'xterm-256color'
       })
     )
+  })
+
+  it('attaches ConPTY warning on win32 spawn when ConPTY is not available', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    isConptyAvailableMock.mockReturnValue(false)
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\user',
+        env: { SHELL: 'cmd.exe' }
+      })
+      expect(handle.warning).toBe(
+        "This Windows version doesn't support ConPTY — full-screen terminal apps (tmux, vim, htop) may not render correctly."
+      )
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('does not attach ConPTY warning on win32 spawn when ConPTY is available', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    isConptyAvailableMock.mockReturnValue(true)
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\user',
+        env: { SHELL: 'cmd.exe' }
+      })
+      expect(handle.warning).toBeUndefined()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('appends Git prompt guards after the detached daemon inherited config', () => {

@@ -30,4 +30,5 @@ export type CreateOrAttachResult = {
   historySeeded?: boolean
   launchAgent?: TuiAgent
   attachToken: symbol
+  warning?: string
 }

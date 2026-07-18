@@ -2611,13 +2611,15 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     pwshAvailable: boolean
     gitBashAvailable: boolean
     hostPlatform: NodeJS.Platform | null
+    conptyAvailable: boolean
   }
   const fallbackWindowsTerminalCapabilities = {
     wslAvailable: false,
     wslDistros: [],
     pwshAvailable: false,
     gitBashAvailable: false,
-    hostPlatform: null
+    hostPlatform: null,
+    conptyAvailable: false
   }
   return {
     check: async (args) => {
@@ -2642,6 +2644,7 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])
         : [],
+    isConptyAvailable: () => Promise.resolve(false),
     detectRemoteWindowsTerminalCapabilities: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<WindowsTerminalCapabilityBridgeResult>(

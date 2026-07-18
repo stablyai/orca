@@ -5,13 +5,23 @@ const { execFileAsyncMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn()
 }))
 
-const { isPwshAvailableMock, isWslAvailableMock, listWslDistrosMock, isGitBashAvailableMock } =
-  vi.hoisted(() => ({
-    isPwshAvailableMock: vi.fn(),
-    isWslAvailableMock: vi.fn(),
-    listWslDistrosMock: vi.fn(),
-    isGitBashAvailableMock: vi.fn()
-  }))
+const {
+  isPwshAvailableMock,
+  isWslAvailableMock,
+  listWslDistrosMock,
+  isGitBashAvailableMock,
+  isConptyAvailableMock
+} = vi.hoisted(() => ({
+  isPwshAvailableMock: vi.fn(),
+  isWslAvailableMock: vi.fn(),
+  listWslDistrosMock: vi.fn(),
+  isGitBashAvailableMock: vi.fn(),
+  isConptyAvailableMock: vi.fn()
+}))
+
+vi.mock('../main/providers/windows-pty-backend', () => ({
+  isConptyAvailable: isConptyAvailableMock
+}))
 
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
@@ -65,6 +75,8 @@ beforeEach(() => {
   isWslAvailableMock.mockReset()
   listWslDistrosMock.mockReset()
   isGitBashAvailableMock.mockReset()
+  isConptyAvailableMock.mockReset()
+  isConptyAvailableMock.mockReturnValue(true)
 })
 
 describe('buildCommandLookupSpec', () => {
@@ -338,12 +350,24 @@ describe('PreflightHandler', () => {
     try {
       const handler = requestHandlers.get('preflight.detectWindowsTerminalCapabilities')
       expect(handler).toBeDefined()
+      isConptyAvailableMock.mockReturnValue(true)
       await expect(handler!({})).resolves.toEqual({
         wslAvailable: true,
         wslDistros: ['Ubuntu'],
         pwshAvailable: true,
         gitBashAvailable: true,
-        hostPlatform: 'win32'
+        hostPlatform: 'win32',
+        conptyAvailable: true
+      })
+
+      isConptyAvailableMock.mockReturnValue(false)
+      await expect(handler!({})).resolves.toEqual({
+        wslAvailable: true,
+        wslDistros: ['Ubuntu'],
+        pwshAvailable: true,
+        gitBashAvailable: true,
+        hostPlatform: 'win32',
+        conptyAvailable: false
       })
     } finally {
       Object.defineProperty(process, 'platform', {
