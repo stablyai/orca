@@ -144,12 +144,14 @@ export function patchPackagedProcessPath(): void {
         join(home, '.nix-profile/bin'),
         // Why: several agent CLIs ship install scripts that drop binaries into
         // tool-specific ~/.<name>/bin directories (opencode's documented fallback,
-        // Pi's vite-plus installer). GUI-launched Electron inherits a minimal PATH
-        // without shell rc files, so these stay invisible to `which` probes — and
-        // the Agents settings page reports them as "Not installed" even when the
-        // user can run them from Terminal. See stablyai/orca#829.
+        // Pi's vite-plus installer, Grok's ~/.grok/bin). GUI-launched Electron
+        // inherits a minimal PATH without shell rc files, so these stay invisible
+        // to `which` probes — and the Agents settings page reports them as "Not
+        // installed" even when the user can run them from Terminal. See
+        // stablyai/orca#829.
         join(home, '.opencode/bin'),
-        join(home, '.vite-plus/bin')
+        join(home, '.vite-plus/bin'),
+        join(home, '.grok/bin')
       )
     }
   }
