@@ -137,7 +137,7 @@ describe('keybindings', () => {
         { key: '¡', code: 'Digit1', meta: true, control: false, alt: true, shift: false },
         'darwin'
       )
-    ).toEqual({ ok: false, error: 'Press a key, not only a modifier.' })
+    ).toEqual({ ok: true, value: 'Mod+Alt+1' })
   })
 
   it('applies per-action bare-key rules while capturing shortcuts', () => {
@@ -368,7 +368,7 @@ describe('keybindings', () => {
       })
     ).toContainEqual({
       binding: 'Mod+3',
-      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+      actionIds: expect.arrayContaining(['tab.selectByIndex', 'tab.openQuickCommandsMenu'])
     })
 
     expect(
@@ -377,7 +377,7 @@ describe('keybindings', () => {
       })
     ).toContainEqual({
       binding: 'Cmd+3',
-      actionIds: expect.arrayContaining(['workspace.selectByIndex', 'tab.openQuickCommandsMenu'])
+      actionIds: expect.arrayContaining(['tab.selectByIndex', 'tab.openQuickCommandsMenu'])
     })
 
     expect(
@@ -1546,23 +1546,24 @@ describe('digit-index shortcuts', () => {
   it('flags the two ranged actions as digit-index rows', () => {
     expect(isDigitIndexActionId('tab.selectByIndex')).toBe(true)
     expect(isDigitIndexActionId('workspace.selectByIndex')).toBe(true)
+    expect(isDigitIndexActionId('webAi.selectByIndex')).toBe(true)
     expect(isDigitIndexActionId('tab.newTerminal')).toBe(false)
   })
 
   it('resolves the default ranges per platform', () => {
-    // macOS: workspace = Cmd+1-9, tab = Ctrl+1-9.
+    // macOS: account = Option+1-9, workspace = Ctrl+1-9, tab = Cmd+1-9.
+    expect(
+      matchKeybindingDigitIndex('webAi.selectByIndex', digitInput('3', { alt: true }), 'darwin')
+    ).toBe(2)
     expect(
       matchKeybindingDigitIndex(
         'workspace.selectByIndex',
-        digitInput('3', { meta: true }),
+        digitInput('3', { control: true }),
         'darwin'
       )
     ).toBe(2)
     expect(
       matchKeybindingDigitIndex('tab.selectByIndex', digitInput('3', { meta: true }), 'darwin')
-    ).toBeNull()
-    expect(
-      matchKeybindingDigitIndex('tab.selectByIndex', digitInput('3', { control: true }), 'darwin')
     ).toBe(2)
 
     // Windows/Linux: workspace = Ctrl+1-9, tab = Alt+1-9.
@@ -1628,7 +1629,7 @@ describe('digit-index shortcuts', () => {
     expect(
       matchKeybindingDigitIndex(
         'tab.selectByIndex',
-        digitInput('2', { control: true }),
+        digitInput('2', { meta: true }),
         'darwin',
         undefined,
         {
@@ -1640,7 +1641,7 @@ describe('digit-index shortcuts', () => {
     expect(
       matchKeybindingDigitIndex(
         'tab.selectByIndex',
-        digitInput('2', { control: true }),
+        digitInput('2', { meta: true }),
         'darwin',
         undefined,
         {
@@ -1655,17 +1656,16 @@ describe('digit-index shortcuts', () => {
     expect(
       keybindingFromInputForAction(
         'workspace.selectByIndex',
-        digitInput('7', { meta: true }),
-        'darwin'
-      )
-    ).toEqual({ ok: true, value: 'Mod+1' })
-    expect(
-      keybindingFromInputForAction(
-        'tab.selectByIndex',
-        digitInput('9', { control: true }),
+        digitInput('7', { control: true }),
         'darwin'
       )
     ).toEqual({ ok: true, value: 'Ctrl+1' })
+    expect(
+      keybindingFromInputForAction('tab.selectByIndex', digitInput('9', { meta: true }), 'darwin')
+    ).toEqual({ ok: true, value: 'Mod+1' })
+    expect(
+      keybindingFromInputForAction('webAi.selectByIndex', digitInput('8', { alt: true }), 'darwin')
+    ).toEqual({ ok: true, value: 'Alt+1' })
     // A non-number chord is rejected with guidance.
     expect(
       keybindingFromInputForAction(
@@ -1684,9 +1684,29 @@ describe('digit-index shortcuts', () => {
         'darwin'
       )
     ).toEqual({ ok: true, value: 'Ctrl+Shift+1' })
-    expect(normalizeKeybindingListForAction('workspace.selectByIndex', 'Mod+Shift+5')).toEqual([
-      'Mod+Shift+1'
+    expect(normalizeKeybindingListForAction('workspace.selectByIndex', 'Ctrl+Shift+5')).toEqual([
+      'Ctrl+Shift+1'
     ])
+  })
+
+  it('captures and matches macOS Option-composed digits by physical code', () => {
+    const optionOne = {
+      key: '¡',
+      code: 'Digit1',
+      meta: false,
+      control: false,
+      alt: true,
+      shift: false
+    }
+    expect(keybindingFromInputForAction('webAi.selectByIndex', optionOne, 'darwin')).toEqual({
+      ok: true,
+      value: 'Alt+1'
+    })
+    expect(keybindingMatchesAction('webAi.selectByIndex', optionOne, 'darwin')).toBe(true)
+    expect(matchKeybindingDigitIndex('webAi.selectByIndex', optionOne, 'darwin')).toBe(0)
+
+    const optionNine = { ...optionOne, key: 'ª', code: 'Digit9' }
+    expect(matchKeybindingDigitIndex('webAi.selectByIndex', optionNine, 'darwin')).toBe(8)
   })
 
   it('matches via the physical-code fallback when the key value is unavailable', () => {
@@ -1694,14 +1714,16 @@ describe('digit-index shortcuts', () => {
     expect(
       matchKeybindingDigitIndex(
         'tab.selectByIndex',
-        { key: '', code: 'Digit5', meta: false, control: true, alt: false, shift: false },
+        { key: '', code: 'Digit5', meta: true, control: false, alt: false, shift: false },
         'darwin'
       )
     ).toBe(4)
   })
 
   it('canonicalizes stored bindings and rejects non-number chords', () => {
-    expect(normalizeKeybindingListForAction('workspace.selectByIndex', 'Mod+5')).toEqual(['Mod+1'])
+    expect(normalizeKeybindingListForAction('workspace.selectByIndex', 'Ctrl+5')).toEqual([
+      'Ctrl+1'
+    ])
     expect(normalizeKeybindingArrayForAction('tab.selectByIndex', ['Ctrl+9'])).toEqual(['Ctrl+1'])
     expect(normalizeKeybindingListForAction('tab.selectByIndex', 'Mod+P')).toMatchObject({
       ok: false

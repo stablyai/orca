@@ -2,10 +2,13 @@ import { translate } from '@/i18n/i18n'
 import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import type { WebAiAccount } from '../../../../shared/types'
+import { getWebAiAccountServiceLabel } from '../../../../shared/web-ai-accounts'
 
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
+  | 'new-web-ai-account'
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
@@ -18,6 +21,7 @@ export type TabCreateMenuOption = {
   keywords: readonly string[]
   label: string
   shell?: BuiltInWindowsTerminalShell
+  webAiAccountId?: string
 }
 
 export type TabCreateMenuOptionsContext = {
@@ -28,6 +32,7 @@ export type TabCreateMenuOptionsContext = {
   simulatorIsGoTo: boolean
   terminalOnly: boolean
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
+  webAiAccounts?: readonly WebAiAccount[]
 }
 
 export const TAB_CREATE_MENU_QUERY_MAX_BYTES = 2 * 1024
@@ -110,6 +115,26 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
         translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
         translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+      ]
+    })
+  }
+
+  for (const account of context.webAiAccounts ?? []) {
+    const serviceLabel = getWebAiAccountServiceLabel(account)
+    const label = `${account.label} / ${serviceLabel}`
+    options.push({
+      id: `new-web-ai-account:${account.id}`,
+      kind: 'new-web-ai-account',
+      label,
+      webAiAccountId: account.id,
+      keywords: [
+        account.label,
+        serviceLabel,
+        account.provider,
+        'web ai',
+        'profile',
+        'account',
+        'chat'
       ]
     })
   }

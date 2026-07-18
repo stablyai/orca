@@ -2582,6 +2582,37 @@ describe('createUISlice browser import hint dismissal', () => {
   })
 })
 
+describe('createUISlice Web AI accounts collapse state', () => {
+  it('persists collapse changes once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setWebAiAccountsCollapsed(true)
+    store.getState().setWebAiAccountsCollapsed(true)
+
+    expect(store.getState().webAiAccountsCollapsed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ webAiAccountsCollapsed: true })
+  })
+
+  it('hydrates only an explicit collapsed value', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ webAiAccountsCollapsed: true }))
+    expect(store.getState().webAiAccountsCollapsed).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ webAiAccountsCollapsed: undefined }))
+    expect(store.getState().webAiAccountsCollapsed).toBe(false)
+  })
+})
+
 describe('createUISlice feature interactions', () => {
   it('normalizes persisted feature interaction records during hydration', () => {
     const store = createUIStore()

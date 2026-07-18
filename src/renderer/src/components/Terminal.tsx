@@ -12,6 +12,8 @@ import {
 } from '@/constants/terminal'
 import { useAppStore } from '../store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWebAiBrowserWorkspaceId, WEB_AI_BROWSER_WORKSPACE_ID } from '../../../shared/constants'
+import { getWebAiAccountWorkspaceId, normalizeWebAiAccounts } from '../../../shared/web-ai-accounts'
 import { useAllWorktrees } from '../store/selectors'
 import { getConnectionId } from '../lib/connection-context'
 import { basename } from '../lib/path'
@@ -75,6 +77,7 @@ import {
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
+import { dispatchWorkspaceNewTabShortcut } from '@/lib/workspace-new-tab-shortcut'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
 import {
@@ -251,15 +254,26 @@ function Terminal(): React.JSX.Element | null {
   const terminalWorktreeParkingTimersRef = useRef(new Map<string, number>())
   const allWorktrees = useAllWorktrees()
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const webAiAccountsValue = useAppStore((s) => s.settings?.webAiAccounts)
+  const webAiWorkspaceSurfaces = useMemo(
+    () =>
+      normalizeWebAiAccounts(webAiAccountsValue).map((account) => ({
+        id: getWebAiAccountWorkspaceId(account.id),
+        path: ''
+      })),
+    [webAiAccountsValue]
+  )
   const workspaceSurfaces = useMemo(
     () => [
       ...allWorktrees.map((worktree) => ({ id: worktree.id, path: worktree.path })),
       ...folderWorkspaces.map((workspace) => ({
         id: folderWorkspaceKey(workspace.id),
         path: workspace.folderPath
-      }))
+      })),
+      ...webAiWorkspaceSurfaces,
+      { id: WEB_AI_BROWSER_WORKSPACE_ID, path: '' }
     ],
-    [allWorktrees, folderWorkspaces]
+    [allWorktrees, folderWorkspaces, webAiWorkspaceSurfaces]
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
@@ -1229,6 +1243,9 @@ function Terminal(): React.JSX.Element | null {
     if (!activeWorktreeId) {
       return
     }
+    if (isWebAiBrowserWorkspaceId(activeWorktreeId)) {
+      return
+    }
     // Why: in the paired web client, host session-tabs are authoritative.
     // Creating a local fallback races the host's initial terminal and duplicates tabs.
     if (isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))) {
@@ -1267,7 +1284,7 @@ function Terminal(): React.JSX.Element | null {
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
-      if (!activeWorktreeId) {
+      if (!activeWorktreeId || isWebAiBrowserWorkspaceId(activeWorktreeId)) {
         return
       }
       const targetGroupId =
@@ -1330,7 +1347,7 @@ function Terminal(): React.JSX.Element | null {
 
   const handleNewAgentTab = useCallback(
     (agent: TuiAgent) => {
-      if (!activeWorktreeId) {
+      if (!activeWorktreeId || isWebAiBrowserWorkspaceId(activeWorktreeId)) {
         return
       }
       const state = useAppStore.getState()
@@ -1357,7 +1374,7 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const handleNewSimulatorTab = useCallback(() => {
-    if (!activeWorktreeId) {
+    if (!activeWorktreeId || isWebAiBrowserWorkspaceId(activeWorktreeId)) {
       return
     }
     const targetGroupId =
@@ -1376,27 +1393,19 @@ function Terminal(): React.JSX.Element | null {
     const targetGroupId =
       useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
       useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
-    if (targetGroupId) {
-      void openNewBrowserTabInActiveWorkspace(targetGroupId)
+    if (isWebAiBrowserWorkspaceId(activeWorktreeId)) {
+      void openNewBrowserTabInActiveWorkspace(targetGroupId ?? '')
       return
     }
-    const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-    const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-      void createWebRuntimeSessionBrowserTab({
-        worktreeId: activeWorktreeId,
-        environmentId: runtimeEnvironmentId,
-        url: defaultUrl
-      })
-      return
-    }
-    createBrowserTab(activeWorktreeId, defaultUrl, {
-      title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
-      focusAddressBar: true
-    })
-  }, [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace])
+    // Keep all local and remote new-browser entry points in one resolver so an
+    // ordinary worktree's active Web AI tab retains its account/profile binding.
+    void openNewBrowserTabInActiveWorkspace(targetGroupId ?? '')
+  }, [activeWorktreeId, openNewBrowserTabInActiveWorkspace])
 
   const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
+    if (isWebAiBrowserWorkspaceId(useAppStore.getState().activeWorktreeId)) {
+      return
+    }
     await openTabBarEntry(args)
   }, [])
 
@@ -1432,7 +1441,7 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const handleNewFile = useCallback(async () => {
-    if (!activeWorktreeId) {
+    if (!activeWorktreeId || isWebAiBrowserWorkspaceId(activeWorktreeId)) {
       return
     }
     const targetGroupId =
@@ -1759,10 +1768,8 @@ function Terminal(): React.JSX.Element | null {
           keybindings
         })
       }
-      // Why: Cmd/Ctrl+T always opens a new terminal, regardless of which
-      // surface is active. Browser-tab creation has its own shortcut
-      // (Cmd/Ctrl+Shift+B) so users have a predictable way to spawn a
-      // terminal from anywhere in the central pane.
+      // Why: a Web AI account is a browser-only workspace. Cmd/Ctrl+T must
+      // inherit that account's profile instead of crossing into a terminal.
       if (!e.repeat && matchShortcut('tab.newTerminal')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newTerminal')
@@ -1770,7 +1777,20 @@ function Terminal(): React.JSX.Element | null {
           void createFloatingWorkspaceTerminalTab(useAppStore.getState())
           return
         }
-        handleNewTab()
+        const store = useAppStore.getState()
+        dispatchWorkspaceNewTabShortcut(
+          activeWorktreeId,
+          {
+            openBrowserTab: handleNewBrowserTab,
+            openTerminalTab: handleNewTab
+          },
+          {
+            activeBrowserTabId: store.activeBrowserTabId,
+            activeTabType: store.activeTabType,
+            browserTabsByWorktree: store.browserTabsByWorktree,
+            webAiAccounts: store.settings?.webAiAccounts
+          }
+        )
         return
       }
 
@@ -2188,6 +2208,7 @@ function Terminal(): React.JSX.Element | null {
             tabs={tabs}
             activeTabId={activeTabId}
             worktreeId={renderedActiveWorktreeId}
+            browserOnly={isWebAiBrowserWorkspaceId(renderedActiveWorktreeId)}
             onActivate={handleActivateTab}
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}

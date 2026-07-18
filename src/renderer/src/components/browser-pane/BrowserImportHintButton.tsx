@@ -20,13 +20,23 @@ import { getBrowserCookieImportSourceLabels } from '../../../../shared/browser-c
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
+import type { BrowserCookieImportScope, WebAiProvider } from '../../../../shared/types'
+import { isGoogleCookieImportScope } from '../../../../shared/browser-cookie-import-scope'
+import { getWebAiProvider } from '../../../../shared/web-ai-accounts'
+import type { BrowserProfileOperationOwner } from '@/lib/browser-profile-operation-owner'
 
 type BrowserImportHintButtonProps = {
   profileId: string | null
+  webAiProvider?: WebAiProvider | null
+  cookieImportScope?: BrowserCookieImportScope | null
+  owner?: BrowserProfileOperationOwner
 }
 
 export function BrowserImportHintButton({
-  profileId
+  profileId,
+  webAiProvider = null,
+  cookieImportScope = null,
+  owner
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
@@ -43,6 +53,15 @@ export function BrowserImportHintButton({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
   const effectiveProfileId = profileId ?? 'default'
+  const providerDefinition = webAiProvider ? getWebAiProvider(webAiProvider) : null
+  const cookieImportLabel = providerDefinition?.label ?? cookieImportScope?.label ?? null
+  const googleCookieScope = providerDefinition
+    ? providerDefinition.cookieDomains.some(
+        (domain) => domain === 'google.com' || domain.endsWith('.google.com')
+      )
+    : cookieImportScope
+      ? isGoogleCookieImportScope(cookieImportScope)
+      : false
   const shouldShow = shouldShowBrowserImportHint({
     persistedUIReady,
     browserImportHintHidden
@@ -72,10 +91,10 @@ export function BrowserImportHintButton({
       if (nextOpen) {
         // Why: macOS treats other browsers' profile folders as app data. Only
         // probe them when the user opens the import hint.
-        void fetchDetectedBrowsers()
+        void fetchDetectedBrowsers(owner)
       }
     },
-    [fetchDetectedBrowsers]
+    [fetchDetectedBrowsers, owner]
   )
 
   const handleImportFromBrowser = useCallback(
@@ -85,7 +104,10 @@ export function BrowserImportHintButton({
       const result = await importCookiesFromBrowser(
         effectiveProfileId,
         browserFamily,
-        browserProfile
+        browserProfile,
+        webAiProvider ?? undefined,
+        cookieImportScope ?? undefined,
+        owner
       )
       if (result.ok) {
         const browser = detectedBrowsers.find((entry) => entry.family === browserFamily)
@@ -104,13 +126,25 @@ export function BrowserImportHintButton({
       }
       toast.error(result.reason)
     },
-    [detectedBrowsers, effectiveProfileId, importCookiesFromBrowser]
+    [
+      cookieImportScope,
+      detectedBrowsers,
+      effectiveProfileId,
+      importCookiesFromBrowser,
+      owner,
+      webAiProvider
+    ]
   )
 
   const handleImportFromFile = useCallback(async (): Promise<void> => {
     setOpen(false)
     setImportMenuOpen(false)
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(
+      effectiveProfileId,
+      webAiProvider ?? undefined,
+      cookieImportScope ?? undefined,
+      owner
+    )
     if (result.ok) {
       toast.success(
         translate(
@@ -124,7 +158,7 @@ export function BrowserImportHintButton({
     if (result.reason !== 'canceled') {
       toast.error(result.reason)
     }
-  }, [effectiveProfileId, importCookiesToProfile])
+  }, [cookieImportScope, effectiveProfileId, importCookiesToProfile, owner, webAiProvider])
 
   const handleOpenBrowserSettings = useCallback((): void => {
     openSettingsTarget({ pane: 'browser', repoId: null })
@@ -171,24 +205,58 @@ export function BrowserImportHintButton({
           data-contextual-tour-target="browser-import-hint"
         >
           <Import className="size-3.5" />
-          {translate('auto.components.browser.pane.BrowserImportHintButton.b24fef25be', 'Import')}
+          {cookieImportLabel
+            ? translate(
+                'auto.components.browser.pane.BrowserImportHintButton.webAiImport',
+                'Import {{value0}}',
+                { value0: cookieImportLabel }
+              )
+            : translate(
+                'auto.components.browser.pane.BrowserImportHintButton.b24fef25be',
+                'Import'
+              )}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" side="bottom" sideOffset={6} className="w-80 p-3">
         <div className="space-y-3">
           <div className="space-y-1.5">
             <div className="text-sm font-medium text-foreground">
-              {translate(
-                'auto.components.browser.pane.BrowserImportHintButton.4f5ffaa6a1',
-                'Import browser data'
-              )}
+              {cookieImportLabel
+                ? translate(
+                    'auto.components.browser.pane.BrowserImportHintButton.webAiTitle',
+                    'Import {{value0}} cookies',
+                    { value0: cookieImportLabel }
+                  )
+                : translate(
+                    'auto.components.browser.pane.BrowserImportHintButton.4f5ffaa6a1',
+                    'Import browser data'
+                  )}
             </div>
-            <p className="text-xs leading-5 text-muted-foreground">{importSummary}</p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {cookieImportLabel
+                ? googleCookieScope
+                  ? translate(
+                      'auto.components.browser.pane.BrowserImportHintButton.googleScope',
+                      '{{value0}} uses your shared Google sign-in, so this copies Google account cookies but skips unrelated sites.',
+                      { value0: cookieImportLabel }
+                    )
+                  : translate(
+                      'auto.components.browser.pane.BrowserImportHintButton.webAiScope',
+                      'Only cookies used by {{value0}} will be copied into this profile.',
+                      { value0: cookieImportLabel }
+                    )
+                : importSummary}
+            </p>
             <p className="text-[11px] leading-4 text-muted-foreground/80">
-              {translate(
-                'auto.components.browser.pane.BrowserImportHintButton.e52a955e6f',
-                'You can always find this in Settings > Browser.'
-              )}
+              {cookieImportLabel
+                ? translate(
+                    'auto.components.browser.pane.BrowserImportHintButton.webAiMenuHint',
+                    'Import for this service is also available in the browser menu.'
+                  )
+                : translate(
+                    'auto.components.browser.pane.BrowserImportHintButton.e52a955e6f',
+                    'You can always find this in Settings > Browser.'
+                  )}
             </p>
           </div>
 

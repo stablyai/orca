@@ -11,6 +11,8 @@ import {
   requiredString
 } from '../schemas'
 
+export { ProfileImportFromBrowser } from './browser-cookie-import-schema'
+
 export const Element = BrowserTarget.extend({
   element: requiredString('Missing required --element')
 })
@@ -156,12 +158,6 @@ export const ProfileCreate = z.object({
 })
 
 export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
-
-export const ProfileImportFromBrowser = z.object({
-  profileId: requiredString('Missing required --profile'),
-  browserFamily: requiredString('Missing required --browser-family'),
-  browserProfile: OptionalString
-})
 
 export const Drag = BrowserTarget.extend({
   from: requiredString('Missing required --from and --to element refs'),

@@ -53,6 +53,35 @@ describe('tab create menu options', () => {
     ).toEqual(['new-browser'])
   })
 
+  it('matches saved Web AI accounts as profile-bound browser actions', () => {
+    const options = buildTabCreateMenuOptions({
+      terminalOnly: false,
+      hasNewBrowser: true,
+      hasNewMarkdown: false,
+      hasOpenMarkdown: false,
+      hasSimulator: false,
+      simulatorIsGoTo: false,
+      webAiAccounts: [
+        {
+          id: 'account-1',
+          provider: 'chatgpt',
+          label: 'Personal ChatGPT',
+          executionHostId: 'local',
+          profileId: 'profile-1',
+          sessionPartition: 'persist:profile-1',
+          createdAt: 1
+        }
+      ]
+    })
+
+    expect(findMatchingTabCreateMenuOptions('personal chatgpt', options)).toMatchObject([
+      {
+        kind: 'new-web-ai-account',
+        webAiAccountId: 'account-1'
+      }
+    ])
+  })
+
   it('preserves default Windows shell order for tied terminal matches', () => {
     const options = buildTabCreateMenuOptions({
       terminalOnly: false,

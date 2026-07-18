@@ -655,7 +655,11 @@
         "2fe88c2e06": "La sincronización del espacio de trabajo remoto no está disponible",
         "2ec42e1c52": "Aún no hay espacio de trabajo remoto",
         "88214a785b": "La sincronización del espacio de trabajo esperó a que la sesión local terminara de cargarse y agotó el tiempo de espera",
-        "4f78ba5885": "Espacio de trabajo sincronizado"
+        "4f78ba5885": "Espacio de trabajo sincronizado",
+        "webAiAccountRequired": "No hay ninguna cuenta de IA web activa",
+        "webAiProfileMismatch": "El perfil solicitado no coincide con la cuenta de IA web activa",
+        "webAiCreateFailed": "No se pudo crear la pestaña del navegador de IA web",
+        "webAiProfileLocked": "El perfil de esta pestaña está fijado por su cuenta de IA web"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "Nuevas funciones que aún están tomando forma. Pruébalas.",
@@ -4782,6 +4786,46 @@
           "cancel": "Cancelar",
           "forget": "Eliminar de Orca",
           "reconnectAndDelete": "Reconectar y eliminar"
+        },
+        "WebAiAccountDialog": {
+          "title": "Añadir cuenta de IA web",
+          "provider": "Servicio",
+          "accountName": "Nombre de la cuenta",
+          "customServiceLabel": "Nombre del servicio",
+          "customServiceLabelPlaceholder": "Doubao",
+          "customHomeUrl": "URL de inicio",
+          "customHomeUrlPlaceholder": "https://www.doubao.com/",
+          "customHomeUrlInvalid": "Introduce una URL HTTPS sin nombre de usuario ni contraseña.",
+          "customHomeUrlHint": "Esta página de inicio reutilizable se guarda sin parámetros de consulta ni fragmentos.",
+          "customCookieDomains": "Dominios de cookies",
+          "customCookieDomainsPlaceholder": "doubao.com",
+          "customCookieDomainsInvalid": "Usa dominios separados por comas que sean el nombre de host de la URL de inicio o uno de sus dominios superiores.",
+          "customCookieDomainsDerived": "Déjalo en blanco para usar {{value0}}. Separa varios dominios con comas.",
+          "customCookieDomainsHint": "Separa varios dominios con comas. No se permiten protocolos, rutas ni comodines.",
+          "browserProfile": "Perfil del navegador",
+          "createProfile": "Crear un nuevo perfil aislado",
+          "sharedGoogleCookiesWarning": "{{value0}} usa cookies de inicio de sesión compartidas de google.com. Google puede rechazar el inicio de sesión en navegadores integrados; además, al importar cookies podría cambiar la cuenta de Google usada por otros servicios de Google en este perfil del navegador.",
+          "cancel": "Cancelar",
+          "addAndOpen": "Añadir y abrir"
+        },
+        "WebAiAccountsSection": {
+          "profileMissing": "Este perfil del navegador ya no existe.",
+          "createProfileFailed": "No se pudo crear el perfil del navegador.",
+          "addFailed": "No se pudo añadir la cuenta de IA web.",
+          "removed": "Se eliminó {{value0}} de la barra lateral. El perfil del navegador se conservó.",
+          "toggle": "Mostrar u ocultar las cuentas de IA web",
+          "title": "Cuentas de IA web",
+          "add": "Añadir cuenta de IA web",
+          "addFirst": "Añadir una cuenta",
+          "openNewTab": "Abrir otra pestaña del navegador",
+          "manageProfile": "Administrar perfil del navegador",
+          "remove": "Eliminar de la barra lateral",
+          "profileCheckFailed": "No se pudieron verificar los perfiles del navegador. Inténtalo de nuevo.",
+          "launchFailed": "No se pudo abrir esta cuenta de IA web.",
+          "openProfilesFailed": "No se pudo abrir la configuración de perfiles del navegador local.",
+          "removeFailed": "No se pudo eliminar la cuenta de IA web.",
+          "openNewTabForAccount": "Abrir otra pestaña del navegador para {{value0}}",
+          "moreActionsForAccount": "Más acciones para {{value0}}"
         }
       },
       "shared": {
@@ -5212,6 +5256,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" eliminado.",
+          "webAiProfileInUse": "Este perfil está en uso por una o varias cuentas de IA web. Elimina esas cuentas antes de borrar el perfil.",
           "2d4bea7f35": "Se borraron las cookies predeterminadas.",
           "ebb78dfd6f": "Desde archivo…",
           "7df818977e": "Desde ",
@@ -12317,7 +12362,13 @@
             "4f5ffaa6a1": "Importar datos del navegador",
             "b24fef25be": "Importar",
             "02e89014c5": "Se importaron {{value0}} cookies de {{value1}}{{value2}}.",
-            "d40d584769": "Se importaron {{value0}} cookies del archivo."
+            "d40d584769": "Se importaron {{value0}} cookies del archivo.",
+            "webAiImport": "Importar {{value0}}",
+            "webAiTitle": "Importar cookies de {{value0}}",
+            "webAiScope": "Solo se copiarán en este perfil las cookies que usa {{value0}}.",
+            "geminiScope": "Gemini usa tu inicio de sesión compartido de Google, por lo que se copian las cookies de tu cuenta de Google, pero no las de sitios no relacionados.",
+            "googleScope": "{{value0}} usa tu inicio de sesión compartido de Google, por lo que se copian las cookies de tu cuenta de Google, pero no las de sitios no relacionados.",
+            "webAiMenuHint": "La importación para este servicio también está disponible en el menú del navegador."
           },
           "BrowserMobileDriverOverlay": {
             "a6914ee43f": "Devolver",
@@ -12434,7 +12485,8 @@
             "bf648471c5": "Creando…",
             "53bbe3dab4": "Se importaron {{value0}} cookies del archivo.",
             "c5f0e4d3b2a1": "Se importaron {{value0}} cookies de {{value1}} ({{value2}}).",
-            "d6a1f5e4c3b2": "Se importaron {{value0}} cookies de {{value1}}."
+            "d6a1f5e4c3b2": "Se importaron {{value0}} cookies de {{value1}}.",
+            "importProviderCookies": "Importar cookies de {{value0}}"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "Adjuntar a IA",

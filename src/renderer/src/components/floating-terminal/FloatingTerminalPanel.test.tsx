@@ -1695,8 +1695,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     keydownListener(
       makeFocusedPanelKeyEvent({
         code: 'Digit3',
-        ctrlKey: true,
         key: '3',
+        metaKey: true,
         preventDefault,
         stopImmediatePropagation,
         stopPropagation,
@@ -1796,8 +1796,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     keydownListener(
       makeFocusedPanelKeyEvent({
         code: 'Digit2',
-        ctrlKey: true,
         key: '2',
+        metaKey: true,
         preventDefault,
         target: panelElement
       })
@@ -1818,8 +1818,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     keydownListener(
       makeFocusedPanelKeyEvent({
         code: 'Digit5',
-        ctrlKey: true,
         key: '5',
+        metaKey: true,
         preventDefault,
         stopImmediatePropagation,
         stopPropagation,

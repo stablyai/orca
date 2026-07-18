@@ -592,6 +592,59 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
   })
 
+  it('forwards number ranges once and consumes their auto-repeat events', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'webAi.selectByIndex': ['Alt+1'],
+        'workspace.selectByIndex': ['Ctrl+1'],
+        'tab.selectByIndex': ['Cmd+1']
+      })
+    })
+
+    const inputs = [
+      {
+        code: 'Digit2',
+        key: '2',
+        meta: false,
+        control: false,
+        alt: true,
+        expected: ['ui:jumpToWebAiAccountIndex', 1]
+      },
+      {
+        code: 'Digit3',
+        key: '3',
+        meta: false,
+        control: true,
+        alt: false,
+        expected: ['ui:jumpToWorktreeIndex', 2]
+      },
+      {
+        code: 'Digit4',
+        key: '4',
+        meta: true,
+        control: false,
+        alt: false,
+        expected: ['ui:jumpToTabIndex', 3]
+      }
+    ] as const
+
+    for (const input of inputs) {
+      expect(triggerBeforeInput(input)).toHaveBeenCalledTimes(1)
+    }
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, ...inputs[0].expected)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, ...inputs[1].expected)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, ...inputs[2].expected)
+
+    rendererSendMock.mockClear()
+    for (const input of inputs) {
+      expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).toHaveBeenCalledTimes(1)
+    }
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
     setupGuestShortcutForwarding({
       browserTabId,

@@ -655,7 +655,11 @@
         "2fe88c2e06": "远程工作区同步不可用",
         "2ec42e1c52": "还没有远程工作区",
         "88214a785b": "工作区同步等待本地会话恢复(hydration)并超时",
-        "4f78ba5885": "工作区已同步"
+        "4f78ba5885": "工作区已同步",
+        "webAiAccountRequired": "没有活动的网页 AI 账号",
+        "webAiProfileMismatch": "请求的配置文件与当前网页 AI 账号不匹配",
+        "webAiCreateFailed": "创建网页 AI 浏览器标签页失败",
+        "webAiProfileLocked": "此标签页的配置文件由其网页 AI 账号固定"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "仍在完善中的新功能。尝试一下。",
@@ -4782,6 +4786,46 @@
           "cancel": "取消",
           "forget": "从 Orca 中移除",
           "reconnectAndDelete": "重新连接并删除"
+        },
+        "WebAiAccountDialog": {
+          "title": "添加网页 AI 账号",
+          "provider": "服务",
+          "accountName": "账号名称",
+          "customServiceLabel": "服务名称",
+          "customServiceLabelPlaceholder": "豆包",
+          "customHomeUrl": "首页网址",
+          "customHomeUrlPlaceholder": "https://www.doubao.com/",
+          "customHomeUrlInvalid": "请输入不含用户名或密码的 HTTPS 网址。",
+          "customHomeUrlHint": "这个可重复使用的首页会在保存时移除查询参数和片段。",
+          "customCookieDomains": "Cookie 域名",
+          "customCookieDomainsPlaceholder": "doubao.com",
+          "customCookieDomainsInvalid": "请输入以逗号分隔的域名，且必须是首页主机名或其上级域名。",
+          "customCookieDomainsDerived": "留空将使用 {{value0}}。多个域名请用逗号分隔。",
+          "customCookieDomainsHint": "多个域名请用逗号分隔，不支持协议、路径或通配符。",
+          "browserProfile": "浏览器配置文件",
+          "createProfile": "新建隔离配置文件",
+          "sharedGoogleCookiesWarning": "{{value0}} 使用共享的 google.com 登录 Cookie。Google 登录可能会拒绝嵌入式浏览器；导入 Cookie 也可能改变此浏览器配置文件中其他 Google 服务所使用的账号。",
+          "cancel": "取消",
+          "addAndOpen": "添加并打开"
+        },
+        "WebAiAccountsSection": {
+          "profileMissing": "此浏览器配置文件已不存在。",
+          "createProfileFailed": "创建浏览器配置文件失败。",
+          "addFailed": "添加网页 AI 账号失败。",
+          "removed": "已从侧边栏移除 {{value0}}。浏览器配置文件已保留。",
+          "toggle": "展开或折叠网页 AI 账号",
+          "title": "网页 AI 账号",
+          "add": "添加网页 AI 账号",
+          "addFirst": "添加账号",
+          "openNewTab": "打开另一个浏览器标签页",
+          "manageProfile": "管理浏览器配置文件",
+          "remove": "从侧边栏移除",
+          "profileCheckFailed": "无法验证浏览器配置文件，请重试。",
+          "launchFailed": "无法打开此网页 AI 账号。",
+          "openProfilesFailed": "无法打开本机浏览器配置文件设置。",
+          "removeFailed": "移除网页 AI 账号失败。",
+          "openNewTabForAccount": "为 {{value0}} 打开另一个浏览器标签页",
+          "moreActionsForAccount": "{{value0}} 的更多操作"
         }
       },
       "shared": {
@@ -5197,6 +5241,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "已删除配置文件“{{value0}}”。",
+          "webAiProfileInUse": "此配置文件正被一个或多个网页 AI 帐号使用。请先移除这些帐号，再删除该配置文件。",
           "2d4bea7f35": "默认 cookie 已清除。",
           "ebb78dfd6f": "从文件...",
           "7df818977e": "从",
@@ -12317,7 +12362,13 @@
             "4f5ffaa6a1": "导入浏览器数据",
             "b24fef25be": "导入",
             "02e89014c5": "从 {{value1}}{{value2}} 导入 {{value0}} cookie。",
-            "d40d584769": "已从文件导入 {{value0}} 个 Cookie。"
+            "d40d584769": "已从文件导入 {{value0}} 个 Cookie。",
+            "webAiImport": "导入 {{value0}}",
+            "webAiTitle": "导入 {{value0}} Cookie",
+            "webAiScope": "只会将 {{value0}} 使用的 Cookie 复制到此配置文件。",
+            "geminiScope": "Gemini 使用共享的 Google 登录，因此会复制 Google 帐号 Cookie，但会跳过无关网站。",
+            "googleScope": "{{value0}} 使用共享的 Google 登录，因此会复制 Google 帐号 Cookie，但会跳过无关网站。",
+            "webAiMenuHint": "此服务的选择性导入也可在浏览器菜单中使用。"
           },
           "BrowserMobileDriverOverlay": {
             "a6914ee43f": "收回",
@@ -12434,7 +12485,8 @@
             "bf648471c5": "创建中…",
             "53bbe3dab4": "已从文件导入 {{value0}} 个 Cookie。",
             "c5f0e4d3b2a1": "已从 {{value1}} ({{value2}}) 导入 {{value0}} 个 Cookie。",
-            "d6a1f5e4c3b2": "已从 {{value1}} 导入 {{value0}} 个 Cookie。"
+            "d6a1f5e4c3b2": "已从 {{value1}} 导入 {{value0}} 个 Cookie。",
+            "importProviderCookies": "导入 {{value0}} Cookie"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "附加到 AI",

@@ -439,7 +439,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1')
   })
 
-  it('preserves the stored session partition when duplicating a local browser tab', async () => {
+  it('preserves the stored session partition and Web AI identity when duplicating a local browser tab', async () => {
     storeBox.state = {
       ...storeBox.state,
       browserTabsByWorktree: {
@@ -449,6 +449,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
             worktreeId: 'wt-1',
             sessionProfileId: 'profile-1',
             sessionPartition: 'persist:orca-browser-session-profile-1',
+            webAiAccountId: 'web-ai-account-1',
             activePageId: 'browser-page-1',
             pageIds: ['browser-page-1'],
             url: 'https://example.com',
@@ -472,6 +473,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       title: 'Example',
       sessionProfileId: 'profile-1',
       sessionPartition: 'persist:orca-browser-session-profile-1',
+      webAiAccountId: 'web-ai-account-1',
       targetGroupId: 'group-1'
     })
   })

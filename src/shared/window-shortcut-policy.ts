@@ -42,10 +42,17 @@ export type WindowShortcutAction =
   | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
   | { type: 'switchRecentTab' }
+  | { type: 'jumpToWebAiAccountIndex'; index: number }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
   | { type: 'dictationKeyDown' }
+
+const WINDOW_DIGIT_INDEX_ACTIONS = [
+  ['webAi.selectByIndex', 'jumpToWebAiAccountIndex'],
+  ['workspace.selectByIndex', 'jumpToWorktreeIndex'],
+  ['tab.selectByIndex', 'jumpToTabIndex']
+] as const
 
 type WindowShortcutResolveOptions = KeybindingMatchOptions
 
@@ -255,30 +262,12 @@ export function resolveWindowShortcutAction(
     return { type: 'switchRecentTab' }
   }
 
-  // Why: the two ranges live in different scopes (no shared conflictGroup), so a
-  // user is free to map both onto the same modifier without it being blocked as a
-  // conflict. Checking workspace first gives that overlap deterministic
-  // precedence — workspace wins — matching the historical Cmd-before-Ctrl order.
-  const worktreeIndex = matchKeybindingDigitIndex(
-    'workspace.selectByIndex',
-    input,
-    platform,
-    keybindings,
-    options
-  )
-  if (worktreeIndex !== null) {
-    return { type: 'jumpToWorktreeIndex', index: worktreeIndex }
-  }
-
-  const tabIndex = matchKeybindingDigitIndex(
-    'tab.selectByIndex',
-    input,
-    platform,
-    keybindings,
-    options
-  )
-  if (tabIndex !== null) {
-    return { type: 'jumpToTabIndex', index: tabIndex }
+  // Why: order is the deterministic precedence for conflicting custom chords.
+  for (const [actionId, type] of WINDOW_DIGIT_INDEX_ACTIONS) {
+    const index = matchKeybindingDigitIndex(actionId, input, platform, keybindings, options)
+    if (index !== null) {
+      return { type, index }
+    }
   }
 
   if (actionMatches('tab.openQuickCommandsMenu', input, platform, keybindings, options)) {
@@ -330,6 +319,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
     case 'dictationKeyDown':
       return 'voice.dictation'
+    case 'jumpToWebAiAccountIndex':
+      return 'webAi.selectByIndex'
     case 'jumpToWorktreeIndex':
       return 'workspace.selectByIndex'
     case 'jumpToTabIndex':

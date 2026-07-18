@@ -1,7 +1,9 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
+  BrowserCookieImportScope,
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
   BrowserCertificateFailure,
@@ -11,10 +13,16 @@ import type {
   BrowserSessionProfile,
   BrowserViewportPresetId,
   BrowserWorkspace,
+  WebAiAccount,
+  WebAiProvider,
   WorkspaceSessionState
 } from '../../../../shared/types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
-import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import {
+  FLOATING_TERMINAL_WORKTREE_ID,
+  ORCA_BROWSER_BLANK_URL,
+  PERSISTENT_LOCAL_WORKSPACE_IDS
+} from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import {
@@ -24,7 +32,7 @@ import {
 } from '../../../../shared/workspace-session-browser-history'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
-import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import { pushRecentlyClosedTabKind, type RecentlyClosedTabKind } from './recently-closed-tabs'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -44,6 +52,7 @@ import { translate } from '@/i18n/i18n'
 import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -55,6 +64,17 @@ import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
+import {
+  getWebAiAccountWorkspaceId,
+  getWebAiAccountHomeUrl,
+  isWebAiAccountWorkspaceId,
+  isWebAiBrowserWorkspaceId,
+  normalizeWebAiAccounts,
+  parseWebAiAccountWorkspaceId,
+  webAiAccountMatchesBinding,
+  webAiAccountMatchesWorkspace
+} from '../../../../shared/web-ai-accounts'
+import type { BrowserProfileOperationOwner } from '@/lib/browser-profile-operation-owner'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -72,12 +92,47 @@ type CreateBrowserTabOptions = {
   // stays on the webview. When omitted, we fall back to the blank-URL check.
   focusAddressBar?: boolean
   browserRuntimeEnvironmentId?: string | null
+  webAiAccountId?: string | null
 }
 
 type CreateBrowserPageOptions = {
   activate?: boolean
   title?: string
   browserRuntimeEnvironmentId?: string | null
+}
+
+export type WebAiAccountLaunchResult =
+  | { ok: true; workspace: BrowserWorkspace; profiles: BrowserSessionProfile[] }
+  | {
+      ok: false
+      reason: 'profile-check-failed'
+      profiles: null
+    }
+  | {
+      ok: false
+      reason: 'profile-missing' | 'launch-failed'
+      profiles: BrowserSessionProfile[]
+    }
+
+type WebAiAccountLaunchFailureReason = Extract<WebAiAccountLaunchResult, { ok: false }>['reason']
+
+function notifyWebAiAccountLaunchFailure(reason: WebAiAccountLaunchFailureReason): void {
+  toast.error(
+    reason === 'profile-check-failed'
+      ? translate(
+          'auto.components.sidebar.WebAiAccountsSection.profileCheckFailed',
+          'Could not verify browser profiles. Try again.'
+        )
+      : reason === 'profile-missing'
+        ? translate(
+            'auto.components.sidebar.WebAiAccountsSection.profileMissing',
+            'This browser profile no longer exists.'
+          )
+        : translate(
+            'auto.components.sidebar.WebAiAccountsSection.launchFailed',
+            'Failed to open this Web AI account.'
+          )
+  )
 }
 
 type BrowserTabPageState = {
@@ -92,6 +147,30 @@ type BrowserTabPageState = {
 type ClosedBrowserWorkspaceSnapshot = {
   workspace: BrowserWorkspace
   pages: BrowserPage[]
+}
+
+function removeClosedBrowserSnapshotKinds(
+  kinds: readonly RecentlyClosedTabKind[],
+  snapshots: readonly ClosedBrowserWorkspaceSnapshot[],
+  retainedSnapshots: readonly ClosedBrowserWorkspaceSnapshot[]
+): RecentlyClosedTabKind[] {
+  const retainedWorkspaceIds = new Set(retainedSnapshots.map((snapshot) => snapshot.workspace.id))
+  const removedSnapshotIndexes = new Set<number>()
+  snapshots.forEach((snapshot, index) => {
+    if (!retainedWorkspaceIds.has(snapshot.workspace.id)) {
+      removedSnapshotIndexes.add(index)
+    }
+  })
+
+  let browserSnapshotIndex = 0
+  return kinds.filter((kind) => {
+    if (kind !== 'browser') {
+      return true
+    }
+    const remove = removedSnapshotIndexes.has(browserSnapshotIndex)
+    browserSnapshotIndex += 1
+    return !remove
+  })
 }
 
 function sanitizeBrowserPageAnnotation(annotation: BrowserPageAnnotation): BrowserPageAnnotation {
@@ -133,6 +212,7 @@ export type BrowserSlice = {
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openBrowserLinkInNewTab: (sourcePageId: string, url: string) => Promise<BrowserWorkspace | null>
   closeBrowserTab: (tabId: string) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
@@ -196,13 +276,18 @@ export type BrowserSlice = {
     summary: BrowserCookieImportSummary | null
     error: string | null
   } | null
-  fetchBrowserSessionProfiles: () => Promise<void>
+  fetchBrowserSessionProfiles: (owner?: BrowserProfileOperationOwner) => Promise<void>
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
     label: string
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
-  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportResult>
+  importCookiesToProfile: (
+    profileId: string,
+    webAiProvider?: WebAiProvider,
+    cookieImportScope?: BrowserCookieImportScope,
+    owner?: BrowserProfileOperationOwner
+  ) => Promise<BrowserCookieImportResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
     family: string
@@ -211,11 +296,16 @@ export type BrowserSlice = {
     selectedProfile: string
   }[]
   detectedBrowsersLoaded: boolean
-  fetchDetectedBrowsers: () => Promise<void>
+  detectedBrowsersHostId: ExecutionHostId | null
+  detectedBrowsersRequestGeneration: number
+  fetchDetectedBrowsers: (owner?: BrowserProfileOperationOwner) => Promise<void>
   importCookiesFromBrowser: (
     profileId: string,
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    webAiProvider?: WebAiProvider,
+    cookieImportScope?: BrowserCookieImportScope,
+    owner?: BrowserProfileOperationOwner
   ) => Promise<BrowserCookieImportResult>
   clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
@@ -224,6 +314,33 @@ export type BrowserSlice = {
   defaultBrowserSessionProfileId: string | null
   defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
   setDefaultBrowserSessionProfileId: (profileId: string | null) => void
+  openWebAiAccount: (
+    account: WebAiAccount,
+    options?: {
+      openNewTab?: boolean
+      targetGroupId?: string
+      url?: string
+      title?: string
+      activate?: boolean
+      targetWorktreeId?: string
+    }
+  ) => BrowserWorkspace | null
+  launchWebAiAccount: (
+    account: WebAiAccount,
+    options?: {
+      openNewTab?: boolean
+      targetGroupId?: string
+      url?: string
+      title?: string
+      activate?: boolean
+      targetWorktreeId?: string
+    }
+  ) => Promise<WebAiAccountLaunchResult>
+  activateWebAiBrowserWorkspace: (
+    accountWorkspaceId: string,
+    browserWorkspaceId?: string
+  ) => boolean
+  deleteWebAiAccount: (accountId: string) => Promise<boolean>
 }
 
 function normalizeUrl(url: string): string {
@@ -263,6 +380,36 @@ function getBrowserSettingsHostId(state: Pick<AppState, 'settings'>): ExecutionH
   return getSettingsFocusedExecutionHostId(state.settings)
 }
 
+function getBrowserProfileOperationRuntimeEnvironmentId(
+  state: Pick<AppState, 'settings'>,
+  owner?: BrowserProfileOperationOwner
+): string | null {
+  if (owner) {
+    return owner.runtimeEnvironmentId?.trim() || null
+  }
+  return state.settings?.activeRuntimeEnvironmentId?.trim() || null
+}
+
+function getBrowserProfileOperationHostId(
+  state: Pick<AppState, 'settings'>,
+  owner?: BrowserProfileOperationOwner
+): ExecutionHostId {
+  const runtimeEnvironmentId = getBrowserProfileOperationRuntimeEnvironmentId(state, owner)
+  return runtimeEnvironmentId
+    ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+    : LOCAL_EXECUTION_HOST_ID
+}
+
+function getBrowserProfileOperationRuntimeTarget(
+  state: Pick<AppState, 'settings'>,
+  owner?: BrowserProfileOperationOwner
+): RuntimeClientTarget | null {
+  const host = parseExecutionHostId(getBrowserProfileOperationHostId(state, owner))
+  return host?.kind === 'runtime'
+    ? { kind: 'environment', environmentId: host.environmentId }
+    : null
+}
+
 function getBrowserWorktreeHostId(state: AppState, worktreeId: string): ExecutionHostId {
   return getExecutionHostIdForWorktree(state, worktreeId)
 }
@@ -286,15 +433,18 @@ function getBrowserSessionProfileHostId(
 
 function profileListByHostUpdate(
   state: Pick<AppState, 'browserSessionProfilesByHostId' | 'settings'>,
-  profiles: BrowserSessionProfile[]
+  profiles: BrowserSessionProfile[],
+  hostId: ExecutionHostId = getBrowserSettingsHostId(state)
 ): Partial<BrowserSlice> {
-  return {
-    browserSessionProfiles: profiles,
+  const hostProfiles = {
     browserSessionProfilesByHostId: {
       ...state.browserSessionProfilesByHostId,
-      [getBrowserSettingsHostId(state)]: profiles
+      [hostId]: profiles
     }
   }
+  return hostId === getBrowserSettingsHostId(state)
+    ? { ...hostProfiles, browserSessionProfiles: profiles }
+    : hostProfiles
 }
 
 function closeRemoteBrowserPageInOwningEnvironment(
@@ -343,13 +493,15 @@ function buildWorkspaceFromPage(
   page: BrowserPage,
   pageIds: string[],
   sessionProfileId?: string | null,
-  sessionPartition?: string | null
+  sessionPartition?: string | null,
+  webAiAccountId?: string | null
 ): BrowserWorkspace {
   return {
     id,
     worktreeId,
     sessionProfileId: sessionProfileId ?? null,
     sessionPartition: sessionPartition ?? null,
+    webAiAccountId: webAiAccountId ?? null,
     activePageId: page.id,
     pageIds,
     url: page.url,
@@ -458,6 +610,147 @@ function findWorkspace(
   return workspaceById.get(workspaceId) ?? null
 }
 
+function findWebAiAccountWorkspaces(
+  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
+  accountId: string
+): BrowserWorkspace[] {
+  return Object.values(browserTabsByWorktree)
+    .flat()
+    .filter((entry) => entry.webAiAccountId === accountId)
+}
+
+function webAiAccountWorkspaceBindingIsValid(
+  account: WebAiAccount,
+  workspace: BrowserWorkspace
+): boolean {
+  if (!webAiAccountMatchesBinding(account, workspace)) {
+    return false
+  }
+  return !isWebAiBrowserWorkspaceId(workspace.worktreeId)
+    ? true
+    : webAiAccountMatchesWorkspace(account, workspace)
+}
+
+function canPlaceWebAiAccountInWorktree(
+  state: AppState,
+  account: WebAiAccount,
+  worktreeId: string
+): boolean {
+  const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+  if (worktreeId === accountWorkspaceId) {
+    return true
+  }
+  if (
+    isWebAiBrowserWorkspaceId(worktreeId) ||
+    typeof state.getKnownWorktreeById !== 'function' ||
+    !state.getKnownWorktreeById(worktreeId)
+  ) {
+    return false
+  }
+  // Why: account profiles belong to the desktop Electron session. A runtime
+  // worktree's browser tabs are owned by its remote runtime, so mixing the two
+  // would split one tab group across hosts and risk publishing private state.
+  return getRuntimeEnvironmentIdForWorktree(state, worktreeId) === null
+}
+
+function findPreferredWebAiAccountWorkspaceInWorktree(
+  state: AppState,
+  workspaces: readonly BrowserWorkspace[],
+  worktreeId: string
+): BrowserWorkspace | null {
+  const inWorktree = workspaces.filter((workspace) => workspace.worktreeId === worktreeId)
+  const preferredId = state.activeBrowserTabIdByWorktree[worktreeId]
+  return inWorktree.find((workspace) => workspace.id === preferredId) ?? inWorktree[0] ?? null
+}
+
+function findMostRecentlyVisitedWebAiAccountWorkspace(
+  state: AppState,
+  workspaces: readonly BrowserWorkspace[]
+): BrowserWorkspace | null {
+  const history = state.worktreeNavHistory ?? []
+  const lastHistoryIndex = Math.min(
+    state.worktreeNavHistoryIndex ?? history.length - 1,
+    history.length - 1
+  )
+  for (let index = lastHistoryIndex; index >= 0; index -= 1) {
+    const entry = history[index]
+    if (typeof entry !== 'string') {
+      continue
+    }
+    const workspace = findPreferredWebAiAccountWorkspaceInWorktree(state, workspaces, entry)
+    if (workspace) {
+      return workspace
+    }
+  }
+  return (
+    [...workspaces]
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .find(
+        (workspace) => state.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspace.id
+      ) ??
+    [...workspaces].sort((left, right) => right.createdAt - left.createdAt)[0] ??
+    null
+  )
+}
+
+function activateWebAiAccountWorkspace(
+  get: () => AppState,
+  worktreeId: string,
+  browserWorkspaceId?: string
+): boolean {
+  const state = get()
+  const workspaces = state.browserTabsByWorktree[worktreeId] ?? []
+  const preferredWorkspaceId = browserWorkspaceId ?? state.activeBrowserTabIdByWorktree[worktreeId]
+  const workspace =
+    workspaces.find((entry) => entry.id === preferredWorkspaceId) ?? workspaces[0] ?? null
+  if (!workspace) {
+    return false
+  }
+
+  const alreadyVisible =
+    state.activeView === 'terminal' &&
+    state.activeWorktreeId === worktreeId &&
+    state.activeTabType === 'browser' &&
+    state.activeBrowserTabId === workspace.id
+  const switchingWorktree = state.activeWorktreeId !== worktreeId
+  state.setActiveView('terminal')
+  if (switchingWorktree) {
+    state.setActiveWorktree(worktreeId)
+  }
+  state.setActiveBrowserTab(workspace.id)
+  if (!alreadyVisible && switchingWorktree && !state.isNavigatingHistory) {
+    state.recordWorktreeVisit(worktreeId)
+  }
+  return true
+}
+
+function removeStaleWebAiAccountWorkspaces(get: () => AppState, account: WebAiAccount): void {
+  const staleWorkspaces = findWebAiAccountWorkspaces(
+    get().browserTabsByWorktree,
+    account.id
+  ).filter(
+    (workspace) =>
+      !webAiAccountWorkspaceBindingIsValid(account, workspace) ||
+      !canPlaceWebAiAccountInWorktree(get(), account, workspace.worktreeId)
+  )
+  for (const staleWorkspace of staleWorkspaces) {
+    // Why: an untagged old-profile tab inside the synthetic account workspace
+    // would still be reachable through the account-scoped tab shortcuts.
+    destroyWorkspaceWebviews(get().browserPagesByWorkspace, staleWorkspace.id)
+    get().closeBrowserTab(staleWorkspace.id)
+  }
+}
+
+function legacyWebAiSiblingWorkspaceId(sourceWorkspaceId: string, pageId: string): string {
+  // Length-prefix both components so even malformed legacy IDs cannot produce
+  // the same migration ID through delimiter ambiguity.
+  return `legacy-web-ai-workspace:${sourceWorkspaceId.length}:${sourceWorkspaceId}:${pageId.length}:${pageId}`
+}
+
+function legacyWebAiSiblingUnifiedTabId(workspaceId: string): string {
+  return `legacy-web-ai-tab:${workspaceId.length}:${workspaceId}`
+}
+
 function findPage(
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
   pageId: string
@@ -505,6 +798,160 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }))
   },
 
+  launchWebAiAccount: async (account, options) => {
+    let profiles: BrowserSessionProfile[]
+    try {
+      profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
+    } catch {
+      return { ok: false, reason: 'profile-check-failed', profiles: null }
+    }
+    set((state) => profileListByHostUpdate(state, profiles, LOCAL_EXECUTION_HOST_ID))
+    // Why: UI callbacks can outlive settings changes; only the current saved
+    // account binding may select the cookie partition used for launch.
+    const canonicalAccount = normalizeWebAiAccounts(get().settings?.webAiAccounts).find(
+      (entry) => entry.id === account.id
+    )
+    if (!canonicalAccount) {
+      return { ok: false, reason: 'launch-failed', profiles }
+    }
+    removeStaleWebAiAccountWorkspaces(get, canonicalAccount)
+    const profileExists = profiles.some(
+      (profile) =>
+        profile.scope !== 'default' &&
+        profile.id === canonicalAccount.profileId &&
+        profile.partition === canonicalAccount.sessionPartition
+    )
+    if (!profileExists) {
+      return { ok: false, reason: 'profile-missing', profiles }
+    }
+    const workspace = get().openWebAiAccount(canonicalAccount, options)
+    return workspace
+      ? { ok: true, workspace, profiles }
+      : { ok: false, reason: 'launch-failed', profiles }
+  },
+
+  openWebAiAccount: (account, options) => {
+    // V1 binds saved web identities to the desktop Electron browser. A later
+    // runtime implementation can route through browser.tabCreate without
+    // changing the persisted account model.
+    if (account.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+      return null
+    }
+    const accountHomeUrl = getWebAiAccountHomeUrl(account)
+    if (!accountHomeUrl) {
+      return null
+    }
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    removeStaleWebAiAccountWorkspaces(get, account)
+    const state = get()
+    const taggedWorkspaces = findWebAiAccountWorkspaces(get().browserTabsByWorktree, account.id)
+    const validWorkspaces = taggedWorkspaces.filter((workspace) =>
+      webAiAccountWorkspaceBindingIsValid(account, workspace)
+    )
+    const requestedTargetWorktreeId = options?.targetWorktreeId
+    if (
+      requestedTargetWorktreeId &&
+      !canPlaceWebAiAccountInWorktree(state, account, requestedTargetWorktreeId)
+    ) {
+      return null
+    }
+    const activeTargetWorktreeId =
+      state.activeWorktreeId &&
+      canPlaceWebAiAccountInWorktree(state, account, state.activeWorktreeId)
+        ? state.activeWorktreeId
+        : null
+    const existing = options?.openNewTab
+      ? null
+      : requestedTargetWorktreeId
+        ? findPreferredWebAiAccountWorkspaceInWorktree(
+            state,
+            validWorkspaces,
+            requestedTargetWorktreeId
+          )
+        : ((activeTargetWorktreeId
+            ? findPreferredWebAiAccountWorkspaceInWorktree(
+                state,
+                validWorkspaces,
+                activeTargetWorktreeId
+              )
+            : null) ?? findMostRecentlyVisitedWebAiAccountWorkspace(state, validWorkspaces))
+    if (existing && !options?.openNewTab) {
+      activateWebAiAccountWorkspace(get, existing.worktreeId, existing.id)
+      return findWorkspace(get().browserTabsByWorktree, existing.id) ?? existing
+    }
+
+    const targetWorktreeId =
+      requestedTargetWorktreeId ?? activeTargetWorktreeId ?? accountWorkspaceId
+    const created = get().createBrowserTab(targetWorktreeId, options?.url ?? accountHomeUrl, {
+      activate: options?.activate ?? true,
+      title: options?.title ?? account.label,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition,
+      targetGroupId: options?.targetGroupId,
+      browserRuntimeEnvironmentId: null,
+      webAiAccountId: account.id
+    })
+    if (options?.activate !== false) {
+      activateWebAiAccountWorkspace(get, targetWorktreeId, created.id)
+    }
+    return findWorkspace(get().browserTabsByWorktree, created.id) ?? created
+  },
+
+  activateWebAiBrowserWorkspace: (accountWorkspaceId, browserWorkspaceId) => {
+    if (!isWebAiAccountWorkspaceId(accountWorkspaceId)) {
+      return false
+    }
+    return activateWebAiAccountWorkspace(get, accountWorkspaceId, browserWorkspaceId)
+  },
+
+  deleteWebAiAccount: async (accountId) => {
+    const accounts = normalizeWebAiAccounts(get().settings?.webAiAccounts)
+    await get().updateSettings({
+      webAiAccounts: accounts.filter((account) => account.id !== accountId)
+    })
+    if (
+      normalizeWebAiAccounts(get().settings?.webAiAccounts).some((entry) => entry.id === accountId)
+    ) {
+      return false
+    }
+    const workspaces = findWebAiAccountWorkspaces(get().browserTabsByWorktree, accountId)
+    for (const workspace of workspaces) {
+      destroyWorkspaceWebviews(get().browserPagesByWorkspace, workspace.id)
+      get().closeBrowserTab(workspace.id)
+    }
+    set((state) => {
+      const recentlyClosedBrowserTabsByWorktree: Record<string, ClosedBrowserWorkspaceSnapshot[]> =
+        {}
+      const recentlyClosedTabKindsByWorktree = { ...state.recentlyClosedTabKindsByWorktree }
+      for (const [worktreeId, snapshots] of Object.entries(
+        state.recentlyClosedBrowserTabsByWorktree
+      )) {
+        const retained = snapshots.filter(
+          (snapshot) => snapshot.workspace.webAiAccountId !== accountId
+        )
+        if (retained.length !== snapshots.length) {
+          // Why: cross-type reopen history stores browser kinds separately from
+          // snapshots. Removing only the account snapshot leaves a phantom MRU entry.
+          const retainedKinds = removeClosedBrowserSnapshotKinds(
+            recentlyClosedTabKindsByWorktree[worktreeId] ?? [],
+            snapshots,
+            retained
+          )
+          if (retainedKinds.length > 0) {
+            recentlyClosedTabKindsByWorktree[worktreeId] = retainedKinds
+          } else {
+            delete recentlyClosedTabKindsByWorktree[worktreeId]
+          }
+        }
+        if (retained.length > 0) {
+          recentlyClosedBrowserTabsByWorktree[worktreeId] = retained
+        }
+      }
+      return { recentlyClosedBrowserTabsByWorktree, recentlyClosedTabKindsByWorktree }
+    })
+    return true
+  },
+
   createBrowserTab: (worktreeId, url, options) => {
     const workspaceId = createBrowserUuid()
     const page = buildBrowserPage(
@@ -529,7 +976,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       page,
       [page.id],
       sessionProfileId,
-      options?.sessionPartition
+      options?.sessionPartition,
+      options?.webAiAccountId
     )
 
     set((s) => {
@@ -623,6 +1071,63 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (!worktreeId) {
       return
     }
+    if (isWebAiAccountWorkspaceId(worktreeId)) {
+      const accountId = parseWebAiAccountWorkspaceId(worktreeId)
+      const account = accountId
+        ? normalizeWebAiAccounts(state.settings?.webAiAccounts).find(
+            (entry) => entry.id === accountId
+          )
+        : null
+      if (!account) {
+        notifyWebAiAccountLaunchFailure('launch-failed')
+        return
+      }
+      const result = await get().launchWebAiAccount(account, {
+        openNewTab: true,
+        targetGroupId: groupId
+      })
+      if (!result.ok) {
+        notifyWebAiAccountLaunchFailure(result.reason)
+      }
+      return
+    }
+
+    // Why: an ordinary worktree can host a Web AI tab alongside terminals and
+    // editors. New-browser actions from that surface must keep the active
+    // account's cookie partition instead of silently creating a default tab.
+    const activeBrowserTabId =
+      state.activeBrowserTabIdByWorktree[worktreeId] ??
+      (state.activeWorktreeId === worktreeId ? state.activeBrowserTabId : null)
+    const activeBrowserWorkspace = activeBrowserTabId
+      ? (state.browserTabsByWorktree[worktreeId] ?? []).find(
+          (workspace) => workspace.id === activeBrowserTabId
+        )
+      : null
+    const activeWebAiAccount = activeBrowserWorkspace?.webAiAccountId
+      ? normalizeWebAiAccounts(state.settings?.webAiAccounts).find((account) =>
+          webAiAccountWorkspaceBindingIsValid(account, activeBrowserWorkspace)
+        )
+      : null
+    if (activeBrowserWorkspace?.webAiAccountId && !activeWebAiAccount) {
+      // A stale or tampered account tag must never fall through to the default
+      // profile, which would cross browser identities inside the same workflow.
+      notifyWebAiAccountLaunchFailure('launch-failed')
+      return
+    }
+    if (activeWebAiAccount) {
+      const result = await get().launchWebAiAccount(activeWebAiAccount, {
+        openNewTab: true,
+        targetGroupId: groupId,
+        targetWorktreeId: worktreeId
+      })
+      if (result.ok) {
+        get().recordFeatureInteraction('browser-tab-created')
+      } else {
+        notifyWebAiAccountLaunchFailure(result.reason)
+      }
+      return
+    }
+
     const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
     if (runtimeEnvironmentId) {
@@ -656,6 +1161,52 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       targetGroupId: groupId
     })
     get().recordFeatureInteraction('browser-tab-created')
+  },
+  openBrowserLinkInNewTab: async (sourcePageId, url) => {
+    const state = get()
+    const sourcePage = findPage(state.browserPagesByWorkspace, sourcePageId)
+    if (!sourcePage) {
+      return null
+    }
+    const sourceWorkspace = findWorkspace(state.browserTabsByWorktree, sourcePage.workspaceId)
+    if (!sourceWorkspace) {
+      return null
+    }
+    const sourceUnifiedTab = (state.unifiedTabsByWorktree[sourcePage.worktreeId] ?? []).find(
+      (tab) => tab.contentType === 'browser' && tab.entityId === sourceWorkspace.id
+    )
+    const account = sourceWorkspace.webAiAccountId
+      ? normalizeWebAiAccounts(state.settings?.webAiAccounts).find((entry) =>
+          webAiAccountMatchesBinding(entry, sourceWorkspace)
+        )
+      : null
+    if (sourceWorkspace.webAiAccountId) {
+      if (!account) {
+        return null
+      }
+      const result = await get().launchWebAiAccount(account, {
+        openNewTab: true,
+        targetGroupId: sourceUnifiedTab?.groupId,
+        targetWorktreeId: sourcePage.worktreeId,
+        url,
+        title: url
+      })
+      if (!result.ok) {
+        notifyWebAiAccountLaunchFailure(result.reason)
+        return null
+      }
+      return result.workspace
+    }
+    if (isWebAiAccountWorkspaceId(sourcePage.worktreeId)) {
+      return null
+    }
+    return get().createBrowserTab(sourcePage.worktreeId, url, {
+      title: url,
+      sessionProfileId: sourceWorkspace.sessionProfileId,
+      sessionPartition: sourceWorkspace.sessionPartition,
+      targetGroupId: sourceUnifiedTab?.groupId,
+      browserRuntimeEnvironmentId: sourcePage.browserRuntimeEnvironmentId ?? null
+    })
   },
   closeBrowserTab: (tabId) => {
     let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
@@ -794,6 +1345,14 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         get().closeUnifiedTab(workspaceItem.id)
       }
     }
+    const activeWorktreeId = get().activeWorktreeId
+    if (
+      activeWorktreeId &&
+      isWebAiAccountWorkspaceId(activeWorktreeId) &&
+      (get().browserTabsByWorktree[activeWorktreeId]?.length ?? 0) === 0
+    ) {
+      get().setActiveWorktree(null)
+    }
   },
 
   shutdownWorktreeBrowsers: async (worktreeId) => {
@@ -854,13 +1413,31 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     const pages = entryToRestore.pages
     const sessionProfileId = snap.sessionProfileId ?? null
     const sessionPartition = snap.sessionPartition ?? null
+    const savedAccount = snap.webAiAccountId
+      ? normalizeWebAiAccounts(get().settings?.webAiAccounts).find((account) =>
+          webAiAccountWorkspaceBindingIsValid(account, snap)
+        )
+      : null
+    const webAiAccountId = savedAccount?.id ?? null
+
+    // Why: never reopen an account-tagged snapshot after its canonical account,
+    // profile, partition, or placement changed. Restoring it as an ordinary tab
+    // would silently retain access to the old authenticated partition.
+    if (
+      (snap.webAiAccountId && !savedAccount) ||
+      (savedAccount && !canPlaceWebAiAccountInWorktree(get(), savedAccount, worktreeId)) ||
+      (isWebAiAccountWorkspaceId(worktreeId) && !savedAccount)
+    ) {
+      return null
+    }
 
     if (pages.length === 0) {
       const restored = get().createBrowserTab(worktreeId, snap.url, {
         title: snap.title,
         activate: true,
         sessionProfileId,
-        sessionPartition
+        sessionPartition,
+        webAiAccountId
       })
       return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
     }
@@ -873,14 +1450,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       activate: true,
       sessionProfileId,
       sessionPartition,
-      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
+      webAiAccountId,
+      browserRuntimeEnvironmentId: savedAccount ? null : firstPage.browserRuntimeEnvironmentId
     })
 
     for (const p of restPages) {
       get().createBrowserPage(restored.id, p.url, {
         activate: false,
         title: p.title,
-        browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId
+        browserRuntimeEnvironmentId: savedAccount ? null : p.browserRuntimeEnvironmentId
       })
     }
 
@@ -1564,13 +2142,69 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   hydrateBrowserSession: (session, options) => {
     const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
+    const persistedPagesByWorkspace = session.browserPagesByWorkspace ?? {}
+    const legacyWebAiMigrationBySourceWorkspaceId = new Map<
+      string,
+      {
+        worktreeId: string
+        workspaceIdByPageId: Map<string, string>
+        workspaceIdsInPageOrder: string[]
+      }
+    >()
+    const legacyWebAiSiblingSourceByWorkspaceId = new Map<
+      string,
+      { sourceWorkspaceId: string; worktreeId: string }
+    >()
+    for (const [worktreeId, tabs] of Object.entries(persistedTabsByWorktree)) {
+      if (!isWebAiAccountWorkspaceId(worktreeId)) {
+        continue
+      }
+      for (const tab of tabs) {
+        const pages = persistedPagesByWorkspace[tab.id] ?? []
+        if (pages.length <= 1) {
+          continue
+        }
+        const primaryPageId = pages.some((page) => page.id === tab.activePageId)
+          ? tab.activePageId
+          : pages[0]?.id
+        const workspaceIdByPageId = new Map<string, string>()
+        const workspaceIdsInPageOrder = pages.map((page) => {
+          const workspaceId =
+            page.id === primaryPageId ? tab.id : legacyWebAiSiblingWorkspaceId(tab.id, page.id)
+          workspaceIdByPageId.set(page.id, workspaceId)
+          if (workspaceId !== tab.id) {
+            legacyWebAiSiblingSourceByWorkspaceId.set(workspaceId, {
+              sourceWorkspaceId: tab.id,
+              worktreeId
+            })
+          }
+          return workspaceId
+        })
+        legacyWebAiMigrationBySourceWorkspaceId.set(tab.id, {
+          worktreeId,
+          workspaceIdByPageId,
+          workspaceIdsInPageOrder
+        })
+      }
+    }
     const currentState = get()
+    const savedWebAiAccountById = new Map(
+      normalizeWebAiAccounts(currentState.settings?.webAiAccounts).map((account) => [
+        account.id,
+        account
+      ])
+    )
     const validWorktreeIdsForCleanup = new Set(
       Object.values(currentState.worktreesByRepo)
         .flat()
         .map((worktree) => worktree.id)
     )
-    validWorktreeIdsForCleanup.add(FLOATING_TERMINAL_WORKTREE_ID)
+    for (const workspaceId of PERSISTENT_LOCAL_WORKSPACE_IDS) {
+      validWorktreeIdsForCleanup.add(workspaceId)
+    }
+    for (const account of savedWebAiAccountById.values()) {
+      validWorktreeIdsForCleanup.add(getWebAiAccountWorkspaceId(account.id))
+    }
     for (const workspace of currentState.folderWorkspaces) {
       validWorktreeIdsForCleanup.add(folderWorkspaceKey(workspace.id))
     }
@@ -1584,8 +2218,16 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     // re-hydrates after webviews are live.
     const droppedWorkspaceIds: string[] = []
     for (const [worktreeId, tabs] of Object.entries(persistedTabsByWorktree)) {
-      if (!validWorktreeIdsForCleanup.has(worktreeId)) {
-        for (const tab of tabs) {
+      for (const tab of tabs) {
+        const savedAccount = tab.webAiAccountId
+          ? savedWebAiAccountById.get(tab.webAiAccountId)
+          : undefined
+        const invalidWebAiBinding = tab.webAiAccountId
+          ? !savedAccount ||
+            !webAiAccountWorkspaceBindingIsValid(savedAccount, tab) ||
+            !canPlaceWebAiAccountInWorktree(currentState, savedAccount, worktreeId)
+          : isWebAiBrowserWorkspaceId(worktreeId)
+        if (!validWorktreeIdsForCleanup.has(worktreeId) || invalidWebAiBinding) {
           droppedWorkspaceIds.push(tab.id)
         }
       }
@@ -1595,7 +2237,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
 
     set((s) => {
-      const persistedPagesByWorkspace = session.browserPagesByWorkspace ?? {}
       const persistedActiveBrowserTabIdByWorktree = session.activeBrowserTabIdByWorktree ?? {}
       const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
       const validWorktreeIds = new Set(
@@ -1603,7 +2244,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           .flat()
           .map((worktree) => worktree.id)
       )
-      validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      for (const workspaceId of PERSISTENT_LOCAL_WORKSPACE_IDS) {
+        validWorktreeIds.add(workspaceId)
+      }
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
@@ -1611,6 +2254,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
       const browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
       const browserPagesByWorkspace: Record<string, BrowserPage[]> = {}
+      const currentWebAiAccountById = new Map(
+        normalizeWebAiAccounts(s.settings?.webAiAccounts).map((account) => [account.id, account])
+      )
+      for (const account of currentWebAiAccountById.values()) {
+        validWorktreeIds.add(getWebAiAccountWorkspaceId(account.id))
+      }
 
       for (const [worktreeId, tabs] of Object.entries(persistedTabsByWorktree)) {
         if (!validWorktreeIds.has(worktreeId)) {
@@ -1618,6 +2267,17 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         }
         const hydratedTabs: BrowserWorkspace[] = []
         for (const tab of tabs) {
+          const savedAccount = tab.webAiAccountId
+            ? currentWebAiAccountById.get(tab.webAiAccountId)
+            : undefined
+          const invalidWebAiBinding = tab.webAiAccountId
+            ? !savedAccount ||
+              !webAiAccountWorkspaceBindingIsValid(savedAccount, tab) ||
+              !canPlaceWebAiAccountInWorktree(s, savedAccount, worktreeId)
+            : isWebAiBrowserWorkspaceId(worktreeId)
+          if (invalidWebAiBinding) {
+            continue
+          }
           const persistedPages = persistedPagesByWorkspace[tab.id] ?? [
             {
               id: createBrowserUuid(),
@@ -1627,8 +2287,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               title: tab.title,
               loading: false,
               faviconUrl: tab.faviconUrl ?? null,
-              canGoBack: tab.canGoBack,
-              canGoForward: tab.canGoForward,
+              canGoBack: false,
+              canGoForward: false,
               loadError: tab.loadError ?? null,
               createdAt: tab.createdAt
             } satisfies BrowserPage
@@ -1639,8 +2299,39 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             worktreeId,
             url: normalizeUrl(page.url),
             loading: false,
+            // Why: guest webContents are recreated after restart, so their
+            // Chromium navigation stacks do not survive the session payload.
+            canGoBack: false,
+            canGoForward: false,
             loadError: page.loadError ?? null
           }))
+
+          if (isWebAiAccountWorkspaceId(worktreeId) && nextPages.length > 1) {
+            // Early development builds stored sidebar "+" pages inside one
+            // BrowserWorkspace, but that inner page list has no visible tab
+            // switcher. Migrate those local sessions once into ordinary visible
+            // workspaces. Keep the active page on the original workspace ID so
+            // persisted active-tab and unified-tab references stay valid.
+            const migrationPlan = legacyWebAiMigrationBySourceWorkspaceId.get(tab.id)
+            for (const page of nextPages) {
+              const workspaceId = migrationPlan?.workspaceIdByPageId.get(page.id) ?? tab.id
+              const migratedPage = { ...page, workspaceId }
+              browserPagesByWorkspace[workspaceId] = [migratedPage]
+              hydratedTabs.push(
+                mirrorWorkspaceFromActivePage(
+                  {
+                    ...tab,
+                    id: workspaceId,
+                    activePageId: page.id,
+                    pageIds: [page.id]
+                  },
+                  [migratedPage]
+                )
+              )
+            }
+            continue
+          }
+
           browserPagesByWorkspace[tab.id] = nextPages
           hydratedTabs.push(
             mirrorWorkspaceFromActivePage(
@@ -1738,9 +2429,23 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }
     })
 
-    const state = get()
-    for (const [worktreeId, browserTabs] of Object.entries(state.browserTabsByWorktree)) {
+    for (const workspaceId of droppedWorkspaceIds) {
+      const state = get()
+      const unifiedTab = Object.values(state.unifiedTabsByWorktree)
+        .flat()
+        .find((tab) => tab.contentType === 'browser' && tab.entityId === workspaceId)
+      if (unifiedTab) {
+        state.closeUnifiedTab(unifiedTab.id, { recordInteraction: false })
+      }
+    }
+
+    const hydratedState = get()
+    for (const [worktreeId, browserTabs] of Object.entries(hydratedState.browserTabsByWorktree)) {
       for (const bt of browserTabs) {
+        if (legacyWebAiSiblingSourceByWorkspaceId.has(bt.id)) {
+          continue
+        }
+        const state = get()
         const exists = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
           (t) => t.contentType === 'browser' && t.entityId === bt.id
         )
@@ -1753,6 +2458,63 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         }
       }
     }
+
+    for (const [workspaceId, migrationSource] of legacyWebAiSiblingSourceByWorkspaceId) {
+      const state = get()
+      const workspace = findWorkspace(state.browserTabsByWorktree, workspaceId)
+      if (!workspace) {
+        continue
+      }
+      const tabs = state.unifiedTabsByWorktree[migrationSource.worktreeId] ?? []
+      const sourceUnifiedTab = tabs.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === migrationSource.sourceWorkspaceId
+      )
+      const existingUnifiedTab = tabs.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+      )
+      if (existingUnifiedTab) {
+        continue
+      }
+      state.createUnifiedTab(migrationSource.worktreeId, 'browser', {
+        id: legacyWebAiSiblingUnifiedTabId(workspace.id),
+        entityId: workspace.id,
+        label: workspace.title,
+        targetGroupId: sourceUnifiedTab?.groupId,
+        activate: false,
+        recordInteraction: false
+      })
+    }
+
+    for (const [sourceWorkspaceId, migrationPlan] of legacyWebAiMigrationBySourceWorkspaceId) {
+      const state = get()
+      const tabs = state.unifiedTabsByWorktree[migrationPlan.worktreeId] ?? []
+      const sourceUnifiedTab = tabs.find(
+        (tab) => tab.contentType === 'browser' && tab.entityId === sourceWorkspaceId
+      )
+      if (!sourceUnifiedTab) {
+        continue
+      }
+      const migratedUnifiedTabIds = migrationPlan.workspaceIdsInPageOrder.flatMap((workspaceId) => {
+        const tab = tabs.find(
+          (entry) => entry.contentType === 'browser' && entry.entityId === workspaceId
+        )
+        return tab ? [tab.id] : []
+      })
+      const group = state.groupsByWorktree[migrationPlan.worktreeId]?.find(
+        (entry) => entry.id === sourceUnifiedTab.groupId
+      )
+      if (!group || migratedUnifiedTabIds.length !== migrationPlan.workspaceIdsInPageOrder.length) {
+        continue
+      }
+      const migratedTabIds = new Set(migratedUnifiedTabIds)
+      const nextOrder = group.tabOrder.flatMap((tabId) => {
+        if (tabId === sourceUnifiedTab.id) {
+          return migratedUnifiedTabIds
+        }
+        return migratedTabIds.has(tabId) ? [] : [tabId]
+      })
+      state.reorderUnifiedTabs(group.id, nextOrder, { recordInteraction: false })
+    }
   },
 
   switchBrowserTabProfile: (workspaceId, profileId, sessionPartition) => {
@@ -1760,11 +2522,25 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
         const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
         if (tabIndex !== -1) {
+          const currentTab = tabs[tabIndex]
+          const boundAccount = currentTab.webAiAccountId
+            ? normalizeWebAiAccounts(s.settings?.webAiAccounts).find((account) =>
+                webAiAccountMatchesBinding(account, currentTab)
+              )
+            : null
+          if (boundAccount) {
+            // Why: a saved account promises one fixed cookie partition in every
+            // placement, including tabs embedded in an ordinary worktree.
+            return s
+          }
           const updatedTabs = [...tabs]
           updatedTabs[tabIndex] = {
             ...updatedTabs[tabIndex],
             sessionProfileId: profileId,
-            sessionPartition: sessionPartition ?? null
+            sessionPartition: sessionPartition ?? null,
+            // Invalid/orphan tags are sanitized when the user deliberately
+            // chooses a new profile; valid account bindings returned above.
+            webAiAccountId: null
           }
           return {
             browserTabsByWorktree: {
@@ -1778,24 +2554,26 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
   },
 
-  fetchBrowserSessionProfiles: async () => {
-    if (isRuntimeEnvironmentActive(get())) {
+  fetchBrowserSessionProfiles: async (owner) => {
+    const runtimeTarget = getBrowserProfileOperationRuntimeTarget(get(), owner)
+    const hostId = getBrowserProfileOperationHostId(get(), owner)
+    if (runtimeTarget) {
       try {
         const result = await callRuntimeRpc<BrowserProfileListResult>(
-          getActiveRuntimeTarget(get().settings),
+          runtimeTarget,
           'browser.profileList',
           undefined,
           { timeoutMs: 15_000 }
         )
-        set((s) => profileListByHostUpdate(s, result.profiles))
+        set((s) => profileListByHostUpdate(s, result.profiles, hostId))
       } catch {
-        set((s) => profileListByHostUpdate(s, []))
+        set((s) => profileListByHostUpdate(s, [], hostId))
       }
       return
     }
     try {
       const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
-      set((s) => profileListByHostUpdate(s, profiles))
+      set((s) => profileListByHostUpdate(s, profiles, hostId))
     } catch {
       /* best-effort — stale profile list is preferable to a crash */
     }
@@ -1838,6 +2616,23 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   deleteBrowserSessionProfile: async (profileId) => {
+    // Why: Web AI accounts treat their profile partition as an identity
+    // boundary. Deleting that profile would leave a persisted sidebar account
+    // pointing at a partition that can no longer be opened safely.
+    if (
+      !isRuntimeEnvironmentActive(get()) &&
+      normalizeWebAiAccounts(get().settings?.webAiAccounts).some(
+        (account) => account.profileId === profileId
+      )
+    ) {
+      toast.error(
+        translate(
+          'auto.components.settings.BrowserProfileRow.webAiProfileInUse',
+          'This profile is used by one or more Web AI accounts. Remove those accounts before deleting the profile.'
+        )
+      )
+      return false
+    }
     if (isRuntimeEnvironmentActive(get())) {
       try {
         const result = await callRuntimeRpc<BrowserProfileDeleteResult>(
@@ -1893,8 +2688,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
-  importCookiesToProfile: async (profileId) => {
-    if (isRuntimeEnvironmentActive(get())) {
+  importCookiesToProfile: async (profileId, webAiProvider?, cookieImportScope?, owner?) => {
+    if (getBrowserProfileOperationRuntimeTarget(get(), owner)) {
       const reason = 'Manual cookie file import is unavailable while a remote runtime is active.'
       set({
         browserSessionImportState: {
@@ -1916,7 +2711,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
     try {
       const result = (await window.api.browser.sessionImportCookies({
-        profileId
+        profileId,
+        webAiProvider,
+        ...(cookieImportScope ? { cookieImportScope } : {})
       })) as BrowserCookieImportResult
       if (result.ok) {
         get().recordFeatureInteraction?.('cookie-import')
@@ -1929,7 +2726,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           }
         })
         await get()
-          .fetchBrowserSessionProfiles()
+          .fetchBrowserSessionProfiles(owner)
           .catch(() => {})
       } else {
         set({
@@ -1962,41 +2759,71 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   detectedBrowsers: [],
   detectedBrowsersLoaded: false,
+  detectedBrowsersHostId: null,
+  detectedBrowsersRequestGeneration: 0,
 
-  fetchDetectedBrowsers: async () => {
-    if (isRuntimeEnvironmentActive(get())) {
+  fetchDetectedBrowsers: async (owner) => {
+    const runtimeTarget = getBrowserProfileOperationRuntimeTarget(get(), owner)
+    const hostId = getBrowserProfileOperationHostId(get(), owner)
+    if (get().detectedBrowsersLoaded && get().detectedBrowsersHostId === hostId) {
+      return
+    }
+    const requestGeneration = get().detectedBrowsersRequestGeneration + 1
+    set((state) => ({
+      detectedBrowsersRequestGeneration: requestGeneration,
+      ...(state.detectedBrowsersHostId !== hostId
+        ? {
+            // Why: never show a source list discovered on one machine while an
+            // import is already targeted at another owner.
+            detectedBrowsers: [],
+            detectedBrowsersLoaded: false,
+            detectedBrowsersHostId: hostId
+          }
+        : {})
+    }))
+    const commitDetectedBrowsers = (browsers: BrowserDetectProfilesResult['browsers']): void => {
+      const state = get()
+      if (
+        state.detectedBrowsersHostId !== hostId ||
+        state.detectedBrowsersRequestGeneration !== requestGeneration
+      ) {
+        return
+      }
+      set({ detectedBrowsers: browsers, detectedBrowsersLoaded: true })
+    }
+    if (runtimeTarget) {
       try {
         const result = await callRuntimeRpc<BrowserDetectProfilesResult>(
-          getActiveRuntimeTarget(get().settings),
+          runtimeTarget,
           'browser.profileDetectBrowsers',
           undefined,
           { timeoutMs: 15_000 }
         )
-        set({ detectedBrowsers: result.browsers, detectedBrowsersLoaded: true })
+        commitDetectedBrowsers(result.browsers)
       } catch {
-        set({ detectedBrowsers: [], detectedBrowsersLoaded: true })
+        commitDetectedBrowsers([])
       }
       return
     }
-    if (get().detectedBrowsersLoaded) {
-      return
-    }
     try {
-      const browsers = (await window.api.browser.sessionDetectBrowsers()) as {
-        family: string
-        label: string
-        profiles: { name: string; directory: string }[]
-        selectedProfile: string
-      }[]
-      set({ detectedBrowsers: browsers, detectedBrowsersLoaded: true })
+      const browsers =
+        (await window.api.browser.sessionDetectBrowsers()) as BrowserDetectProfilesResult['browsers']
+      commitDetectedBrowsers(browsers)
     } catch {
-      /* best-effort — empty list is acceptable fallback */
-      set({ detectedBrowsersLoaded: true })
+      commitDetectedBrowsers([])
     }
   },
 
-  importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
-    if (isRuntimeEnvironmentActive(get())) {
+  importCookiesFromBrowser: async (
+    profileId,
+    browserFamily,
+    browserProfile?,
+    webAiProvider?,
+    cookieImportScope?,
+    owner?
+  ) => {
+    const runtimeTarget = getBrowserProfileOperationRuntimeTarget(get(), owner)
+    if (runtimeTarget) {
       set({
         browserSessionImportState: {
           profileId,
@@ -2007,9 +2834,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       })
       try {
         const result = await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
-          getActiveRuntimeTarget(get().settings),
+          runtimeTarget,
           'browser.profileImportFromBrowser',
-          { profileId, browserFamily, browserProfile },
+          {
+            profileId,
+            browserFamily,
+            browserProfile,
+            webAiProvider,
+            ...(cookieImportScope ? { cookieImportScope } : {})
+          },
           { timeoutMs: 30_000 }
         )
         if (result.ok) {
@@ -2022,7 +2855,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             }
           })
           await get()
-            .fetchBrowserSessionProfiles()
+            .fetchBrowserSessionProfiles(owner)
             .catch(() => {})
         } else {
           set({
@@ -2060,7 +2893,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const result = (await window.api.browser.sessionImportFromBrowser({
         profileId,
         browserFamily,
-        browserProfile
+        browserProfile,
+        webAiProvider,
+        ...(cookieImportScope ? { cookieImportScope } : {})
       })) as BrowserCookieImportResult
       if (result.ok) {
         get().recordFeatureInteraction?.('cookie-import')
@@ -2073,7 +2908,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           }
         })
         await get()
-          .fetchBrowserSessionProfiles()
+          .fetchBrowserSessionProfiles(owner)
           .catch(() => {})
       } else {
         set({

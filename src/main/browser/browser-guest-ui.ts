@@ -336,6 +336,16 @@ export function setupGuestShortcutForwarding(args: {
         event.preventDefault()
         return true
       }
+      if (
+        action?.type === 'jumpToWebAiAccountIndex' ||
+        action?.type === 'jumpToWorktreeIndex' ||
+        action?.type === 'jumpToTabIndex'
+      ) {
+        // Why: consume held number chords without repeatedly launching an
+        // account or churning worktree/tab focus inside the renderer.
+        event.preventDefault()
+        return true
+      }
       return false
     }
     if (action?.type === 'worktreeHistoryNavigate') {
@@ -483,6 +493,8 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:openSettings')
     } else if (action?.type === 'forceReload') {
       renderer.reloadIgnoringCache()
+    } else if (action?.type === 'jumpToWebAiAccountIndex') {
+      renderer.send('ui:jumpToWebAiAccountIndex', action.index)
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else if (action?.type === 'jumpToTabIndex') {

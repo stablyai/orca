@@ -655,7 +655,11 @@
         "2fe88c2e06": "リモートワークスペースの同期は利用できません",
         "2ec42e1c52": "リモートワークスペースはまだありません",
         "88214a785b": "ワークスペースの同期はローカル セッションのハイドレーションを待機し、タイムアウトになりました",
-        "4f78ba5885": "ワークスペースが同期されました"
+        "4f78ba5885": "ワークスペースが同期されました",
+        "webAiAccountRequired": "アクティブな Web AI アカウントがありません",
+        "webAiProfileMismatch": "要求されたプロファイルはアクティブな Web AI アカウントと一致しません",
+        "webAiCreateFailed": "Web AI ブラウザタブを作成できませんでした",
+        "webAiProfileLocked": "このタブのプロファイルは Web AI アカウントによって固定されています"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "まだ形になりつつある新機能。試してみてください。",
@@ -4782,6 +4786,46 @@
           "cancel": "キャンセル",
           "forget": "Orcaから削除",
           "reconnectAndDelete": "再接続して削除"
+        },
+        "WebAiAccountDialog": {
+          "title": "Web AI アカウントを追加",
+          "provider": "サービス",
+          "accountName": "アカウント名",
+          "customServiceLabel": "サービス名",
+          "customServiceLabelPlaceholder": "Doubao",
+          "customHomeUrl": "ホーム URL",
+          "customHomeUrlPlaceholder": "https://www.doubao.com/",
+          "customHomeUrlInvalid": "ユーザー名やパスワードを含まない HTTPS URL を入力してください。",
+          "customHomeUrlHint": "この再利用可能なホームページは、クエリパラメーターとフラグメントを除いて保存されます。",
+          "customCookieDomains": "Cookie ドメイン",
+          "customCookieDomainsPlaceholder": "doubao.com",
+          "customCookieDomainsInvalid": "ホームのホスト名またはその親ドメインをカンマ区切りで入力してください。",
+          "customCookieDomainsDerived": "空欄の場合は {{value0}} を使用します。複数のドメインはカンマで区切ってください。",
+          "customCookieDomainsHint": "複数のドメインはカンマで区切ってください。プロトコル、パス、ワイルドカードは使用できません。",
+          "browserProfile": "ブラウザプロファイル",
+          "createProfile": "新しい分離プロファイルを作成",
+          "sharedGoogleCookiesWarning": "{{value0}} は google.com の共有ログイン Cookie を使用します。Google ログインでは、埋め込みブラウザからのアクセスが拒否される場合があり、Cookie をインポートすると、このブラウザプロファイル内の他の Google サービスで使用する Google アカウントも変わる可能性があります。",
+          "cancel": "キャンセル",
+          "addAndOpen": "追加して開く"
+        },
+        "WebAiAccountsSection": {
+          "profileMissing": "このブラウザプロファイルは存在しません。",
+          "createProfileFailed": "ブラウザプロファイルを作成できませんでした。",
+          "addFailed": "Web AI アカウントを追加できませんでした。",
+          "removed": "{{value0}} をサイドバーから削除しました。ブラウザプロファイルは保持されています。",
+          "toggle": "Web AI アカウントの表示を切り替える",
+          "title": "Web AI アカウント",
+          "add": "Web AI アカウントを追加",
+          "addFirst": "アカウントを追加",
+          "openNewTab": "別のブラウザタブを開く",
+          "manageProfile": "ブラウザプロファイルを管理",
+          "remove": "サイドバーから削除",
+          "profileCheckFailed": "ブラウザプロファイルを確認できませんでした。もう一度お試しください。",
+          "launchFailed": "この Web AI アカウントを開けませんでした。",
+          "openProfilesFailed": "ローカルのブラウザプロファイル設定を開けませんでした。",
+          "removeFailed": "Web AI アカウントを削除できませんでした。",
+          "openNewTabForAccount": "{{value0}} 用に別のブラウザタブを開く",
+          "moreActionsForAccount": "{{value0}} のその他の操作"
         }
       },
       "shared": {
@@ -5197,6 +5241,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "プロファイル「{{value0}}」が削除されました。",
+          "webAiProfileInUse": "このプロファイルは1つ以上のWeb AIアカウントで使用されています。プロファイルを削除する前に、それらのアカウントを削除してください。",
           "2d4bea7f35": "デフォルトの Cookie がクリアされました。",
           "ebb78dfd6f": "ファイルから…",
           "7df818977e": "から",
@@ -12317,7 +12362,13 @@
             "4f5ffaa6a1": "ブラウザデータをインポートする",
             "b24fef25be": "インポート",
             "02e89014c5": "{{value1}}{{value2}} から {{value0}} クッキーをインポートしました。",
-            "d40d584769": "ファイルから {{value0}} 個の Cookie をインポートしました。"
+            "d40d584769": "ファイルから {{value0}} 個の Cookie をインポートしました。",
+            "webAiImport": "{{value0}} をインポート",
+            "webAiTitle": "{{value0}} の Cookie をインポート",
+            "webAiScope": "{{value0}} が使用する Cookie のみをこのプロファイルにコピーします。",
+            "geminiScope": "Gemini は共有の Google ログインを使用するため、Google アカウントの Cookie はコピーされますが、無関係なサイトの Cookie は除外されます。",
+            "googleScope": "{{value0}} は共有の Google ログインを使用するため、Google アカウントの Cookie はコピーされますが、無関係なサイトの Cookie は除外されます。",
+            "webAiMenuHint": "このサービス用のインポートは、ブラウザメニューからも利用できます。"
           },
           "BrowserMobileDriverOverlay": {
             "a6914ee43f": "操作を取り戻す",
@@ -12434,7 +12485,8 @@
             "bf648471c5": "作成…",
             "53bbe3dab4": "ファイルから {{value0}} 個の Cookie をインポートしました。",
             "c5f0e4d3b2a1": "{{value1}} ({{value2}}) から {{value0}} 件の Cookie をインポートしました。",
-            "d6a1f5e4c3b2": "{{value1}} から {{value0}} 件の Cookie をインポートしました。"
+            "d6a1f5e4c3b2": "{{value1}} から {{value0}} 件の Cookie をインポートしました。",
+            "importProviderCookies": "{{value0}} の Cookie をインポート"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "AIにアタッチする",

@@ -7,6 +7,10 @@ type ChromiumCookieTestRow = {
   name: string
   value: string
   encryptedValue?: Buffer
+  hostKey?: string
+  path?: string
+  secure?: boolean
+  expirationDate?: number
 }
 
 export function createChromiumCookieTestDatabase(
@@ -56,15 +60,18 @@ export function createChromiumCookieTestDatabase(
       source_port,
       last_update_utc,
       has_cross_site_ancestor
-    ) VALUES (?, ?, '', ?, ?, ?, '/', 0, 0, 0, 0, 0, -1, ?, 0)
+    ) VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, 0, 0, 0, -1, ?, 0)
   `)
   rows.forEach((row, index) => {
     insert.run(
       133_000_000_000_000 + index,
-      '.example.com',
+      row.hostKey ?? '.example.com',
       row.name,
       row.value,
       row.encryptedValue ?? Buffer.alloc(0),
+      row.path ?? '/',
+      row.expirationDate ? BigInt(Math.floor(row.expirationDate) + 11_644_473_600) * 1_000_000n : 0,
+      row.secure ? 1 : 0,
       0
     )
   })

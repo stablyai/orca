@@ -68,6 +68,14 @@ import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcrip
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import {
+  parseWebAiAccountWorkspaceId,
+  WEB_AI_BROWSER_WORKSPACE_ID
+} from '../../../shared/constants'
+import {
+  normalizeWebAiAccounts,
+  webAiAccountMatchesWorkspace
+} from '../../../shared/web-ai-accounts'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -791,6 +799,31 @@ function queueSetupAndIssueCommands(
 // already imports from. Registering here keeps folder workspace replay on the
 // same path as direct folder activation.
 setWorktreeNavActivator((workspaceId) => {
+  const accountId = parseWebAiAccountWorkspaceId(workspaceId)
+  if (accountId) {
+    const store = useAppStore.getState()
+    const account = normalizeWebAiAccounts(store.settings?.webAiAccounts).find(
+      (entry) => entry.id === accountId
+    )
+    if (!account) {
+      return false
+    }
+    const workspaces = store.browserTabsByWorktree[workspaceId] ?? []
+    const preferredWorkspaceId = store.activeBrowserTabIdByWorktree[workspaceId]
+    const workspace =
+      workspaces.find(
+        (entry) => entry.id === preferredWorkspaceId && webAiAccountMatchesWorkspace(account, entry)
+      ) ?? workspaces.find((entry) => webAiAccountMatchesWorkspace(account, entry))
+    if (workspace) {
+      return store.activateWebAiBrowserWorkspace(workspaceId, workspace.id)
+    }
+    // Why: navigation history must never recreate a closed account tab. The
+    // account row remains available for an explicit user launch instead.
+    return false
+  }
+  if (workspaceId === WEB_AI_BROWSER_WORKSPACE_ID) {
+    return false
+  }
   const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type === 'folder') {
     return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)

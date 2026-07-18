@@ -1,18 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WebAiAccount } from '../../../../shared/types'
 
 const appStoreSnapshot: {
   activeTabId: string | null
   activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
   unifiedTabsByWorktree: Record<string, unknown[]>
   activeGroupIdByWorktree: Record<string, string>
+  webAiAccounts: WebAiAccount[]
 } = {
   activeTabId: 'old-terminal',
   activeTabType: 'terminal',
   unifiedTabsByWorktree: {},
-  activeGroupIdByWorktree: {}
+  activeGroupIdByWorktree: {},
+  webAiAccounts: []
 }
 const pinTabMock: (tabId: string) => void = vi.fn()
 const unpinTabMock: (tabId: string) => void = vi.fn()
+const launchWebAiAccountMock = vi.fn().mockResolvedValue({ ok: true })
 
 const useAppStoreMock = vi.fn(
   (
@@ -26,9 +30,12 @@ const useAppStoreMock = vi.fn(
       activeGroupIdByWorktree: Record<string, string>
       pinTab: typeof pinTabMock
       unpinTab: typeof unpinTabMock
+      launchWebAiAccount: typeof launchWebAiAccountMock
       settings: {
         terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
         terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
+        activeRuntimeEnvironmentId: null
+        webAiAccounts: WebAiAccount[]
       }
     }) => unknown
   ) =>
@@ -42,9 +49,12 @@ const useAppStoreMock = vi.fn(
       activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
       pinTab: pinTabMock,
       unpinTab: unpinTabMock,
+      launchWebAiAccount: launchWebAiAccountMock,
       settings: {
         terminalWindowsShell: 'powershell.exe',
-        terminalWindowsPowerShellImplementation: 'auto'
+        terminalWindowsPowerShellImplementation: 'auto',
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: appStoreSnapshot.webAiAccounts
       }
     })
 )
@@ -67,6 +77,11 @@ vi.mock('react', async () => {
 // calls useRef) has no dispatcher; make it a pass-through like the store mock.
 vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
+}))
+
+vi.mock('@/hooks/useShortcutLabel', () => ({
+  useShortcutLabel: (actionId: string) => actionId,
+  useOptionalShortcutLabel: () => null
 }))
 
 vi.mock('lucide-react', () => ({
@@ -117,9 +132,12 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
   pinTab: pinTabMock,
   unpinTab: unpinTabMock,
+  launchWebAiAccount: launchWebAiAccountMock,
   settings: {
     terminalWindowsShell: 'powershell.exe',
-    terminalWindowsPowerShellImplementation: 'auto'
+    terminalWindowsPowerShellImplementation: 'auto',
+    activeRuntimeEnvironmentId: null,
+    webAiAccounts: appStoreSnapshot.webAiAccounts
   }
 }))
 
@@ -311,6 +329,7 @@ describe('TabBar context menu wiring', () => {
     appStoreSnapshot.activeTabType = 'terminal'
     appStoreSnapshot.unifiedTabsByWorktree = {}
     appStoreSnapshot.activeGroupIdByWorktree = {}
+    appStoreSnapshot.webAiAccounts = []
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
@@ -344,6 +363,46 @@ describe('TabBar context menu wiring', () => {
     const sortable = findChildrenByType(element, 'SortableTab')
     expect(sortable).toHaveLength(1)
     expect(sortable[0].props.tabCount).toBe(2)
+  })
+
+  it('offers saved Web AI accounts and targets the owning worktree group', async () => {
+    const account: WebAiAccount = {
+      id: 'account-1',
+      provider: 'chatgpt',
+      label: 'Personal ChatGPT',
+      executionHostId: 'local',
+      profileId: 'profile-1',
+      sessionPartition: 'persist:profile-1',
+      createdAt: 1
+    }
+    appStoreSnapshot.webAiAccounts = [account]
+    appStoreSnapshot.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
+
+    const element = await renderTabBar({
+      groupId: 'group-1',
+      tabs: [TERMINAL_TAB],
+      editorFiles: [],
+      browserTabs: [],
+      tabBarOrder: ['term-1']
+    })
+    const subTrigger = findChildrenByType(element, 'DropdownMenuSubTrigger').find((candidate) =>
+      extractText(candidate).includes('Web AI Accounts')
+    )
+    const accountItem = findChildrenByType(element, 'DropdownMenuItem').find((candidate) =>
+      extractText(candidate).includes('Personal ChatGPT / ChatGPT')
+    )
+
+    expect(subTrigger).toBeTruthy()
+    expect(accountItem).toBeTruthy()
+    const onSelect = accountItem?.props.onSelect as (() => void) | undefined
+    onSelect?.()
+    await Promise.resolve()
+
+    expect(launchWebAiAccountMock).toHaveBeenCalledWith(account, {
+      openNewTab: true,
+      targetGroupId: 'group-1',
+      targetWorktreeId: 'wt-1'
+    })
   })
 
   it('keeps the tab strip content-sized until horizontal scrolling is needed', async () => {
@@ -478,6 +537,28 @@ describe('TabBar context menu wiring', () => {
     expect(menuLabels[1]).toContain('Open Markdown...')
     expect(menuLabels[2]).toContain('New Terminal')
     expect(menuLabels[3]).toContain('New Browser Tab')
+  })
+
+  it('shows only browser creation in a browser-only synthetic workspace', async () => {
+    const element = await renderTabBar({
+      tabs: [],
+      browserTabs: [],
+      browserOnly: true,
+      onNewFileTab: () => {},
+      onOpenFileTab: () => {},
+      onNewSimulatorTab: () => {},
+      onOpenEntry: async () => {}
+    })
+
+    const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(menuLabels).toHaveLength(1)
+    expect(menuLabels[0]).toContain('New Browser Tab')
+    expect(menuLabels[0]).toContain('tab.newTerminal')
+    expect(menuLabels[0]).not.toContain('tab.newBrowser')
+    expect(findChildrenByType(element, 'TabBarCreateEntry')).toHaveLength(0)
   })
 
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {

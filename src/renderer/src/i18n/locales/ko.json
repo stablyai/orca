@@ -655,7 +655,11 @@
         "2fe88c2e06": "원격 워크스페이스 동기화를 사용할 수 없습니다.",
         "2ec42e1c52": "아직 원격 워크스페이스가 없습니다.",
         "88214a785b": "워크스페이스 동기화가 로컬 세션 하이드레이션을 기다렸다가 시간 초과되었습니다.",
-        "4f78ba5885": "워크스페이스가 동기화되었습니다."
+        "4f78ba5885": "워크스페이스가 동기화되었습니다.",
+        "webAiAccountRequired": "활성 웹 AI 계정이 없습니다",
+        "webAiProfileMismatch": "요청한 프로필이 활성 웹 AI 계정과 일치하지 않습니다",
+        "webAiCreateFailed": "웹 AI 브라우저 탭을 만들지 못했습니다",
+        "webAiProfileLocked": "이 탭의 프로필은 웹 AI 계정에 고정되어 있습니다"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "아직 구체화되고 있는 새로운 기능입니다. 한번 시도해 보세요.",
@@ -4782,6 +4786,46 @@
           "cancel": "취소",
           "forget": "Orca에서 제거",
           "reconnectAndDelete": "재연결 후 삭제"
+        },
+        "WebAiAccountDialog": {
+          "title": "웹 AI 계정 추가",
+          "provider": "서비스",
+          "accountName": "계정 이름",
+          "customServiceLabel": "서비스 이름",
+          "customServiceLabelPlaceholder": "Doubao",
+          "customHomeUrl": "홈 URL",
+          "customHomeUrlPlaceholder": "https://www.doubao.com/",
+          "customHomeUrlInvalid": "사용자 이름이나 비밀번호가 없는 HTTPS URL을 입력하세요.",
+          "customHomeUrlHint": "이 재사용 가능한 홈 페이지는 쿼리 매개변수와 프래그먼트를 제거한 상태로 저장됩니다.",
+          "customCookieDomains": "쿠키 도메인",
+          "customCookieDomainsPlaceholder": "doubao.com",
+          "customCookieDomainsInvalid": "홈 호스트 이름 또는 그 상위 도메인을 쉼표로 구분해 입력하세요.",
+          "customCookieDomainsDerived": "비워 두면 {{value0}} 도메인을 사용합니다. 여러 도메인은 쉼표로 구분하세요.",
+          "customCookieDomainsHint": "여러 도메인은 쉼표로 구분하세요. 프로토콜, 경로 및 와일드카드는 허용되지 않습니다.",
+          "browserProfile": "브라우저 프로필",
+          "createProfile": "새 격리 프로필 만들기",
+          "sharedGoogleCookiesWarning": "{{value0}} 서비스는 google.com의 공유 로그인 쿠키를 사용합니다. Google 로그인은 내장 브라우저를 거부할 수 있으며, 쿠키를 가져오면 이 브라우저 프로필의 다른 Google 서비스에서 사용하는 Google 계정도 변경될 수 있습니다.",
+          "cancel": "취소",
+          "addAndOpen": "추가하고 열기"
+        },
+        "WebAiAccountsSection": {
+          "profileMissing": "이 브라우저 프로필은 더 이상 존재하지 않습니다.",
+          "createProfileFailed": "브라우저 프로필을 만들지 못했습니다.",
+          "addFailed": "웹 AI 계정을 추가하지 못했습니다.",
+          "removed": "사이드바에서 {{value0}} 항목을 제거했습니다. 브라우저 프로필은 유지했습니다.",
+          "toggle": "웹 AI 계정 펼치기 또는 접기",
+          "title": "웹 AI 계정",
+          "add": "웹 AI 계정 추가",
+          "addFirst": "계정 추가",
+          "openNewTab": "다른 브라우저 탭 열기",
+          "manageProfile": "브라우저 프로필 관리",
+          "remove": "사이드바에서 제거",
+          "profileCheckFailed": "브라우저 프로필을 확인할 수 없습니다. 다시 시도하세요.",
+          "launchFailed": "이 웹 AI 계정을 열지 못했습니다.",
+          "openProfilesFailed": "로컬 브라우저 프로필 설정을 열지 못했습니다.",
+          "removeFailed": "웹 AI 계정을 제거하지 못했습니다.",
+          "openNewTabForAccount": "{{value0}}용 브라우저 탭 하나 더 열기",
+          "moreActionsForAccount": "{{value0}} 추가 작업"
         }
       },
       "shared": {
@@ -5197,6 +5241,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "프로필 '{{value0}}'이(가) 삭제되었습니다.",
+          "webAiProfileInUse": "이 프로필은 하나 이상의 웹 AI 계정에서 사용 중입니다. 프로필을 삭제하기 전에 해당 계정을 제거하세요.",
           "2d4bea7f35": "기본 쿠키가 삭제되었습니다.",
           "ebb78dfd6f": "파일에서…",
           "7df818977e": "에서",
@@ -12317,7 +12362,13 @@
             "4f5ffaa6a1": "브라우저 데이터 가져오기",
             "b24fef25be": "가져오기",
             "02e89014c5": "{{value1}}{{value2}}에서 {{value0}} 쿠키를 가져왔습니다.",
-            "d40d584769": "파일에서 {{value0}}개의 쿠키를 가져왔습니다."
+            "d40d584769": "파일에서 {{value0}}개의 쿠키를 가져왔습니다.",
+            "webAiImport": "{{value0}} 가져오기",
+            "webAiTitle": "{{value0}} 쿠키 가져오기",
+            "webAiScope": "{{value0}}에서 사용하는 쿠키만 이 프로필로 복사합니다.",
+            "geminiScope": "Gemini는 공유 Google 로그인을 사용하므로 Google 계정 쿠키를 복사하지만 관련 없는 사이트의 쿠키는 제외합니다.",
+            "googleScope": "{{value0}}는 공유 Google 로그인을 사용하므로 Google 계정 쿠키를 복사하지만 관련 없는 사이트의 쿠키는 제외합니다.",
+            "webAiMenuHint": "이 서비스용 가져오기는 브라우저 메뉴에서도 사용할 수 있습니다."
           },
           "BrowserMobileDriverOverlay": {
             "a6914ee43f": "제어권 가져오기",
@@ -12434,7 +12485,8 @@
             "bf648471c5": "만드는 중…",
             "53bbe3dab4": "파일에서 {{value0}}개의 쿠키를 가져왔습니다.",
             "c5f0e4d3b2a1": "{{value1}} ({{value2}})에서 {{value0}}개의 쿠키를 가져왔습니다.",
-            "d6a1f5e4c3b2": "{{value1}}에서 {{value0}}개의 쿠키를 가져왔습니다."
+            "d6a1f5e4c3b2": "{{value1}}에서 {{value0}}개의 쿠키를 가져왔습니다.",
+            "importProviderCookies": "{{value0}} 쿠키 가져오기"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "AI에 연결",

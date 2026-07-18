@@ -36,10 +36,12 @@ type BrowserToolbarMenuDropdownProps = {
   detectedBrowsers: DetectedBrowserEntry[]
   onFetchDetectedBrowsers: () => void
   browserSessionImportState: { profileId: string; status: string } | null | undefined
+  cookieImportProviderLabel?: string
   onImportFromBrowser: (browserFamily: string, browserProfile?: string) => void
   onImportFromFile: () => void
   viewportPresetId: BrowserViewportPresetId | null
   onApplyViewportPreset: (nextId: BrowserViewportPresetId | null) => void
+  profileSelectionLocked: boolean
 }
 
 export function BrowserToolbarMenuDropdown({
@@ -52,11 +54,17 @@ export function BrowserToolbarMenuDropdown({
   detectedBrowsers,
   onFetchDetectedBrowsers,
   browserSessionImportState,
+  cookieImportProviderLabel,
   onImportFromBrowser,
   onImportFromFile,
   viewportPresetId,
-  onApplyViewportPreset
+  onApplyViewportPreset,
+  profileSelectionLocked
 }: BrowserToolbarMenuDropdownProps): React.JSX.Element {
+  const visibleProfiles = profileSelectionLocked
+    ? allProfiles.filter((profile) => profile.id === effectiveProfileId)
+    : allProfiles
+
   return (
     <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -73,11 +81,12 @@ export function BrowserToolbarMenuDropdown({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        {allProfiles.map((profile) => {
+        {visibleProfiles.map((profile) => {
           const isSelectedProfile = profile.id === effectiveProfileId
           return (
             <DropdownMenuItem
               key={profile.id}
+              disabled={profileSelectionLocked}
               onSelect={() => onSwitchProfile(profile.id === 'default' ? null : profile.id)}
             >
               <Check
@@ -94,12 +103,18 @@ export function BrowserToolbarMenuDropdown({
           )
         })}
 
-        <DropdownMenuSeparator />
-
-        <DropdownMenuItem onSelect={onNewProfile}>
-          <Plus className="mr-2 size-3.5" />
-          {translate('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
-        </DropdownMenuItem>
+        {profileSelectionLocked ? null : (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onNewProfile}>
+              <Plus className="mr-2 size-3.5" />
+              {translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef',
+                'New Profile…'
+              )}
+            </DropdownMenuItem>
+          </>
+        )}
 
         <DropdownMenuSeparator />
 
@@ -120,10 +135,16 @@ export function BrowserToolbarMenuDropdown({
             data-contextual-tour-target="browser-import-cookies-control"
           >
             <Import className="mr-2 size-3.5" />
-            {translate(
-              'auto.components.browser.pane.BrowserToolbarMenu.2293adf620',
-              'Import Cookies'
-            )}
+            {cookieImportProviderLabel
+              ? translate(
+                  'auto.components.browser.pane.BrowserToolbarMenu.importProviderCookies',
+                  'Import {{value0}} Cookies',
+                  { value0: cookieImportProviderLabel }
+                )
+              : translate(
+                  'auto.components.browser.pane.BrowserToolbarMenu.2293adf620',
+                  'Import Cookies'
+                )}
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent>

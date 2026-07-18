@@ -9,14 +9,26 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  FLOATING_TERMINAL_WORKTREE_ID,
+  getDefaultWorkspaceSession,
+  getWebAiAccountWorkspaceId
+} from '../../../../shared/constants'
+import type { WebAiAccount } from '../../../../shared/types'
+import { buildBrowserSessionData } from '@/lib/workspace-session'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+const toastErrorMock = vi.hoisted(() => vi.fn())
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: toastErrorMock }
 }))
 
 const mockApi = {
@@ -38,12 +50,18 @@ const mockApi = {
 // @ts-expect-error test window mock
 globalThis.window = { api: mockApi }
 
+beforeEach(() => {
+  toastErrorMock.mockClear()
+})
+
 function createTestStore() {
-  return create<AppState>()(
+  const store = create<AppState>()(
     (...a) =>
       ({
         settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+        activeView: 'terminal',
         activeWorktreeId: 'wt-1',
+        folderWorkspaces: [],
         browserDefaultUrl: 'about:blank',
         unifiedTabsByWorktree: {},
         tabBarOrderByWorktree: {},
@@ -51,7 +69,11 @@ function createTestStore() {
         openFiles: [],
         activeTabType: 'terminal',
         activeTabTypeByWorktree: {},
+        isNavigatingHistory: false,
+        worktreeNavHistory: [],
+        worktreeNavHistoryIndex: -1,
         worktreesByRepo: {},
+        getKnownWorktreeById: vi.fn(() => undefined),
         createUnifiedTab: vi.fn(),
         closeUnifiedTab: vi.fn(),
         activateTab: vi.fn(),
@@ -60,6 +82,30 @@ function createTestStore() {
         ...createBrowserSlice(...a)
       }) as unknown as AppState
   )
+  store.setState({
+    setActiveView: vi.fn((activeView) => store.setState({ activeView })),
+    setActiveWorktree: vi.fn((activeWorktreeId) => store.setState({ activeWorktreeId })),
+    recordWorktreeVisit: vi.fn(),
+    updateSettings: vi.fn(async (updates) => {
+      const next = { ...store.getState().settings!, ...updates }
+      store.setState({ settings: next })
+      return next
+    })
+  })
+  return store
+}
+
+function webAiAccount(overrides: Partial<WebAiAccount> = {}): WebAiAccount {
+  return {
+    id: 'web-ai-account-1',
+    provider: 'chatgpt',
+    label: 'Personal ChatGPT',
+    executionHostId: 'local',
+    profileId: 'profile-isolated',
+    sessionPartition: 'persist:orca-browser-session-profile-isolated',
+    createdAt: 1,
+    ...overrides
+  }
 }
 
 function settingsWithRuntime(id: string): AppState['settings'] {
@@ -494,6 +540,1214 @@ describe('createBrowserSlice closed browser workspaces', () => {
   })
 })
 
+describe('createBrowserSlice Web AI accounts', () => {
+  it('keeps a profile referenced by a Web AI account from being deleted', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const profile = {
+      id: account.profileId,
+      scope: 'isolated' as const,
+      partition: account.sessionPartition,
+      label: account.label,
+      source: null
+    }
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      browserSessionProfiles: [profile]
+    })
+    mockApi.browser.sessionDeleteProfile.mockClear()
+
+    await expect(store.getState().deleteBrowserSessionProfile(account.profileId)).resolves.toBe(
+      false
+    )
+
+    expect(mockApi.browser.sessionDeleteProfile).not.toHaveBeenCalled()
+    expect(store.getState().browserSessionProfiles).toEqual([profile])
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'This profile is used by one or more Web AI accounts. Remove those accounts before deleting the profile.'
+    )
+  })
+
+  it('does not launch when the saved profile id and partition no longer exist', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: 'persist:changed-partition',
+        label: 'Changed profile',
+        source: null
+      }
+    ])
+
+    const result = await store.getState().launchWebAiAccount(account)
+
+    expect(result).toMatchObject({ ok: false, reason: 'profile-missing' })
+    expect(store.getState().browserTabsByWorktree[getWebAiAccountWorkspaceId(account.id)]).toBe(
+      undefined
+    )
+  })
+
+  it('launches after the authoritative local profile id and partition match', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: 'Personal browser',
+        source: null
+      }
+    ])
+
+    const result = await store.getState().launchWebAiAccount(account)
+
+    expect(result.ok).toBe(true)
+    expect(
+      store.getState().browserTabsByWorktree[getWebAiAccountWorkspaceId(account.id)]
+    ).toHaveLength(1)
+  })
+
+  it('keeps the remote profile mirror focused while a Web AI launch refreshes local profiles', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const remoteProfiles = [
+      {
+        id: 'remote-default',
+        scope: 'default' as const,
+        partition: 'persist:remote-default',
+        label: 'Remote Default',
+        source: null
+      }
+    ]
+    const localProfiles = [
+      {
+        id: account.profileId,
+        scope: 'isolated' as const,
+        partition: account.sessionPartition,
+        label: 'Local Web AI profile',
+        source: null
+      }
+    ]
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: 'env-1',
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      browserSessionProfiles: remoteProfiles,
+      browserSessionProfilesByHostId: { 'runtime:env-1': remoteProfiles }
+    })
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce(localProfiles)
+
+    const result = await store.getState().launchWebAiAccount(account)
+
+    expect(result.ok).toBe(true)
+    expect(store.getState().browserSessionProfiles).toEqual(remoteProfiles)
+    expect(store.getState().browserSessionProfilesByHostId.local).toEqual(localProfiles)
+    expect(store.getState().browserSessionProfilesByHostId['runtime:env-1']).toEqual(remoteProfiles)
+  })
+
+  it('does not let a stale caller substitute another profile for a saved account id', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const staleAccount = webAiAccount({
+      profileId: 'profile-substitute',
+      sessionPartition: 'persist:profile-substitute'
+    })
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: staleAccount.profileId,
+        scope: 'isolated',
+        partition: staleAccount.sessionPartition,
+        label: 'Substitute profile',
+        source: null
+      }
+    ])
+
+    const result = await store.getState().launchWebAiAccount(staleAccount)
+
+    expect(result).toMatchObject({ ok: false, reason: 'profile-missing' })
+    expect(store.getState().browserTabsByWorktree[getWebAiAccountWorkspaceId(account.id)]).toBe(
+      undefined
+    )
+  })
+
+  it('removes an old account binding before reporting the canonical profile missing', async () => {
+    const store = createTestStore()
+    const account = webAiAccount({
+      profileId: 'profile-new',
+      sessionPartition: 'persist:profile-new'
+    })
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const staleWorkspace = store
+      .getState()
+      .createBrowserTab(accountWorkspaceId, 'https://chatgpt.com/', {
+        sessionProfileId: 'profile-old',
+        sessionPartition: 'persist:profile-old',
+        webAiAccountId: account.id
+      })
+    store.setState({
+      unifiedTabsByWorktree: {
+        [accountWorkspaceId]: [
+          {
+            id: 'old-binding-unified-tab',
+            entityId: staleWorkspace.id,
+            groupId: 'group-1',
+            worktreeId: accountWorkspaceId,
+            contentType: 'browser',
+            label: 'Old ChatGPT binding',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: 'profile-old',
+        scope: 'isolated',
+        partition: 'persist:profile-old',
+        label: 'Old profile',
+        source: null
+      }
+    ])
+
+    const result = await store.getState().launchWebAiAccount(account)
+
+    expect(result).toMatchObject({ ok: false, reason: 'profile-missing' })
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toBeUndefined()
+    expect(store.getState().browserPagesByWorkspace[staleWorkspace.id]).toBeUndefined()
+    expect(store.getState().closeUnifiedTab).toHaveBeenCalledWith('old-binding-unified-tab')
+  })
+
+  it('creates an isolated projectless workspace and reuses it on later clicks', () => {
+    const store = createTestStore()
+    store.setState({ activeWorktreeId: null, worktreesByRepo: {} })
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+
+    const created = store.getState().openWebAiAccount(account)
+    const focused = store.getState().openWebAiAccount(account)
+
+    expect(created).toMatchObject({
+      worktreeId: accountWorkspaceId,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition,
+      webAiAccountId: account.id,
+      url: 'https://chatgpt.com/'
+    })
+    expect(focused?.id).toBe(created?.id)
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(1)
+    expect(store.getState().setActiveWorktree).toHaveBeenCalledWith(accountWorkspaceId)
+    expect(store.getState().setActiveView).toHaveBeenCalledWith('terminal')
+    expect(store.getState().recordWorktreeVisit).toHaveBeenCalledTimes(1)
+  })
+
+  it('embeds a saved account in a requested ordinary worktree and reuses it there', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: ((worktreeId: string) =>
+        worktreeId === 'wt-project'
+          ? ({ id: worktreeId } as never)
+          : undefined) as AppState['getKnownWorktreeById']
+    })
+
+    const created = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project',
+      targetGroupId: 'group-project'
+    })
+    const focused = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+
+    expect(created).toMatchObject({
+      worktreeId: 'wt-project',
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(focused?.id).toBe(created?.id)
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(1)
+    expect(store.getState().createUnifiedTab).toHaveBeenCalledWith(
+      'wt-project',
+      'browser',
+      expect.objectContaining({ targetGroupId: 'group-project' })
+    )
+  })
+
+  it('focuses the most recently visited existing account tab before creating another', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-two',
+      worktreeNavHistory: ['wt-one', 'wt-two'],
+      worktreeNavHistoryIndex: 1,
+      getKnownWorktreeById: ((worktreeId: string) =>
+        worktreeId === 'wt-one' || worktreeId === 'wt-two'
+          ? ({ id: worktreeId } as never)
+          : undefined) as AppState['getKnownWorktreeById']
+    })
+    const existing = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-one'
+    })
+    store.setState({ activeWorktreeId: 'wt-two' })
+
+    const focused = store.getState().openWebAiAccount(account)
+
+    expect(focused?.id).toBe(existing?.id)
+    expect(store.getState().browserTabsByWorktree['wt-two']).toBeUndefined()
+    expect(store.getState().setActiveWorktree).toHaveBeenLastCalledWith('wt-one')
+  })
+
+  it('creates another profile-bound tab in the explicitly selected worktree', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-project' }) as never) as AppState['getKnownWorktreeById']
+    })
+
+    store.getState().openWebAiAccount(account, { targetWorktreeId: 'wt-project' })
+    store.getState().openWebAiAccount(account, {
+      openNewTab: true,
+      targetWorktreeId: 'wt-project'
+    })
+
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(2)
+    expect(
+      store
+        .getState()
+        .browserTabsByWorktree['wt-project']?.every(
+          (workspace) =>
+            workspace.webAiAccountId === account.id &&
+            workspace.sessionPartition === account.sessionPartition
+        )
+    ).toBe(true)
+  })
+
+  it('fails closed when an explicit Web AI target is runtime-owned', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: 'runtime-one',
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-runtime',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-runtime' }) as never) as AppState['getKnownWorktreeById']
+    })
+
+    expect(
+      store.getState().openWebAiAccount(account, { targetWorktreeId: 'wt-runtime' })
+    ).toBeNull()
+    expect(store.getState().browserTabsByWorktree['wt-runtime']).toBeUndefined()
+  })
+
+  it('opens a Custom account at its own HTTPS home instead of ChatGPT', () => {
+    const store = createTestStore()
+    const account = webAiAccount({
+      provider: 'custom',
+      label: 'Personal Doubao',
+      customServiceLabel: 'Doubao',
+      customHomeUrl: 'https://www.doubao.com/chat/',
+      customCookieDomains: ['doubao.com']
+    })
+
+    const created = store.getState().openWebAiAccount(account)
+
+    expect(created?.url).toBe('https://www.doubao.com/chat/')
+    expect(created?.url).not.toBe('https://chatgpt.com/')
+  })
+
+  it('opens Google AI Studio at its fixed provider home', () => {
+    const store = createTestStore()
+    const account = webAiAccount({
+      provider: 'aistudio',
+      label: 'Work AI Studio'
+    })
+
+    expect(store.getState().openWebAiAccount(account)?.url).toBe('https://aistudio.google.com/')
+  })
+
+  it('opens additional visible browser tabs with the same account identity', () => {
+    const store = createTestStore()
+    const account = webAiAccount({ provider: 'claude' })
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+
+    const result = store.getState().openWebAiAccount(account, { openNewTab: true })
+
+    expect(result?.id).not.toBe(workspace.id)
+    const workspaces = store.getState().browserTabsByWorktree[accountWorkspaceId] ?? []
+    expect(workspaces).toHaveLength(2)
+    expect(workspaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          webAiAccountId: account.id,
+          sessionProfileId: account.profileId,
+          sessionPartition: account.sessionPartition,
+          url: 'https://claude.ai/'
+        }),
+        expect.objectContaining({
+          webAiAccountId: account.id,
+          sessionProfileId: account.profileId,
+          sessionPartition: account.sessionPartition,
+          url: 'https://claude.ai/'
+        })
+      ])
+    )
+    expect(
+      workspaces.every((entry) => store.getState().browserPagesByWorkspace[entry.id]?.length === 1)
+    ).toBe(true)
+  })
+
+  it('keeps different saved accounts in separate workspaces and profile partitions', () => {
+    const store = createTestStore()
+    const personal = webAiAccount()
+    const work = webAiAccount({
+      id: 'web-ai-account-2',
+      provider: 'deepseek',
+      label: 'Work DeepSeek',
+      profileId: 'profile-work',
+      sessionPartition: 'persist:orca-browser-session-profile-work'
+    })
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [personal, work]
+      } as AppState['settings']
+    })
+
+    const personalTab = store.getState().openWebAiAccount(personal)
+    const workTab = store.getState().openWebAiAccount(work)
+    const personalAgain = store.getState().openWebAiAccount(personal)
+    const personalWorkspaceId = getWebAiAccountWorkspaceId(personal.id)
+    const workWorkspaceId = getWebAiAccountWorkspaceId(work.id)
+
+    expect(personalAgain?.id).toBe(personalTab?.id)
+    expect(workTab).toMatchObject({
+      webAiAccountId: work.id,
+      sessionProfileId: work.profileId,
+      sessionPartition: work.sessionPartition
+    })
+    expect(store.getState().browserTabsByWorktree[personalWorkspaceId]).toEqual([personalTab])
+    expect(store.getState().browserTabsByWorktree[workWorkspaceId]).toEqual([workTab])
+  })
+
+  it('switches between accounts without sharing their persistent partitions', () => {
+    const store = createTestStore()
+    const personal = webAiAccount()
+    const work = webAiAccount({
+      id: 'web-ai-account-2',
+      label: 'Work ChatGPT',
+      profileId: 'profile-work',
+      sessionPartition: 'persist:orca-browser-session-profile-work'
+    })
+
+    const personalWorkspace = store.getState().openWebAiAccount(personal)
+    const workWorkspace = store.getState().openWebAiAccount(work)
+    const focusedPersonal = store.getState().openWebAiAccount(personal)
+    const personalWorkspaceId = getWebAiAccountWorkspaceId(personal.id)
+    const workWorkspaceId = getWebAiAccountWorkspaceId(work.id)
+
+    expect(personalWorkspace).toMatchObject({
+      webAiAccountId: personal.id,
+      sessionProfileId: personal.profileId,
+      sessionPartition: personal.sessionPartition
+    })
+    expect(workWorkspace).toMatchObject({
+      webAiAccountId: work.id,
+      sessionProfileId: work.profileId,
+      sessionPartition: work.sessionPartition
+    })
+    expect(personal.sessionPartition).not.toBe(work.sessionPartition)
+    expect(focusedPersonal?.id).toBe(personalWorkspace?.id)
+    expect(store.getState().activeBrowserTabId).toBe(personalWorkspace?.id)
+    expect(store.getState().activeWorktreeId).toBe(personalWorkspaceId)
+    expect(store.getState().browserTabsByWorktree[personalWorkspaceId]).toEqual([personalWorkspace])
+    expect(store.getState().browserTabsByWorktree[workWorkspaceId]).toEqual([workWorkspace])
+  })
+
+  it('routes the generic new-browser action to another visible tab in the active account identity', async () => {
+    const store = createTestStore()
+    const account = webAiAccount({ provider: 'deepseek' })
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: 'DeepSeek profile',
+        source: null
+      }
+    ])
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    const workspaces = store.getState().browserTabsByWorktree[accountWorkspaceId] ?? []
+    expect(workspaces).toHaveLength(2)
+    expect(workspaces[1]).toMatchObject({
+      url: 'https://chat.deepseek.com/',
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(store.getState().browserPagesByWorkspace[workspace.id]).toHaveLength(1)
+    expect(store.getState().browserPagesByWorkspace[workspaces[1]!.id]).toHaveLength(1)
+  })
+
+  it('does not open a new account tab when the saved profile binding is missing', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: 'persist:changed-partition',
+        label: 'Changed profile',
+        source: null
+      }
+    ])
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toEqual([workspace])
+  })
+
+  it('replaces a drifted active account tab when opening a new tab', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const drifted = store.getState().createBrowserTab(accountWorkspaceId, 'https://chatgpt.com/', {
+      sessionProfileId: 'profile-old',
+      sessionPartition: 'persist:profile-old',
+      webAiAccountId: account.id
+    })
+    store.setState({
+      activeWorktreeId: accountWorkspaceId,
+      activeBrowserTabId: drifted.id,
+      activeBrowserTabIdByWorktree: { [accountWorkspaceId]: drifted.id }
+    })
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: 'Canonical profile',
+        source: null
+      }
+    ])
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    const workspaces = store.getState().browserTabsByWorktree[accountWorkspaceId] ?? []
+    expect(workspaces).toEqual([
+      expect.objectContaining({
+        webAiAccountId: account.id,
+        sessionProfileId: account.profileId,
+        sessionPartition: account.sessionPartition
+      })
+    ])
+    expect(workspaces[0]?.id).not.toBe(drifted.id)
+    expect(store.getState().browserPagesByWorkspace[drifted.id]).toBeUndefined()
+  })
+
+  it('opens guest-requested links in a visible tab with the source account profile', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const source = store.getState().openWebAiAccount(account)
+    if (!source?.activePageId) {
+      throw new Error('Expected a Web AI browser page')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: account.label,
+        source: null
+      }
+    ])
+
+    const opened = await store
+      .getState()
+      .openBrowserLinkInNewTab(source.activePageId, 'https://chatgpt.com/c/example')
+
+    expect(opened).toMatchObject({
+      url: 'https://chatgpt.com/c/example',
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(2)
+  })
+
+  it('keeps guest-requested links in the source worktree and account binding', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-project' }) as never) as AppState['getKnownWorktreeById']
+    })
+    const source = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!source?.activePageId) {
+      throw new Error('Expected an integrated Web AI browser page')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: account.label,
+        source: null
+      }
+    ])
+
+    const opened = await store
+      .getState()
+      .openBrowserLinkInNewTab(source.activePageId, 'https://chatgpt.com/c/integrated')
+
+    expect(opened).toMatchObject({
+      worktreeId: 'wt-project',
+      url: 'https://chatgpt.com/c/integrated',
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(2)
+  })
+
+  it('rejects guest-requested account links when the saved profile is missing', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const source = store.getState().openWebAiAccount(account)
+    if (!source?.activePageId) {
+      throw new Error('Expected a Web AI browser page')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([])
+
+    const opened = await store
+      .getState()
+      .openBrowserLinkInNewTab(source.activePageId, 'https://chatgpt.com/c/rejected')
+
+    expect(opened).toBeNull()
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('This browser profile no longer exists.')
+  })
+
+  it('removes stale profile workspaces before recreating the account surface', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    const drifted = store.getState().createBrowserTab(accountWorkspaceId, 'https://chatgpt.com/', {
+      sessionProfileId: 'different-profile',
+      sessionPartition: 'persist:different-profile',
+      webAiAccountId: account.id
+    })
+    store.setState({
+      unifiedTabsByWorktree: {
+        [accountWorkspaceId]: [
+          {
+            id: 'drifted-unified-tab',
+            entityId: drifted.id,
+            groupId: 'group-1',
+            worktreeId: accountWorkspaceId,
+            contentType: 'browser',
+            label: 'Drifted ChatGPT',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+
+    const created = store.getState().openWebAiAccount(account)
+    const workspaces = store.getState().browserTabsByWorktree[accountWorkspaceId] ?? []
+
+    expect(created?.id).not.toBe(drifted.id)
+    expect(workspaces).toEqual([created])
+    expect(workspaces).toEqual([
+      expect.objectContaining({
+        sessionProfileId: account.profileId,
+        sessionPartition: account.sessionPartition,
+        webAiAccountId: account.id
+      })
+    ])
+    expect(store.getState().browserPagesByWorkspace[drifted.id]).toBeUndefined()
+    expect(store.getState().closeUnifiedTab).toHaveBeenCalledWith('drifted-unified-tab')
+  })
+
+  it('preserves the account tag when reopening a closed workspace', () => {
+    const store = createTestStore()
+    const account = webAiAccount({ provider: 'deepseek' })
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+
+    store.getState().closeBrowserTab(workspace.id)
+    const reopened = store.getState().reopenClosedBrowserTab(accountWorkspaceId)
+
+    expect(reopened?.webAiAccountId).toBe(account.id)
+    expect(reopened?.sessionProfileId).toBe(account.profileId)
+  })
+
+  it('does not restore a synthetic tab after the saved account was removed', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+
+    await store.getState().deleteWebAiAccount(account.id)
+    const reopened = store.getState().reopenClosedBrowserTab(accountWorkspaceId)
+
+    expect(reopened).toBeNull()
+  })
+
+  it('preserves the account tag when reopening another visible tab for the same account', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const first = store.getState().openWebAiAccount(account)
+    if (!first) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+    store.getState().closeBrowserTab(first.id)
+    const live = store.getState().openWebAiAccount(account)
+    if (!live) {
+      throw new Error('Expected a replacement Web AI browser workspace')
+    }
+
+    const reopened = store.getState().reopenClosedBrowserTab(accountWorkspaceId)
+
+    expect(reopened?.webAiAccountId).toBe(account.id)
+    expect(live.webAiAccountId).toBe(account.id)
+  })
+
+  it('leaves the empty synthetic workspace after its last browser closes', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+
+    store.getState().closeBrowserTab(workspace.id)
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('removes the saved account and closes its surface without deleting the profile', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+    store.getState().openWebAiAccount(account, { openNewTab: true })
+
+    const removed = await store.getState().deleteWebAiAccount(account.id)
+
+    expect(removed).toBe(true)
+    expect(store.getState().settings?.webAiAccounts).toEqual([])
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toBeUndefined()
+    expect(mockApi.browser.sessionDeleteProfile).not.toHaveBeenCalled()
+  })
+
+  it('removes live and recently closed account tabs from ordinary worktrees', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-one',
+      getKnownWorktreeById: ((worktreeId: string) =>
+        worktreeId === 'wt-one' || worktreeId === 'wt-two'
+          ? ({ id: worktreeId } as never)
+          : undefined) as AppState['getKnownWorktreeById']
+    })
+    const closed = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-one'
+    })
+    store.getState().openWebAiAccount(account, {
+      openNewTab: true,
+      targetWorktreeId: 'wt-two'
+    })
+    if (!closed) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    store.getState().closeBrowserTab(closed.id)
+    const unrelated = store.getState().createBrowserTab('wt-one', 'https://example.com')
+    store.getState().closeBrowserTab(unrelated.id)
+    store.setState((state) => ({
+      recentlyClosedTabKindsByWorktree: {
+        ...state.recentlyClosedTabKindsByWorktree,
+        'wt-one': ['terminal', ...(state.recentlyClosedTabKindsByWorktree['wt-one'] ?? [])]
+      }
+    }))
+
+    expect(
+      store
+        .getState()
+        .recentlyClosedBrowserTabsByWorktree['wt-one']?.some(
+          (snapshot) => snapshot.workspace.webAiAccountId === account.id
+        )
+    ).toBe(true)
+
+    await store.getState().deleteWebAiAccount(account.id)
+
+    expect(store.getState().browserTabsByWorktree['wt-one']).toBeUndefined()
+    expect(store.getState().browserTabsByWorktree['wt-two']).toBeUndefined()
+    expect(
+      Object.values(store.getState().recentlyClosedBrowserTabsByWorktree)
+        .flat()
+        .some((snapshot) => snapshot.workspace.webAiAccountId === account.id)
+    ).toBe(false)
+    expect(
+      store
+        .getState()
+        .recentlyClosedBrowserTabsByWorktree['wt-one']?.map((snapshot) => snapshot.workspace.id)
+    ).toEqual([unrelated.id])
+    expect(store.getState().recentlyClosedTabKindsByWorktree['wt-one']).toEqual([
+      'terminal',
+      'browser'
+    ])
+    expect(store.getState().recentlyClosedTabKindsByWorktree['wt-two']).toBeUndefined()
+  })
+
+  it('keeps the workspace binding when account persistence fails', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      updateSettings: vi.fn(async () => {})
+    })
+    const workspace = store.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+
+    const removed = await store.getState().deleteWebAiAccount(account.id)
+
+    expect(removed).toBe(false)
+    expect(store.getState().settings?.webAiAccounts).toEqual([account])
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]?.[0]?.webAiAccountId).toBe(
+      account.id
+    )
+  })
+
+  it('hydrates multiple account tabs in the synthetic workspace and reuses the active one', () => {
+    const store = createTestStore()
+    const account = webAiAccount({ provider: 'claude' })
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    const firstWorkspaceId = 'restored-web-ai-workspace-1'
+    const secondWorkspaceId = 'restored-web-ai-workspace-2'
+    const firstPageId = 'restored-page-1'
+    const secondPageId = 'restored-page-2'
+    store.setState({
+      activeWorktreeId: accountWorkspaceId,
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: null,
+      activeWorktreeId: accountWorkspaceId,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [accountWorkspaceId]: [
+          {
+            id: firstWorkspaceId,
+            worktreeId: accountWorkspaceId,
+            sessionProfileId: account.profileId,
+            sessionPartition: account.sessionPartition,
+            webAiAccountId: account.id,
+            activePageId: firstPageId,
+            pageIds: [firstPageId],
+            url: 'https://claude.ai/',
+            title: 'Claude',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          },
+          {
+            id: secondWorkspaceId,
+            worktreeId: accountWorkspaceId,
+            sessionProfileId: account.profileId,
+            sessionPartition: account.sessionPartition,
+            webAiAccountId: account.id,
+            activePageId: secondPageId,
+            pageIds: [secondPageId],
+            url: 'https://claude.ai/new',
+            title: 'Second conversation',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: true,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 2
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        [firstWorkspaceId]: [
+          {
+            id: firstPageId,
+            workspaceId: firstWorkspaceId,
+            worktreeId: accountWorkspaceId,
+            url: 'https://claude.ai/',
+            title: 'Claude',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ],
+        [secondWorkspaceId]: [
+          {
+            id: secondPageId,
+            workspaceId: secondWorkspaceId,
+            worktreeId: accountWorkspaceId,
+            url: 'https://claude.ai/new',
+            title: 'Second conversation',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: true,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 2
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: {
+        [accountWorkspaceId]: secondWorkspaceId
+      },
+      activeTabTypeByWorktree: { [accountWorkspaceId]: 'browser' }
+    })
+
+    const reopened = store.getState().openWebAiAccount(account)
+
+    expect(reopened?.id).toBe(secondWorkspaceId)
+    expect(reopened?.activePageId).toBe(secondPageId)
+    expect(reopened).toMatchObject({ canGoBack: false, canGoForward: false })
+    expect(store.getState().browserPagesByWorkspace[firstWorkspaceId]).toHaveLength(1)
+    expect(store.getState().browserPagesByWorkspace[secondWorkspaceId]).toHaveLength(1)
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(2)
+  })
+
+  it('migrates legacy hidden account pages into visible browser tabs on hydration', () => {
+    const store = createTestStore()
+    const account = webAiAccount({ provider: 'claude' })
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    const workspaceId = 'legacy-web-ai-workspace'
+    const firstPageId = 'legacy-page-1'
+    const activePageId = 'legacy-page-2'
+    store.setState({
+      activeWorktreeId: accountWorkspaceId,
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+
+    store.getState().hydrateBrowserSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: accountWorkspaceId,
+      browserTabsByWorktree: {
+        [accountWorkspaceId]: [
+          {
+            id: workspaceId,
+            worktreeId: accountWorkspaceId,
+            sessionProfileId: account.profileId,
+            sessionPartition: account.sessionPartition,
+            webAiAccountId: account.id,
+            activePageId,
+            pageIds: [firstPageId, activePageId],
+            url: 'https://claude.ai/chat/active',
+            title: 'Active conversation',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        [workspaceId]: [
+          {
+            id: firstPageId,
+            workspaceId,
+            worktreeId: accountWorkspaceId,
+            url: 'https://claude.ai/',
+            title: 'Claude',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          },
+          {
+            id: activePageId,
+            workspaceId,
+            worktreeId: accountWorkspaceId,
+            url: 'https://claude.ai/chat/active',
+            title: 'Active conversation',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 2
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: {
+        [accountWorkspaceId]: workspaceId
+      },
+      activeTabTypeByWorktree: { [accountWorkspaceId]: 'browser' }
+    })
+
+    const workspaces = store.getState().browserTabsByWorktree[accountWorkspaceId] ?? []
+    expect(workspaces).toHaveLength(2)
+    expect(workspaces.map((workspace) => workspace.url).sort()).toEqual([
+      'https://claude.ai/',
+      'https://claude.ai/chat/active'
+    ])
+    expect(
+      workspaces.every(
+        (workspace) => store.getState().browserPagesByWorkspace[workspace.id]?.length === 1
+      )
+    ).toBe(true)
+    expect(workspaces.find((workspace) => workspace.id === workspaceId)?.activePageId).toBe(
+      activePageId
+    )
+    expect(store.getState().openWebAiAccount(account)?.id).toBe(workspaceId)
+  })
+
+  it('round-trips account identity and visible tabs through the persisted session schema', () => {
+    const firstStore = createTestStore()
+    const account = webAiAccount({ provider: 'claude' })
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    firstStore.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const workspace = firstStore.getState().openWebAiAccount(account)
+    if (!workspace) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+    const secondWorkspace = firstStore.getState().openWebAiAccount(account, { openNewTab: true })
+    if (!secondWorkspace) {
+      throw new Error('Expected a second Web AI browser workspace')
+    }
+    const originalWorkspaces = firstStore.getState().browserTabsByWorktree[accountWorkspaceId] ?? []
+    const browserData = buildBrowserSessionData(
+      firstStore.getState().browserTabsByWorktree,
+      firstStore.getState().browserPagesByWorkspace,
+      firstStore.getState().activeBrowserTabIdByWorktree
+    )
+    const parsed = parseWorkspaceSession(
+      JSON.parse(
+        JSON.stringify({
+          ...getDefaultWorkspaceSession(),
+          activeWorktreeId: accountWorkspaceId,
+          activeWorkspaceKey: `worktree:${accountWorkspaceId}`,
+          activeTabTypeByWorktree: { [accountWorkspaceId]: 'browser' },
+          ...browserData
+        })
+      )
+    )
+    if (!parsed.ok) {
+      throw new Error('Expected the Web AI session to parse')
+    }
+
+    const restoredStore = createTestStore()
+    restoredStore.setState({
+      activeWorktreeId: accountWorkspaceId,
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    restoredStore.getState().hydrateBrowserSession(parsed.value)
+    const reopened = restoredStore.getState().openWebAiAccount(account)
+
+    expect(reopened?.id).toBe(secondWorkspace.id)
+    expect(reopened).toMatchObject({
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(
+      restoredStore.getState().browserTabsByWorktree[accountWorkspaceId]?.map((entry) => ({
+        id: entry.id,
+        webAiAccountId: entry.webAiAccountId,
+        sessionProfileId: entry.sessionProfileId,
+        sessionPartition: entry.sessionPartition
+      }))
+    ).toEqual(
+      originalWorkspaces.map((entry) => ({
+        id: entry.id,
+        webAiAccountId: entry.webAiAccountId,
+        sessionProfileId: entry.sessionProfileId,
+        sessionPartition: entry.sessionPartition
+      }))
+    )
+    expect(restoredStore.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(2)
+    expect(restoredStore.getState().browserPagesByWorkspace[workspace.id]).toHaveLength(1)
+    expect(restoredStore.getState().browserPagesByWorkspace[secondWorkspace.id]).toHaveLength(1)
+  })
+})
+
 describe('createBrowserSlice runtime guard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -602,6 +1856,43 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().browserSessionProfiles[0]?.id).toBe('local-default')
   })
 
+  it('allows a remote profile to be deleted when a local Web AI account has the same id', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const remoteProfile = {
+      id: account.profileId,
+      scope: 'isolated' as const,
+      partition: 'persist:orca-remote-profile',
+      label: 'Remote profile',
+      source: null
+    }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-delete',
+      ok: true,
+      result: { deleted: true, profileId: remoteProfile.id },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: 'env-1',
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      browserSessionProfiles: [remoteProfile],
+      browserSessionProfilesByHostId: { 'runtime:env-1': [remoteProfile] }
+    })
+
+    await expect(store.getState().deleteBrowserSessionProfile(remoteProfile.id)).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'browser.profileDelete',
+      params: { profileId: remoteProfile.id },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().browserSessionProfiles).toEqual([])
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
   it('uses the target worktree host default profile when creating a browser tab', () => {
     const store = createTestStore()
     store.setState({
@@ -672,7 +1963,8 @@ describe('createBrowserSlice runtime guard', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       sessionProfileId: null,
-      sessionPartition: 'persist:orca-browser'
+      sessionPartition: 'persist:orca-browser',
+      webAiAccountId: 'web-ai-account-1'
     })
 
     store
@@ -686,9 +1978,157 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toEqual(
       expect.objectContaining({
         sessionProfileId: 'profile-isolated',
-        sessionPartition: 'persist:orca-browser-session-profile-isolated'
+        sessionPartition: 'persist:orca-browser-session-profile-isolated',
+        webAiAccountId: null
       })
     )
+  })
+
+  it('keeps a saved Web AI tab on its account profile', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const tab = store.getState().openWebAiAccount(account)
+    if (!tab) {
+      throw new Error('Expected a Web AI browser workspace')
+    }
+
+    store.getState().switchBrowserTabProfile(tab.id, 'another-profile', 'persist:another-profile')
+
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]?.[0]).toMatchObject({
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+  })
+
+  it('locks a saved Web AI profile when the tab is embedded in an ordinary worktree', () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() =>
+        ({ id: 'wt-project' }) as never) as AppState['getKnownWorktreeById']
+    })
+    const tab = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!tab) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+
+    store.getState().switchBrowserTabProfile(tab.id, 'another-profile', 'persist:another-profile')
+
+    expect(store.getState().browserTabsByWorktree['wt-project']?.[0]).toMatchObject({
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+  })
+
+  it('inherits an embedded Web AI account for ordinary new-browser actions', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() => ({
+        id: 'wt-project'
+      })) as unknown as AppState['getKnownWorktreeById']
+    })
+    const first = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!first) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: account.label,
+        source: null
+      }
+    ])
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    const tabs = store.getState().browserTabsByWorktree['wt-project'] ?? []
+    expect(tabs).toHaveLength(2)
+    expect(tabs[1]).toMatchObject({
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
+  })
+
+  it('does not fall back to the default profile for a stale embedded account binding', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    mockApi.browser.sessionListProfiles.mockClear()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() => ({
+        id: 'wt-project'
+      })) as unknown as AppState['getKnownWorktreeById']
+    })
+    store.getState().createBrowserTab('wt-project', 'https://chatgpt.com/c/stale', {
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: 'persist:stale-partition'
+    })
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(1)
+    expect(mockApi.browser.sessionListProfiles).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith('Failed to open this Web AI account.')
+  })
+
+  it('reports a missing profile instead of opening an unbound embedded tab', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() => ({
+        id: 'wt-project'
+      })) as unknown as AppState['getKnownWorktreeById']
+    })
+    const first = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!first) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([])
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('This browser profile no longer exists.')
   })
 
   it('creates new browser tabs through the owning runtime for desktop remote worktrees', async () => {
@@ -798,6 +2238,200 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().browserSessionImportState).toMatchObject({
       profileId: 'default',
       status: 'error'
+    })
+  })
+
+  it('ignores a stale remote browser detection result after switching to a local owner', async () => {
+    const store = createTestStore()
+    const remoteBrowsers = [
+      {
+        family: 'firefox',
+        label: 'Remote Firefox',
+        profiles: [],
+        selectedProfile: 'default-release'
+      }
+    ]
+    const localBrowsers = [
+      {
+        family: 'chrome',
+        label: 'Local Chrome',
+        profiles: [],
+        selectedProfile: 'Default'
+      }
+    ]
+    let resolveRemoteDetect: (value: unknown) => void = () => {}
+    const remoteDetect = new Promise<unknown>((resolve) => {
+      resolveRemoteDetect = resolve
+    })
+    runtimeEnvironmentCall.mockReturnValueOnce(remoteDetect)
+    store.setState({ settings: settingsWithRuntime('env-1') })
+
+    const remoteRequest = store.getState().fetchDetectedBrowsers()
+    await vi.waitFor(() =>
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'browser.profileDetectBrowsers',
+        params: undefined,
+        timeoutMs: 15_000
+      })
+    )
+    mockApi.browser.sessionDetectBrowsers.mockResolvedValueOnce(localBrowsers)
+    await store.getState().fetchDetectedBrowsers({ runtimeEnvironmentId: null })
+
+    expect(store.getState().detectedBrowsers).toEqual(localBrowsers)
+    expect(store.getState().detectedBrowsersHostId).toBe('local')
+
+    resolveRemoteDetect({
+      id: 'rpc-remote-detect',
+      ok: true,
+      result: { browsers: remoteBrowsers },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await remoteRequest
+
+    expect(store.getState().detectedBrowsers).toEqual(localBrowsers)
+    expect(store.getState().detectedBrowsersLoaded).toBe(true)
+    expect(store.getState().detectedBrowsersHostId).toBe('local')
+  })
+
+  it('keeps tagged Web AI detection and imports local while another runtime is active', async () => {
+    const store = createTestStore()
+    const owner = { runtimeEnvironmentId: null }
+    store.setState({ settings: settingsWithRuntime('env-1') })
+    mockApi.browser.sessionDetectBrowsers.mockResolvedValueOnce([
+      {
+        family: 'chrome',
+        label: 'Google Chrome',
+        profiles: [],
+        selectedProfile: 'Default'
+      }
+    ])
+    mockApi.browser.sessionImportCookies.mockResolvedValueOnce({
+      ok: true,
+      profileId: 'profile-chatgpt',
+      summary: { totalCookies: 1, importedCookies: 1, skippedCookies: 0, domains: ['chatgpt.com'] }
+    })
+    mockApi.browser.sessionImportFromBrowser.mockResolvedValueOnce({
+      ok: true,
+      profileId: 'profile-chatgpt',
+      summary: { totalCookies: 1, importedCookies: 1, skippedCookies: 0, domains: ['chatgpt.com'] }
+    })
+    const localProfiles = [
+      {
+        id: 'profile-chatgpt',
+        scope: 'isolated' as const,
+        partition: 'persist:profile-chatgpt',
+        label: 'ChatGPT',
+        source: null
+      }
+    ]
+    mockApi.browser.sessionListProfiles
+      .mockResolvedValueOnce(localProfiles)
+      .mockResolvedValueOnce(localProfiles)
+
+    await store.getState().fetchDetectedBrowsers(owner)
+    await store.getState().importCookiesToProfile('profile-chatgpt', 'chatgpt', undefined, owner)
+    await store
+      .getState()
+      .importCookiesFromBrowser('profile-chatgpt', 'chrome', 'Default', 'chatgpt', undefined, owner)
+
+    expect(mockApi.browser.sessionDetectBrowsers).toHaveBeenCalledTimes(1)
+    expect(mockApi.browser.sessionImportCookies).toHaveBeenCalledWith({
+      profileId: 'profile-chatgpt',
+      webAiProvider: 'chatgpt'
+    })
+    expect(mockApi.browser.sessionImportFromBrowser).toHaveBeenCalledWith({
+      profileId: 'profile-chatgpt',
+      browserFamily: 'chrome',
+      browserProfile: 'Default',
+      webAiProvider: 'chatgpt'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().detectedBrowsersHostId).toBe('local')
+  })
+
+  it('keeps ordinary browser-profile imports on the active remote runtime', async () => {
+    const store = createTestStore()
+    store.setState({ settings: settingsWithRuntime('env-1') })
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-import',
+      ok: true,
+      result: { ok: false, reason: 'canceled' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().importCookiesFromBrowser('remote-profile', 'chrome')
+
+    expect(mockApi.browser.sessionImportFromBrowser).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'browser.profileImportFromBrowser',
+      params: {
+        profileId: 'remote-profile',
+        browserFamily: 'chrome',
+        browserProfile: undefined,
+        webAiProvider: undefined
+      },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('forwards the Web AI provider when importing a cookie file', async () => {
+    const store = createTestStore()
+
+    await store.getState().importCookiesToProfile('profile-claude', 'claude')
+
+    expect(mockApi.browser.sessionImportCookies).toHaveBeenCalledWith({
+      profileId: 'profile-claude',
+      webAiProvider: 'claude'
+    })
+  })
+
+  it('forwards the Web AI provider when importing from a browser profile', async () => {
+    const store = createTestStore()
+
+    await store
+      .getState()
+      .importCookiesFromBrowser('profile-gemini', 'chrome', 'Profile 2', 'gemini')
+
+    expect(mockApi.browser.sessionImportFromBrowser).toHaveBeenCalledWith({
+      profileId: 'profile-gemini',
+      browserFamily: 'chrome',
+      browserProfile: 'Profile 2',
+      webAiProvider: 'gemini'
+    })
+  })
+
+  it('forwards a validated Custom scope for file and browser-profile imports', async () => {
+    const store = createTestStore()
+    const cookieImportScope = {
+      label: 'Example AI',
+      domains: ['example.com'],
+      sourceHostname: 'chat.example.com'
+    }
+
+    await store.getState().importCookiesToProfile('profile-custom', undefined, cookieImportScope)
+    await store
+      .getState()
+      .importCookiesFromBrowser(
+        'profile-custom',
+        'chrome',
+        'Profile 3',
+        undefined,
+        cookieImportScope
+      )
+
+    expect(mockApi.browser.sessionImportCookies).toHaveBeenCalledWith({
+      profileId: 'profile-custom',
+      webAiProvider: undefined,
+      cookieImportScope
+    })
+    expect(mockApi.browser.sessionImportFromBrowser).toHaveBeenCalledWith({
+      profileId: 'profile-custom',
+      browserFamily: 'chrome',
+      browserProfile: 'Profile 3',
+      webAiProvider: undefined,
+      cookieImportScope
     })
   })
 

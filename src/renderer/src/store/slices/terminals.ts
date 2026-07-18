@@ -18,8 +18,13 @@ import type {
 } from '../../../../shared/agent-session-resume'
 import {
   DEFAULT_REPO_BADGE_COLOR,
-  FLOATING_TERMINAL_WORKTREE_ID
+  PERSISTENT_LOCAL_WORKSPACE_IDS
 } from '../../../../shared/constants'
+import {
+  getWebAiAccountWorkspaceId,
+  isWebAiBrowserWorkspaceId,
+  normalizeWebAiAccounts
+} from '../../../../shared/web-ai-accounts'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   folderWorkspaceKey,
@@ -1177,7 +1182,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   openNewTerminalTabInActiveWorkspace: async (groupId) => {
     const state = get()
     const worktreeId = state.activeWorktreeId
-    if (!worktreeId) {
+    if (!worktreeId || isWebAiBrowserWorkspaceId(worktreeId)) {
       return
     }
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
@@ -3141,10 +3146,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           .filter(([, detected]) => detected.authoritative)
           .map(([repoId]) => repoId)
       )
-      // Why: the Floating Workspace is intentionally not a repo worktree, but
-      // its tabs still use the normal terminal session pipeline so daemon PTYs
-      // can survive app restart just like workspace terminals.
-      validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      // Why: local synthetic workspaces are intentionally absent from the repo
+      // catalog, but still use the normal session pipeline across restarts.
+      for (const workspaceId of PERSISTENT_LOCAL_WORKSPACE_IDS) {
+        validWorktreeIds.add(workspaceId)
+      }
+      for (const account of normalizeWebAiAccounts(s.settings?.webAiAccounts)) {
+        validWorktreeIds.add(getWebAiAccountWorkspaceId(account.id))
+      }
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
@@ -3181,7 +3190,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // so subsequent legitimate events (codex restart, new pane) still bump.
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         Object.entries(session.tabsByWorktree)
-          .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
+          .filter(
+            ([worktreeId]) =>
+              !isWebAiBrowserWorkspaceId(worktreeId) && validWorktreeIds.has(worktreeId)
+          )
           .map(([worktreeId, tabs]) => {
             const quickCommandLabelByTerminalId = new Map(
               (session.unifiedTabs?.[worktreeId] ?? [])
@@ -3267,7 +3279,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         Object.entries(session.tabsByWorktree)
           .filter(([, tabs]) => tabs.some((t) => t.ptyId))
           .map(([wId]) => wId)
-      const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
+      const pendingReconnectWorktreeIds = shutdownIds.filter(
+        (id) => !isWebAiBrowserWorkspaceId(id) && validWorktreeIds.has(id)
+      )
 
       // Why: capture which specific tabs had live PTYs per worktree from the
       // raw session data BEFORE clearTransientTerminalState nulled the ptyIds.

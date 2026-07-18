@@ -964,6 +964,10 @@ export type BrowserWorkspace = {
   // Why: runtime-created tabs resolve profile partition in main. Persisting it
   // keeps isolated storage stable when the renderer profile mirror is stale.
   sessionPartition?: string | null
+  /** Durable link back to a saved Web AI sidebar account. Closing the browser
+   *  workspace removes only the warm surface; the account itself remains in
+   *  GlobalSettings and can recreate a workspace on the next click. */
+  webAiAccountId?: string | null
   activePageId?: string | null
   pageIds?: string[]
   // Why: the active page owns real browser chrome state now, but the top-level
@@ -1005,6 +1009,33 @@ export type BrowserSessionProfile = {
   partition: string
   label: string
   source: BrowserSessionProfileSource | null
+}
+
+export type WebAiProvider = 'chatgpt' | 'claude' | 'deepseek' | 'gemini' | 'aistudio' | 'custom'
+
+export type WebAiAccount = {
+  id: string
+  provider: WebAiProvider
+  label: string
+  /** Browser profiles are host-scoped. The first release creates local
+   *  Electron profiles and renders them in a dedicated local browser workspace. */
+  executionHostId: ExecutionHostId
+  profileId: string
+  /** Persist the resolved partition so restored tabs never fall back to the
+   *  shared default profile while the profile registry is still hydrating. */
+  sessionPartition: string
+  /** Custom providers keep their display and navigation metadata on the
+   *  account because unlike fixed providers they do not share a global home. */
+  customServiceLabel?: string
+  customHomeUrl?: string
+  customCookieDomains?: string[]
+  createdAt: number
+}
+
+export type BrowserCookieImportScope = {
+  label: string
+  domains: string[]
+  sourceHostname: string
 }
 
 export type BrowserCookieImportSummary = {
@@ -2699,6 +2730,9 @@ export type GlobalSettings = {
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
+  /** Saved web-app identities shown in the dedicated left-sidebar section.
+   *  Authentication material remains in BrowserSessionProfile partitions. */
+  webAiAccounts?: WebAiAccount[]
   /** Why: worktree-scoped localhost hostnames make same-app tabs distinguishable
    *  in external browsers. Opt-in (default off): serving the app under a different
    *  host can break dev apps that bind cookies/sessions to localhost. */
@@ -3444,6 +3478,8 @@ export type PersistedUIState = {
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
+  /** Whether the independent Web AI Accounts sidebar section is collapsed. */
+  webAiAccountsCollapsed?: boolean
   /** Why: Windows-only. Set once after the window first hides to the system
    *  tray, so the "Orca is still running" notification shows only on first use. */
   trayMinimizeNoticeShown?: boolean

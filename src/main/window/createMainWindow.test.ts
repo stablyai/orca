@@ -533,13 +533,105 @@ describe('createMainWindow', () => {
 
     const input =
       process.platform === 'darwin'
-        ? { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: true, alt: false }
+        ? { type: 'keyDown', code: 'Digit5', key: '5', meta: true, control: false, alt: false }
         : { type: 'keyDown', code: 'Digit5', key: '5', meta: false, control: false, alt: true }
     const preventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault } as never, input as never)
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('ui:jumpToTabIndex', 4)
+  })
+
+  it('routes account/worktree/tab number shortcuts and suppresses auto-repeat', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, {
+      getKeybindings: () => ({
+        'webAi.selectByIndex': ['Alt+1'],
+        'workspace.selectByIndex': ['Ctrl+1'],
+        'tab.selectByIndex': ['Cmd+1']
+      })
+    })
+
+    const inputs = [
+      {
+        code: 'Digit2',
+        key: '2',
+        meta: false,
+        control: false,
+        alt: true,
+        expected: ['ui:jumpToWebAiAccountIndex', 1]
+      },
+      {
+        code: 'Digit3',
+        key: '3',
+        meta: false,
+        control: true,
+        alt: false,
+        expected: ['ui:jumpToWorktreeIndex', 2]
+      },
+      {
+        code: 'Digit4',
+        key: '4',
+        meta: true,
+        control: false,
+        alt: false,
+        expected: ['ui:jumpToTabIndex', 3]
+      }
+    ] as const
+
+    for (const input of inputs) {
+      const preventDefault = vi.fn()
+      windowHandlers['before-input-event'](
+        { preventDefault } as never,
+        { type: 'keyDown', ...input } as never
+      )
+      expect(preventDefault).toHaveBeenCalledTimes(1)
+    }
+
+    expect(webContents.send).toHaveBeenNthCalledWith(1, ...inputs[0].expected)
+    expect(webContents.send).toHaveBeenNthCalledWith(2, ...inputs[1].expected)
+    expect(webContents.send).toHaveBeenNthCalledWith(3, ...inputs[2].expected)
+
+    webContents.send.mockClear()
+    for (const input of inputs) {
+      const preventDefault = vi.fn()
+      windowHandlers['before-input-event'](
+        { preventDefault } as never,
+        { type: 'keyDown', isAutoRepeat: true, ...input } as never
+      )
+      expect(preventDefault).toHaveBeenCalledTimes(1)
+    }
+    expect(webContents.send).not.toHaveBeenCalled()
   })
 
   it('lets main-window Ctrl+Tab flow to the renderer held switcher', () => {

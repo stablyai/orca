@@ -68,6 +68,7 @@ describe('parseWorkspaceSession', () => {
             worktreeId: 'wt',
             sessionProfileId: 'iso-profile',
             sessionPartition: 'persist:orca-browser-session-iso-profile',
+            webAiAccountId: 'web-ai-account-1',
             url: 'https://example.com',
             title: 'Example',
             loading: false,
@@ -87,6 +88,7 @@ describe('parseWorkspaceSession', () => {
     expect(result.value.browserTabsByWorktree?.wt?.[0]?.sessionPartition).toBe(
       'persist:orca-browser-session-iso-profile'
     )
+    expect(result.value.browserTabsByWorktree?.wt?.[0]?.webAiAccountId).toBe('web-ai-account-1')
   })
 
   it('preserves a valid launchAgent on a terminal tab', () => {

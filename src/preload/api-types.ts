@@ -70,6 +70,7 @@ import type {
 import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
+  BrowserCookieImportScope,
   BrowserCookieImportResult,
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
@@ -78,6 +79,7 @@ import type {
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
+  WebAiProvider,
   ClaudeRateLimitAccountsState,
   ClassifiedError,
   CodexRateLimitAccountsState,
@@ -549,13 +551,19 @@ export type BrowserApi = {
     label: string
   }) => Promise<BrowserSessionProfile | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
-  sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
+  sessionImportCookies: (args: {
+    profileId: string
+    webAiProvider?: WebAiProvider
+    cookieImportScope?: BrowserCookieImportScope
+  }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   sessionImportFromBrowser: (args: {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    webAiProvider?: WebAiProvider
+    cookieImportScope?: BrowserCookieImportScope
   }) => Promise<BrowserCookieImportResult>
   sessionClearDefaultCookies: () => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
@@ -2825,6 +2833,8 @@ export type PreloadApi = {
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
     onOpenWorkspaceBoard: (callback: () => void) => () => void
     onOpenTasks: (callback: () => void) => () => void
+    /** Desktop-only while older web adapters catch up with the shortcut channel. */
+    onJumpToWebAiAccountIndex?: (callback: (index: number) => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void

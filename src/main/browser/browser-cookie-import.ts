@@ -72,10 +72,18 @@ function diag(msg: string): void {
   console.log('[cookie-import]', msg)
 }
 import type {
+  BrowserCookieImportScope,
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
-  BrowserSessionProfileSource
+  BrowserSessionProfileSource,
+  WebAiProvider
 } from '../../shared/types'
+import {
+  browserCookieDomainMatchesScope,
+  normalizeBrowserCookieDomain,
+  normalizeBrowserCookieImportScope
+} from '../../shared/browser-cookie-import-scope'
+import { getWebAiProvider, isWebAiProvider } from '../../shared/web-ai-accounts'
 import { browserSessionRegistry } from './browser-session-registry'
 import { setupClientHintsOverride } from './browser-session-ua'
 import {
@@ -445,6 +453,7 @@ type RawCookieEntry = {
   name?: unknown
   value?: unknown
   path?: unknown
+  hostOnly?: unknown
   secure?: unknown
   httpOnly?: unknown
   sameSite?: unknown
@@ -457,6 +466,7 @@ type ValidatedCookie = {
   value: string
   domain: string
   path: string
+  hostOnly: boolean
   secure: boolean
   httpOnly: boolean
   sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
@@ -529,6 +539,315 @@ function deriveUrl(domain: string, secure: boolean): string | null {
   }
 }
 
+function normalizeCookieDomain(domain: string): string {
+  return domain.trim().toLowerCase().replace(/^\.+/, '').replace(/\.$/, '')
+}
+
+type ResolvedCookieImportScope = Pick<BrowserCookieImportScope, 'label' | 'domains'>
+
+type CookieImportScopeResolution =
+  | { ok: true; scope: ResolvedCookieImportScope | null }
+  | { ok: false; reason: string }
+
+function resolveCookieImportScope(
+  webAiProvider?: unknown,
+  cookieImportScope?: unknown
+): CookieImportScopeResolution {
+  if (webAiProvider !== undefined && cookieImportScope !== undefined) {
+    return {
+      ok: false,
+      reason: 'Choose either a Web AI provider or a custom cookie import scope.'
+    }
+  }
+  if (webAiProvider !== undefined) {
+    if (!isWebAiProvider(webAiProvider)) {
+      return { ok: false, reason: 'Invalid Web AI provider.' }
+    }
+    const provider = getWebAiProvider(webAiProvider)
+    if (webAiProvider === 'custom' || provider.cookieDomains.length === 0) {
+      return {
+        ok: false,
+        reason: 'Custom Web AI cookie imports require a validated cookie import scope.'
+      }
+    }
+    const domains = provider.cookieDomains.map((domain) => normalizeBrowserCookieDomain(domain))
+    if (domains.some((domain) => !domain)) {
+      return { ok: false, reason: 'Invalid Web AI provider cookie scope.' }
+    }
+    return {
+      ok: true,
+      scope: { label: provider.label, domains: domains as string[] }
+    }
+  }
+  if (cookieImportScope !== undefined) {
+    const normalized = normalizeBrowserCookieImportScope(cookieImportScope)
+    if (!normalized) {
+      return { ok: false, reason: 'Invalid cookie import scope.' }
+    }
+    return { ok: true, scope: normalized }
+  }
+  return { ok: true, scope: null }
+}
+
+export function validateBrowserCookieImportScopeRequest(
+  webAiProvider?: unknown,
+  cookieImportScope?: unknown
+): string | null {
+  const resolution = resolveCookieImportScope(webAiProvider, cookieImportScope)
+  return resolution.ok ? null : resolution.reason
+}
+
+export function cookieDomainMatchesWebAiProvider(domain: string, provider: WebAiProvider): boolean {
+  return browserCookieDomainMatchesScope(domain, {
+    domains: getWebAiProvider(provider).cookieDomains
+  })
+}
+
+const GOOGLE_INTEGRITY_COOKIE_NAMES = new Set([
+  'SIDCC',
+  '__Secure-1PSIDCC',
+  '__Secure-3PSIDCC',
+  '__Secure-STRP',
+  'AEC'
+])
+
+function isGoogleIntegrityCookie(name: string, domain: string): boolean {
+  if (!GOOGLE_INTEGRITY_COOKIE_NAMES.has(name)) {
+    return false
+  }
+  const normalizedDomain = normalizeCookieDomain(domain)
+  return normalizedDomain === 'google.com' || normalizedDomain.endsWith('.google.com')
+}
+
+function cookieMatchesImportScope(
+  domain: string,
+  cookieImportScope?: ResolvedCookieImportScope | null
+): boolean {
+  return cookieImportScope ? browserCookieDomainMatchesScope(domain, cookieImportScope) : true
+}
+
+function noMatchingCookiesReason(
+  cookieImportScope: ResolvedCookieImportScope,
+  sourceLabel: string
+): string {
+  return `No ${cookieImportScope.label} cookies found in ${sourceLabel}.`
+}
+
+function cookieUrlWithPath(domain: string, secure: boolean, path: string): string | null {
+  const baseUrl = deriveUrl(domain, secure)
+  if (!baseUrl) {
+    return null
+  }
+  const url = new URL(baseUrl)
+  url.pathname = path.startsWith('/') ? path : '/'
+  return url.toString()
+}
+
+async function removeTargetCookiesMatchingScope(
+  targetSession: Electron.Session,
+  cookieImportScope: ResolvedCookieImportScope
+): Promise<{ removed: number; failed: number }> {
+  let cookies: Electron.Cookie[]
+  try {
+    cookies = await targetSession.cookies.get({})
+  } catch {
+    return { removed: 0, failed: 1 }
+  }
+  let removed = 0
+  let failed = 0
+  for (const cookie of cookies) {
+    const domain = cookie.domain
+    if (
+      !domain ||
+      !cookieMatchesImportScope(domain, cookieImportScope) ||
+      isGoogleIntegrityCookie(cookie.name, domain)
+    ) {
+      continue
+    }
+    const url = cookieUrlWithPath(domain, cookie.secure === true, cookie.path ?? '/')
+    if (!url) {
+      failed++
+      continue
+    }
+    try {
+      await targetSession.cookies.remove(url, cookie.name)
+      removed++
+    } catch {
+      failed++
+    }
+  }
+  return { removed, failed }
+}
+
+function deleteStagedCookiesMatchingScope(
+  database: InstanceType<typeof DatabaseSync>,
+  cookieImportScope: ResolvedCookieImportScope
+): number {
+  const rows = database.prepare('SELECT rowid, host_key, name FROM cookies').all() as {
+    rowid: number | bigint
+    host_key: string
+    name: string
+  }[]
+  const deleteRow = database.prepare('DELETE FROM cookies WHERE rowid = ?')
+  let deleted = 0
+  for (const row of rows) {
+    if (
+      !cookieMatchesImportScope(row.host_key, cookieImportScope) ||
+      isGoogleIntegrityCookie(row.name, row.host_key)
+    ) {
+      continue
+    }
+    deleteRow.run(row.rowid)
+    deleted++
+  }
+  return deleted
+}
+
+type SessionCookieCandidate = {
+  domain: string
+  name: string
+  value: string
+  path: string
+  hostOnly: boolean
+  secure: boolean
+  httpOnly: boolean
+  sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
+  expirationDate: number | undefined
+}
+
+function sessionCookieIdentity(
+  cookie: Pick<SessionCookieCandidate, 'domain' | 'name' | 'path'>
+): string {
+  return `${cookie.domain.trim().toLowerCase().replace(/\.$/, '')}\0${cookie.name}\0${cookie.path}`
+}
+
+async function setSessionCookie(
+  targetSession: Electron.Session,
+  cookie: SessionCookieCandidate
+): Promise<boolean> {
+  const url = deriveUrl(cookie.domain, cookie.secure)
+  if (!url) {
+    return false
+  }
+  try {
+    const isHostPrefixed = cookie.name.startsWith('__Host-')
+    await targetSession.cookies.set({
+      url,
+      name: cookie.name,
+      value: cookie.value,
+      ...(cookie.hostOnly || isHostPrefixed ? {} : { domain: cookie.domain }),
+      path: isHostPrefixed ? '/' : cookie.path,
+      secure: cookie.secure,
+      httpOnly: cookie.httpOnly,
+      sameSite: cookie.sameSite,
+      expirationDate: cookie.expirationDate
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function snapshotCookie(cookie: Electron.Cookie): SessionCookieCandidate | null {
+  if (!cookie.domain) {
+    return null
+  }
+  return {
+    domain: cookie.domain,
+    name: cookie.name,
+    value: cookie.value,
+    path: cookie.path ?? '/',
+    hostOnly: cookie.hostOnly ?? !cookie.domain.startsWith('.'),
+    secure: cookie.secure === true,
+    httpOnly: cookie.httpOnly === true,
+    sameSite: cookie.sameSite ?? 'unspecified',
+    expirationDate: cookie.expirationDate
+  }
+}
+
+async function restoreScopedSessionCookies(
+  targetSession: Electron.Session,
+  cookieImportScope: ResolvedCookieImportScope,
+  snapshot: SessionCookieCandidate[]
+): Promise<boolean> {
+  const removal = await removeTargetCookiesMatchingScope(targetSession, cookieImportScope)
+  let restored = removal.failed === 0
+  for (const cookie of snapshot) {
+    if (!(await setSessionCookie(targetSession, cookie))) {
+      restored = false
+    }
+  }
+  return restored
+}
+
+async function replaceScopedSessionCookies(
+  targetSession: Electron.Session,
+  cookieImportScope: ResolvedCookieImportScope,
+  cookies: SessionCookieCandidate[],
+  protectedCookieIds = new Set<string>()
+): Promise<{ ok: true; imported: number } | { ok: false; reason: string }> {
+  let currentCookies: Electron.Cookie[]
+  try {
+    currentCookies = await targetSession.cookies.get({})
+  } catch {
+    return {
+      ok: false,
+      reason: `Could not inspect existing ${cookieImportScope.label} cookies.`
+    }
+  }
+  const snapshot = currentCookies.flatMap((cookie) => {
+    if (
+      !cookie.domain ||
+      !cookieMatchesImportScope(cookie.domain, cookieImportScope) ||
+      isGoogleIntegrityCookie(cookie.name, cookie.domain)
+    ) {
+      return []
+    }
+    const saved = snapshotCookie(cookie)
+    return saved ? [saved] : []
+  })
+  const successful: SessionCookieCandidate[] = []
+  for (const cookie of cookies) {
+    if (await setSessionCookie(targetSession, cookie)) {
+      successful.push(cookie)
+      continue
+    }
+    if (successful.length > 0) {
+      await restoreScopedSessionCookies(targetSession, cookieImportScope, snapshot)
+    }
+    return {
+      ok: false,
+      reason: `Could not safely replace existing ${cookieImportScope.label} cookies.`
+    }
+  }
+
+  const replacementIds = new Set(cookies.map(sessionCookieIdentity))
+  const staleCookies = snapshot.filter((cookie) => {
+    const identity = sessionCookieIdentity(cookie)
+    return !replacementIds.has(identity) && !protectedCookieIds.has(identity)
+  })
+  for (const cookie of staleCookies) {
+    const url = cookieUrlWithPath(cookie.domain, cookie.secure, cookie.path)
+    if (!url) {
+      await restoreScopedSessionCookies(targetSession, cookieImportScope, snapshot)
+      return {
+        ok: false,
+        reason: `Could not safely replace existing ${cookieImportScope.label} cookies.`
+      }
+    }
+    try {
+      await targetSession.cookies.remove(url, cookie.name)
+    } catch {
+      await restoreScopedSessionCookies(targetSession, cookieImportScope, snapshot)
+      return {
+        ok: false,
+        reason: `Could not safely replace existing ${cookieImportScope.label} cookies.`
+      }
+    }
+  }
+  return { ok: true, imported: cookies.length }
+}
+
 function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
   if (typeof raw.domain !== 'string' || raw.domain.trim().length === 0) {
     return null
@@ -558,6 +877,7 @@ function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
     value: raw.value,
     domain,
     path: typeof raw.path === 'string' ? raw.path : '/',
+    hostOnly: typeof raw.hostOnly === 'boolean' ? raw.hostOnly : !domain.startsWith('.'),
     secure,
     httpOnly: raw.httpOnly === true || raw.httpOnly === 1,
     sameSite: normalizeSameSite(raw.sameSite),
@@ -568,56 +888,102 @@ function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
 async function importValidatedCookies(
   cookies: ValidatedCookie[],
   totalInput: number,
-  targetPartition: string
+  targetPartition: string,
+  cookieImportScope?: ResolvedCookieImportScope | null,
+  sourceLabel = 'the selected source'
 ): Promise<BrowserCookieImportResult> {
-  diag(
-    `importValidatedCookies: ${cookies.length} validated of ${totalInput} total, partition="${targetPartition}"`
+  const now = Date.now() / 1000
+  const relevantCookies = cookies.filter(
+    (cookie) =>
+      cookieMatchesImportScope(cookie.domain, cookieImportScope) &&
+      !isGoogleIntegrityCookie(cookie.name, cookie.domain)
   )
+  const expiredCookies = relevantCookies.filter(
+    (cookie) => cookie.expirationDate !== undefined && cookie.expirationDate <= now
+  )
+  const scopedCookies = relevantCookies.filter(
+    (cookie) => cookie.expirationDate === undefined || cookie.expirationDate > now
+  )
+  diag(
+    `importValidatedCookies: ${scopedCookies.length} scoped of ${cookies.length} validated / ${totalInput} total, partition="${targetPartition}"`
+  )
+  if (scopedCookies.length === 0) {
+    return {
+      ok: false,
+      reason: cookieImportScope
+        ? noMatchingCookiesReason(cookieImportScope, sourceLabel)
+        : 'No importable cookies found.'
+    }
+  }
   const targetSession = session.fromPartition(targetPartition)
   let importedCount = 0
-  let skipped = totalInput - cookies.length
+  let skipped = totalInput - scopedCookies.length
   const domainSet = new Set<string>()
 
   // Why: Electron's cookies.set() rejects any non-printable-ASCII byte.
   // Strip from all string fields as a safety net.
   const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
 
-  for (const cookie of cookies) {
-    try {
-      await targetSession.cookies.set({
-        url: cookie.url,
-        name: cookie.name,
-        value: stripNonPrintable(cookie.value),
-        domain: cookie.domain,
-        path: cookie.path,
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        expirationDate: cookie.expirationDate
-      })
-      importedCount++
-      // Why: surface only the domain — never name, value, or path — so the
-      // renderer can show a useful summary without leaking secret cookie data.
+  if (cookieImportScope) {
+    const replacement = await replaceScopedSessionCookies(
+      targetSession,
+      cookieImportScope,
+      scopedCookies.map((cookie) => ({
+        ...cookie,
+        value: stripNonPrintable(cookie.value)
+      })),
+      new Set(expiredCookies.map(sessionCookieIdentity))
+    )
+    if (!replacement.ok) {
+      return replacement
+    }
+    importedCount = replacement.imported
+    for (const cookie of scopedCookies) {
       const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
       domainSet.add(cleanDomain)
-    } catch (err) {
-      skipped++
-      if (skipped <= 5) {
-        // Find the exact offending character position and code
-        const val = cookie.value
-        let badInfo = 'none found'
-        for (let i = 0; i < val.length; i++) {
-          const code = val.charCodeAt(i)
-          if (code < 0x20 || code > 0x7e) {
-            badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
-            break
+    }
+  } else {
+    for (const cookie of scopedCookies) {
+      try {
+        const isHostPrefixed = cookie.name.startsWith('__Host-')
+        await targetSession.cookies.set({
+          url: cookie.url,
+          name: cookie.name,
+          value: stripNonPrintable(cookie.value),
+          ...(cookie.hostOnly || isHostPrefixed ? {} : { domain: cookie.domain }),
+          path: isHostPrefixed ? '/' : cookie.path,
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite,
+          expirationDate: cookie.expirationDate
+        })
+        importedCount++
+        // Why: surface only the domain — never name, value, or path — so the
+        // renderer can show a useful summary without leaking secret cookie data.
+        const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
+        domainSet.add(cleanDomain)
+      } catch (err) {
+        skipped++
+        if (skipped <= 5) {
+          const val = cookie.value
+          let badInfo = 'none found'
+          for (let i = 0; i < val.length; i++) {
+            const code = val.charCodeAt(i)
+            if (code < 0x20 || code > 0x7e) {
+              badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
+              break
+            }
           }
+          diag(
+            `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${err}`
+          )
         }
-        diag(
-          `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${err}`
-        )
       }
     }
+  }
+
+  if (importedCount === 0) {
+    return { ok: false, reason: 'No cookies could be imported.' }
   }
 
   diag(
@@ -661,8 +1027,14 @@ export async function pickCookieFile(parentWindow: BrowserWindow | null): Promis
 
 export async function importCookiesFromFile(
   filePath: string,
-  targetPartition: string
+  targetPartition: string,
+  webAiProvider?: WebAiProvider,
+  cookieImportScope?: BrowserCookieImportScope
 ): Promise<BrowserCookieImportResult> {
+  const scopeResolution = resolveCookieImportScope(webAiProvider, cookieImportScope)
+  if (!scopeResolution.ok) {
+    return scopeResolution
+  }
   let rawContent: string
   try {
     rawContent = await readFile(filePath, 'utf-8')
@@ -707,7 +1079,13 @@ export async function importCookiesFromFile(
     }
   }
 
-  return importValidatedCookies(validated, parsed.length, targetPartition)
+  return importValidatedCookies(
+    validated,
+    parsed.length,
+    targetPartition,
+    scopeResolution.scope,
+    'the selected file'
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -1261,6 +1639,7 @@ function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
     value,
     domain,
     path,
+    hostOnly: !domain.startsWith('.'),
     secure,
     httpOnly,
     sameSite: 'unspecified',
@@ -1288,7 +1667,8 @@ function readCString(buf: Buffer, offset: number, end: number): string | null {
 
 async function importCookiesFromFirefox(
   browser: DetectedBrowser,
-  targetPartition: string
+  targetPartition: string,
+  cookieImportScope?: ResolvedCookieImportScope | null
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromFirefox: partition="${targetPartition}"`)
 
@@ -1340,16 +1720,11 @@ async function importCookiesFromFirefox(
       return { ok: false, reason: 'No cookies found in Firefox.' }
     }
 
-    const now = Math.floor(Date.now() / 1000)
     const validated: ValidatedCookie[] = []
     for (const row of rows) {
       if (!row.name || !row.host) {
         continue
       }
-      if (row.expiry > 0 && row.expiry < now) {
-        continue
-      }
-
       const domain = row.host
       const secure = row.isSecure === 1
       const url = deriveUrl(domain, secure)
@@ -1363,6 +1738,7 @@ async function importCookiesFromFirefox(
         value: row.value ?? '',
         domain,
         path: row.path || '/',
+        hostOnly: !domain.startsWith('.'),
         secure,
         httpOnly: row.isHttpOnly === 1,
         sameSite: firefoxSameSite(row.sameSite),
@@ -1376,7 +1752,13 @@ async function importCookiesFromFirefox(
       return { ok: false, reason: 'No valid cookies found in Firefox.' }
     }
 
-    return importValidatedCookies(validated, rows.length, targetPartition)
+    return importValidatedCookies(
+      validated,
+      rows.length,
+      targetPartition,
+      cookieImportScope,
+      browser.label
+    )
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
     diag(`  Firefox import failed: ${err}`)
@@ -1393,7 +1775,8 @@ async function importCookiesFromFirefox(
 
 async function importCookiesFromSafari(
   browser: DetectedBrowser,
-  targetPartition: string
+  targetPartition: string,
+  cookieImportScope?: ResolvedCookieImportScope | null
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromSafari: partition="${targetPartition}"`)
 
@@ -1431,7 +1814,13 @@ async function importCookiesFromSafari(
       return { ok: false, reason: 'All Safari cookies are expired.' }
     }
 
-    return importValidatedCookies(valid, cookies.length, targetPartition)
+    return importValidatedCookies(
+      cookies,
+      cookies.length,
+      targetPartition,
+      cookieImportScope,
+      browser.label
+    )
   } catch (err) {
     diag(`  Safari import failed: ${err}`)
     return { ok: false, reason: 'Could not import cookies from Safari.' }
@@ -1444,8 +1833,15 @@ async function importCookiesFromSafari(
 
 export async function importCookiesFromBrowser(
   browser: DetectedBrowser,
-  targetPartition: string
+  targetPartition: string,
+  webAiProvider?: WebAiProvider,
+  cookieImportScope?: BrowserCookieImportScope
 ): Promise<BrowserCookieImportResult> {
+  const scopeResolution = resolveCookieImportScope(webAiProvider, cookieImportScope)
+  if (!scopeResolution.ok) {
+    return scopeResolution
+  }
+  const resolvedCookieImportScope = scopeResolution.scope
   diag(`importCookiesFromBrowser: browser=${browser.family} partition="${targetPartition}"`)
   if (!existsSync(browser.cookiesPath)) {
     diag(`  cookies DB not found: ${browser.cookiesPath}`)
@@ -1453,10 +1849,10 @@ export async function importCookiesFromBrowser(
   }
 
   if (browser.family === 'firefox') {
-    return importCookiesFromFirefox(browser, targetPartition)
+    return importCookiesFromFirefox(browser, targetPartition, resolvedCookieImportScope)
   }
   if (browser.family === 'safari') {
-    return importCookiesFromSafari(browser, targetPartition)
+    return importCookiesFromSafari(browser, targetPartition, resolvedCookieImportScope)
   }
 
   // Why: Electron's cookies.set() API rejects many valid cookie values (binary
@@ -1554,8 +1950,6 @@ export async function importCookiesFromBrowser(
     const targetCols: string[] = targetColumnInfo.map((r) => r.name)
     const colList = targetCols.join(', ')
 
-    stagingDb.exec('DELETE FROM cookies')
-
     const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
       string,
       unknown
@@ -1576,7 +1970,60 @@ export async function importCookiesFromBrowser(
       return { ok: false, reason: `No cookies found in ${browser.label}.` }
     }
 
-    const needsSourceKey = sourceRows.some((sourceRow) => {
+    const scopedSourceRows = sourceRows.filter((sourceRow) => {
+      const domain = sourceRow.host_key
+      return (
+        typeof domain === 'string' && cookieMatchesImportScope(domain, resolvedCookieImportScope)
+      )
+    })
+    const now = Date.now() / 1000
+    const expiredSourceRows = scopedSourceRows.filter((sourceRow) => {
+      const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
+      return expiresUtc > 0 && expiresUtc <= now
+    })
+    const unexpiredSourceRows = scopedSourceRows.filter((sourceRow) => {
+      const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
+      return expiresUtc <= 0 || expiresUtc > now
+    })
+    const importSourceRows = unexpiredSourceRows.filter((sourceRow) => {
+      const domain = sourceRow.host_key
+      const name = sourceRow.name
+      return !(
+        typeof domain === 'string' &&
+        typeof name === 'string' &&
+        isGoogleIntegrityCookie(name, domain)
+      )
+    })
+    const integritySkipped = unexpiredSourceRows.length - importSourceRows.length
+    const expiredSkipped = expiredSourceRows.length
+    const protectedCookieIds = new Set(
+      expiredSourceRows.flatMap((sourceRow) => {
+        const domain = sourceRow.host_key
+        const name = sourceRow.name
+        const path = sourceRow.path
+        return typeof domain === 'string' && typeof name === 'string' && typeof path === 'string'
+          ? [sessionCookieIdentity({ domain, name, path })]
+          : []
+      })
+    )
+
+    if (importSourceRows.length === 0) {
+      stagingDb.close()
+      stagingDb = null
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
+      return {
+        ok: false,
+        reason: resolvedCookieImportScope
+          ? noMatchingCookiesReason(resolvedCookieImportScope, browser.label)
+          : 'No importable cookies found.'
+      }
+    }
+
+    const needsSourceKey = importSourceRows.some((sourceRow) => {
       const encRaw = sourceRow.encrypted_value
       return encRaw instanceof Uint8Array && encRaw.length > 0
     })
@@ -1599,29 +2046,9 @@ export async function importCookiesFromBrowser(
       }
     }
 
-    // Why: Google's integrity cookies (SIDCC, __Secure-*PSIDCC, __Secure-STRP)
-    // are cryptographically bound to the source browser's TLS fingerprint and
-    // environment. Importing them into a different browser causes
-    // accounts.google.com to reject the session with CookieMismatch. Skipping
-    // them lets Google regenerate fresh integrity cookies on the first request.
-    const INTEGRITY_COOKIE_NAMES = new Set([
-      'SIDCC',
-      '__Secure-1PSIDCC',
-      '__Secure-3PSIDCC',
-      '__Secure-STRP',
-      'AEC'
-    ])
-    function isIntegrityCookie(name: string, domain: string): boolean {
-      if (!INTEGRITY_COOKIE_NAMES.has(name)) {
-        return false
-      }
-      const d = domain.startsWith('.') ? domain.slice(1) : domain
-      return d === 'google.com' || d.endsWith('.google.com')
-    }
-
     let imported = 0
-    let skipped = 0
-    let integritySkipped = 0
+    let skipped = sourceRows.length - importSourceRows.length
+    let preparationFailures = 0
     let memoryLoaded = 0
     let memoryFailed = 0
     const domainSet = new Set<string>()
@@ -1632,6 +2059,7 @@ export async function importCookiesFromBrowser(
       domain: string
       name: string
       path: string
+      hostOnly: boolean
       secure: boolean
       httpOnly: boolean
       sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
@@ -1646,8 +2074,14 @@ export async function importCookiesFromBrowser(
     )
 
     stagingDb.exec('BEGIN TRANSACTION')
+    if (resolvedCookieImportScope) {
+      const deleted = deleteStagedCookiesMatchingScope(stagingDb, resolvedCookieImportScope)
+      diag(`  removed ${deleted} scoped cookies from staging database`)
+    } else {
+      stagingDb.exec('DELETE FROM cookies')
+    }
 
-    for (const sourceRow of sourceRows) {
+    for (const sourceRow of importSourceRows) {
       const encRaw = sourceRow.encrypted_value
       // Why: node:sqlite returns BLOB columns as Uint8Array. Any other truthy type
       // means the schema is unexpected — treat it as missing rather than creating
@@ -1660,6 +2094,7 @@ export async function importCookiesFromBrowser(
         const raw = sourceKey ? decryptCookieValueRaw(encBuf, sourceKey) : null
         if (!raw) {
           skipped++
+          preparationFailures++
           continue
         }
         decryptedValue = raw
@@ -1673,11 +2108,6 @@ export async function importCookiesFromBrowser(
 
       const domain = sourceRow.host_key as string
       const name = sourceRow.name as string
-
-      if (isIntegrityCookie(name, domain)) {
-        integritySkipped++
-        continue
-      }
 
       const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain
       domainSet.add(cleanDomain)
@@ -1698,6 +2128,7 @@ export async function importCookiesFromBrowser(
         domain,
         name,
         path,
+        hostOnly: !domain.startsWith('.'),
         secure,
         httpOnly,
         sameSite,
@@ -1709,6 +2140,39 @@ export async function importCookiesFromBrowser(
       imported++
     }
     diag(`  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC)`)
+    diag(`  skipped ${expiredSkipped} expired cookies`)
+
+    if (resolvedCookieImportScope && preparationFailures > 0) {
+      stagingDb.exec('ROLLBACK')
+      stagingDb.close()
+      stagingDb = null
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
+      return {
+        ok: false,
+        reason: `Could not prepare all ${resolvedCookieImportScope.label} cookies from ${browser.label}.`
+      }
+    }
+
+    if (imported === 0) {
+      stagingDb.exec('ROLLBACK')
+      stagingDb.close()
+      stagingDb = null
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
+      return {
+        ok: false,
+        reason: resolvedCookieImportScope
+          ? `No ${resolvedCookieImportScope.label} cookies could be prepared from ${browser.label}.`
+          : `No cookies could be prepared from ${browser.label}.`
+      }
+    }
 
     stagingDb.exec('COMMIT')
     stagingDb.close()
@@ -1716,42 +2180,39 @@ export async function importCookiesFromBrowser(
 
     diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
 
-    // Why: clearing the session's in-memory cookie store before loading imported
-    // cookies prevents stale cookies from a previous Orca browsing session from
-    // mixing with the imported set. Mixed state (some old, some imported) causes
-    // sites like Google to detect inconsistent session cookies and reject them.
-    await targetSession.clearStorageData({ storages: ['cookies'] })
-    diag(
-      `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
-    )
-
-    // Why: loading cookies into memory via cookies.set() makes them available
-    // immediately without requiring a restart. The staging DB is kept as a
-    // fallback for any cookies that fail the cookies.set() validation.
-    for (const cookie of decryptedCookies) {
-      const url = deriveUrl(cookie.domain, cookie.secure)
-      if (!url) {
-        memoryFailed++
-        continue
+    if (resolvedCookieImportScope) {
+      const replacement = await replaceScopedSessionCookies(
+        targetSession,
+        resolvedCookieImportScope,
+        decryptedCookies,
+        protectedCookieIds
+      )
+      if (!replacement.ok) {
+        try {
+          unlinkSync(stagingCookiesPath)
+        } catch {
+          /* best-effort */
+        }
+        return replacement
       }
-      try {
-        // Why: __Host- prefixed cookies must not have a domain attribute and
-        // must have path=/. Chromium rejects them otherwise.
-        const isHostPrefixed = cookie.name.startsWith('__Host-')
-        await targetSession.cookies.set({
-          url,
-          name: cookie.name,
-          value: cookie.value,
-          ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-          path: isHostPrefixed ? '/' : cookie.path,
-          secure: cookie.secure,
-          httpOnly: cookie.httpOnly,
-          sameSite: cookie.sameSite,
-          expirationDate: cookie.expirationDate
-        })
-        memoryLoaded++
-      } catch {
-        memoryFailed++
+      memoryLoaded = replacement.imported
+    } else {
+      // Why: full-profile import keeps its existing replace-all semantics to
+      // avoid mixing old and imported authentication state.
+      await targetSession.clearStorageData({ storages: ['cookies'] })
+      diag(
+        `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
+      )
+      // Why: full-profile import retains the cold-start SQLite fallback for
+      // values Electron cannot accept through cookies.set(). Scoped imports use
+      // the transactional path above so an apparent failure cannot sign out an
+      // existing account.
+      for (const cookie of decryptedCookies) {
+        if (await setSessionCookie(targetSession, cookie)) {
+          memoryLoaded++
+        } else {
+          memoryFailed++
+        }
       }
     }
 

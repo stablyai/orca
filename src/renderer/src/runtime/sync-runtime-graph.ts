@@ -32,6 +32,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../shared/types'
+import { isWebAiBrowserWorkspaceId } from '../../../shared/constants'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import {
   getActiveTabNavOrder,
@@ -365,6 +366,14 @@ function getBrowserPagesByWorkspace(state: AppState): AppState['browserPagesByWo
   return state.browserPagesByWorkspace ?? EMPTY_BROWSER_PAGES_BY_WORKSPACE
 }
 
+function isWebAiAccountBoundBrowserWorkspace(workspace: {
+  webAiAccountId?: string | null
+}): boolean {
+  // Why: even malformed restored bindings remain private until validation can
+  // remove them; publishing an empty account tag would fail open.
+  return workspace.webAiAccountId != null
+}
+
 function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktree']): string {
   if (cachedTabsProjection?.source === tabsByWorktree) {
     return cachedTabsProjection.projection
@@ -434,33 +443,59 @@ function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles'])
 function buildRuntimeMobileBrowserProjection(state: AppState): string {
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
+  const publishableWorkspaceOwnerById = new Map<string, string>()
+  for (const [worktreeId, workspaces] of Object.entries(browserTabsByWorktree)) {
+    if (isWebAiBrowserWorkspaceId(worktreeId)) {
+      continue
+    }
+    for (const workspace of workspaces) {
+      if (!isWebAiAccountBoundBrowserWorkspace(workspace)) {
+        publishableWorkspaceOwnerById.set(workspace.id, worktreeId)
+      }
+    }
+  }
   return JSON.stringify({
     workspacesByWorktree: Object.fromEntries(
-      Object.entries(browserTabsByWorktree).map(([worktreeId, workspaces]) => [
-        worktreeId,
-        workspaces.map((workspace) => ({
-          id: workspace.id,
-          activePageId: workspace.activePageId,
-          title: workspace.title,
-          url: workspace.url,
-          loading: workspace.loading,
-          canGoBack: workspace.canGoBack,
-          canGoForward: workspace.canGoForward
-        }))
-      ])
+      Object.entries(browserTabsByWorktree)
+        .filter(([worktreeId]) => !isWebAiBrowserWorkspaceId(worktreeId))
+        .map(([worktreeId, workspaces]) => [
+          worktreeId,
+          workspaces
+            .filter((workspace) => !isWebAiAccountBoundBrowserWorkspace(workspace))
+            .map((workspace) => ({
+              id: workspace.id,
+              activePageId: workspace.activePageId,
+              title: workspace.title,
+              url: workspace.url,
+              loading: workspace.loading,
+              canGoBack: workspace.canGoBack,
+              canGoForward: workspace.canGoForward
+            }))
+        ])
     ),
     pagesByWorkspace: Object.fromEntries(
-      Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
-        workspaceId,
-        pages.map((page) => ({
-          id: page.id,
-          title: page.title,
-          url: page.url,
-          loading: page.loading,
-          canGoBack: page.canGoBack,
-          canGoForward: page.canGoForward
-        }))
-      ])
+      Object.entries(browserPagesByWorkspace)
+        // Why: page records do not carry the Web AI account tag. Publish only
+        // through a live, explicitly public workspace owner so orphaned private
+        // pages cannot fail open during hydration or cleanup.
+        .filter(([workspaceId]) => publishableWorkspaceOwnerById.has(workspaceId))
+        .map(([workspaceId, pages]) => [
+          workspaceId,
+          pages
+            .filter(
+              (page) =>
+                page.workspaceId === workspaceId &&
+                page.worktreeId === publishableWorkspaceOwnerById.get(workspaceId)
+            )
+            .map((page) => ({
+              id: page.id,
+              title: page.title,
+              url: page.url,
+              loading: page.loading,
+              canGoBack: page.canGoBack,
+              canGoForward: page.canGoForward
+            }))
+        ])
     )
   })
 }
@@ -700,15 +735,21 @@ export function buildMobileSessionTabSnapshots(
 
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
   for (const worktreeId of worktreeIds) {
+    // Why: Web AI accounts are Electron-local authenticated surfaces. Paired
+    // clients must not receive their account IDs, page titles, or full URLs.
+    if (isWebAiBrowserWorkspaceId(worktreeId)) {
+      continue
+    }
     const activeGroupId = state.activeGroupIdByWorktree[worktreeId] ?? null
     const terminalTabByIdForWorktree = new Map(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
     const browserWorkspaceByIdForWorktree = new Map(
-      (getBrowserTabsByWorktree(state)[worktreeId] ?? []).map((workspace) => [
-        workspace.id,
-        workspace
-      ])
+      (getBrowserTabsByWorktree(state)[worktreeId] ?? [])
+        // Why: account-bound browser tabs contain local authenticated state,
+        // even when future UI places them beside ordinary worktree tabs.
+        .filter((workspace) => !isWebAiAccountBoundBrowserWorkspace(workspace))
+        .map((workspace) => [workspace.id, workspace])
     )
     const unifiedTabByIdForWorktree = new Map(
       (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])

@@ -9,7 +9,8 @@ import {
   importCookiesFromFile,
   detectInstalledBrowsers,
   selectBrowserProfile,
-  importCookiesFromBrowser
+  importCookiesFromBrowser,
+  validateBrowserCookieImportScopeRequest
 } from '../browser/browser-cookie-import'
 import type {
   BrowserSetGrabModeArgs,
@@ -23,11 +24,13 @@ import type {
   BrowserExtractHoverResult
 } from '../../shared/browser-grab-types'
 import type {
+  BrowserCookieImportScope,
   BrowserCookieImportResult,
   BrowserCertificateProceedResult,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
-  BrowserViewportOverride
+  BrowserViewportOverride,
+  WebAiProvider
 } from '../../shared/types'
 import {
   isValidBrowserAnnotationViewportBridgeMarkers,
@@ -494,9 +497,23 @@ export function registerBrowserHandlers(): void {
 
   ipcMain.handle(
     'browser:session:importCookies',
-    async (event, args: { profileId: string }): Promise<BrowserCookieImportResult> => {
+    async (
+      event,
+      args: {
+        profileId: string
+        webAiProvider?: WebAiProvider
+        cookieImportScope?: BrowserCookieImportScope
+      }
+    ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
+      }
+      const invalidScopeReason = validateBrowserCookieImportScopeRequest(
+        args.webAiProvider,
+        args.cookieImportScope
+      )
+      if (invalidScopeReason) {
+        return { ok: false, reason: invalidScopeReason }
       }
       const profile = browserSessionRegistry.getProfile(args.profileId)
       if (!profile) {
@@ -509,7 +526,12 @@ export function registerBrowserHandlers(): void {
         return { ok: false, reason: 'canceled' }
       }
 
-      const result = await importCookiesFromFile(filePath, profile.partition)
+      const result = await importCookiesFromFile(
+        filePath,
+        profile.partition,
+        args.webAiProvider,
+        args.cookieImportScope
+      )
       if (result.ok) {
         browserSessionRegistry.updateProfileSource(args.profileId, {
           browserFamily: 'manual',
@@ -572,10 +594,23 @@ export function registerBrowserHandlers(): void {
     'browser:session:importFromBrowser',
     async (
       event,
-      args: { profileId: string; browserFamily: string; browserProfile?: string }
+      args: {
+        profileId: string
+        browserFamily: string
+        browserProfile?: string
+        webAiProvider?: WebAiProvider
+        cookieImportScope?: BrowserCookieImportScope
+      }
     ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
+      }
+      const invalidScopeReason = validateBrowserCookieImportScopeRequest(
+        args.webAiProvider,
+        args.cookieImportScope
+      )
+      if (invalidScopeReason) {
+        return { ok: false, reason: invalidScopeReason }
       }
       const profile = browserSessionRegistry.getProfile(args.profileId)
       if (!profile) {
@@ -611,7 +646,12 @@ export function registerBrowserHandlers(): void {
         browser = reselected
       }
 
-      const result = await importCookiesFromBrowser(browser, profile.partition)
+      const result = await importCookiesFromBrowser(
+        browser,
+        profile.partition,
+        args.webAiProvider,
+        args.cookieImportScope
+      )
       if (result.ok) {
         const profileName =
           browser.profiles.find((p) => p.directory === browser.selectedProfile)?.name ??

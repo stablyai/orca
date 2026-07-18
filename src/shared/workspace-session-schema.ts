@@ -199,6 +199,10 @@ const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
   // profile mirror is stale at startup would silently fall back to the shared
   // default partition — reopening the storage leak (#6923) across restarts.
   sessionPartition: z.string().nullable().optional(),
+  // Why: saved Web AI accounts outlive their warm browser workspace. Preserve
+  // this reverse link so a restored workspace can be focused without storing a
+  // duplicated workspace id in GlobalSettings.
+  webAiAccountId: z.string().nullable().optional(),
   activePageId: z.string().nullable().optional(),
   pageIds: z.array(z.string()).optional(),
   url: z.string(),

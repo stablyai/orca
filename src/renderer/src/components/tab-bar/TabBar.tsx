@@ -64,6 +64,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -74,6 +77,10 @@ import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-creat
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
 import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
 import { translate } from '@/i18n/i18n'
+import {
+  getWebAiAccountServiceLabel,
+  normalizeWebAiAccounts
+} from '../../../../shared/web-ai-accounts'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
@@ -126,6 +133,8 @@ type TabBarProps = {
   onNewSimulatorTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
+  /** Synthetic browser surfaces allow browser creation without terminal/editor actions. */
+  browserOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
@@ -251,6 +260,7 @@ function TabBarInner({
   onNewSimulatorTab,
   onOpenEntry,
   terminalOnly = false,
+  browserOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
   onOpenFileTab,
@@ -310,7 +320,12 @@ function TabBarInner({
   const projects = useAppStore((s) => s.projects)
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
+  const launchWebAiAccount = useAppStore((s) => s.launchWebAiAccount)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const webAiAccounts = useMemo(
+    () => normalizeWebAiAccounts(settings?.webAiAccounts),
+    [settings?.webAiAccounts]
+  )
   // Why: probe Windows shell capabilities on the host that owns this worktree, so
   // the offered shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
@@ -593,18 +608,57 @@ function TabBarInner({
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
-        simulatorIsGoTo: workspaceHasSimulatorTab
+        simulatorIsGoTo: workspaceHasSimulatorTab,
+        webAiAccounts:
+          !terminalOnly && !browserOnly && !isWebClient && !activeRuntimeEnvironmentId
+            ? webAiAccounts
+            : undefined
       }),
     [
+      activeRuntimeEnvironmentId,
+      browserOnly,
+      isWebClient,
       mobileEmulatorEnabled,
       onNewFileTab,
       onNewSimulatorTab,
       onOpenFileTab,
       terminalOnly,
+      webAiAccounts,
       windowsShellEntries,
       workspaceHasSimulatorTab
     ]
   )
+  const launchSavedWebAiAccount = (accountId: string): void => {
+    const account = webAiAccounts.find((candidate) => candidate.id === accountId)
+    if (!account) {
+      return
+    }
+    void launchWebAiAccount(account, {
+      openNewTab: true,
+      targetGroupId: resolvedGroupId,
+      targetWorktreeId: worktreeId
+    }).then((result) => {
+      if (result.ok) {
+        return
+      }
+      toast.error(
+        result.reason === 'profile-check-failed'
+          ? translate(
+              'auto.components.sidebar.WebAiAccountsSection.profileCheckFailed',
+              'Could not verify browser profiles. Try again.'
+            )
+          : result.reason === 'profile-missing'
+            ? translate(
+                'auto.components.sidebar.WebAiAccountsSection.profileMissing',
+                'This browser profile no longer exists.'
+              )
+            : translate(
+                'auto.components.sidebar.WebAiAccountsSection.launchFailed',
+                'Failed to open this Web AI account.'
+              )
+      )
+    })
+  }
   const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
     switch (option.kind) {
       case 'new-terminal':
@@ -626,6 +680,11 @@ function TabBarInner({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-web-ai-account':
+        if (option.webAiAccountId) {
+          launchSavedWebAiAccount(option.webAiAccountId)
+        }
         break
       case 'new-markdown':
         onNewFileTab?.()
@@ -693,52 +752,51 @@ function TabBarInner({
   }
   const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
 
-  const defaultTerminalMenuItems =
-    windowsShellEntries && onNewTerminalWithShell ? (
-      windowsShellEntries.map((entry, idx) => {
-        const isDefault = idx === 0
-        return (
-          <DropdownMenuItem
-            key={entry.shell}
-            onSelect={() => {
-              // Why: the top-level Windows shell menu models shell
-              // categories, not concrete executables. When the user
-              // picked PowerShell 7+ in advanced settings, launching the
-              // "PowerShell" menu item must preserve that implementation
-              // instead of forcing inbox powershell.exe.
-              queueNewActiveTerminalFocusAfterNewTabMenuClose()
-              onNewTerminalWithShell(
-                resolveWindowsShellLaunchTarget(
-                  entry.shell,
-                  defaultWindowsPowerShellImplementation,
-                  windowsTerminalCapabilities.pwshAvailable
-                )
+  const defaultTerminalMenuItems = browserOnly ? null : windowsShellEntries &&
+    onNewTerminalWithShell ? (
+    windowsShellEntries.map((entry, idx) => {
+      const isDefault = idx === 0
+      return (
+        <DropdownMenuItem
+          key={entry.shell}
+          onSelect={() => {
+            // Why: the top-level Windows shell menu models shell
+            // categories, not concrete executables. When the user
+            // picked PowerShell 7+ in advanced settings, launching the
+            // "PowerShell" menu item must preserve that implementation
+            // instead of forcing inbox powershell.exe.
+            queueNewActiveTerminalFocusAfterNewTabMenuClose()
+            onNewTerminalWithShell(
+              resolveWindowsShellLaunchTarget(
+                entry.shell,
+                defaultWindowsPowerShellImplementation,
+                windowsTerminalCapabilities.pwshAvailable
               )
-            }}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-          >
-            <ShellIcon shell={entry.shell} size={14} />
-            <span className="flex-1">
-              {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
-              {entry.label}
-            </span>
-            {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
-          </DropdownMenuItem>
-        )
-      })
-    ) : (
-      <DropdownMenuItem
-        onSelect={() => {
-          queueNewActiveTerminalFocusAfterNewTabMenuClose()
-          onNewTerminalTab()
-        }}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-      >
-        <TerminalSquare className="size-4 text-muted-foreground" />
-        {translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
-        <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-    )
+            )
+          }}
+          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        >
+          <ShellIcon shell={entry.shell} size={14} />
+          <span className="flex-1">
+            {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} {entry.label}
+          </span>
+          {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
+        </DropdownMenuItem>
+      )
+    })
+  ) : (
+    <DropdownMenuItem
+      onSelect={() => {
+        queueNewActiveTerminalFocusAfterNewTabMenuClose()
+        onNewTerminalTab()
+      }}
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+    >
+      <TerminalSquare className="size-4 text-muted-foreground" />
+      {translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
+      <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+    </DropdownMenuItem>
+  )
   const newBrowserMenuItem = !terminalOnly ? (
     <DropdownMenuItem
       onSelect={onNewBrowserTab}
@@ -746,11 +804,41 @@ function TabBarInner({
     >
       <Globe className="size-4 text-muted-foreground" />
       {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
-      <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
+      <DropdownMenuShortcut>
+        {browserOnly ? newTerminalShortcut : newBrowserShortcut}
+      </DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
+  const canOfferWebAiAccounts =
+    !terminalOnly &&
+    !browserOnly &&
+    !isWebClient &&
+    !activeRuntimeEnvironmentId &&
+    webAiAccounts.length > 0
+  const newWebAiAccountsMenuItem = canOfferWebAiAccounts ? (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium">
+        <Globe className="size-4 text-muted-foreground" />
+        {translate('auto.components.sidebar.WebAiAccountsSection.title', 'Web AI Accounts')}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {webAiAccounts.map((account) => (
+          <DropdownMenuItem
+            key={account.id}
+            onSelect={() => launchSavedWebAiAccount(account.id)}
+            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+          >
+            <Globe className="size-4 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">
+              {account.label} / {getWebAiAccountServiceLabel(account)}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  ) : null
   const newSimulatorMenuItem =
-    !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
+    !terminalOnly && !browserOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -782,7 +870,7 @@ function TabBarInner({
       )
     ) : null
   const newMarkdownMenuItem =
-    !terminalOnly && onNewFileTab ? (
+    !terminalOnly && !browserOnly && onNewFileTab ? (
       <DropdownMenuItem
         onSelect={onNewFileTab}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -793,7 +881,7 @@ function TabBarInner({
       </DropdownMenuItem>
     ) : null
   const openMarkdownMenuItem =
-    !terminalOnly && onOpenFileTab ? (
+    !terminalOnly && !browserOnly && onOpenFileTab ? (
       <DropdownMenuItem
         onSelect={onOpenFileTab}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -808,6 +896,7 @@ function TabBarInner({
   const mobileEmulatorIntroMenuBlock =
     showMobileEmulatorIntroCallout &&
     !terminalOnly &&
+    !browserOnly &&
     isMacOs &&
     mobileEmulatorEnabled &&
     onNewSimulatorTab ? (
@@ -820,6 +909,7 @@ function TabBarInner({
         {openMarkdownMenuItem}
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newWebAiAccountsMenuItem}
         {newSimulatorMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
@@ -827,6 +917,7 @@ function TabBarInner({
       <>
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newWebAiAccountsMenuItem}
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}
@@ -1311,7 +1402,7 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {!terminalOnly && onOpenEntry ? (
+          {!terminalOnly && !browserOnly && onOpenEntry ? (
             <>
               <TabBarCreateEntry
                 worktreeId={worktreeId}
@@ -1333,7 +1424,7 @@ function TabBarInner({
             </>
           ) : null}
           {showStaticCreateMenuItems ? standardCreateMenuItems : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems ? (
+          {showStaticCreateMenuItems && showAgentLaunchItems && !browserOnly ? (
             <>
               <DropdownMenuSeparator />
               <QuickLaunchAgentMenuItems
