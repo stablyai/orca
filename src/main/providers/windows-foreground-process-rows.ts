@@ -60,9 +60,11 @@ export async function queryWindowsProcessDescendants(
   } catch {
     return null
   }
-  // Why: a snapshot that omitted the PTY root may be stale or permission-
-  // filtered; only an observed root can authoritatively have no descendants.
-  if (!rows.some((row) => row.pid === rootPid)) {
+  // Why: a startup shell on Windows can spawn the long-lived agent shell and
+  // then exit before teardown runs. Keep that child chain when the snapshot
+  // still shows rows parented to the original pid; otherwise a missing root
+  // would mask live descendants and leave worktree cleanup hanging.
+  if (!rows.some((row) => row.pid === rootPid) && !rows.some((row) => row.ppid === rootPid)) {
     return null
   }
   return collectDescendants(rows, rootPid).sort((a, b) => b.depth - a.depth)

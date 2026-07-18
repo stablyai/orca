@@ -1215,9 +1215,21 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // has run, proc.pid refers to a recycled pid. Sending SIGKILL would
       // terminate an unrelated process. The fd release is handled by
       // dispose()/destroy(); forceKill is strictly for signalling a live child.
-      // Why: Windows node-pty kill already closes ConPTY; retrying it through
-      // forceKill can double-close the native handle during workspace teardown.
+      // Why: Windows node-pty kill already closes ConPTY and tears down the
+      // owning shell. Match the local provider path here; raw process.kill()
+      // can leave the PTY owner alive long enough for worktree teardown to
+      // time out even after descendant cleanup succeeds.
       if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
+        return
+      }
+      if (process.platform === 'win32') {
+        try {
+          proc.kill()
+          nodePtyKillIssued = true
+        } catch (error) {
+          nodePtyKillIssued = false
+          throw error
+        }
         return
       }
       try {

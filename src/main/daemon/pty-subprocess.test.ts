@@ -1398,7 +1398,7 @@ describe('createPtySubprocess', () => {
     expect(proc.kill).toHaveBeenCalledTimes(2)
   })
 
-  it('propagates rejected force kills so the owner can retry', () => {
+  itOnPosixHost('propagates rejected force kills so the owner can retry', () => {
     const proc = mockPtyProcess(77)
     proc.kill.mockImplementation(() => {
       throw new Error('native fallback rejected')
@@ -1422,7 +1422,7 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('forceKill sends SIGKILL to the child pid', () => {
+  itOnPosixHost('forceKill sends SIGKILL to the child pid', () => {
     const proc = mockPtyProcess(77)
     spawnMock.mockReturnValue(proc)
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
@@ -1432,6 +1432,53 @@ describe('createPtySubprocess', () => {
 
     expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
     killSpy.mockRestore()
+  })
+
+  it('forceKill on Windows uses node-pty kill instead of raw process.kill', () => {
+    const proc = mockPtyProcess(77)
+    spawnMock.mockReturnValue(proc)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      handle.forceKill()
+
+      expect(proc.kill).toHaveBeenCalledOnce()
+      expect(killSpy).not.toHaveBeenCalled()
+    } finally {
+      killSpy.mockRestore()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('propagates rejected Windows node-pty force kills so the owner can retry', () => {
+    const proc = mockPtyProcess(77)
+    proc.kill
+      .mockImplementationOnce(() => {
+        throw new Error('native Windows kill rejected')
+      })
+      .mockImplementationOnce(() => undefined)
+    spawnMock.mockReturnValue(proc)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      expect(() => handle.forceKill()).toThrow('native Windows kill rejected')
+      expect(() => handle.forceKill()).not.toThrow()
+      expect(proc.kill).toHaveBeenCalledTimes(2)
+      expect(killSpy).not.toHaveBeenCalled()
+    } finally {
+      killSpy.mockRestore()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('routes onData events', () => {
@@ -2819,17 +2866,15 @@ describe('createPtySubprocess', () => {
       }
       proc.destroy = vi.fn(() => proc.kill())
       spawnMock.mockReturnValue(proc)
-      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-        throw new Error('already gone')
-      })
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       try {
         const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.forceKill()
         handle.dispose()
-        expect(killSpy).toHaveBeenCalledWith(123456, 'SIGKILL')
         expect(proc.kill).toHaveBeenCalledOnce()
+        expect(killSpy).not.toHaveBeenCalled()
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
         killSpy.mockRestore()
@@ -2878,14 +2923,23 @@ describe('createPtySubprocess', () => {
       killSpy.mockRestore()
     })
 
-    it('forceKill before exit still fires SIGKILL (live child)', () => {
+    it('forceKill before exit uses node-pty kill on Windows', () => {
       const proc = mockPtyProcess(77)
       spawnMock.mockReturnValue(proc)
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-      handle.forceKill()
-      expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
-      killSpy.mockRestore()
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+        handle.forceKill()
+        expect(proc.kill).toHaveBeenCalledOnce()
+        expect(killSpy).not.toHaveBeenCalled()
+      } finally {
+        killSpy.mockRestore()
+        if (origPlatform) {
+          Object.defineProperty(process, 'platform', origPlatform)
+        }
+      }
     })
   })
 })

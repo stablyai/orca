@@ -96,4 +96,35 @@ describe('windows foreground process rows spawn options', () => {
     expect(candidates?.[0]?.pid).toBe(200)
     expect(optionsForCommand('wmic')).toMatchObject({ windowsHide: true })
   })
+
+  it('keeps descendants when the root pid has already exited but child rows still point to it', async () => {
+    execFileMock.mockImplementation((_cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      cb(null, {
+        stdout: JSON.stringify([
+          {
+            ProcessId: 200,
+            ParentProcessId: 100,
+            Name: 'powershell.exe',
+            CommandLine: 'powershell.exe -File C:/tools/claude.ps1',
+            ExecutablePath: 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
+          },
+          {
+            ProcessId: 300,
+            ParentProcessId: 200,
+            Name: 'node.exe',
+            CommandLine: 'node claude-child.js',
+            ExecutablePath: 'C:/Program Files/nodejs/node.exe'
+          }
+        ]),
+        stderr: ''
+      })
+    })
+
+    const candidates = await queryWindowsProcessDescendants(100, { fresh: true })
+
+    expect(candidates).toEqual([
+      expect.objectContaining({ pid: 300, ppid: 200, depth: 2 }),
+      expect.objectContaining({ pid: 200, ppid: 100, depth: 1 })
+    ])
+  })
 })

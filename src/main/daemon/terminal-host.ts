@@ -3,6 +3,7 @@ import { normalizePtySize } from './daemon-pty-size'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   SessionNotFoundError,
@@ -110,6 +111,8 @@ export class TerminalHost {
     // Clear tombstone if re-creating a killed session
     this.killedTombstones.delete(opts.sessionId)
     const size = normalizePtySize(opts.cols, opts.rows)
+    const launchAgent =
+      opts.launchAgent ?? recognizeAgentProcessFromCommandLine(opts.command)?.agent
 
     const subprocess = this.spawnSubprocess({
       sessionId: opts.sessionId,
@@ -120,7 +123,7 @@ export class TerminalHost {
       envToDelete: opts.envToDelete,
       command: opts.command,
       startupCommandDelivery: opts.startupCommandDelivery,
-      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(launchAgent ? { launchAgent } : {}),
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
@@ -141,7 +144,7 @@ export class TerminalHost {
       cols: size.cols,
       rows: size.rows,
       terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
-      launchAgent: opts.launchAgent,
+      launchAgent,
       subprocess,
       shellReadySupported,
       historySeed: opts.historySeed,
