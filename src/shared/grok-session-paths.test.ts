@@ -57,19 +57,20 @@ describe('grok-session-paths', () => {
     expect(resolveGrokHomeDir({}, '/home/ada')).toBe(join('/home/ada', '.grok'))
   })
 
-  it('refuses to invent encodeURIComponent names longer than 255 bytes', () => {
+  it('encodes long cwds with Grok slug+blake3 instead of inventing URL names', () => {
     const longCwd = `/${'a'.repeat(200)}/${'b'.repeat(200)}`
     expect(Buffer.byteLength(encodeURIComponent(longCwd), 'utf8')).toBeGreaterThan(
       GROK_ENCODED_CWD_DIR_MAX_BYTES
     )
-    expect(grokEncodedCwdDirName(longCwd)).toBeNull()
+    const encoded = grokEncodedCwdDirName(longCwd)
+    expect(encoded).toBe(`${'b'.repeat(40)}-e22e6487078c7674`)
     expect(
       buildGrokChatHistoryPathCandidates({
         sessionId: 'sess-1',
         cwd: longCwd,
         sessionsDir: '/tmp/sessions'
       })
-    ).toEqual([])
+    ).toEqual([join('/tmp/sessions', encoded!, 'sess-1', 'chat_history.jsonl')])
   })
 
   it('rejects unsafe session ids and path-special cwd components', async () => {
@@ -112,24 +113,24 @@ describe('grok-session-paths', () => {
     ).toBe(history)
   })
 
-  it('does not synchronously discover a long-cwd slug group', () => {
+  it('synchronously resolves a long-cwd slug group via encode_cwd_dirname', () => {
     const root = makeRoot()
     const sessionsDir = join(root, 'sessions')
     const sessionId = 'sess-long'
-    // Simulate Grok's slug+hash group directory (not encodeURIComponent of cwd).
-    const slugGroup = 'long-path-ab12cd34'
+    const longCwd = `/${'a'.repeat(200)}/${'b'.repeat(200)}`
+    const slugGroup = grokEncodedCwdDirName(longCwd)!
     const history = join(sessionsDir, slugGroup, sessionId, 'chat_history.jsonl')
     mkdirSync(dirname(history), { recursive: true })
-    writeFileSync(join(sessionsDir, slugGroup, '.cwd'), '/very/long/path\n')
+    writeFileSync(join(sessionsDir, slugGroup, '.cwd'), `${longCwd}\n`)
     writeFileSync(history, '{"type":"assistant","content":"hi"}\n')
 
     expect(
       resolveGrokChatHistoryPathSync({
         sessionId,
-        cwd: `/${'x'.repeat(300)}`,
+        cwd: longCwd,
         sessionsDir
       })
-    ).toBeNull()
+    ).toBe(history)
   })
 
   it('finds the documented group/session layout asynchronously', async () => {

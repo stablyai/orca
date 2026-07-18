@@ -3,10 +3,20 @@ import { lstat, opendir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
+  encodeGrokCwdDirName,
+  GROK_ENCODED_CWD_DIR_MAX_BYTES as GROK_CWD_DIR_MAX_BYTES
+} from './grok-cwd-dirname'
+import {
   GrokSessionPathLookupQueue,
   type GrokSessionPathScanner
 } from './grok-session-path-lookup-queue'
 
+export {
+  encodeGrokCwdDirName,
+  encodeGrokUrlComponent,
+  grokCwdLeafName,
+  slugifyGrokCwdLeaf
+} from './grok-cwd-dirname'
 export {
   GROK_SESSION_PATH_CACHE_MAX_ENTRIES,
   GROK_SESSION_SCAN_ACTIVE_ROOT_MAX,
@@ -16,8 +26,9 @@ export {
 
 export const GROK_CHAT_HISTORY_FILE = 'chat_history.jsonl'
 // Why: Grok URL-encodes the cwd for the sessions group directory. When that
-// encoded name exceeds 255 bytes it switches to a slug+hash layout.
-export const GROK_ENCODED_CWD_DIR_MAX_BYTES = 255
+// encoded name exceeds 255 bytes it switches to a slug+hash layout (OSS:
+// xai_grok_config::paths::encode_cwd_dirname).
+export const GROK_ENCODED_CWD_DIR_MAX_BYTES = GROK_CWD_DIR_MAX_BYTES
 export const GROK_SESSION_ID_MAX_LENGTH = 128
 // Why: session discovery runs in hook/main hot paths; one corrupt or enormous
 // sessions root must not cause unbounded candidate probes.
@@ -52,26 +63,16 @@ export function resolveGrokSessionsDir(
   return join(resolveGrokHomeDir(env, homeDir), 'sessions')
 }
 
-/** Return Grok's safe cwd-group component, or null for slug/invalid layouts. */
+/**
+ * Return Grok's sessions group dirname for a cwd.
+ * Short paths: URL-encoded form. Long paths: `{slug}-{blake3_hex16}`.
+ * Only empty/invalid inputs return null (length no longer forces null).
+ */
 export function grokEncodedCwdDirName(cwd: string): string | null {
-  const trimmed = cwd.trim()
-  if (!trimmed) {
-    return null
-  }
-  let encoded: string
-  try {
-    encoded = encodeURIComponent(trimmed)
-  } catch {
-    return null
-  }
-  // encodeURIComponent deliberately leaves dots untouched; reject path syntax.
-  if (encoded === '.' || encoded === '..' || encoded.includes('/') || encoded.includes('\\')) {
-    return null
-  }
-  return Buffer.byteLength(encoded, 'utf8') <= GROK_ENCODED_CWD_DIR_MAX_BYTES ? encoded : null
+  return encodeGrokCwdDirName(cwd)
 }
 
-/** Fast-path candidates when both session id and cwd are known. */
+/** Fast-path candidates when both session id and cwd are known (short + long). */
 export function buildGrokChatHistoryPathCandidates(args: {
   sessionId: string
   cwd?: string | null
@@ -85,7 +86,7 @@ export function buildGrokChatHistoryPathCandidates(args: {
   if (!cwd) {
     return []
   }
-  const encoded = grokEncodedCwdDirName(cwd)
+  const encoded = encodeGrokCwdDirName(cwd)
   if (!encoded) {
     return []
   }
