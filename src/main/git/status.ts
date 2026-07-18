@@ -31,12 +31,8 @@ import {
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
-import {
-  gitExecFileAsync,
-  gitExecFileAsyncBuffer,
-  gitOptionalLocksDisabledEnv,
-  gitStreamStdout
-} from './runner'
+import { gitExecFileAsync, gitOptionalLocksDisabledEnv, gitStreamStdout } from './runner'
+import { MAX_GIT_SHOW_BYTES, readGitBlobRaw, type RawBlobOutcome } from './blob-reader'
 import { StatusPorcelainParser } from './status-porcelain-parser'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
@@ -58,7 +54,6 @@ import {
   reuseOrRecomputeGitStatusLineStats
 } from '../../shared/git-status-line-stats-cache'
 
-const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
 const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
@@ -1826,19 +1821,8 @@ async function readGitBlobAtIndexPath(
 ): Promise<GitBlobReadResult> {
   // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
-  try {
-    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
-      ...gitOptionsForWorktree(worktreePath, options),
-      maxBuffer: MAX_GIT_SHOW_BYTES
-    })
-
-    return { ...bufferToBlob(stdout, filePath), exists: true }
-  } catch (error) {
-    if (isMaxBufferOverflowError(error)) {
-      return { content: '', isBinary: true, exists: true }
-    }
-    return { content: '', isBinary: false, exists: false }
-  }
+  const raw = await readGitBlobRaw({ kind: 'index', worktreePath, gitPath }, options)
+  return rawOutcomeToBlobResult(raw, filePath)
 }
 
 async function readGitBlobAtOidPath(
@@ -1849,22 +1833,19 @@ async function readGitBlobAtOidPath(
 ): Promise<GitBlobReadResult> {
   // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
-  try {
-    const { stdout } = await gitExecFileAsyncBuffer(
-      ['show', '--end-of-options', `${oid}:${gitPath}`],
-      {
-        ...gitOptionsForWorktree(worktreePath, options),
-        maxBuffer: MAX_GIT_SHOW_BYTES
-      }
-    )
+  const raw = await readGitBlobRaw({ kind: 'rev', worktreePath, rev: oid, gitPath }, options)
+  return rawOutcomeToBlobResult(raw, filePath)
+}
 
-    return { ...bufferToBlob(stdout, filePath), exists: true }
-  } catch (error) {
-    if (isMaxBufferOverflowError(error)) {
-      return { content: '', isBinary: true, exists: true }
-    }
+function rawOutcomeToBlobResult(raw: RawBlobOutcome, filePath: string): GitBlobReadResult {
+  if (raw.tooLarge) {
+    return { content: '', isBinary: true, exists: true }
+  }
+  // !bytes is unreachable per RawBlobOutcome's invariant (found ⇒ bytes) but narrows the optional to Buffer here.
+  if (!raw.found || !raw.bytes) {
     return { content: '', isBinary: false, exists: false }
   }
+  return { ...bufferToBlob(raw.bytes, filePath), exists: true }
 }
 
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
