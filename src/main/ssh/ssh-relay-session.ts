@@ -1000,6 +1000,11 @@ export class SshRelaySession {
     })
   }
 
+  /**
+   * Disposes relay-backed providers using lifecycle-specific identity cleanup.
+   *
+   * @param reason Whether the remote identity is retiring or may reconnect.
+   */
   private teardownProviders(reason: 'shutdown' | 'connection_lost'): void {
     this.muxDisposeCleanup?.()
     this.muxDisposeCleanup = null

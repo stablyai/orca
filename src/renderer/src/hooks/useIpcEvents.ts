@@ -838,6 +838,7 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
+/** Registers renderer subscriptions for main-process lifecycle and state events. */
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []

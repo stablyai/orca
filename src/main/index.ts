@@ -871,6 +871,11 @@ function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
+/**
+ * Creates the primary application window and wires its main-process event bridges.
+ *
+ * @returns The created or restored main window.
+ */
 function openMainWindow(): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
