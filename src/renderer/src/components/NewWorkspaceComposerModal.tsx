@@ -204,19 +204,28 @@ function QuickTabBody({
   const handleProjectAdded = useCallback(
     (repoId: string): void => {
       selectAddedProjectRepo(repoId)
-      // Why: land keyboard flow on the name field, mirroring what picking a
-      // project from the combobox does.
-      requestAnimationFrame(() => nameInputRef?.current?.focus())
     },
-    [nameInputRef, selectAddedProjectRepo]
+    [selectAddedProjectRepo]
+  )
+  const handleAddProjectCloseAutoFocus = useCallback(
+    (event: Event): void => {
+      // Why: after adding a project the next step is naming the worktree.
+      // Radix would try to restore focus to the (unmounted) combobox row that
+      // opened the dialog; send it to the name field instead — the same place
+      // picking a project from the combobox lands.
+      event.preventDefault()
+      nameInputRef?.current?.focus()
+    },
+    [nameInputRef]
   )
   const addProjectController = useMemo<AddRepoDialogHostedController>(
     () => ({
       open: addProjectOpen,
       onOpenChange: setAddProjectOpen,
-      onProjectAdded: handleProjectAdded
+      onProjectAdded: handleProjectAdded,
+      onCloseAutoFocus: handleAddProjectCloseAutoFocus
     }),
-    [addProjectOpen, handleProjectAdded]
+    [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded]
   )
   const selectedProjectOption = cardProps.projectOptions.find(
     (option) => option.id === cardProps.selectedProjectId

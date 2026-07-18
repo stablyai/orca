@@ -26,8 +26,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog({
 }: {
   hosted?: AddRepoDialogHostedController
 }) {
-  const activeModal = useAppStore((s) => s.activeModal)
-  const modalData = useAppStore((s) => s.modalData)
+  const isOpen = useAppStore((s) => (hosted ? hosted.open : s.activeModal === 'add-repo'))
+  // Why: hosted mode never receives dropped paths through modalData — that
+  // channel belongs to the store-modal instance.
+  const droppedLocalPath = useAppStore((s) =>
+    !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
+  )
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
@@ -71,7 +75,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog({
     setStep
   })
 
-  const isOpen = hosted ? hosted.open : activeModal === 'add-repo'
   const hostSelection = useAddRepoHostSelection({ isOpen, setStep })
   const selectedRuntimeEnvironmentId =
     hostSelection.selectedParsedHost?.kind === 'runtime'
@@ -166,10 +169,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog({
     onGitRepoReady: completeGitRepoAdd
   })
 
-  // Why: hosted mode never receives dropped paths through modalData — that
-  // channel belongs to the store-modal instance.
-  const droppedLocalPath =
-    !hosted && typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const selectedHostKind = hostSelection.selectedParsedHost?.kind
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
@@ -306,6 +305,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog({
       step={step}
       isAdding={isAdding}
       onBack={handleBack}
+      onCloseAutoFocus={hosted?.onCloseAutoFocus}
       onOpenChange={handleOpenChange}
     >
       <AddRepoDialogStepContent

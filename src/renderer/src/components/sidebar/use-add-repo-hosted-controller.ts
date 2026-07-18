@@ -10,6 +10,10 @@ export type AddRepoDialogHostedController = {
   /** Called after a Git project is added; the host selects the new project
    *  instead of running the default-checkout navigation handoff. */
   onProjectAdded: (repoId: string) => void | Promise<void>
+  /** Radix close-autofocus hook for the nested dialog. Lets the host redirect
+   *  focus (e.g. to the composer's name field) instead of Radix restoring it
+   *  to the already-unmounted combobox row that opened the dialog. */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 export function useAddRepoHostedController(hosted: AddRepoDialogHostedController | undefined): {
