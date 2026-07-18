@@ -67,6 +67,33 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
+function installMacosVisibilityRepaint(window: BrowserWindow): void {
+  let delayedRepaintTimer: ReturnType<typeof setTimeout> | null = null
+  const repaintAfterVisibilityTransition = (): void => {
+    forceRepaint(window)
+    if (delayedRepaintTimer) {
+      clearTimeout(delayedRepaintTimer)
+    }
+    // Why: macOS can finish restoring webview compositor layers after Electron's
+    // show/restore event, so a second paint catches late black-surface recovery.
+    delayedRepaintTimer = setTimeout(() => {
+      delayedRepaintTimer = null
+      forceRepaint(window)
+    }, 250)
+  }
+  const clearDelayedRepaint = (): void => {
+    if (delayedRepaintTimer) {
+      clearTimeout(delayedRepaintTimer)
+      delayedRepaintTimer = null
+    }
+  }
+
+  window.on('restore', repaintAfterVisibilityTransition)
+  window.on('show', repaintAfterVisibilityTransition)
+  window.on('focus', repaintAfterVisibilityTransition)
+  window.on('closed', clearDelayedRepaint)
+}
+
 function isMacAppPasteInput(input: Electron.Input): boolean {
   return (
     process.platform === 'darwin' &&
@@ -293,18 +320,13 @@ export function createMainWindow(
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   if (process.platform === 'darwin') {
-    // Why: persistent browser webviews use separate compositor layers, and on
-    // recent macOS releases those layers can fail to repaint after occlusion or
-    // restore. Disabling main-window throttling and forcing a repaint on
-    // visibility transitions hardens Orca against black-surface failures during
-    // browser-tab restore and tab switching.
-    mainWindow.webContents.setBackgroundThrottling(false)
-    mainWindow.on('restore', () => {
-      forceRepaint(mainWindow)
-    })
-    mainWindow.on('show', () => {
-      forceRepaint(mainWindow)
-    })
+    // Why: browser-guest surfaces are kept alive by their own per-guest
+    // unthrottle (browser-manager attach), so the main window can throttle
+    // normally while hidden/occluded instead of rendering at full rate.
+    // Toggling must happen only while visible: flipping it on a hidden window
+    // desyncs Chromium's frame evictor and blanks the surface (electron#42378).
+    mainWindow.webContents.setBackgroundThrottling(true)
+    installMacosVisibilityRepaint(mainWindow)
   }
 
   // Why: a focus-preserving system/display wake fires no window focus or

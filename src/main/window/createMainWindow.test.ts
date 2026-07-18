@@ -299,6 +299,76 @@ describe('createMainWindow', () => {
     }
   })
 
+  it('keeps main-window background throttling enabled while repainting macOS visibility transitions', () => {
+    vi.useFakeTimers()
+    const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        const handlers = windowHandlers.get(event) ?? []
+        handlers.push(handler)
+        windowHandlers.set(event, handlers)
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    // Why: throttling-off pins visibilityState 'visible' and renders occluded
+    // windows at full rate; this guards against reintroducing it.
+    expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
+
+    if (process.platform !== 'darwin') {
+      return
+    }
+
+    expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
+    expect(windowHandlers.get('restore')).toHaveLength(1)
+    expect(windowHandlers.get('show')).toHaveLength(1)
+    expect(windowHandlers.get('focus')).toHaveLength(1)
+
+    windowHandlers.get('show')?.[0]?.()
+
+    expect(webContents.invalidate).toHaveBeenCalledTimes(1)
+    expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(1, 1201, 800)
+
+    vi.advanceTimersByTime(32)
+    expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(2, 1200, 800)
+
+    // Focus 100ms later re-arms the debounced late repaint instead of stacking.
+    vi.advanceTimersByTime(68)
+    windowHandlers.get('focus')?.[0]?.()
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(249)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(1)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(3)
+  })
+
   it('supports all minus key variants for terminal zoom out', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
