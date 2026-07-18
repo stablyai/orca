@@ -28,7 +28,7 @@ import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
-import { createSeededTestRepo, isValidGitRepo } from './seeded-test-repo'
+import { requireSeededTestRepo } from './seeded-test-repo'
 
 type OrcaTestFixtures = {
   electronApp: ElectronApplication
@@ -138,9 +138,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       const persistedRepoPath = existsSync(TEST_REPO_PATH_FILE)
         ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
         : ''
-      const repoPath = isValidGitRepo(persistedRepoPath)
-        ? persistedRepoPath
-        : createSeededTestRepo()
+      const repoPath = requireSeededTestRepo(persistedRepoPath)
       await provideFixture(repoPath)
     },
     { scope: 'worker' }
@@ -279,7 +277,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       return
     }
 
-    const repoPath = isValidGitRepo(testRepoPath) ? testRepoPath : createSeededTestRepo()
+    const repoPath = requireSeededTestRepo(testRepoPath)
 
     // Add the test repo via the IPC bridge
     // Why: calling window.api.repos.add() goes through the same code path as

@@ -11,18 +11,23 @@
  */
 
 import { execSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+import {
+  cleanupE2ERunScope,
+  readPreparedE2ERunResources,
+  resolveE2ERunScope
+} from './e2e-run-scope'
 
-/** Temp file where the test repo path is stored for the fixture to read. */
-export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
+export const E2E_RUN_SCOPE = resolveE2ERunScope()
+/** Run-scoped temp file where the test repo path is stored for workers. */
+export const TEST_REPO_PATH_FILE = E2E_RUN_SCOPE.repoPathFile
 const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
   const root = process.cwd()
   const outMain = path.join(root, 'out', 'main', 'index.js')
+  const { testRepoDir, worktreeDir } = readPreparedE2ERunResources(E2E_RUN_SCOPE)
 
   // ── 1. Build the Electron app ──────────────────────────────────────
   if (process.env.SKIP_BUILD && existsSync(outMain)) {
@@ -56,43 +61,48 @@ export default function globalSetup(): void {
   // ── 2. Create a seeded test git repo ───────────────────────────────
   // Why: each test run gets its own git repo so the suite is fully
   // idempotent. No test depends on whatever repos the user has open.
-  // Why: realpathSync so the seeded path matches the store's repo.path on
-  // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
-  // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
-  const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
+  try {
+    execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
+    execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
+    execSync('git config user.name "E2E Test"', { cwd: testRepoDir, stdio: 'pipe' })
 
-  execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git config user.name "E2E Test"', { cwd: testRepoDir, stdio: 'pipe' })
+    // Seed test data files
+    writeFileSync(
+      path.join(testRepoDir, 'README.md'),
+      '# Orca E2E Test Repo\n\nThis repo was created automatically for Playwright tests.\n'
+    )
+    writeFileSync(
+      path.join(testRepoDir, 'CLAUDE.md'),
+      '# CLAUDE.md\n\nTest instructions for E2E.\n'
+    )
+    writeFileSync(
+      path.join(testRepoDir, 'package.json'),
+      `${JSON.stringify({ name: 'orca-e2e-test', version: '0.0.0', private: true }, null, 2)}\n`
+    )
+    writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
+    mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
+    writeFileSync(path.join(testRepoDir, 'src', 'index.ts'), 'export const hello = "world"\n')
 
-  // Seed test data files
-  writeFileSync(
-    path.join(testRepoDir, 'README.md'),
-    '# Orca E2E Test Repo\n\nThis repo was created automatically for Playwright tests.\n'
-  )
-  writeFileSync(path.join(testRepoDir, 'CLAUDE.md'), '# CLAUDE.md\n\nTest instructions for E2E.\n')
-  writeFileSync(
-    path.join(testRepoDir, 'package.json'),
-    `${JSON.stringify({ name: 'orca-e2e-test', version: '0.0.0', private: true }, null, 2)}\n`
-  )
-  writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
-  mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
-  writeFileSync(path.join(testRepoDir, 'src', 'index.ts'), 'export const hello = "world"\n')
+    execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
+    execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
 
-  execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
-  execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
+    // Why: several tests verify worktree-switching behavior (terminal content
+    // retention, browser tab retention). They need at least 2 worktrees.
+    // Creating one here makes those tests run instead of being skipped.
+    execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
+      cwd: testRepoDir,
+      stdio: 'pipe'
+    })
+    console.error(`[e2e] Secondary worktree created at ${worktreeDir}`)
 
-  // Why: several tests verify worktree-switching behavior (terminal content
-  // retention, browser tab retention). They need at least 2 worktrees.
-  // Creating one here makes those tests run instead of being skipped.
-  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
-  execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
-    cwd: testRepoDir,
-    stdio: 'pipe'
-  })
-  console.error(`[e2e] Secondary worktree created at ${worktreeDir}`)
-
-  // Write the test repo path so the fixture can read it
-  writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
-  console.error(`[e2e] Test repo created at ${testRepoDir}`)
+    writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
+    console.error(`[e2e] Test repo created at ${testRepoDir}`)
+  } catch (error) {
+    try {
+      cleanupE2ERunScope(E2E_RUN_SCOPE)
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'E2E setup and owned cleanup both failed')
+    }
+    throw error
+  }
 }

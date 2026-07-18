@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { resolveSuitePlan, runHeavyTestSuite } from './run-heavy-test-suite.mjs'
 
 const DEFAULT_REPORT_PATH = 'test-results/terminal-scale-perf-report.json'
 const DEFAULT_HTML_REPORT_PATH = 'test-results/terminal-perf-impact-report.html'
@@ -58,9 +59,18 @@ function exitCode(result) {
   return result.status ?? 1
 }
 
-export function runTerminalScalePerfReportGate({
+async function runScaleSuiteWithAdmission({ args, env, stdio }) {
+  const plan = resolveSuitePlan('electron-e2e-terminal-scale', args, {
+    env,
+    playwrightStdio: stdio
+  })
+  return runHeavyTestSuite({ suite: 'electron-e2e-terminal-scale-report', ...plan })
+}
+
+export async function runTerminalScalePerfReportGate({
   argv = process.argv.slice(2),
   env = process.env,
+  runScaleSuite = runScaleSuiteWithAdmission,
   spawnSyncImpl = spawnSync
 } = {}) {
   const { passthroughArgs, reportPath } = parseReportGateArgs(argv, env)
@@ -70,20 +80,16 @@ export function runTerminalScalePerfReportGate({
   let scaleExitCode
   try {
     const reportFd = openSync(tempReportPath, 'w')
-    let scaleResult
     try {
-      scaleResult = runNodeScript(
-        'config/scripts/run-terminal-scale-perf-e2e.mjs',
-        ['--', '--reporter=json', ...passthroughArgs],
-        ['inherit', reportFd, 'inherit'],
-        spawnSyncImpl,
-        env
-      )
+      scaleExitCode = await runScaleSuite({
+        args: ['--reporter=json', ...passthroughArgs],
+        env,
+        stdio: ['inherit', reportFd, 'inherit']
+      })
     } finally {
       closeSync(reportFd)
     }
 
-    scaleExitCode = exitCode(scaleResult)
     mkdirSync(dirname(reportPath), { recursive: true })
     copyFileSync(tempReportPath, reportPath)
   } finally {
@@ -132,5 +138,5 @@ export function runTerminalScalePerfReportGate({
 }
 
 if (process.argv[1] === import.meta.filename) {
-  process.exit(runTerminalScalePerfReportGate())
+  process.exitCode = await runTerminalScalePerfReportGate()
 }

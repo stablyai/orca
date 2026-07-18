@@ -2191,8 +2191,8 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "pnpm exec electron-vite build --mode e2e",
-        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "SKIP_BUILD=1 node config/scripts/run-heavy-test-suite.mjs electron-e2e tests/e2e/terminal-cold-activation-deferral.spec.ts --project=electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 node config/scripts/run-heavy-test-suite.mjs electron-e2e tests/e2e/ssh-cold-activation-restore.spec.ts --project=electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
@@ -2232,7 +2232,7 @@
           "date": "2026-07-14",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 node config/scripts/run-heavy-test-suite.mjs electron-e2e tests/e2e/ssh-cold-activation-restore.spec.ts --project=electron-headless --workers=1",
           "result": "passed",
           "durationSeconds": 128,
           "summary": "Six focused files and 475 tests passed; the local cold-activation journey passed; the Docker/Linux SSH journey restored six of six original relay PTYs, mounted six of six managers without parking, and executed remote input through the restored terminal."
@@ -4180,7 +4180,7 @@
       "invariant": "Whenever GlyphRenderer attaches a different shared atlas, every cached glyph vertex is rebuilt before the next draw even if the old and new atlases have the same clear-model generation.",
       "oracle": "Render terminal A and capture its non-empty canvas, populate terminal B with a distinct atlas, attach A's glyph renderer to B's atlas without changing A's buffer, render A again, and require byte-equivalent visible pixels. Also require the atlas identities to differ so the test cannot pass without exercising the transition.",
       "commands": [
-        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-webgl-atlas-budget.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "node config/scripts/run-heavy-test-suite.mjs electron-e2e tests/e2e/terminal-webgl-atlas-budget.spec.ts --project=electron-headless --workers=1"
       ],
       "testFiles": ["tests/e2e/terminal-webgl-atlas-budget.spec.ts"],
       "assertionRefs": [
@@ -4197,7 +4197,7 @@
           "date": "2026-07-17",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-webgl-atlas-budget.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "command": "node config/scripts/run-heavy-test-suite.mjs electron-e2e tests/e2e/terminal-webgl-atlas-budget.spec.ts --project=electron-headless --workers=1",
           "result": "passed",
           "durationSeconds": 44,
           "summary": "Both real-WebGL scenarios passed. The atlas-replacement case changed 327,165 pixels with the old generation adoption and zero pixels after identity invalidation."

@@ -5,35 +5,16 @@
  * test run so we don't litter the user's /tmp with test directories.
  */
 
-import { readFileSync, existsSync, rmSync, readdirSync } from 'node:fs'
-import path from 'node:path'
-import { TEST_REPO_PATH_FILE } from './global-setup'
+import { cleanupE2ERunScope, resolveE2ERunScope } from './e2e-run-scope'
 
 export default function globalTeardown(): void {
-  if (!existsSync(TEST_REPO_PATH_FILE)) {
-    return
+  // Why: Playwright may load setup and teardown through separate module
+  // wrappers. Reconstruct from the run id in the shared process environment
+  // instead of relying on a named export from the setup module.
+  const cleanedPaths = cleanupE2ERunScope(resolveE2ERunScope(), {
+    allowMissingManifest: true
+  })
+  if (cleanedPaths.length > 0) {
+    console.error(`[e2e] Cleaned up ${cleanedPaths.length} run-scoped resources`)
   }
-
-  const testRepoDir = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-  if (testRepoDir && existsSync(testRepoDir)) {
-    // Why: git worktree add creates directories as siblings. Clean up any
-    // seeded or test-created worktrees in the same parent so reruns remain
-    // idempotent and do not leak temp repos into /tmp.
-    const parentDir = path.dirname(testRepoDir)
-    try {
-      const siblings = readdirSync(parentDir)
-      for (const name of siblings) {
-        if (name.startsWith('orca-e2e-worktree-') || name.startsWith('e2e-test-')) {
-          rmSync(path.join(parentDir, name), { recursive: true, force: true })
-        }
-      }
-    } catch {
-      // Best-effort cleanup of worktrees
-    }
-
-    rmSync(testRepoDir, { recursive: true, force: true })
-    console.error(`[e2e] Cleaned up test repo at ${testRepoDir}`)
-  }
-
-  rmSync(TEST_REPO_PATH_FILE, { force: true })
 }

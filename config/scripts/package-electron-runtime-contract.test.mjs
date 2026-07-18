@@ -27,7 +27,7 @@ describe('Electron runtime package contract', () => {
 
   it('guards package scripts that launch Electron tooling', () => {
     const scripts = packageJson.scripts
-    const guardedScripts = [
+    const directlyGuardedScripts = [
       'start',
       'dev',
       'dev-stable-name',
@@ -35,16 +35,49 @@ describe('Electron runtime package contract', () => {
       'build:win',
       'build:mac',
       'build:mac:release',
-      'build:linux',
-      'test:e2e',
-      'test:e2e:terminal-rendering-golden',
-      'test:e2e:terminal-rendering-release-evidence',
-      'test:e2e:headful'
+      'build:linux'
     ]
 
-    for (const scriptName of guardedScripts) {
+    for (const scriptName of directlyGuardedScripts) {
       expect(scripts[scriptName], scriptName).toContain('pnpm run ensure:electron-runtime &&')
     }
+
+    for (const scriptName of [
+      'test:e2e',
+      'test:e2e:headful',
+      'test:e2e:floating-mobile-emulator',
+      'test:e2e:terminal-rendering-golden',
+      'test:e2e:terminal-rendering-release-evidence',
+      'test:e2e:terminal-perf',
+      'test:e2e:source-control-scale'
+    ]) {
+      expect(scripts[scriptName], scriptName).toContain(
+        'node config/scripts/run-heavy-test-suite.mjs electron-e2e'
+      )
+    }
+    const directTestBypasses = Object.entries(scripts).filter(
+      ([scriptName, command]) =>
+        scriptName.startsWith('test') &&
+        (/\bnpx playwright\b/.test(command) ||
+          /\bpnpm exec playwright\b/.test(command) ||
+          /\bvitest run\b/.test(command))
+    )
+    expect(directTestBypasses).toEqual([])
+
+    const reliabilityGates = readFileSync(
+      join(projectDir, 'config/reliability-gates.jsonc'),
+      'utf8'
+    )
+    expect(reliabilityGates).not.toMatch(/\b(?:npx|pnpm exec) playwright test\b/)
+
+    const heavySuiteRunner = readFileSync(
+      join(projectDir, 'config/scripts/run-heavy-test-suite.mjs'),
+      'utf8'
+    )
+    expect(heavySuiteRunner).toContain(
+      "const runtime = suite === 'unit' || suite === 'computer-e2e' ? 'node' : 'electron'"
+    )
+    expect(heavySuiteRunner).toContain('config/scripts/ensure-native-runtime.mjs')
   })
 
   it('keeps Windows and Linux package builds off the macOS native helper build', () => {
@@ -472,6 +505,10 @@ describe('Electron runtime package contract', () => {
 
   it('keeps terminal scale perf wired to the report budget gate', () => {
     const packageScripts = packageJson.scripts
+    const reportGate = readFileSync(
+      join(projectDir, 'config/scripts/run-terminal-scale-perf-report-gate.mjs'),
+      'utf8'
+    )
     const terminalPerfWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/terminal-perf.yml'), 'utf8')
     )
@@ -482,6 +519,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-perf:scale:report']).toContain(
       'run-terminal-scale-perf-report-gate.mjs'
     )
+    expect(reportGate).toContain('runHeavyTestSuite')
+    expect(reportGate).toContain("resolveSuitePlan('electron-e2e-terminal-scale'")
+    expect(reportGate).not.toContain('run-terminal-scale-perf-e2e.mjs')
     expect(runStep.run).toContain('pnpm run test:e2e:terminal-perf:scale:report')
     expect(runStep.run).toContain('xvfb-run --auto-servernum')
     const manualProfileKnobs = [

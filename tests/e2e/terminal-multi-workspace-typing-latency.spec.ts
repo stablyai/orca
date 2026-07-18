@@ -14,7 +14,7 @@
  * Scenarios are gated behind ORCA_TYPING_BENCH=1 (they are benchmarks that
  * may legitimately "fail" while the bug reproduces, not CI regression gates).
  * Entry point: pnpm bench:multi-workspace-typing  (see
- * config/scripts/run-multi-workspace-typing-bench.mjs for knobs). Results are
+ * `pnpm bench:multi-workspace-typing` accepts the benchmark knobs. Results are
  * written as JSON to tools/benchmarks/results/ for A/B comparison.
  */
 import type { Page, TestInfo } from '@stablyai/playwright-test'

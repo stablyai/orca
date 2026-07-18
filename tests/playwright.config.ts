@@ -1,4 +1,9 @@
+import { availableParallelism } from 'node:os'
 import { defineConfig } from '@stablyai/playwright-test'
+import { resolveElectronE2eWorkerCount } from '../config/scripts/interactive-test-worker-budget.mjs'
+import { ensureE2ERunId } from './e2e/e2e-run-scope'
+
+ensureE2ERunId()
 
 /**
  * Playwright config for Orca E2E tests.
@@ -29,7 +34,7 @@ export default defineConfig({
   // Why: each CI worker launches a real Electron/Chromium process tree against
   // a mutable seeded repo. Release runners showed two apps per VM can contend
   // on Xvfb/git enough to create false E2E failures, so CI scales by shards.
-  workers: process.env.CI ? 1 : undefined,
+  workers: resolveElectronE2eWorkerCount(Boolean(process.env.CI), availableParallelism()),
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: 'list',
