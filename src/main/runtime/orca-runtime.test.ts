@@ -21535,6 +21535,35 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('reuses pane close for live PTYs that do not own a renderer tab', async () => {
+    const kill = vi.fn(() => true)
+    const closeTerminalTab = vi.fn(async () => {})
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        {
+          id: 'floating-created-pty',
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Claude'
+        }
+      ]
+    })
+    runtime.registerPty('floating-created-pty', TEST_WORKTREE_ID)
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.closeTerminalTab(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      tabId: terminal.tabId,
+      ptyKilled: true
+    })
+    expect(kill).toHaveBeenCalledWith('floating-created-pty')
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+  })
+
   it('durably closes every split leaf without a renderer', async () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({

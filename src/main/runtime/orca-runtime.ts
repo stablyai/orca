@@ -22914,7 +22914,7 @@ export class OrcaRuntimeService {
     if (pty) {
       const tabId = pty.pty.tabId
       if (!tabId) {
-        throw new Error('terminal_tab_not_found')
+        return this.closeTerminal(handle)
       }
       // Why: a handle-addressed CLI/automation close is an explicit intent, so
       // it must stay destructive under the non-user close adjudication gate.
