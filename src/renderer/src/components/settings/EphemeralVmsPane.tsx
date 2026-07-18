@@ -163,6 +163,9 @@ export function EphemeralVmsPane(): React.JSX.Element {
             : ensureOrcaCliAvailableForAgentSkillTerminal())
         }}
         onRecheck={refreshSkill}
+        freshnessSkillName={
+          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : EPHEMERAL_VMS_SKILL_NAME
+        }
       />
 
       <div className="space-y-3 rounded-lg border border-border/60 bg-card/30 p-4">

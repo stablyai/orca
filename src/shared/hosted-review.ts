@@ -104,6 +104,10 @@ export type HostedReviewCreationBlockedReason =
   | 'fork_head_unsupported'
   | 'unsupported_provider'
   | 'existing_review'
+  // Why: a stacked worktree's local-only parent base is unresolvable on the
+  // remote; blocked at create-time so the submit fails with actionable copy
+  // instead of the provider's opaque error.
+  | 'base_not_on_remote'
   | null
 
 export type HostedReviewCreationNextAction =

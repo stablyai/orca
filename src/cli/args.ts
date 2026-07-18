@@ -58,6 +58,7 @@ export const BOOLEAN_FLAGS = new Set([
   'run-hooks',
   'show-profile',
   'staged',
+  'tab',
   'tasks',
   'text-stdin',
   'unread',
@@ -180,6 +181,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'note',
       'diagnostics',
       'linear',
+      'skills',
       'agent-context'
     ].includes(commandPath[0])
   ) {
@@ -235,6 +237,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'environment',
         'diagnostics',
         'linear',
+        'skills',
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||

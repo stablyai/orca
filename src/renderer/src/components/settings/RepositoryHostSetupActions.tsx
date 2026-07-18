@@ -43,7 +43,7 @@ type RepositoryHostSetupActionsProps = {
     setupState: 'not-set-up'
     setupMethod: 'provisioned'
   }) => Promise<ProjectHostSetupCreateResult | null>
-  onOpenSetup: (repoId: string) => void
+  onSetupReady: (hostId: ExecutionHostId) => void
 }
 
 type SetupStep = 'choose' | 'existing' | 'clone' | 'planned'
@@ -55,7 +55,7 @@ export function RepositoryHostSetupActions({
   setupProjectExistingFolder,
   setupProjectClone,
   createProjectHostSetup,
-  onOpenSetup
+  onSetupReady
 }: RepositoryHostSetupActionsProps): React.JSX.Element | null {
   const [isOpen, setIsOpen] = useState(false)
   const [step, setStep] = useState<SetupStep>('choose')
@@ -102,7 +102,7 @@ export function RepositoryHostSetupActions({
       })
       if (result) {
         resetFlow()
-        onOpenSetup(result.repo.id)
+        onSetupReady(setupTargetHostId)
       }
     } finally {
       setIsSettingUp(false)
@@ -129,7 +129,7 @@ export function RepositoryHostSetupActions({
       })
       if (result) {
         resetFlow()
-        onOpenSetup(result.repo.id)
+        onSetupReady(setupTargetHostId)
       }
     } finally {
       setIsCloning(false)

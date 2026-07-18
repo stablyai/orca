@@ -32,7 +32,7 @@ function writeFakeSsh(dir: string): string {
     `#!/bin/sh
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -o|-p|-i|-J) shift 2 ;;
+    -o|-p|-i|-J|-S) shift 2 ;;
     -T) shift ;;
     --) shift; break ;;
     -*) shift ;;
@@ -215,6 +215,25 @@ describe('system SSH transport integration', () => {
         )
       } finally {
         mux.dispose()
+        await conn.disconnect()
+      }
+    },
+    20_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'connects GSSAPI-flagged targets through system ssh without the force override',
+    async () => {
+      delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
+      const conn = new SshConnection(
+        { ...makeTarget(), gssapiAuthentication: true },
+        { onStateChange: vi.fn() }
+      )
+      await conn.connect()
+      try {
+        expect(conn.usesSystemSshTransport()).toBe(true)
+        expect(conn.getState().status).toBe('connected')
+      } finally {
         await conn.disconnect()
       }
     },

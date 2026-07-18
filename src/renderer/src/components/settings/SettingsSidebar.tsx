@@ -155,6 +155,13 @@ export function SettingsSidebar({
         )
       case 'installed':
         return translate('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')
+      case 'up-to-date':
+        return translate('auto.components.skills.SkillFreshnessStatusPill.upToDate', 'Up to date')
+      case 'update-available':
+        return translate(
+          'auto.components.skills.SkillFreshnessStatusPill.updateAvailable',
+          'Update available'
+        )
       case 'checking':
         return translate('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')
     }
@@ -162,11 +169,13 @@ export function SettingsSidebar({
   const installStatusClassName = (status: SettingsNavInstallStatus): string =>
     cn(
       'ml-auto shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none',
-      status === 'installed'
+      status === 'installed' || status === 'up-to-date'
         ? 'border-status-success-border bg-status-success-background text-status-success'
-        : status === 'install'
-          ? 'border-foreground/15 bg-foreground/10 text-foreground'
-          : 'border-border/50 bg-muted/30 text-muted-foreground'
+        : status === 'update-available'
+          ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+          : status === 'install'
+            ? 'border-foreground/15 bg-foreground/10 text-foreground'
+            : 'border-border/50 bg-muted/30 text-muted-foreground'
     )
 
   return (

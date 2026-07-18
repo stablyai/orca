@@ -327,6 +327,46 @@ describe('WebSocketTransport', () => {
     liveClient.close()
   })
 
+  it('bounds raw TCP sockets above the WebSocket connection budget', async () => {
+    // Why: the WebSocket cap applies only after upgrade, so raw sockets need a
+    // finite independent bound without reducing the 128 legitimate WS slots.
+    const { transport } = await createTransport()
+    await transport.start()
+
+    const httpServer = (transport as unknown as { httpServer: { maxConnections: number } })
+      .httpServer
+    expect(httpServer.maxConnections).toBe(256)
+  })
+
+  it('force-terminates an over-capacity socket that ignores the close frame', async () => {
+    // Why: a backgrounded/half-open phone may never ack the 1013 close, so a
+    // bare ws.close() retains its descriptor until the heartbeat. A reconnect
+    // flood can fill the TCP headroom during that window, so rejection must
+    // hard-close on a short fixed deadline.
+    const { transport } = await createTransport()
+    await transport.start()
+
+    const ws = await connectWs(transport)
+    const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+    const serverSocket = Array.from(wss.clients)[0]
+    expect(serverSocket).toBeDefined()
+    const terminateSpy = vi.spyOn(serverSocket!, 'terminate')
+
+    vi.useFakeTimers()
+    try {
+      ;(transport as unknown as { rejectOverCapacity(ws: WebSocket): void }).rejectOverCapacity(
+        serverSocket!
+      )
+      vi.advanceTimersByTime(1_000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(terminateSpy).toHaveBeenCalled()
+    terminateSpy.mockRestore()
+    ws.close()
+  })
+
   it('is idempotent on double start', async () => {
     const { transport } = await createTransport()
 
@@ -466,6 +506,43 @@ describe('WebSocketTransport', () => {
         host: '127.0.0.1',
         port: preferredPort,
         fallbackPort
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(fallbackPort)
+    })
+
+    it('binds the preferred port first when preferPinnedPort is set and both are free', async () => {
+      // Why: issue #8535 — `orca serve --port <P>` clients dial the pin. A
+      // free but stale mobile-ws-fallback-port.json must not pre-empt it.
+      const preferredPort = await reserveFreePort()
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort,
+        preferPinnedPort: true
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(preferredPort)
+    })
+
+    it('falls back when preferPinnedPort is set but the preferred port is taken', async () => {
+      // Why: explicit pins still degrade to the STA-1511 fallback on
+      // EADDRINUSE so previously-paired mobile devices remain reachable.
+      const preferredHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(preferredHolder)
+      await preferredHolder.start()
+      const preferredPort = preferredHolder.resolvedPort
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort,
+        preferPinnedPort: true
       })
       transports.push(transport)
       await transport.start()

@@ -513,6 +513,8 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         return `A ${createReviewCopy.reviewLabel} already exists`
       case 'fork_head_unsupported':
         return 'Fork head unsupported'
+      case 'base_not_on_remote':
+        return 'Base branch is not on the remote'
       case null:
       case undefined:
         return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'

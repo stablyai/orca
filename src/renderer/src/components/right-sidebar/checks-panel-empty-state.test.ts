@@ -220,6 +220,47 @@ describe('getChecksPanelEmptyStateCopy', () => {
     ).toBe('Could not refresh pull request')
   })
 
+  it('attributes a 5xx outage to GitHub instead of the generic refresh error', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: 'error',
+        prRefreshErrorType: 'server_error',
+        hostedReviewBlockedReason: null,
+        hasUpstream: true
+      })
+    ).toEqual({
+      title: 'GitHub is unavailable',
+      description:
+        "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers."
+    })
+  })
+
+  it('attributes a network failure to GitHub in the ambiguous hosted-review branch', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: 'error',
+        prRefreshErrorType: 'network',
+        hostedReviewBlockedReason: null,
+        hasUpstream: true,
+        hasAmbiguousGitHubHostedReview: true
+      }).title
+    ).toBe("Can't reach GitHub")
+  })
+
+  it('keeps the generic refresh error for non-outage error types', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: 'error',
+        prRefreshErrorType: 'auth',
+        hostedReviewBlockedReason: null,
+        hasUpstream: true
+      }).title
+    ).toBe('Could not refresh pull request')
+  })
+
   it('renders a single stable title across a full ambiguous refresh cycle', () => {
     const cycle = ['queued', 'in-flight', undefined, 'skipped', 'paused'] as const
     const titles = new Set(

@@ -15,11 +15,11 @@ import {
 import { clampUtf8Tail, type EagerBufferChunk } from './pty-eager-buffer-clamp'
 import {
   bufferPreHandlerPtyData,
-  bufferPreHandlerPtyExit,
   clearPreHandlerPtyState,
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
+import { deliverPtyExitToHandlers } from './pty-exit-delivery'
 import {
   clearReceivedPtyCharTotal,
   isPtyPushDeliveryBlackholed,
@@ -57,7 +57,10 @@ export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
  *  guard and suppress xterm auto-replies during replay. */
 export const ptyReplayHandlers = new Map<string, (data: string) => void>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
-const ptyExitSidecars = new Map<string, Set<(code: number) => void>>()
+const ptyExitSidecars = new Map<
+  string,
+  Set<(code: number, context: { hadPrimary: boolean }) => void>
+>()
 /** Per-PTY teardown callbacks registered by each transport to clear closure
  *  state (stale-title timer, agent tracker) that would otherwise fire after
  *  the data handler is removed. */
@@ -231,21 +234,22 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
       // cumulative totals too so a reused id restarts at zero on both sides.
       clearProcessedPtyCharTotal(payload.id)
       clearReceivedPtyCharTotal(payload.id)
-      const handler = ptyExitHandlers.get(payload.id)
-      if (handler) {
-        clearPreHandlerPtyState(payload.id)
-        handler(payload.code)
-      } else {
-        bufferPreHandlerPtyExit(payload.id, payload.code)
-      }
       const sidecars = ptyExitSidecars.get(payload.id)
-      if (sidecars && sidecars.size > 0) {
-        const snapshot = Array.from(sidecars)
+      if (sidecars) {
         ptyExitSidecars.delete(payload.id)
-        for (const sidecar of snapshot) {
-          sidecar(payload.code)
-        }
       }
+      const primary = ptyExitHandlers.get(payload.id)
+      if (primary) {
+        // Why: exit handlers are one-shot owners. Remove before invocation so
+        // a throwing callback cannot stay registered for a duplicate exit.
+        ptyExitHandlers.delete(payload.id)
+      }
+      deliverPtyExitToHandlers({
+        ptyId: payload.id,
+        code: payload.code,
+        ...(primary ? { primary } : {}),
+        sidecars: sidecars ? Array.from(sidecars) : []
+      })
     })
   )
   // Why: main probes when delivery looks stuck on lost ACKs (data arriving
@@ -267,7 +271,10 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   window.api.pty.rendererDispatcherReady?.()
 }
 
-export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => void): () => void {
+export function subscribeToPtyExit(
+  ptyId: string,
+  watcher: (code: number, context: { hadPrimary: boolean }) => void
+): () => void {
   ensurePtyDispatcher()
   let set = ptyExitSidecars.get(ptyId)
   if (!set) {

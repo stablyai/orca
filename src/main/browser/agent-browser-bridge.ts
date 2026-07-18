@@ -698,12 +698,18 @@ export class AgentBrowserBridge {
       if (firstLiveWcId === null) {
         firstLiveWcId = wcId
       }
+      const loadError = this.browserManager.getBrowserPageLoadError(tabId)
+      const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
       result.push({
         browserPageId: tabId,
         index: index++,
-        url: wc.getURL() ?? '',
+        // Why: failed WebContents report chrome-error://, which is neither
+        // actionable nor the address the user asked to load.
+        url: loadError?.validatedUrl ?? wc.getURL() ?? '',
         title: wc.getTitle() ?? '',
-        active: wcId === activeWcId
+        active: wcId === activeWcId,
+        loadError,
+        certificateFailure
       })
     }
     // Why: if no tab has been explicitly activated yet, surface the first live

@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { PairedDevice, Platform, StepIndex } from './MobileHero'
-import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
+import type { IosChannel } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
@@ -17,6 +17,8 @@ import { translate } from '@/i18n/i18n'
 import { useMobilePageEscape } from './use-mobile-page-escape'
 import { MobilePageContent } from './MobilePageContent'
 import { useMobileInstallQr } from './use-mobile-install-qr'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import { useMobileInstallActions } from './use-mobile-install-actions'
 
 export default function MobilePage(): React.JSX.Element {
   const [stage, setStage] = useState<FlowStage | null>(null)
@@ -30,6 +32,10 @@ export default function MobilePage(): React.JSX.Element {
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
+  const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  // Why: Relay is opt-in while compatible mobile builds are limited to the
+  // TestFlight preview and Android APK.
+  const [connectionMode, setConnectionMode] = useState<MobilePairingConnectionMode>('local-only')
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const [selectedAddress, setSelectedAddress] = useState<string | undefined>(undefined)
   // Why: tracks whether `selectedAddress` came from the user typing a
@@ -41,6 +47,8 @@ export default function MobilePage(): React.JSX.Element {
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const hasGeneratedRef = useRef(false)
+  const pairingRequestIdRef = useRef(0)
+  const wasSignedInRef = useRef(signedIn)
   const mountedRef = useMountedRef()
   const stageRef = useRef<FlowStage | null>(null)
   const deviceCountAtPairStartRef = useRef<number | null>(null)
@@ -48,6 +56,7 @@ export default function MobilePage(): React.JSX.Element {
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const installQrUrl = useMobileInstallQr(stage, platform, iosChannel)
+  const { copyInstallUrl, openInstallUrl } = useMobileInstallActions(platform, iosChannel)
 
   const setPairingDeviceBaseline = useCallback(
     (count: number | null): void => {
@@ -163,24 +172,39 @@ export default function MobilePage(): React.JSX.Element {
   )
 
   const generatePairing = useCallback(
-    async (rotate: boolean, addressOverride?: string) => {
+    async (
+      rotate: boolean,
+      addressOverride?: string,
+      connectionModeOverride?: MobilePairingConnectionMode
+    ) => {
+      const requestId = ++pairingRequestIdRef.current
+      // Mark the request synchronously so state changes cannot make the
+      // Step 2 auto-generate effect start a second offer in parallel.
+      hasGeneratedRef.current = true
       if (mountedRef.current) {
         setPairLoading(true)
       }
       try {
         const address = addressOverride ?? selectedAddress
+        const nextConnectionMode = connectionModeOverride ?? connectionMode
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
+          connectionMode: nextConnectionMode,
           ...(rotate ? { rotate: true } : {})
         })
+        if (requestId !== pairingRequestIdRef.current) {
+          return
+        }
         if (result.available) {
           if (mountedRef.current) {
             setPairQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
           }
-          hasGeneratedRef.current = true
         } else {
+          hasGeneratedRef.current = false
           if (mountedRef.current) {
+            setPairQrDataUrl(null)
+            setPairingUrl(null)
             toast.error(
               translate(
                 'auto.components.mobile.MobilePage.b353e18de1',
@@ -190,7 +214,10 @@ export default function MobilePage(): React.JSX.Element {
           }
         }
       } catch {
-        if (mountedRef.current) {
+        if (mountedRef.current && requestId === pairingRequestIdRef.current) {
+          hasGeneratedRef.current = false
+          setPairQrDataUrl(null)
+          setPairingUrl(null)
           toast.error(
             translate(
               'auto.components.mobile.MobilePage.4c8bd11c1a',
@@ -199,13 +226,40 @@ export default function MobilePage(): React.JSX.Element {
           )
         }
       } finally {
-        if (mountedRef.current) {
+        if (mountedRef.current && requestId === pairingRequestIdRef.current) {
           setPairLoading(false)
         }
       }
     },
-    [mountedRef, selectedAddress]
+    [connectionMode, mountedRef, selectedAddress]
   )
+
+  const handleConnectionModeChange = useCallback(
+    (nextMode: MobilePairingConnectionMode): void => {
+      if (nextMode === connectionMode) {
+        return
+      }
+      setConnectionMode(nextMode)
+      // Why: an offer encodes its connection policy. Invalidate the prior
+      // request before rotating so a late response cannot restore a stale QR.
+      pairingRequestIdRef.current += 1
+      const shouldRegenerate = hasGeneratedRef.current || pairLoading
+      hasGeneratedRef.current = false
+      setPairingUrl(null)
+      if (shouldRegenerate) {
+        void generatePairing(true, undefined, nextMode)
+      }
+    },
+    [connectionMode, generatePairing, pairLoading]
+  )
+
+  useEffect(() => {
+    const wasSignedIn = wasSignedInRef.current
+    wasSignedInRef.current = signedIn
+    if (wasSignedIn && !signedIn) {
+      handleConnectionModeChange('local-only')
+    }
+  }, [handleConnectionModeChange, signedIn])
 
   const loadNetworkInterfaces = useCallback(async () => {
     if (mountedRef.current) {
@@ -354,28 +408,6 @@ export default function MobilePage(): React.JSX.Element {
     }
   }
 
-  const openInstallUrl = (): void => {
-    void window.api.shell.openUrl(getInstallCopy(platform, iosChannel).url)
-  }
-
-  const copyInstallUrl = async (): Promise<void> => {
-    try {
-      await window.api.ui.writeClipboardText(getInstallCopy(platform, iosChannel).url)
-      if (mountedRef.current) {
-        toast.success(
-          translate('auto.components.mobile.MobilePage.fad833de8d', 'Install link copied')
-        )
-      }
-    } catch (err) {
-      console.error('writeClipboardText failed', err)
-      if (mountedRef.current) {
-        toast.error(
-          translate('auto.components.mobile.MobilePage.baea63c445', 'Failed to copy link')
-        )
-      }
-    }
-  }
-
   const toggleMobileSidebarButton = useCallback(() => {
     const nextShowMobileButton = !showMobileButton
     void updateSettings({ showMobileButton: nextShowMobileButton })
@@ -410,6 +442,8 @@ export default function MobilePage(): React.JSX.Element {
       openInstallUrl={openInstallUrl}
       pairAnotherDevice={pairAnotherDevice}
       pairLoading={pairLoading}
+      connectionMode={connectionMode}
+      handleConnectionModeChange={handleConnectionModeChange}
       pairQrDataUrl={pairQrDataUrl}
       pairingUrl={pairingUrl}
       platform={platform}

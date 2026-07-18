@@ -110,6 +110,24 @@ export function isSyncPushStageError(error: unknown): boolean {
   )
 }
 
+// Why: shared patterns so conflict classification and toast copy cannot drift.
+// Unconcluded prior merge vs. a fresh conflict from this operation produce
+// different user-facing messages, but Create PR treats both as "sync conflict".
+const UNCONCLUDED_MERGE_ERROR_PATTERN =
+  /unmerged files|needs merge|you have not concluded your merge/i
+const FRESH_MERGE_CONFLICT_ERROR_PATTERN = /automatic merge failed|CONFLICT \(|fix conflicts/i
+
+// Why: detects "the working tree has merge conflicts the user must resolve" —
+// both an unconcluded prior merge and a fresh conflict from this operation.
+// Lets the Create PR flow tell a real sync conflict apart from a
+// fetch/network/auth/push failure that only looks similar.
+export function isMergeConflictErrorMessage(message: string): boolean {
+  return (
+    UNCONCLUDED_MERGE_ERROR_PATTERN.test(message) ||
+    FRESH_MERGE_CONFLICT_ERROR_PATTERN.test(message)
+  )
+}
+
 export function resolveRemoteOperationErrorMessage(
   error: unknown,
   options?: RemoteOperationErrorOptions
@@ -118,7 +136,7 @@ export function resolveRemoteOperationErrorMessage(
     return REMOTE_OPERATION_FAILED_MESSAGE
   }
 
-  if (/unmerged files|needs merge|you have not concluded your merge/i.test(error.message)) {
+  if (UNCONCLUDED_MERGE_ERROR_PATTERN.test(error.message)) {
     if (options?.isRebase) {
       return 'Rebase blocked — resolve existing conflicts first.'
     }
@@ -127,7 +145,7 @@ export function resolveRemoteOperationErrorMessage(
       : 'Pull blocked — resolve existing merge conflicts first.'
   }
 
-  if (/automatic merge failed|CONFLICT \(|fix conflicts/i.test(error.message)) {
+  if (FRESH_MERGE_CONFLICT_ERROR_PATTERN.test(error.message)) {
     if (options?.isRebase) {
       return 'Rebase stopped with conflicts. Resolve them in Source Control, then continue the rebase.'
     }

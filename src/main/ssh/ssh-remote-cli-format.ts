@@ -34,6 +34,7 @@ function formatStatusResult(status: CliStatusResult): { stdout: string; stderr: 
     stdout: `${[
       `appRunning: ${status.app.running}`,
       `pid: ${status.app.pid ?? 'none'}`,
+      `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
       `runtimeState: ${status.runtime.state}`,
       `runtimeReachable: ${status.runtime.reachable}`,
       `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,

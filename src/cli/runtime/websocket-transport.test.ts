@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { encodePairingOffer, type PairingOffer } from '../../shared/pairing'
 import {
@@ -13,12 +13,17 @@ import {
   publicKeyToBase64
 } from '../../shared/e2ee-crypto'
 import { RuntimeClient } from './client'
+import { launchOrcaApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
 import { RuntimeClientError } from './types'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
+
+vi.mock('./launch', () => ({
+  launchOrcaApp: vi.fn()
+}))
 
 type TestRuntime = {
   endpoint: string
@@ -31,6 +36,7 @@ describe('CLI remote WebSocket transport', () => {
   const servers: TestRuntime[] = []
 
   afterEach(async () => {
+    vi.mocked(launchOrcaApp).mockClear()
     await Promise.all(servers.splice(0).map((server) => server.close()))
   })
 
@@ -77,6 +83,28 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
+  })
+
+  it('does not launch a local desktop app for remote-paired open', async () => {
+    const runtime = await startTestRuntime('runtime-remote-headless', {
+      desktopWindowStatus: 'initializing'
+    })
+    servers.push(runtime)
+    const client = new RuntimeClient(
+      '/tmp/unused',
+      5_000,
+      encodePairingOffer({
+        v: 2,
+        endpoint: runtime.endpoint,
+        deviceToken: runtime.deviceToken,
+        publicKeyB64: runtime.publicKeyB64
+      })
+    )
+
+    const status = await client.openOrca()
+
+    expect(status.result.app.desktopWindowStatus).toBe('initializing')
+    expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
   it('connects through a saved environment selector', async () => {
@@ -128,6 +156,7 @@ async function startTestRuntime(
   statusOverrides: {
     runtimeProtocolVersion?: number
     minCompatibleRuntimeClientVersion?: number
+    desktopWindowStatus?: 'available' | 'openable' | 'initializing' | 'blocked'
   } = {}
 ): Promise<TestRuntime> {
   const serverKeyPair = generateKeyPair()
@@ -177,6 +206,7 @@ async function startTestRuntime(
                 rendererGraphEpoch: 1,
                 graphStatus: 'ready',
                 authoritativeWindowId: null,
+                desktopWindowStatus: statusOverrides.desktopWindowStatus,
                 liveTabCount: 0,
                 liveLeafCount: 0,
                 runtimeProtocolVersion:

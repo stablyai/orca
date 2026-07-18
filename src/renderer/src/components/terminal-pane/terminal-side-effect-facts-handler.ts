@@ -185,9 +185,9 @@ export type TerminalSideEffectFactConsumerOptions = {
   ptyId: string
   callbacks: TerminalSideEffectFactConsumerCallbacks
   /** Pull main's title-only replay snapshot on registration. Pane transports
-   *  use this in place of deriving titles from eager-buffer byte replay;
-   *  parked watchers skip it because the pane's runtime title slot is already
-   *  current at park time. */
+   *  use this in place of deriving titles from eager-buffer byte replay.
+   *  Ordinary parked watchers already have a current pane title; cold-started
+   *  watchers request it because no pane populated their slot. */
   restoreTitleOnRegister?: boolean
 }
 

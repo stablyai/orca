@@ -143,6 +143,9 @@ export const WorktreeCreate = z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
       .optional(),
+    // Why: mobile retries a create interrupted by a connection migration with the
+    // same key so the host dedupes instead of spawning a duplicate worktree.
+    clientMutationId: z.string().min(1).max(128).optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {

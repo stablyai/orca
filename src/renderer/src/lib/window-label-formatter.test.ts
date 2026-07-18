@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { formatWindowLabel } from './window-label-formatter'
+import { formatResetCountdown, formatResetDuration } from '../../../shared/rate-limit-reset-format'
+import { formatRateLimitWindowChipLabel, formatWindowLabel } from './window-label-formatter'
+
+const MIN = 60_000
+const HOUR = 60 * MIN
 
 describe('formatWindowLabel', () => {
   it('returns "5h" for 300 minutes', () => {
@@ -53,5 +57,32 @@ describe('formatWindowLabel', () => {
     // render the raw minute count rather than guess at a half-bucket label.
     expect(formatWindowLabel(75)).toBe('75m')
     expect(formatWindowLabel(150)).toBe('150m')
+  })
+})
+
+describe('formatRateLimitWindowChipLabel', () => {
+  // Why: repro for #8378 — Codex session chip said "5h" while the popup said
+  // "Resets in 2h 33m" for the same resetsAt. Both surfaces must share the
+  // remaining-time duration when a reset timestamp is available.
+  it('shows remaining time when resetsAt is known (repro-8378)', () => {
+    const now = 1_700_000_000_000
+    const remainingMs = 2 * HOUR + 33 * MIN
+    const window = { windowMinutes: 300, resetsAt: now + remainingMs }
+
+    expect(formatRateLimitWindowChipLabel(window, now)).toBe('2h 33m')
+    expect(formatRateLimitWindowChipLabel(window, now)).toBe(formatResetDuration(remainingMs))
+    expect(formatResetCountdown(remainingMs)).toBe('Resets in 2h 33m')
+  })
+
+  it('falls back to fixed window size when resetsAt is null', () => {
+    expect(formatRateLimitWindowChipLabel({ windowMinutes: 300, resetsAt: null })).toBe('5h')
+    expect(formatRateLimitWindowChipLabel({ windowMinutes: 10080, resetsAt: null })).toBe('wk')
+  })
+
+  it('reports "now" when the reset timestamp has already passed', () => {
+    const now = 1_700_000_000_000
+    expect(formatRateLimitWindowChipLabel({ windowMinutes: 300, resetsAt: now - MIN }, now)).toBe(
+      'now'
+    )
   })
 })

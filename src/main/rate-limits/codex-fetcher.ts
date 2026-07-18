@@ -9,6 +9,7 @@ import type {
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { join } from 'node:path'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { resolveCodexCommand } from '../codex-cli/command'
@@ -381,6 +382,7 @@ async function fetchBackendRateLimitResetCredits(
     signal
   })
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     return null
   }
   const payload = (await response.json()) as BackendRateLimitResetCreditsResponse
@@ -448,6 +450,7 @@ export async function consumeCodexRateLimitResetCredit(options: {
     }
   )
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     throw new Error(`Codex reset failed: HTTP ${response.status}`)
   }
   const payload = (await response.json()) as BackendConsumeRateLimitResetCreditResponse
@@ -531,6 +534,7 @@ async function fetchViaBackend(
     signal
   })
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     return null
   }
   const payload = (await response.json()) as BackendUsageResponse

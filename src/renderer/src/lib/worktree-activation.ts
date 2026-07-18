@@ -65,6 +65,9 @@ import { toast } from 'sonner'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -82,6 +85,7 @@ export type WorktreeStartupPayload = {
   draftPrompt?: string
   startupCommandDelivery?: StartupCommandDelivery
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
+  sessionOptions?: Record<string, SessionOptionValue>
   telemetry?: AgentStartedTelemetry
 }
 
@@ -259,6 +263,10 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+    sessionOptions: resolveNativeChatSessionOptionDefaults(
+      state.settings?.nativeChatSessionOptions,
+      agent
+    ),
     platform: launchPlatform,
     isRemote: repo ? repoIsRemote(repo) : false,
     allowEmptyPromptLaunch: true
@@ -272,6 +280,7 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
+    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
@@ -602,6 +611,13 @@ export function ensureWorktreeHasInitialTerminal(
   // pane so the main terminal begins in the requested agent session instead of
   // opening to an idle shell and forcing the user to repeat the same prompt.
   if (sequencedStartup) {
+    if (launchAgent) {
+      seedNativeChatAppliedSessionOptions(
+        terminalTab.id,
+        launchAgent,
+        sequencedStartup.sessionOptions
+      )
+    }
     store.queueTabStartupCommand(terminalTab.id, sequencedStartup)
   }
   queueSetupAndIssueCommands(
@@ -683,6 +699,14 @@ function applyDefaultTerminalTabs(
     store.setActiveTab(firstTabId)
   }
   if (startup) {
+    const startupAgent =
+      startup.launchAgent ??
+      (startup.telemetry
+        ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
+        : undefined)
+    if (startupAgent) {
+      seedNativeChatAppliedSessionOptions(firstTabId, startupAgent, startup.sessionOptions)
+    }
     store.queueTabStartupCommand(firstTabId, startup)
   }
   queueSetupAndIssueCommands(

@@ -104,6 +104,7 @@ describe('browserManager', () => {
     webContentsFromIdMock.mockReset()
     openPopupWithOriginBarMock.mockReset()
     browserManager.unregisterAll()
+    browserManager.setBrowserGuestStateChangedListener(null)
     browserManager.setDictationShortcutForwardingPredicate(null)
     browserManager.setSettingsResolver(() => ({}))
   })
@@ -250,6 +251,165 @@ describe('browserManager', () => {
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
   })
 
+  it('keeps plain links current and routes explicit new-tab gestures to Orca tabs', async () => {
+    const rendererSendMock = vi.fn()
+    const executeJavaScriptInIsolatedWorldMock = vi.fn().mockResolvedValue(undefined)
+    const guest = {
+      id: 141,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      executeJavaScriptInIsolatedWorld: executeJavaScriptInIsolatedWorldMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const domReadyHandler = guestOnMock.mock.calls.find(([event]) => event === 'dom-ready')?.[1] as
+      | (() => void)
+      | undefined
+    domReadyHandler?.()
+    await vi.waitFor(() => expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledTimes(1))
+
+    const managerState = browserManager as unknown as {
+      clickedLinkFrameNameByGuestId: Map<number, string>
+    }
+    const clickedLinkFrameName = managerState.clickedLinkFrameNameByGuestId.get(guest.id)
+    if (!clickedLinkFrameName) {
+      throw new Error('Expected a private clicked-link frame name')
+    }
+    expect(clickedLinkFrameName).toMatch(/^__orca_clicked_link_foreground_/)
+    expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledWith(
+      expect.any(Number),
+      [
+        expect.objectContaining({
+          code: expect.stringContaining(
+            `${JSON.stringify(clickedLinkFrameName)},${process.platform === 'darwin'})`
+          )
+        })
+      ],
+      false
+    )
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+      frameName: string
+    }) => { action: 'allow' | 'deny' }
+    expect(
+      handler({
+        url: 'https://docs.example.com/guide',
+        frameName: clickedLinkFrameName
+      })
+    ).toEqual({ action: 'deny' })
+
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
+      browserPageId: 'browser-1',
+      url: 'https://docs.example.com/guide'
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-1',
+      origin: 'https://docs.example.com',
+      action: 'opened-in-orca'
+    })
+    expect(openPopupWithOriginBarMock).not.toHaveBeenCalled()
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+  })
+
+  it('routes child-frame gestures with one-use tokens', async () => {
+    const rendererSendMock = vi.fn()
+    const executeJavaScriptMock = vi.fn().mockResolvedValue(undefined)
+    const frameOnceMock = vi.fn()
+    const frame = {
+      parent: {},
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: executeJavaScriptMock,
+      once: frameOnceMock,
+      off: vi.fn()
+    }
+    const guest = {
+      id: 142,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      executeJavaScriptInIsolatedWorld: vi.fn().mockResolvedValue(undefined)
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-frame',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    const frameCreatedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'frame-created'
+    )?.[1] as ((event: Electron.Event, details: Electron.FrameCreatedDetails) => void) | undefined
+    frameCreatedHandler?.({} as Electron.Event, { frame } as never)
+    const frameDomReadyHandler = frameOnceMock.mock.calls.find(
+      ([event]) => event === 'dom-ready'
+    )?.[1] as (() => void) | undefined
+    frameDomReadyHandler?.()
+
+    await vi.waitFor(() => expect(executeJavaScriptMock).toHaveBeenCalledTimes(1))
+    const firstScript = executeJavaScriptMock.mock.calls[0][0] as string
+    const foregroundFrameName = firstScript.match(
+      /__orca_clicked_link_iframe_foreground_[0-9a-f-]+/
+    )?.[0]
+    if (!foregroundFrameName) {
+      throw new Error('Expected a private child-frame routing token')
+    }
+    expect(firstScript).toContain('installBrowserIframeClickedLinkRouting')
+    expect(executeJavaScriptMock).toHaveBeenCalledWith(firstScript, false)
+
+    const popupHandler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+      frameName: string
+    }) => { action: string }
+    expect(
+      popupHandler({
+        url: 'https://docs.example.com/from-frame',
+        frameName: foregroundFrameName
+      })
+    ).toEqual({ action: 'deny' })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
+      browserPageId: 'browser-frame',
+      url: 'https://docs.example.com/from-frame'
+    })
+
+    await vi.waitFor(() => expect(executeJavaScriptMock).toHaveBeenCalledTimes(2))
+    const secondScript = executeJavaScriptMock.mock.calls[1][0] as string
+    expect(secondScript).not.toContain(foregroundFrameName)
+  })
+
   it('hosts allowed popups in an origin-bar window with inherited guest policies', () => {
     const rendererSendMock = vi.fn()
     const guestOnceMock = vi.fn()
@@ -320,6 +480,7 @@ describe('browserManager', () => {
     // attached directly here.
     expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
     expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
+    expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
     // The renderer notice carries only the sanitized origin, never the URL.
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
@@ -421,6 +582,45 @@ describe('browserManager', () => {
     })
 
     expect(browserManager.getSessionProfileIdForTab('browser-1')).toBe('work')
+  })
+
+  it('tracks offscreen load failures for the owning worktree snapshot', () => {
+    const stateChanged = vi.fn()
+    const offscreenGuest = {
+      id: 605,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://localhost:3443/')
+    }
+    webContentsFromIdMock.mockReturnValue(offscreenGuest)
+    browserManager.setBrowserGuestStateChangedListener(stateChanged)
+
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'offscreen-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: offscreenGuest.id
+    })
+    const didFailLoad = offscreenGuest.on.mock.calls.find(
+      ([event]) => event === 'did-fail-load'
+    )?.[1] as (
+      event: unknown,
+      errorCode: number,
+      errorDescription: string,
+      validatedUrl: string,
+      isMainFrame: boolean
+    ) => void
+    didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
+
+    expect(browserManager.getBrowserPageLoadError('offscreen-page')).toEqual({
+      code: -202,
+      description: 'Certificate authority invalid',
+      validatedUrl: 'https://localhost:3443/'
+    })
+    expect(stateChanged).toHaveBeenCalledWith('remote-worktree')
   })
 
   it('falls back to opening popup URLs externally before a guest is registered', () => {
@@ -1000,12 +1200,19 @@ describe('browserManager', () => {
       webContentsId: 102,
       rendererWebContentsId
     })
+    // Why: attach-before-registration teardown skips unregisterGuest, so global
+    // cleanup must independently release the private click-routing token.
+    browserManager.attachGuestPolicies({ ...guest, id: 103 } as never)
 
     browserManager.unregisterAll()
 
     expect(browserManager.getGuestWebContentsId('browser-1')).toBeNull()
     expect(browserManager.getGuestWebContentsId('browser-2')).toBeNull()
     expect(guestOffMock).toHaveBeenCalled()
+    const managerState = browserManager as unknown as {
+      clickedLinkFrameNameByGuestId: Map<number, unknown>
+    }
+    expect(managerState.clickedLinkFrameNameByGuestId.size).toBe(0)
   })
 
   it('rejects non-webview guest types to prevent privilege escalation', () => {
@@ -1421,6 +1628,163 @@ describe('browserManager', () => {
         validatedUrl: 'http://localhost:3000/'
       }
     })
+    expect(browserManager.getBrowserPageLoadError('browser-1')).toEqual({
+      code: -105,
+      description: 'Name not resolved',
+      validatedUrl: 'http://localhost:3000/'
+    })
+
+    const didStartNavigationHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-start-navigation'
+    )?.[1] as
+      | ((event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void)
+      | undefined
+    didStartNavigationHandler?.(null, 'http://localhost:3000/retry', false, true)
+    expect(browserManager.getBrowserPageLoadError('browser-1')).toBeNull()
+  })
+
+  it('drops a queued failure when a replacement navigation starts before registration', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 407,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com/')
+    }
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === guest.id
+        ? guest
+        : id === rendererWebContentsId
+          ? { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+          : null
+    )
+
+    browserManager.attachGuestPolicies(guest as never)
+    const didFailLoad = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-fail-load'
+    )?.[1] as (
+      event: unknown,
+      errorCode: number,
+      errorDescription: string,
+      validatedUrl: string,
+      isMainFrame: boolean
+    ) => void
+    const didStartNavigation = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-start-navigation'
+    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
+    didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
+    didStartNavigation(null, 'https://example.com/', false, true)
+    expect(
+      browserManager.registerGuest({
+        browserPageId: 'browser-late-registration',
+        webContentsId: guest.id,
+        rendererWebContentsId
+      })
+    ).toBe(true)
+
+    expect(rendererSendMock).not.toHaveBeenCalledWith(
+      'browser:guest-load-failed',
+      expect.anything()
+    )
+    expect(browserManager.getBrowserPageLoadError('browser-late-registration')).toBeNull()
+  })
+
+  it('keeps a certificate failure until a real main-frame navigation starts', () => {
+    const guest = {
+      id: 405,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      send: vi.fn(),
+      getURL: vi.fn(() => 'chrome-error://chromewebdata/')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    const didStartNavigation = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-start-navigation'
+    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+    const didFailLoad = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-fail-load'
+    )?.[1] as (
+      event: unknown,
+      errorCode: number,
+      errorDescription: string,
+      validatedUrl: string,
+      isMainFrame: boolean
+    ) => void
+
+    browserManager.registerGuest({
+      browserPageId: 'browser-certificate-page',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
+    didStartNavigation(null, 'chrome-error://chromewebdata/', false, true)
+    expect(browserManager.getBrowserPageLoadError('browser-certificate-page')?.code).toBe(-202)
+
+    didStartNavigation(null, 'https://localhost:3443/', false, true)
+    expect(browserManager.getBrowserPageLoadError('browser-certificate-page')).toBeNull()
+  })
+
+  it('restores a certificate failure when a retry navigation aborts before committing', () => {
+    const guest = {
+      id: 406,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      send: vi.fn(),
+      getURL: vi.fn(() => 'chrome-error://chromewebdata/')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    const didStartNavigation = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-start-navigation'
+    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+    const didFailLoad = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-fail-load'
+    )?.[1] as (
+      event: unknown,
+      errorCode: number,
+      errorDescription: string,
+      validatedUrl: string,
+      isMainFrame: boolean
+    ) => void
+
+    browserManager.registerGuest({
+      browserPageId: 'browser-retry-abort-page',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
+    // Retry: the new navigation starts (overlay optimistically cleared)...
+    didStartNavigation(null, 'https://localhost:3443/', false, true)
+    expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')).toBeNull()
+    // ...then aborts (ERR_ABORTED) before committing, so the error is restored.
+    didFailLoad(null, -3, 'Aborted', 'https://localhost:3443/', true)
+    expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')?.code).toBe(-202)
+
+    // A fresh navigation from a non-errored state drops the stash, so a later
+    // abort cannot resurrect the old error.
+    didStartNavigation(null, 'https://localhost:3443/', false, true) // stashes -202, clears active
+    didStartNavigation(null, 'https://example.com/', false, true) // active empty -> drops stash
+    didFailLoad(null, -3, 'Aborted', 'https://example.com/', true)
+    expect(browserManager.getBrowserPageLoadError('browser-retry-abort-page')).toBeNull()
   })
 
   it('queues permission denials and download requests until the guest registers', () => {
@@ -1993,6 +2357,15 @@ describe('browserManager', () => {
       },
       {
         type: 'keyDown',
+        code: 'BracketRight',
+        key: ']',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: true,
+        shift: false
+      },
+      {
+        type: 'keyDown',
         code: 'PageDown',
         key: 'PageDown',
         meta: false,
@@ -2047,12 +2420,13 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:newTerminalTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTab', 1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTerminalTab', 1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:openQuickOpen')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:focusBrowserAddressBar')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:reloadBrowserPage')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:hardReloadBrowserPage')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTabAcrossAllTypes', 1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTab', 1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:switchTerminalTab', 1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:openQuickOpen')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:focusBrowserAddressBar')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:reloadBrowserPage')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage')
   })
 
   it('uses customized keybindings when forwarding browser guest shortcuts', () => {

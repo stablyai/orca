@@ -16,6 +16,13 @@ const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
+// Why: Git for Windows' bash inherits the ConPTY console's OEM code page
+// (CP437), so a TUI that writes UTF-8 bytes straight to the console — agents
+// like Claude Code use WriteFile, not WriteConsoleW — renders as mojibake
+// (`❯` -> `Γ¥»`). Switch the console to UTF-8, then exec the normal interactive
+// login shell; cmd.exe and PowerShell already do the equivalent. The `;` (not
+// `&&`) keeps startup working even if chcp.com is missing.
+const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -176,7 +183,7 @@ export function resolveWindowsShellLaunchArgs(
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['--login', '-i'],
+      shellArgs: ['-c', GIT_BASH_UTF8_LOGIN_COMMAND],
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

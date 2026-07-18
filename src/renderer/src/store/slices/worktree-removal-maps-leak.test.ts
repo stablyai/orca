@@ -121,6 +121,11 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
         [WT1]: [makeOpenFile({ id: '/path/wt1/closed.ts', worktreeId: WT1 })],
         [WT2]: [makeOpenFile({ id: '/path/wt2/closed.ts', worktreeId: WT2 })]
       },
+      recentlyClosedTerminalTabsByWorktree: {
+        [WT1]: [{ startupCwd: '/path/wt1' }],
+        [WT2]: [{ startupCwd: '/path/wt2' }]
+      },
+      recentlyClosedTabKindsByWorktree: { [WT1]: ['terminal'], [WT2]: ['terminal'] },
       defaultTerminalTabsAppliedByWorktreeId: { [WT1]: true, [WT2]: true }
     })
   }
@@ -135,10 +140,14 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     // Evicted for the removed worktree.
     expect(s.remoteStatusesByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT1]).toBeUndefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT1]).toBeUndefined()
     // Retained for the surviving worktree (guard over-eviction).
     expect(s.remoteStatusesByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT2]).toBeDefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT2]).toBe(true)
   })
 
@@ -152,9 +161,13 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     const s = store.getState()
     expect(s.remoteStatusesByWorktree[WT1]).toBeUndefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT1]).toBeUndefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT1]).toBeUndefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT1]).toBeUndefined()
     expect(s.remoteStatusesByWorktree[WT2]).toBeDefined()
     expect(s.recentlyClosedEditorTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[WT2]).toBeDefined()
+    expect(s.recentlyClosedTabKindsByWorktree[WT2]).toBeDefined()
     expect(s.defaultTerminalTabsAppliedByWorktreeId[WT2]).toBe(true)
   })
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
+import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -47,6 +48,10 @@ type AgentSkillSetupPanelProps = {
   openingHint?: ReactNode
   footer?: ReactNode
   onRecheck: () => void | Promise<unknown>
+  // Why: when set, the installed pill reflects skill freshness and Re-check also
+  // refreshes the freshness inventory. Callers omit it for non-local runtimes,
+  // which the local-host-only freshness scan cannot vouch for.
+  freshnessSkillName?: string
 }
 
 export function AgentSkillSetupPanel({
@@ -79,7 +84,8 @@ export function AgentSkillSetupPanel({
   actionHint,
   openingHint,
   footer,
-  onRecheck
+  onRecheck,
+  freshnessSkillName
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
@@ -211,7 +217,12 @@ export function AgentSkillSetupPanel({
           variant="ghost"
           size="sm"
           className="gap-1.5"
-          onClick={() => void onRecheck()}
+          onClick={() => {
+            void onRecheck()
+            if (freshnessSkillName) {
+              notifyInstalledAgentSkillsChanged()
+            }
+          }}
           disabled={loading}
         >
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
@@ -264,12 +275,16 @@ export function AgentSkillSetupPanel({
                     )}
                   </IntegrationStatusPill>
                 ) : installed ? (
-                  <IntegrationStatusPill tone="connected">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
-                      'Installed'
-                    )}
-                  </IntegrationStatusPill>
+                  freshnessSkillName ? (
+                    <SkillFreshnessStatusPill skillName={freshnessSkillName} />
+                  ) : (
+                    <IntegrationStatusPill tone="connected">
+                      {translate(
+                        'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
+                        'Installed'
+                      )}
+                    </IntegrationStatusPill>
+                  )
                 ) : (
                   <IntegrationStatusPill tone="attention">
                     {translate(

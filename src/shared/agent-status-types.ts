@@ -224,6 +224,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
+  /** Resume identity update only; the status-shaped fields are transport placeholders. */
+  providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
 }

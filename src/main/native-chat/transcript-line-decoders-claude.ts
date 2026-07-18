@@ -1,6 +1,10 @@
 // Claude JSONL line → NativeChatMessage decoder.
 
-import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
+import {
+  NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
+  type NativeChatBlock,
+  type NativeChatMessage
+} from '../../shared/native-chat-types'
 import {
   asRecord,
   extractString,
@@ -8,6 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { claudeInterruptedMessageId } from './transcript-turn-markers'
 
 export function decodeClaudeTranscriptLine(
   line: string,
@@ -20,6 +25,19 @@ export function decodeClaudeTranscriptLine(
   const role = record.type
   if (role !== 'user' && role !== 'assistant') {
     return null
+  }
+  const timestamp = parseTimestamp(record.timestamp)
+  const recordMessageId = extractString(record.uuid) ?? fallbackId
+  if (claudeInterruptedMessageId(record)) {
+    // Why: keep Claude's injected boilerplate out of the user-bubble path while
+    // preserving the interruption as a quiet, replayable conversation status.
+    return {
+      id: recordMessageId,
+      role: 'system',
+      blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
+      timestamp,
+      source: 'transcript'
+    }
   }
   const message = asRecord(record.message)
   const decodedBlocks = claudeContentBlocks(message?.content)
@@ -42,7 +60,7 @@ export function decodeClaudeTranscriptLine(
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks),
     blocks,
-    timestamp: parseTimestamp(record.timestamp),
+    timestamp,
     source: 'transcript'
   }
 }

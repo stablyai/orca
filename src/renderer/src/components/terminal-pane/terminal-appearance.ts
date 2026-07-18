@@ -10,7 +10,7 @@ import {
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
 import { guardParserHandler } from './terminal-parser-handler-guard'
-import { captureScrollState, restoreScrollState, safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
@@ -300,21 +300,26 @@ export function applyTerminalAppearance(
     // separate hook and lets live toggles (settings change, font swap)
     // land immediately.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
-    try {
-      const state = captureScrollState(pane.terminal)
-      safeFit(pane)
-      restoreScrollState(pane.terminal, state)
-    } catch {
-      /* ignore */
-    }
     const transport = paneTransports.get(pane.id)
     // Why: skip PTY resize when a mobile-fit override is active — the PTY
     // is already at the correct phone dimensions and must not be resized
     // back to desktop dimensions by an appearance change.
     const appearancePtyId = transport?.getPtyId()
     if (transport?.isConnected() && (!appearancePtyId || !getFitOverrideForPty(appearancePtyId))) {
-      transport.resize(pane.terminal.cols, pane.terminal.rows)
       maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
+      safeFitAndThen(pane, 'appearance-pty-resize', () => {
+        const currentTransport = paneTransports.get(pane.id)
+        if (
+          currentTransport !== transport ||
+          !transport.isConnected() ||
+          transport.getPtyId() !== appearancePtyId
+        ) {
+          return
+        }
+        transport.resize(pane.terminal.cols, pane.terminal.rows)
+      })
+    } else {
+      safeFit(pane)
     }
   }
 

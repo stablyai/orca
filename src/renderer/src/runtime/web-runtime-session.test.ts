@@ -490,6 +490,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
         launchAgent: 'codex',
+        viewMode: 'chat',
         activate: true
       })
     ).resolves.toBe(true)
@@ -510,6 +511,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
         launchAgent: 'codex',
+        viewMode: 'chat',
         activate: true
       },
       timeoutMs: 15_000

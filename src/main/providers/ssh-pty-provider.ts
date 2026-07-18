@@ -154,6 +154,7 @@ export class SshPtyProvider implements IPtyProvider {
       // Pi-compatible agent is being launched, while commandDelivery tells it
       // whether to submit the command itself for runtime-owned background PTYs.
       ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.shellOverride !== undefined ? { shellOverride: opts.shellOverride } : {}),
       ...(opts.terminalWindowsWslDistro !== undefined
         ? { terminalWindowsWslDistro: opts.terminalWindowsWslDistro }
