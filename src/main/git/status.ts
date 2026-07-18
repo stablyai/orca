@@ -31,12 +31,10 @@ import {
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
-import {
-  gitExecFileAsync,
-  gitExecFileAsyncBuffer,
-  gitOptionalLocksDisabledEnv,
-  gitStreamStdout
-} from './runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
+import { gitStatusExecBatchAsync } from './wsl-status-batch'
+import { gitStatusExecFileAsync } from './wsl-status-runner'
+import { gitStatusStreamStdout } from './wsl-status-stream'
 import { StatusPorcelainParser } from './status-porcelain-parser'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
@@ -300,7 +298,7 @@ async function runGetStatus(
   const conflictOperation = await conflictPromise
 
   try {
-    const { stoppedEarly } = await gitStreamStdout(statusArgs, {
+    const { stoppedEarly } = await gitStatusStreamStdout(statusArgs, {
       cwd: worktreePath,
       wslDistro: options.wslDistro,
       // Why: status polling is read-like; avoid refreshing the index and racing
@@ -553,18 +551,10 @@ async function runNumstat(
   options: GitRuntimeOptions = {}
 ): Promise<Map<string, GitLineStats> | null> {
   try {
-    const { stdout } = await gitExecFileAsync(
-      [
-        '-c',
-        'core.quotePath=false',
-        'diff',
-        '-z',
-        ...(cached ? ['--cached'] : []),
-        '--numstat',
-        '-M'
-      ],
-      { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
-    )
+    const { stdout } = await gitStatusExecFileAsync(numstatArgs(cached), {
+      ...gitOptionsForWorktree(worktreePath, options),
+      env: gitOptionalLocksDisabledEnv()
+    })
     return parseNumstat(stdout)
   } catch (error) {
     // Why: an aborted pass must reject so a cancelled scan is never treated as
@@ -578,6 +568,41 @@ async function runNumstat(
     // map) tells the caller the pass is incomplete and must not be cached.
     return null
   }
+}
+
+function numstatArgs(cached: boolean): string[] {
+  return [
+    '-c',
+    'core.quotePath=false',
+    'diff',
+    '-z',
+    ...(cached ? ['--cached'] : []),
+    '--numstat',
+    '-M'
+  ]
+}
+
+async function runTrackedNumstats(
+  worktreePath: string,
+  hasStaged: boolean,
+  hasUnstaged: boolean,
+  options: GitRuntimeOptions
+): Promise<[Map<string, GitLineStats> | null, Map<string, GitLineStats> | null]> {
+  const emptyStats = new Map<string, GitLineStats>()
+  if (!hasStaged || !hasUnstaged) {
+    return Promise.all([
+      hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
+      hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats)
+    ])
+  }
+  const results = await gitStatusExecBatchAsync([numstatArgs(true), numstatArgs(false)], {
+    ...gitOptionsForWorktree(worktreePath, options),
+    env: gitOptionalLocksDisabledEnv()
+  })
+  return [
+    results[0] ? parseNumstat(results[0].stdout) : null,
+    results[1] ? parseNumstat(results[1].stdout) : null
+  ]
 }
 
 /** Returns false when a numstat pass failed, so callers skip caching it. */
@@ -594,12 +619,11 @@ async function attachLineStats(
   const untrackedPaths = entries
     .filter((entry) => entry.area === 'untracked')
     .map((entry) => entry.path)
-  const emptyStats = new Map<string, GitLineStats>()
-  const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
-    hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
-    hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
+  const [[stagedStats, unstagedStats], untrackedStats] = await Promise.all([
+    runTrackedNumstats(worktreePath, hasStaged, hasUnstaged, options),
     collectUntrackedAdditions(worktreePath, untrackedPaths, options.signal)
   ])
+  const emptyStats = new Map<string, GitLineStats>()
   for (const entry of entries) {
     applyLineStats(
       entry,
@@ -804,7 +828,7 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
   } else if (cached) {
     try {
       const status = await getGitUpstreamStatusForUpstreamName(
-        (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
+        (args) => gitStatusExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
         cached.upstreamName
       )
       return { status, probedSameNameOriginRef: false }
@@ -842,7 +866,7 @@ async function probeEffectiveUpstreamStatus(
 ): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
   let probedSameNameOriginRef = false
   const snapshotRunner = createGitConfigSnapshotRunner((args) =>
-    gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+    gitStatusExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
   )
   const status = await getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {

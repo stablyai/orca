@@ -38,6 +38,17 @@ describe('classifySubprocessCommand', () => {
       classifySubprocessCommand('wsl.exe', ['-d', 'Ubuntu', '--', 'git', 'status', '--porcelain'])
     ).toBe('git status')
     expect(classifySubprocessCommand('wsl.exe', ['-d', 'Ubuntu'])).toBe('wsl')
+    expect(
+      classifySubprocessCommand('wsl.exe', [
+        '-d',
+        'Ubuntu',
+        '--',
+        '/bin/sh',
+        '-c',
+        "cd '/repo' && exec '/usr/bin/git' 'status'",
+        'orca:git status'
+      ])
+    ).toBe('git status')
   })
 
   it('falls back to the binary name when no subcommand exists', () => {

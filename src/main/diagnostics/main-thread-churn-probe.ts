@@ -49,6 +49,15 @@ export function classifySubprocessCommand(command: string, args: readonly string
       return 'wsl'
     }
     binary = binaryName(unwrapped)
+    if (binary === 'sh') {
+      const commandIndex = rest.findIndex((arg) => arg === '-c' || arg === '-lc')
+      const shellName = commandIndex < 0 ? undefined : rest[commandIndex + 2]
+      // Why: cached WSL git uses a non-login shell to preserve a version
+      // manager shim's cwd; its explicit $0 keeps churn evidence under git.
+      if (shellName?.startsWith('orca:git')) {
+        return shellName.slice('orca:'.length)
+      }
+    }
   }
   if (!SUBCOMMAND_BINARIES.has(binary)) {
     return binary

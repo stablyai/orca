@@ -319,7 +319,7 @@ function createAbortError(): Error {
   return error
 }
 
-function killSpawnedCommandTree(child: ChildProcess): void {
+export function killSpawnedCommandTree(child: ChildProcess): void {
   const pid = child.pid
   if (!pid || process.platform !== 'win32') {
     child.kill()

@@ -30,24 +30,40 @@ const {
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileAsyncBuffer: gitExecFileAsyncBufferMock,
-  // Why: getStatus now streams status output. The mock pulls the next queued
-  // stdout from gitExecFileAsyncMock and feeds it to onStdout, so existing tests
-  // that seed the status call via `gitExecFileAsyncMock.mockResolvedValueOnce`
-  // keep working unchanged and call ordering (status, then numstat) is preserved.
-  gitStreamStdout: async (
-    args: string[],
-    options: { onStdout: (chunk: string) => boolean | void }
-  ) => {
-    // Forward args so arg-routing mock implementations (e.g. `args.includes`)
-    // still match the status read.
-    const { stdout } = await gitExecFileAsyncMock(args)
-    const stoppedEarly = options.onStdout(stdout ?? '') === true
-    return { stoppedEarly }
-  },
   gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
     ...env,
     GIT_OPTIONAL_LOCKS: '0'
   })
+}))
+
+vi.mock('./wsl-status-runner', () => ({
+  gitStatusExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('./wsl-status-stream', () => ({
+  gitStatusStreamStdout: async (
+    args: string[],
+    options: { onStdout: (chunk: string) => boolean | void }
+  ) => {
+    const { stdout } = await gitExecFileAsyncMock(args)
+    return { stoppedEarly: options.onStdout(stdout ?? '') === true }
+  }
+}))
+
+vi.mock('./wsl-status-batch', () => ({
+  gitStatusExecBatchAsync: (commands: string[][], options: { signal?: AbortSignal }) =>
+    Promise.all(
+      commands.map(async (args) => {
+        try {
+          return await gitExecFileAsyncMock(args, options)
+        } catch (error) {
+          if (options.signal?.aborted) {
+            throw error
+          }
+          return null
+        }
+      })
+    )
 }))
 
 vi.mock('fs/promises', () => ({
