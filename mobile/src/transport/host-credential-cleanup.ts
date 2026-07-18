@@ -219,7 +219,7 @@ export async function scheduleHostCredentialCleanup(
   hostId: string,
   deleteCredential: DeleteHostCredential,
   timeoutMs = CLEANUP_CONFIRM_TIMEOUT_MS
-): Promise<void> {
+): Promise<boolean> {
   const recorded = await recordCleanupIntent(hostId)
   if (!recorded) {
     // Why: the only durable recovery handle failed to persist. Hold an in-memory
@@ -228,6 +228,7 @@ export async function scheduleHostCredentialCleanup(
     markUnrecordedPending(hostId)
   }
   void confirmNativeCleanup(hostId, deleteCredential, timeoutMs).catch(() => {})
+  return recorded
 }
 
 export async function retryPendingHostCredentialCleanups(

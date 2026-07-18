@@ -4,8 +4,11 @@ import type { HostProfile } from './types'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { relayWebSocketUrl } from './mobile-access-route-order'
 
+export class MobileRelayRouteInactiveError extends Error {}
+
 export function isDirectorResolutionFailure(error: Error): boolean {
   return (
+    !(error instanceof MobileRelayRouteInactiveError) &&
     !(error instanceof MobileE2EEAuthenticationError) &&
     (!(error instanceof RelayOuterError) || [4409, 4503, 1006].includes(error.code))
   )
@@ -41,6 +44,10 @@ export function encodeBase64Url(value: Uint8Array): string {
 
 export function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+export function remainingRouteMs(deadline: number, now: () => number): number {
+  return Math.max(1, deadline - now())
 }
 
 export async function withEndpointRouteDeadline<T>(args: {

@@ -1,18 +1,11 @@
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
-import {
-  isDirectorResolutionFailure,
-  persistRelayHost,
-  withEndpointRouteDeadline
-} from './mobile-endpoint-supervisor-support'
-import {
-  mobileRelayCredentialNeedsRotation,
-  rotateMobileRelayCredential
-} from './mobile-relay-credential-rotation'
+import { remainingRouteMs } from './mobile-endpoint-supervisor-support'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import { MobileRelayCredentialRotationController } from './mobile-relay-credential-rotation-controller'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
+import { MobileRelayHostPersistence } from './mobile-relay-host-persistence'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
-import { orderedHostAccessRoutes, relayWebSocketUrl } from './mobile-access-route-order'
-import { keepMobileRelayRouteActive, openMobileRelayRoute } from './mobile-relay-route-connection'
+import { orderedHostAccessRoutes } from './mobile-access-route-order'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import type { RpcClient } from './rpc-client'
 import {
@@ -22,10 +15,11 @@ import {
 import type { HostProfile, MobileAccessEndpoint } from './types'
 import { MobileEndpointReconnectPolicy } from './mobile-endpoint-reconnect-policy'
 import { MobileEndpointSupervisorTimers } from './mobile-endpoint-supervisor-timers'
+import { MobileRelayCredentialBundleLoader } from './mobile-relay-credential-bundle-loader'
+import { MobileRelayOrderedRouteAttempt } from './mobile-relay-ordered-route-attempt'
 
 const ROUTE_AUTH_TIMEOUT_MS = 3_500
 const RECONNECT_PASS_TIMEOUT_MS = 20_000
-type RelayRouteAttempt = { ok: true } | { ok: false; error: Error; authenticationFailed: boolean }
 
 export type MobileEndpointSupervisorDependencies = {
   openDirect: (endpoint: string) => RpcClient
@@ -37,6 +31,7 @@ export type MobileEndpointSupervisorDependencies = {
   resolveRelay: typeof resolveMobileRelayEndpoint
   readBundle: (hostId: string) => Promise<MobileRelayCredentialBundle | null>
   writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
+  deleteBundle: (hostId: string) => Promise<void>
   saveHost: (host: HostProfile) => Promise<void>
   updateLastGood: (hostId: string, endpoint: string) => Promise<void>
   now: () => number
@@ -47,13 +42,16 @@ export type MobileEndpointSupervisorDependencies = {
 
 export class MobileEndpointSupervisor {
   private host: HostProfile
-  private bundle: MobileRelayCredentialBundle | null = null
   private stopped = false
   private foreground = true
   private operationInFlight = false
-  private rotationInFlight = false
+  private stickyLastGoodEligible = true
   private readonly reconnectPolicy = new MobileEndpointReconnectPolicy()
   private readonly timers: MobileEndpointSupervisorTimers
+  private readonly relayPersistence: MobileRelayHostPersistence
+  private readonly credentialRotation: MobileRelayCredentialRotationController
+  private readonly bundleLoader: MobileRelayCredentialBundleLoader
+  private readonly relayRouteAttempt: MobileRelayOrderedRouteAttempt
   private unsubscribeState: (() => void) | null = null
 
   constructor(
@@ -63,11 +61,58 @@ export class MobileEndpointSupervisor {
   ) {
     this.host = host
     this.timers = new MobileEndpointSupervisorTimers(dependencies.setTimer, dependencies.clearTimer)
+    this.relayPersistence = new MobileRelayHostPersistence(
+      dependencies.writeBundle,
+      dependencies.deleteBundle,
+      dependencies.saveHost,
+      dependencies.randomBytes,
+      dependencies.setTimer,
+      dependencies.clearTimer
+    )
+    this.bundleLoader = new MobileRelayCredentialBundleLoader(
+      dependencies.readBundle,
+      dependencies.setTimer,
+      dependencies.clearTimer
+    )
+    this.relayRouteAttempt = new MobileRelayOrderedRouteAttempt(
+      logical,
+      this.bundleLoader,
+      this.relayPersistence,
+      this.timers,
+      () => this.host,
+      (host) => {
+        this.host = host
+      },
+      () => !this.stopped && this.foreground,
+      (url) => this.recordLastGood(url),
+      () => void this.reconnectInOrder(true),
+      dependencies
+    )
+    this.credentialRotation = new MobileRelayCredentialRotationController(
+      logical,
+      this.relayPersistence,
+      () => this.host,
+      () => this.bundleLoader.current(),
+      (result) => {
+        this.host = result.host
+        this.bundleLoader.replace(result.bundle)
+      },
+      () => !this.stopped && this.foreground,
+      dependencies.now
+    )
   }
 
   async start(): Promise<void> {
     if (this.host.relay) {
-      this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
+      this.bundleLoader.start(this.host.id, () => {
+        if (
+          !this.stopped &&
+          this.logical.getState() === 'connected' &&
+          this.logical.getActivePath() !== 'relay'
+        ) {
+          void this.credentialRotation.rotateIfNeeded()
+        }
+      })
     }
     if (this.stopped) {
       return
@@ -78,23 +123,21 @@ export class MobileEndpointSupervisor {
       }
       if (state === 'connected') {
         if (this.logical.getActivePath() !== 'relay') {
-          void this.rotateCredentialIfNeeded()
+          void this.credentialRotation.rotateIfNeeded()
         }
       } else if (state === 'reconnecting' || state === 'disconnected') {
         void this.reconnectInOrder()
       }
     })
-    const state = this.logical.getState()
-    if (state === 'connected') {
+    if (this.logical.getState() === 'connected') {
       if (this.logical.getActivePath() !== 'relay') {
-        await this.rotateCredentialIfNeeded()
+        await this.credentialRotation.rotateIfNeeded()
       }
       return
     }
-    if (state === 'auth-failed') {
-      return
+    if (this.logical.getState() !== 'auth-failed') {
+      await this.reconnectInOrder()
     }
-    await this.reconnectInOrder()
   }
 
   setForeground(foreground: boolean): void {
@@ -136,7 +179,8 @@ export class MobileEndpointSupervisor {
     }
     const passDeadline = this.dependencies.now() + RECONNECT_PASS_TIMEOUT_MS
     try {
-      for (const route of orderedHostAccessRoutes(this.host)) {
+      const routes = orderedHostAccessRoutes(this.host, this.stickyLastGoodEligible)
+      for (const [index, route] of routes.entries()) {
         if (this.stopped || !this.foreground) {
           return
         }
@@ -145,12 +189,23 @@ export class MobileEndpointSupervisor {
           break
         }
         if (await this.tryRoute(route, passDeadline)) {
+          if (this.logical.getState() === 'connected') {
+            this.stickyLastGoodEligible = true
+          }
           this.reconnectPolicy.reset()
           return
+        }
+        if (index === 0 && route.url === this.host.lastGoodEndpoint) {
+          // Why: one dead sticky hint must not tax every retry pass; configured
+          // user order resumes until another route authenticates successfully.
+          this.stickyLastGoodEligible = false
         }
       }
     } finally {
       this.operationInFlight = false
+    }
+    if (this.stopped || !this.foreground) {
+      return
     }
     const replacingLiveSession = forceReplacement && this.logical.getState() === 'connected'
     const delay = replacingLiveSession
@@ -165,7 +220,7 @@ export class MobileEndpointSupervisor {
   private async tryRoute(route: MobileAccessEndpoint, passDeadline: number): Promise<boolean> {
     const routeDeadline = Math.min(passDeadline, this.dependencies.now() + ROUTE_AUTH_TIMEOUT_MS)
     if (route.kind === 'relay') {
-      return this.tryRelayRoute(routeDeadline)
+      return this.relayRouteAttempt.try(routeDeadline)
     }
     let session: RpcClient
     try {
@@ -177,11 +232,11 @@ export class MobileEndpointSupervisor {
       await this.logical.migrateTo(
         session,
         directPathForEndpoint(this.host, route.url),
-        this.remainingMs(routeDeadline)
+        remainingRouteMs(routeDeadline, this.dependencies.now)
       )
-      await this.recordLastGood(route.url)
+      this.recordLastGood(route.url)
       this.timers.clearAll()
-      void this.rotateCredentialIfNeeded()
+      void this.credentialRotation.rotateIfNeeded()
       return true
     } catch (error) {
       session.close()
@@ -194,124 +249,10 @@ export class MobileEndpointSupervisor {
     }
   }
 
-  private async tryRelayRoute(routeDeadline: number): Promise<boolean> {
-    if (!this.bundle || !this.host.relay) {
-      return false
-    }
-    const credentials = [this.bundle.current, this.bundle.grace].filter(
-      (credential): credential is NonNullable<typeof credential> =>
-        Boolean(credential && credential.expiresAt > this.dependencies.now())
-    )
-    for (const credential of credentials) {
-      if (this.dependencies.now() >= routeDeadline) {
-        return false
-      }
-      const first = await this.openAndMigrateRelay(credential, routeDeadline)
-      if (first.ok) {
-        return true
-      }
-      if (first.authenticationFailed) {
-        return true
-      }
-      if (!isDirectorResolutionFailure(first.error) || !this.host.relay) {
-        continue
-      }
-      try {
-        const resolved = await withEndpointRouteDeadline({
-          promise: this.dependencies.resolveRelay({
-            relay: this.host.relay,
-            resumeToken: credential.token
-          }),
-          timeoutMs: this.remainingMs(routeDeadline),
-          setTimer: this.dependencies.setTimer,
-          clearTimer: this.dependencies.clearTimer
-        })
-        this.host = await persistRelayHost(this.host, resolved, this.dependencies.saveHost)
-        const retried = await this.openAndMigrateRelay(credential, routeDeadline)
-        if (retried.ok || retried.authenticationFailed) {
-          return true
-        }
-      } catch {}
-    }
-    return false
-  }
-
-  private async openAndMigrateRelay(
-    credential: { token: string; version: number },
-    routeDeadline: number
-  ): Promise<RelayRouteAttempt> {
-    if (!this.host.relay || !this.bundle) {
-      return {
-        ok: false,
-        error: new Error('relay state missing'),
-        authenticationFailed: false
-      }
-    }
-    const result = await openMobileRelayRoute({
-      relay: this.host.relay,
-      bundle: this.bundle,
-      credential,
-      timeoutMs: this.remainingMs(routeDeadline),
-      logical: this.logical,
-      openRelay: this.dependencies.openRelay,
-      writeBundle: this.dependencies.writeBundle,
-      randomBytes: this.dependencies.randomBytes
-    })
-    if (result.ok) {
-      this.bundle = result.bundle
-      return keepMobileRelayRouteActive({
-        result,
-        logical: this.logical,
-        isStopped: () => this.stopped,
-        isForeground: () => this.foreground,
-        recordLastGood: () => this.recordLastGood(relayWebSocketUrl(this.host.relay!)),
-        scheduleLease: (session) =>
-          this.timers.scheduleLease(
-            session,
-            this.dependencies.now,
-            () => void this.reconnectInOrder(true)
-          )
-      })
-    }
-    if (result.authenticationFailed) {
-      this.logical.publishRouteOwnerState('auth-failed')
-    }
-    return result
-  }
-
-  private async recordLastGood(url: string): Promise<void> {
+  private recordLastGood(url: string): void {
     this.host = { ...this.host, lastGoodEndpoint: url }
-    await this.dependencies.updateLastGood(this.host.id, url).catch(() => {})
-  }
-
-  private async rotateCredentialIfNeeded(): Promise<void> {
-    if (
-      this.stopped ||
-      this.rotationInFlight ||
-      !this.bundle ||
-      this.logical.getActivePath() === 'relay' ||
-      !mobileRelayCredentialNeedsRotation(this.bundle, this.dependencies.now())
-    ) {
-      return
-    }
-    this.rotationInFlight = true
-    try {
-      const result = await rotateMobileRelayCredential({
-        client: this.logical,
-        bundle: this.bundle,
-        writeBundle: this.dependencies.writeBundle,
-        randomBytes: this.dependencies.randomBytes
-      })
-      this.bundle = result.bundle
-      this.host = await persistRelayHost(this.host, result.relay, this.dependencies.saveHost)
-    } catch {
-      // Pending rotation state stays durable for the next authenticated direct route.
-    } finally {
-      this.rotationInFlight = false
-    }
-  }
-
-  private remainingMs(deadline: number): number {
-    return Math.max(1, deadline - this.dependencies.now())
+    // Why: last-good is a reconnect hint; persistence cannot hold or tear down
+    // an already authenticated route.
+    void this.dependencies.updateLastGood(this.host.id, url).catch(() => {})
   }
 }

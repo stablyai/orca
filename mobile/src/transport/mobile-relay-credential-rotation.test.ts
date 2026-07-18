@@ -146,6 +146,49 @@ describe('mobile relay credential rotation', () => {
     expect(writeBundle).toHaveBeenCalledOnce()
   })
 
+  it('does not publish a committed rotation after its owner stops', async () => {
+    const pendingBundle: MobileRelayCredentialBundle = {
+      ...bundle,
+      pending: { token: 'C'.repeat(43), hash: 'D'.repeat(43), reqId: 'rotate-existing' }
+    }
+    const installed = install('rotate-existing')
+    let finishRequest!: () => void
+    const client = fakeClient([])
+    client.sendRequest = vi.fn(
+      () =>
+        new Promise<RpcResponse>((resolve) => {
+          finishRequest = () =>
+            resolve(
+              success({
+                v: 1,
+                relay,
+                installStatus: {
+                  v: 1,
+                  reqId: installed.reqId,
+                  state: 'committed',
+                  result: installed
+                }
+              })
+            )
+        })
+    )
+    const writeBundle = vi.fn(async () => {})
+    let active = true
+
+    const rotating = rotateMobileRelayCredential({
+      client,
+      bundle: pendingBundle,
+      writeBundle,
+      shouldContinue: () => active
+    })
+    await vi.waitFor(() => expect(client.sendRequest).toHaveBeenCalledOnce())
+    active = false
+    finishRequest()
+
+    await expect(rotating).rejects.toThrow(/inactive/)
+    expect(writeBundle).not.toHaveBeenCalled()
+  })
+
   it('applies only authoritative current or grace confirmation expiries', () => {
     const withGrace: MobileRelayCredentialBundle = {
       ...bundle,

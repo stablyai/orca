@@ -24,6 +24,7 @@ export async function rotateMobileRelayCredential(args: {
   bundle: MobileRelayCredentialBundle
   writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
   randomBytes?: (length: number) => Uint8Array
+  shouldContinue?: () => boolean
 }): Promise<RotationResult> {
   let bundle = args.bundle
   if (!bundle.pending) {
@@ -39,6 +40,7 @@ export async function rotateMobileRelayCredential(args: {
     })
     // Why: a crash or lost response must leave enough material to query the
     // one global install key before any second authorization attempt.
+    assertRotationActive(args.shouldContinue)
     await args.writeBundle(bundle)
   }
 
@@ -47,6 +49,7 @@ export async function rotateMobileRelayCredential(args: {
     throw new Error('relay credential rotation pending state missing')
   }
   let endpoints = await getEndpoints(args.client, pending.reqId)
+  assertRotationActive(args.shouldContinue)
   if (endpoints.installStatus?.state !== 'committed') {
     const response = await args.client.sendRequest('pairing.provisionRelay', {
       reqId: pending.reqId,
@@ -58,6 +61,7 @@ export async function rotateMobileRelayCredential(args: {
     }
     const installed = DeviceCredentialInstalledSchema.parse(response.result)
     endpoints = await getEndpoints(args.client, pending.reqId)
+    assertRotationActive(args.shouldContinue)
     if (
       endpoints.installStatus?.state !== 'committed' ||
       JSON.stringify(endpoints.installStatus.result) !== JSON.stringify(installed)
@@ -82,8 +86,15 @@ export async function rotateMobileRelayCredential(args: {
       : { grace: undefined }),
     pending: undefined
   })
+  assertRotationActive(args.shouldContinue)
   await args.writeBundle(next)
   return { bundle: next, relay: endpoints.relay }
+}
+
+function assertRotationActive(shouldContinue?: () => boolean): void {
+  if (shouldContinue && !shouldContinue()) {
+    throw new Error('relay credential rotation became inactive')
+  }
 }
 
 export function mobileRelayCredentialNeedsRotation(

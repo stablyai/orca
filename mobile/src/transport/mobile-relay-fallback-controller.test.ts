@@ -91,6 +91,9 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
   publishRouteOwnerState = (state: ConnectionState) => this.publishState(state)
   getActivePath = () => this.path
+  setActivePath = (path: MobileConnectionPath) => {
+    this.path = path
+  }
   getGeneration = () => this.generation
 }
 
@@ -137,6 +140,7 @@ function dependencies(
     resolveRelay: vi.fn(async ({ relay }) => relay),
     readBundle: vi.fn(async () => bundle),
     writeBundle: vi.fn(async () => {}),
+    deleteBundle: vi.fn(async () => {}),
     saveHost: vi.fn(async () => {}),
     now: Date.now,
     randomBytes: (length) => new Uint8Array(length).fill(1),
@@ -219,6 +223,115 @@ describe('mobile relay fallback controller', () => {
     await supervisor.start()
 
     expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('adopts Relay and schedules its lease when credential persistence stalls', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const deps = dependencies({
+      writeBundle: vi.fn(() => new Promise<void>(() => {}))
+    })
+    const supervisor = new MobileRelayFallbackController(logical, host, deps)
+
+    await supervisor.start()
+
+    expect(logical.getActivePath()).toBe('relay')
+    expect(deps.writeBundle).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    supervisor.stop()
+  })
+
+  it('releases a Relay migration that completes after the controller stops', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    let finishMigration!: () => void
+    logical.migrateTo.mockImplementationOnce(
+      async (_session: RpcClient, path: MobileConnectionPath) => {
+        await new Promise<void>((resolve) => {
+          finishMigration = resolve
+        })
+        logical.setActivePath(path)
+      }
+    )
+    const deps = dependencies({
+      // Why: lifecycle fencing cannot wait for a locked or stalled SecureStore.
+      writeBundle: vi.fn(() => new Promise<void>(() => {}))
+    })
+    const supervisor = new MobileRelayFallbackController(logical, host, deps)
+
+    const starting = supervisor.start()
+    await vi.waitFor(() => expect(deps.openRelay).toHaveBeenCalledOnce())
+    supervisor.stop()
+    finishMigration()
+    await starting
+
+    expect(logical.suspendActiveSession).toHaveBeenCalled()
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(deps.writeBundle).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not retry a Relay migration rejected during controller stop', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    let rejectMigration!: () => void
+    logical.migrateTo.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        rejectMigration = resolve
+      })
+      throw new Error('client closed')
+    })
+    const deps = dependencies()
+    const supervisor = new MobileRelayFallbackController(logical, host, deps)
+
+    const starting = supervisor.start()
+    await vi.waitFor(() => expect(deps.openRelay).toHaveBeenCalledOnce())
+    supervisor.stop()
+    rejectMigration()
+    await starting
+
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(deps.resolveRelay).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not persist a director result that resolves after controller stop', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    let finishResolution!: () => void
+    const deps = dependencies({
+      openRelay: vi.fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4409))),
+      resolveRelay: vi.fn(
+        () =>
+          new Promise<typeof relay>((resolve) => {
+            finishResolution = () => resolve(relay)
+          })
+      )
+    })
+    const supervisor = new MobileRelayFallbackController(logical, host, deps)
+
+    const starting = supervisor.start()
+    await vi.waitFor(() => expect(deps.resolveRelay).toHaveBeenCalledOnce())
+    supervisor.stop()
+    finishResolution()
+    await starting
+
+    expect(deps.saveHost).not.toHaveBeenCalled()
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+  })
+
+  it('releases recovery when corrected Relay host persistence stalls', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const deps = dependencies({
+      openRelay: vi.fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4409))),
+      saveHost: vi.fn(() => new Promise<void>(() => {}))
+    })
+    const supervisor = new MobileRelayFallbackController(logical, host, deps)
+
+    const starting = supervisor.start()
+    await vi.waitFor(() => expect(deps.saveHost).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(12_000)
+    await starting
+    logical.publishState('reconnecting')
+    await vi.waitFor(() => expect(deps.openRelay).toHaveBeenCalledTimes(2))
+
     supervisor.stop()
   })
 

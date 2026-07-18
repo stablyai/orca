@@ -103,6 +103,7 @@ function dependencies(args: {
     }),
     clearJournal: vi.fn(async () => {}),
     readCredentialBundle: vi.fn(async () => args.bundle ?? null),
+    loadPendingCleanup: vi.fn(async () => ({ ids: [], storageUnreadable: false })),
     writeCredentialBundle: vi.fn(async () => {}),
     loadHosts: vi.fn(async () => []),
     saveHost: vi.fn(async () => {}),
@@ -230,5 +231,31 @@ describe('mobile relay pairing recovery', () => {
     expect(written.current.token).toBe(saved.secrets.pendingResumeToken)
     expect(saved.metadata.authorizationMode).toBe('authenticated-direct')
     expect(deps.updateJournal).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not revive a journal whose host has pending removal cleanup', async () => {
+    const saved = journal()
+    const connectRelay = vi.fn()
+    const deps = dependencies({ journal: saved, connectRelay })
+    deps.loadPendingCleanup.mockResolvedValue({
+      ids: [saved.metadata.host.id],
+      storageUnreadable: false
+    })
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+
+    expect(connectRelay).not.toHaveBeenCalled()
+    expect(deps.writeCredentialBundle).not.toHaveBeenCalled()
+    expect(deps.saveHost).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when pending-removal storage is unreadable', async () => {
+    const saved = journal()
+    const connectRelay = vi.fn()
+    const deps = dependencies({ journal: saved, connectRelay })
+    deps.loadPendingCleanup.mockResolvedValue({ ids: [], storageUnreadable: true })
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    expect(connectRelay).not.toHaveBeenCalled()
   })
 })

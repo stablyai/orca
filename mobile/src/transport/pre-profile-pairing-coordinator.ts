@@ -18,7 +18,7 @@ import {
 } from './mobile-relay-pairing-journal-store'
 import {
   promotePairingJournalCredential,
-  writeMobileRelayCredentialBundle
+  replaceMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import {
   connectMobileRelayForPairing,
@@ -47,7 +47,7 @@ type Dependencies = {
   saveJournal: typeof saveMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
-  writeCredentialBundle: typeof writeMobileRelayCredentialBundle
+  writeCredentialBundle: typeof replaceMobileRelayCredentialBundle
   now: () => number
   platform: string
 }
@@ -61,7 +61,7 @@ const defaultDependencies: Dependencies = {
   saveJournal: saveMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
-  writeCredentialBundle: writeMobileRelayCredentialBundle,
+  writeCredentialBundle: replaceMobileRelayCredentialBundle,
   now: Date.now,
   platform: Platform.OS
 }
@@ -145,10 +145,11 @@ async function runPairing(
   const now = dependencies.now()
   // Why: every pairing artifact must share the preserved host id so re-pairing
   // updates one card instead of publishing a second identity (STA-1840).
-  const { id: hostId, name: hostName } = await dependencies.resolveHostIdentity(
-    offer.publicKeyB64,
-    `host-${now}`
-  )
+  const {
+    id: hostId,
+    name: hostName,
+    publicationEpoch
+  } = await dependencies.resolveHostIdentity(offer.publicKeyB64, `host-${now}`)
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
@@ -184,7 +185,8 @@ async function runPairing(
         offer,
         lastConnected: now,
         lastGoodEndpoint: winner.url
-      })
+      }),
+      publicationEpoch
     )
     assertActive(isDisposed)
     return { hostId }
@@ -217,7 +219,8 @@ async function runPairing(
         offer,
         lastConnected: now,
         lastGoodEndpoint: winner.url
-      })
+      }),
+      publicationEpoch
     )
     assertActive(isDisposed)
     await dependencies.clearJournal(journal.metadata.journalId)
@@ -245,7 +248,8 @@ async function runPairing(
       journal,
       endpoints.relay,
       winner.path === 'relay' ? relayWebSocketUrl(endpoints.relay) : winner.url
-    )
+    ),
+    publicationEpoch
   )
   assertActive(isDisposed)
   await dependencies.clearJournal(journal.metadata.journalId)

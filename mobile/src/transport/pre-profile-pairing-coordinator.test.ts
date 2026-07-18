@@ -70,7 +70,8 @@ function dependencies(client: RpcClient, events: string[]) {
     }),
     resolveHostIdentity: vi.fn(async (_publicKeyB64: string, hostId: string) => ({
       id: hostId,
-      name: 'Blue Whale'
+      name: 'Blue Whale',
+      publicationEpoch: 1
     })),
     saveHost: vi.fn(async (_host: HostProfile) => {
       events.push('save-host')
@@ -205,16 +206,19 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
-    expect(deps.saveHost).toHaveBeenCalledWith({
-      id: `host-${now}`,
-      name: 'Blue Whale',
-      endpoint: directOffer.endpoint,
-      endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
-      deviceToken: directOffer.deviceToken,
-      publicKeyB64: directOffer.publicKeyB64,
-      lastConnected: now,
-      lastGoodEndpoint: directOffer.endpoint
-    })
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      {
+        id: `host-${now}`,
+        name: 'Blue Whale',
+        endpoint: directOffer.endpoint,
+        endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
+        deviceToken: directOffer.deviceToken,
+        publicKeyB64: directOffer.publicKeyB64,
+        lastConnected: now,
+        lastGoodEndpoint: directOffer.endpoint
+      },
+      1
+    )
     expect(events).toEqual(['connect', 'save-host'])
   })
 
@@ -249,7 +253,8 @@ describe('pre-profile pairing coordinator', () => {
           { id: 'direct-1', kind: 'tailscale', url: secondary }
         ],
         lastGoodEndpoint: secondary
-      })
+      }),
+      1
     )
   })
 
@@ -262,7 +267,7 @@ describe('pre-profile pairing coordinator', () => {
     deps.resolveHostIdentity = vi.fn(async (publicKeyB64: string, newHostId: string) => {
       expect(publicKeyB64).toBe(directOffer.publicKeyB64)
       expect(newHostId).toBe(`host-${now}`)
-      return { id: 'host-existing', name: 'Studio Mac' }
+      return { id: 'host-existing', name: 'Studio Mac', publicationEpoch: 7 }
     })
 
     const attempt = startPreProfilePairing({
@@ -272,16 +277,19 @@ describe('pre-profile pairing coordinator', () => {
     })
 
     await expect(attempt.result).resolves.toEqual({ hostId: 'host-existing' })
-    expect(deps.saveHost).toHaveBeenCalledWith({
-      id: 'host-existing',
-      name: 'Studio Mac',
-      endpoint: directOffer.endpoint,
-      endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
-      deviceToken: directOffer.deviceToken,
-      publicKeyB64: directOffer.publicKeyB64,
-      lastConnected: now,
-      lastGoodEndpoint: directOffer.endpoint
-    })
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      {
+        id: 'host-existing',
+        name: 'Studio Mac',
+        endpoint: directOffer.endpoint,
+        endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
+        deviceToken: directOffer.deviceToken,
+        publicKeyB64: directOffer.publicKeyB64,
+        lastConnected: now,
+        lastGoodEndpoint: directOffer.endpoint
+      },
+      7
+    )
   })
 
   it('races both legacy routes and publishes only after authoritative direct install', async () => {
@@ -367,7 +375,8 @@ describe('pre-profile pairing coordinator', () => {
           }
         ],
         lastGoodEndpoint: directOffer.endpoint
-      })
+      }),
+      1
     )
   })
 
@@ -387,7 +396,8 @@ describe('pre-profile pairing coordinator', () => {
       expect.objectContaining({
         endpoint: relayOffer.endpoint,
         endpoints: [{ id: 'direct-primary', kind: 'lan', url: relayOffer.endpoint }]
-      })
+      }),
+      1
     )
     expect(events).toEqual([
       'save-journal',
@@ -461,7 +471,8 @@ describe('pre-profile pairing coordinator', () => {
     expect(deps.saveHost).toHaveBeenCalledWith(
       expect.objectContaining({
         lastGoodEndpoint: `wss://relay-c1.onorca.dev/v1/connect/${relayOffer.relay!.relayHostId}`
-      })
+      }),
+      1
     )
   })
 

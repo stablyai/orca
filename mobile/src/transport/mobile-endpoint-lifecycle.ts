@@ -6,10 +6,11 @@ import { MobileRelayFallbackController } from './mobile-relay-fallback-controlle
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import {
+  deleteMobileRelayCredentialBundle,
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
-import { saveHost } from './host-store'
+import { saveExistingHostRelayUpgrade } from './host-store'
 import { updateHostLastGoodEndpoint } from './host-store'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
@@ -86,7 +87,12 @@ function createRelayFallbackController(
   onLog: ConnectionLogSink
 ): MobileRelayFallbackController {
   return new MobileRelayFallbackController(logical, host, {
-    openDirect: (endpoint) => connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    openDirect: (endpoint) =>
+      connect(endpoint, host.deviceToken, host.publicKeyB64, {
+        // Why: the fallback probe's timeout and cooldown own retry scheduling.
+        onLog,
+        autoReconnect: false
+      }),
     openRelay: (relay, credential, confirmReqId) =>
       connectMobileRelayRpcSession({
         relay,
@@ -99,7 +105,8 @@ function createRelayFallbackController(
     resolveRelay: resolveMobileRelayEndpoint,
     readBundle: readMobileRelayCredentialBundle,
     writeBundle: writeMobileRelayCredentialBundle,
-    saveHost,
+    deleteBundle: deleteMobileRelayCredentialBundle,
+    saveHost: saveExistingHostRelayUpgrade,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
     setTimer: setTimeout,
@@ -132,7 +139,8 @@ function createSupervisor(
     resolveRelay: resolveMobileRelayEndpoint,
     readBundle: readMobileRelayCredentialBundle,
     writeBundle: writeMobileRelayCredentialBundle,
-    saveHost,
+    deleteBundle: deleteMobileRelayCredentialBundle,
+    saveHost: saveExistingHostRelayUpgrade,
     updateLastGood: updateHostLastGoodEndpoint,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,

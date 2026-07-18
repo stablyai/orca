@@ -6,7 +6,7 @@ import {
   type MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
-import { loadHosts, saveHost } from './host-store'
+import { loadHosts, saveRecoveredPairingHost } from './host-store'
 import {
   promotePairingJournalCredential,
   readMobileRelayCredentialBundle,
@@ -28,6 +28,7 @@ import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate
 import type { HostProfile, RpcResponse } from './types'
 import { buildMobileAccessRoutes } from './mobile-access-route-order'
 import { normalizePairingEndpoints } from './types'
+import { loadPendingHostCredentialCleanup } from './host-credential-cleanup'
 
 export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred'
 
@@ -36,9 +37,10 @@ type RecoveryDependencies = {
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
   readCredentialBundle: typeof readMobileRelayCredentialBundle
+  loadPendingCleanup: typeof loadPendingHostCredentialCleanup
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   loadHosts: typeof loadHosts
-  saveHost: typeof saveHost
+  saveHost: typeof saveRecoveredPairingHost
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   now: () => number
@@ -50,9 +52,10 @@ const defaultDependencies: RecoveryDependencies = {
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
   readCredentialBundle: readMobileRelayCredentialBundle,
+  loadPendingCleanup: loadPendingHostCredentialCleanup,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   loadHosts,
-  saveHost,
+  saveHost: saveRecoveredPairingHost,
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   now: Date.now,
@@ -88,6 +91,16 @@ async function runRecovery(
   }
   if (!journal) {
     return 'none'
+  }
+  const pendingCleanup = await dependencies.loadPendingCleanup().catch(() => null)
+  if (
+    !pendingCleanup ||
+    pendingCleanup.storageUnreadable ||
+    pendingCleanup.ids.includes(journal.metadata.host.id)
+  ) {
+    // Why: a crash after base-host removal may leave the pairing journal until
+    // native cleanup retries; startup recovery must not revive that host.
+    return 'deferred'
   }
   const bundle = await dependencies.readCredentialBundle(journal.metadata.host.id).catch(() => null)
   const hosts = await dependencies.loadHosts().catch(() => [])

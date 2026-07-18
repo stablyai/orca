@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const asyncStorage = vi.hoisted(() => ({
+  getAllKeys: vi.fn(),
   getItem: vi.fn(),
-  setItem: vi.fn()
+  setItem: vi.fn(),
+  removeItem: vi.fn()
 }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
@@ -16,6 +18,7 @@ import {
 import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
 
 const STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
+const V3_KEY_PREFIX = 'orca:mobile-relay:host-overlay:v3:'
 const OVERLAY: MobileRelayHostOverlay = {
   v: 2,
   hostId: 'host-1',
@@ -40,63 +43,161 @@ const OVERLAY: MobileRelayHostOverlay = {
 }
 
 describe('mobile relay host overlay store', () => {
-  let stored: string | null
+  let stored: Map<string, string>
 
   beforeEach(() => {
     vi.clearAllMocks()
     resetMobileRelayHostOverlayStoreForTests()
-    stored = null
-    asyncStorage.getItem.mockImplementation(async (key: string) =>
-      key === STORAGE_KEY ? stored : null
-    )
+    stored = new Map()
+    asyncStorage.getAllKeys.mockImplementation(async () => [...stored.keys()])
+    asyncStorage.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null)
     asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
-      if (key === STORAGE_KEY) {
-        stored = value
-      }
+      stored.set(key, value)
+    })
+    asyncStorage.removeItem.mockImplementation(async (key: string) => {
+      stored.delete(key)
     })
   })
 
-  it('round-trips v2 metadata in a namespace legacy builds do not rewrite', async () => {
+  it('round-trips metadata in an isolated per-host namespace', async () => {
     await saveMobileRelayHostOverlay(OVERLAY)
 
     await expect(loadMobileRelayHostOverlays(new Set(['host-1']))).resolves.toEqual(
       new Map([['host-1', OVERLAY]])
     )
-    expect(asyncStorage.setItem).toHaveBeenCalledWith(STORAGE_KEY, expect.any(String))
+    expect(asyncStorage.setItem).toHaveBeenCalledWith(`${V3_KEY_PREFIX}host-1`, expect.any(String))
   })
 
   it('never overlays or resurrects a host whose legacy base was removed', async () => {
-    stored = JSON.stringify([OVERLAY])
+    stored.set(STORAGE_KEY, JSON.stringify([OVERLAY]))
 
     await expect(loadMobileRelayHostOverlays(new Set())).resolves.toEqual(new Map())
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
-    expect(JSON.parse(stored)).toEqual([OVERLAY])
+    expect(JSON.parse(stored.get(STORAGE_KEY)!)).toEqual([OVERLAY])
   })
 
-  it('refuses to overwrite unreadable overlay storage', async () => {
-    stored = '{'
+  it('writes a per-host overlay without rewriting unreadable legacy storage', async () => {
+    stored.set(STORAGE_KEY, '{')
 
-    await expect(saveMobileRelayHostOverlay(OVERLAY)).rejects.toThrow(/unreadable/)
-    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+    await expect(saveMobileRelayHostOverlay(OVERLAY)).resolves.toBeUndefined()
+    expect(stored.get(`${V3_KEY_PREFIX}host-1`)).toBe(JSON.stringify(OVERLAY))
+    expect(stored.get(STORAGE_KEY)).toBe('{')
   })
 
   it('removes requested overlays in one storage write', async () => {
     const second = { ...OVERLAY, hostId: 'host-2' }
-    stored = JSON.stringify([OVERLAY, second])
+    stored.set(STORAGE_KEY, JSON.stringify([OVERLAY, second]))
 
     await expect(removeMobileRelayHostOverlays(['host-1', 'host-missing'])).resolves.toBeUndefined()
 
-    expect(JSON.parse(stored!)).toEqual([second])
-    expect(asyncStorage.getItem).toHaveBeenCalledOnce()
-    expect(asyncStorage.setItem).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(JSON.parse(stored.get(STORAGE_KEY)!)).toEqual([second]))
+    expect(asyncStorage.removeItem).toHaveBeenCalledTimes(2)
   })
 
   it('skips the storage write when no requested overlay exists', async () => {
-    stored = JSON.stringify([OVERLAY])
+    stored.set(STORAGE_KEY, JSON.stringify([OVERLAY]))
 
     await expect(removeMobileRelayHostOverlays(['host-missing'])).resolves.toBeUndefined()
 
-    expect(asyncStorage.getItem).toHaveBeenCalledOnce()
-    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(asyncStorage.getItem).toHaveBeenCalledWith(STORAGE_KEY))
+    expect(stored.get(STORAGE_KEY)).toBe(JSON.stringify([OVERLAY]))
+  })
+
+  it('loads a pending per-host snapshot without waiting for its native write', async () => {
+    let finishWrite!: () => void
+    asyncStorage.setItem.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishWrite = () => {
+            stored.set(`${V3_KEY_PREFIX}host-1`, JSON.stringify(OVERLAY))
+            resolve()
+          }
+        })
+    )
+    const saving = saveMobileRelayHostOverlay(OVERLAY)
+    await vi.waitFor(() => expect(finishWrite).toBeTypeOf('function'))
+
+    await expect(loadMobileRelayHostOverlays(new Set(['host-1']))).resolves.toEqual(
+      new Map([['host-1', OVERLAY]])
+    )
+
+    finishWrite()
+    await saving
+    await expect(loadMobileRelayHostOverlays(new Set(['host-1']))).resolves.toEqual(
+      new Map([['host-1', OVERLAY]])
+    )
+  })
+
+  it('loads known hosts directly when global key enumeration fails', async () => {
+    stored.set(`${V3_KEY_PREFIX}host-1`, JSON.stringify(OVERLAY))
+    asyncStorage.getAllKeys.mockRejectedValueOnce(new Error('enumeration unavailable'))
+
+    await expect(loadMobileRelayHostOverlays(new Set(['host-1']))).resolves.toEqual(
+      new Map([['host-1', OVERLAY]])
+    )
+    expect(asyncStorage.getItem).toHaveBeenCalledWith(`${V3_KEY_PREFIX}host-1`)
+  })
+
+  it('starts independent known-host reads concurrently', async () => {
+    const second = { ...OVERLAY, hostId: 'host-2' }
+    let finishFirst!: () => void
+    let finishSecond!: () => void
+    asyncStorage.getItem.mockImplementation((key: string) => {
+      if (key === STORAGE_KEY) {
+        return Promise.resolve(null)
+      }
+      return new Promise<string | null>((resolve) => {
+        if (key === `${V3_KEY_PREFIX}host-1`) {
+          finishFirst = () => resolve(JSON.stringify(OVERLAY))
+        } else {
+          finishSecond = () => resolve(JSON.stringify(second))
+        }
+      })
+    })
+
+    const loading = loadMobileRelayHostOverlays(new Set(['host-1', 'host-2']))
+    await vi.waitFor(() => expect(finishSecond).toBeTypeOf('function'))
+    finishSecond()
+    finishFirst()
+
+    await expect(loading).resolves.toEqual(
+      new Map([
+        ['host-1', OVERLAY],
+        ['host-2', second]
+      ])
+    )
+  })
+
+  it('does not revive a stale legacy overlay when the per-host read fails', async () => {
+    stored.set(STORAGE_KEY, JSON.stringify([OVERLAY]))
+    asyncStorage.getItem.mockImplementationOnce(async (key: string) => stored.get(key) ?? null)
+    asyncStorage.getItem.mockRejectedValueOnce(new Error('per-host read unavailable'))
+
+    await expect(loadMobileRelayHostOverlays(new Set(['host-1']))).resolves.toEqual(new Map())
+  })
+
+  it('does not let one stalled host overlay block another host', async () => {
+    const second = { ...OVERLAY, hostId: 'host-2' }
+    let finishFirst!: () => void
+    asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      if (key === `${V3_KEY_PREFIX}host-1`) {
+        await new Promise<void>((resolve) => {
+          finishFirst = () => {
+            stored.set(key, value)
+            resolve()
+          }
+        })
+        return
+      }
+      stored.set(key, value)
+    })
+
+    const savingFirst = saveMobileRelayHostOverlay(OVERLAY)
+    await vi.waitFor(() => expect(finishFirst).toBeTypeOf('function'))
+    await expect(saveMobileRelayHostOverlay(second)).resolves.toBeUndefined()
+
+    expect(stored.get(`${V3_KEY_PREFIX}host-2`)).toBe(JSON.stringify(second))
+    finishFirst()
+    await savingFirst
   })
 })

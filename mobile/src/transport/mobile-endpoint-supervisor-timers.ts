@@ -20,7 +20,7 @@ export class MobileEndpointSupervisorTimers {
   }
 
   scheduleLease(session: MobileRelayRpcSession, now: () => number, rotate: () => void): void {
-    this.clearLease()
+    this.clearAll()
     const deadline = session.getLeaseExpiresAt()
     if (!deadline) {
       return
@@ -37,6 +37,10 @@ export class MobileEndpointSupervisorTimers {
       this.clearTimer(this.retry)
       this.retry = null
     }
+  }
+
+  hasScheduled(): boolean {
+    return this.retry !== null || this.lease !== null
   }
 
   clearAll(): void {

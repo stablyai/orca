@@ -123,6 +123,10 @@ export const StoredHostProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   endpoint: z.string().min(1),
+  // Why: ordered direct routes remain usable if optional Relay overlay
+  // publication is interrupted; older builds tolerate these additive fields.
+  routeOrder: z.literal(1).optional(),
+  orderedDirectEndpoints: z.array(z.string().min(1).max(2048)).min(1).max(16).optional(),
   lastGoodEndpoint: z.string().min(1).optional(),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite()

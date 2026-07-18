@@ -48,7 +48,10 @@ export function buildMobileAccessRoutes(args: {
   return routes
 }
 
-export function orderedHostAccessRoutes(host: HostProfile): MobileAccessEndpoint[] {
+export function orderedHostAccessRoutes(
+  host: HostProfile,
+  promoteLastGood = true
+): MobileAccessEndpoint[] {
   const configured = host.endpoints?.length
     ? host.endpoints
     : buildMobileAccessRoutes({
@@ -65,9 +68,10 @@ export function orderedHostAccessRoutes(host: HostProfile): MobileAccessEndpoint
   })
   // Why: sticky route promotion is part of the explicit ordered policy; old
   // Relay profiles retain the released direct-first reconnect behavior.
-  const lastGood = hasAuthoritativeMobileRouteOrder(host)
-    ? host.lastGoodEndpoint?.trim()
-    : undefined
+  const lastGood =
+    hasAuthoritativeMobileRouteOrder(host) && promoteLastGood
+      ? host.lastGoodEndpoint?.trim()
+      : undefined
   const stickyIndex = lastGood ? routes.findIndex(({ url }) => url === lastGood) : -1
   if (stickyIndex <= 0) {
     return routes

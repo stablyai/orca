@@ -21,6 +21,8 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 
+vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
+
 describe('updateHostNameAndEndpoint', () => {
   beforeEach(() => {
     vi.mocked(AsyncStorage.getItem).mockReset()

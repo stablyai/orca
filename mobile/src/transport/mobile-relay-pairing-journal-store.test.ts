@@ -23,6 +23,7 @@ vi.mock('react-native', () => ({ Platform: platform }))
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
+  clearMobileRelayPairingJournalForHost,
   loadMobileRelayPairingJournal,
   resetMobileRelayPairingJournalStoreForTests,
   saveMobileRelayPairingJournal,
@@ -396,5 +397,21 @@ describe('mobile relay pairing journal store', () => {
 
     platform.OS = 'web'
     await expect(saveMobileRelayPairingJournal(journal)).rejects.toThrow(/native secret store/)
+  })
+
+  it('invalidates only a pairing journal for the removed host', async () => {
+    const journal = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(11)
+    })
+    await saveMobileRelayPairingJournal(journal)
+
+    await clearMobileRelayPairingJournalForHost('host-2')
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
+
+    await clearMobileRelayPairingJournalForHost('host-1')
+    await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
   })
 })
