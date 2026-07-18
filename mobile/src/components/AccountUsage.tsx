@@ -132,7 +132,7 @@ export function UsageWindowBars({
           <UsageBar
             label={w.label}
             usedPercent={w.usedPercent}
-            unavailable={false}
+            unavailable={!Number.isFinite(w.usedPercent)}
             labelWidth={labelWidth}
             resetText={now == null ? null : getUsageWindowResetLabel(w, now)}
           />

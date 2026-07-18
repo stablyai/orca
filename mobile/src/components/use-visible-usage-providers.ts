@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
-import { loadVisibleUsageProviders } from '../storage/preferences'
+import { loadVisibleUsageProvidersSettled } from '../storage/preferences'
 import { DEFAULT_VISIBLE_USAGE_PROVIDERS, type UsageProviderKey } from './account-usage-state'
 
 export function useVisibleUsageProviders(): Set<UsageProviderKey> {
@@ -13,7 +13,7 @@ export function useVisibleUsageProviders(): Set<UsageProviderKey> {
   useFocusEffect(
     useCallback(() => {
       let active = true
-      void loadVisibleUsageProviders().then((stored) => {
+      void loadVisibleUsageProvidersSettled().then((stored) => {
         if (active) {
           setVisible(stored)
         }

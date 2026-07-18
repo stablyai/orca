@@ -7,7 +7,7 @@ type FocusCallback = () => void | (() => void)
 
 const dependencies = vi.hoisted(() => ({
   focusCallback: null as FocusCallback | null,
-  loadVisibleUsageProviders: vi.fn()
+  loadVisibleUsageProvidersSettled: vi.fn()
 }))
 
 vi.mock('expo-router', () => ({
@@ -17,7 +17,7 @@ vi.mock('expo-router', () => ({
 }))
 
 vi.mock('../storage/preferences', () => ({
-  loadVisibleUsageProviders: dependencies.loadVisibleUsageProviders
+  loadVisibleUsageProvidersSettled: dependencies.loadVisibleUsageProvidersSettled
 }))
 
 function Probe({ onValue }: { onValue: (value: string[]) => void }) {
@@ -29,7 +29,14 @@ describe('useVisibleUsageProviders', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     dependencies.focusCallback = null
-    dependencies.loadVisibleUsageProviders.mockReset()
+    dependencies.loadVisibleUsageProvidersSettled.mockReset()
+    const originalConsoleError = console.error
+    vi.spyOn(console, 'error').mockImplementation((...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
+        return
+      }
+      originalConsoleError(...args)
+    })
   })
 
   afterEach(() => {
@@ -37,7 +44,9 @@ describe('useVisibleUsageProviders', () => {
   })
 
   it('starts with Claude and Codex, then reloads the stored set on focus', async () => {
-    dependencies.loadVisibleUsageProviders.mockResolvedValue(new Set(['antigravity', 'grok']))
+    dependencies.loadVisibleUsageProvidersSettled.mockResolvedValue(
+      new Set(['antigravity', 'grok'])
+    )
     const values: string[][] = []
     let renderer: ReactTestRenderer | null = null
 
@@ -59,7 +68,7 @@ describe('useVisibleUsageProviders', () => {
 
   it('ignores a storage read that resolves after the screen loses focus', async () => {
     let resolveLoad: ((value: Set<string>) => void) | null = null
-    dependencies.loadVisibleUsageProviders.mockImplementation(
+    dependencies.loadVisibleUsageProvidersSettled.mockImplementation(
       () => new Promise((resolve) => (resolveLoad = resolve))
     )
     const values: string[][] = []
