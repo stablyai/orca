@@ -111,4 +111,5 @@
 
 - 로컬 배포: 서명된 Orca 1.4.144-rc.4 수정본을 설치하고 재시작했으며 기존 PTY 9/9가 유지됐다.
 - 원격 배포: `beige-ian/orca`의 `fix/codex-shift-enter-durable` 브랜치에 push했고, `stablyai/orca` main 대상 PR #9273이 열려 있다.
-- 현재 PR은 merge 가능한 상태이며 GitHub 검사가 실행 중이다. 공식 main 병합은 저장소 write 권한이 있는 maintainer가 수행한다.
+- 현재 PR은 merge 가능한 상태이며 별도 GitHub 검사는 보고되지 않았다. 공식 main 병합은 저장소 write 권한이 있는 maintainer가 수행한다.
+- 07/18 사용자가 공식 반영을 승인했다. 자동 squash merge를 시도했으나 현재 계정의 upstream 권한이 read-only라 GitHub가 거절했고, PR에 전체 검증 결과와 maintainer merge 요청을 남겼다.
