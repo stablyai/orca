@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { PinnedTerminalPanel } from '../../../shared/types'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import {
   getPinnedTerminalPanelHostForWorktreeId,
@@ -19,8 +20,11 @@ import {
 type ConnectionOwnerState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
-> &
-  Partial<Pick<AppState, 'settings'>>
+> & {
+  // Why: structural (not AppState['settings']) so narrow test states and
+  // intersected caller state types don't have to satisfy full GlobalSettings.
+  settings?: { pinnedTerminalPanels?: readonly PinnedTerminalPanel[] } | null
+}
 
 export function createConnectionIdForFileSelector(
   worktreeId: string | null,

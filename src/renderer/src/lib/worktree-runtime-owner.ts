@@ -7,6 +7,7 @@ import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execu
 import type {
   FolderWorkspace,
   GlobalSettings,
+  PinnedTerminalPanel,
   ProjectGroup,
   Repo,
   Worktree
@@ -29,7 +30,11 @@ type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 
 export type WorktreeRuntimeOwnerState = {
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?:
+    | (Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> & {
+        pinnedTerminalPanels?: readonly PinnedTerminalPanel[]
+      })
+    | null
   worktreesByRepo?: Record<string, readonly Pick<Worktree, 'id' | 'repoId' | 'hostId'>[]>
   folderWorkspaces?: readonly Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'>[]
   projectGroups?: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
