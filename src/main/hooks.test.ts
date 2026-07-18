@@ -13,7 +13,8 @@ vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   rmSync: vi.fn(),
-  chmodSync: vi.fn()
+  chmodSync: vi.fn(),
+  statSync: vi.fn()
 }))
 
 const { execMock, execFileMock, gitExecFileSyncMock } = vi.hoisted(() => ({
@@ -433,6 +434,38 @@ describe('writeIssueCommand', () => {
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
       TEST_ISSUE_COMMAND_PATH,
       'local command\n',
+      'utf-8'
+    )
+  })
+
+  it('skips the .gitignore write when the repo path is a bare git dir', async () => {
+    const fs = await import('node:fs')
+    const bareRepoPath = join('/test/bare.git')
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === join(bareRepoPath, '.orca'))
+    vi.mocked(fs.statSync).mockImplementation(((path: string) => {
+      if (path === join(bareRepoPath, 'HEAD')) {
+        return { isFile: () => true, isDirectory: () => false }
+      }
+      if (path === join(bareRepoPath, 'objects') || path === join(bareRepoPath, 'refs')) {
+        return { isFile: () => false, isDirectory: () => true }
+      }
+      throw new Error('ENOENT')
+    }) as never)
+    vi.mocked(fs.readFileSync).mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
+
+    const { writeIssueCommand } = await import('./hooks')
+    writeIssueCommand(bareRepoPath, 'local command')
+
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+      join(bareRepoPath, '.orca', 'issue-command'),
+      'local command\n',
+      'utf-8'
+    )
+    expect(vi.mocked(fs.writeFileSync)).not.toHaveBeenCalledWith(
+      join(bareRepoPath, '.gitignore'),
+      expect.anything(),
       'utf-8'
     )
   })

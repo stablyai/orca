@@ -391,7 +391,8 @@ function hasValidLinkedWorktreeGitDirectorySync(gitDir: string): boolean {
   }
 }
 
-function hasValidBareRepoMarkerSync(path: string): boolean {
+/** Filesystem-only bare-root check (no git spawn) for callers that must stay cheap. */
+export function hasValidBareRepoMarkerSync(path: string): boolean {
   return hasValidCommonGitDirectorySync(path) && !gitConfigDeclaresNonBare(path)
 }
 
