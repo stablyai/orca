@@ -59,6 +59,30 @@ describe('repo-specific worktree ownership layouts', () => {
     ).toBe('external')
   })
 
+  it('resolves relative layouts beside a bare repo, matching creation', () => {
+    const settings = makeSettings({ nestWorkspaces: false })
+    const bareRepo = makeRepo({
+      path: '/projects/a/repo.git',
+      isBare: true,
+      worktreeBasePath: 'worktrees'
+    })
+
+    expect(buildKnownOrcaWorkspaceLayouts(settings, bareRepo)[0]).toEqual({
+      path: '/projects/a/worktrees',
+      nestWorkspaces: false
+    })
+    // Why: under the (flat) Orca root beside the bare dir → not external. If
+    // the layout had wrongly resolved inside the git dir, this would flip.
+    expect(
+      classifyWorktreeOwnership({
+        repo: bareRepo,
+        settings,
+        worktree: makeWorktree('/projects/a/worktrees/feature'),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, bareRepo)
+      })
+    ).toBe('unknown-legacy')
+  })
+
   it('uses repo-specific nested layouts for Windows-style paths', () => {
     const repo = makeRepo({
       path: 'C:\\projects\\App\\repo',

@@ -906,7 +906,8 @@ describe('registerWorktreeHandlers', () => {
 
     expect(computeWorktreePathMock).toHaveBeenCalledWith('feature', '/workspace/repo', {
       nestWorkspaces: false,
-      workspaceDir: '../worktrees'
+      workspaceDir: '../worktrees',
+      repoIsBare: false
     })
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',

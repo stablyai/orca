@@ -6,7 +6,9 @@ import { splitWorktreeId } from '../../shared/worktree-id'
 import { getWslHome, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
-type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+/** WorktreePathSettings enriched by getWorktreePathSettings with the repo's bareness. */
+type WorktreePathComputationSettings = WorktreePathSettings & { repoIsBare?: boolean }
+type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath' | 'isBare'>
 
 export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
 export { mergeWorktree } from './worktree-metadata-merge'
@@ -85,7 +87,7 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: WorktreePathSettings
+  settings: WorktreePathComputationSettings
 ): string {
   const workspaceRoot = computeWorkspaceRoot(repoPath, settings)
   const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
@@ -97,7 +99,10 @@ export function computeWorktreePath(
   return pathOps.join(workspaceRoot, sanitizedName)
 }
 
-export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {
+export function computeWorkspaceRoot(
+  repoPath: string,
+  settings: { workspaceDir: string; repoIsBare?: boolean }
+): string {
   const wsl = parseWslPath(repoPath)
   if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
     const wslHome = getWslHome(wsl.distro)
@@ -109,13 +114,13 @@ export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir:
       return win32.join(wslHome, 'orca', 'workspaces')
     }
   }
-  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir, settings.repoIsBare === true)
 }
 
 export function computeRemoteWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: WorktreePathSettings,
+  settings: WorktreePathComputationSettings,
   options: { useConfiguredAbsolutePath?: boolean } = {}
 ): string {
   if (
@@ -133,10 +138,11 @@ export function computeRemoteWorktreePath(
 export function getWorktreePathSettings(
   repo: WorktreeBasePathRepo,
   settings: WorktreePathSettings
-): WorktreePathSettings {
+): WorktreePathComputationSettings {
   return {
     nestWorkspaces: settings.nestWorkspaces,
-    workspaceDir: getEffectiveWorktreeBasePath(repo, settings)
+    workspaceDir: getEffectiveWorktreeBasePath(repo, settings),
+    repoIsBare: repo.isBare === true
   }
 }
 
@@ -163,11 +169,19 @@ function getRuntimePathOps(
     : posix
 }
 
-function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {
+function resolveWorkspaceDirForRepo(
+  repoPath: string,
+  workspaceDir: string,
+  repoIsBare = false
+): string {
   const pathOps = getRuntimePathOps(repoPath, workspaceDir)
-  return pathOps.isAbsolute(workspaceDir)
-    ? pathOps.normalize(workspaceDir)
-    : resolveRuntimePath(repoPath, workspaceDir)
+  if (pathOps.isAbsolute(workspaceDir)) {
+    return pathOps.normalize(workspaceDir)
+  }
+  // Why: a bare repo's path is its git dir; a relative workspace dir must
+  // resolve beside it, not inside it ('worktrees' would collide with git's
+  // own admin dir).
+  return resolveRuntimePath(repoPath, repoIsBare ? pathOps.join('..', workspaceDir) : workspaceDir)
 }
 
 function isWorkspaceDirRelativeToRepo(repoPath: string, workspaceDir: string): boolean {
