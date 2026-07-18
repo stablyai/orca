@@ -132,6 +132,7 @@ type WorktreeCardProps = {
   nativeDragEnabled?: boolean
   affiliateListMode?: boolean
   statusPrDisplay?: WorktreeCardPrDisplay | null
+  coordinatedGitHubRefresh?: boolean
 }
 
 const EMPTY_WORKSPACE_PORTS = []
@@ -223,7 +224,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onLineageToggle,
   isLineageDropTarget = false,
   affiliateListMode = false,
-  statusPrDisplay = null
+  statusPrDisplay = null,
+  coordinatedGitHubRefresh = false
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
@@ -598,9 +600,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
-  // Why: GitHub card refreshes are already batched by WorktreeList's coordinator;
-  // per-card hosted-review polling bypasses that budget and creates a startup stampede.
-  const usesCoordinatedGitHubRefresh = repo ? isGitHubBackedRepo(repo) : false
+  // Why: only sidebar rows are registered with WorktreeList's coordinator;
+  // standalone surfaces must retain their own refresh path.
+  const usesCoordinatedGitHubRefresh =
+    coordinatedGitHubRefresh && repo ? isGitHubBackedRepo(repo) : false
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 

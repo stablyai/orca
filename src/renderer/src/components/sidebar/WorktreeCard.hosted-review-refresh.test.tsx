@@ -201,7 +201,12 @@ describe('WorktreeCard hosted review refresh', () => {
 
     act(() => {
       root?.render(
-        <WorktreeCard worktree={makeWorktree()} repo={makeGitHubRepo()} isActive={false} />
+        <WorktreeCard
+          worktree={makeWorktree()}
+          repo={makeGitHubRepo()}
+          isActive={false}
+          coordinatedGitHubRefresh
+        />
       )
     })
 
@@ -210,5 +215,23 @@ describe('WorktreeCard hosted review refresh', () => {
     })
 
     expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+  })
+
+  it('keeps polling GitHub-backed cards outside the coordinator-owned list', async () => {
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    act(() => {
+      root?.render(
+        <WorktreeCard worktree={makeWorktree()} repo={makeGitHubRepo()} isActive={false} />
+      )
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(2)
   })
 })
