@@ -1,7 +1,4 @@
-// Why: pinned panels share one persistent session so dashboard logins survive
-// relaunch, but stay out of `persist:browser` — panel guests are chromeless and
-// must not inherit or pollute the interactive browser's cookies.
-export const PINNED_WEB_PANEL_PARTITION = 'persist:pinned-web-panels'
+import { PINNED_WEB_PANEL_PARTITION } from '../../../../shared/pinned-web-panels'
 
 const webviewsByPanelId = new Map<string, Electron.WebviewTag>()
 

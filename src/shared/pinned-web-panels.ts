@@ -4,6 +4,13 @@ import type { PinnedWebPanel } from './types'
 // bound keeps a corrupted profile from flooding the sidebar and the partition.
 export const MAX_PINNED_WEB_PANELS = 12
 
+// Why: panels share one persistent session so dashboard logins survive
+// relaunch, but stay out of the interactive browser's partitions — panel
+// guests are chromeless and must not inherit or pollute browser cookies.
+// Lives in shared because main's will-attach-webview allowlist and the
+// renderer's webview host must agree on the exact string.
+export const PINNED_WEB_PANEL_PARTITION = 'persist:pinned-web-panels'
+
 const MAX_PANEL_TITLE_LENGTH = 60
 
 function normalizePinnedWebPanelUrl(value: unknown): string | null {

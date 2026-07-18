@@ -16,6 +16,7 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import { PINNED_WEB_PANEL_PARTITION } from '../../shared/pinned-web-panels'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
@@ -351,6 +352,12 @@ class BrowserSessionRegistry {
 
   isAllowedPartition(partition: string): boolean {
     if (partition === this.defaultPartition) {
+      return true
+    }
+    // Why: pinned web panels use one fixed app-defined partition, kept out of
+    // browser-profile partitions; the attach-time hardening in
+    // will-attach-webview applies to it unchanged.
+    if (partition === PINNED_WEB_PANEL_PARTITION) {
       return true
     }
     return [...this.profiles.values()].some((p) => p.partition === partition)
