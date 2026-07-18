@@ -28,6 +28,8 @@ import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -129,7 +131,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     shell: queuedShell,
     isRemote,
     agentArgs: effectiveAgentArgs,
-    agentEnv
+    agentEnv,
+    sessionOptions: resolveNativeChatSessionOptionDefaults(
+      store.settings?.nativeChatSessionOptions,
+      agent
+    )
   }
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
@@ -169,6 +175,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -244,6 +253,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     quickCommandLabel,
     ...initialViewModeProps
   })
+  seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),

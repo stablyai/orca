@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
+import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
 const RelayTokenResponseSchema = z
   .object({
@@ -69,6 +70,7 @@ export async function exchangeRelayAuthorization(input: {
     body: JSON.stringify({ relayHostId, hostPublicKeyB64: input.keypair.publicKeyB64 })
   })
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     throw new RelayHttpError('token-exchange', response.status)
   }
   const parsed = RelayTokenResponseSchema.safeParse(await response.json())
@@ -96,6 +98,7 @@ export async function requestRelayAssignment(input: {
     body: JSON.stringify({ v: 1, relayHostId: input.relayHostId })
   })
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     throw new RelayHttpError('assignment', response.status)
   }
   const parsed = AssignmentResponseSchema.safeParse(await response.json())

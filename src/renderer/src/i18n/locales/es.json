@@ -31,6 +31,10 @@
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Mostrar icono en la barra de menús",
+        "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
       }
     }
   },
@@ -67,7 +71,9 @@
     "quit": "Salir",
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
-    }
+    },
+    "activityWaiting": "Orca: actividad en espera",
+    "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -583,6 +589,27 @@
             "de50bef680": "macOS está bloqueando las notificaciones de Orca"
           }
         }
+      },
+      "linear": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked ticket",
+            "postUpdate": "Post a progress update",
+            "moveState": "Move the ticket forward",
+            "attachPr": "Attach the PR link",
+            "triageFollowups": "Triage and create follow-ups",
+            "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
+            "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
+            "postUpdateSummary": "Comment progress or a completion summary back to the Linear issue.",
+            "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
+            "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
+            "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
+            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
+            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
+            "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
+          }
+        }
       }
     },
     "hooks": {
@@ -700,7 +727,9 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "projectHostsSummary": "{{value0}} hosts"
+        "projectHostsSummary": "{{value0}} hosts",
+        "linearTitle": "Linear",
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -711,13 +740,13 @@
     },
     "components": {
       "CodexRestartChip": {
-        "9132779820": "Descartar",
         "c72a5fb234": "Reiniciar",
         "9263e75f49": "Codex está usando la cuenta anterior.",
         "a4c8e1b2f7": "Codex sigue conectado como {{value0}}",
         "d3e8a1f4b2": "Cuenta cambiada",
-        "e9b2c7d1a5": "Reinicia esta sesión para usar {{value0}}. Contrae para seguir trabajando con la cuenta actual.",
-        "f1a6c8e3b4": "Contraer"
+        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
@@ -1753,7 +1782,8 @@
         "jiraSortAscending": "ascendente",
         "jiraSortDescending": "descendente",
         "jiraSortBy": "Ordenar por",
-        "jiraToggleSortDirection": "Ordenar de forma {{value0}}"
+        "jiraToggleSortDirection": "Ordenar de forma {{value0}}",
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -1815,7 +1845,14 @@
         "a726967bd3": "Descartar",
         "d5253b54af": "error",
         "7ffc08506e": "check",
-        "522df222b9": "spinner"
+        "522df222b9": "spinner",
+        "e944c2de43": "Update Verification Blocked",
+        "5b309b19f3": "Update Wasn't Installed",
+        "092f09fc14": "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version.",
+        "c9ff9b9ec2": "Check official releases",
+        "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
+        "5194358929": "Hide details",
+        "8bc9e17d8f": "Show details"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Mover",
@@ -3219,7 +3256,11 @@
             "42fdd4da1d": "Se está actualizando el inicio de sesión de Claude. Las sesiones de agentes pueden seguir iniciadas.",
             "c06c1d215d": "No se pudo actualizar el uso de Claude porque falló la solicitud de red.",
             "cabdc2a9e0": "No se pudieron leer las credenciales de inicio de sesión de Claude.",
-            "a7517cccb6": "El uso de Claude no está disponible ahora."
+            "a7517cccb6": "El uso de Claude no está disponible ahora.",
+            "e2c6a4f917": "Run Grok to refresh",
+            "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
+            "f90b3d7a16": "Run Kimi to refresh",
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
@@ -3596,6 +3637,64 @@
           "cd7893fbc1": "Escaneando skills",
           "35b9a724a0": "Disponible",
           "0c74e7ff34": "Local"
+        },
+        "SkillFreshnessNudge": {
+          "titleOne": "Una skill de Orca instalada está desactualizada",
+          "titleMany": "{{value0}} skills de Orca instaladas están desactualizadas",
+          "updateOne": "Actualizar skill",
+          "updateMany": "Actualizar skills",
+          "description": "Actualiza {{value0}} para que los Agents sigan las instrucciones actuales de esta versión de Orca."
+        },
+        "SkillFreshnessRow": {
+          "statusUpdateAvailable": "Actualización disponible",
+          "statusCantUpdate": "No se puede actualizar",
+          "cantUpdateReason": "Esta skill está instalada en un lugar que Orca no puede actualizar de forma segura, así que el comando npx skills update la deja sin cambios.",
+          "chipCurrent": "Actual",
+          "chipUnrecognized": "No reconocida",
+          "chipInaccessible": "Inaccesible",
+          "chipDuplicate": "Duplicada",
+          "chipExternalLink": "Enlace externo",
+          "chipBrokenLink": "Enlace roto",
+          "chipReadOnly": "Solo lectura",
+          "chipInRepo": "En un repo",
+          "chipPluginCache": "Caché de plugin",
+          "tipCurrent": "La skill aquí ya está actualizada; la actualización no la cambiará.",
+          "tipUnrecognized": "El contenido de la skill aquí no coincide con ninguna versión oficial, así que Orca no puede actualizarla de forma segura. Elimina o reemplaza lo que hay aquí para permitir las actualizaciones.",
+          "tipInaccessible": "Orca no pudo leer la skill aquí (un error de permisos o de archivo), así que no puede comprobarla ni actualizarla.",
+          "tipDuplicate": "La skill también está instalada aquí, aparte de la principal, así que el comando npx skills update no puede alcanzarla. Elimínala para permitir las actualizaciones.",
+          "tipExternalLink": "Es un acceso directo que apunta fuera de las carpetas de skills de Orca; la actualización no lo seguirá.",
+          "tipBrokenLink": "Es un acceso directo a algo que ya no existe; puedes eliminarlo sin problema.",
+          "tipReadOnly": "La skill aquí está en una ubicación de solo lectura, así que no se puede actualizar hasta que cambies sus permisos.",
+          "tipInRepo": "La skill aquí vive dentro de un proyecto, no en tus skills globales; Orca solo actualiza las globales.",
+          "tipPluginCache": "La skill aquí la gestiona un plugin; actualiza el plugin en su lugar.",
+          "skippedReasonUnrecognized": "The copy here doesn’t match the official version — it may be modified, or a different skill with the same name. Orca left it out of the update so it won’t overwrite it. Remove it if you want Orca to update this skill.",
+          "skippedReasonReadOnly": "This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.",
+          "skippedReasonInaccessible": "Orca couldn’t read this copy, so it left the skill out of the update.",
+          "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
+          "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
+          "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it."
+        },
+        "SkillFreshnessUpdateDialog": {
+          "title": "Actualizar skills",
+          "checking": "Comprobando las skills de Orca instaladas…",
+          "none": "No se encontraron skills de Orca instaladas.",
+          "updateOne": "Se puede actualizar 1 skill de forma segura",
+          "updateMany": "Se pueden actualizar {{value0}} skills de forma segura",
+          "success": "Todas las skills de Orca instaladas están actualizadas.",
+          "attention": "Algunas skills de Orca instaladas no se pueden actualizar automáticamente.",
+          "attentionDescription": "Abre Detalles de la actualización para ver por qué no se puede actualizar cada una.",
+          "details": "Detalles de la actualización",
+          "terminalTitle": "Actualizar skills de Orca",
+          "terminalDescription": "Revisa el comando pre-rellenado y pulsa Intro para ejecutarlo.",
+          "terminalAria": "Terminal de actualización de skills de Orca",
+          "checkNow": "Comprobar ahora",
+          "close": "Cerrar"
+        },
+        "SkillFreshnessStatusPill": {
+          "updateAvailable": "Actualización disponible",
+          "upToDate": "Actualizado",
+          "installed": "Instalado"
         }
       },
       "sidebar": {
@@ -3848,10 +3947,9 @@
         "RemoveFolderDialog": {
           "4dc5b5065b": "Quitar",
           "d36883e046": "Cancelar",
-          "8c097ef04e": "de Orca. Sigue estando en tu disco.",
-          "e62415c3d0": "Esto solo quita",
           "b79b39d865": "Quitar proyecto",
-          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
+          "removeDescriptionSsh": "Esto solo elimina {{name}} de Orca. Sus archivos permanecen en {{host}}; vuelve a añadir ese host SSH para recuperarlo.",
+          "removeDescriptionLocal": "Esto solo elimina {{name}} de Orca. Sigue estando en tu disco."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Mostrar espacio de trabajo activo"
@@ -5013,7 +5111,11 @@
           "windowSidebarSummary": "Barra lateral, barra de estado y explorador de archivos",
           "statusBarCount": "{{value0}} indicadores visibles.",
           "gitIgnoredGlossary": "Archivos que coinciden con .gitignore.",
-          "statusBarDescription": "Elige qué indicadores aparecen en la barra de estado."
+          "statusBarDescription": "Elige qué indicadores aparecen en la barra de estado.",
+          "showPinnedWorktreesInGroups": {
+            "title": "Mostrar también los worktrees fijados en sus listas originales",
+            "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -5873,13 +5975,6 @@
           "3743ed080c": "Establecer comando",
           "f79084947b": "Nueva aplicación"
         },
-        "OrchestrationExamplesDialog": {
-          "3d1aa105e3": "Copiar prompt",
-          "9b4c004998": "Hecho",
-          "969cec9739": "Copiar prompt de ejemplo {{value0}}",
-          "4e46da1889": "No se pudo copiar el prompt.",
-          "80c6f2feb8": "Prompt de ejemplo copiado."
-        },
         "OrchestrationPane": {
           "52e0634e2c": "Pídele a un agente coordinador que use la orquestación para handoffs, handoffs de worktree y agentes secundarios secuenciales o paralelos.",
           "ae79504732": "Cómo usarlo",
@@ -6391,7 +6486,9 @@
           "2309068a6f": "destructivo",
           "65358016ea": "Desechar",
           "dev": "Herramientas de desarrollo",
-          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI."
+          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
+          "linearTitle": "Linear",
+          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -7226,6 +7323,10 @@
             },
             "9a115966d3": "Minimizar a la bandeja al cerrar",
             "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
+            "showPinnedWorktreesInGroups": {
+              "title": "Mostrar también los worktrees fijados en sus listas originales",
+              "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."
+            },
             "antigravityUsageTitle": "Uso de Antigravity",
             "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
             "antigravityKeyword": "antigravity",
@@ -9013,6 +9114,10 @@
                   "description": "Permite que tus agentes lean y editen tareas de Linear.",
                   "copyCommand": "Copiar comando"
                 }
+              },
+              "search": {
+                "title": "Linear",
+                "description": "Give agents the skill to read and update your linked Linear tickets."
               }
             }
           }
@@ -9032,7 +9137,9 @@
           "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
           "c6d1a8f4e2": "Se restablece {{when}}",
           "e6dadc1e2b": "Monthly usage",
-          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
+          "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
+          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Usado",
@@ -9091,6 +9198,23 @@
           "availability": "Disponible en",
           "testFlight": "TestFlight",
           "androidApk": "APK de Android"
+        },
+        "SkillUsageExampleDialog": {
+          "copiedPrompt": "Prompt de ejemplo copiado.",
+          "copyFailed": "No se pudo copiar el prompt.",
+          "copyExampleAria": "Copiar prompt de ejemplo {{value0}}",
+          "done": "Hecho",
+          "copyPrompt": "Copiar prompt"
+        },
+        "LinearAgentSkillPane": {
+          "title": "Linear",
+          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "skillTitle": "Linear skill",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
+          "howToUse": "How to use it",
+          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
+          "terminalTitle": "Linear skill setup",
+          "terminalAriaLabel": "Linear skill install terminal"
         }
       },
       "right": {
@@ -9575,7 +9699,9 @@
               "a9bf7c171a": "Push fallido",
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
-            }
+            },
+            "createPrIntentSyncConflicts": "La sincronización encontró conflictos. Resuélvelos y vuelve a intentar Crear PR.",
+            "createPrIntentSyncing": "Sincronizando rama…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -10198,6 +10324,24 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "github": {
+            "refresh": {
+              "error": {
+                "copy": {
+                  "580025e7b7": "GitHub is unavailable",
+                  "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
+                  "d1a9f2b165": "Can't reach GitHub",
+                  "7d01d42a3a": "GitHub is unreachable right now. Check your connection, then try again shortly.",
+                  "e9d681894a": "GitHub rate limit reached",
+                  "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
+                  "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
+                  "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
+                  "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                }
+              }
+            }
           }
         }
       },
@@ -10524,7 +10668,8 @@
           },
           "ProjectCombobox": {
             "search": "Buscar proyectos...",
-            "empty": "Ningún proyecto coincide con tu búsqueda."
+            "empty": "Ningún proyecto coincide con tu búsqueda.",
+            "addProject": "Add a new project"
           }
         }
       },
@@ -13115,7 +13260,32 @@
         "pastedImageLabel": "Imagen pegada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
-        "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…"
+        "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…",
+        "model": "Modelo",
+        "effort": "Esfuerzo",
+        "fastMode": "Modo rápido",
+        "thinking": "Razonamiento",
+        "options": "Opciones",
+        "sessionOptions": "Opciones de sesión",
+        "chooseInAgentPicker": "Elegir en el selector del agente…",
+        "toggleOption": "Alternar {{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
+        "sentNotConfirmed": "Enviado al agente — sin confirmar",
+        "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
+        "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
+        "optionUpdateFailed": "No se pudo actualizar la opción",
+        "optionValue": {
+          "fast": "Rápido",
+          "minimal": "Mínimo",
+          "low": "Bajo",
+          "medium": "Medio",
+          "high": "Alto",
+          "xhigh": "Muy alto",
+          "max": "Máximo",
+          "on": "Activado",
+          "off": "Desactivado"
+        }
       },
       "tool": {
         "running": "Ejecutando…",
@@ -13138,6 +13308,7 @@
           "title": "No se pudo cargar la conversación",
           "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
         },
+        "pairHost": "Empareje un host para ver el historial de chat del agente.",
         "notAgent": {
           "title": "No hay conversación aquí",
           "subtitle": "Este terminal no está ejecutando un agente de código reconocido."
@@ -13190,6 +13361,29 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    }
+  },
+  "browser": {
+    "loadFailure": {
+      "connectionNotSecure": "Connection isn't secure",
+      "cantReachHost": "Can't reach {{value0}}",
+      "cantLoadPage": "Can't load this page",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
+      "retry": "Retry",
+      "copyAddress": "Copy Address",
+      "addressCopied": "Copied the current page address.",
+      "openExternally": "Open Externally",
+      "tryHttps": "Try HTTPS",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
   }
 }

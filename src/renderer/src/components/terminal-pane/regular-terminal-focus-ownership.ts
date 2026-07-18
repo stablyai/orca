@@ -102,8 +102,6 @@ export function resyncTerminalFocusForWindowFocus(args: {
     }
   }
 
-  args.syncFocused(true)
-
   const reclaimedHelper = helper
 
   // Why: defer the reclaim refocus to the next frame and only take focus if
@@ -115,6 +113,7 @@ export function resyncTerminalFocusForWindowFocus(args: {
     const schedule = args.scheduleRefocus ?? scheduleNextFrame
     schedule(() => {
       if (!reclaimedHelper.isConnected) {
+        syncFocusAfterFailedReclaim(reclaimedHelper.ownerDocument.activeElement, args.syncFocused)
         return
       }
       const active = reclaimedHelper.ownerDocument.activeElement
@@ -123,19 +122,42 @@ export function resyncTerminalFocusForWindowFocus(args: {
         isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
       ) {
         reclaimedHelper.focus()
+        if (reclaimedHelper.ownerDocument.activeElement === reclaimedHelper) {
+          args.syncFocused(true)
+        } else {
+          syncFocusAfterFailedReclaim(reclaimedHelper.ownerDocument.activeElement, args.syncFocused)
+        }
+        return
       }
+      syncFocusAfterFailedReclaim(active, args.syncFocused)
     })
     return true
   }
+
+  args.syncFocused(true)
 
   // Why: macOS app reactivation leaves a stale NSTextInputContext on the
   // still-focused helper (electron#32307/#34952); non-mac returns false inside.
   refreshTerminalImeInputContext(reclaimedHelper, {
     isMac: args.isMac,
+    // Why: if another control wins during the refresh frame, the terminal
+    // mirror must follow that owner instead of remaining latched true.
+    onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, args.syncFocused),
     scheduleRefocus: args.scheduleRefocus
   })
 
   return true
+}
+
+function syncFocusAfterFailedReclaim(
+  activeElement: Element | null,
+  syncFocused: TerminalInputFocusSync
+): void {
+  // Why: a later xterm focusin already published terminal ownership; an older
+  // deferred reclaim must not overwrite that newer process-wide mirror.
+  if (!isXtermHelperTextarea(activeElement)) {
+    syncFocused(false)
+  }
 }
 
 function isNode(value: EventTarget | null): value is Node {

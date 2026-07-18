@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Terminal E2E helpers share one PaneManager-backed path for PTY IO, split actions, and stable pane identity snapshots. */
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+import { buildFreshShellProbeInputSequence } from '../terminal-probe-input-sequence'
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
@@ -264,15 +265,21 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
     throw new Error('discoverActivePtyId: active tab has no PTY candidates in store')
   }
 
+  const candidateInputs = candidateIds.map((_id, index) =>
+    buildFreshShellProbeInputSequence(`echo ${marker}_${index}\r`)
+  )
+
   await page.evaluate(
-    ({ marker, candidateIds }) => {
+    ({ candidateIds, candidateInputs }) => {
       // Why: daemon PTY IDs can contain path separators and shell metacharacters.
       // Echo a numeric probe index, then map it back to the opaque ID in Node.
       for (const [index, id] of candidateIds.entries()) {
-        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${index}\r`)
+        for (const input of candidateInputs[index] ?? []) {
+          window.api.pty.write(String(id), input)
+        }
       }
     },
-    { marker, candidateIds }
+    { candidateIds, candidateInputs }
   )
 
   let foundPtyId: string | null = null

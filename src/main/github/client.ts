@@ -29,6 +29,7 @@ import {
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
+import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
@@ -184,18 +185,15 @@ function classifyPRRefreshError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType'] {
   const message = err instanceof Error ? err.message : String(err)
+  // Why: GitHub-unreachable buckets (5xx outage / network / rate limit) share
+  // one detector with the Tasks work-item path so both surfaces attribute an
+  // outage to GitHub identically. Rate-limit responses also carry "HTTP 403",
+  // so this must run before the permission check below.
+  const unavailable = classifyGitHubUnavailable(message)
+  if (unavailable) {
+    return unavailable
+  }
   const lower = message.toLowerCase()
-  if (lower.includes('rate limit')) {
-    return 'rate_limited'
-  }
-  if (
-    lower.includes('timeout') ||
-    lower.includes('no such host') ||
-    lower.includes('network') ||
-    lower.includes('could not resolve host')
-  ) {
-    return 'network'
-  }
   if (lower.includes('http 403') || lower.includes('resource not accessible')) {
     return 'permission'
   }
@@ -215,6 +213,8 @@ function safePRRefreshErrorMessage(
       return 'GitHub authentication is unavailable. Check your gh login.'
     case 'network':
       return 'GitHub is unreachable right now. Check your network and try again.'
+    case 'server_error':
+      return "GitHub's API is temporarily unavailable (server error). This is a GitHub-side issue."
     case 'permission':
       return 'GitHub did not allow access to this pull request.'
     case 'repo_unavailable':
@@ -485,13 +485,29 @@ function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
-    author:
-      typeof item.user === 'object' && item.user !== null && 'login' in item.user
-        ? String((item.user as { login?: unknown }).login ?? '')
-        : typeof item.author === 'object' && item.author !== null && 'login' in item.author
-          ? String((item.author as { login?: unknown }).login ?? '')
-          : null,
+    ...authorFieldsFromUnknown(item),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
+  }
+}
+
+/**
+ * Derive both the author login and its API avatar_url in one place so GHE
+ * avatars render (the login-only `github.com/{login}.png` URL 404s on GHE).
+ *
+ * REST exposes `user.avatar_url`; gh/GraphQL expose `author.avatarUrl`. `gh pr
+ * view` omits the avatar entirely, so authorAvatarUrl is left undefined and the
+ * UI falls back to the login URL then a placeholder. See #8784.
+ */
+function authorFieldsFromUnknown(
+  item: Record<string, unknown>
+): Pick<MainWorkItem, 'author' | 'authorAvatarUrl'> {
+  const user = userFromUnknown(item.user ?? item.author)
+  if (!user) {
+    return { author: null }
+  }
+  return {
+    author: user.login,
+    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {})
   }
 }
 
@@ -746,12 +762,7 @@ function mapPullRequestWorkItem(
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
-    author:
-      typeof item.user === 'object' && item.user !== null && 'login' in item.user
-        ? String((item.user as { login?: unknown }).login ?? '')
-        : typeof item.author === 'object' && item.author !== null && 'login' in item.author
-          ? String((item.author as { login?: unknown }).login ?? '')
-          : null,
+    ...authorFieldsFromUnknown(item),
     branchName:
       typeof item.head === 'object' && item.head !== null && 'ref' in item.head
         ? String((item.head as { ref?: unknown }).ref ?? '')
@@ -1259,6 +1270,9 @@ async function listQueriedWorkItems(
     query.reviewedBy !== null
   const issueScope = query.scope !== 'pr' && !hasPrOnlyFilter
   const prScope = query.scope !== 'issue'
+  let successfulRequestCount = 0
+  let nonAvailabilityFailureCount = 0
+  let availabilityError: unknown
 
   // Why: run the issue and PR fetches in parallel but surface the
   // issue-side error separately so the IPC envelope can carry it up. PR-side
@@ -1281,13 +1295,18 @@ async function listQueriedWorkItems(
       const { stdout } = issueOwnerRepo
         ? await ghExecFileAsync(request.args, ghOptions)
         : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
-      return {
-        items: (JSON.parse(stdout) as Record<string, unknown>[])
-          .filter((item) => !('pull_request' in item))
-          .map(mapIssueWorkItem)
-      }
+      const items = (JSON.parse(stdout) as Record<string, unknown>[])
+        .filter((item) => !('pull_request' in item))
+        .map(mapIssueWorkItem)
+      successfulRequestCount += 1
+      return { items }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
+      }
       return { items: [], issuesError: classifyListIssuesError(stderr) }
     }
   })()
@@ -1314,17 +1333,30 @@ async function listQueriedWorkItems(
         .slice(request.offset, request.offset + limit)
         .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       const hydrated = await hydrateWorkItemRepositoryMergeMetadata(mapped, prOwnerRepo, ghOptions)
+      successfulRequestCount += 1
       if (query.state === 'closed') {
         return hydrated.filter((item) => item.state !== 'merged')
       }
       return hydrated
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
+      const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
+      }
       return []
     }
   })()
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
+  if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
+    // Why: combined queries normally preserve either successful half. When
+    // every attempted half hit the same availability class, propagate one of
+    // those existing failures so Tasks can distinguish an outage from no data.
+    throw availabilityError
+  }
   return {
     items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
     issuesError: issueResult.issuesError

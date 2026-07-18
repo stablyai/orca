@@ -52,6 +52,7 @@ import {
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
+import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import {
@@ -91,6 +92,9 @@ type PtyShutdownOperation = {
 const ptyShutdownOperations = new Map<string, PtyShutdownOperation>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
+// Why: remembers the last positively-recognized agent foreground per PTY so a
+// degraded/timed-out scan does not report the shell and look like an exit.
+const ptyLastRecognizedForeground = new Map<string, string>()
 const ptyTerminalHandle = new Map<string, string>()
 const ptyInitialCwd = new Map<string, string>()
 // Why: node-pty callbacks must be disposed before environment teardown, but
@@ -226,6 +230,7 @@ function clearPtyState(id: string): void {
   ptyAgentSessionIds.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
+  ptyLastRecognizedForeground.delete(id)
   ptyTerminalHandle.delete(id)
   ptyInitialCwd.delete(id)
   ptyLoadGeneration.delete(id)
@@ -1183,6 +1188,7 @@ export class LocalPtyProvider implements IPtyProvider {
   async getForegroundProcess(id: string): Promise<string | null> {
     const proc = ptyProcesses.get(id)
     if (!proc) {
+      ptyLastRecognizedForeground.delete(id)
       return null
     }
     try {
@@ -1193,9 +1199,32 @@ export class LocalPtyProvider implements IPtyProvider {
           contextPaths: ptyAgentForegroundContextPaths.get(id)
         }
       )
-      return resolution.processName
+      // Why: the scan can outlive PTY teardown or id reuse; stale results must
+      // not resurrect cache state for a process that no longer owns this id.
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
+      // Why: a degraded/timed-out scan must not report the shell as the
+      // foreground — the completion coordinator reads that as an exit and fires
+      // a false "agent done" while the agent is still working. Prefer the last
+      // recognized agent across a transient failure (e.g. a Windows CIM timeout).
+      const stable = resolveStableForegroundProcess(
+        resolution,
+        ptyLastRecognizedForeground.get(id) ?? null
+      )
+      if (stable.lastRecognizedAgent) {
+        ptyLastRecognizedForeground.set(id, stable.lastRecognizedAgent)
+      } else {
+        ptyLastRecognizedForeground.delete(id)
+      }
+      return stable.processName
     } catch {
-      return null
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
+      // Why: an inspection error is itself a degraded read; fall back to the
+      // last recognized agent rather than null (which also reads as an exit).
+      return ptyLastRecognizedForeground.get(id) ?? null
     }
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CustomPet } from '../../../../shared/types'
+import { applyCodexSpriteTimingDefaults } from '../../../../shared/codex-pet-sprite-defaults'
 import { useAppStore } from '../../store'
 import { BUNDLED_PET, findBundledPet, isBundledPetId } from './pet-models'
 import {
@@ -114,7 +115,14 @@ export function usePetUrl(): ResolvedPet {
       customMeta.sprite.frameHeight > 0 &&
       customMeta.sprite.fps > 0
     ) {
-      return { url: customUrl, ready: true, sprite: customMeta.sprite, detected: null }
+      // Why: sprites persisted before per-frame durations existed pace ~9x too
+      // fast. Upgrade the legacy Codex fingerprint without forcing a re-import.
+      return {
+        url: customUrl,
+        ready: true,
+        sprite: applyCodexSpriteTimingDefaults(customMeta.sprite),
+        detected: null
+      }
     }
     const detected = detectedSpriteCache.get(customMeta.id)
     if (detected) {

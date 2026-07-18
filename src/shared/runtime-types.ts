@@ -8,6 +8,8 @@ import type {
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
+  BrowserCertificateFailure,
+  BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileSource,
   CreateWorktreeResult,
@@ -206,6 +208,8 @@ export type RuntimeMobileSessionBrowserTab = {
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  loadError?: BrowserLoadError | null
+  certificateFailure?: BrowserCertificateFailure | null
   color?: string | null
   isPinned?: boolean
   isActive: boolean
@@ -818,6 +822,11 @@ export type BrowserTabInfo = {
   url: string
   title: string
   active: boolean
+  // Why: a failed load leaves getURL() at chrome-error://; surface the structured
+  // error so an agent driving the browser can tell a bypassable certificate
+  // failure from an ordinary network error the way the UI can.
+  loadError?: BrowserLoadError | null
+  certificateFailure?: BrowserCertificateFailure | null
   worktreeId?: string | null
   profileId?: string | null
   profileLabel?: string | null

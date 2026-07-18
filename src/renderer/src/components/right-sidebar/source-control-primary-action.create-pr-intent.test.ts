@@ -71,6 +71,33 @@ describe('resolvePrimaryAction Create PR intent', () => {
     expect(result.disabled).toBe(false)
   })
 
+  it('returns Create PR intent for a behind-only branch (fast-forward sync)', () => {
+    const input = inputs({
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/feature',
+        ahead: 0,
+        behind: 3
+      },
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'needs_sync',
+        nextAction: 'sync'
+      }
+    })
+    const result = resolvePrimaryAction(input)
+    expect(result.kind).toBe('create_pr_intent')
+    expect(result.disabled).toBe(false)
+    expect(resolveCreatePrHeaderAction(input)).toEqual({
+      kind: 'create_pr_intent',
+      label: 'Create PR',
+      title: 'Prepare this branch and create a pull request',
+      disabled: false
+    })
+  })
+
   it('returns Create PR intent for a branch that needs a safe push before review', () => {
     const input = inputs({
       upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },

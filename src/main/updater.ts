@@ -2,6 +2,7 @@
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateCheckOptions, UpdateStatus } from '../shared/types'
+import { isWindowsSignatureCheckUnavailableFailure } from '../shared/updater-windows-signature-check'
 import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
@@ -117,9 +118,8 @@ let _getPendingUpdateNudgeId: (() => string | null) | null = null
 let _getDismissedUpdateNudgeId: (() => string | null) | null = null
 let _setPendingUpdateNudgeId: ((id: string | null) => void) | null = null
 let _setDismissedUpdateNudgeId: ((id: string | null) => void) | null = null
-// Why: guards against duplicate download() calls when both the card and
-// Settings trigger a download before the first download-progress event
-// flips the status to 'downloading'.
+// Why: guards against duplicate download() calls while an accepted request
+// transitions the authoritative status to 'downloading'.
 let downloadInFlight = false
 /** Guards against the macOS `activate` handler re-opening the old version
  *  while Squirrel's ShipIt is replacing the .app bundle. */
@@ -522,6 +522,14 @@ function sendErrorStatus(message: string, userInitiated?: boolean): void {
     currentStatus.userInitiated === userInitiated
   ) {
     return
+  }
+  // Why: counts AV/EDR-blocked Windows signature checks in the field so we can
+  // size the affected cohort before investing in bigger updater changes.
+  if (isWindowsSignatureCheckUnavailableFailure(message)) {
+    recordUpdaterLifecycle('windows_signature_check_blocked', undefined, {
+      level: 'warn',
+      message: 'Windows update signature check could not run'
+    })
   }
   sendStatus({ state: 'error', message, userInitiated })
 }
@@ -1510,8 +1518,15 @@ export function downloadUpdate(): void {
   if (!canStart) {
     return
   }
+  const version = currentStatus.state === 'available' ? currentStatus.version : availableVersion
+  if (!version) {
+    return
+  }
   downloadInFlight = true
   beginMacUpdateDownload()
+  // Why: retries may spend seconds in setup before electron-updater emits
+  // progress; surface acceptance immediately so the action never looks inert.
+  sendStatus({ state: 'downloading', percent: 0, version })
   getAutoUpdater()
     .downloadUpdate()
     .catch((err) => {

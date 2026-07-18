@@ -7,6 +7,7 @@ import {
   createPtyDeliveryBreadcrumbRing
 } from '../../../../shared/pty-delivery-diagnostics'
 import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
+import { maybeStartTerminalRenderDesyncSentinel } from './terminal-render-desync-sentinel'
 
 const rendererDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
 
@@ -24,6 +25,11 @@ export function recordTerminalFreezeBreadcrumb(
 setTerminalWebglDiagnosticRecorder((kind, detail) =>
   rendererDeliveryBreadcrumbs.record(kind, detail)
 )
+
+// Why: the sentinel is a field-diagnostic that must be armable on production
+// builds; starting it from this diagnostics bootstrap keeps arming independent
+// of any specific pane mounting first. No-op unless its localStorage flag is set.
+maybeStartTerminalRenderDesyncSentinel()
 
 export function getTerminalFreezeBreadcrumbs(): PtyDeliveryBreadcrumb[] {
   return rendererDeliveryBreadcrumbs.snapshot()

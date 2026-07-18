@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
@@ -192,5 +193,27 @@ describe('Codex backend rate-limit requests', () => {
         })
       })
     )
+  })
+
+  it('cancels the unread error-response body so bundled undici cannot crash on socket close', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'access-token', account_id: 'account-id' }
+      })
+    )
+    let cancelledBodies = 0
+    vi.mocked(fetch).mockResolvedValue(
+      cancelTrackingResponse(429, () => {
+        cancelledBodies += 1
+      })
+    )
+
+    await expect(
+      consumeCodexRateLimitResetCredit({
+        codexHomePath: '/managed/codex-home',
+        idempotencyKey: 'redeem-429'
+      })
+    ).rejects.toThrow('Codex reset failed: HTTP 429')
+    expect(cancelledBodies).toBe(1)
   })
 })

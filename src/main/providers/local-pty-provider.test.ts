@@ -67,10 +67,8 @@ vi.mock('./windows-powershell-executable', () => ({
 }))
 
 vi.mock('./agent-foreground-process', () => ({
-  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => ({
-    available: true,
-    processName: await resolveAgentForegroundProcessMock(...args)
-  })
+  resolveAgentForegroundProcessWithAvailability: (...args: unknown[]) =>
+    resolveAgentForegroundProcessMock(...args)
 }))
 
 vi.mock('../wsl', () => ({
@@ -143,7 +141,10 @@ describe('LocalPtyProvider', () => {
     terminateDescendantSnapshotMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
-      async (_pid: number, fallbackProcess: string | null) => fallbackProcess
+      async (_pid: number, fallbackProcess: string | null) => ({
+        available: true,
+        processName: fallbackProcess
+      })
     )
 
     exitCb = undefined
@@ -936,7 +937,7 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
-        ['--login', '-i'],
+        ['-c', 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'],
         expect.objectContaining({
           cwd: 'C:\\Users\\jin\\repo',
           env: expect.objectContaining({
@@ -1358,13 +1359,40 @@ describe('LocalPtyProvider', () => {
     it('returns null for unknown PTY ids', async () => {
       expect(await provider.getForegroundProcess('nonexistent')).toBeNull()
     })
+
+    it('keeps a recognized agent across an unavailable scan without adding probes', async () => {
+      resolveAgentForegroundProcessMock
+        .mockResolvedValueOnce({ available: true, processName: 'claude' })
+        .mockResolvedValueOnce({ available: false, processName: 'powershell.exe' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('drops a delayed scan result after the PTY exits', async () => {
+      let resolveScan!: (resolution: { available: boolean; processName: string }) => void
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveScan = resolve
+        })
+      )
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const foreground = provider.getForegroundProcess(id)
+      exitCb?.({ exitCode: 0 })
+      resolveScan({ available: true, processName: 'droid' })
+
+      await expect(foreground).resolves.toBeNull()
+    })
   })
 
   describe('confirmForegroundProcess', () => {
     it('drops a delayed result after the PTY exits', async () => {
-      let resolveScan!: (processName: string) => void
+      let resolveScan!: (resolution: { available: boolean; processName: string }) => void
       resolveAgentForegroundProcessMock.mockReturnValue(
-        new Promise<string>((resolve) => {
+        new Promise((resolve) => {
           resolveScan = resolve
         })
       )
@@ -1372,7 +1400,7 @@ describe('LocalPtyProvider', () => {
 
       const confirmation = provider.confirmForegroundProcess(id)
       exitCb?.({ exitCode: 0 })
-      resolveScan('droid')
+      resolveScan({ available: true, processName: 'droid' })
 
       await expect(confirmation).resolves.toBeNull()
     })

@@ -100,6 +100,31 @@ describe('fetchGrokRateLimits', () => {
     )
   })
 
+  it('maps an omitted protobuf percentage as zero for a weekly credits period', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-07-17T19:38:56.948570+00:00',
+            end: '2026-07-24T19:38:56.948570+00:00'
+          },
+          billingPeriodStart: '2026-07-17T19:38:56.948570+00:00',
+          billingPeriodEnd: '2026-07-24T19:38:56.948570+00:00',
+          isUnifiedBillingUser: true
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+    expect(result.weekly?.resetsAt).toBe(Date.parse('2026-07-24T19:38:56.948570+00:00'))
+    expect(result.monthly).toBeUndefined()
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('returns unavailable when not signed in even if a token-less auth file exists', async () => {
     authState.file = JSON.stringify({})
     const result = await fetchGrokRateLimits()
@@ -119,7 +144,7 @@ describe('fetchGrokRateLimits', () => {
     expect(result.monthly).toBeUndefined()
   })
 
-  it('maps monthly included usage for unified-billing accounts without weekly credits', async () => {
+  it('maps monthly included usage when a unified-billing response has an ambiguous weekly period', async () => {
     authState.file = freshAuthJson()
     netFetchMock
       .mockResolvedValueOnce(
@@ -162,6 +187,7 @@ describe('fetchGrokRateLimits', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer access-token' })
       })
     )
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
   })
 
   // Why: 'unavailable' would make applyStalePolicy discard the last good
@@ -241,6 +267,13 @@ describe('fetchGrokRateLimits', () => {
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/expired/i)
+    expect(result.error).toMatch(/run grok on the computer running Orca/i)
+    expect(result.error).toMatch(/sign in if prompted/i)
+    expect(result.error).toMatch(/no chat message is needed/i)
+    expect(result.usageMetadata).toEqual({
+      failureKind: 'delegated-refresh-required',
+      source: 'oauth'
+    })
     // Why: a stored-but-expired access token is refreshed by Grok CLI on next
     // use (a genuine sign-out returns 'missing'), so the message must not tell
     // users to re-run `grok login` (#8497).

@@ -77,6 +77,7 @@ export type EditorConfigParams = {
   markdownSourceLineOffsetRef: MutableRefObject<number>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
+  openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
   syncAnnotationTarget: (editor: Editor) => void
   clearAnnotationTarget: () => void
   scrollRichMarkdownReviewNoteCardIntoView: (commentId: string) => void
@@ -109,17 +110,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     reconcileRoundTripRef,
     onContentChangeRef,
     onDirtyStateHintRef,
-    onSaveRef,
     onOpenDocLinkRef,
-    isEditingLinkRef,
-    slashMenuRef,
-    filteredSlashCommandsRef,
-    selectedCommandIndexRef,
-    docLinkMenuRef,
-    filteredDocLinkRowsRef,
-    selectedDocLinkIndexRef,
-    handleLocalImagePickRef,
-    handleEmojiPickRef,
     typedEmptyOrderedListMarkerRef,
     cancelAutoFocusRef,
     serializeTimerRef,
@@ -127,15 +118,11 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     isApplyingProgrammaticUpdateRef,
     markdownCommentsRef,
     markdownSourceLineOffsetRef,
-    flushPendingSerialization,
-    openSearchRef,
     syncAnnotationTarget,
     clearAnnotationTarget,
     scrollRichMarkdownReviewNoteCardIntoView,
     setIsEditingLink,
     setLinkBubble,
-    setSelectedCommandIndex,
-    setSelectedDocLinkIndex,
     setSlashMenu,
     setDocLinkMenu
   } = params
@@ -172,36 +159,12 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
         return false
       },
+      // Why: KeyHandlerContext is a typed subset of EditorConfigParams, so the
+      // spread stays type-checked while new context fields avoid re-listing
+      // every ref here.
       handleKeyDown: createRichMarkdownKeyHandler({
-        isMac,
-        editorRef,
-        rootRef,
-        lastCommittedMarkdownRef,
-        originalSourceRef,
-        baseCanonicalRef,
-        reconcileRoundTripRef,
-        onContentChangeRef,
-        onSaveRef,
-        isEditingLinkRef,
-        slashMenuRef,
-        filteredSlashCommandsRef,
-        selectedCommandIndexRef,
-        docLinkMenuRef,
-        filteredDocLinkRowsRef,
-        selectedDocLinkIndexRef,
-        handleLocalImagePickRef,
-        handleEmojiPickRef,
-        typedEmptyOrderedListMarkerRef,
-        flushPendingSerialization,
-        openSearchRef,
+        ...params,
         linkBubbleOwnerId: codec.transport.key,
-        htmlSuperscriptLinkContext,
-        setIsEditingLink,
-        setLinkBubble,
-        setSelectedCommandIndex,
-        setSelectedDocLinkIndex,
-        setSlashMenu,
-        setDocLinkMenu,
         openSelectedHtmlSuperscriptLink: () =>
           openSelectedHtmlSuperscriptLink({
             activateMarkdownLink,

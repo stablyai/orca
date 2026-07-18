@@ -8,18 +8,30 @@ import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
 import type { RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
-import { uploadDirectory, waitForSentinel, execCommand } from './ssh-relay-deploy-helpers'
+import {
+  uploadDirectory,
+  waitForSentinel,
+  execCommand,
+  isUnconfirmedSshCommandTermination
+} from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   readLocalFullVersion,
   computeRemoteRelayDir,
   isRelayAlreadyInstalled,
-  acquireInstallLock,
   finalizeInstall,
   abandonInstall,
   gcOldRelayVersions
 } from './ssh-relay-versioned-install'
-import { shellEscape } from './ssh-connection-utils'
+import { acquireInstallLock } from './ssh-relay-install-lock'
+import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
+import {
+  releaseRelayGcClaimWithRetry,
+  tryAcquireRelayGcClaim,
+  waitForRelayGcClaimRelease
+} from './ssh-relay-gc-claim'
+import { NATIVE_DEPS_COMMAND_TIMEOUT_MS, RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
+import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
 import {
   probeBuildToolchain,
   formatMissingToolchainError,
@@ -66,16 +78,14 @@ export type RelayDeployResult = {
   sockPath?: string
 }
 
-// Why: individual exec commands have 30s timeouts, but the full deploy
-// pipeline (detect platform → check existing → upload → npm install →
-// launch) has no overall bound. A hanging `npm install` or slow SFTP
-// upload could block the connection indefinitely. First-time installs need
-// room for the longer native dependency install bound below.
-const RELAY_DEPLOY_TIMEOUT_MS = 300_000
-
-// npm install on a cold Windows cache plus antivirus scanning can exceed the
-// default 30s exec timeout.
-const NATIVE_DEPS_INSTALL_TIMEOUT_MS = 240_000
+class RelayDirectoryGcConflictError extends Error {
+  constructor(
+    readonly remoteRelayDir: string,
+    readonly hostPlatform: RemoteHostPlatform
+  ) {
+    super(`Relay directory GC is in progress at ${remoteRelayDir}`)
+  }
+}
 
 function execHostCommand(
   conn: SshConnection,
@@ -108,15 +118,25 @@ export async function deployAndLaunchRelay(
   relayInstanceId?: string
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
+  // Why: Promise.race does not cancel its loser. Stop a contended install-lock
+  // waiter so it cannot acquire and mutate the relay after this call times out.
+  const deployAbortController = new AbortController()
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timeoutHandle = setTimeout(() => {
+      deployAbortController.abort()
       reject(new Error(`Relay deployment timed out after ${RELAY_DEPLOY_TIMEOUT_MS / 1000}s`))
     }, RELAY_DEPLOY_TIMEOUT_MS)
   })
 
   try {
     return await Promise.race([
-      deployAndLaunchRelayInner(conn, onProgress, graceTimeSeconds, relayInstanceId),
+      deployAndLaunchRelayInner(
+        conn,
+        onProgress,
+        graceTimeSeconds,
+        relayInstanceId,
+        deployAbortController.signal
+      ),
       timeoutPromise
     ])
   } finally {
@@ -179,22 +199,29 @@ type RelayBootstrapState = {
 async function resolveRelayBootstrapStateSequentially(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  fullVersion: string
+  fullVersion: string,
+  signal?: AbortSignal
 ): Promise<RelayBootstrapState> {
-  const installState = await resolveRemoteInstallState(conn, hostPlatform, fullVersion)
-  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
+  const installState = await resolveRemoteInstallState(conn, hostPlatform, fullVersion, { signal })
+  const nodePath = await resolveRemoteNodePath(conn, hostPlatform, { signal })
   return { ...installState, nodePath }
 }
 
 async function resolveRelayBootstrapState(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  fullVersion: string
+  fullVersion: string,
+  signal?: AbortSignal
 ): Promise<RelayBootstrapState> {
   if (!conn.canRunConcurrentExecCommands()) {
-    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion)
+    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion, signal)
   }
   const abortController = new AbortController()
+  const abortForDeploy = (): void => abortController.abort()
+  signal?.addEventListener('abort', abortForDeploy, { once: true })
+  if (signal?.aborted) {
+    abortForDeploy()
+  }
   const installStatePromise = resolveRemoteInstallState(conn, hostPlatform, fullVersion, {
     rethrowSessionLimitErrors: true,
     signal: abortController.signal
@@ -205,10 +232,12 @@ async function resolveRelayBootstrapState(
   })
   try {
     const [installState, nodePath] = await Promise.all([installStatePromise, nodePathPromise])
+    signal?.throwIfAborted()
     return { ...installState, nodePath }
   } catch (err) {
     abortController.abort()
     const settled = await Promise.allSettled([installStatePromise, nodePathPromise])
+    signal?.throwIfAborted()
     if (!isSshSessionLimitError(err)) {
       throw err
     }
@@ -224,7 +253,9 @@ async function resolveRelayBootstrapState(
     console.warn(
       '[ssh-relay] Concurrent bootstrap probes hit the remote SSH session limit; retrying sequentially.'
     )
-    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion)
+    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion, signal)
+  } finally {
+    signal?.removeEventListener('abort', abortForDeploy)
   }
 }
 
@@ -241,11 +272,40 @@ async function deployAndLaunchRelayInner(
   conn: SshConnection,
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
-  relayInstanceId?: string
+  relayInstanceId?: string,
+  deploySignal?: AbortSignal
+): Promise<RelayDeployResult> {
+  while (true) {
+    deploySignal?.throwIfAborted()
+    try {
+      return await deployAndLaunchRelayAttempt(
+        conn,
+        onProgress,
+        graceTimeSeconds,
+        relayInstanceId,
+        deploySignal
+      )
+    } catch (err) {
+      if (!(err instanceof RelayDirectoryGcConflictError)) {
+        throw err
+      }
+      // Why: GC atomically moves the old install aside. Wait for its stable
+      // sibling claim to clear, then recompute install state from scratch.
+      await waitForRelayGcClaimRelease(conn, err.remoteRelayDir, err.hostPlatform, deploySignal)
+    }
+  }
+}
+
+async function deployAndLaunchRelayAttempt(
+  conn: SshConnection,
+  onProgress?: (status: string) => void,
+  graceTimeSeconds?: number,
+  relayInstanceId?: string,
+  deploySignal?: AbortSignal
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
-  const hostPlatform = await detectRemoteHostPlatform(conn)
+  const hostPlatform = await detectRemoteHostPlatform(conn, { signal: deploySignal })
   if (!hostPlatform) {
     throw new Error(
       'Unsupported remote platform. Orca relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64.'
@@ -275,57 +335,104 @@ async function deployAndLaunchRelayInner(
   // fail-fast; remotes that reject overlapping session channels retry the old
   // sequential order so restrictive SSH servers keep working.
   const { remoteHome, remoteRelayDir, alreadyInstalled, nodePath } =
-    await resolveRelayBootstrapState(conn, hostPlatform, fullVersion)
+    await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
 
+  let ownsInstallLock = false
+  let launchGcClaimToken: string | undefined
   if (alreadyInstalled) {
-    await repairInstalledNativeDeps(conn, remoteRelayDir, platform, hostPlatform, nodePath)
+    const launchFence = await repairInstalledNativeDeps(
+      conn,
+      remoteRelayDir,
+      platform,
+      hostPlatform,
+      nodePath,
+      deploySignal
+    )
+    ownsInstallLock = launchFence.ownsInstallLock
+    launchGcClaimToken = launchFence.gcClaimToken
+    deploySignal?.throwIfAborted()
   } else {
     // Why: serialize concurrent first-installs of the same version against
-    // each other via an atomic mkdir lock. The losing caller polls and either
+    // each other via a host-native exclusive lock. The losing caller polls and either
     // re-checks `alreadyInstalled` (now true) or steals a stale lock.
-    await acquireInstallLock(conn, remoteRelayDir, hostPlatform)
+    await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
+    ownsInstallLock = true
     try {
       // Re-probe after acquiring the lock — a sibling installer may have
       // finished while we were waiting.
-      if (!(await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform))) {
+      if (
+        !(await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform, {
+          signal: deploySignal
+        }))
+      ) {
         onProgress?.('Uploading relay...')
         console.log('[ssh-relay] Uploading relay...')
-        await uploadRelay(conn, platform, remoteRelayDir, fullVersion, hostPlatform)
+        await uploadRelay(conn, platform, remoteRelayDir, fullVersion, hostPlatform, deploySignal)
         console.log('[ssh-relay] Upload complete')
 
         onProgress?.('Installing native dependencies...')
         console.log('[ssh-relay] Installing native dependencies...')
-        await installNativeDeps(conn, remoteRelayDir, platform, hostPlatform, nodePath)
+        await installNativeDeps(
+          conn,
+          remoteRelayDir,
+          platform,
+          hostPlatform,
+          nodePath,
+          deploySignal
+        )
         console.log('[ssh-relay] Native deps installed')
 
-        // Why: write `.install-complete` BEFORE releasing the lock so a
-        // sibling never observes the dir as "complete but locked", which
-        // would lead GC to skip a recoverable dir indefinitely.
-        await finalizeInstall(conn, remoteRelayDir, hostPlatform)
-      } else {
-        await abandonInstall(conn, remoteRelayDir, hostPlatform)
+        // Why: mark complete but retain the lock until launch makes daemon
+        // liveness observable to cross-version GC.
+        await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
+          signal: deploySignal,
+          releaseLock: false
+        })
       }
     } catch (err) {
       // Why: leave a partial install dir in place (no `.install-complete`)
       // so the next deploy detects the partial and re-runs upload + install.
-      // Just release the lock so a concurrent caller can retry.
-      await abandonInstall(conn, remoteRelayDir, hostPlatform)
+      // Keep the lock if remote command termination was not confirmed; stale
+      // recovery is safer than overlapping a still-running npm process.
+      if (!isUnconfirmedSshCommandTermination(err)) {
+        await abandonInstall(conn, remoteRelayDir, hostPlatform)
+        ownsInstallLock = false
+      }
       throw err
     }
   }
 
-  onProgress?.('Starting relay...')
-  console.log('[ssh-relay] Launching relay...')
-  const launched = await launchRelay(
-    conn,
-    remoteRelayDir,
-    hostPlatform,
-    nodePath,
-    graceTimeSeconds,
-    relayInstanceId
-  )
+  let launched: Awaited<ReturnType<typeof launchRelay>>
+  let launchLivenessObserved = false
+  try {
+    deploySignal?.throwIfAborted()
+    onProgress?.('Starting relay...')
+    console.log('[ssh-relay] Launching relay...')
+    launched = await launchRelay(
+      conn,
+      remoteRelayDir,
+      hostPlatform,
+      nodePath,
+      graceTimeSeconds,
+      relayInstanceId,
+      deploySignal
+    )
+    launchLivenessObserved = true
+  } finally {
+    // Why: older clients understand only the install lock. If launch never
+    // becomes live, retain it for stale recovery so their GC cannot race a
+    // concurrent caller that was waiting behind this owner.
+    if (ownsInstallLock && launchLivenessObserved) {
+      await abandonInstall(conn, remoteRelayDir, hostPlatform)
+    }
+    // The detached start may outlive a timed-out SSH command. Preserve either
+    // fence on failed launch until stale recovery can prove the handoff ended.
+    if (launchGcClaimToken && launchLivenessObserved) {
+      await releaseRelayGcClaimWithRetry(conn, remoteRelayDir, launchGcClaimToken, hostPlatform)
+    }
+  }
   console.log('[ssh-relay] Relay started successfully')
 
   // Why: best-effort cleanup of unreferenced sibling version dirs. Errors
@@ -352,7 +459,8 @@ async function uploadRelay(
   platform: RelayPlatform,
   remoteDir: string,
   fullVersion: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -363,16 +471,19 @@ async function uploadRelay(
   }
 
   // Create remote directory
-  await execHostCommand(conn, hostPlatform, makeRemoteDirectoryCommand(hostPlatform, remoteDir))
+  await execHostCommand(conn, hostPlatform, makeRemoteDirectoryCommand(hostPlatform, remoteDir), {
+    signal
+  })
 
-  await uploadDirectoryForConnection(conn, localRelayDir, remoteDir, hostPlatform)
+  await uploadDirectoryForConnection(conn, localRelayDir, remoteDir, hostPlatform, signal)
 
   // Make the node binary executable
   if (!isWindowsRemoteHost(hostPlatform)) {
     await execHostCommand(
       conn,
       hostPlatform,
-      makeRemoteExecutableCommand(hostPlatform, joinRemotePath(hostPlatform, remoteDir, 'node'))
+      makeRemoteExecutableCommand(hostPlatform, joinRemotePath(hostPlatform, remoteDir, 'node')),
+      { signal }
     )
   }
 
@@ -383,7 +494,8 @@ async function uploadRelay(
     conn,
     hostPlatform,
     joinRemotePath(hostPlatform, remoteDir, '.version'),
-    fullVersion
+    fullVersion,
+    signal
   )
 }
 
@@ -391,10 +503,11 @@ async function uploadDirectoryForConnection(
   conn: SshConnection,
   localRelayDir: string,
   remoteDir: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
 ): Promise<void> {
   if (typeof conn.uploadDirectory === 'function') {
-    await conn.uploadDirectory(localRelayDir, remoteDir, { hostPlatform })
+    await conn.uploadDirectory(localRelayDir, remoteDir, { hostPlatform, signal })
     return
   }
 
@@ -410,10 +523,11 @@ async function writeRemoteFile(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   remotePath: string,
-  contents: string
+  contents: string,
+  signal?: AbortSignal
 ): Promise<void> {
   if (typeof conn.writeFile === 'function') {
-    await conn.writeFile(remotePath, contents, { hostPlatform })
+    await conn.writeFile(remotePath, contents, { hostPlatform, signal })
     return
   }
 
@@ -438,31 +552,64 @@ const RELAY_NATIVE_DEPS = {
   '@parcel/watcher': '2.5.6'
 } as const
 
-async function hasRequiredNativeDeps(
+type RelayNativeDepName = keyof typeof RELAY_NATIVE_DEPS
+const RELAY_NATIVE_DEP_NAMES = Object.keys(RELAY_NATIVE_DEPS) as RelayNativeDepName[]
+const NATIVE_DEPS_MISSING_PREFIX = 'ORCA-NATIVE-DEPS-MISSING:'
+
+// Why: npm 12 blocks dependency lifecycle scripts unless each exact package
+// version is approved, even when ignore-scripts is explicitly disabled.
+const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
+  Object.entries(RELAY_NATIVE_DEPS).map(([name, version]) => [`${name}@${version}`, true])
+)
+
+function nativeDepsProbeJs(successToken: string): string {
+  // Why: node-pty's Windows wrapper defers loading conpty.node until first
+  // spawn, so require("node-pty") alone cannot prove the binding is healthy.
+  const loadNodePty =
+    'require("node-pty"); require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty")'
+  return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
+}
+
+function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] {
+  const marker = output
+    .split(/\r?\n/)
+    .find((line) => line.trim().startsWith(NATIVE_DEPS_MISSING_PREFIX))
+  if (!marker) {
+    return [...RELAY_NATIVE_DEP_NAMES]
+  }
+  const reported = marker.trim().slice(NATIVE_DEPS_MISSING_PREFIX.length).split(',')
+  return RELAY_NATIVE_DEP_NAMES.filter((name) => reported.includes(name))
+}
+
+async function probeRequiredNativeDeps(
   conn: SshConnection,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
-  nodePath: string
-): Promise<boolean> {
+  nodePath: string,
+  signal?: AbortSignal
+): Promise<{ available: boolean; missing: RelayNativeDepName[] }> {
   const escapedNode = shellEscape(nodePath)
+  const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK')
   try {
     const command = isWindowsRemoteHost(hostPlatform)
       ? commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg('require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")')} } catch { 'MISSING' }`
+          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)} } catch { 'MISSING' }`
         )
       : commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `(${escapedNode} -e 'require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")' 2>/dev/null || echo MISSING)`
+          `(${escapedNode} -e ${shellEscape(probeJs)} 2>/dev/null || echo MISSING)`
         )
-    const probe = await execHostCommand(conn, hostPlatform, command)
-    return probe.includes('ORCA-NATIVE-DEPS-OK')
+    const probe = await execHostCommand(conn, hostPlatform, command, { signal })
+    const available = probe.includes('ORCA-NATIVE-DEPS-OK')
+    return { available, missing: available ? [] : missingNativeDepsFromProbe(probe) }
   } catch {
-    return false
+    signal?.throwIfAborted()
+    return { available: false, missing: [...RELAY_NATIVE_DEP_NAMES] }
   }
 }
 
@@ -471,25 +618,116 @@ async function repairInstalledNativeDeps(
   remoteDir: string,
   platform: RelayPlatform,
   hostPlatform: RemoteHostPlatform,
-  nodePath: string
-): Promise<void> {
-  if (await hasRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath)) {
-    return
+  nodePath: string,
+  signal?: AbortSignal
+): Promise<{ ownsInstallLock: boolean; gcClaimToken?: string }> {
+  const initialProbe = await probeRequiredNativeDeps(
+    conn,
+    remoteDir,
+    hostPlatform,
+    nodePath,
+    signal
+  )
+  const lockResult = await tryAcquireRelayRepairLock(conn, remoteDir, hostPlatform, { signal })
+  if (lockResult === 'gc') {
+    throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+  }
+  if (lockResult === 'acquired') {
+    let stillInstalled: boolean
+    try {
+      stillInstalled = await isRelayAlreadyInstalled(conn, remoteDir, hostPlatform, {
+        rethrowSessionLimitErrors: true,
+        signal
+      })
+    } catch (err) {
+      await abandonInstall(conn, remoteDir, hostPlatform)
+      throw err
+    }
+    if (!stillInstalled) {
+      // Why: GC may finish its rename before our lock attempt recreates the
+      // original path. Never trust probes made before this locked recheck.
+      await abandonInstall(conn, remoteDir, hostPlatform)
+      throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+    }
+  }
+  const gcClaimToken =
+    lockResult === 'busy' || lockResult === 'error'
+      ? await acquireRelayLaunchGcFence(conn, remoteDir, hostPlatform, signal)
+      : undefined
+  if (initialProbe.available) {
+    // Why: even a healthy reconnect must stay fenced until launch liveness is
+    // observable; otherwise cross-version GC can rename after this probe.
+    return { ownsInstallLock: lockResult === 'acquired', gcClaimToken }
   }
 
+  // Why: an already-installed relay can launch in degraded mode (fs/git/preflight
+  // still work; native-backed ops fail), so native-deps repair is best-effort:
+  // lock contention and repair failures must not abort the connection. Pre-repair
+  // this path used require.resolve (which passed for a present-but-unloadable
+  // binding), so a fatal repair here would be a straight regression.
   console.warn(`[ssh-relay] Repairing missing native deps at ${remoteDir}`)
-  await acquireInstallLock(conn, remoteDir, hostPlatform)
+  if (lockResult === 'busy' || lockResult === 'error') {
+    console.warn(
+      `[ssh-relay] Native-deps repair lock is ${lockResult} at ${remoteDir}; launching degraded`
+    )
+    return { ownsInstallLock: false, gcClaimToken }
+  }
   try {
     // Why: older complete relay dirs were created before @parcel/watcher was
     // installed. Re-probe under the lock so only one reconnect mutates the dir.
-    if (!(await hasRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath))) {
-      await installNativeDeps(conn, remoteDir, platform, hostPlatform, nodePath)
-      await finalizeInstall(conn, remoteDir, hostPlatform)
-    } else {
-      await abandonInstall(conn, remoteDir, hostPlatform)
+    const probe = await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
+    if (!probe.available) {
+      await installNativeDeps(
+        conn,
+        remoteDir,
+        platform,
+        hostPlatform,
+        nodePath,
+        signal,
+        probe.missing
+      )
+      await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })
     }
+    return { ownsInstallLock: true }
   } catch (err) {
-    await abandonInstall(conn, remoteDir, hostPlatform)
+    const terminationUnconfirmed = isUnconfirmedSshCommandTermination(err)
+    // Why: keep a confirmed-failure lock through degraded launch so GC cannot
+    // move the relay before liveness is visible. Unconfirmed remote mutation
+    // keeps its stale-recoverable lock beyond this connection.
+    console.warn(
+      `[ssh-relay] Native deps repair failed at ${remoteDir}; launching degraded: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    )
+    return { ownsInstallLock: !terminationUnconfirmed }
+  }
+}
+
+async function acquireRelayLaunchGcFence(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<string> {
+  const token = await tryAcquireRelayGcClaim(conn, remoteDir, hostPlatform, signal)
+  if (!token) {
+    signal?.throwIfAborted()
+    throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+  }
+  try {
+    signal?.throwIfAborted()
+    const stillInstalled = await isRelayAlreadyInstalled(conn, remoteDir, hostPlatform, {
+      rethrowSessionLimitErrors: true,
+      signal
+    })
+    if (!stillInstalled) {
+      throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+    }
+    // Why: a caller that cannot own the install lock still needs its own
+    // durable fence; never borrow another connection's lock through launch.
+    return token
+  } catch (err) {
+    await releaseRelayGcClaimWithRetry(conn, remoteDir, token, hostPlatform)
     throw err
   }
 }
@@ -507,14 +745,14 @@ async function installNativeDeps(
   remoteDir: string,
   platform: RelayPlatform,
   hostPlatform: RemoteHostPlatform,
-  nodePath: string
+  nodePath: string,
+  signal?: AbortSignal,
+  resetDeps: RelayNativeDepName[] = []
 ): Promise<void> {
-  // Why: node's bin directory must be in PATH for npm's child processes.
+  // Why: commandWithNodePath puts node's bin directory in PATH for npm's child processes.
   // npm install runs node-pty's prebuild script (`node scripts/prebuild.js`)
   // which spawns `node` as a child — if node isn't in PATH, that child
   // fails with exit 127 even though we invoked npm via its full path.
-  const escapedNode = shellEscape(nodePath)
-
   // npm init -y rejects '+' in derived package names (content-hashed dir
   // names like relay-0.1.0+abc123). Bypass it with a fixed minimal
   // package.json. type:commonjs pins module resolution against Node default
@@ -524,38 +762,51 @@ async function installNativeDeps(
     version: '1.0.0',
     private: true,
     type: 'commonjs',
-    dependencies: RELAY_NATIVE_DEPS
+    dependencies: RELAY_NATIVE_DEPS,
+    allowScripts: RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST
   })}\n`
   await writeRemoteFile(
     conn,
     hostPlatform,
     joinRemotePath(hostPlatform, remoteDir, 'package.json'),
-    pkgJson
+    pkgJson,
+    signal
   )
 
   try {
     const installArgs = Object.entries(RELAY_NATIVE_DEPS)
       .map(([dep, version]) => shellEscape(`${dep}@${version}`))
       .join(' ')
+    // Why: npm reports a present package as up to date even when one packaged
+    // native file was deleted. Reset only dependencies the probe found broken.
+    const resetCommand = resetNativeDepsCommand(hostPlatform, resetDeps)
+    const resetPrefix = resetCommand ? `${resetCommand}; ` : ''
     const command = isWindowsRemoteHost(hostPlatform)
       ? commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `npm install --omit=dev --no-audit --no-fund ${Object.entries(RELAY_NATIVE_DEPS)
+          `${resetPrefix}npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${Object.entries(
+            RELAY_NATIVE_DEPS
+          )
             .map(([dep, version]) => powerShellLiteral(`${dep}@${version}`))
-            .join(' ')}`
+            .join(' ')}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
         )
       : commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `npm install --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
+          `${resetPrefix}npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
         )
     await execHostCommand(conn, hostPlatform, command, {
-      timeoutMs: NATIVE_DEPS_INSTALL_TIMEOUT_MS
+      timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
+      signal
     })
   } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    signal?.throwIfAborted()
     // Don't write .install-complete on hard fail; reconnect retries on a
     // partial install. Greppable token so user bug reports paste something
     // searchable.
@@ -568,7 +819,7 @@ async function installNativeDeps(
     // remote and replace node-gyp's opaque `not found: make` with an actionable
     // install hint instead of leaking the raw npm output to the user.
     if (platform.startsWith('linux') && shouldProbeBuildToolchainAfterNativeDepsFailure(msg)) {
-      const toolchain = await probeBuildToolchain(conn, hostPlatform)
+      const toolchain = await probeBuildToolchain(conn, hostPlatform, signal)
       if (toolchain?.toolchainMissing) {
         throw new Error(formatMissingToolchainError(toolchain, msg))
       }
@@ -576,54 +827,178 @@ async function installNativeDeps(
     throw err
   }
 
-  // SFTP doesn't preserve execute bits; node-pty's spawn-helper prebuild
-  // must be +x for posix_spawnp.
-  if (!isWindowsRemoteHost(hostPlatform)) {
-    await execHostCommand(
-      conn,
-      hostPlatform,
-      `find ${shellEscape(joinRemotePath(hostPlatform, remoteDir, 'node_modules/node-pty/prebuilds'))} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
-    )
+  await makeNodePtySpawnHelperExecutable(conn, remoteDir, hostPlatform, signal)
+
+  let probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
+  if (!probe.available) {
+    // Why: npm treats an already-present package as up to date, so enabling
+    // lifecycle scripts on install cannot repair a binding skipped earlier.
+    console.warn(`[ssh-relay] Rebuilding unloadable native deps at ${remoteDir}`)
+    let rebuilt = false
+    try {
+      await rebuildNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
+      rebuilt = true
+    } catch (err) {
+      if (isUnconfirmedSshCommandTermination(err)) {
+        throw err
+      }
+      signal?.throwIfAborted()
+      console.warn(
+        `[ssh-relay][NATIVE-DEPS-REBUILD-FAIL] npm rebuild native deps failed at ${remoteDir} (${platform}): ${(err as Error).message}`
+      )
+    }
+    signal?.throwIfAborted()
+    if (rebuilt) {
+      await makeNodePtySpawnHelperExecutable(conn, remoteDir, hostPlatform, signal)
+      probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
+    }
   }
 
-  // node -e require() catches unloadable installs (wrong arch, missing
-  // prebuild, broken native binding) that test -d cannot. Stderr → file
-  // so .bashrc noise can't pollute the sentinel match; preserved for the
-  // [NPTY-MISSING] breadcrumb. MISSING is non-fatal by design — see
-  // docs/ssh-relay-versioned-install-dirs.md (relay still serves
-  // fs/git/preflight; only pty.spawn fails at runtime).
-  const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
-  const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
-  const escapedStderr = shellEscape(stderrFile)
-  const probeCommand = isWindowsRemoteHost(hostPlatform)
+  // MISSING is non-fatal by design: the relay still serves fs/git/preflight;
+  // only native-backed operations fail on hosts that cannot build the addons.
+  if (!probe.available) {
+    console.warn(
+      `[ssh-relay][NPTY-MISSING] native deps installed but require() failed at ${remoteDir} (${platform}). stdout=${probe.output.trim().slice(-200)} stderr=${probe.stderr.trim().slice(-500)}`
+    )
+  }
+}
+
+function resetNativeDepsCommand(
+  hostPlatform: RemoteHostPlatform,
+  resetDeps: RelayNativeDepName[]
+): string {
+  if (resetDeps.length === 0) {
+    return ''
+  }
+  const resetNodePty = resetDeps.includes('node-pty')
+  const resetWatcher = resetDeps.includes('@parcel/watcher')
+  if (isWindowsRemoteHost(hostPlatform)) {
+    const commands: string[] = []
+    if (resetNodePty) {
+      commands.push(
+        `Remove-Item -LiteralPath ${powerShellLiteral('node_modules/node-pty')} -Recurse -Force -ErrorAction SilentlyContinue`
+      )
+    }
+    if (resetWatcher) {
+      commands.push(
+        `Remove-Item -LiteralPath ${powerShellLiteral('node_modules/@parcel/watcher')} -Recurse -Force -ErrorAction SilentlyContinue`,
+        `$parcelScope = ${powerShellLiteral('node_modules/@parcel')}`,
+        `Get-ChildItem -LiteralPath $parcelScope -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name.StartsWith('watcher-', [StringComparison]::Ordinal) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue`
+      )
+    }
+    return commands.join('; ')
+  }
+  const commands: string[] = []
+  if (resetNodePty) {
+    commands.push(`rm -rf ${shellEscape('node_modules/node-pty')}`)
+  }
+  if (resetWatcher) {
+    commands.push(
+      `rm -rf ${shellEscape('node_modules/@parcel/watcher')}`,
+      `find ${shellEscape('node_modules/@parcel')} -maxdepth 1 -name 'watcher-*' -exec rm -rf {} + 2>/dev/null || true`
+    )
+  }
+  return commands.join('; ')
+}
+
+async function rebuildNativeDeps(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  signal?: AbortSignal
+): Promise<void> {
+  const depNames = Object.keys(RELAY_NATIVE_DEPS)
+  const command = isWindowsRemoteHost(hostPlatform)
     ? commandWithNodePath(
         hostPlatform,
         nodePath,
         remoteDir,
-        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg('require("node-pty"); console.log(process.argv[1])')} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
+        `npm rebuild --ignore-scripts=false ${depNames.map(powerShellLiteral).join(' ')}; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`
       )
     : commandWithNodePath(
         hostPlatform,
         nodePath,
         remoteDir,
-        `(${escapedNode} -e 'require("node-pty"); console.log(process.argv[1])' ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
+        `npm rebuild --ignore-scripts=false ${depNames.map(shellEscape).join(' ')} 2>&1`
       )
-  const probeOutput = await execHostCommand(conn, hostPlatform, probeCommand)
-  if (!probeOutput.includes(PROBE_OK)) {
-    const remoteStderr = isWindowsRemoteHost(hostPlatform)
-      ? ''
-      : await execHostCommand(conn, hostPlatform, `cat ${escapedStderr} 2>/dev/null; true`).catch(
-          () => ''
-        )
-    console.warn(
-      `[ssh-relay][NPTY-MISSING] node-pty installed but require() failed at ${remoteDir} (${platform}). stdout=${probeOutput.trim().slice(-200)} stderr=${remoteStderr.trim().slice(-500)}`
-    )
+  await execHostCommand(conn, hostPlatform, command, {
+    timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
+    signal
+  })
+}
+
+async function makeNodePtySpawnHelperExecutable(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<void> {
+  if (isWindowsRemoteHost(hostPlatform)) {
+    return
   }
+  // SFTP doesn't preserve execute bits; node-pty's spawn-helper prebuild
+  // must be +x for posix_spawnp.
   await execHostCommand(
     conn,
     hostPlatform,
-    removeRemoteFileCommand(hostPlatform, stderrFile)
-  ).catch(() => {})
+    `find ${shellEscape(joinRemotePath(hostPlatform, remoteDir, 'node_modules/node-pty/prebuilds'))} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`,
+    { signal }
+  )
+}
+
+async function probeInstalledNativeDeps(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  signal?: AbortSignal
+): Promise<{
+  available: boolean
+  missing: RelayNativeDepName[]
+  output: string
+  stderr: string
+}> {
+  // require() catches unloadable installs (wrong arch, missing prebuild, or a
+  // skipped lifecycle script) that require.resolve() and test -d both miss.
+  const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
+  const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
+  const escapedStderr = shellEscape(stderrFile)
+  const probeJs = nativeDepsProbeJs(PROBE_OK)
+  const probeCommand = isWindowsRemoteHost(hostPlatform)
+    ? commandWithNodePath(
+        hostPlatform,
+        nodePath,
+        remoteDir,
+        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
+      )
+    : commandWithNodePath(
+        hostPlatform,
+        nodePath,
+        remoteDir,
+        `(${shellEscape(nodePath)} -e ${shellEscape(probeJs)} ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
+      )
+  const probeOutput = await execHostCommand(conn, hostPlatform, probeCommand, { signal })
+  const remoteStderr =
+    probeOutput.includes(PROBE_OK) || isWindowsRemoteHost(hostPlatform)
+      ? ''
+      : await execHostCommand(conn, hostPlatform, `cat ${escapedStderr} 2>/dev/null; true`, {
+          signal
+        }).catch(() => '')
+  signal?.throwIfAborted()
+  if (!isWindowsRemoteHost(hostPlatform)) {
+    // The POSIX probe redirects stderr to this file; the Windows probe does not.
+    await execHostCommand(conn, hostPlatform, removeRemoteFileCommand(hostPlatform, stderrFile), {
+      signal
+    }).catch(() => {})
+    signal?.throwIfAborted()
+  }
+  return {
+    available: probeOutput.includes(PROBE_OK),
+    missing: probeOutput.includes(PROBE_OK) ? [] : missingNativeDepsFromProbe(probeOutput),
+    output: probeOutput,
+    stderr: remoteStderr
+  }
 }
 
 function getLocalRelayPath(platform: RelayPlatform): string | null {
@@ -663,7 +1038,8 @@ async function launchRelay(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   graceTimeSeconds?: number,
-  relayInstanceId?: string
+  relayInstanceId?: string,
+  signal?: AbortSignal
 ): Promise<{ transport: MultiplexerTransport; nodePath: string; sockPath: string }> {
   // Why: Phase 1 of the plan requires Node.js on the remote. We use the
   // system `node` rather than bundling a node binary, keeping the relay
@@ -695,21 +1071,27 @@ async function launchRelay(
       conn,
       hostPlatform,
       remoteDir,
-      activePipeMarkerPath
+      activePipeMarkerPath,
+      signal
     )) ?? {
       sockPath: sockFile,
       endpointDir
     }
     const fallbackEndpoint = buildWindowsRelayFallbackEndpoint(hostPlatform, remoteDir, sockName)
-    return launchWindowsRelay(conn, hostPlatform, {
-      remoteDir,
-      nodePath,
-      sockPath: activeEndpoint.sockPath,
-      endpointDir: activeEndpoint.endpointDir,
-      graceTime,
-      activePipeMarkerPath,
-      reconnectFallback: fallbackEndpoint
-    })
+    return launchWindowsRelay(
+      conn,
+      hostPlatform,
+      {
+        remoteDir,
+        nodePath,
+        sockPath: activeEndpoint.sockPath,
+        endpointDir: activeEndpoint.endpointDir,
+        graceTime,
+        activePipeMarkerPath,
+        reconnectFallback: fallbackEndpoint
+      },
+      signal
+    )
   }
 
   // Why: after an app restart a relay may still be running in its grace
@@ -719,29 +1101,43 @@ async function launchRelay(
   try {
     const probeOutput = await execCommand(
       conn,
-      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`
+      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`,
+      { signal }
     )
     console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
     if (probeOutput.trim() === 'ALIVE') {
       console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
       try {
         const channel = await conn.exec(
-          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
+          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`,
+          { signal }
         )
-        const transport = await waitForSentinel(channel)
+        const transport = await waitForSentinel(channel, signal)
         console.log('[ssh-relay] Reconnected to existing relay via socket')
         return { transport, nodePath, sockPath: sockFile }
       } catch (err) {
+        signal?.throwIfAborted()
         console.warn(
           '[ssh-relay] Socket reconnect failed, launching fresh relay:',
           err instanceof Error ? err.message : String(err)
         )
         // Why: stale socket from a crashed relay — remove it so the
         // fresh launch can bind a new socket at the same path.
-        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`).catch(() => {})
+        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch(
+          (cleanupErr) => {
+            if (isUnconfirmedSshCommandTermination(cleanupErr)) {
+              throw cleanupErr
+            }
+          }
+        )
+        signal?.throwIfAborted()
       }
     }
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    signal?.throwIfAborted()
     // Probe failed — fall through to fresh launch
   }
 
@@ -762,7 +1158,7 @@ async function launchRelay(
   // subsequent logging (it wraps process.stderr/stdout), so the current log
   // stays at relay.log for the `tail relay.log` diagnostics workflow.
   const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
-  const launchChannel = await conn.exec(launchCmd)
+  const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
   launchChannel.stderr.on('data', () => {})
@@ -784,36 +1180,39 @@ async function launchRelay(
   const POLL_TIMEOUT_MS = 10_000
   const pollStart = Date.now()
   let socketReady = false
-  while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
-    try {
-      // Why: node is guaranteed to exist on the remote (we just deployed
-      // the relay with it). Using it to probe the socket is more portable
-      // than python3/socat/perl which may not be installed. The socket
-      // path is passed as argv[1] to avoid shell quoting issues with -e.
-      const result = await execCommand(
-        conn,
-        `${escapedNode} -e 'var s=require("net").connect(process.argv[1]);s.on("connect",function(){s.destroy();process.stdout.write("READY")});s.on("error",function(){process.stdout.write("WAITING")})' ${shellEscape(sockFile)} 2>/dev/null || (test -S ${shellEscape(sockFile)} && echo READY || echo WAITING)`
-      )
-      if (result.trim() === 'READY') {
-        socketReady = true
-        break
+  try {
+    while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
+      try {
+        // Why: node is guaranteed to exist on the remote (we just deployed
+        // the relay with it). Using it to probe the socket is more portable
+        // than python3/socat/perl which may not be installed. The socket
+        // path is passed as argv[1] to avoid shell quoting issues with -e.
+        const result = await execCommand(
+          conn,
+          `${escapedNode} -e 'var s=require("net").connect(process.argv[1]);s.on("connect",function(){s.destroy();process.stdout.write("READY")});s.on("error",function(){process.stdout.write("WAITING")})' ${shellEscape(sockFile)} 2>/dev/null || (test -S ${shellEscape(sockFile)} && echo READY || echo WAITING)`,
+          { signal }
+        )
+        if (result.trim() === 'READY') {
+          socketReady = true
+          break
+        }
+      } catch {
+        signal?.throwIfAborted()
+        /* exec failed, retry */
       }
-    } catch {
-      /* exec failed, retry */
+      await waitForRelayPoll(POLL_INTERVAL_MS, signal)
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+  } finally {
+    launchChannel.close()
   }
-
-  // Why: close the fire-and-forget launch channel now that the relay's
-  // socket is either ready or the poll timed out. Leaving it open leaks
-  // an SSH channel per relay restart.
-  launchChannel.close()
 
   if (!socketReady) {
     const logOutput = await execCommand(
       conn,
-      `tail -20 ${shellEscape(logFile)} 2>/dev/null || echo "(no log)"`
+      `tail -20 ${shellEscape(logFile)} 2>/dev/null || echo "(no log)"`,
+      { signal }
     ).catch(() => '(could not read log)')
+    signal?.throwIfAborted()
     throw new Error(`Relay failed to start within ${POLL_TIMEOUT_MS / 1000}s. Log:\n${logOutput}`)
   }
 
@@ -822,9 +1221,28 @@ async function launchRelay(
   // stdin/stdout to the relay's Unix socket — same path used for reconnect
   // after app restart.
   const channel = await conn.exec(
-    `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
+    `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`,
+    { signal }
   )
-  return { transport: await waitForSentinel(channel), nodePath, sockPath: sockFile }
+  return { transport: await waitForSentinel(channel, signal), nodePath, sockPath: sockFile }
+}
+
+function waitForRelayPoll(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
+      reject(createSshOperationAbortError())
+    }
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
+  })
 }
 
 function buildWindowsRelayFallbackEndpoint(
@@ -844,15 +1262,20 @@ async function readWindowsActiveRelayEndpoint(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   remoteDir: string,
-  markerPath: string
+  markerPath: string,
+  signal?: AbortSignal
 ): Promise<WindowsRelayEndpoint | null> {
   const output = await execHostCommand(
     conn,
     hostPlatform,
     powerShellCommand(
       `if (Test-Path -LiteralPath ${powerShellLiteral(markerPath)} -PathType Leaf) { Get-Content -LiteralPath ${powerShellLiteral(markerPath)} -Raw -ErrorAction SilentlyContinue }`
-    )
-  ).catch(() => '')
+    ),
+    { signal }
+  ).catch(() => {
+    signal?.throwIfAborted()
+    return ''
+  })
   const sockPath = output.trim()
   if (!isWindowsRelayPipePath(sockPath)) {
     return null
@@ -867,15 +1290,18 @@ async function rememberWindowsActiveRelayEndpoint(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   markerPath: string,
-  sockPath: string
+  sockPath: string,
+  signal?: AbortSignal
 ): Promise<void> {
   await execHostCommand(
     conn,
     hostPlatform,
     powerShellCommand(
       `Set-Content -LiteralPath ${powerShellLiteral(markerPath)} -Value ${powerShellLiteral(sockPath)} -NoNewline`
-    )
+    ),
+    { signal }
   ).catch((err) => {
+    signal?.throwIfAborted()
     // Why: fallback pipe names are deterministic, so losing this marker does
     // not force the next deploy to orphan an undiscoverable relay.
     console.warn(
@@ -901,17 +1327,19 @@ type WindowsRelayLaunchOptions = {
 async function launchWindowsRelay(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  opts: WindowsRelayLaunchOptions
+  opts: WindowsRelayLaunchOptions,
+  signal?: AbortSignal
 ): Promise<{ transport: MultiplexerTransport; nodePath: string; sockPath: string }> {
   let launchOpts = opts
-  if ((await probeWindowsRelayPipe(conn, hostPlatform, opts)) === 'READY') {
+  if ((await probeWindowsRelayPipe(conn, hostPlatform, opts, signal)) === 'READY') {
     try {
-      const transport = await connectWindowsRelay(conn, hostPlatform, opts)
+      const transport = await connectWindowsRelay(conn, hostPlatform, opts, signal)
       await rememberWindowsActiveRelayEndpoint(
         conn,
         hostPlatform,
         opts.activePipeMarkerPath,
-        opts.sockPath
+        opts.sockPath,
+        signal
       )
       return {
         transport,
@@ -919,6 +1347,7 @@ async function launchWindowsRelay(
         sockPath: opts.sockPath
       }
     } catch (err) {
+      signal?.throwIfAborted()
       console.warn(
         '[ssh-relay] Windows named pipe reconnect failed, launching fresh relay:',
         err instanceof Error ? err.message : String(err)
@@ -936,15 +1365,16 @@ async function launchWindowsRelay(
 
   if (
     launchOpts !== opts &&
-    (await probeWindowsRelayPipe(conn, hostPlatform, launchOpts)) === 'READY'
+    (await probeWindowsRelayPipe(conn, hostPlatform, launchOpts, signal)) === 'READY'
   ) {
     try {
-      const transport = await connectWindowsRelay(conn, hostPlatform, launchOpts)
+      const transport = await connectWindowsRelay(conn, hostPlatform, launchOpts, signal)
       await rememberWindowsActiveRelayEndpoint(
         conn,
         hostPlatform,
         launchOpts.activePipeMarkerPath,
-        launchOpts.sockPath
+        launchOpts.sockPath,
+        signal
       )
       return {
         transport,
@@ -952,6 +1382,7 @@ async function launchWindowsRelay(
         sockPath: launchOpts.sockPath
       }
     } catch (err) {
+      signal?.throwIfAborted()
       console.warn(
         '[ssh-relay] Windows fallback pipe reconnect failed, relaunching relay:',
         err instanceof Error ? err.message : String(err)
@@ -973,20 +1404,29 @@ async function launchWindowsRelay(
       launchOpts.graceTime,
       logFile,
       errFile
-    )
+    ),
+    { signal }
   )
 
   const POLL_INTERVAL_MS = 200
   const POLL_TIMEOUT_MS = 10_000
   if (
-    await waitForWindowsRelayPipe(conn, hostPlatform, launchOpts, POLL_TIMEOUT_MS, POLL_INTERVAL_MS)
+    await waitForWindowsRelayPipe(
+      conn,
+      hostPlatform,
+      launchOpts,
+      POLL_TIMEOUT_MS,
+      POLL_INTERVAL_MS,
+      signal
+    )
   ) {
-    const transport = await connectWindowsRelay(conn, hostPlatform, launchOpts)
+    const transport = await connectWindowsRelay(conn, hostPlatform, launchOpts, signal)
     await rememberWindowsActiveRelayEndpoint(
       conn,
       hostPlatform,
       launchOpts.activePipeMarkerPath,
-      launchOpts.sockPath
+      launchOpts.sockPath,
+      signal
     )
     return {
       transport,
@@ -998,8 +1438,12 @@ async function launchWindowsRelay(
   const logOutput = await execHostCommand(
     conn,
     hostPlatform,
-    windowsRelayTailLogCommand(logFile, errFile)
-  ).catch(() => '(could not read log)')
+    windowsRelayTailLogCommand(logFile, errFile),
+    { signal }
+  ).catch(() => {
+    signal?.throwIfAborted()
+    return '(could not read log)'
+  })
   throw new Error(`Relay failed to start within ${POLL_TIMEOUT_MS / 1000}s. Log:\n${logOutput}`)
 }
 
@@ -1010,13 +1454,14 @@ async function connectWindowsRelay(
     remoteDir: string
     nodePath: string
     sockPath: string
-  }
+  },
+  signal?: AbortSignal
 ): Promise<MultiplexerTransport> {
   const channel = await conn.exec(
     windowsRelayConnectCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
-    { wrapCommand: false }
+    { wrapCommand: false, signal }
   )
-  return waitForSentinel(channel)
+  return waitForSentinel(channel, signal)
 }
 
 function windowsRelayConnectCommand(
@@ -1083,12 +1528,14 @@ async function probeWindowsRelayPipe(
     remoteDir: string
     nodePath: string
     sockPath: string
-  }
+  },
+  signal?: AbortSignal
 ): Promise<'READY' | 'WAITING'> {
   const result = await execHostCommand(
     conn,
     hostPlatform,
-    windowsRelayProbeCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath)
+    windowsRelayProbeCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
+    { signal }
   )
   return result.trim() === 'READY' ? 'READY' : 'WAITING'
 }
@@ -1102,7 +1549,8 @@ async function waitForWindowsRelayPipe(
     sockPath: string
   },
   timeoutMs: number,
-  intervalMs: number
+  intervalMs: number,
+  signal?: AbortSignal
 ): Promise<boolean> {
   try {
     const result = await execHostCommand(
@@ -1111,10 +1559,12 @@ async function waitForWindowsRelayPipe(
       windowsRelayWaitCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath, {
         timeoutMs,
         intervalMs
-      })
+      }),
+      { signal }
     )
     return result.trim() === 'READY'
   } catch {
+    signal?.throwIfAborted()
     return false
   }
 }

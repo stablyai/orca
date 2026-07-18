@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
+import { relaunchApp } from '../app-relaunch'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
@@ -314,7 +315,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       // Why: app.exit(0) skips before-quit/will-quit, so clean the Windows tray
       // explicitly before relaunching to avoid a stale notification-area icon.
       destroySystemTray()
-      app.relaunch()
+      relaunchApp('renderer-request')
       app.exit(0)
     }, 150)
   })
@@ -325,7 +326,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // checkpoints, runtime metadata, and telemetry flush before exit.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      app.relaunch()
+      relaunchApp('admin-restart')
       app.quit()
     }, 150)
   })

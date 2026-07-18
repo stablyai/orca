@@ -34,13 +34,26 @@ import type { AppState } from '../../store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
-import { getExecutionHostLabel, getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getExecutionHostLabel,
+  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 
 export { branchName }
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
+
+export function getPinnedWorktreeDisplayPolicy(
+  settings?: { showPinnedWorktreesInGroups?: boolean } | null
+): PinnedWorktreeDisplayPolicy {
+  return settings?.showPinnedWorktreesInGroups === true ? 'duplicate-in-groups' : 'single-location'
+}
 
 export type GroupHeaderRow = {
   type: 'header'
@@ -52,6 +65,10 @@ export type GroupHeaderRow = {
   repo?: Repo
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
+  hostId?: ExecutionHostId
+  hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
+  hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
+  worktreeIds?: readonly string[]
 }
 
 export type WorktreeRow = {
@@ -438,15 +455,15 @@ export function getPRGroupKey(
 /**
  * Emit a "Pinned" header + its items into `result`.
  *
- * Why: pinned is a shortcut overlay, not the worktree's canonical grouping.
- * Normal sections still include pinned worktrees so labels like "All" and
- * "In progress" remain literal.
+ * Why: the dedicated Pinned section is always present for pinned worktrees;
+ * the display policy decides whether their natural group rows also render.
  */
 function emitPinnedGroup(
   worktrees: Worktree[],
   repoMap: Map<string, Repo>,
+  defaultHostId: ExecutionHostId,
   collapsedGroups: Set<string>,
-  visibleUnpinnedRepoIds: ReadonlySet<string>,
+  renderedNaturalAnchorRepoIds: ReadonlySet<string>,
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
   allowImportedFallback: boolean,
   result: Row[]
@@ -455,6 +472,21 @@ function emitPinnedGroup(
   if (pinned.length === 0) {
     return
   }
+  const hostWorktreeCounts = new Map<ExecutionHostId, number>()
+  const hostWorktreeIds = new Map<ExecutionHostId, string[]>()
+  const pinnedRepoOrder: string[] = []
+  const seenPinnedRepoIds = new Set<string>()
+  for (const worktree of pinned) {
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+    hostWorktreeCounts.set(hostId, (hostWorktreeCounts.get(hostId) ?? 0) + 1)
+    const hostIds = hostWorktreeIds.get(hostId) ?? []
+    hostIds.push(worktree.id)
+    hostWorktreeIds.set(hostId, hostIds)
+    if (!seenPinnedRepoIds.has(worktree.repoId)) {
+      pinnedRepoOrder.push(worktree.repoId)
+      seenPinnedRepoIds.add(worktree.repoId)
+    }
+  }
 
   result.push({
     type: 'header',
@@ -462,9 +494,19 @@ function emitPinnedGroup(
     label: PINNED_GROUP_META.label,
     count: pinned.length,
     tone: PINNED_GROUP_META.tone,
-    icon: PINNED_GROUP_META.icon
+    icon: PINNED_GROUP_META.icon,
+    hostWorktreeCounts,
+    hostWorktreeIds,
+    worktreeIds: pinned.map((worktree) => worktree.id)
   })
-  if (!collapsedGroups.has(PINNED_GROUP_KEY)) {
+  if (collapsedGroups.has(PINNED_GROUP_KEY)) {
+    for (const repoId of pinnedRepoOrder) {
+      const candidate = importedWorktreesByRepo.get(repoId)
+      if (allowImportedFallback && candidate && !renderedNaturalAnchorRepoIds.has(repoId)) {
+        result.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
+      }
+    }
+  } else {
     const lastPinnedIndexByRepoId = new Map<string, number>()
     pinned.forEach((worktree, index) => lastPinnedIndexByRepoId.set(worktree.repoId, index))
     for (const [index, worktree] of pinned.entries()) {
@@ -484,7 +526,7 @@ function emitPinnedGroup(
       if (
         allowImportedFallback &&
         candidate &&
-        !visibleUnpinnedRepoIds.has(worktree.repoId) &&
+        !renderedNaturalAnchorRepoIds.has(worktree.repoId) &&
         lastPinnedIndexByRepoId.get(worktree.repoId) === index
       ) {
         result.push(buildImportedWorktreesCardRow(candidate, 'pinned-fallback'))
@@ -689,6 +731,101 @@ function getMixedHostContextLabels(
   return uniqueLabels.size > 1 ? labelsByRepoId : undefined
 }
 
+function getHostWorktreeCounts(
+  worktrees: readonly Worktree[],
+  repoMap: Map<string, Repo>,
+  defaultHostId: ExecutionHostId
+): Map<ExecutionHostId, number> | undefined {
+  if (worktrees.length === 0) {
+    return undefined
+  }
+  const counts = new Map<ExecutionHostId, number>()
+  const seenWorktreeIds = new Set<string>()
+  for (const worktree of worktrees) {
+    if (seenWorktreeIds.has(worktree.id)) {
+      continue
+    }
+    seenWorktreeIds.add(worktree.id)
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+    counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
+  }
+  return counts
+}
+
+function getHostWorktreeIds(
+  worktrees: readonly Worktree[],
+  repoMap: Map<string, Repo>,
+  defaultHostId: ExecutionHostId
+): Map<ExecutionHostId, string[]> | undefined {
+  if (worktrees.length === 0) {
+    return undefined
+  }
+  const idsByHost = new Map<ExecutionHostId, string[]>()
+  const seenWorktreeIds = new Set<string>()
+  for (const worktree of worktrees) {
+    if (seenWorktreeIds.has(worktree.id)) {
+      continue
+    }
+    seenWorktreeIds.add(worktree.id)
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+    const ids = idsByHost.get(hostId) ?? []
+    ids.push(worktree.id)
+    idsByHost.set(hostId, ids)
+  }
+  return idsByHost
+}
+
+function getRenderedNaturalAnchorRepoIds({
+  groupBy,
+  worktrees,
+  repoMap,
+  prCache,
+  collapsedGroups,
+  workspaceStatuses,
+  settings,
+  projectGrouping
+}: {
+  groupBy: WorktreeGroupBy
+  worktrees: readonly Worktree[]
+  repoMap: Map<string, Repo>
+  prCache: Record<string, unknown> | null
+  collapsedGroups: ReadonlySet<string>
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  settings?: AppState['settings']
+  projectGrouping?: ProjectGroupingModel
+}): Set<string> {
+  const renderedRepoIds = new Set<string>()
+  if (groupBy === 'none') {
+    if (!collapsedGroups.has(ALL_GROUP_KEY)) {
+      for (const worktree of worktrees) {
+        renderedRepoIds.add(worktree.repoId)
+      }
+    }
+    return renderedRepoIds
+  }
+  if (groupBy === 'repo') {
+    for (const worktree of worktrees) {
+      renderedRepoIds.add(worktree.repoId)
+    }
+    return renderedRepoIds
+  }
+  for (const worktree of worktrees) {
+    const groupKey = getGroupKeyForWorktree(
+      groupBy,
+      worktree,
+      repoMap,
+      prCache,
+      workspaceStatuses,
+      settings,
+      projectGrouping
+    )
+    if (groupKey && !collapsedGroups.has(groupKey)) {
+      renderedRepoIds.add(worktree.repoId)
+    }
+  }
+  return renderedRepoIds
+}
+
 function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
   if (mainWorktrees.length === 0) {
@@ -856,7 +993,9 @@ export function buildRows(
   pendingCreations: readonly PendingCreationRef[] = [],
   projectGrouping?: ProjectGroupingModel,
   folderWorkspaces: readonly FolderWorkspace[] = [],
-  hostLabelById?: ReadonlyMap<string, string>
+  hostLabelById?: ReadonlyMap<string, string>,
+  defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -877,34 +1016,45 @@ export function buildRows(
     }
   }
 
-  const visibleUnpinnedRepoIds = new Set(
-    worktrees.filter((worktree) => !worktree.isPinned).map((worktree) => worktree.repoId)
-  )
-  const visiblePinnedRepoIds = new Set(
-    worktrees.filter((worktree) => worktree.isPinned).map((worktree) => worktree.repoId)
-  )
+  const naturalWorktrees =
+    pinnedDisplayPolicy === 'duplicate-in-groups'
+      ? worktrees
+      : worktrees.filter((worktree) => !worktree.isPinned)
+  const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
+    groupBy,
+    worktrees: naturalWorktrees,
+    repoMap,
+    prCache,
+    collapsedGroups,
+    workspaceStatuses,
+    settings,
+    projectGrouping
+  })
   emitPinnedGroup(
     worktrees,
     repoMap,
+    defaultHostId,
     collapsedGroups,
-    visibleUnpinnedRepoIds,
+    renderedNaturalAnchorRepoIds,
     importedWorktreesByRepo,
     groupBy !== 'repo',
     result
   )
-
   if (groupBy === 'none') {
-    if (worktrees.length > 0) {
+    if (naturalWorktrees.length > 0) {
       result.push({
         type: 'header',
         key: ALL_GROUP_KEY,
         label: ALL_GROUP_META.label,
-        count: worktrees.length,
+        count: naturalWorktrees.length,
         tone: ALL_GROUP_META.tone,
-        icon: ALL_GROUP_META.icon
+        icon: ALL_GROUP_META.icon,
+        hostWorktreeCounts: getHostWorktreeCounts(naturalWorktrees, repoMap, defaultHostId),
+        hostWorktreeIds: getHostWorktreeIds(naturalWorktrees, repoMap, defaultHostId),
+        worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
       })
       if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-        appendWorktreeRows(result, worktrees, repoMap, lineageById, worktreeMap, {
+        appendWorktreeRows(result, naturalWorktrees, repoMap, lineageById, worktreeMap, {
           nestLineage,
           collapsedGroups,
           groupDepth: 0,
@@ -916,7 +1066,7 @@ export function buildRows(
   }
 
   const grouped = new Map<string, WorktreeGroupEntry>()
-  for (const w of worktrees) {
+  for (const w of naturalWorktrees) {
     let key: string
     let label: string
     let repo: Repo | undefined
@@ -967,7 +1117,7 @@ export function buildRows(
     for (const [repoId, candidate] of importedWorktreesByRepo) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
-      if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
+      if (!grouped.has(key)) {
         grouped.set(key, {
           label: grouping.label,
           items: [],
@@ -983,7 +1133,9 @@ export function buildRows(
     for (const [repoId, candidate] of newExternalWorktreesInboxByRepo) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
-      if (!grouped.has(key) && !visiblePinnedRepoIds.has(repoId)) {
+      if (!grouped.has(key)) {
+        // Why: the default policy removes pinned worktrees from natural groups,
+        // but actionable inbox rows still need a project section to render in.
         grouped.set(key, {
           label: grouping.label,
           items: [],
@@ -1085,7 +1237,10 @@ export function buildRows(
                   label: definition?.label ?? workspaceStatus,
                   count: group.items.length,
                   tone: meta.tone,
-                  icon: meta.icon
+                  icon: meta.icon,
+                  hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
+                  hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                  worktreeIds: group.items.map((worktree) => worktree.id)
                 }
               })()
             : (() => {
@@ -1097,7 +1252,10 @@ export function buildRows(
                   label: meta.label,
                   count: group.items.length,
                   tone: meta.tone,
-                  icon: meta.icon
+                  icon: meta.icon,
+                  hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
+                  hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                  worktreeIds: group.items.map((worktree) => worktree.id)
                 }
               })()
 

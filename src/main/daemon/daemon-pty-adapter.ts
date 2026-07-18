@@ -36,6 +36,8 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 type ColdRestorePayload = {
   scrollback: string
   cwd: string
+  cols: number
+  rows: number
   oscLinks?: TerminalOscLinkRange[]
 }
 
@@ -515,6 +517,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    // Why: shutdown can be the first lazy-client operation after restart; connect
+    // before killing so a healthy daemon session is not orphaned (#7742).
+    await this.ensureConnected()
     // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
     // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
@@ -595,7 +600,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!scrollback) {
       return null
     }
-    return { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
+    return {
+      scrollback,
+      cwd: restoreInfo.cwd,
+      cols: restoreInfo.cols,
+      rows: restoreInfo.rows,
+      oscLinks: restoreInfo.oscLinks
+    }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {

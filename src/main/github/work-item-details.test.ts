@@ -216,6 +216,56 @@ describe('getWorkItemDetails', () => {
     expect(details?.participants?.[0]?.login).toBe('issue-author')
   })
 
+  it('enriches a non-participating assignee avatar from the GraphQL assignees connection', async () => {
+    // Why: a GHE assignee who never commented is absent from `participants`, so
+    // the enrichment must also draw avatars from the `assignees` connection or
+    // item.assignees keeps the blank avatar `gh` returns.
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'issue:924',
+      type: 'issue',
+      number: 924,
+      title: 'Assignee avatar',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/issues/924',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'issue-author',
+      assignees: [{ login: 'ghe-assignee', name: 'GHE Assignee', avatarUrl: '' }]
+    })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                body: 'Issue body',
+                assignees: {
+                  nodes: [
+                    {
+                      login: 'ghe-assignee',
+                      name: 'GHE Assignee',
+                      avatarUrl: 'https://ghe.example.com/avatars/ghe-assignee'
+                    }
+                  ]
+                },
+                participants: { nodes: [{ login: 'issue-author', avatarUrl: 'https://x/y' }] },
+                comments: { nodes: [] }
+              }
+            }
+          }
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    const details = await getWorkItemDetails('/repo-root', 924, 'issue')
+
+    expect(details?.item.assignees?.[0]).toMatchObject({
+      login: 'ghe-assignee',
+      avatarUrl: 'https://ghe.example.com/avatars/ghe-assignee'
+    })
+  })
+
   it('caps issue timeline pagination by supported activity items', async () => {
     getWorkItemMock.mockResolvedValueOnce({
       id: 'issue:923',
@@ -567,5 +617,67 @@ describe('getWorkItemDetails', () => {
 
     expect(details?.filesUnavailable).toBe(false)
     expect(details?.files).toEqual([])
+  })
+
+  // Why: `gh pr view` omits avatar_url, so the login-based github.com URL 404s on
+  // GHE. getWorkItemDetails must resolve author/reviewer/assignee avatars via the
+  // GraphQL user(login:) batch and stamp them onto the returned item. See #8784.
+  it('enriches PR author, reviewer, and assignee avatars from the GraphQL user lookup', async () => {
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'pr:1102',
+      type: 'pr',
+      number: 1102,
+      title: 'Enterprise PR',
+      state: 'open',
+      url: 'https://ghe.example.com/acme/widgets/pull/1102',
+      labels: [],
+      updatedAt: '2026-07-11T00:00:00Z',
+      author: 'seah',
+      reviewRequests: [{ login: 'ludi', name: null, avatarUrl: '' }],
+      latestReviews: [{ login: 'inho', state: 'APPROVED', avatarUrl: '' }],
+      // A default `u/0` placeholder must be replaced by the resolved avatar.
+      assignees: [{ login: 'seah', name: 'Seah', avatarUrl: 'https://avatars.example.com/u/0?v=4' }]
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getPRCommentsMock.mockResolvedValue([])
+    getPRChecksMock.mockResolvedValue([])
+    const avatars: Record<string, string> = {
+      seah: 'https://avatars.example.com/u/1?v=4',
+      ludi: 'https://avatars.example.com/u/2?v=4',
+      inho: 'https://avatars.example.com/u/3?v=4'
+    }
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const target = args.at(-1)
+      if (target === 'repos/acme/widgets/pulls/1102') {
+        return {
+          stdout: JSON.stringify({ body: 'PR body', head: { sha: 'h' }, base: { sha: 'b' } })
+        }
+      }
+      if (target === 'repos/acme/widgets/pulls/1102/files?per_page=100') {
+        return { stdout: '[]' }
+      }
+      const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+      if (query.includes('user(login:')) {
+        // Return the aliased users the batch asked for, keyed by their login.
+        const data: Record<string, { login: string; name: null; avatarUrl: string }> = {}
+        let index = 0
+        for (const login of Object.keys(avatars)) {
+          if (query.includes(`user(login: "${login}")`)) {
+            data[`u${index}`] = { login, name: null, avatarUrl: avatars[login] }
+            index += 1
+          }
+        }
+        return { stdout: JSON.stringify({ data }) }
+      }
+      return { stdout: JSON.stringify({ data: {} }) }
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 1102, 'pr')
+
+    expect(details?.item.authorAvatarUrl).toBe(avatars.seah)
+    expect(details?.item.reviewRequests?.[0]?.avatarUrl).toBe(avatars.ludi)
+    expect(details?.item.latestReviews?.[0]?.avatarUrl).toBe(avatars.inho)
+    // The default u/0 placeholder is overridden by the resolved avatar.
+    expect(details?.item.assignees?.[0]?.avatarUrl).toBe(avatars.seah)
   })
 })
