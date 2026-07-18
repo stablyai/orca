@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import type WebSocket from 'ws'
 import { RelayControlClient } from './relay-control-client'
@@ -54,6 +54,10 @@ async function activate(client: RelayControlClient, socket: SilentControlSocket)
 }
 
 describe('RelayControlClient liveness', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('terminates an active control socket that receives no relay traffic', async () => {
     vi.useFakeTimers()
     const socket = new SilentControlSocket()
@@ -65,7 +69,6 @@ describe('RelayControlClient liveness', () => {
 
     expect(socket.terminate).toHaveBeenCalledOnce()
     expect(onClose).toHaveBeenCalledWith(1006)
-    vi.useRealTimers()
   })
 
   it('extends the deadline whenever relay traffic arrives', async () => {
@@ -81,6 +84,5 @@ describe('RelayControlClient liveness', () => {
 
     await vi.advanceTimersByTimeAsync(81)
     expect(socket.terminate).toHaveBeenCalledOnce()
-    vi.useRealTimers()
   })
 })
