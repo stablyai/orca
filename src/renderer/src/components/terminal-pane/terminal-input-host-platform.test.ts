@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
+import {
+  resolveTerminalInputHostPlatform,
+  terminalInputLacksLocalForegroundConfirmation
+} from './terminal-input-host-platform'
 
 function state(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -243,5 +246,52 @@ describe('resolveTerminalInputHostPlatform', () => {
         transport: null
       })
     ).toBe('darwin')
+  })
+})
+
+describe('terminalInputLacksLocalForegroundConfirmation', () => {
+  it('distinguishes SSH, remote runtime, and WSL panes from a local PTY', () => {
+    const base = {
+      clientPlatform: 'darwin' as const,
+      state: state(),
+      worktreeId: 'repo::/repo'
+    }
+
+    expect(
+      terminalInputLacksLocalForegroundConfirmation({
+        ...base,
+        transport: { getConnectionId: () => 'ssh-1' }
+      })
+    ).toBe(true)
+    expect(
+      terminalInputLacksLocalForegroundConfirmation({
+        ...base,
+        transport: {
+          getConnectionId: () => null,
+          getPtyId: () => 'remote:runtime-1@@pty-1'
+        }
+      })
+    ).toBe(true)
+    expect(
+      terminalInputLacksLocalForegroundConfirmation({
+        ...base,
+        clientPlatform: 'win32',
+        transport: {
+          getConnectionId: () => null,
+          getPtyId: () => 'local-pty-1',
+          getLocalSessionMetadata: () => ({ shellOverride: 'wsl.exe -d Ubuntu' })
+        }
+      })
+    ).toBe(true)
+    expect(
+      terminalInputLacksLocalForegroundConfirmation({
+        ...base,
+        transport: {
+          getConnectionId: () => null,
+          getPtyId: () => 'local-pty-1',
+          getLocalSessionMetadata: () => ({ cwd: '/repo' })
+        }
+      })
+    ).toBe(false)
   })
 })

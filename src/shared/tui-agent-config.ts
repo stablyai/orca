@@ -67,6 +67,9 @@ export type TuiAgentConfig = {
   /** Windows Shift+Enter override. Omitted agents keep the legacy Esc+CR path
    * because the renderer cannot infer every local or remote TUI's decoder. */
   windowsShiftEnterEncoding?: 'csi-u'
+  /** Agent-specific Shift+Enter fallback when the TUI's negotiated keyboard
+   * protocol does not match the multiline bytes it accepts. */
+  shiftEnterEncoding?: 'ctrl-j'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -113,7 +116,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
     preflightTrust: 'codex',
-    draftPasteReadySignal: 'codex-composer-prompt'
+    draftPasteReadySignal: 'codex-composer-prompt',
+    // Why: current Codex accepts Ctrl+J for a composer newline but ignores the
+    // CSI-u Shift+Enter sequence it negotiates through some terminal hosts.
+    shiftEnterEncoding: 'ctrl-j'
   },
   autohand: {
     detectCmd: 'autohand',

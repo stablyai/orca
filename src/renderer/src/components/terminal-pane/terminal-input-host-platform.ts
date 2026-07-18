@@ -19,7 +19,7 @@ type TerminalInputHostPlatformState = Pick<
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
 >
 
-export function resolveTerminalInputHostPlatform(args: {
+type TerminalInputHostPlatformArgs = {
   clientPlatform: NodeJS.Platform
   state: TerminalInputHostPlatformState
   worktreeId: string
@@ -29,7 +29,43 @@ export function resolveTerminalInputHostPlatform(args: {
           Pick<PtyTransport, 'getPtyId' | 'getRuntimeEnvironmentId' | 'getLocalSessionMetadata'>
         >)
     | null
-}): NodeJS.Platform {
+}
+
+export function terminalInputLacksLocalForegroundConfirmation(
+  args: TerminalInputHostPlatformArgs
+): boolean {
+  const ptyId = args.transport?.getPtyId?.() ?? null
+  const runtimeEnvironmentId =
+    args.transport?.getRuntimeEnvironmentId?.() ??
+    (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null)
+  if (runtimeEnvironmentId) {
+    return true
+  }
+
+  const localSessionMetadata = args.transport?.getLocalSessionMetadata?.()
+  if (ptyId !== null && localSessionMetadata != null) {
+    return (
+      isWslUncPath(localSessionMetadata.cwd ?? '') ||
+      isWslShellOverride(localSessionMetadata.shellOverride)
+    )
+  }
+
+  const transportConnectionId = args.transport?.getConnectionId?.()
+  const connectionId =
+    transportConnectionId === undefined
+      ? getConnectionIdFromState(args.state, args.worktreeId)
+      : transportConnectionId
+  if (connectionId) {
+    return true
+  }
+
+  const host = parseExecutionHostId(getExecutionHostIdForWorktree(args.state, args.worktreeId))
+  return host?.kind === 'ssh' || host?.kind === 'runtime'
+}
+
+export function resolveTerminalInputHostPlatform(
+  args: TerminalInputHostPlatformArgs
+): NodeJS.Platform {
   const transportConnectionId = args.transport?.getConnectionId?.()
   const connectionId =
     transportConnectionId === undefined

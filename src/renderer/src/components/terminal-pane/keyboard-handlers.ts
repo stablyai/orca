@@ -31,8 +31,14 @@ import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
-import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
+import {
+  resolveAgentShiftEnterEncodingForPane,
+  resolveWindowsShiftEnterEncodingForPane
+} from './terminal-windows-shift-enter'
+import {
+  resolveTerminalInputHostPlatform,
+  terminalInputLacksLocalForegroundConfirmation
+} from './terminal-input-host-platform'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
@@ -50,7 +56,8 @@ export function resolveTerminalKeyboardShortcutAction(
   isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
-  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
+  getAgentShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[11] = undefined
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   // Why: keep the host callback required at the production boundary so a
   // caller cannot silently fall back to client-OS byte routing.
@@ -65,7 +72,8 @@ export function resolveTerminalKeyboardShortcutAction(
     isKittyKeyboardActivePane,
     layoutBaseCharacterForCode,
     getWindowsShiftEnterEncoding,
-    isWindowsTerminalHost
+    isWindowsTerminalHost,
+    getAgentShiftEnterEncoding
   )
 }
 
@@ -286,6 +294,26 @@ export function useTerminalKeyboardShortcuts({
       return resolveWindowsShiftEnterEncodingForPane(state, paneKey)
     }
 
+    const getActivePaneAgentShiftEnterEncoding = () => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!activePane) {
+        return null
+      }
+      const state = useAppStore.getState()
+      const transport = paneTransportsRef.current.get(activePane.id) ?? null
+      return resolveAgentShiftEnterEncodingForPane(
+        state,
+        makePaneKey(tabId, activePane.leafId),
+        terminalInputLacksLocalForegroundConfirmation({
+          clientPlatform: shortcutPlatform,
+          state,
+          worktreeId,
+          transport
+        })
+      )
+    }
+
     // Why: host metadata is live and can hydrate after the terminal mounts;
     // resolve it only when Shift+Enter needs to choose a byte protocol.
     const isActivePaneWindowsTerminalHost = (): boolean => {
@@ -397,7 +425,8 @@ export function useTerminalKeyboardShortcuts({
         isKittyKeyboardActivePane,
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
-        isActivePaneWindowsTerminalHost
+        isActivePaneWindowsTerminalHost,
+        getActivePaneAgentShiftEnterEncoding
       )
       if (!action) {
         return
@@ -421,13 +450,13 @@ export function useTerminalKeyboardShortcuts({
         const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
         if (sent) {
           recordTerminalUserInputForLeaf(tabId, pane.leafId)
-          if (action.data === '\x1b[13;2u') {
+          if (action.data === '\x1b[13;2u' || action.data === '\x0a') {
             // Why: this direct shortcut write does not pass through PTY onData,
             // so no-OSC shells need an explicit post-write confirmation ladder.
             const binding = panePtyBindingsRef.current.get(pane.id) as
-              | (IDisposable & { requestDroidReconfirmation?: () => void })
+              | (IDisposable & { requestAgentShiftEnterReconfirmation?: () => void })
               | undefined
-            binding?.requestDroidReconfirmation?.()
+            binding?.requestAgentShiftEnterReconfirmation?.()
           }
         }
         return
@@ -666,6 +695,7 @@ export function useTerminalKeyboardShortcuts({
     keyboardScopeRef,
     managerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd,
     expandedPaneIdRef,

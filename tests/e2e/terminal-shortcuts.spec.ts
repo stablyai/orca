@@ -37,7 +37,7 @@ import {
 
 async function setActivePaneForegroundAgent(
   page: Page,
-  agent: 'droid' | 'antigravity' | null
+  agent: 'codex' | 'droid' | 'antigravity' | null
 ): Promise<string> {
   return page.evaluate((agent) => {
     const state = window.__store?.getState()
@@ -57,9 +57,8 @@ async function setActivePaneForegroundAgent(
     state.setPaneForegroundAgent(paneKey, {
       agent,
       shellForeground: false,
-      // The shortcut only emits CSI-u for a process identity confirmed to
-      // belong to this PTY; keep the fixture aligned with that trust gate.
-      routingTrusted: agent === 'droid'
+      // Keep the fixture aligned with the shortcut's trusted-process gate.
+      routingTrusted: agent === 'droid' || agent === 'codex'
     })
     return paneKey
   }, agent)
@@ -484,6 +483,9 @@ test.describe('Terminal Shortcuts', () => {
     await execInTerminal(orcaPage, ptyId, "printf '\\033[>1u'")
     await expect.poll(() => getKittyKeyboardFlags(orcaPage)).toBe(1)
     await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u')
+    await setActivePaneForegroundAgent(orcaPage, 'codex')
+    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x0a')
+    await setActivePaneForegroundAgent(orcaPage, null)
 
     // Clear the shell's unconsumed CSI-u line before resetting flags in a settled
     // command; otherwise its line editor can swallow the reset bytes.

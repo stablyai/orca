@@ -14,7 +14,10 @@ import {
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import { DEFAULT_DA1_RESPONSE } from './terminal-capability-replies'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
-import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
+import {
+  resolveAgentShiftEnterEncodingForPane,
+  resolveWindowsShiftEnterEncodingForPane
+} from './terminal-windows-shift-enter'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -187,7 +190,7 @@ type StoreState = {
   suppressedPtyExitIds: Record<string, true>
   agentLaunchConfigByPaneKey: Record<
     string,
-    { launchConfig: unknown; identity?: { agentType?: string } }
+    { launchConfig: unknown; registeredAt?: number; identity?: { agentType?: string } }
   >
   getAgentLaunchConfigForStatusEntry: ReturnType<typeof vi.fn>
   getAgentLaunchConfigForStatusMetadata: ReturnType<typeof vi.fn>
@@ -5260,6 +5263,8 @@ describe('connectPanePty', () => {
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
       agent: 'droid',
+      routingTrusted: false,
+      blockedLaunchRegisteredAt: null,
       shellForeground: false
     })
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
@@ -5271,6 +5276,139 @@ describe('connectPanePty', () => {
       shellForeground: true
     })
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+  })
+
+  it('revokes trusted Codex after accepted no-OSC exit input until shell confirmation', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
+    const pane = createPane(1)
+    const ptyId = 'pty-codex-exit-no-osc'
+    const tabId = 'tab-codex-exit-no-osc'
+    const paneKey = makePaneKey(tabId, LEAF_1)
+    transportFactoryQueue.push(createMockTransport(ptyId))
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
+      agent: 'codex',
+      routingTrusted: true,
+      shellForeground: false
+    }
+
+    sendTerminalInputThroughPane(pane, '\x04')
+    await flushAsyncTicks()
+
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: 'codex',
+      routingTrusted: false,
+      blockedLaunchRegisteredAt: null,
+      shellForeground: false
+    })
+
+    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: null,
+      shellForeground: true
+    })
+  })
+
+  it('blocks remote Codex fallback immediately after no-OSC exit input', async () => {
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const ptyId = 'ssh:conn@@pty-codex-exit-no-osc'
+    const tabId = 'tab-remote-codex-exit-no-osc'
+    const paneKey = makePaneKey(tabId, LEAF_1)
+    transportFactoryQueue.push(createMockTransport(ptyId))
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+      registeredAt: 10,
+      identity: { agentType: 'codex' }
+    }
+    const resolveRemoteEncoding = () =>
+      resolveAgentShiftEnterEncodingForPane(
+        {
+          paneForegroundAgentByPaneKey: mockStoreState.paneForegroundAgentByPaneKey,
+          agentLaunchConfigByPaneKey: {
+            [paneKey]: { identity: { agentType: 'codex' }, registeredAt: 10 }
+          }
+        },
+        paneKey,
+        true
+      )
+    expect(resolveRemoteEncoding()).toBe('ctrl-j')
+
+    sendTerminalInputThroughPane(pane, '\x04')
+    await flushAsyncTicks()
+
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: 'codex',
+      routingTrusted: false,
+      blockedLaunchRegisteredAt: 10,
+      shellForeground: false
+    })
+    expect(resolveRemoteEncoding()).toBeNull()
+
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+      registeredAt: 11,
+      identity: { agentType: 'codex' }
+    }
+    expect(
+      resolveAgentShiftEnterEncodingForPane(
+        {
+          paneForegroundAgentByPaneKey: mockStoreState.paneForegroundAgentByPaneKey,
+          agentLaunchConfigByPaneKey: {
+            [paneKey]: { identity: { agentType: 'codex' }, registeredAt: 11 }
+          }
+        },
+        paneKey,
+        true
+      )
+    ).toBe('ctrl-j')
+  })
+
+  it('keeps remote Codex fallback through ordinary submit input', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const ptyId = 'ssh:conn@@pty-codex-submit'
+    const tabId = 'tab-remote-codex-submit'
+    const paneKey = makePaneKey(tabId, LEAF_1)
+    transportFactoryQueue.push(createMockTransport(ptyId))
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps({ tabId }) as never)
+    await flushAsyncTicks()
+    mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+      identity: { agentType: 'codex' }
+    }
+    mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
+      agent: 'codex',
+      shellForeground: false
+    }
+
+    sendTerminalInputThroughPane(pane, '\r')
+    await flushAsyncTicks()
+
+    expect(
+      resolveAgentShiftEnterEncodingForPane(
+        {
+          paneForegroundAgentByPaneKey: mockStoreState.paneForegroundAgentByPaneKey,
+          agentLaunchConfigByPaneKey: {
+            [paneKey]: { identity: { agentType: 'codex' } }
+          }
+        },
+        paneKey,
+        true
+      )
+    ).toBe('ctrl-j')
   })
 
   it('never promotes typed Droid text when foreground enrichment is unavailable', async () => {
@@ -18612,7 +18750,7 @@ describe('connectPanePty', () => {
       binding: {
         noteVisibilityResume: () => void
         sampleForegroundAgentOnFocus: () => void
-        requestDroidReconfirmation: () => void
+        requestAgentShiftEnterReconfirmation: () => void
       }
       deps: ReturnType<typeof createDeps>
       transport: MockTransport
@@ -18649,7 +18787,7 @@ describe('connectPanePty', () => {
       ) as unknown as {
         noteVisibilityResume: () => void
         sampleForegroundAgentOnFocus: () => void
-        requestDroidReconfirmation: () => void
+        requestAgentShiftEnterReconfirmation: () => void
       }
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
@@ -18766,7 +18904,7 @@ describe('connectPanePty', () => {
       }
     })
 
-    it('keeps trusted Droid routing through a rapid Shift+Enter burst', async () => {
+    it('keeps trusted Droid routing while Shift+Enter confirmation runs', async () => {
       vi.useFakeTimers()
       const ptyId = 'pty-droid-shift-enter-burst'
       const tabId = `tab-${ptyId}`
@@ -18785,9 +18923,9 @@ describe('connectPanePty', () => {
       }
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
 
-      binding.requestDroidReconfirmation()
+      binding.requestAgentShiftEnterReconfirmation()
       await vi.advanceTimersByTimeAsync(200)
-      binding.requestDroidReconfirmation()
+      binding.requestAgentShiftEnterReconfirmation()
       await vi.advanceTimersByTimeAsync(349)
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
@@ -18799,6 +18937,7 @@ describe('connectPanePty', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: 'droid',
+        routingTrusted: true,
         shellForeground: false
       })
 
@@ -18811,11 +18950,50 @@ describe('connectPanePty', () => {
         shellForeground: false
       })
 
-      binding.requestDroidReconfirmation()
+      binding.requestAgentShiftEnterReconfirmation()
       await vi.advanceTimersByTimeAsync(700)
       await flushAsyncTicks()
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: 'droid',
+        routingTrusted: true,
+        shellForeground: false
+      })
+    })
+
+    it('keeps trusted Codex routing immediately after focus and Shift+Enter idle sampling', async () => {
+      vi.useFakeTimers()
+      const ptyId = 'pty-codex-trust-through-benign-samples'
+      const tabId = `tab-${ptyId}`
+      const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
+        ptyId,
+        tabId
+      })
+      mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+        agent: 'codex',
+        routingTrusted: true,
+        shellForeground: false
+      }
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex')
+
+      binding.sampleForegroundAgentOnFocus()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        agent: 'codex',
+        routingTrusted: true,
+        shellForeground: false
+      })
+
+      binding.requestAgentShiftEnterReconfirmation()
+      await vi.advanceTimersByTimeAsync(350)
+      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        agent: 'codex',
+        routingTrusted: true,
+        shellForeground: false
+      })
+
+      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+      await flushAsyncTicks()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        agent: 'codex',
         routingTrusted: true,
         shellForeground: false
       })

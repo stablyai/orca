@@ -634,7 +634,7 @@ type PanePtyBinding = IDisposable & {
    *  agent pane has no OSC boundary left to correct it. */
   sampleForegroundAgentOnFocus: () => void
   /** Reconfirm after direct shortcut input, which bypasses PTY onData. */
-  requestDroidReconfirmation: () => void
+  requestAgentShiftEnterReconfirmation: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
   /** True when the hidden-delivery gate structurally manages the pane's
@@ -1251,7 +1251,7 @@ export function connectPanePty(
   let commandInferredPaneAgentGeneration = 0
   let shellCommandInferenceSuspendedUntilCommandEnd = false
   let startAcceptedInferredCommand = (_agent: TuiAgent): void => {}
-  let requestKnownDroidReconfirmation = (): void => {}
+  let revokeKnownShiftEnterAgentRouting = (_blockUntrackableFallback?: boolean): void => {}
   const resetPendingShellCommandLine = (): void => {
     pendingShellCommandLine = ''
     pendingShellCommandCursor = 0
@@ -1500,8 +1500,8 @@ export function connectPanePty(
       data.includes('\x04')
     ) {
       // Why: shells without OSC 133 give no command/exit boundary. An accepted
-      // submit or interrupt revokes only stale Droid routing and confirms once.
-      requestKnownDroidReconfirmation()
+      // submit or interrupt revokes stale Shift+Enter routing and confirms once.
+      revokeKnownShiftEnterAgentRouting(data.includes('\x04'))
     }
     if (commandInferredPaneAgent) {
       return
@@ -2045,7 +2045,7 @@ export function connectPanePty(
     if (
       !deps.isVisibleRef.current ||
       visibleForegroundSamplePending ||
-      visibleForegroundSampleSettled
+      (!forceRoutingConfirmation && visibleForegroundSampleSettled)
     ) {
       return
     }
@@ -2053,7 +2053,7 @@ export function connectPanePty(
     const foreground = state.paneForegroundAgentByPaneKey[cacheKey]
     // Why: a daemon reattach may restore display identity without current
     // routing authority. Only fresh evidence can suppress its confirmation.
-    if (foreground?.agent && foreground.routingTrusted === true) {
+    if (!forceRoutingConfirmation && foreground?.agent && foreground.routingTrusted === true) {
       return
     }
     if (!forceRoutingConfirmation && paneHasLiveHookAgentIcon(state)) {
@@ -2069,22 +2069,48 @@ export function connectPanePty(
     // identity from local process state, with remote/SSH excluded by the tracker.
     visibleForegroundSamplePending = paneForegroundAgentTracker.onVisiblePtyBound(expectsAgent)
   }
+  const refreshTrustedVisiblePaneForegroundAgent = (): void => {
+    const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
+    // Why: benign focus/visibility/Shift+Enter events may refresh an already
+    // trusted agent, but must not resurrect sampling after a settled shell.
+    sampleVisiblePaneForegroundAgent(
+      foreground?.agent !== null && foreground?.routingTrusted === true
+    )
+  }
   startAcceptedInferredCommand = (agent) => {
     paneForegroundAgentTracker.onCommandStarted(agent)
   }
-  requestKnownDroidReconfirmation = () => {
+  revokeKnownShiftEnterAgentRouting = (blockUntrackableFallback = false) => {
     const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
     // Why: daemon reattach/launch metadata is display-only until a live
     // provider read confirms it. Submit/interrupt/title-exit evidence must
     // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
     // to a Droid that already exited before confirmation ever ran.
-    if (foreground?.agent !== 'droid') {
+    const ptyId = transport.getPtyId()
+    const lacksForegroundTracking = Boolean(ptyId && !isForegroundTrackingAllowed(ptyId))
+    const launchOnlyAgent =
+      blockUntrackableFallback && lacksForegroundTracking ? resolveExpectedLaunchTuiAgent() : null
+    const agent = foreground?.agent ?? launchOnlyAgent
+    if (
+      !agent ||
+      (!TUI_AGENT_CONFIG[agent].shiftEnterEncoding &&
+        !TUI_AGENT_CONFIG[agent].windowsShiftEnterEncoding)
+    ) {
+      return
+    }
+    if (lacksForegroundTracking && !blockUntrackableFallback) {
+      // Why: Enter, pasted LF, and Ctrl+C are normal in-agent input. A remote
+      // pane cannot asynchronously restore trust, so only hard exit evidence
+      // (Ctrl+D or an agent-exited signal) may block its launch fallback.
       return
     }
     // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
     // as a hint, but revoke bytes until one current provider confirmation lands.
     useAppStore.getState().setPaneForegroundAgent(cacheKey, {
-      agent: 'droid',
+      agent,
+      routingTrusted: false,
+      blockedLaunchRegisteredAt:
+        useAppStore.getState().agentLaunchConfigByPaneKey[cacheKey]?.registeredAt ?? null,
       shellForeground: false
     })
     visibleForegroundSamplePending = false
@@ -3085,7 +3111,7 @@ export function connectPanePty(
   const onAgentExited = (): void => {
     clearSuppressedTitleSideEffects()
     clearCommandInferredPaneAgent()
-    requestKnownDroidReconfirmation()
+    revokeKnownShiftEnterAgentRouting(true)
     // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
     // the agent has exited. Clear any running cache timer so the sidebar doesn't
     // show a stale countdown for a tab that no longer has an active Claude session.
@@ -8165,8 +8191,9 @@ export function connectPanePty(
     noteVisibilityResume() {
       ptySizeReassertion.request({ fit: false })
       consumeHibernatedAgentWake()
-      requestKnownDroidReconfirmation()
-      sampleVisiblePaneForegroundAgent()
+      // Why: focus/visibility is not exit evidence. Preserve trusted routing
+      // while the provider refresh runs so Shift+Enter remains usable.
+      refreshTrustedVisiblePaneForegroundAgent()
     },
     // Why: mobile wake reaches this pane while it stays hidden on the desktop, so
     // it must consume only the armed hibernation wake — no size/foreground reads.
@@ -8210,10 +8237,11 @@ export function connectPanePty(
       return null
     },
     sampleForegroundAgentOnFocus() {
-      requestKnownDroidReconfirmation()
-      sampleVisiblePaneForegroundAgent()
+      // Why: focusing a live agent pane must not open a transient fallback
+      // window before the asynchronous foreground refresh completes.
+      refreshTrustedVisiblePaneForegroundAgent()
     },
-    requestDroidReconfirmation() {
+    requestAgentShiftEnterReconfirmation() {
       if (shiftEnterReconfirmTimer !== null) {
         clearTimeout(shiftEnterReconfirmTimer)
       }
@@ -8221,8 +8249,9 @@ export function connectPanePty(
       // confirm only after the Shift+Enter burst goes idle.
       shiftEnterReconfirmTimer = setTimeout(() => {
         shiftEnterReconfirmTimer = null
-        requestKnownDroidReconfirmation()
-        sampleVisiblePaneForegroundAgent()
+        // Why: Shift+Enter is normal in-agent input, not evidence that the
+        // agent exited. Refresh without revoking the last trusted identity.
+        refreshTrustedVisiblePaneForegroundAgent()
       }, SHIFT_ENTER_RECONFIRM_IDLE_MS)
     },
     reconcileIfSessionDead,

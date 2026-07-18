@@ -1300,12 +1300,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
       set((s) => {
         const copiedLaunchConfig = copyLaunchConfig(launchConfig)
+        const existingRegistryEntry = s.agentLaunchConfigByPaneKey[paneKey]
         const nextRegistryEntry: AgentLaunchConfigRegistryEntry = {
           launchConfig: copiedLaunchConfig,
-          registeredAt: Date.now(),
+          registeredAt: Math.max(
+            Date.now(),
+            (existingRegistryEntry?.registeredAt ?? Number.NEGATIVE_INFINITY) + 1
+          ),
           identity: normalizeLaunchConfigRegistrationMetadata(paneKey, metadata)
         }
-        const existingRegistryEntry = s.agentLaunchConfigByPaneKey[paneKey]
         const registryChanged = !launchConfigRegistryEntriesEqual(
           existingRegistryEntry,
           nextRegistryEntry
