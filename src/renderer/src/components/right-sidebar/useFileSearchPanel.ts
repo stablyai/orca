@@ -2,6 +2,7 @@ import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { SearchFileResult, SearchMatch, SearchResult } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
@@ -31,6 +32,9 @@ export type FileSearchPanelModel = {
 export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearchPanelModel {
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, s.activeWorktreeId)
+  )
   const openFile = useAppStore((s) => s.openFile)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
 
@@ -223,6 +227,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       }
       openMatchResult({
         activeWorktreeId,
+        runtimeEnvironmentId,
         fileResult,
         match,
         openFile,
@@ -231,7 +236,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
         revealInnerRafRef
       })
     },
-    [activeWorktreeId, openFile, setPendingEditorReveal]
+    [activeWorktreeId, runtimeEnvironmentId, openFile, setPendingEditorReveal]
   )
 
   return {

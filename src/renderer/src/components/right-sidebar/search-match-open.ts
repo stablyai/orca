@@ -10,15 +10,20 @@ export function cancelRevealFrame(frameRef: React.RefObject<number | null>): voi
 
 export function openMatchResult(params: {
   activeWorktreeId: string
+  runtimeEnvironmentId: string | null
   fileResult: SearchFileResult
   match: SearchMatch
-  openFile: (file: {
-    filePath: string
-    relativePath: string
-    worktreeId: string
-    language: string
-    mode: 'edit'
-  }) => void
+  openFile: (
+    file: {
+      filePath: string
+      relativePath: string
+      worktreeId: string
+      runtimeEnvironmentId?: string
+      language: string
+      mode: 'edit'
+    },
+    options?: { suppressActiveRuntimeFallback?: boolean }
+  ) => void
   setPendingEditorReveal: (
     reveal: {
       filePath: string
@@ -32,6 +37,7 @@ export function openMatchResult(params: {
 }): void {
   const {
     activeWorktreeId,
+    runtimeEnvironmentId,
     fileResult,
     match,
     openFile,
@@ -40,13 +46,22 @@ export function openMatchResult(params: {
     revealInnerRafRef
   } = params
 
-  openFile({
-    filePath: fileResult.filePath,
-    relativePath: fileResult.relativePath,
-    worktreeId: activeWorktreeId,
-    language: detectLanguage(fileResult.relativePath),
-    mode: 'edit'
-  })
+  openFile(
+    {
+      filePath: fileResult.filePath,
+      relativePath: fileResult.relativePath,
+      worktreeId: activeWorktreeId,
+      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+      language: detectLanguage(fileResult.relativePath),
+      mode: 'edit'
+    },
+    {
+      // Why: search results come from the worktree's owning runtime; opening
+      // them must keep that owner (or pin local) instead of letting the ambient
+      // active-runtime fallback pick a host that cannot read the path (#9185).
+      suppressActiveRuntimeFallback: runtimeEnvironmentId === null
+    }
+  )
 
   cancelRevealFrame(revealRafRef)
   cancelRevealFrame(revealInnerRafRef)
