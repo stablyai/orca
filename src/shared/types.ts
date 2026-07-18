@@ -2987,6 +2987,8 @@ export type GlobalSettings = {
   experimentalNewWorktreeCardStyle?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
+  /** Experimental: serve git blob reads (diff panel) from the in-process native reader instead of `git show` spawns. */
+  experimentalNativeGit?: boolean
   /** Compact worktree cards by hiding a redundant metadata row when the title
    *  and branch already say the same thing. */
   compactWorktreeCards: boolean

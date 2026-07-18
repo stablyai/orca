@@ -150,6 +150,7 @@ import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branc
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
+import { configureNativeGitBlobReads, resolveNativeGitMode } from './git/blob-reader'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -1770,6 +1771,12 @@ app.whenReady().then(async () => {
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
   })
+  // Why: lazy thunk re-reads the setting on every blob read, so toggling the
+  // experimental flag takes effect without a restart; ORCA_NATIVE_GIT still
+  // overrides via resolveNativeGitMode.
+  configureNativeGitBlobReads(() =>
+    resolveNativeGitMode(store?.getSettings().experimentalNativeGit)
+  )
   // Why: must run before ClaudeRuntimeAuthService's constructor sync — a Claude
   // CLI that survived the restart inside the daemon still holds the current
   // single-use refresh token, and an unguarded early refresh would rotate it
