@@ -24,7 +24,12 @@ function PinnedTerminalPanelViewport({
 }): React.JSX.Element {
   return (
     <div
-      className={cn('min-h-0 flex-1 flex-col', visible ? 'flex' : 'hidden')}
+      // Why: TerminalPane positions xterm layers absolutely; without a
+      // positioned ancestor they anchor to the page and cover the header.
+      className={cn(
+        'relative min-h-0 flex-1 flex-col overflow-hidden',
+        visible ? 'flex' : 'hidden'
+      )}
       data-pinned-terminal-panel-id={panel.id}
     >
       <TerminalPane
