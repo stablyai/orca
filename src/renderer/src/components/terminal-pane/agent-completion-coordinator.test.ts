@@ -245,6 +245,43 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).not.toHaveBeenCalled()
   })
 
+  it('does not confirm process-exit from unavailable remote inspections', async () => {
+    let result: RuntimeTerminalProcessInspection = processResult('codex')
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    // Remote connection drops: the handle is stale/gone, not confirmed idle.
+    result = { foregroundProcess: null, hasChildProcesses: false, unavailable: true }
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    // Recovery: a successful inspection still sees the agent running.
+    result = processResult('codex')
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    // A real exit still confirms after two successful idle samples.
+    result = processResult(null)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
+      source: 'process-exit',
+      quietedHookDone: false,
+      terminalIdleConfirmed: true
+    })
+  })
+
   it('does not dispatch process-exit while an agent terminal still has child processes', async () => {
     let result = processResult('codex')
     const dispatchCompletion = vi.fn()

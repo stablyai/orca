@@ -12,6 +12,10 @@ import {
 export type RuntimeTerminalProcessInspection = {
   foregroundProcess: string | null
   hasChildProcesses: boolean
+  // Why: a stale/gone remote handle is unknown liveness, not a confirmed
+  // empty-process inspection. Callers that infer agent exit must be able to
+  // tell the two apart (#9151).
+  unavailable?: true
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
@@ -91,7 +95,7 @@ export async function inspectRuntimeTerminalProcess(
     return result.process
   } catch (error) {
     if (isTerminalGoneError(error)) {
-      return { foregroundProcess: null, hasChildProcesses: false }
+      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true }
     }
     throw error
   }
