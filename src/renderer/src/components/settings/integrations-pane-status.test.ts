@@ -112,4 +112,20 @@ describe('getPreflightIntegrationStatuses', () => {
       glabStatus: 'connection-error'
     })
   })
+
+  it('keeps unexpected CLI errors separate from network failures', () => {
+    expect(
+      getPreflightIntegrationStatuses(
+        {
+          ...connectedPreflight,
+          gh: { installed: true, authenticated: false, authState: 'error' },
+          glab: { installed: true, authenticated: false, authState: 'error' }
+        },
+        new Set()
+      )
+    ).toMatchObject({
+      ghStatus: 'check-error',
+      glabStatus: 'check-error'
+    })
+  })
 })

@@ -21,6 +21,7 @@ export type CliProviderCardState =
   | 'not-installed'
   | 'not-authenticated'
   | 'connection-error'
+  | 'check-error'
   | 'unavailable'
 
 export function deriveCliProviderCardState(input: {
@@ -47,9 +48,10 @@ export function deriveCliProviderCardState(input: {
   if (input.cliStatus.authenticated) {
     return 'connected'
   }
-  return input.cliStatus.authState === undefined || input.cliStatus.authState === 'unauthenticated'
-    ? 'not-authenticated'
-    : 'connection-error'
+  if (input.cliStatus.authState === undefined || input.cliStatus.authState === 'unauthenticated') {
+    return 'not-authenticated'
+  }
+  return input.cliStatus.authState === 'error' ? 'check-error' : 'connection-error'
 }
 
 export type PreflightCardStatuses = {

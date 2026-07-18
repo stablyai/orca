@@ -42,10 +42,16 @@ export type HydrationResult =
     }
 
 let cached: Promise<HydrationResult> | null = null
+let inFlight: Promise<HydrationResult> | null = null
+let inFlightForced = false
+let queuedForced: Promise<HydrationResult> | null = null
 
 /** @internal - tests need a clean hydration cache between cases. */
 export function _resetHydrateShellPathCache(): void {
   cached = null
+  inFlight = null
+  inFlightForced = false
+  queuedForced = null
 }
 
 function pickShell(): string | null {
@@ -219,15 +225,12 @@ type HydrateOptions = {
 }
 
 /**
- * Spawn the user's login shell once and return the PATH it would export.
- * Caches the promise for the lifetime of the process — call
- * `_resetHydrateShellPathCache()` in tests or `hydrateShellPath({ force: true })`
- * when the user asks to re-probe (e.g. after installing a new CLI).
+ * Start one shell hydration and expose it as the shared in-flight result.
+ *
+ * @param options Shell selection and test overrides for this hydration.
+ * @returns The newly started hydration promise.
  */
-export function hydrateShellPath(options: HydrateOptions = {}): Promise<HydrationResult> {
-  if (cached && !options.force) {
-    return cached
-  }
+function startShellHydration(options: HydrateOptions): Promise<HydrationResult> {
   const shell = options.shellOverride !== undefined ? options.shellOverride : pickShell()
   if (!shell) {
     // Windows uses cmd/PowerShell rather than a POSIX login shell — the
@@ -235,8 +238,55 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
     cached = Promise.resolve({ segments: [], proxyEnv: {}, ok: false, failureReason: 'no_shell' })
     return cached
   }
-  cached = (options.spawner ?? spawnShellAndReadPath)(shell)
-  return cached
+
+  const started = (options.spawner ?? spawnShellAndReadPath)(shell)
+  inFlight = started
+  inFlightForced = options.force === true
+  cached = started
+  const clearInFlight = (): void => {
+    if (inFlight === started) {
+      inFlight = null
+      inFlightForced = false
+    }
+  }
+  void started.then(clearInFlight, clearInFlight)
+  return started
+}
+
+/**
+ * Spawn the user's login shell once and return the PATH it would export.
+ * Caches the promise for the lifetime of the process — call
+ * `_resetHydrateShellPathCache()` in tests or `hydrateShellPath({ force: true })`
+ * when the user asks to re-probe (e.g. after installing a new CLI).
+ */
+export function hydrateShellPath(options: HydrateOptions = {}): Promise<HydrationResult> {
+  if (!options.force) {
+    return cached ?? startShellHydration(options)
+  }
+
+  if (!inFlight) {
+    return startShellHydration(options)
+  }
+  if (queuedForced) {
+    return queuedForced
+  }
+  if (inFlightForced) {
+    return inFlight
+  }
+
+  // Why: startup and user-triggered refreshes can overlap. Queue one fresh
+  // capture behind the active shell and coalesce later force callers onto it.
+  const startForcedHydration = (): Promise<HydrationResult> => startShellHydration(options)
+  const queued = inFlight.then(startForcedHydration, startForcedHydration)
+  queuedForced = queued
+  cached = queued
+  const clearQueuedForced = (): void => {
+    if (queuedForced === queued) {
+      queuedForced = null
+    }
+  }
+  void queued.then(clearQueuedForced, clearQueuedForced)
+  return queued
 }
 
 /**

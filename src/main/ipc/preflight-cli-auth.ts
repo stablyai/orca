@@ -71,7 +71,7 @@ function classifyAuthFailure(error: unknown): CliAuthProbeResult {
   }
   if (
     NETWORK_ERROR_CODES.has(code) ||
-    /network is unreachable|no such host|could not resolve|temporary failure in name resolution|connection (?:refused|reset)|failed to connect|error connecting|proxyconnect tcp|tls handshake/i.test(
+    /network is unreachable|no such host|could not resolve|temporary failure in name resolution|connection (?:refused|reset)|failed to connect|error connecting|proxyconnect tcp|proxy authentication required|http 407|tls handshake/i.test(
       output
     )
   ) {

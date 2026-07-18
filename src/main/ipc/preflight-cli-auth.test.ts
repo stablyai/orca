@@ -80,6 +80,35 @@ describe('preflight CLI authentication', () => {
     })
   })
 
+  it.each([
+    'Get "https://api.github.com/": Proxy Authentication Required',
+    'HTTP 407: Proxy Authentication Required'
+  ])(
+    'treats a structured GitHub proxy-authentication failure as unreachable: %s',
+    async (error) => {
+      const run = vi.fn().mockRejectedValue({
+        stdout: JSON.stringify({
+          hosts: {
+            'github.com': [
+              {
+                active: true,
+                state: 'error',
+                error
+              }
+            ]
+          }
+        }),
+        stderr: ''
+      })
+
+      await expect(probeGhAuthentication(run)).resolves.toEqual({
+        authenticated: false,
+        authState: 'unreachable'
+      })
+      expect(run).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it('preserves GitHub timeout and reachability failures instead of reporting logout', async () => {
     const timedOutRun = vi
       .fn()

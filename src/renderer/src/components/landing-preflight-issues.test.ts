@@ -75,6 +75,21 @@ describe('landing preflight issues', () => {
     expect(issues[0]?.description).toContain('network or proxy')
   })
 
+  it('reports an unexpected CLI error separately from connectivity and login issues', () => {
+    const issues = getLandingPreflightIssues(
+      {
+        git: { installed: true },
+        gh: { installed: true, authenticated: false, authState: 'error' }
+      },
+      { hasGitHubBackedProject: true }
+    )
+
+    expect(issues.map((issue) => issue.id)).toEqual(['gh-check-error'])
+    expect(issues[0]?.description).toContain('gh auth status')
+    expect(issues[0]?.description).not.toContain('network or proxy')
+    expect(issues[0]?.description).not.toContain('gh auth login')
+  })
+
   it('treats GitLab-only registered projects as not GitHub-backed', () => {
     expect(
       hasGitHubBackedProject([

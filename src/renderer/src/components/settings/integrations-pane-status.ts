@@ -6,6 +6,7 @@ export type GhStatus =
   | 'not-installed'
   | 'not-authenticated'
   | 'connection-error'
+  | 'check-error'
 // Why: parallel to GhStatus — GitLab uses glab and the same three failure
 // modes plus a distinct failed-auth-probe state.
 export type GlabStatus = GhStatus
@@ -75,9 +76,10 @@ function ghStatusFromPreflight(status: PreflightStatus['gh']): GhStatus {
   if (status.authenticated) {
     return 'connected'
   }
-  return status.authState === undefined || status.authState === 'unauthenticated'
-    ? 'not-authenticated'
-    : 'connection-error'
+  if (status.authState === undefined || status.authState === 'unauthenticated') {
+    return 'not-authenticated'
+  }
+  return status.authState === 'error' ? 'check-error' : 'connection-error'
 }
 
 function glabStatusFromPreflight(status: PreflightStatus['glab']): GlabStatus {
@@ -87,9 +89,10 @@ function glabStatusFromPreflight(status: PreflightStatus['glab']): GlabStatus {
   if (status.authenticated) {
     return 'connected'
   }
-  return status.authState === undefined || status.authState === 'unauthenticated'
-    ? 'not-authenticated'
-    : 'connection-error'
+  if (status.authState === undefined || status.authState === 'unauthenticated') {
+    return 'not-authenticated'
+  }
+  return status.authState === 'error' ? 'check-error' : 'connection-error'
 }
 
 function bitbucketStatusFromPreflight(status: PreflightStatus['bitbucket']): BitbucketStatus {

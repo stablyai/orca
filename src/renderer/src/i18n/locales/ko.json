@@ -1046,8 +1046,11 @@
         "ec43b38ba7": "GitHub에 별표 표시됨",
         "157bb5ecbb": "GitHub 열기",
         "preflightDismiss": "닫기",
-        "github_cli_auth_check_failed": "GitHub CLI authentication could not be verified",
-        "github_cli_auth_check_failed_description": "Check your network or proxy settings, then re-check the GitHub CLI connection."
+        "github_cli_auth_check_failed": "GitHub CLI 인증을 확인할 수 없습니다",
+        "github_cli_auth_check_failed_description": "네트워크 또는 프록시 설정을 확인한 후 GitHub CLI 연결을 다시 확인하세요.",
+        "github_cli_auth_check_error": "GitHub CLI에서 예기치 않은 오류가 발생했습니다",
+        "github_cli_auth_check_error_description": "터미널에서 \"gh auth status\"를 실행하고 보고된 CLI 오류를 해결한 후 다시 확인하세요.",
+        "github_cli_auth_check_error_fix_label": "상태 확인"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -8639,9 +8642,12 @@
                   "6b2cfb52b4": "gh",
                   "b4d900e7f1": "PR, 이슈 및 검사는 다음을 통해 이루어집니다.",
                   "account_scope_prefix": "계정 범위",
-                  "connection_error": "Connection error",
-                  "github_auth_check_failed": "Orca could not verify GitHub CLI authentication. Check your network or proxy settings, then re-check.",
-                  "gitlab_auth_check_failed": "Orca could not verify GitLab CLI authentication. Check your network or proxy settings, then re-check."
+                  "connection_error": "연결 오류",
+                  "cli_error": "CLI 오류",
+                  "github_auth_check_failed": "Orca에서 GitHub CLI 인증을 확인할 수 없습니다. 네트워크 또는 프록시 설정을 확인한 후 다시 확인하세요.",
+                  "gitlab_auth_check_failed": "Orca에서 GitLab CLI 인증을 확인할 수 없습니다. 네트워크 또는 프록시 설정을 확인한 후 다시 확인하세요.",
+                  "github_auth_check_error": "GitHub CLI에서 예기치 않은 오류가 발생했습니다. 터미널에서 \"gh auth status\"를 실행한 후 다시 확인하세요.",
+                  "gitlab_auth_check_error": "GitLab CLI에서 예기치 않은 오류가 발생했습니다. 터미널에서 \"glab auth status\"를 실행한 후 다시 확인하세요."
                 }
               }
             }

@@ -356,7 +356,7 @@ describe('preflight', () => {
       throw new Error(`unexpected command ${String(command)}`)
     })
 
-    const status = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+    const status = await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
 
     expect(status.gh).toEqual({
       installed: true,
@@ -373,6 +373,7 @@ describe('preflight', () => {
       ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*auth[\s\S]*status/)],
       { encoding: 'utf-8', timeout: 5000 }
     )
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
   })
 
   it('uses the persisted Windows Path when probing host CLIs', async () => {
@@ -390,13 +391,14 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: authenticatedGhStatusJson })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
-    const status = await runPreflightCheck()
+    const status = await runPreflightCheck(true)
 
     expect(status.gh).toEqual({
       installed: true,
       authenticated: true,
       authState: 'authenticated'
     })
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePersistedWindowsPathMock).toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, 'gh', ['--version'], {
       encoding: 'utf-8',
@@ -484,6 +486,51 @@ describe('preflight', () => {
       authState: 'authenticated'
     })
     expect(execFileAsyncMock).toHaveBeenCalledTimes(10)
+    expect(hydrateShellPathMock).toHaveBeenCalledWith({ force: true })
+  })
+
+  it('does not let an older in-flight probe overwrite a forced refresh', async () => {
+    let resolveStaleGhAuth: ((result: { stdout: string; stderr?: string }) => void) | undefined
+    let ghAuthProbeCount = 0
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (Array.isArray(args) && args[0] === '--version') {
+        return { stdout: `${String(command)} version 2.0.0\n` }
+      }
+      if (command === 'glab') {
+        return { stdout: 'Logged in to gitlab.com\n' }
+      }
+      if (command === 'gh') {
+        ghAuthProbeCount += 1
+        if (ghAuthProbeCount === 1) {
+          return new Promise((resolve) => {
+            resolveStaleGhAuth = resolve
+          })
+        }
+        return { stdout: authenticatedGhStatusJson }
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    const staleRequest = runPreflightCheck()
+    await vi.waitFor(() => {
+      expect(resolveStaleGhAuth).toBeDefined()
+    })
+    const freshStatus = await runPreflightCheck(true)
+
+    resolveStaleGhAuth?.({
+      stdout: JSON.stringify({
+        hosts: {
+          'github.com': [{ active: true, state: 'error', error: 'HTTP 401: Bad credentials' }]
+        }
+      })
+    })
+    const staleStatus = await staleRequest
+    const cachedStatus = await runPreflightCheck()
+
+    expect(freshStatus.gh.authState).toBe('authenticated')
+    expect(staleStatus.gh.authState).toBe('unauthenticated')
+    expect(cachedStatus.gh.authState).toBe('authenticated')
+    expect(ghAuthProbeCount).toBe(2)
   })
 
   it('registers the preflight handler', async () => {

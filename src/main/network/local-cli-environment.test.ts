@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { hydrateShellPathMock, mergePersistedWindowsPathMock } = vi.hoisted(() => ({
-  hydrateShellPathMock: vi.fn(),
-  mergePersistedWindowsPathMock: vi.fn()
-}))
+const { hydrateShellPathMock, mergePathSegmentsMock, mergePersistedWindowsPathMock } = vi.hoisted(
+  () => ({
+    hydrateShellPathMock: vi.fn(),
+    mergePathSegmentsMock: vi.fn(),
+    mergePersistedWindowsPathMock: vi.fn()
+  })
+)
 
 vi.mock('../startup/hydrate-shell-path', () => ({
-  hydrateShellPath: hydrateShellPathMock
+  hydrateShellPath: hydrateShellPathMock,
+  mergePathSegments: mergePathSegmentsMock
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
@@ -18,13 +22,16 @@ import {
   buildLocalCliEnvironment,
   setLocalCliProxySettings
 } from './local-cli-environment'
+import type { HydrationResult } from '../startup/hydrate-shell-path'
 
 describe('local CLI environment', () => {
   const originalPlatform = process.platform
+  const originalPath = process.env.PATH
 
   beforeEach(() => {
     _resetLocalCliProxySettings()
     hydrateShellPathMock.mockReset()
+    mergePathSegmentsMock.mockReset()
     mergePersistedWindowsPathMock.mockReset()
     hydrateShellPathMock.mockResolvedValue({
       segments: ['/usr/local/bin'],
@@ -47,6 +54,11 @@ describe('local CLI environment', () => {
       configurable: true,
       value: originalPlatform
     })
+    if (originalPath === undefined) {
+      delete process.env.PATH
+    } else {
+      process.env.PATH = originalPath
+    }
   })
 
   it('fills missing proxy variables from the login shell without importing unrelated values', async () => {
@@ -73,6 +85,43 @@ describe('local CLI environment', () => {
 
     expect(env.HTTPS_PROXY).toBe('http://launch-proxy.example:8080')
     expect(env.NO_PROXY).toBe('launch.internal')
+  })
+
+  it('copies the process PATH only after an in-flight shell hydration has merged it', async () => {
+    process.env.PATH = '/usr/bin'
+    let resolveHydration: ((result: HydrationResult) => void) | undefined
+    hydrateShellPathMock.mockReturnValueOnce(
+      new Promise<HydrationResult>((resolve) => {
+        resolveHydration = resolve
+      })
+    )
+    mergePathSegmentsMock.mockImplementationOnce((segments: string[]) => {
+      process.env.PATH = [...segments, '/usr/bin'].join(':')
+      return segments
+    })
+
+    const environmentPromise = buildLocalCliEnvironment()
+    expect(mergePathSegmentsMock).not.toHaveBeenCalled()
+
+    resolveHydration?.({
+      segments: ['/Users/test/.local/bin'],
+      proxyEnv: {},
+      ok: true,
+      failureReason: 'none'
+    })
+
+    await expect(environmentPromise).resolves.toMatchObject({
+      PATH: '/Users/test/.local/bin:/usr/bin'
+    })
+    expect(mergePathSegmentsMock).toHaveBeenCalledWith(['/Users/test/.local/bin'])
+  })
+
+  it('preserves an explicitly supplied PATH while still importing shell proxy values', async () => {
+    const env = await buildLocalCliEnvironment({ PATH: '/custom/bin' })
+
+    expect(env.PATH).toBe('/custom/bin')
+    expect(env.HTTPS_PROXY).toBe('http://shell-proxy.example:8080')
+    expect(mergePathSegmentsMock).not.toHaveBeenCalled()
   })
 
   it('lets manual Orca proxy settings override inherited proxy and bypass values', async () => {

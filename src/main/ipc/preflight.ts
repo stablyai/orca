@@ -65,10 +65,12 @@ export type { RemoteWindowsTerminalCapabilities }
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
+let cacheGeneration = 0
 
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  cacheGeneration += 1
 }
 
 function uniqueAgentIds(ids: Iterable<string>): string[] {
@@ -221,10 +223,12 @@ export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
-  const cacheable = !getPreflightWslTarget(context)
+  const wslTarget = getPreflightWslTarget(context)
+  const cacheable = !wslTarget
   if (cacheable && cached && !force) {
     return cached
   }
+  const requestGeneration = cacheable ? ++cacheGeneration : 0
 
   if (force) {
     // Why: the GitLab known-hosts cache (gl-utils) is populated lazily on the
@@ -234,6 +238,15 @@ export async function runPreflightCheck(
     // path in IntegrationsPane forces preflight, so piggyback on that signal
     // to refresh the host list too.
     _resetKnownHostsCache()
+  }
+
+  if (force && !wslTarget && process.platform !== 'win32') {
+    // Why: a manual re-check must observe proxy and PATH edits made in shell rc
+    // files since startup. Refresh once here so parallel CLI probes share it.
+    const shellHydration = await hydrateShellPath({ force: true })
+    if (shellHydration.segments.length > 0) {
+      mergePathSegments(shellHydration.segments)
+    }
   }
 
   const [gitProbe, ghProbe, glabProbe] = await Promise.all([
@@ -271,7 +284,7 @@ export async function runPreflightCheck(
     gitea
   }
 
-  if (cacheable) {
+  if (cacheable && requestGeneration === cacheGeneration) {
     cached = result
   }
 

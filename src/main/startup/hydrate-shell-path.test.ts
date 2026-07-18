@@ -82,7 +82,7 @@ describe('hydrateShellPath', () => {
     expect(spawnCount).toBe(1)
   })
 
-  it('re-spawns when force:true is passed — matches the Refresh button contract', async () => {
+  it('re-spawns once and coalesces concurrent force callers after the cache settles', async () => {
     let spawnCount = 0
     const spawner: HydrationSpawner = async () => {
       spawnCount += 1
@@ -90,9 +90,54 @@ describe('hydrateShellPath', () => {
     }
 
     await hydrateShellPath({ shellOverride: '/bin/zsh', spawner })
-    await hydrateShellPath({ shellOverride: '/bin/zsh', spawner, force: true })
+    const firstRefresh = hydrateShellPath({ shellOverride: '/bin/zsh', spawner, force: true })
+    const secondRefresh = hydrateShellPath({ shellOverride: '/bin/zsh', spawner, force: true })
 
+    expect(firstRefresh).toBe(secondRefresh)
+    await Promise.all([firstRefresh, secondRefresh])
     expect(spawnCount).toBe(2)
+  })
+
+  it('serializes and coalesces forced refreshes behind an in-flight hydration', async () => {
+    let resolveInitial: ((result: HydrationResult) => void) | undefined
+    let resolveRefresh: ((result: HydrationResult) => void) | undefined
+    const initialSpawner = vi.fn(
+      () =>
+        new Promise<HydrationResult>((resolve) => {
+          resolveInitial = resolve
+        })
+    )
+    const refreshSpawner = vi.fn(
+      () =>
+        new Promise<HydrationResult>((resolve) => {
+          resolveRefresh = resolve
+        })
+    )
+
+    const initial = hydrateShellPath({ shellOverride: '/bin/zsh', spawner: initialSpawner })
+    const firstRefresh = hydrateShellPath({
+      shellOverride: '/bin/zsh',
+      spawner: refreshSpawner,
+      force: true
+    })
+    const secondRefresh = hydrateShellPath({
+      shellOverride: '/bin/zsh',
+      spawner: refreshSpawner,
+      force: true
+    })
+
+    expect(firstRefresh).toBe(secondRefresh)
+    expect(refreshSpawner).not.toHaveBeenCalled()
+
+    resolveInitial?.({ segments: ['/old'], proxyEnv: {}, ok: true, failureReason: 'none' })
+    await initial
+    await vi.waitFor(() => {
+      expect(refreshSpawner).toHaveBeenCalledTimes(1)
+    })
+
+    resolveRefresh?.({ segments: ['/fresh'], proxyEnv: {}, ok: true, failureReason: 'none' })
+    await expect(firstRefresh).resolves.toMatchObject({ segments: ['/fresh'] })
+    expect(refreshSpawner).toHaveBeenCalledTimes(1)
   })
 
   it('returns failureReason:no_shell when no shell is available (Windows path)', async () => {

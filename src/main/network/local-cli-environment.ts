@@ -4,7 +4,11 @@ import {
   type NetworkProxySettings
 } from '../../shared/network-proxy'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
-import { hydrateShellPath, type HydrationResult } from '../startup/hydrate-shell-path'
+import {
+  hydrateShellPath,
+  mergePathSegments,
+  type HydrationResult
+} from '../startup/hydrate-shell-path'
 
 let configuredProxySettings: NetworkProxySettings | null = null
 
@@ -74,13 +78,22 @@ function fillShellProxyEnvironment(
 export async function buildLocalCliEnvironment(
   baseEnv: NodeJS.ProcessEnv = process.env
 ): Promise<Record<string, string>> {
-  const env = stringOnlyEnvironment(baseEnv)
   if (process.platform === 'win32') {
+    const env = stringOnlyEnvironment(baseEnv)
     mergePersistedWindowsPath(env)
-  } else {
-    const shellHydration = await hydrateShellPath()
-    fillShellProxyEnvironment(env, shellHydration)
+    Object.assign(env, buildConfiguredProxyEnv(configuredProxySettings))
+    return env
   }
+
+  const shellHydration = await hydrateShellPath()
+  // Why: the startup hydration callback can finish while this function awaits
+  // the same promise. Merge before copying so GUI-launched probes do not retain
+  // the sparse PATH snapshot from before shell startup completed.
+  if (baseEnv === process.env && shellHydration.segments.length > 0) {
+    mergePathSegments(shellHydration.segments)
+  }
+  const env = stringOnlyEnvironment(baseEnv)
+  fillShellProxyEnvironment(env, shellHydration)
 
   // Why: a manual Orca proxy is the child-process source of truth. Applying it
   // last also clears inherited NO_PROXY through buildConfiguredProxyEnv.

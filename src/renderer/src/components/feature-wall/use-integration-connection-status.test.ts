@@ -412,6 +412,23 @@ describe('deriveCliProviderCardState', () => {
       })
     ).toBe('connection-error')
   })
+
+  it('keeps an unexpected CLI error separate from a connection failure', () => {
+    expect(
+      deriveCliProviderCardState({
+        cliStatus: {
+          installed: true,
+          authenticated: false,
+          authState: 'error'
+        },
+        preflightStatusAvailable: true,
+        preflightStatusChecked: true,
+        preflightStatusCurrent: true,
+        preflightStatusError: null,
+        preflightStatusLoading: false
+      })
+    ).toBe('check-error')
+  })
 })
 
 describe('deriveIntegrationFlowState', () => {

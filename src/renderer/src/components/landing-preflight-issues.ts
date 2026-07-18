@@ -65,10 +65,27 @@ export function getLandingPreflightIssues(
       fixUrl: 'https://cli.github.com',
       dismissible: true
     })
+  } else if (!status.gh.authenticated && status.gh.authState === 'error') {
+    issues.push({
+      id: 'gh-check-error',
+      title: translate(
+        'auto.components.Landing.github_cli_auth_check_error',
+        'GitHub CLI returned an unexpected error'
+      ),
+      description: translate(
+        'auto.components.Landing.github_cli_auth_check_error_description',
+        'Run "gh auth status" in a terminal, resolve the reported CLI error, then re-check.'
+      ),
+      fixLabel: translate(
+        'auto.components.Landing.github_cli_auth_check_error_fix_label',
+        'Review status'
+      ),
+      fixUrl: 'https://cli.github.com/manual/gh_auth_status',
+      dismissible: true
+    })
   } else if (
     !status.gh.authenticated &&
-    status.gh.authState !== undefined &&
-    status.gh.authState !== 'unauthenticated'
+    (status.gh.authState === 'timeout' || status.gh.authState === 'unreachable')
   ) {
     issues.push({
       id: 'gh-connectivity',
