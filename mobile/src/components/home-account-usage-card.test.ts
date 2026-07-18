@@ -18,7 +18,12 @@ vi.mock('./AgentIcons', () => ({ ClaudeIcon: 'ClaudeIcon', OpenAIIcon: 'OpenAIIc
 function limits(provider: ProviderRateLimits['provider']): ProviderRateLimits {
   return {
     provider,
-    session: { usedPercent: 25, windowMinutes: 300, resetsAt: null, resetDescription: null },
+    session: {
+      usedPercent: 25,
+      windowMinutes: 300,
+      resetsAt: 3_600_000,
+      resetDescription: null
+    },
     weekly: null,
     updatedAt: 1,
     error: null,
@@ -75,6 +80,7 @@ describe('HomeAccountUsageCard visibility', () => {
           visibleProviders: new Set(['antigravity']),
           showHostName: false,
           hostName: 'Desk',
+          now: 0,
           onPress: vi.fn()
         })
       )
@@ -83,6 +89,26 @@ describe('HomeAccountUsageCard visibility', () => {
     const texts = textValues(renderer!)
     expect(texts).toContain('Antigravity')
     expect(texts).not.toContain('claude@example.com')
+
+    act(() => renderer?.unmount())
+  })
+
+  it('renders display-only provider reset countdowns using the current timestamp', () => {
+    let renderer: ReactTestRenderer | null = null
+    act(() => {
+      renderer = create(
+        createElement(HomeAccountUsageCard, {
+          snapshot: snapshot(),
+          visibleProviders: new Set(['antigravity']),
+          showHostName: false,
+          hostName: 'Desk',
+          now: 0,
+          onPress: vi.fn()
+        })
+      )
+    })
+
+    expect(textValues(renderer!)).toContain('Resets in 1h')
 
     act(() => renderer?.unmount())
   })

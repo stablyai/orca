@@ -312,8 +312,15 @@ export function setUsageProviderVisible(
   return visibleUsageWrite
 }
 
-// Read after any in-flight toggle settles, so a screen that re-mounts right
-// after a toggle sees the just-written value instead of a pre-write snapshot.
-export function loadVisibleUsageProvidersSettled(): Promise<Set<UsageProviderKey>> {
-  return visibleUsageWrite.catch(() => undefined).then(() => loadVisibleUsageProviders())
+// Why: retry if a toggle is appended while the stored read is in flight, so
+// rollback/focus reloads cannot overwrite newer optimistic state.
+export async function loadVisibleUsageProvidersSettled(): Promise<Set<UsageProviderKey>> {
+  while (true) {
+    const pending = visibleUsageWrite
+    await pending.catch(() => undefined)
+    const stored = await loadVisibleUsageProviders()
+    if (pending === visibleUsageWrite) {
+      return stored
+    }
+  }
 }

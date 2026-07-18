@@ -624,4 +624,23 @@ describe('setUsageProviderVisible (serialized read-modify-write)', () => {
 
     expect(settled).toEqual(new Set(['claude', 'codex', 'grok']))
   })
+
+  it('waits again when a toggle is queued while the settled read is in progress', async () => {
+    store = JSON.stringify(['claude', 'codex'])
+    const staleRead = deferred<string | null>()
+    let readCount = 0
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async () => {
+      readCount += 1
+      return readCount === 1 ? staleRead.promise : store
+    })
+
+    const settled = loadVisibleUsageProvidersSettled()
+    await vi.waitFor(() => expect(AsyncStorage.getItem).toHaveBeenCalledTimes(1))
+
+    const pending = setUsageProviderVisible('grok', true)
+    staleRead.resolve(JSON.stringify(['claude', 'codex']))
+
+    await pending
+    await expect(settled).resolves.toEqual(new Set(['claude', 'codex', 'grok']))
+  })
 })

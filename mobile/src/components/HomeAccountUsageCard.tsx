@@ -23,12 +23,14 @@ export function HomeAccountUsageCard({
   visibleProviders,
   showHostName,
   hostName,
+  now,
   onPress
 }: {
   snapshot: AccountsSnapshot
   visibleProviders: Set<UsageProviderKey>
   showHostName: boolean
   hostName: string
+  now: number
   onPress: () => void
 }) {
   const claudeActiveId = snapshot.claude.activeAccountId
@@ -90,6 +92,7 @@ export function HomeAccountUsageCard({
                   <UsageWindowBars
                     windows={getProviderUsageWindows(limits)}
                     fetching={limits?.status === 'fetching'}
+                    now={now}
                   />
                 </View>
               )}
