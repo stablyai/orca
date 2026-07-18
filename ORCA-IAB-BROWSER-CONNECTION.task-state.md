@@ -3,7 +3,7 @@
 ## Linear Source
 - 이슈: N/A
 - 링크: N/A
-- 상태: in-progress
+- 상태: completed
 - 담당: Codex
 
 ## Goal
@@ -47,7 +47,7 @@
 - 07/17 패널 배치와 Orca 전용 제어는 확인했으나 Browser 플러그인의 직접 발견은 실패했습니다.
 
 ## Current Status
-- 직접 연결 구현, 실제 dev 검증, 독립 리뷰, 전체 빌드와 로컬 커밋을 완료했습니다. 원격 저장소가 현재 GitHub 계정의 쓰기와 SSH 인증을 모두 거부해 deploy 절차가 중단됐으며, 실사용 앱 교체는 시작하지 않았습니다.
+- 직접 연결 구현, dev·실사용 앱 검증, 독립 리뷰, 전체 빌드, 커밋, 개인 fork 백업과 `/Applications/Orca.app` 반영을 완료했습니다. 재시작된 실사용 Orca에서 공식 Browser가 현재 폴더 브라우저를 직접 발견했고 동일 탭 이동과 새 연결 재인식을 확인했습니다.
 
 ## Context Lens
 - Required: yes
@@ -135,26 +135,26 @@
 - [x] 독립 리뷰와 Done gate
 - [x] 전체 desktop/native 빌드 통과
 - [x] 변경 로컬 커밋
-- [ ] 원격 백업 — GitHub 쓰기 권한 필요
-- [ ] 실사용 Orca 앱 반영과 최종 QA
+- [x] 개인 fork 원격 백업
+- [x] 실사용 Orca 앱 반영과 최종 QA
 
 ## Risks / Blockers
 - macOS local Codex 직접 연결과 process-swap 이동에는 코드 blocker가 없습니다.
 - SSH 세션은 local pipe 대상에서 제외했습니다. Windows named pipe 경로는 구현했지만 이번 macOS 환경에서는 실행 검증하지 않았습니다.
 - 잘못되거나 분할된 JSON-RPC frame에 대한 추가 방어 테스트는 후속 hardening 후보이며 현재 macOS local 목표의 완료 차단 사항은 아닙니다.
-- 배포 blocker: HTTPS push는 현재 계정의 저장소 쓰기 권한 부족으로 403, SSH push는 등록된 public key가 없어 거부됐습니다.
+- 원본 `stablyai/orca`에는 두 개인 계정 모두 쓰기 권한이 없어, 사용자 승인에 따라 `jeonghoon0126/orca` 개인 fork에 백업했습니다.
 
 ## Verification
 - 명령/방법: 관련 테스트, 타입 검사, 별도 dev 런타임의 Browser 플러그인 직접 연결
-- 결과: Browser 연결 테스트 15개와 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 99개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, 전체 desktop/native 빌드 통과. 최종 dev 빌드에서 공식 Browser 런타임이 connection A/tabId 1의 `https://example.com/`을 읽고 같은 객체로 `https://example.org/` 이동 후 URL·제목·본문을 읽었으며, connection B에서도 tabId 1과 동일 화면 내용을 재확인했습니다.
+- 결과: Browser 연결 테스트 15개와 기존 AgentBrowserBridge 회귀를 포함한 관련 테스트 99개, 전체 TypeScript typecheck, 변경 파일 oxlint, `git diff --check`, 전체 desktop/native 빌드와 서명 검증 통과. dev 앱뿐 아니라 교체·재시작한 실사용 Orca에서도 공식 Browser가 `example.com`을 직접 읽고 같은 객체로 `example.org` 이동 후 URL·제목·본문을 읽었으며, 새 Browser 연결에서 같은 탭을 재인식했습니다. 검증용 탭은 정리하고 기존 사용자 탭은 보존했습니다.
 
 ## Release / Handoff
-- 배포/반영 방식: 로컬 독립 worktree에서 검증 후 사용자 승인 범위에 맞춰 반영
-- 운영 전달사항: 현재 설치 앱과 다른 세션은 유지
-- 배포 없음이면 그 이유: 설치 앱 교체·커밋·병합은 이번 작업 계약 밖이며 별도 사용자 결정 사항
+- 배포/반영 방식: 서명된 macOS unpack 앱을 `/Applications/Orca.app`에 반영하고 재시작
+- 운영 전달사항: 이전 앱은 `/Applications/Orca.app.pre-iab-backup`에 복구용으로 보존, 사용자 데이터와 기존 탭 유지
+- 원격 반영: `jeonghoon0126/orca` 개인 fork의 해결 브랜치
 
 ## Final Outcome
-- 코드 Done gate와 로컬 커밋은 완료했습니다. 원격 백업 권한이 없어 배포 파이프라인과 실사용 앱 교체는 대기 중입니다.
+- Browser 패널 직접 발견 문제를 코드·dev 앱·실사용 앱에서 해결했습니다. 설치 앱 교체 후 동일 탭 이동과 새 연결 재인식까지 통과했으며 blocker는 없습니다.
 
 ## Independent Review
 - Contract met: yes
@@ -164,7 +164,7 @@
 - Result: blocker 0개 / major 0개 / minor 2개. minor는 문서 최신화와 protocol negative coverage이며 현재 완료 범위를 막지 않음
 
 ## Compact Preservation
-- Current work / 현재 작업: Orca Browser 플러그인 직접 연결·교차 출처 이동·재접속 구현, dev 검증, 독립 리뷰 완료
+- Current work / 현재 작업: Orca Browser 플러그인 직접 연결·교차 출처 이동·재접속 구현, dev·실사용 검증, 앱 반영 완료
 - User request / 사용자 요청: 규칙 우회가 아닌 완벽한 해결
 - Decision rationale / 판단 이유: 패널은 정상이고 플러그인 요청에 브라우저 정보가 없습니다.
 - Decisions / 확정 판단: 독립 worktree, 테스트 우선, dev 새 세션 직접 검증
@@ -172,8 +172,8 @@
 - Evidence source paths / 근거 경로: 현재 작업 문서와 조사 후 확정할 코드·테스트
 - Verification / 검증: 공식 Browser 런타임 `iab` 발견, 같은 tab 객체의 `example.com` → `example.org` 이동과 새 connection 재접속 성공, 관련 테스트 99개·typecheck·lint·diff check 통과
 - Remaining risk / 남은 리스크: Windows와 SSH 원격 실행, protocol negative coverage는 이번 macOS local 완료 범위 밖
-- Resume next action / 재개 첫 행동: stablyai/orca 쓰기 권한이 있는 GitHub 인증을 활성화한 뒤 push부터 재개
+- Resume next action / 재개 첫 행동: 없음. 후속 hardening이 필요하면 별도 작업으로 시작
 
 ## Next Step
-- 다음 세션이 바로 실행할 첫 행동 1개: 권한 있는 GitHub 인증으로 해결 브랜치를 push
+- 다음 세션이 바로 실행할 첫 행동 1개: 없음 — 현재 완료 상태 유지
 - 이어 쓰면 안 되는 별도 작업: 기존 Shift+Enter 및 다른 Orca 기능 수정
