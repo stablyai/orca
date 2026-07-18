@@ -1,20 +1,20 @@
 import type { SshConnection } from './ssh-connection'
-import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
+import { createSshOperationAbortError } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, normalizeWindowsRemotePath } from './ssh-remote-platform'
-import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { powerShellCommand } from './ssh-remote-powershell'
 import {
   buildPosixNodeInstallGuidance,
   type RemoteNodeResolutionOptions
 } from './ssh-remote-node-install-guidance'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import {
+  buildPosixNodeToolchainProbe,
+  buildWindowsNodeToolchainProbe,
+  nodeToolchainVersionsMeetRequirements
+} from './ssh-remote-node-toolchain-probe'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { buildSshLoginShellCommand } from './ssh-login-shell-command'
-
-// Why: the relay requires Node.js 18+. Version managers like nvm keep every
-// installed version on disk, so a naive "highest version" glob can hand back
-// Node 8/10/12 and crash the relay on launch. Gate every candidate on this.
-const MIN_NODE_MAJOR = 18
 
 // Why: the login-shell fallback catches custom PATH setups in ~/.profile that
 // the path probes don't cover. Interactive configs (conda prompts, etc.) can
@@ -53,7 +53,7 @@ export async function resolveRemoteNodePath(
 // Probe the on-disk install directories of every common Node version manager
 // plus system package-manager locations. Every probe runs unconditionally so
 // a missing directory prints nothing rather than short-circuiting later
-// probes. Returns the first candidate that meets the minimum version.
+// probes. Returns the first candidate with a complete Node/npm toolchain.
 async function tryResolveViaKnownPaths(
   conn: SshConnection,
   options?: RemoteNodeResolutionOptions
@@ -113,7 +113,7 @@ true
         continue
       }
       seen.add(candidate)
-      if (await nodeMeetsVersionRequirement(conn, candidate, options)) {
+      if (await nodeToolchainMeetsRequirements(conn, candidate, options)) {
         console.log(`[ssh-relay] Found node via path probe: ${candidate}`)
         return candidate
       }
@@ -122,6 +122,7 @@ true
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Fall through to login shell.
   }
   return null
@@ -159,7 +160,7 @@ async function tryResolveViaLoginShell(
       return null
     }
 
-    if (await nodeMeetsVersionRequirement(conn, candidate, options)) {
+    if (await nodeToolchainMeetsRequirements(conn, candidate, options)) {
       console.log(`[ssh-relay] Found node via login shell (${shell}): ${candidate}`)
       return candidate
     }
@@ -167,15 +168,18 @@ async function tryResolveViaLoginShell(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Fall through.
   }
   return null
 }
 
-// Returns true if `nodePath` runs and reports Node >= MIN_NODE_MAJOR.
+// Returns true if `nodePath` runs, reports Node >= 18, and has a runnable npm
+// beside it. Deployment prepends this same directory before invoking npm, so
+// accepting a looser pairing would recreate #8450.
 // Caches nothing — this runs at most a few times per resolution (one per
 // candidate), and the exec round-trip dominates.
-async function nodeMeetsVersionRequirement(
+async function nodeToolchainMeetsRequirements(
   conn: SshConnection,
   nodePath: string,
   options?: RemoteNodeResolutionOptions
@@ -183,14 +187,17 @@ async function nodeMeetsVersionRequirement(
   try {
     const versionOutput = await execCommand(
       conn,
-      `${shellEscape(nodePath)} --version`,
-      commandOptions({ wrapCommand: false }, options)
+      buildPosixNodeToolchainProbe(nodePath),
+      // Why: the paired probe uses POSIX PATH assignment syntax, which fish
+      // and csh cannot parse when sshd delegates directly to the login shell.
+      commandOptions({ wrapCommand: true }, options)
     )
-    return nodeVersionMeetsRequirement(versionOutput)
+    return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Binary missing or fails to run — not usable.
     return false
   }
@@ -231,7 +238,7 @@ async function resolveRemoteWindowsNodePath(
         continue
       }
       const normalized = normalizeWindowsRemotePath(nodePath)
-      if (await windowsNodeMeetsVersionRequirement(conn, normalized, options)) {
+      if (await windowsNodeToolchainMeetsRequirements(conn, normalized, options)) {
         console.log(`[ssh-relay] Found Windows node at: ${normalized}`)
         return normalized
       }
@@ -240,13 +247,14 @@ async function resolveRemoteWindowsNodePath(
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     // Fall through to the shared error below.
   }
 
   throwWindowsNodeNotFound(options)
 }
 
-async function windowsNodeMeetsVersionRequirement(
+async function windowsNodeToolchainMeetsRequirements(
   conn: SshConnection,
   nodePath: string,
   options?: RemoteNodeResolutionOptions
@@ -254,25 +262,17 @@ async function windowsNodeMeetsVersionRequirement(
   try {
     const versionOutput = await execCommand(
       conn,
-      powerShellCommand(`& ${powerShellLiteral(nodePath)} --version`),
+      powerShellCommand(buildWindowsNodeToolchainProbe(nodePath)),
       commandOptions({ wrapCommand: false }, options)
     )
-    return nodeVersionMeetsRequirement(versionOutput)
+    return nodeToolchainVersionsMeetRequirements(versionOutput)
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+    throwIfAborted(options)
     return false
   }
-}
-
-function nodeVersionMeetsRequirement(versionOutput: string): boolean {
-  const match = versionOutput.trim().match(/^v?(\d+)/)
-  if (!match) {
-    return false
-  }
-  const major = Number.parseInt(match[1]!, 10)
-  return major >= MIN_NODE_MAJOR
 }
 
 async function throwNodeNotFound(

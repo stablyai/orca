@@ -18,6 +18,7 @@ vi.mock('@/store', () => ({
 }))
 
 import {
+  installEditorAddReviewNoteShortcut,
   installEditorFindShortcut,
   installMonacoDiffChangeNavigationShortcut,
   installMonacoEditorFindShortcut
@@ -197,6 +198,74 @@ describe('installEditorFindShortcut', () => {
 
     expect(getAction).toHaveBeenCalledWith('actions.find')
     expect(run).toHaveBeenCalledTimes(1)
+    dispose()
+  })
+})
+
+describe('installEditorAddReviewNoteShortcut', () => {
+  it('invokes add-review-note on its default binding and honors overrides', () => {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const onAddReviewNote = vi.fn(() => true)
+    container.appendChild(input)
+    document.body.appendChild(container)
+    const dispose = installEditorAddReviewNoteShortcut(container, onAddReviewNote)
+
+    const defaultEvent = dispatchKeyDown(input, {
+      key: 'n',
+      code: 'KeyN',
+      metaKey: true,
+      altKey: true
+    })
+    const repeatEvent = dispatchKeyDown(input, {
+      key: 'n',
+      code: 'KeyN',
+      metaKey: true,
+      altKey: true,
+      repeat: true
+    })
+    const unrelatedEvent = dispatchKeyDown(input, { key: 'n', code: 'KeyN', metaKey: true })
+
+    expect(defaultEvent.defaultPrevented).toBe(true)
+    expect(repeatEvent.defaultPrevented).toBe(false)
+    expect(unrelatedEvent.defaultPrevented).toBe(false)
+    expect(onAddReviewNote).toHaveBeenCalledTimes(1)
+
+    shortcutState.keybindings = { 'editor.addReviewNote': ['Mod+Shift+A'] }
+    const overriddenEvent = dispatchKeyDown(input, {
+      key: 'a',
+      code: 'KeyA',
+      metaKey: true,
+      shiftKey: true
+    })
+    expect(overriddenEvent.defaultPrevented).toBe(true)
+    expect(onAddReviewNote).toHaveBeenCalledTimes(2)
+
+    dispose()
+    dispatchKeyDown(input, { key: 'a', code: 'KeyA', metaKey: true, shiftKey: true })
+    expect(onAddReviewNote).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the chord unconsumed when the handler reports it did not act', () => {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const onDownstreamKeyDown = vi.fn()
+    const onAddReviewNote = vi.fn(() => false)
+    container.appendChild(input)
+    document.body.appendChild(container)
+    input.addEventListener('keydown', onDownstreamKeyDown)
+    const dispose = installEditorAddReviewNoteShortcut(container, onAddReviewNote)
+
+    const event = dispatchKeyDown(input, {
+      key: 'n',
+      code: 'KeyN',
+      metaKey: true,
+      altKey: true
+    })
+
+    expect(onAddReviewNote).toHaveBeenCalledTimes(1)
+    expect(event.defaultPrevented).toBe(false)
+    expect(onDownstreamKeyDown).toHaveBeenCalledTimes(1)
     dispose()
   })
 })

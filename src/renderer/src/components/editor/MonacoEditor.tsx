@@ -48,7 +48,11 @@ import {
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import {
+  installEditorAddReviewNoteShortcut,
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
 import { Plus } from 'lucide-react'
 import {
   getMonacoMarkdownSelectionAnnotationTarget,
@@ -198,6 +202,10 @@ export default function MonacoEditor({
   const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
+  // Why: the Monaco mount closure installs its keydown listeners once, so the
+  // add-review-note shortcut reads the live selection target through a ref.
+  const selectionAnnotationTargetRef = useRef<MonacoMarkdownSelectionAnnotationTarget | null>(null)
+  selectionAnnotationTargetRef.current = selectionAnnotationTarget
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -413,6 +421,18 @@ export default function MonacoEditor({
         propsRef.current.onSave(value)
       })
       const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+      // Opens the same composer as the selection "+" button; the target ref
+      // mirrors the last-rendered selection target and is null unless markdown
+      // annotations are enabled and text is selected.
+      const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
+        const target = selectionAnnotationTargetRef.current
+        if (!target) {
+          return false
+        }
+        setCommentPopover(target)
+        setSelectionAnnotationTarget(null)
+        return true
+      })
       const searchInFilesAction = editorInstance.addAction({
         id: 'orca.searchInFiles',
         label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
@@ -512,6 +532,7 @@ export default function MonacoEditor({
         gutterMouseDownSub.dispose()
         cleanupSaveShortcut()
         cleanupFindShortcut()
+        cleanupAddReviewNoteShortcut()
         editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
         searchInFilesAction.dispose()
         autoHeightSub?.dispose()

@@ -358,9 +358,9 @@ export function setupGuestShortcutForwarding(args: {
       return true
     }
 
-    // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
-    // the generic modifier-chord gate below because that gate rejects Alt.
-    // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.
+    // Why: match this action outside the main-process shortcut allowlist so
+    // both the fresh Shift binding and upgrading users' seeded Alt binding
+    // reach the renderer instead of the focused guest page.
     const switchAllTypesDirection = keybindingMatchesAction(
       'tab.nextAllTypes',
       input,

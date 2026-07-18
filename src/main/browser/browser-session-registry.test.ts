@@ -21,7 +21,9 @@ vi.mock('electron', () => ({
 vi.mock('./browser-manager', () => ({
   browserManager: {
     notifyPermissionDenied: vi.fn(),
-    handleGuestWillDownload: vi.fn()
+    handleGuestWillDownload: vi.fn(),
+    installCertificateRequestGuard: vi.fn(),
+    removeCertificateRequestGuard: vi.fn()
   }
 }))
 

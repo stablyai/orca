@@ -1,4 +1,4 @@
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings, Repo, Worktree } from './types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
 export const ALL_EXECUTION_HOSTS_SCOPE = 'all'
@@ -148,6 +148,19 @@ export function getRepoExecutionHostId(
   }
   const connectionId = normalizeHostPart(repo.connectionId)
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+}
+
+export function getWorktreeExecutionHostId(
+  worktree: Pick<Worktree, 'hostId'>,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+): ExecutionHostId {
+  // Why: runtime and SSH snapshots can identify a more precise owner than
+  // the repo fallback; every sidebar host decision must use the same precedence.
+  return (
+    worktree.hostId ??
+    (repo?.connectionId || repo?.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId)
+  )
 }
 
 export function getSettingsFocusedExecutionHostId(

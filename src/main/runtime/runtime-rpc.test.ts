@@ -1985,6 +1985,20 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
+        id: 'req_browser_certificate_proceed',
+        method: 'browser.certificate.proceed',
+        deviceToken: mobile.token,
+        params: {
+          worktree: 'id:wt-1',
+          page: 'page-1',
+          challengeId: 'challenge-1'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
         id: 'req_browser_dialog_accept',
         method: 'browser.dialogAccept',
         deviceToken: mobile.token,
@@ -2122,6 +2136,13 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_browser_viewport', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({
+        id: 'req_browser_certificate_proceed',
+        ok: false,
+        error: expect.objectContaining({ code: 'forbidden' })
+      })
     )
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_browser_dialog_accept', ok: true })

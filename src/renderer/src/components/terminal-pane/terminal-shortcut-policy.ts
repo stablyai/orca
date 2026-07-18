@@ -42,6 +42,7 @@ export type TerminalShortcutAction =
   | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
+  | { type: 'switchInputSource' }
 
 /** Kitty keyboard protocol modifier field: 1 + shift(1) + alt(2). */
 function kittyAltModifiers(shiftKey: boolean): number {
@@ -96,6 +97,13 @@ export function resolveTerminalShortcutAction(
   isWindowsTerminalHost: () => boolean = () => isWindows
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+
+  // Why: native-only chords must be captured even on repeat without blocking
+  // the OS default that performs the input-source switch.
+  if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
+    return { type: 'switchInputSource' }
+  }
+
   if (!event.repeat) {
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
       return { type: 'copySelection' }

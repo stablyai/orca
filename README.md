@@ -238,10 +238,9 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **WeChat:** Scan the QR code to join the community. If the first group is full, use the backup group.
+- **WeChat:** First WeChat group is full, now you can join the second one.
 
-  <img src="docs/assets/wechat-qr.png" alt="WeChat QR code for the Orca community" width="160" />
-  <img src="docs/assets/wechat-qr-backup.jpg" alt="Backup WeChat QR code for the Orca community" width="160" />
+  <img src="docs/assets/wechat-qr.jpg" alt="WeChat QR code for the Orca community" width="160" />
 
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
 - **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.

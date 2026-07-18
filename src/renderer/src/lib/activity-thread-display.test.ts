@@ -112,7 +112,11 @@ describe('getActivityThreadTaskTitle', () => {
   })
 
   it('keeps orchestration labels across terse follow-ups but yields to new work', () => {
-    const orchestration = { taskId: 'task-1', dispatchId: 'ctx-1', displayName: 'Fix checkout race' }
+    const orchestration = {
+      taskId: 'task-1',
+      dispatchId: 'ctx-1',
+      displayName: 'Fix checkout race'
+    }
     // Terse follow-up → still the same orchestration task.
     expect(
       getActivityThreadTaskTitle({

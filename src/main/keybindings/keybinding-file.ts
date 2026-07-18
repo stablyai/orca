@@ -318,6 +318,80 @@ export function migrateLegacyKeybindings(
   writeJsonDocument(path, document)
 }
 
+/**
+ * Pin the pre-swap tab-switch chords for a pre-existing install so upgrading
+ * users keep the shortcuts they learned. Writes into the active-platform
+ * section (mirroring `writeKeybindingOverride`) so the seeded values stay
+ * resettable from Settings.
+ *
+ * Pins per action, not all-or-nothing: an action is seeded only when this
+ * platform has no effective override for it yet. That way a user who rebound
+ * just one of the swapped actions keeps that choice AND keeps the pre-swap
+ * default on the other three — an existing user's behavior is never altered,
+ * whether they customized none, some, or all of them. Because every pin equals
+ * the action's old default, the seeded set reproduces exactly today's effective
+ * config and introduces no new conflicts.
+ */
+export function seedLegacyTabSwitchBindings(
+  path: string,
+  platform: NodeJS.Platform,
+  legacyBindings: Readonly<Partial<Record<KeybindingActionId, string[]>>>
+): { seeded: boolean; snapshot: KeybindingFileSnapshot } {
+  const keybindingPlatform = getKeybindingPlatform(platform)
+  const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
+  const current = readKeybindingFile(path, platform)
+  const activePlatformOverrides = current.platformOverrides[keybindingPlatform] ?? {}
+  // Why: the new defaults can temporarily make a valid pre-swap customization
+  // look conflicting and remove it from `current.overrides`. Inspect the parsed
+  // common + active-platform sections directly so the seed never replaces it.
+  const toSeed = actionIds.filter(
+    (actionId) =>
+      !Object.prototype.hasOwnProperty.call(current.commonOverrides, actionId) &&
+      !Object.prototype.hasOwnProperty.call(activePlatformOverrides, actionId)
+  )
+  if (toSeed.length === 0) {
+    return { seeded: false, snapshot: current }
+  }
+
+  const readResult = readJsonDocument(path)
+  if (!readResult.document) {
+    // Why: migration must never replace a user-owned file that could not be
+    // parsed; leaving the cohort pending allows a safe retry after repair.
+    throw new Error(readResult.error ?? 'Could not read keybindings file.')
+  }
+  const document = { ...readResult.document }
+  const common = isJsonObject(document.keybindings)
+    ? { ...document.keybindings }
+    : { ...current.commonOverrides }
+  for (const rootKey of Object.keys(document)) {
+    if (isKeybindingActionId(rootKey)) {
+      delete document[rootKey]
+    }
+  }
+  const platforms = isJsonObject(document.platforms) ? { ...document.platforms } : {}
+  const activePlatform = isJsonObject(platforms[keybindingPlatform])
+    ? { ...(platforms[keybindingPlatform] as JsonObject) }
+    : {}
+  for (const actionId of toSeed) {
+    const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
+    if (Array.isArray(normalized)) {
+      activePlatform[actionId] = normalized
+    }
+  }
+
+  document.version = FILE_VERSION
+  document.keybindings = common
+  document.platforms = {
+    ...platforms,
+    darwin: isJsonObject(platforms.darwin) ? platforms.darwin : {},
+    linux: isJsonObject(platforms.linux) ? platforms.linux : {},
+    win32: isJsonObject(platforms.win32) ? platforms.win32 : {},
+    [keybindingPlatform]: activePlatform
+  }
+  writeJsonDocument(path, document)
+  return { seeded: true, snapshot: readKeybindingFile(path, platform) }
+}
+
 export function writeKeybindingOverride(
   path: string,
   platform: NodeJS.Platform,

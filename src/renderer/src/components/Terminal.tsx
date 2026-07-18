@@ -1950,10 +1950,9 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
-      // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
-      // every tab type as an escape hatch from the type-scoped default, and
-      // matches the platform tab-switch chord on macOS.
+      // Fresh installs use Cmd/Ctrl+Shift+[ / ] across all tab types and
+      // Cmd/Ctrl+Alt+[ / ] within the active type; upgrading users keep the
+      // inverse mapping, and both actions remain rebindable.
       // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
       // as the key value (the shifted character), not '['. Option+[ also
       // composes to dead-key / punctuation on many layouts, so matching on

@@ -1397,6 +1397,23 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('reports a GitHub server error when fallback branch discovery receives 5xx responses', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: null
+    })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+
+    expect(outcome).toMatchObject({
+      kind: 'upstream-error',
+      errorType: 'server_error'
+    })
+  })
+
   it('keeps a pending fallback branch error when a later candidate cleanly misses', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [

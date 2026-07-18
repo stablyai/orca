@@ -34,6 +34,7 @@ import {
   type AgentSubagentSnapshot,
   type ParsedAgentStatusPayload
 } from './agent-status-types'
+import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
@@ -745,14 +746,6 @@ function clearActiveToolFieldsUpdate(): ToolSnapshot {
     { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
     { hasToolInputField: true }
   )
-}
-
-/** True for the AskUserQuestion tool across the casing variants different
- *  agents emit (`AskUserQuestion` / `ask_user_question` / `askUserQuestion`).
- *  Why: this is the structured "pick an option" prompt whose full input the
- *  clients render as a live card. */
-function isAskUserQuestionTool(toolName: string | undefined): boolean {
-  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
 }
 
 /** Capture the full AskUserQuestion tool input as a JSON string when the tool
@@ -2526,6 +2519,36 @@ function clearClaudePendingWaitForAgent(
     return
   }
   state.claudeLeadStateByPaneKey.set(paneKey, lead.stateBeforeWait ?? { state: 'working' })
+}
+
+/** Clear an AskUserQuestion wait after the user's answer was typed into the
+ *  terminal. Answering emits no hook event, so the caller infers it from the
+ *  submit keystroke. Restores the stashed pre-wait lead state (child-induced
+ *  question) or falls back to 'working' (lead question), and drops the cached
+ *  question card so later child-driven refreshes cannot re-emit the stale
+ *  wait. Returns the pane state to emit, gated up to 'working' while children
+ *  still run. */
+export function clearClaudeAnsweredQuestionWait(
+  state: HookListenerState,
+  paneKey: string
+): Pick<ClaudeLeadTurnState, 'state' | 'interrupted'> {
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const restored =
+    lead?.state === 'waiting'
+      ? (lead.stateBeforeWait ?? { state: 'working' as const })
+      : { state: 'working' as const }
+  state.claudeLeadStateByPaneKey.set(paneKey, { ...restored })
+  const previousTool = state.lastToolByPaneKey.get(paneKey)
+  state.lastToolByPaneKey.set(
+    paneKey,
+    previousTool?.lastAssistantMessage
+      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      : {}
+  )
+  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  return restored.state === 'done' && claudeRosterHasWorkingSubagent(roster)
+    ? { state: 'working' }
+    : restored
 }
 
 /** Emit a pane status refresh driven by child activity (lifecycle events and

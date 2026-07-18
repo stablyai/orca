@@ -25,7 +25,7 @@ import {
   sameBindings
 } from './keybinding-override-edits'
 import {
-  getShortcutSearchEntry,
+  buildShortcutGlobalSearchMatcher,
   matchesShortcutFilter,
   matchesShortcutLocalSearch,
   normalizeShortcutLocalSearchQuery,
@@ -138,9 +138,10 @@ export function ShortcutsPane(): React.JSX.Element {
   )
   const shortcutSearchQuery = normalizeShortcutLocalSearchQuery(shortcutQuery)
   const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
+  const matchesShortcutGlobalSearch = buildShortcutGlobalSearchMatcher(shortcutRows, searchQuery)
   const matchesShortcutSearch = (row: ShortcutRowsByGroup['rows'][number]): boolean =>
     shortcutSearchQuery !== null &&
-    matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+    matchesShortcutGlobalSearch(row) &&
     matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
   const baseVisibleRows = shortcutRows.filter((row) => matchesShortcutSearch(row))
   const filterCounts: Record<ShortcutFilter, number> = {

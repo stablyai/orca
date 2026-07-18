@@ -4,6 +4,12 @@ import StarterKit from '@tiptap/starter-kit'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 
+// Why: keybinding matching resolves the platform from navigator.userAgent,
+// which is environment-dependent under vitest; pin it for determinism.
+vi.mock('@/lib/shortcut-platform', () => ({
+  getShortcutPlatform: () => 'darwin' as NodeJS.Platform
+}))
+
 const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]
 
 function createEditor(content: object): Editor {
@@ -82,6 +88,7 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
       subscribe: () => () => {},
       update: () => {}
     },
+    openAnnotationPopoverRef: { current: vi.fn(() => true) },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),
@@ -105,6 +112,37 @@ function emptyTopLevelOrderedList(): object {
 }
 
 describe('rich markdown key handler', () => {
+  it('opens the review-note composer on the add-review-note shortcut', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      const event = keyEvent('n', { metaKey: true, altKey: true, code: 'KeyN' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledWith(true)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('leaves the add-review-note chord unconsumed when no composer opens', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      ctx.openAnnotationPopoverRef.current = vi.fn(() => false)
+      const event = keyEvent('n', { metaKey: true, altKey: true, code: 'KeyN' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('preserves a typed empty ordered-list shortcut on Enter', () => {
     const editor = createEditor(emptyTopLevelOrderedList())
 

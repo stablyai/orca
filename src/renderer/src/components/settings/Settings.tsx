@@ -53,6 +53,7 @@ import { SshPane } from './SshPane'
 import { ExperimentalPane } from './ExperimentalPane'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
+import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
@@ -93,13 +94,21 @@ import type {
 } from '@/lib/settings-navigation-types'
 import {
   COMPUTER_USE_SKILL_NAME,
+  LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
+  useInstalledAgentSkill,
+  useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import {
+  getAgentSkillNavInstallStatus,
+  getLinearAgentSkillNavInstallStatus
+} from '@/lib/agent-skill-nav-install-status'
 import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
@@ -202,16 +211,6 @@ function getSettingsNavGroupDefinitionsForSearch(
     seenGroupIds.add(section.group)
     return [group]
   })
-}
-
-function getSkillNavInstallStatus(skill: {
-  installed: boolean
-  loading: boolean
-}): SettingsNavInstallStatus {
-  if (skill.loading) {
-    return 'checking'
-  }
-  return skill.installed ? 'installed' : 'install'
 }
 
 function hasReadyVoiceModel(
@@ -336,8 +335,16 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
+  // Why: the Linear capability section mirrors the nav registry's gate so the
+  // sidebar entry and the rendered section appear/disappear together.
+  const linearConnected = useLinearProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const linearSkill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
+    enabled: linearConnected,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -346,6 +353,10 @@ function Settings(): React.JSX.Element {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  // Why: mirror the setup cards — freshness only speaks for the validated global
+  // rail, which doesn't run under WSL, so the nav pill stays presence-only there.
+  const { inventory: skillFreshnessInventory } = useSkillFreshness()
+  const skillFreshnessApplies = activeSkillRuntime.agentRuntime?.runtime !== 'wsl'
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
@@ -722,24 +733,45 @@ function Settings(): React.JSX.Element {
   const baseNavSections = useSettingsNavigationMetadata()
   const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
     orchestrationSkill
+  const {
+    installed: linearSkillInstalled,
+    loading: linearSkillLoading,
+    skills: linearSkills
+  } = linearSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
+    const applicableFreshnessInventory = skillFreshnessApplies ? skillFreshnessInventory : null
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
-        getSkillNavInstallStatus({
+        getAgentSkillNavInstallStatus({
+          name: ORCHESTRATION_SKILL_NAME,
           installed: orchestrationSkillInstalled,
-          loading: orchestrationSkillLoading
+          loading: orchestrationSkillLoading,
+          inventory: applicableFreshnessInventory
         })
       ]
     ])
+    if (linearConnected) {
+      next.set(
+        'linear',
+        getLinearAgentSkillNavInstallStatus({
+          skills: linearSkills,
+          installed: linearSkillInstalled,
+          loading: linearSkillLoading,
+          inventory: applicableFreshnessInventory
+        })
+      )
+    }
     if (showDesktopOnlySettings) {
       next.set(
         'computer-use',
-        getSkillNavInstallStatus({
+        getAgentSkillNavInstallStatus({
+          name: COMPUTER_USE_SKILL_NAME,
           installed: computerUseSkillInstalled,
-          loading: computerUseSkillLoading
+          loading: computerUseSkillLoading,
+          inventory: applicableFreshnessInventory
         })
       )
       if (settings) {
@@ -757,11 +789,17 @@ function Settings(): React.JSX.Element {
   }, [
     computerUseSkillInstalled,
     computerUseSkillLoading,
+    linearConnected,
+    linearSkillInstalled,
+    linearSkillLoading,
+    linearSkills,
     modelStates,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
     settings,
     showDesktopOnlySettings,
+    skillFreshnessApplies,
+    skillFreshnessInventory,
     voiceModelStatesLoading
   ])
   const navSections = useMemo(
@@ -1236,6 +1274,20 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
+
+                {linearConnected ? (
+                  <SettingsSection
+                    id="linear"
+                    title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
+                    description={translate(
+                      'auto.components.settings.Settings.linearDescription',
+                      'Give agents the skill to read and update your linked Linear tickets.'
+                    )}
+                    searchEntries={getSectionSearchEntries('linear')}
+                  >
+                    {isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
+                  </SettingsSection>
+                ) : null}
 
                 {showDesktopOnlySettings ? (
                   <>

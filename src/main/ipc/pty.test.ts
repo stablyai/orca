@@ -6497,7 +6497,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
-        ['--login', '-i'],
+        ['-c', 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'],
         expect.objectContaining({
           env: expect.objectContaining({ CHERE_INVOKING: '1' })
         })

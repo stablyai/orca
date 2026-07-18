@@ -6299,6 +6299,222 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     }
   })
 
+  it('flags githubUnavailable when a GitHub repo fails with a 5xx outage and no cache', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('flags a GitHub outage returned by a remote runtime method', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-outage',
+      ok: false,
+      error: { code: 'runtime_error', message: 'HTTP 503: Service Unavailable' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(true)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not attribute a remote runtime transport timeout to GitHub', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-runtime-timeout',
+      ok: false,
+      error: {
+        code: 'runtime_unavailable',
+        message: 'Runtime request timed out before github.listWorkItems completed'
+      },
+      _meta: { runtimeId: null }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.githubUnavailable).toBe(false)
+      expect(result.failedCount).toBe(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('flags githubUnavailable while serving stale cached rows after a failed refresh', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 8,
+      title: 'Cached PR',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItems
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      })
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const repos = [{ repoId: 'github-repo', path: '/server/github-repo' }]
+      await store.getState().fetchWorkItemsAcrossRepos(repos, 24, 100, '')
+
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(repos, 24, 100, '', { force: true })
+
+      expect(result.items).toEqual([{ ...item, repoId: 'github-repo' }])
+      expect(result.failedCount).toBe(0)
+      expect(result.githubUnavailable).toBe(true)
+      expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('ignores an ineligible SSH repo when every GitHub source is unavailable', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE))
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'ssh-repo', path: '/server/ssh-repo' },
+          { repoId: 'github-repo', path: '/server/github-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.items).toEqual([])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(true)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('keeps the partial-failure count when another GitHub repo still loads', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const item = {
+      type: 'pr',
+      number: 8,
+      title: 'Loaded PR',
+      url: 'https://example.test/8',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItems
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockResolvedValueOnce({
+        items: [item],
+        sources: {
+          issues: null,
+          prs: { owner: 'up', repo: 'r' },
+          originCandidate: { owner: 'up', repo: 'r' },
+          upstreamCandidate: null
+        }
+      })
+
+    try {
+      const result = await store.getState().fetchWorkItemsAcrossRepos(
+        [
+          { repoId: 'unavailable-repo', path: '/server/unavailable-repo' },
+          { repoId: 'loaded-repo', path: '/server/loaded-repo' }
+        ],
+        24,
+        100,
+        ''
+      )
+
+      expect(result.items).toEqual([{ ...item, repoId: 'loaded-repo' }])
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(false)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not flag githubUnavailable for a 404 (not an outage)', async () => {
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValue(new Error('HTTP 404: Not Found'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'github-repo', path: '/server/github-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.failedCount).toBe(1)
+      expect(result.githubUnavailable).toBe(false)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
   it('quietly skips SSH repos without a resolved GitHub remote in next-page fetches', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -6482,7 +6698,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           24,
           oversizedQuery
         )
-    ).resolves.toEqual({ items: [], failedCount: 0 })
+    ).resolves.toEqual({ items: [], failedCount: 0, githubUnavailable: false })
     await expect(
       store
         .getState()

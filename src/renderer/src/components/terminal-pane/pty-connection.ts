@@ -162,6 +162,7 @@ import {
   isCtrlCKeyEvent,
   isPlainEscapeKeyEvent
 } from './agent-interrupt-inference'
+import { createAgentQuestionAnsweredInference } from './agent-question-answered-inference'
 import {
   AGENT_INTERRUPT_SETTLE_MS,
   type AgentInterruptInputIntent
@@ -1768,6 +1769,15 @@ export function connectPanePty(
         })
     }
   })
+  const questionAnsweredInference = createAgentQuestionAnsweredInference({
+    paneKey: cacheKey,
+    getStatusEntry: () => useAppStore.getState().agentStatusByPaneKey[cacheKey],
+    inferQuestionAnswered: (request) =>
+      window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+        console.warn('[agent-question] inferQuestionAnswered failed:', err)
+        return false
+      })
+  })
   const dropCommandFinishedStatusIfSameTurn = (
     entry: AgentStatusEntry | undefined,
     options?: { allowInferredInterrupt?: boolean }
@@ -1853,6 +1863,10 @@ export function connectPanePty(
     if (intent === 'ctrl-c' || data === '\x03') {
       markTerminalBracketedPasteInterrupted(pane.terminal)
     }
+    // Why: every delivered-input path funnels through here, so this is where a
+    // submit keystroke into a waiting AskUserQuestion pane becomes the
+    // "question answered" signal no hook will ever deliver.
+    questionAnsweredInference.observeSentTerminalInput(data)
   }
   let pendingTerminalInputWrite: Promise<void> | null = null
   const setPendingTerminalInputWrite = (promise: Promise<void>): void => {

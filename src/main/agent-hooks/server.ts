@@ -22,6 +22,7 @@ import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
+  clearClaudeAnsweredQuestionWait,
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
@@ -57,6 +58,10 @@ import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
 } from '../../shared/agent-interrupt-intent'
+import {
+  isAskUserQuestionTool,
+  type AgentQuestionAnsweredInferenceRequest
+} from '../../shared/agent-question-answered-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 import {
@@ -373,7 +378,12 @@ function shouldKeepClaudePermissionVisible(
     return false
   }
   // Why: only real permission requests stay sticky across concurrent subagent
-  // activity; interactive questions clear on the next working hook.
+  // activity; interactive questions clear on the next working hook. Newer
+  // Claude reports the AskUserQuestion wait AS a PermissionRequest, so the
+  // tool name — not the event name — decides which rule applies.
+  if (isAskUserQuestionTool(previous.payload.toolName)) {
+    return false
+  }
   return true
 }
 
@@ -645,6 +655,69 @@ export class AgentHookServer {
       paneKey: inferred.paneKey,
       agentType,
       intent: request.intent
+    })
+    return true
+  }
+
+  /** Guarded fallback for a hook Claude never sends: answering AskUserQuestion
+   *  produces no event, so the amber wait would otherwise linger until the
+   *  agent's next tool or turn end. The renderer reports the submit keystroke;
+   *  this re-validates its baseline against the cached status (a racing real
+   *  hook wins) and synthesizes the post-answer state. */
+  inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
+    if (!isValidPaneKey(request.paneKey)) {
+      return false
+    }
+    const existing = this.state.lastStatusByPaneKey.get(request.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!existing) {
+      return false
+    }
+    const payload = existing.payload
+    // Why: only Claude's interactive question may clear on typed input. The
+    // tool name is the discriminator, not the hook event — Claude versions
+    // differ on whether the AskUserQuestion wait arrives as PreToolUse or
+    // PermissionRequest. Real permission waits (other tools) stay sticky until
+    // the approved tool resumes — a denied or ignored permission must keep
+    // demanding attention even though approving is also a keystroke.
+    if (
+      payload.agentType !== 'claude' ||
+      payload.state !== 'waiting' ||
+      !isAskUserQuestionTool(payload.toolName)
+    ) {
+      return false
+    }
+    if (
+      payload.agentType !== request.baselineAgentType ||
+      payload.prompt !== request.baselinePrompt ||
+      existing.receivedAt !== request.baselineUpdatedAt ||
+      existing.stateStartedAt !== request.baselineStateStartedAt ||
+      Date.now() - existing.receivedAt > AGENT_STATUS_STALE_AFTER_MS
+    ) {
+      return false
+    }
+    // Why: sync the listener's lead-turn record too — a later child lifecycle
+    // event would otherwise re-emit the stale waiting state and resurrect the
+    // dismissed question card.
+    const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
+    const inferred = this.applyNormalizedStatus({
+      paneKey: existing.paneKey,
+      tabId: existing.tabId,
+      worktreeId: existing.worktreeId,
+      connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
+      payload: {
+        state: restored.state,
+        prompt: payload.prompt,
+        agentType: payload.agentType,
+        ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
+        ...(payload.subagents ? { subagents: payload.subagents } : {})
+      }
+    })
+    console.debug('[agent-hooks] inferred answered question status', {
+      paneKey: inferred.paneKey,
+      state: inferred.payload.state
     })
     return true
   }

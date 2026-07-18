@@ -57,7 +57,7 @@ import {
 } from './tooltip'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { formatWindowLabel } from '@/lib/window-label-formatter'
+import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
@@ -1191,7 +1191,7 @@ export function ProviderSegment({
         {visibleBuckets.length === 0 && p.session && (
           <WindowLabel
             w={p.session}
-            label={formatWindowLabel(p.session.windowMinutes)}
+            label={formatRateLimitWindowChipLabel(p.session)}
             display={display}
           />
         )}
@@ -1205,14 +1205,14 @@ export function ProviderSegment({
       ? {
           key: 'session',
           window: p.session,
-          label: formatWindowLabel(p.session.windowMinutes)
+          label: formatRateLimitWindowChipLabel(p.session)
         }
       : null,
     p.weekly
       ? {
           key: 'weekly',
           window: p.weekly,
-          label: formatWindowLabel(p.weekly.windowMinutes)
+          label: formatRateLimitWindowChipLabel(p.weekly)
         }
       : null,
     p.fableWeekly
@@ -1229,7 +1229,7 @@ export function ProviderSegment({
       ? {
           key: 'monthly',
           window: p.monthly,
-          label: formatWindowLabel(p.monthly.windowMinutes)
+          label: formatRateLimitWindowChipLabel(p.monthly)
         }
       : null
   ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
