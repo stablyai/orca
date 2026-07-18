@@ -25,7 +25,7 @@ The OAuth response contract evolved from dedicated model fields to generic entri
 2. Select a Fable entry only when `kind` is `weekly_scoped`, the model display name is Fable (case-insensitive), and `percent` is finite.
 3. Map the scoped entry to the existing seven-day `fableWeekly` window, including its reset timestamp.
 4. Prefer the current scoped entry, then retain the three legacy top-level fields as fallbacks.
-5. Keep malformed, unrelated, inactive, or absent entries non-fatal. Treat `is_active: false` as unavailable so stale promotional limits disappear; accept a missing activity flag for compatibility.
+5. Keep malformed, unrelated, or absent entries non-fatal. Do NOT gate on `is_active`: it marks which limit is currently binding, not whether the entry's data is valid, so an `is_active: false` Fable entry with a finite `percent` must still render (#8979). Accept a missing activity flag for compatibility.
 
 ## Data Flow
 
@@ -40,7 +40,7 @@ The OAuth response contract evolved from dedicated model fields to generic entri
 - `limits` is missing, null, malformed, or contains null entries.
 - A scoped entry names another model.
 - Fable percent is missing, non-numeric, or non-finite.
-- Fable is inactive and should not be rendered.
+- Fable is inactive (`is_active: false`) but still carries a finite `percent`/reset, so it must render (#8979).
 - `is_active` is omitted by an older server response but the remaining scoped entry is valid.
 - Both current and legacy fields exist; the current scoped entry wins.
 - Reset timestamps may be ISO strings, epoch seconds, epoch milliseconds, or absent.
@@ -50,7 +50,7 @@ The OAuth response contract evolved from dedicated model fields to generic entri
 
 - Unit: reproduce a current real-response shape and assert Fable maps without a PTY attempt.
 - Unit: assert scoped data wins over a legacy field.
-- Unit: assert inactive, malformed, and unrelated scoped entries are ignored while legacy fallback remains available.
+- Unit: assert malformed and unrelated scoped entries are ignored while legacy fallback remains available; assert an inactive-but-valid Fable entry still surfaces (#8979).
 - Regression: retain existing legacy-field and bare-`fable` behavior tests.
 - Verification: focused Claude fetcher tests, typecheck, lint, and max-lines ratchet.
 - Electron: refresh Claude usage and confirm Session, Weekly, and Fable remain visible in the existing status-bar details surface.
@@ -76,8 +76,8 @@ No UI implementation changes. The existing Fable row must reappear with the same
 
 - Scope: Kept to the private OAuth mapper and tests; no shared-state or renderer generalization is required to restore Fable.
 - Architecture/data flow: OAuth remains authoritative, with structured scoped data preferred over legacy fields and PTY used only as the existing final supplement.
-- Failure modes covered: malformed optional data, unrelated models, inactive limits, missing activity flags, duplicate old/new representations, missing reset metadata, and platform-neutral execution.
-- Test coverage required: current-schema success without PTY, precedence, inactivity, malformed/unrelated entries, and legacy fallback.
+- Failure modes covered: malformed optional data, unrelated models, inactive-but-valid limits (still rendered, #8979), missing activity flags, duplicate old/new representations, missing reset metadata, and platform-neutral execution.
+- Test coverage required: current-schema success without PTY, precedence, inactive-but-valid rendering, malformed/unrelated entries, and legacy fallback.
 - Performance/blast radius: One bounded linear scan of the small response `limits` array per existing OAuth refresh; no new requests, polling, subprocesses, IPC, storage, or renderer work.
 - UI quality bar: Existing status-bar visuals must remain unchanged except for the restored Fable row.
 - Required review screenshots: Live Claude details with all three rows; surrounding status-bar context.
