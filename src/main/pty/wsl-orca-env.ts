@@ -37,7 +37,16 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_WSL_HOOK_RELAY_VERSION/u',
     'ORCA_WSL_HOOK_INSTANCE/u',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
-    'ORCA_OMP_STATUS_EXTENSION/p'
+    'ORCA_OMP_STATUS_EXTENSION/p',
+    // Why: worktree setup/hook scripts read these (#9206). For WSL worktrees
+    // hooks.ts pre-translates the values to Linux paths (must cross untranslated,
+    // /u); a wsl.exe terminal over a Windows worktree still carries C:\ paths
+    // that WSLENV must translate (/p).
+    ...['ORCA_ROOT_PATH', 'ORCA_WORKTREE_PATH', 'CONDUCTOR_ROOT_PATH', 'GHOSTX_ROOT_PATH'].map(
+      (name) => `${name}/${env[name]?.startsWith('/') ? 'u' : 'p'}`
+    ),
+    // Why: a display name, never a path — never path-translate it.
+    'ORCA_WORKSPACE_NAME/u'
   ]
   for (const entry of passthroughEntries) {
     const variableName = entry.split('/')[0]
