@@ -40,7 +40,8 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'OMP',
     permissionLabel: 'OMP - action required',
     idleLabel: 'OMP ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    synthesizeWorkingTitle: false
   },
   droid: {
     workingLabel: 'Droid',

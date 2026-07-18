@@ -32,12 +32,20 @@ describe('synthetic agent titles', () => {
   it('provides Pi-compatible OMP titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('omp', 'done')).toBe('OMP ready')
     expect(getSyntheticAgentTerminalTitle('omp', 'waiting')).toBe('OMP - action required')
-    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working')).toBe(true)
+    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working')).toBe(false)
+    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'done')).toBe(true)
   })
 
   it('provides Pi titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('pi', 'done')).toBe('Pi ready')
     expect(getSyntheticAgentTerminalTitle('pi', 'waiting')).toBe('Pi - action required')
+    expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working')).toBe(true)
+  })
+
+  it('keeps OMP terminal-state synthesis while leaving Pi working-title synthesis enabled', () => {
+    expect(getSyntheticAgentTerminalTitle('omp', 'blocked')).toBe('OMP - action required')
+    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'blocked')).toBe(true)
+    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working')).toBe(false)
     expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working')).toBe(true)
   })
 })
