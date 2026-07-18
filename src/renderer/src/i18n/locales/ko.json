@@ -9667,6 +9667,7 @@
             "createPrIntentPublishing": "브랜치를 게시하는 중…",
             "createPrIntentForcePushing": "lease로 강제 푸시하는 중…",
             "createPrIntentPushing": "commits을 푸시하는 중…",
+            "createPrIntentFastForwarding": "브랜치를 업데이트하는 중…",
             "createPrIntentRemoteFailed": "원격 브랜치를 업데이트할 수 없습니다. Create PR을 다시 시도하세요.",
             "createPrIntentGeneratingDetails": "리뷰 세부 정보 생성 중…",
             "createPrIntentBranchChangedDuringDetails": "리뷰 세부 정보를 생성하는 동안 브랜치가 변경되었습니다. Create PR을 다시 시도하세요.",
@@ -9699,9 +9700,7 @@
               "a9bf7c171a": "푸시 실패",
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
-            },
-            "createPrIntentSyncConflicts": "동기화 중 충돌이 발생했습니다. 해결한 다음 Create PR을 다시 시도하세요.",
-            "createPrIntentSyncing": "브랜치를 동기화하는 중…"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

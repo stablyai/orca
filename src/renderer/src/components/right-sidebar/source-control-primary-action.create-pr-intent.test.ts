@@ -71,7 +71,7 @@ describe('resolvePrimaryAction Create PR intent', () => {
     expect(result.disabled).toBe(false)
   })
 
-  it('returns Create PR intent for a behind-only branch (fast-forward sync)', () => {
+  it('returns Create PR intent for a behind-only branch (fast-forward prepare)', () => {
     const input = inputs({
       upstreamStatus: {
         hasUpstream: true,

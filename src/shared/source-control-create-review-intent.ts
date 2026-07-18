@@ -1,4 +1,4 @@
-import { shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
+import { isBehindOnlyUpstream, shouldForcePushWithLeaseForUpstream } from './git-upstream-status'
 import type { HostedReviewCreationEligibility } from './hosted-review'
 import { supportsHostedReviewCreation } from './hosted-review-creation-providers'
 import type { GitUpstreamStatus } from './git-status-types'
@@ -72,16 +72,11 @@ export function resolveCreateReviewIntentEligibility({
     return { eligible: true, kind: 'force_push' }
   }
 
-  // Why: a behind-only branch (no local commits) is safe to prepare with a
-  // fast-forward sync, so the intent flow can handle it in one click. A
-  // genuinely diverged branch stays ineligible — syncing it would merge
-  // without consent, so the user keeps the explicit sync-first step.
-  if (
-    hostedReviewCreation.blockedReason === 'needs_sync' &&
-    upstreamStatus?.hasUpstream === true &&
-    upstreamStatus.ahead === 0 &&
-    upstreamStatus.behind > 0
-  ) {
+  // Why: a behind-only branch is safe to prepare with `git pull --ff-only`, so
+  // the intent flow can handle it in one click. A genuinely diverged branch
+  // stays ineligible — auto-merging would reconcile without consent, so the
+  // user keeps the explicit sync-first step.
+  if (hostedReviewCreation.blockedReason === 'needs_sync' && isBehindOnlyUpstream(upstreamStatus)) {
     return { eligible: true, kind: 'needs_sync' }
   }
 

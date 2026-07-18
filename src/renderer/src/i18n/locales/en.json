@@ -9690,6 +9690,7 @@
             "createPrIntentPublishing": "Publishing branch…",
             "createPrIntentForcePushing": "Force pushing with lease…",
             "createPrIntentPushing": "Pushing commits…",
+            "createPrIntentFastForwarding": "Updating branch…",
             "createPrIntentRemoteFailed": "Could not update the remote branch. Retry Create PR.",
             "createPrIntentGeneratingDetails": "Generating review details…",
             "createPrIntentBranchChangedDuringDetails": "Branch changed while generating review details. Retry Create PR.",
@@ -9722,9 +9723,7 @@
               "a9bf7c171a": "Push Failed",
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
-            },
-            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
-            "createPrIntentSyncing": "Syncing branch…"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
