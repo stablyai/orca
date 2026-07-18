@@ -2,6 +2,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
+import { getSshDisconnectWorktreeIds } from './ssh-disconnect-worktree-selection'
 import { shouldRetryPaneSpawnOnSshReconnect } from './ssh-reconnect-pane-retry'
 import { applyWorktreeHeadIdentities } from './worktree-head-identity-apply'
 import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
@@ -2798,12 +2799,7 @@ export function useIpcEvents(): void {
         // PTY provider without emitting per-PTY exit events. Clear the stale
         // PTY ids in renderer state so a later reconnect remounts TerminalPane
         // instead of keeping a dead remote PTY attached to the tab.
-        const remoteWorktreeIds = new Set(
-          Object.values(store.worktreesByRepo)
-            .flat()
-            .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
-            .map((w) => w.id)
-        )
+        const remoteWorktreeIds = getSshDisconnectWorktreeIds(store, targetId)
         for (const worktreeId of remoteWorktreeIds) {
           // Why: connection loss is reversible, so purge only live status;
           // replay on reconnect can repopulate the same pane identities.
