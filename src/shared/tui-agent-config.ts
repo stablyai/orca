@@ -374,6 +374,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `followupPrompt` to the PTY as plain input + Enter after startup (not
     // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
     promptInjectionMode: 'stdin-after-start'
+  },
+  'gajae-code': {
+    detectCmd: 'gjc',
+    launchCmd: 'gjc',
+    expectedProcess: 'gjc',
+    // Why: gjc accepts a positional prompt while preserving its interactive TUI,
+    // so argv delivery avoids the startup-input readiness race.
+    promptInjectionMode: 'argv'
   }
 }
 

@@ -72,6 +72,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/openai/codex'
   },
   {
+    id: 'gajae-code',
+    label: translate('auto.lib.agent.catalog.gajae_code_label', 'Gajae Code'),
+    cmd: 'gjc',
+    homepageUrl: 'https://gajae-code.com'
+  },
+  {
     id: 'grok',
     label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
     cmd: 'grok',
