@@ -74,6 +74,7 @@ export function createRemoteRuntimePtyTransport(
     onPtyExit,
     onPtySpawn,
     onTitleChange,
+    onNormalizedTitleRepeat,
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
@@ -108,6 +109,7 @@ export function createRemoteRuntimePtyTransport(
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}:${createBrowserUuid()}`
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
+    onNormalizedTitleRepeat,
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,

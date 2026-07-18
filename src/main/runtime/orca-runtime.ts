@@ -6620,6 +6620,9 @@ export class OrcaRuntimeService {
             this.touchMobileSessionSnapshotsForPty(ptyId)
           }
         },
+        onNormalizedTitleRepeat: (rawTitle) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'title-repeat', rawTitle })
+        },
         // Why: agent transitions and bells become pty:sideEffect facts —
         // main is the single byte parser for local/SSH PTYs; the renderer
         // store handler decides what the facts mean (notification policy).

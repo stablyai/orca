@@ -745,6 +745,9 @@ export function createAgentCompletionCoordinator(
     clearPendingCodexAttention()
     workingStatusObserved = true
     requiresFreshWorking = false
+    // Why: resumed title work cancels the provisional done identity too, so a
+    // later genuine done ping with the same hook identity can complete.
+    lastCompletionIdentity = null
     lastCompletionIdentityByPaneKey.delete(options.paneKey)
     currentTurn += 1
     dropPendingTitle()

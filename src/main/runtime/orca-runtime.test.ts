@@ -7340,6 +7340,16 @@ describe('OrcaRuntimeService', () => {
       expect(batches[0].seq).toBeLessThan(batches[1].seq)
     })
 
+    it('emits repeated normalized titles as policy-only facts', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      syncSinglePty(runtime)
+
+      runtime.onPtyData('pty-1', '\x1b]0;⠋ π - cwd\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;⠙ π - cwd\x07', 101)
+
+      expect(batches[1]?.facts).toEqual([{ kind: 'title-repeat', rawTitle: '⠙ π - cwd' }])
+    })
+
     it('emits nothing for chunks without derived facts', () => {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)

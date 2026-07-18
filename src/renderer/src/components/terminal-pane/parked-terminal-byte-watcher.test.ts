@@ -26,6 +26,8 @@ type MockStoreState = {
     terminalHiddenDeliveryGate?: boolean
     notifications?: { enabled?: boolean; agentTaskComplete?: boolean }
   } | null
+  tabsByWorktree: Record<string, { id: string; launchAgent?: 'pi' | 'omp' }[]>
+  agentStatusByPaneKey: Record<string, { agentType?: 'pi' | 'omp'; state?: string }>
   setRuntimePaneTitle: ReturnType<typeof vi.fn>
   clearRuntimePaneTitle: ReturnType<typeof vi.fn>
   updateTabTitle: ReturnType<typeof vi.fn>
@@ -65,6 +67,8 @@ function createMockStoreState(): MockStoreState {
       terminalMainSideEffectAuthority: false,
       notifications: { enabled: true, agentTaskComplete: true }
     },
+    tabsByWorktree: { [WORKTREE_ID]: [{ id: TAB_ID }] },
+    agentStatusByPaneKey: {},
     setRuntimePaneTitle: vi.fn(),
     clearRuntimePaneTitle: vi.fn(),
     updateTabTitle: vi.fn(),
@@ -514,6 +518,7 @@ describe('startParkedTerminalByteWatcher', () => {
       const tracker = createTerminalTitleTracker({
         onTitle: (normalizedTitle, rawTitle) =>
           pending.push({ kind: 'title', normalizedTitle, rawTitle }),
+        onNormalizedTitleRepeat: (rawTitle) => pending.push({ kind: 'title-repeat', rawTitle }),
         onAgentBecameWorking: () => pending.push({ kind: 'agent-working' }),
         onAgentBecameIdle: (title) => pending.push({ kind: 'agent-idle', title }),
         onAgentExited: () => pending.push({ kind: 'agent-exited' }),
@@ -636,6 +641,38 @@ describe('startParkedTerminalByteWatcher', () => {
         paneKey: PANE_KEY
       })
       dispose()
+    })
+
+    it('re-resolves owner-changing repeats while stable repeats stay write-free', async () => {
+      enableMainAuthority()
+      const { dispose } = await startWatcher()
+
+      await dispatchFacts([{ kind: 'title', normalizedTitle: '⠋ Pi', rawTitle: '⠋ π - cwd' }])
+      expect(mockStoreState.setRuntimePaneTitle).toHaveBeenLastCalledWith(TAB_ID, PANE_ID, '⠋ Pi')
+
+      mockStoreState.agentStatusByPaneKey[PANE_KEY] = {
+        agentType: 'omp',
+        state: 'working'
+      }
+      await dispatchFacts([{ kind: 'title-repeat', rawTitle: '⠙ π - cwd' }])
+
+      expect(mockStoreState.setRuntimePaneTitle).toHaveBeenLastCalledWith(TAB_ID, PANE_ID, '⠋ OMP')
+      expect(mockStoreState.updateTabTitle).toHaveBeenLastCalledWith(TAB_ID, '⠋ OMP')
+      expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledTimes(2)
+      expect(mockStoreState.updateTabTitle).toHaveBeenCalledTimes(2)
+
+      await dispatchFacts([{ kind: 'title-repeat', rawTitle: '⠹ π - cwd' }])
+
+      expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledTimes(2)
+      expect(mockStoreState.updateTabTitle).toHaveBeenCalledTimes(2)
+      expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
+      expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+
+      // Why: reveal disposal clears only the parked runtime slot; the corrected
+      // tab title remains until the mounted owner-aware snapshot republishes it.
+      dispose()
+      expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID)
+      expect(mockStoreState.updateTabTitle).toHaveBeenLastCalledWith(TAB_ID, '⠋ OMP')
     })
 
     it('fires the cache timer and completion from working→idle facts', async () => {

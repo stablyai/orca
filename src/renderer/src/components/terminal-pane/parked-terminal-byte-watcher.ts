@@ -14,7 +14,8 @@
  * moves to main. See docs/reference/terminal-hidden-view-parking.md and
  * docs/reference/terminal-side-effect-authority.md.
  */
-import { isClaudeAgent } from '../../../../shared/agent-detection'
+import { isClaudeAgent, normalizeTerminalTitle } from '../../../../shared/agent-detection'
+import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import {
@@ -38,6 +39,7 @@ import {
 } from './terminal-side-effect-facts-handler'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
+import { resolvePaneDisplayTitle } from './terminal-title-evidence'
 
 // Why: mirrors AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS in pty-connection.ts.
 // The parked path must keep the live path's BEL-vs-completion race window so
@@ -101,6 +103,10 @@ export function startParkedTerminalByteWatcher(
   let wroteRuntimeTitleSlot = false
   let bellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteTimer: ReturnType<typeof setTimeout> | null = null
+  let lastObservedNormalizedTitle = options.initialTitle
+    ? normalizeTerminalTitle(options.initialTitle)
+    : null
+  let lastPublishedDisplayTitle = options.initialTitle ?? null
 
   const clearBellNotificationTimer = (): void => {
     if (bellNotificationTimer !== null) {
@@ -143,14 +149,38 @@ export function startParkedTerminalByteWatcher(
   // Why: one policy block for both consumption modes — byte parsing (kill
   // switch off) and pty:sideEffect facts (main authority on). The semantics
   // must be identical or flipping the switch changes notification behavior.
+  const resolveParkedDisplayOwner = () => {
+    const state = useAppStore.getState()
+    const tab = state.tabsByWorktree?.[worktreeId]?.find((entry) => entry.id === tabId)
+    return resolvePaneAgentOwner({
+      launchAgent: tab?.launchAgent,
+      hookAgent: state.agentStatusByPaneKey?.[paneKey]?.agentType
+    })
+  }
+
+  const publishParkedTitle = (normalizedTitle: string, forcePublication: boolean): void => {
+    lastObservedNormalizedTitle = normalizedTitle
+    const displayTitle = resolvePaneDisplayTitle(normalizedTitle, resolveParkedDisplayOwner())
+    if (!forcePublication && displayTitle === lastPublishedDisplayTitle) {
+      return
+    }
+    lastPublishedDisplayTitle = displayTitle
+    const state = useAppStore.getState()
+    wroteRuntimeTitleSlot = true
+    state.setRuntimePaneTitle(tabId, paneId, displayTitle)
+    if (drivesTabTitle) {
+      state.updateTabTitle(tabId, displayTitle)
+    }
+  }
+
   const sideEffectCallbacks = {
     onTitleChange: (title: string): void => {
-      const state = useAppStore.getState()
-      wroteRuntimeTitleSlot = true
-      state.setRuntimePaneTitle(tabId, paneId, title)
-      if (drivesTabTitle) {
-        state.updateTabTitle(tabId, title)
-      }
+      publishParkedTitle(title, true)
+    },
+    onNormalizedTitleRepeat: (rawTitle: string): void => {
+      // Why: hook ownership can resolve while the pane is unmounted; only an
+      // effective label change may write the parked runtime/tab title slots.
+      publishParkedTitle(lastObservedNormalizedTitle ?? normalizeTerminalTitle(rawTitle), false)
     },
     onBell: (): void => {
       const state = useAppStore.getState()

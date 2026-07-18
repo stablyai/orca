@@ -558,6 +558,90 @@ describe('createIpcPtyTransport', () => {
     }
   })
 
+  it('suppresses duplicate normalized title publications without dropping terminal data', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onNormalizedTitleRepeat = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onNormalizedTitleRepeat })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;steady-title\x07first\r\n', callbacks)
+      processor.processData('\x1b]0;steady-title\x07second\r\n', callbacks)
+
+      expect(callbacks.onData).toHaveBeenCalledTimes(2)
+      expect(callbacks.onData).toHaveBeenNthCalledWith(1, '\x1b]0;steady-title\x07first\r\n')
+      expect(callbacks.onData).toHaveBeenNthCalledWith(2, '\x1b]0;steady-title\x07second\r\n')
+
+      await vi.runAllTimersAsync()
+
+      expect(onTitleChange).toHaveBeenCalledTimes(1)
+      expect(onTitleChange).toHaveBeenCalledWith('steady-title', 'steady-title')
+      expect(onNormalizedTitleRepeat).toHaveBeenCalledOnce()
+      expect(onNormalizedTitleRepeat).toHaveBeenCalledWith('steady-title')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses spinner-frame title publications after title normalization', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onNormalizedTitleRepeat = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onNormalizedTitleRepeat })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;\u2726 Gemini running\x07', callbacks)
+      processor.processData('\x1b]0;\u23f2 Gemini running\x07', callbacks)
+
+      await vi.runAllTimersAsync()
+
+      expect(onTitleChange).toHaveBeenCalledTimes(1)
+      expect(onTitleChange).toHaveBeenCalledWith('\u2726 Gemini CLI', '\u2726 Gemini running')
+      expect(onNormalizedTitleRepeat).toHaveBeenCalledWith('\u23f2 Gemini running')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('feeds duplicate live titles to status tracking after suppressed replay', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onAgentBecameWorking = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange,
+        onAgentBecameWorking,
+        onAgentBecameIdle
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;Codex working\x07', callbacks, {
+        suppressAttentionEvents: true
+      })
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(1)
+      expect(onAgentBecameWorking).not.toHaveBeenCalled()
+
+      processor.processData('\x1b]0;Codex working\x07', callbacks)
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(1)
+      expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
+
+      processor.processData('\x1b]0;Codex done\x07', callbacks)
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(2)
+      expect(onAgentBecameIdle).toHaveBeenCalledWith('Codex done')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves stale-title detection after compacting deferred side effects', async () => {
     vi.useFakeTimers()
     try {

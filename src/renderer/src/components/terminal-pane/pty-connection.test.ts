@@ -303,6 +303,9 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
       if (/^\s*(?:[\u2800-\u28ff]\s+)?(?:Pi|OMP)(?: ready| idle)?\s*$/i.test(title)) {
         return /[\u2800-\u28ff]/u.test(title) ? 'working' : 'idle'
       }
+      if (/^\s*(?:[\u2800-\u28ff]\s+)?π(?:\s*[-:]|\s)/u.test(title)) {
+        return /[\u2800-\u28ff]/u.test(title) ? 'working' : 'idle'
+      }
       return null
     })
   }
@@ -831,7 +834,12 @@ describe('connectPanePty', () => {
             paneKey,
             ...(terminalTitle ? { terminalTitle } : {}),
             updatedAt: Date.now(),
-            stateStartedAt: Date.now(),
+            // Why: same-state hook pings retain their producer identity; race
+            // tests need to prove replay handling with a stable finite value.
+            stateStartedAt:
+              typeof payload.stateStartedAt === 'number' && Number.isFinite(payload.stateStartedAt)
+                ? payload.stateStartedAt
+                : Date.now(),
             stateHistory: []
           }
         }
@@ -1141,6 +1149,77 @@ describe('connectPanePty', () => {
       terminalTitle: 'OMP ready'
     })
   })
+
+  it.each([
+    ['working', '⠋ Pi', '⠋ π - cwd', '⠙ π - cwd', '⠹ π - cwd', '⠼ π - cwd', '⠋ OMP'],
+    ['idle', 'Pi', 'Pi ready', 'Pi ready', 'Pi ready', 'Pi ready', 'OMP ready'],
+    [
+      'permission',
+      'Pi - action required',
+      'Pi - action required',
+      'Pi - action required',
+      'Pi - action required',
+      'Pi - action required',
+      'OMP - action required'
+    ]
+  ])(
+    're-resolves an equivalent remote %s title when its compatible owner changes',
+    async (_, normalizedTitle, initialRaw, unchangedRaw, ownerRaw, settledRaw, expectedTitle) => {
+      const { connectPanePty } = await import('./pty-connection')
+      enableActiveRuntimeEnvironment()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const transport = createMockTransport('remote:web-env-1@@pty-owner-transition')
+      transportFactoryQueue.push(transport)
+      const manager = createManager(1, 1)
+      const deps = createDeps()
+
+      connectPanePty(createPane(1) as never, manager as never, deps as never)
+      await flushAsyncTicks()
+      manager.setPaneGpuRendering.mockClear()
+      deps.setRuntimePaneTitle.mockClear()
+      deps.updateTabTitle.mockClear()
+      const onTitleChange = createdTransportOptions[0]?.onTitleChange as
+        | ((title: string, rawTitle: string) => void)
+        | undefined
+      const onNormalizedTitleRepeat = createdTransportOptions[0]?.onNormalizedTitleRepeat as
+        | ((rawTitle: string) => void)
+        | undefined
+      if (!onTitleChange || !onNormalizedTitleRepeat) {
+        throw new Error('missing remote title callbacks')
+      }
+
+      onTitleChange(normalizedTitle, initialRaw)
+      expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, normalizedTitle)
+      expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', normalizedTitle)
+      expect(manager.setPaneGpuRendering).toHaveBeenLastCalledWith(1, true)
+
+      onNormalizedTitleRepeat(unchangedRaw)
+      expect(deps.setRuntimePaneTitle).toHaveBeenCalledTimes(1)
+      expect(deps.updateTabTitle).toHaveBeenCalledTimes(1)
+      expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        paneKey,
+        state: 'working',
+        prompt: '',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'omp',
+        stateHistory: []
+      }
+      onNormalizedTitleRepeat(ownerRaw)
+
+      expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, expectedTitle)
+      expect(deps.setRuntimePaneTitle).toHaveBeenCalledTimes(2)
+      expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', expectedTitle)
+      expect(deps.updateTabTitle).toHaveBeenCalledTimes(2)
+      expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
+      onNormalizedTitleRepeat(settledRaw)
+      expect(deps.setRuntimePaneTitle).toHaveBeenCalledTimes(2)
+      expect(deps.updateTabTitle).toHaveBeenCalledTimes(2)
+      expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it('drives runtime title, tab title, and renderer policy from one title decision', async () => {
     const { connectPanePty } = await import('./pty-connection')
@@ -15009,6 +15088,85 @@ describe('connectPanePty', () => {
       )
     })
 
+    it.each([
+      ['working', '⠋ Pi', '⠋ π - cwd', '⠙ π - cwd', '⠹ π - cwd', '⠼ π - cwd', '⠋ OMP'],
+      ['idle', 'Pi', 'Pi ready', 'Pi ready', 'Pi ready', 'Pi ready', 'OMP ready'],
+      [
+        'permission',
+        'Pi - action required',
+        'Pi - action required',
+        'Pi - action required',
+        'Pi - action required',
+        'Pi - action required',
+        'OMP - action required'
+      ]
+    ])(
+      're-resolves an equivalent main %s title fact when its compatible owner changes',
+      async (_, normalizedTitle, initialRaw, unchangedRaw, ownerRaw, settledRaw, expectedTitle) => {
+        enableMainAuthority()
+        const { connectPanePty } = await import('./pty-connection')
+        const handler = await import('./terminal-side-effect-facts-handler')
+        const transport = createMockTransport()
+        transportFactoryQueue.push(transport)
+        const paneKey = makePaneKey('tab-1', LEAF_1)
+        const manager = createManager(1, 1)
+        const deps = createDeps()
+
+        connectPanePty(createPane(1) as never, manager as never, deps as never)
+        const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+        onPtySpawn('pty-fact-owner-transition')
+        manager.setPaneGpuRendering.mockClear()
+        deps.setRuntimePaneTitle.mockClear()
+        deps.updateTabTitle.mockClear()
+        handler._dispatchTerminalSideEffectBatchForTest({
+          ptyId: 'pty-fact-owner-transition',
+          seq: 1,
+          facts: [{ kind: 'title', normalizedTitle, rawTitle: initialRaw }]
+        })
+        expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, normalizedTitle)
+        expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', normalizedTitle)
+        expect(manager.setPaneGpuRendering).toHaveBeenLastCalledWith(1, true)
+
+        handler._dispatchTerminalSideEffectBatchForTest({
+          ptyId: 'pty-fact-owner-transition',
+          seq: 2,
+          facts: [{ kind: 'title-repeat', rawTitle: unchangedRaw }]
+        })
+        expect(deps.setRuntimePaneTitle).toHaveBeenCalledTimes(1)
+        expect(deps.updateTabTitle).toHaveBeenCalledTimes(1)
+        expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
+
+        mockStoreState.agentStatusByPaneKey[paneKey] = {
+          paneKey,
+          state: 'working',
+          prompt: '',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          agentType: 'omp',
+          stateHistory: []
+        }
+        handler._dispatchTerminalSideEffectBatchForTest({
+          ptyId: 'pty-fact-owner-transition',
+          seq: 3,
+          facts: [{ kind: 'title-repeat', rawTitle: ownerRaw }]
+        })
+
+        expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, expectedTitle)
+        expect(deps.setRuntimePaneTitle).toHaveBeenCalledTimes(2)
+        expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', expectedTitle)
+        expect(deps.updateTabTitle).toHaveBeenCalledTimes(2)
+        expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
+        handler._dispatchTerminalSideEffectBatchForTest({
+          ptyId: 'pty-fact-owner-transition',
+          seq: 4,
+          facts: [{ kind: 'title-repeat', rawTitle: settledRaw }]
+        })
+        expect(deps.setRuntimePaneTitle).toHaveBeenCalledTimes(2)
+        expect(deps.updateTabTitle).toHaveBeenCalledTimes(2)
+        expect(manager.setPaneGpuRendering).toHaveBeenCalledTimes(1)
+      }
+    )
+
     it('stops consuming facts after the pane binding is disposed', async () => {
       enableMainAuthority()
       const { connectPanePty } = await import('./pty-connection')
@@ -17330,6 +17488,100 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(storeSubscribers).toHaveLength(1)
+  })
+
+  it('cancels provisional Pi hook done on a title repeat and accepts the later done', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-hook')
+    transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
+    vi.useFakeTimers()
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    const repeatHandler = createdTransportOptions[0]?.onNormalizedTitleRepeat as
+      | ((rawTitle: string) => void)
+      | undefined
+    const statusHandler = createdTransportOptions[0]?.onAgentStatus as
+      | ((payload: {
+          state: 'done'
+          prompt: string
+          agentType: 'pi'
+          stateStartedAt: number
+        }) => void)
+      | undefined
+    if (!titleHandler || !repeatHandler || !statusHandler) {
+      throw new Error('Expected title publication, repeat, and hook status handlers')
+    }
+
+    titleHandler('⠋ Pi', '⠋ π - cwd')
+    const done = {
+      state: 'done' as const,
+      prompt: 'milestone',
+      agentType: 'pi' as const,
+      stateStartedAt: 1_234
+    }
+    statusHandler(done)
+    repeatHandler('⠙ π - cwd')
+    statusHandler(done)
+    vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS * 3)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete' })
+    )
+  })
+
+  it('starts a later Pi turn from a title repeat after quiet completion', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-hook')
+    transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
+    vi.useFakeTimers()
+
+    const deps = createDeps()
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    const repeatHandler = createdTransportOptions[0]?.onNormalizedTitleRepeat as
+      | ((rawTitle: string) => void)
+      | undefined
+    const statusHandler = createdTransportOptions[0]?.onAgentStatus as
+      | ((payload: {
+          state: 'done'
+          prompt: string
+          agentType: 'pi'
+          stateStartedAt: number
+        }) => void)
+      | undefined
+    if (!titleHandler || !repeatHandler || !statusHandler) {
+      throw new Error('Expected title publication, repeat, and hook status handlers')
+    }
+
+    const done = {
+      state: 'done' as const,
+      prompt: 'milestone',
+      agentType: 'pi' as const,
+      stateStartedAt: 1_234
+    }
+    titleHandler('⠋ Pi', '⠋ π - cwd')
+    statusHandler(done)
+    vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS * 3)
+    expect(deps.dispatchNotification).toHaveBeenCalledTimes(1)
+
+    repeatHandler('⠙ π - cwd')
+    statusHandler(done)
+    vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS * 3)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledTimes(2)
   })
 
   it('applies accepted hook side effects when every completion alert consumer is disabled', async () => {

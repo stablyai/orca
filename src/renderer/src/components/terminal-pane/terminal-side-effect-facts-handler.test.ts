@@ -20,6 +20,7 @@ function createCallbackRecorder(): {
     callbacks: {
       onTitleChange: (normalizedTitle, rawTitle) =>
         events.push(['title', normalizedTitle, rawTitle]),
+      onNormalizedTitleRepeat: (rawTitle) => events.push(['title-repeat', rawTitle]),
       onBell: () => events.push(['bell']),
       onAgentBecameIdle: (title) => events.push(['idle', title]),
       onAgentBecameWorking: () => events.push(['working']),
@@ -158,6 +159,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       batch([
         { kind: 'title', normalizedTitle: '⠋ Claude', rawTitle: '⠋ Claude' },
         { kind: 'agent-working' },
+        { kind: 'title-repeat', rawTitle: '⠙ Claude' },
         { kind: 'title', normalizedTitle: '✳ Claude', rawTitle: '✳ Claude' },
         { kind: 'agent-idle', title: '✳ Claude' },
         { kind: 'bell' }
@@ -167,6 +169,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     expect(events).toEqual([
       ['title', '⠋ Claude', '⠋ Claude'],
       ['working'],
+      ['title-repeat', '⠙ Claude'],
       ['title', '✳ Claude', '✳ Claude'],
       ['idle', '✳ Claude'],
       ['bell']
@@ -399,6 +402,23 @@ describe('registerTerminalSideEffectFactConsumer', () => {
       ['title', 'live', 'live'],
       ['title', 'newer', 'newer']
     ])
+  })
+
+  it('drops a replay title older than a live normalized-title repeat', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'title-repeat', rawTitle: '⠙ π - cwd' }], { seq: 20 })
+    )
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'title', normalizedTitle: 'stale', rawTitle: 'stale' }], {
+        replay: true,
+        seq: 10
+      })
+    )
+
+    expect(events).toEqual([['title-repeat', '⠙ π - cwd']])
   })
 
   it('keeps exactly one consumer per PTY: a new registration replaces the old', () => {

@@ -20,6 +20,7 @@ const ST = `${ESC}\\`
 
 type TitleFactEvent =
   | { kind: 'title'; normalized: string; raw: string }
+  | { kind: 'title-repeat'; raw: string }
   | { kind: 'became-working' }
   | { kind: 'became-idle'; title: string }
   | { kind: 'agent-exited' }
@@ -34,6 +35,7 @@ function createRendererPath(): TitleFactPath {
   const events: TitleFactEvent[] = []
   const processor = createPtyOutputProcessor({
     onTitleChange: (normalized, raw) => events.push({ kind: 'title', normalized, raw }),
+    onNormalizedTitleRepeat: (raw) => events.push({ kind: 'title-repeat', raw }),
     onAgentBecameWorking: () => events.push({ kind: 'became-working' }),
     onAgentBecameIdle: (title) => events.push({ kind: 'became-idle', title }),
     onAgentExited: () => events.push({ kind: 'agent-exited' }),
@@ -59,6 +61,7 @@ function createMainPath(): TitleFactPath {
   const processAgentStatusChunk = createAgentStatusOscProcessor()
   const tracker = createTerminalTitleTracker({
     onTitle: (normalized, raw) => events.push({ kind: 'title', normalized, raw }),
+    onNormalizedTitleRepeat: (raw) => events.push({ kind: 'title-repeat', raw }),
     onAgentBecameWorking: () => events.push({ kind: 'became-working' }),
     onAgentBecameIdle: (title) => events.push({ kind: 'became-idle', title }),
     onAgentExited: () => events.push({ kind: 'agent-exited' }),
@@ -107,6 +110,38 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
   })
 
+  it('deduplicates normalized-equal titles identically while preserving status transitions', () => {
+    for (let index = 0; index < 100; index += 1) {
+      const spinner = index % 2 === 0 ? '⠋' : '⠙'
+      feedBoth(paths, `${ESC}]0;${spinner} π - cwd${BEL}`)
+    }
+    feedBoth(paths, `${ESC}]0;π - cwd${BEL}`)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events.filter((event) => event.kind !== 'title-repeat')).toEqual([
+      { kind: 'title', normalized: '⠋ Pi', raw: '⠋ π - cwd' },
+      { kind: 'became-working' },
+      { kind: 'title', normalized: 'Pi', raw: 'π - cwd' },
+      { kind: 'became-idle', title: 'π - cwd' }
+    ])
+    expect(paths.main.events.filter((event) => event.kind === 'title-repeat')).toHaveLength(99)
+  })
+
+  it.each([
+    ['idle', 'π - cwd', 'Pi'],
+    ['permission', 'Pi - action required', 'Pi - action required']
+  ])('routes normalized-equal %s titles as policy-only repeats', (_, rawTitle, normalizedTitle) => {
+    feedBoth(paths, `${ESC}]0;${rawTitle}${BEL}`)
+    feedBoth(paths, `${ESC}]0;${rawTitle}${BEL}`)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events).toEqual([
+      { kind: 'title', normalized: normalizedTitle, raw: rawTitle },
+      { kind: 'title-repeat', raw: rawTitle }
+    ])
+    expect(paths.main.events).not.toContainEqual({ kind: 'became-working' })
+  })
+
   it('derives identical facts from BEL- and ST-terminated titles', () => {
     feedBoth(paths, `${ESC}]2;Codex working${ST}body bytes`)
     feedBoth(paths, `${ESC}]0;Codex done${BEL}`)
@@ -132,6 +167,21 @@ describe('main title tracker parity with the renderer transport processor', () =
 
     expect(paths.main.events).toEqual(paths.renderer.events)
     expect(paths.main.events.at(-1)).toEqual({ kind: 'became-idle', title: 'Claude' })
+  })
+
+  it('republishes the same working title after its stale clear in both paths', () => {
+    feedBoth(paths, `${ESC}]0;⠋ π - cwd${BEL}`)
+    feedBoth(paths, 'output with no title\r\n')
+    vi.advanceTimersByTime(3_000)
+
+    feedBoth(paths, `${ESC}]0;⠋ π - cwd${BEL}`)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events.filter((event) => event.kind === 'title')).toEqual([
+      { kind: 'title', normalized: '⠋ Pi', raw: '⠋ π - cwd' },
+      { kind: 'title', normalized: 'Pi', raw: 'Pi' },
+      { kind: 'title', normalized: '⠋ Pi', raw: '⠋ π - cwd' }
+    ])
   })
 
   it('keeps the stale-title timer unperturbed by pure OSC 9999 status chunks', () => {

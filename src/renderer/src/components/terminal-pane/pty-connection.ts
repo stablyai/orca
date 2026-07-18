@@ -4,7 +4,8 @@ import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
 import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
-import { resolvePaneTitleDecision } from './terminal-title-evidence'
+import { normalizeTerminalTitle } from '../../../../shared/agent-detection'
+import { resolvePaneTitleDecision, type PaneTitleDecision } from './terminal-title-evidence'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
@@ -2196,6 +2197,7 @@ export function connectPanePty(
       ptyId,
       callbacks: {
         onTitleChange,
+        onNormalizedTitleRepeat,
         onBell,
         onAgentBecameIdle,
         onAgentBecameWorking,
@@ -2565,16 +2567,28 @@ export function connectPanePty(
   let hasConsideredInitialCacheTimerSeed = false
   let allowInitialIdleCacheSeed = false
 
-  const onTitleChange = (
-    title: string,
+  const observeTitleForCompletion = (rawTitle: string): void => {
+    if (!syncAgentTaskCompleteTrackingEnabled()) {
+      return
+    }
+    const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+    if (!shouldSuppressTitleCompletionForFreshHook(rawTitle, activeHookStatus)) {
+      agentCompletionCoordinator.observeTitle(rawTitle)
+    }
+  }
+
+  let lastObservedNormalizedTitle: string | null = null
+  let lastResolvedTitleDecision: PaneTitleDecision | null = null
+  const resolveAndPublishPaneTitle = (
+    normalizedTitle: string,
     rawTitle: string,
-    meta?: { staleWorkingTitleClear?: boolean }
-  ): void => {
-    // Why: one owner-aware decision drives the display label, the runtime/tab
-    // title, task-completion tracking, and the renderer gate, so raw title text
-    // can no longer disable GPU behind stronger owner evidence (#7428/#7447).
+    forcePublication: boolean
+  ): PaneTitleDecision | null => {
+    // Why: compatible ownership can resolve after the first Pi-shaped frame;
+    // repeats must re-evaluate the effective label without restoring store churn.
+    lastObservedNormalizedTitle = normalizedTitle
     const decision = resolvePaneTitleDecision({
-      normalizedTitle: title,
+      normalizedTitle,
       rawTitle,
       displayOwnerAgentType: getAuthoritativePaneAgent(),
       rendererOwnerAgentType: getPaneScopedRendererOwner(),
@@ -2588,31 +2602,56 @@ export function connectPanePty(
         ...(launchToken ? { launchToken } : {})
       })
     ) {
+      return null
+    }
+    const displayChanged = lastResolvedTitleDecision?.displayTitle !== paneTitle
+    const rendererChanged =
+      lastResolvedTitleDecision?.rendererPolicy.gpuEnabled !== decision.rendererPolicy.gpuEnabled
+    lastResolvedTitleDecision = decision
+    if (forcePublication || rendererChanged) {
+      manager.setPaneGpuRendering(pane.id, decision.rendererPolicy.gpuEnabled)
+    }
+    if (forcePublication || displayChanged) {
+      deps.setRuntimePaneTitle(deps.tabId, pane.id, paneTitle)
+      // Why: only the focused pane should drive the tab title — otherwise two
+      // agents in split panes cause rapid title flickering as each emits OSC.
+      if (manager.getActivePane()?.id === pane.id) {
+        deps.updateTabTitle(deps.tabId, paneTitle)
+      }
+    }
+    return decision
+  }
+
+  const onNormalizedTitleRepeat = (rawTitle: string): void => {
+    // Why: repeats still drive owner changes, but reuse the prior normalization
+    // so unchanged title frames stay cheap.
+    const normalizedTitle = lastObservedNormalizedTitle ?? normalizeTerminalTitle(rawTitle)
+    resolveAndPublishPaneTitle(normalizedTitle, rawTitle, false)
+    if (detectAgentStatusFromTitle(rawTitle) === 'working') {
+      // Why: only resumed work cancels provisional completion; repeated idle
+      // and permission frames exist solely to converge late title ownership.
+      observeTitleForCompletion(rawTitle)
+    }
+  }
+
+  const onTitleChange = (
+    title: string,
+    rawTitle: string,
+    meta?: { staleWorkingTitleClear?: boolean }
+  ): void => {
+    const decision = resolveAndPublishPaneTitle(title, rawTitle, true)
+    if (!decision) {
       return
     }
-    manager.setPaneGpuRendering(pane.id, decision.rendererPolicy.gpuEnabled)
-    deps.setRuntimePaneTitle(deps.tabId, pane.id, paneTitle)
     // Why: a stale-derived cleared title comes from main's unthrottled 3s
     // timer, not agent output. It must update the visible title but never
     // feed completion tracking — observeTitle would classify the cleared
     // title as idle and mint a task-complete for a merely-paused agent.
-    if (!meta?.staleWorkingTitleClear && syncAgentTaskCompleteTrackingEnabled()) {
-      const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
-      if (!shouldSuppressTitleCompletionForFreshHook(decision.rawTitle, activeHookStatus)) {
-        // Why: display titles still update while hooks are active, but a stale
-        // idle frame must not complete the coordinator turn before hook `done`.
-        agentCompletionCoordinator.observeTitle(decision.rawTitle)
-      }
+    if (!meta?.staleWorkingTitleClear) {
+      // Why: display titles still update while hooks are active, but a stale
+      // idle frame must not complete the coordinator turn before hook `done`.
+      observeTitleForCompletion(decision.rawTitle)
     }
-    // Why: only the focused pane should drive the tab title — otherwise two
-    // agents in split panes cause rapid title flickering as each emits OSC
-    // sequences. Only the active split's title propagates to the tab. When
-    // focus changes, onActivePaneChange syncs the newly active pane's stored
-    // title to the tab.
-    if (manager.getActivePane()?.id === pane.id) {
-      deps.updateTabTitle(deps.tabId, paneTitle)
-    }
-
     if (!hasConsideredInitialCacheTimerSeed) {
       hasConsideredInitialCacheTimerSeed = true
       const state = useAppStore.getState()
@@ -3309,6 +3348,7 @@ export function connectPanePty(
       ? {}
       : {
           onTitleChange,
+          onNormalizedTitleRepeat,
           onBell,
           onAgentBecameIdle,
           onAgentBecameWorking,

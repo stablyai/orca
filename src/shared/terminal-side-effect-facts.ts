@@ -14,6 +14,7 @@ import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
  *  merely-paused agent (>3s silent mid-task) is not a completion. */
 export type TerminalSideEffectFact =
   | { kind: 'title'; normalizedTitle: string; rawTitle: string; staleWorkingTitleClear?: boolean }
+  | { kind: 'title-repeat'; rawTitle: string }
   | { kind: 'bell' }
   | { kind: 'agent-working' }
   | { kind: 'agent-idle'; title: string; staleWorkingTitleClear?: boolean }

@@ -2,7 +2,7 @@
 // command-finished and GitHub pr-link scanning to the shared tracker so main
 // emits those facts for local/SSH PTYs. These tests pin the chunk-boundary
 // carry, exit-code best-effort, dedupe, and synthetic-frame isolation rules.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createTerminalTitleTracker,
   type TerminalTitleTrackerCallbacks
@@ -174,6 +174,43 @@ describe('createTerminalTitleTracker synthetic-frame isolation', () => {
       ['title', '⠋ Cursor Agent'],
       ['finished', 130]
     ])
+  })
+})
+
+describe('createTerminalTitleTracker title publication', () => {
+  it('publishes one normalized title for repeated and spinner-equivalent frames', () => {
+    const onTitle = vi.fn()
+    const onNormalizedTitleRepeat = vi.fn()
+    const onAgentBecameWorking = vi.fn()
+    const onAgentBecameIdle = vi.fn()
+    const tracker = createTerminalTitleTracker({
+      onTitle,
+      onNormalizedTitleRepeat,
+      onAgentBecameWorking,
+      onAgentBecameIdle
+    })
+
+    for (let index = 0; index < 100; index += 1) {
+      const spinner = index % 2 === 0 ? '⠋' : '⠙'
+      tracker.handleChunk(`${ESC}]0;${spinner} π - cwd${BEL}`)
+    }
+
+    expect(onTitle).toHaveBeenCalledTimes(1)
+    expect(onTitle).toHaveBeenCalledWith('⠋ Pi', '⠋ π - cwd')
+    expect(onNormalizedTitleRepeat).toHaveBeenCalledTimes(99)
+    expect(onNormalizedTitleRepeat).toHaveBeenLastCalledWith('⠙ π - cwd')
+    expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
+
+    tracker.handleChunk(`${ESC}]0;π - cwd${BEL}`)
+
+    expect(onTitle).toHaveBeenCalledTimes(2)
+    expect(onTitle).toHaveBeenLastCalledWith('Pi', 'π - cwd')
+    expect(onAgentBecameIdle).toHaveBeenCalledWith('π - cwd', undefined)
+
+    tracker.handleChunk(`${ESC}]0;π - cwd${BEL}`)
+    expect(onTitle).toHaveBeenCalledTimes(2)
+    expect(onNormalizedTitleRepeat).toHaveBeenCalledTimes(100)
+    expect(onNormalizedTitleRepeat).toHaveBeenLastCalledWith('π - cwd')
   })
 })
 

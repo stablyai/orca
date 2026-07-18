@@ -70,6 +70,7 @@ export type TerminalSideEffectFactConsumerCallbacks = {
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ) => void
+  onNormalizedTitleRepeat?: (rawTitle: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string, meta?: { staleWorkingTitleClear?: boolean }) => void
   onAgentBecameWorking?: () => void
@@ -107,6 +108,12 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
         fact.rawTitle,
         fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : undefined
       )
+      return
+    case 'title-repeat':
+      // Why: repeat facts can change effective owner policy, so they are live
+      // title observations for the delayed-snapshot replay watermark too.
+      entry.lastLiveTitleSeq = seq
+      entry.callbacks.onNormalizedTitleRepeat?.(fact.rawTitle)
       return
     case 'bell':
       entry.callbacks.onBell?.()

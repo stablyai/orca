@@ -53,10 +53,12 @@ export type TerminalTitleFactMeta = {
 
 export type TerminalTitleTrackerCallbacks = {
   /**
-   * Fired once per observed OSC title, in byte order — including the
-   * synthesized cleared title when the stale-working timer fires.
+   * Fired when the normalized OSC title changes, in byte order — including
+   * the synthesized cleared title when the stale-working timer fires.
    */
   onTitle?: (normalizedTitle: string, rawTitle: string, meta?: TerminalTitleFactMeta) => void
+  /** Fired when an observed OSC title repeats the current normalized title. */
+  onNormalizedTitleRepeat?: (rawTitle: string) => void
   onAgentBecameIdle?: (title: string, meta?: TerminalTitleFactMeta) => void
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
@@ -119,6 +121,7 @@ export function createTerminalTitleTracker(
 ): TerminalTitleTracker {
   const {
     onTitle,
+    onNormalizedTitleRepeat,
     onAgentBecameIdle,
     onAgentBecameWorking,
     onAgentExited,
@@ -177,8 +180,17 @@ export function createTerminalTitleTracker(
     if (isCursorNativeAgentTitle(rawTitle)) {
       return
     }
-    lastEmittedTitle = normalizeTerminalTitle(rawTitle)
-    onTitle?.(lastEmittedTitle, rawTitle)
+    const nextTitle = normalizeTerminalTitle(rawTitle)
+    // Why: main owns title publication for local/SSH PTYs; use the same
+    // normalized identity gate as renderer parsing to avoid store churn.
+    if (nextTitle !== lastEmittedTitle) {
+      lastEmittedTitle = nextTitle
+      onTitle?.(nextTitle, rawTitle)
+    } else {
+      // Why: ownership can resolve after any Pi-compatible status frame;
+      // downstream policy re-evaluates repeats without republishing unchanged state.
+      onNormalizedTitleRepeat?.(rawTitle)
+    }
     agentTracker?.handleTitle(rawTitle)
   }
 
