@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { userInfo } from 'node:os'
+import os, { userInfo } from 'node:os'
 import { promisify } from 'node:util'
 import path, { win32 } from 'node:path'
 import type { RelayDispatcher } from './dispatcher'
@@ -8,7 +8,6 @@ import { isPwshAvailable } from '../main/pwsh'
 import { isWslAvailable, listWslDistros } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
-import { isConptyAvailable } from '../main/providers/windows-pty-backend'
 
 const execFileAsync = promisify(execFile)
 
@@ -106,7 +105,7 @@ export class PreflightHandler {
       Promise.resolve(isWslAvailable()).catch(() => false),
       Promise.resolve(isPwshAvailable()).catch(() => false),
       Promise.resolve(isGitBashAvailable()).catch(() => false),
-      Promise.resolve(isConptyAvailable()).catch(() => false)
+      Promise.resolve(isConptyAvailableRelay()).catch(() => false)
     ])
     const wslDistros = wslAvailable ? await Promise.resolve(listWslDistros()).catch(() => []) : []
     return {
@@ -287,4 +286,19 @@ function getShellCommandMode(shell: string): '-lc' | '-ilc' {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+/**
+ * Checks if ConPTY is available on the current Windows platform (Windows build >= 18309).
+ * Why: inlined here to prevent importing from the main app bundle into the relay bundle.
+ * @returns A boolean indicating ConPTY availability.
+ */
+function isConptyAvailableRelay(): boolean {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  const release = os.release()
+  const parts = release.split('.')
+  const build = parseInt(parts[2] ?? '0', 10)
+  return build >= 18309
 }

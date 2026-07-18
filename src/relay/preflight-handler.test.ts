@@ -10,18 +10,27 @@ const {
   isWslAvailableMock,
   listWslDistrosMock,
   isGitBashAvailableMock,
-  isConptyAvailableMock
+  osReleaseMock
 } = vi.hoisted(() => ({
   isPwshAvailableMock: vi.fn(),
   isWslAvailableMock: vi.fn(),
   listWslDistrosMock: vi.fn(),
   isGitBashAvailableMock: vi.fn(),
-  isConptyAvailableMock: vi.fn()
+  osReleaseMock: vi.fn()
 }))
 
-vi.mock('../main/providers/windows-pty-backend', () => ({
-  isConptyAvailable: isConptyAvailableMock
-}))
+vi.mock('node:os', async () => {
+  const actual = await vi.importActual<any>('node:os')
+  const mockRelease = () => osReleaseMock()
+  return {
+    ...actual,
+    release: mockRelease,
+    default: {
+      ...actual.default,
+      release: mockRelease
+    }
+  }
+})
 
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
@@ -75,8 +84,8 @@ beforeEach(() => {
   isWslAvailableMock.mockReset()
   listWslDistrosMock.mockReset()
   isGitBashAvailableMock.mockReset()
-  isConptyAvailableMock.mockReset()
-  isConptyAvailableMock.mockReturnValue(true)
+  osReleaseMock.mockReset()
+  osReleaseMock.mockReturnValue('10.0.19041')
 })
 
 describe('buildCommandLookupSpec', () => {
@@ -350,7 +359,7 @@ describe('PreflightHandler', () => {
     try {
       const handler = requestHandlers.get('preflight.detectWindowsTerminalCapabilities')
       expect(handler).toBeDefined()
-      isConptyAvailableMock.mockReturnValue(true)
+      osReleaseMock.mockReturnValue('10.0.19041')
       await expect(handler!({})).resolves.toEqual({
         wslAvailable: true,
         wslDistros: ['Ubuntu'],
@@ -360,7 +369,7 @@ describe('PreflightHandler', () => {
         conptyAvailable: true
       })
 
-      isConptyAvailableMock.mockReturnValue(false)
+      osReleaseMock.mockReturnValue('10.0.17763')
       await expect(handler!({})).resolves.toEqual({
         wslAvailable: true,
         wslDistros: ['Ubuntu'],

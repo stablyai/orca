@@ -1,7 +1,11 @@
 import os from 'node:os'
 
-// Why: node-pty silently falls back to WinPTY on Windows build numbers below 18309.
-// Mirror node-pty's threshold exactly to prevent silently running on a broken backend.
+/**
+ * Detects if ConPTY is available on the current Windows operating system version.
+ * Why: node-pty silently falls back to WinPTY on Windows build numbers below 18309.
+ * Mirror node-pty's threshold exactly to prevent silently running on a broken backend.
+ * @returns A boolean indicating if ConPTY is available.
+ */
 export function isConptyAvailable(): boolean {
   if (process.platform !== 'win32') {
     return false
