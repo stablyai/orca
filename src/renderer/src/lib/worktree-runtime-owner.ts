@@ -12,11 +12,13 @@ import type {
   Repo,
   Worktree
 } from '../../../shared/types'
+import type { SshTarget } from '../../../shared/ssh-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   getPinnedTerminalPanelHostForWorktreeId,
   isPinnedTerminalPanelWorktreeId,
-  isSentinelWorktreeId
+  isSentinelWorktreeId,
+  resolvePinnedTerminalPanelSshTargetId
 } from '../../../shared/pinned-terminal-panels'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
@@ -33,6 +35,7 @@ export type WorktreeRuntimeOwnerState = {
   settings?:
     | (Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> & {
         pinnedTerminalPanels?: readonly PinnedTerminalPanel[]
+        sshTargets?: readonly SshTarget[]
       })
     | null
   worktreesByRepo?: Record<string, readonly Pick<Worktree, 'id' | 'repoId' | 'hostId'>[]>
@@ -263,7 +266,11 @@ export function getExecutionHostIdForWorktree(
       state.settings?.pinnedTerminalPanels,
       worktreeId
     )
-    return host !== null ? `ssh:${encodeURIComponent(host)}` : 'local'
+    if (host === null) {
+      return 'local'
+    }
+    const targetId = resolvePinnedTerminalPanelSshTargetId(state.settings?.sshTargets, host)
+    return targetId !== null ? `ssh:${encodeURIComponent(targetId)}` : 'local'
   }
   if (isSentinelWorktreeId(worktreeId)) {
     return 'local'

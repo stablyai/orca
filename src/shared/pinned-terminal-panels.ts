@@ -1,4 +1,5 @@
 import type { PinnedTerminalPanel } from './types'
+import type { SshTarget } from './ssh-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 
 // Why: each panel owns a live PTY; a bound keeps a corrupted profile from
@@ -54,6 +55,25 @@ export function getPinnedTerminalPanelHostForWorktreeId(
     return null
   }
   return panels?.find((panel) => panel.id === panelId)?.host ?? null
+}
+
+/** Resolve a panel's user-facing host string to a configured SSH target id.
+ *  Matches id, label, OpenSSH config alias, or hostname so operators can type
+ *  the name they already use ("node-b"), not Orca's opaque target id. Returns
+ *  null when nothing matches — callers must treat that as unresolved, never as
+ *  local, so a typo can't silently run the command on the wrong machine. */
+export function resolvePinnedTerminalPanelSshTargetId(
+  targets: readonly Pick<SshTarget, 'id' | 'label' | 'configHost' | 'host'>[] | null | undefined,
+  panelHost: string
+): string | null {
+  const target = targets?.find(
+    (candidate) =>
+      candidate.id === panelHost ||
+      candidate.label === panelHost ||
+      candidate.configHost === panelHost ||
+      candidate.host === panelHost
+  )
+  return target?.id ?? null
 }
 
 /** True for tab-host ids that are not real repo worktrees (floating workspace,
