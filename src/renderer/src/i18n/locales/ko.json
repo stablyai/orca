@@ -3928,10 +3928,9 @@
         "RemoveFolderDialog": {
           "4dc5b5065b": "제거",
           "d36883e046": "취소",
-          "8c097ef04e": "Orca에서. 아직 디스크에 있습니다.",
-          "e62415c3d0": "다음 항목만 제거합니다",
           "b79b39d865": "프로젝트 제거",
-          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
+          "removeDescriptionSsh": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 {{host}}에 그대로 남아 있으며, 해당 SSH 호스트를 다시 추가하면 복구할 수 있습니다.",
+          "removeDescriptionLocal": "이 작업은 {{name}}을(를) Orca에서 제거만 합니다. 파일은 디스크에 그대로 남아 있습니다."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "활성 워크스페이스로 이동"
