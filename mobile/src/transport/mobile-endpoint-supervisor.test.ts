@@ -191,6 +191,26 @@ describe('mobile endpoint supervisor', () => {
     supervisor.stop()
   })
 
+  it('retries relay recovery while the foreground direct client remains reconnecting', async () => {
+    const logical = new FakeLogicalClient('reconnecting', 'lan')
+    const openRelay = vi
+      .fn()
+      .mockReturnValueOnce(new FakeRelaySession('disconnected', new Error('relay unavailable')))
+      .mockReturnValueOnce(new FakeRelaySession('disconnected', new Error('relay unavailable')))
+      .mockReturnValueOnce(new FakeRelaySession('connected'))
+    const deps = dependencies({ openRelay })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    expect(logical.getActivePath()).toBe('lan')
+
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(openRelay).toHaveBeenCalledTimes(3)
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
   it('uses POST resolve for wrong-cell recovery and persists the authoritative target', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi

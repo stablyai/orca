@@ -81,8 +81,7 @@ export class MobileEndpointSupervisor {
         }
         this.scheduleDirectProbe()
       } else if (state === 'reconnecting' || state === 'disconnected' || state === 'auth-failed') {
-        // Why: the direct client enters reconnecting after its first failed
-        // dial and may never publish disconnected while its retry loop lives.
+        // Why: the direct client may stay reconnecting without another state change after its first failed dial.
         void this.recoverRelay()
       }
     })
@@ -92,8 +91,7 @@ export class MobileEndpointSupervisor {
       initialState === 'disconnected' ||
       initialState === 'auth-failed'
     ) {
-      // Why: the first direct dial can fail while encrypted relay credentials
-      // are still loading, before the supervisor subscribes to state changes.
+      // Why: the first direct dial may fail before encrypted relay credentials finish loading.
       await this.recoverRelay()
     } else {
       this.scheduleDirectProbe()
@@ -153,10 +151,11 @@ export class MobileEndpointSupervisor {
       }
     } finally {
       this.operationInFlight = false
-      if (forceReplacement && this.relayRotationPending && !this.stopped && !this.leaseTimer) {
+      const retry = !forceReplacement || this.relayRotationPending
+      if (retry && this.foreground && !this.stopped && !this.leaseTimer) {
         this.leaseTimer = this.dependencies.setTimer(() => {
           this.leaseTimer = null
-          void this.recoverRelay(true)
+          void this.recoverRelay(forceReplacement)
         }, 5000)
       }
     }
