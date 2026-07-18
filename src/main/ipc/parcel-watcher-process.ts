@@ -1,19 +1,19 @@
 // Host API for crash-isolated @parcel/watcher children. Desktop uses one
 // supervisor; runtime roots use a bounded pool with independent crash fuses.
-import {
-  WatcherProcessSupervisor,
-  type WatcherProcessCallback,
-  type WatcherProcessHooks,
-  type WatcherProcessSubscription
-} from './parcel-watcher-process-supervisor'
+import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
 import type { WatcherProcessSubscribeOptions } from './parcel-watcher-process-protocol'
+import type {
+  WatcherProcessCallback,
+  WatcherProcessHooks,
+  WatcherProcessSubscription
+} from './parcel-watcher-process-subscription'
 import { RuntimeWatcherProcessPool } from './runtime-watcher-process-pool'
 
 export type {
   WatcherProcessCallback,
   WatcherProcessHooks,
   WatcherProcessSubscription
-} from './parcel-watcher-process-supervisor'
+} from './parcel-watcher-process-subscription'
 export type {
   WatcherProcessDeliveryOptions,
   WatcherProcessEvent,
@@ -21,8 +21,11 @@ export type {
 } from './parcel-watcher-process-protocol'
 
 const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
-// Why: healthy and quarantine pools each cap at four children, containing a
-// failed shard without scaling process count with its number of roots.
+// Why: the canary pauses during legitimate crawls, so production callers need
+// a separate liveness fuse once a child reports that it owns native setup.
+export const WATCHER_PROCESS_SUBSCRIBE_TIMEOUT_MS = 60_000
+// Why: healthy roots share one child; only fault quarantine scales to four,
+// containing a failed shard without paying that RSS cost during normal use.
 const runtimeWatcherProcessPool = new RuntimeWatcherProcessPool()
 
 export function createWatcherProcessSupervisor(): WatcherProcessSupervisor {

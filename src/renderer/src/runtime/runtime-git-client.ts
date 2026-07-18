@@ -133,20 +133,30 @@ export function getRuntimeGitScope(
 
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,
-  options?: { includeIgnored?: boolean; bypassEffectiveUpstreamNegativeCache?: boolean }
+  options?: {
+    includeIgnored?: boolean
+    bypassEffectiveUpstreamNegativeCache?: boolean
+    reuseLineStats?: boolean
+    signal?: AbortSignal
+  }
 ): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
   const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
   const upstreamCacheBypassArgs = options?.bypassEffectiveUpstreamNegativeCache
     ? { bypassEffectiveUpstreamNegativeCache: true }
     : {}
+  const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
   if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.status({
-      worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId,
-      ...includeIgnoredArgs,
-      ...upstreamCacheBypassArgs
-    })
+    return callLocalGitStatus(
+      {
+        worktreePath: resolveLocalWorktreePath(context),
+        connectionId: context.connectionId,
+        ...includeIgnoredArgs,
+        ...upstreamCacheBypassArgs,
+        ...lineStatsReuseArgs
+      },
+      options?.signal
+    )
   }
   return callRuntimeRpc<GitStatusResult>(
     target,
@@ -154,10 +164,56 @@ export async function getRuntimeGitStatus(
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...includeIgnoredArgs,
-      ...upstreamCacheBypassArgs
+      ...upstreamCacheBypassArgs,
+      ...lineStatsReuseArgs
     },
-    { timeoutMs: 15_000 }
+    {
+      timeoutMs: 15_000,
+      // Why: an abort signal forces the dedicated per-request subscription
+      // socket (one WebSocket + E2EE handshake per request). The safety
+      // refresh is the idle steady state, so it stays on the pooled call
+      // transport: its stale result is rejected by the caller's liveness
+      // guard and the 15s timeout bounds it. Activity refreshes keep the
+      // abortable transport so pause/host switches cancel real remote work.
+      ...(options?.reuseLineStats ? {} : { signal: options?.signal })
+    }
   )
+}
+
+let nextGitStatusRequestToken = 0
+
+function createGitStatusAbortError(): Error {
+  const error = new Error('Git status request aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+async function callLocalGitStatus(
+  args: Parameters<Window['api']['git']['status']>[0],
+  signal?: AbortSignal
+): Promise<GitStatusResult> {
+  if (!signal) {
+    return window.api.git.status(args)
+  }
+  if (signal.aborted) {
+    throw createGitStatusAbortError()
+  }
+  const requestToken = `git-status-${Date.now()}-${++nextGitStatusRequestToken}`
+  const cancel = (): void => {
+    void window.api.git.cancelStatus({ requestToken }).catch(() => {})
+  }
+  signal.addEventListener('abort', cancel, { once: true })
+  try {
+    const status = await window.api.git.status({ ...args, requestToken })
+    // Why: cancel is best-effort; a scan that finished after abort must still
+    // reject so callers never treat a cancelled request as a fresh result.
+    if (signal.aborted) {
+      throw createGitStatusAbortError()
+    }
+    return status
+  } finally {
+    signal.removeEventListener('abort', cancel)
+  }
 }
 
 export async function getRuntimeGitSubmoduleStatus(

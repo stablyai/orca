@@ -307,7 +307,9 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab')
+    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab', {
+      reason: 'cleanup'
+    })
   })
 
   it('forwards prompt launch env and captured config to paired web runtime hosts', async () => {

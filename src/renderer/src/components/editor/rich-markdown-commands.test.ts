@@ -40,14 +40,14 @@ describe('rich markdown slash commands', () => {
   it('orders commands under section headers', () => {
     expect(slashCommands.map((command) => `${command.group}:${command.id}`)).toEqual([
       'Headings:heading-1',
-      'Headings:toggle-h1',
       'Headings:heading-2',
-      'Headings:toggle-h2',
       'Headings:heading-3',
-      'Headings:toggle-h3',
       'Headings:heading-4',
-      'Headings:toggle-h4',
       'Headings:heading-5',
+      'Toggle headings:toggle-h1',
+      'Toggle headings:toggle-h2',
+      'Toggle headings:toggle-h3',
+      'Toggle headings:toggle-h4',
       'Basic blocks:blockquote',
       'Basic blocks:ordered-list',
       'Basic blocks:bullet-list',

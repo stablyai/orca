@@ -49,9 +49,10 @@ import type {
   BrowserViewportResult,
   BrowserWaitResult
 } from '../../shared/runtime-types'
+import type { BrowserCertificateProceedResult } from '../../shared/types'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
-import { browserManager } from '../browser/browser-manager'
+import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import { BrowserError } from '../browser/cdp-bridge'
 import {
   startBrowserScreencast,
@@ -631,6 +632,16 @@ export class RuntimeBrowserCommands {
     return {
       tabs: result.tabs.map((tab) => this.enrichBrowserTabInfo(tab))
     }
+  }
+
+  async browserProceedCertificate(
+    params: { challengeId: string } & BrowserCommandTargetParams
+  ): Promise<BrowserCertificateProceedResult> {
+    const target = await this.resolveBrowserCommandTarget(params)
+    if (!target.browserPageId) {
+      return { ok: false, reason: 'missing' }
+    }
+    return browserCertificateTrustController.proceed(target.browserPageId, params.challengeId)
   }
 
   async browserTabShow(params: { page: string; worktree?: string }): Promise<BrowserTabShowResult> {

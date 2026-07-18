@@ -19,6 +19,7 @@ import { submitFeedback } from './feedback'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import {
   getCrashBreadcrumbSnapshot,
+  recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from '../crash-reporting/crash-breadcrumb-store'
 import { startSpan } from '../observability/tracer'
@@ -319,6 +320,52 @@ function buildUncapturedCrashReportText(
   )
 }
 
+// Why: a repeating renderer error (e.g. a ResizeObserver or SSH-rejection
+// storm, #8260) can flush the whole fixed-size breadcrumb ring in seconds,
+// erasing the pre-crash trail. Coalesce repeats into one entry that carries a
+// suppressed count instead.
+const COALESCED_RENDERER_ERROR_BREADCRUMB_NAMES = new Set([
+  'renderer_error',
+  'renderer_unhandled_rejection'
+])
+const RENDERER_ERROR_BREADCRUMB_COALESCE_MS = 30_000
+
+function rendererErrorBreadcrumbCoalesceKey(
+  name: string,
+  data: CrashReportBreadcrumbData | undefined
+): string | undefined {
+  const primaryMessage = name === 'renderer_error' ? data?.message : data?.reasonMessage
+  const fallbackMessage = name === 'renderer_error' ? data?.errorMessage : undefined
+  const message =
+    typeof primaryMessage === 'string' && primaryMessage.length > 0
+      ? primaryMessage
+      : typeof fallbackMessage === 'string' && fallbackMessage.length > 0
+        ? fallbackMessage
+        : undefined
+  // Why: message-less failures have no stable identity, so grouping them could
+  // erase unrelated crash evidence. Sanitization already caps messages at 240 chars.
+  if (!message) {
+    return undefined
+  }
+
+  // Why: common messages such as "Script error" or "Cannot read properties"
+  // can come from unrelated sites. Include sanitized source evidence so one
+  // failure cannot suppress the breadcrumb for another.
+  const sourceIdentity =
+    name === 'renderer_error'
+      ? [
+          data?.errorStack,
+          data?.filename,
+          data?.lineno,
+          data?.colno,
+          data?.errorType,
+          data?.errorName,
+          data?.errorMessage
+        ]
+      : [data?.reasonStack, data?.reasonType, data?.reasonName]
+  return JSON.stringify([name, message, ...sourceIdentity])
+}
+
 export function registerCrashReportingHandlers(store: CrashReportStore): void {
   ipcMain.removeHandler('crashReports:getLatestPending')
   ipcMain.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
@@ -346,8 +393,33 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         return
       }
       const data = sanitizeRendererBreadcrumbData(args.data)
-      recordCrashBreadcrumb(args.name, data)
-      recordRendererBreadcrumbTrace(args.name, data)
+      if (COALESCED_RENDERER_ERROR_BREADCRUMB_NAMES.has(args.name)) {
+        const coalesceKey = rendererErrorBreadcrumbCoalesceKey(args.name, data)
+        if (!coalesceKey) {
+          recordCrashBreadcrumb(args.name, data)
+          recordRendererBreadcrumbTrace(args.name, data)
+          return
+        }
+        const coalesceResult = recordCoalescedCrashBreadcrumb({
+          name: args.name,
+          data,
+          coalesceKey,
+          minIntervalMs: RENDERER_ERROR_BREADCRUMB_COALESCE_MS
+        })
+        // Why: tracing every suppressed duplicate would preserve the same
+        // serialization and disk churn that breadcrumb coalescing removes.
+        if (coalesceResult) {
+          recordRendererBreadcrumbTrace(
+            args.name,
+            coalesceResult.suppressedSinceLast > 0
+              ? { ...data, suppressedSinceLast: coalesceResult.suppressedSinceLast }
+              : data
+          )
+        }
+      } else {
+        recordCrashBreadcrumb(args.name, data)
+        recordRendererBreadcrumbTrace(args.name, data)
+      }
     }
   )
 

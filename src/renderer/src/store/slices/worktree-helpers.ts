@@ -42,6 +42,8 @@ export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | u
 
 export type WorktreeMetaUpdateOptions = {
   shouldApply?: WorktreeMetaUpdateGuard
+  /** Skip the automatic review refetch when the caller owns an equivalent refresh. */
+  suppressHostedReviewRefresh?: boolean
 }
 
 export type WorktreeRenameRequest = {

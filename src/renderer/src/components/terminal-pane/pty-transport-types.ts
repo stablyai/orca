@@ -49,7 +49,7 @@ export type PtyConnectResult = {
   snapshotRows?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
-  coldRestore?: { scrollback: string; cwd: string }
+  coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
   /** Trailing partial escape the daemon emulator held mid-parse; the reattach

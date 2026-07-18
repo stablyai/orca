@@ -668,7 +668,7 @@ describe('registerGitHubHandlers', () => {
       repoPath: '/workspace/repo',
       limit: 10,
       query: 'is:open',
-      before: 'cursor-1',
+      page: 2,
       noCache: true
     })
 
@@ -676,7 +676,7 @@ describe('registerGitHubHandlers', () => {
       '/workspace/repo',
       10,
       'is:open',
-      'cursor-1',
+      2,
       'origin',
       null,
       true
@@ -732,7 +732,7 @@ describe('registerGitHubHandlers', () => {
       repoPath: '/workspace/repo',
       limit: 10,
       query: 'is:open',
-      before: 'cursor-1',
+      page: 2,
       noCache: true
     })
     await handlers['gh:countWorkItems'](null, {
@@ -789,7 +789,7 @@ describe('registerGitHubHandlers', () => {
       '/workspace/repo',
       10,
       'is:open',
-      'cursor-1',
+      2,
       undefined,
       null,
       true,

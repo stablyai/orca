@@ -1826,20 +1826,13 @@ function Terminal(): React.JSX.Element | null {
         }
       }
 
-      // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
-      // otherwise reopen the most recently closed editor tab.
+      // Cmd/Ctrl+Shift+T — reopen the most recently closed tab of any kind
+      // (terminal, browser, or editor), Chrome/Ghostty-style. Repeated presses
+      // walk back through the close history.
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
-        const state = useAppStore.getState()
-        if (state.activeTabType === 'browser') {
-          const restored = state.reopenClosedBrowserTab(activeWorktreeId)
-          if (restored === null) {
-            state.reopenClosedEditorTab(activeWorktreeId)
-          }
-        } else {
-          state.reopenClosedEditorTab(activeWorktreeId)
-        }
+        useAppStore.getState().reopenClosedTab(activeWorktreeId)
         return
       }
 
@@ -1957,10 +1950,9 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
-      // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
-      // every tab type as an escape hatch from the type-scoped default, and
-      // matches the platform tab-switch chord on macOS.
+      // Fresh installs use Cmd/Ctrl+Shift+[ / ] across all tab types and
+      // Cmd/Ctrl+Alt+[ / ] within the active type; upgrading users keep the
+      // inverse mapping, and both actions remain rebindable.
       // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
       // as the key value (the shifted character), not '['. Option+[ also
       // composes to dead-key / punctuation on many layouts, so matching on

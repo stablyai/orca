@@ -38,6 +38,7 @@ import {
   removeWorktreeOp,
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
+import { annotatePrunableWorktreesByExistence } from './git-handler-worktree-list'
 import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
@@ -69,6 +70,7 @@ import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../s
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../shared/git-fetch-auto-maintenance'
 import { GitCapabilityCache } from '../shared/git-capability-cache'
+import type { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError
@@ -76,6 +78,7 @@ import {
 import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
+import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -178,7 +181,11 @@ export class GitHandler {
 
   // Why: RelayContext is accepted for protocol back-compat (see
   // docs/relay-fs-allowlist-removal.md) but no longer consulted on git ops.
-  constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
+  constructor(
+    dispatcher: RelayDispatcher,
+    _context: RelayContext,
+    private readonly watcherRegistry?: Pick<RelayFilesystemWatchRegistry, 'runWithRemovalFence'>
+  ) {
     this.dispatcher = dispatcher
     this.registerHandlers()
     // Why: a detached client's git.responseAck frames will never arrive; wake
@@ -192,7 +199,7 @@ export class GitHandler {
   }
 
   private registerHandlers(): void {
-    this.dispatcher.onRequest('git.status', (p) => this.getStatus(p))
+    this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
     this.dispatcher.onRequest('git.submoduleStatus', (p) => this.getSubmoduleStatus(p))
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
@@ -281,6 +288,7 @@ export class GitHandler {
 
   private clearGitMutationReadCaches(): void {
     this.gitDiffReadDedupe.clear()
+    clearGitStatusLineStatsCache()
     clearSubmodulePathsCache(this.submodulePathsCache)
   }
 
@@ -336,9 +344,9 @@ export class GitHandler {
     return stdout
   }
 
-  private async getStatus(params: Record<string, unknown>) {
+  private async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.clear()
-    return getStatusOp(this.git.bind(this), params)
+    return getStatusOp(this.git.bind(this), params, { signal: context.signal })
   }
 
   // Why: the parent status only lists a single gitlink row per submodule. The
@@ -1369,7 +1377,16 @@ export class GitHandler {
             const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
               signal: context?.signal
             })
-            return this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
+            const normalized = await this.normalizeMainWorktreePath(
+              repoPath,
+              parseWorktreeList(stdout)
+            )
+            // Why: this `-z`-unsupported fallback (Git <2.36) also serves Git
+            // <2.31, which emits no `prunable` annotation; probe each linked
+            // worktree path instead of treating stale registrations as live.
+            // On Git 2.31–2.35 the annotation is already parsed, so the probe
+            // is a harmless backstop (issue #8389).
+            return annotatePrunableWorktreesByExistence(normalized)
           } catch {
             return []
           }
@@ -1384,9 +1401,14 @@ export class GitHandler {
   }
 
   private async removeWorktree(params: Record<string, unknown>) {
-    return this.runWithGitReadCacheClear(() =>
-      removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities)
-    )
+    const remove = () =>
+      this.runWithGitReadCacheClear(() =>
+        removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities)
+      )
+    const worktreePath = params.worktreePath
+    return this.watcherRegistry && typeof worktreePath === 'string'
+      ? this.watcherRegistry.runWithRemovalFence(expandTilde(worktreePath), remove)
+      : remove()
   }
 
   private async worktreeIsClean(params: Record<string, unknown>) {

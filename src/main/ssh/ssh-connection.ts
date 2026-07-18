@@ -27,6 +27,7 @@ import {
   isAuthError,
   isAgentFallbackError,
   isSystemSshFallbackError,
+  isGssapiSystemSshFallbackCandidate,
   isPassphraseError,
   sleep,
   buildConnectConfig,
@@ -40,6 +41,10 @@ import {
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
+import {
+  createLinkedSshFileTransferSignal,
+  raceSftpFileTransferWithAbort
+} from './ssh-file-transfer-abort'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
@@ -73,6 +78,7 @@ export class SshConnection {
   private systemOperationAbortController = new AbortController()
   private systemSshResolvedConfig: SshResolvedConfig | null = null
   private systemSshControlMasterDisabledForSession = false
+  private systemSshGssapiOnlyForSession = false
   private useSystemSshTransport = false
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
@@ -155,13 +161,14 @@ export class SshConnection {
           'SSH exec channel timed out',
           (callback) => client.exec(remoteCommand, callback),
           (channel) => channel.close(),
-          options?.signal
+          options?.signal,
+          true
         ),
       options?.signal
     )
   }
 
-  async sftp(): Promise<SFTPWrapper> {
+  async sftp(signal?: AbortSignal): Promise<SFTPWrapper> {
     if (this.useSystemSshTransport) {
       throw new Error('SFTP is not available when using system SSH transport')
     }
@@ -169,12 +176,15 @@ export class SshConnection {
       throw new Error('Not connected')
     }
     const client = this.client
-    return this.openSessionChannelWithRetry(() =>
-      this.waitForSshCallback(
-        'SSH SFTP channel timed out',
-        (callback) => client.sftp(callback),
-        (sftp) => sftp.end()
-      )
+    return this.openSessionChannelWithRetry(
+      () =>
+        this.waitForSshCallback(
+          'SSH SFTP channel timed out',
+          (callback) => client.sftp(callback),
+          (sftp) => sftp.end(),
+          signal
+        ),
+      signal
     )
   }
 
@@ -217,10 +227,20 @@ export class SshConnection {
     timeoutMessage: string,
     register: (callback: (error: Error | undefined, value: T) => void) => void,
     cleanupLateValue?: (value: T) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    trackRemoteCommandTermination = false
   ): Promise<T> {
     return new Promise((resolve, reject) => {
+      type ChannelOpenTerminationError = Error & { sshChannelCloseConfirmed: boolean }
       let settled = false
+      let unconfirmedOpenError: ChannelOpenTerminationError | null = null
+      const markOpenUnconfirmed = (error: Error): Error => {
+        if (!trackRemoteCommandTermination) {
+          return error
+        }
+        unconfirmedOpenError = Object.assign(error, { sshChannelCloseConfirmed: false })
+        return unconfirmedOpenError
+      }
       // Why: rejecting the instant the signal aborts lets the caller proceed
       // while the in-flight channel open completes in the background and holds
       // a server-side session slot (MaxSessions). Mark the abort and settle
@@ -239,16 +259,41 @@ export class SshConnection {
         abortDeadlineTimer = setTimeout(() => {
           settled = true
           cleanup()
-          reject(createSshOperationAbortError())
+          reject(markOpenUnconfirmed(createSshOperationAbortError()))
         }, ABORTED_CHANNEL_CLOSE_GRACE_MS)
       }
       const timer = setTimeout(() => {
         settled = true
         cleanup()
-        reject(abortRequested ? createSshOperationAbortError() : new Error(timeoutMessage))
+        reject(
+          markOpenUnconfirmed(
+            abortRequested ? createSshOperationAbortError() : new Error(timeoutMessage)
+          )
+        )
       }, CONNECT_TIMEOUT_MS)
+      const discardLateValue = (value: T, onClose?: () => void): void => {
+        const emitter = value as Partial<NodeJS.EventEmitter> & {
+          resume?: () => void
+          stderr?: Partial<NodeJS.EventEmitter> & { resume?: () => void }
+        }
+        const swallowLateError = (): void => {}
+        emitter.on?.('error', swallowLateError)
+        emitter.stderr?.on?.('error', swallowLateError)
+        if (onClose) {
+          emitter.once?.('close', onClose)
+        }
+        // Why: ssh2 can withhold CHANNEL_CLOSE while discarded exec streams
+        // remain unread, and teardown errors have no other owner.
+        emitter.resume?.()
+        emitter.stderr?.resume?.()
+        try {
+          cleanupLateValue?.(value)
+        } catch {
+          /* best effort */
+        }
+      }
       const rejectAfterClose = (value: T): void => {
-        const abortError = createSshOperationAbortError()
+        const abortError = markOpenUnconfirmed(createSshOperationAbortError())
         const emitter = value as Partial<NodeJS.EventEmitter> & {
           resume?: () => void
           stderr?: { resume?: () => void }
@@ -260,23 +305,24 @@ export class SshConnection {
           }
           finished = true
           clearTimeout(closeGraceTimer)
+          emitter.removeListener?.('close', confirmAndDone)
           reject(abortError)
+        }
+        const confirmAndDone = (): void => {
+          if (unconfirmedOpenError === abortError) {
+            unconfirmedOpenError.sshChannelCloseConfirmed = true
+          }
+          done()
         }
         // Why: bounded — a remote that never confirms the close must not hang
         // the aborted operation forever.
         const closeGraceTimer = setTimeout(done, ABORTED_CHANNEL_CLOSE_GRACE_MS)
         if (typeof emitter.once === 'function') {
-          emitter.once('close', done)
+          emitter.once('close', confirmAndDone)
         }
         // Why: ssh2 withholds the 'close' event until the channel's streams
         // are drained; nobody else will ever read this discarded channel.
-        emitter.resume?.()
-        emitter.stderr?.resume?.()
-        try {
-          cleanupLateValue?.(value)
-        } catch {
-          /* best effort */
-        }
+        discardLateValue(value)
         if (typeof emitter.once !== 'function') {
           done()
         }
@@ -287,11 +333,11 @@ export class SshConnection {
           // rejected. Close that late resource so the remote channel is not
           // left open with no owner.
           if (!error && value !== undefined) {
-            try {
-              cleanupLateValue?.(value)
-            } catch {
-              /* best effort */
-            }
+            discardLateValue(value, () => {
+              if (unconfirmedOpenError) {
+                unconfirmedOpenError.sshChannelCloseConfirmed = true
+              }
+            })
           }
           return
         }
@@ -332,23 +378,51 @@ export class SshConnection {
   async uploadDirectory(
     localDir: string,
     remoteDir: string,
-    options?: SshRemoteFileOptions
+    options?: SshRemoteFileOptions & { signal?: AbortSignal }
   ): Promise<void> {
-    if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      try {
-        const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
-        await uploadDirectory(sftp, localDir, remoteDir)
-      } finally {
-        sftp.end()
+    // Why: relay deployment timeout and connection teardown are independent;
+    // either owner must stop a transfer that can otherwise outlive its lock.
+    const linkedSignal = createLinkedSshFileTransferSignal(
+      [this.systemOperationAbortController.signal, options?.signal].filter(
+        (signal): signal is AbortSignal => signal !== undefined
+      )
+    )
+    try {
+      if (!this.useSystemSshTransport) {
+        const sftp = await this.sftp(linkedSignal.signal)
+        const swallowLateSftpError = (): void => {}
+        let sftpEndRequested = false
+        const endSftp = (): void => {
+          if (!sftpEndRequested) {
+            sftpEndRequested = true
+            sftp.end()
+          }
+        }
+        sftp.on('error', swallowLateSftpError)
+        sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+        try {
+          const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
+          await raceSftpFileTransferWithAbort(
+            uploadDirectory(sftp, localDir, remoteDir),
+            linkedSignal.signal,
+            (onClose) => {
+              sftp.once('close', onClose)
+              endSftp()
+            }
+          )
+        } finally {
+          endSftp()
+        }
+        return
       }
-      return
+      await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
+        signal: linkedSignal.signal,
+        hostPlatform: options?.hostPlatform,
+        ...this.getSystemSshBuildArgsOptions()
+      })
+    } finally {
+      linkedSignal.dispose()
     }
-    await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
-      signal: this.systemOperationAbortController.signal,
-      hostPlatform: options?.hostPlatform,
-      ...this.getSystemSshBuildArgsOptions()
-    })
   }
 
   async downloadFile(
@@ -402,55 +476,74 @@ export class SshConnection {
   async writeFile(
     remotePath: string,
     contents: string,
-    options?: SshRemoteFileOptions
+    options?: SshRemoteFileOptions & { signal?: AbortSignal }
   ): Promise<void> {
-    if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      const swallowLateSftpError = (): void => {}
-      sftp.on('error', swallowLateSftpError)
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const ws = sftp.createWriteStream(remotePath)
-          let settled = false
-          const cleanup = (): void => {
-            ws.removeListener('close', onClose)
-            ws.removeListener('error', onError)
+    // Keep package/version writes under the same dual cancellation contract as uploads.
+    const linkedSignal = createLinkedSshFileTransferSignal(
+      [this.systemOperationAbortController.signal, options?.signal].filter(
+        (signal): signal is AbortSignal => signal !== undefined
+      )
+    )
+    try {
+      if (!this.useSystemSshTransport) {
+        const sftp = await this.sftp(linkedSignal.signal)
+        const swallowLateSftpError = (): void => {}
+        let sftpEndRequested = false
+        const endSftp = (): void => {
+          if (!sftpEndRequested) {
+            sftpEndRequested = true
+            sftp.end()
           }
-          const onClose = (): void => {
-            if (settled) {
-              return
+        }
+        sftp.on('error', swallowLateSftpError)
+        sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+        try {
+          const write = new Promise<void>((resolve, reject) => {
+            const ws = sftp.createWriteStream(remotePath)
+            let settled = false
+            const cleanup = (): void => {
+              sftp.removeListener('error', onError)
+              ws.removeListener('close', onClose)
+              ws.removeListener('error', onError)
             }
-            settled = true
-            cleanup()
-            resolve()
-          }
-          const onError = (err: Error): void => {
-            sftp.removeListener('error', onError)
-            if (settled) {
-              return
+            const onClose = (): void => {
+              if (settled) {
+                return
+              }
+              settled = true
+              cleanup()
+              resolve()
             }
-            settled = true
-            cleanup()
-            reject(err)
-          }
-          sftp.prependOnceListener('error', onError)
-          ws.once('close', onClose)
-          ws.once('error', onError)
-          ws.end(contents)
-        })
-      } finally {
-        sftp.end()
-        setImmediate(() => {
-          sftp.removeListener('error', swallowLateSftpError)
-        })
+            const onError = (err: Error): void => {
+              if (settled) {
+                return
+              }
+              settled = true
+              cleanup()
+              reject(err)
+            }
+            sftp.prependOnceListener('error', onError)
+            ws.once('close', onClose)
+            ws.once('error', onError)
+            ws.end(contents)
+          })
+          await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
+            sftp.once('close', onClose)
+            endSftp()
+          })
+        } finally {
+          endSftp()
+        }
+        return
       }
-      return
+      await writeFileViaSystemSsh(this.target, remotePath, contents, {
+        signal: linkedSignal.signal,
+        hostPlatform: options?.hostPlatform,
+        ...this.getSystemSshBuildArgsOptions()
+      })
+    } finally {
+      linkedSignal.dispose()
     }
-    await writeFileViaSystemSsh(this.target, remotePath, contents, {
-      signal: this.systemOperationAbortController.signal,
-      hostPlatform: options?.hostPlatform,
-      ...this.getSystemSshBuildArgsOptions()
-    })
   }
 
   async writeBuffer(
@@ -491,6 +584,12 @@ export class SshConnection {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
+        // Why: a concurrent disconnect() already set 'disconnected'; a cancelled
+        // attempt's late error must not overwrite it with auth-failed/error.
+        if (this.disposed) {
+          throw lastError
+        }
+
         if (isAuthError(lastError) || isPassphraseError(lastError)) {
           this.setState('auth-failed', lastError.message)
           throw lastError
@@ -525,8 +624,27 @@ export class SshConnection {
       await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
       return
     }
+    // Why: ssh2 has no gssapi-with-mic support, so hosts that explicitly
+    // request GSSAPIAuthentication try Kerberos SSO via the system OpenSSH
+    // binary first. Restrict the probe to GSSAPI so missing tickets fall through
+    // to Orca's existing key and credential-prompt path.
+    if (this.target.gssapiAuthentication === true) {
+      try {
+        await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
+        return
+      } catch (probeErr) {
+        if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
+          throw probeErr
+        }
+      }
+    }
+    // Why: a synchronous spawn throw (no system ssh binary) bypasses the probe's
+    // own catch, so the ssh2 fall-through must clear all system-transport state
+    // itself — otherwise exec/sftp keep routing through the failed transport.
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
+    this.useSystemSshTransport = false
 
     const config = buildConnectConfig(this.target, resolved)
 
@@ -566,6 +684,7 @@ export class SshConnection {
         } catch {
           this.systemSshResolvedConfig = null
           this.systemSshControlMasterDisabledForSession = false
+          this.systemSshGssapiOnlyForSession = false
           this.useSystemSshTransport = false
           throw err
         }
@@ -604,7 +723,15 @@ export class SshConnection {
               throw keyErr
             }
             authError = keyErr
-            if (isPassphraseError(authError) && !this.cachedPassphrase) {
+            // Why: when the effective config enables GSSAPI, let the reactive
+            // system-ssh probe (below) try a Kerberos ticket before prompting
+            // for the key passphrase; the general passphrase prompt still runs
+            // if that probe fails, since passphrasePromptHandled stays false.
+            if (
+              isPassphraseError(authError) &&
+              !this.cachedPassphrase &&
+              !isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)
+            ) {
               passphrasePromptHandled = true
               const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
               const val = await this.callbacks.onCredentialRequest?.(
@@ -621,6 +748,28 @@ export class SshConnection {
               }
             }
           }
+        }
+      }
+
+      // Why: a Kerberos ticket may authenticate where keys did not; try the
+      // system ssh binary before falling back to interactive prompts.
+      if (isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        try {
+          await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
+          return
+        } catch {
+          this.systemSshResolvedConfig = null
+          this.systemSshControlMasterDisabledForSession = false
+          this.systemSshGssapiOnlyForSession = false
+          this.useSystemSshTransport = false
+        }
+        // Why: if a disconnect/reconnect superseded this attempt mid-probe, throw
+        // the cancellation error — not the stale ssh2 authError — so connect()
+        // does not post auth-failed after the target was deliberately disconnected.
+        if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
+          throw this.createCancelledConnectAttemptError()
         }
       }
 
@@ -762,12 +911,15 @@ export class SshConnection {
 
   private async doSystemSshProbeWithControlMasterRetry(
     connectGeneration: number,
-    resolved: SshResolvedConfig | null
+    resolved: SshResolvedConfig | null,
+    gssapiOnly = false
   ): Promise<void> {
     this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = gssapiOnly
     const controlPath = getOrcaControlSocketPath(this.target, {
-      resolvedConfig: this.systemSshResolvedConfig
+      resolvedConfig: this.systemSshResolvedConfig,
+      gssapiOnly: this.systemSshGssapiOnlyForSession
     })
     try {
       await this.doSystemSshProbe(connectGeneration)
@@ -936,6 +1088,9 @@ export class SshConnection {
     }
     if (this.systemSshControlMasterDisabledForSession) {
       options.disableControlMaster = true
+    }
+    if (this.systemSshGssapiOnlyForSession) {
+      options.gssapiOnly = true
     }
     return options
   }
@@ -1117,6 +1272,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
   }
 
@@ -1129,6 +1285,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
     this.setState('connecting')
     try {
@@ -1170,6 +1327,7 @@ export class SshConnection {
       this.useSystemSshTransport = false
       this.systemSshResolvedConfig = null
       this.systemSshControlMasterDisabledForSession = false
+      this.systemSshGssapiOnlyForSession = false
       this.setState('error', err instanceof Error ? err.message : String(err))
       throw err
     }
@@ -1198,6 +1356,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
     this.setState('disconnected')
   }

@@ -17,8 +17,10 @@ const SiteSelection = z
 
 const Connect = z.object({
   siteUrl: requiredString('Site URL is required'),
-  email: requiredString('Email is required'),
-  apiToken: requiredString('API token is required')
+  // Self-hosted PAT auth needs no email; connect() enforces it for Cloud.
+  email: OptionalPlainString,
+  apiToken: requiredString('API token is required'),
+  authType: z.enum(['cloud', 'server']).optional()
 })
 
 const SelectSite = z.object({
@@ -100,8 +102,9 @@ export const JIRA_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.jiraConnect({
         siteUrl: params.siteUrl.trim(),
-        email: params.email.trim(),
-        apiToken: params.apiToken.trim()
+        email: params.email?.trim() ?? '',
+        apiToken: params.apiToken.trim(),
+        authType: params.authType
       })
   }),
   defineMethod({

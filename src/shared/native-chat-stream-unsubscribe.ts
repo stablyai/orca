@@ -18,10 +18,11 @@ export function buildNativeChatSubscriptionId(agent: string, sessionId: string):
 /** The unsubscribe RPC frame a client sends on teardown to close the watcher. */
 export function buildNativeChatUnsubscribe(
   agent: string,
-  sessionId: string
+  sessionId: string,
+  subscriptionId?: string
 ): NativeChatUnsubscribeRpc {
   return {
     method: 'nativeChat.unsubscribe',
-    params: { subscriptionId: buildNativeChatSubscriptionId(agent, sessionId) }
+    params: { subscriptionId: subscriptionId ?? buildNativeChatSubscriptionId(agent, sessionId) }
   }
 }

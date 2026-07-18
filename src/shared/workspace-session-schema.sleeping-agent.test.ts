@@ -41,6 +41,74 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves the authoritative Pi session file through hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'pi',
+          providerSession: {
+            key: 'session_id',
+            id: 'pi-session',
+            transcriptPath: '/tmp/pi-session.jsonl'
+          },
+          prompt: '',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'live'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession).toEqual(
+        {
+          key: 'session_id',
+          id: 'pi-session',
+          transcriptPath: '/tmp/pi-session.jsonl'
+        }
+      )
+    }
+  })
+
+  it('drops Pi sleeping-agent records without an authoritative session file', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'pi',
+          providerSession: { key: 'session_id', id: 'pi-session' },
+          prompt: '',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'live'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    }
+  })
+
   it('drops invalid sleeping agent launch config without dropping the record', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -294,8 +362,8 @@ describe('parseWorkspaceSession sleeping agents', () => {
         'tab1:pane-1': {
           paneKey: 'tab1:pane-1',
           worktreeId: 'wt',
-          agent: 'pi',
-          providerSession: { key: 'session_id', id: 'pi-session' },
+          agent: 'definitely-not-an-agent',
+          providerSession: { key: 'session_id', id: 'bogus-session' },
           prompt: 'continue',
           state: 'working',
           capturedAt: 10,

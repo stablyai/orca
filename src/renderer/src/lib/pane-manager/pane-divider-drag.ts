@@ -93,6 +93,8 @@ export function attachDividerDrag(
     if (windowListenersAttached || typeof window === 'undefined') {
       return
     }
+    // Why: Chromium can transiently lose capture while the button remains held,
+    // so window events keep ownership until pointerup, pointercancel, or blur.
     windowListenersAttached = true
     window.addEventListener('pointermove', onPointerMove, true)
     window.addEventListener('pointerup', onPointerUp, true)
@@ -264,12 +266,6 @@ export function attachDividerDrag(
     }
   }
 
-  const onLostPointerCapture = (): void => {
-    if (dragging) {
-      finishActiveDrag(false)
-    }
-  }
-
   const onWindowBlur = (): void => {
     finishActiveDrag(false)
   }
@@ -278,7 +274,6 @@ export function attachDividerDrag(
   divider.addEventListener('pointermove', onPointerMove)
   divider.addEventListener('pointerup', onPointerUp)
   divider.addEventListener('pointercancel', onPointerCancel)
-  divider.addEventListener('lostpointercapture', onLostPointerCapture)
   divider.addEventListener('dblclick', onDoubleClick)
   dividerDragCleanups.set(divider, () => {
     finishActiveDrag(false)
@@ -286,7 +281,6 @@ export function attachDividerDrag(
     divider.removeEventListener('pointermove', onPointerMove)
     divider.removeEventListener('pointerup', onPointerUp)
     divider.removeEventListener('pointercancel', onPointerCancel)
-    divider.removeEventListener('lostpointercapture', onLostPointerCapture)
     divider.removeEventListener('dblclick', onDoubleClick)
   })
 }

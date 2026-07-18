@@ -29,10 +29,11 @@ import {
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
+import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
-  sortWorkItemsByUpdatedAt
+  sortWorkItemsByNumber
 } from '../../shared/work-items'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -184,18 +185,15 @@ function classifyPRRefreshError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType'] {
   const message = err instanceof Error ? err.message : String(err)
+  // Why: GitHub-unreachable buckets (5xx outage / network / rate limit) share
+  // one detector with the Tasks work-item path so both surfaces attribute an
+  // outage to GitHub identically. Rate-limit responses also carry "HTTP 403",
+  // so this must run before the permission check below.
+  const unavailable = classifyGitHubUnavailable(message)
+  if (unavailable) {
+    return unavailable
+  }
   const lower = message.toLowerCase()
-  if (lower.includes('rate limit')) {
-    return 'rate_limited'
-  }
-  if (
-    lower.includes('timeout') ||
-    lower.includes('no such host') ||
-    lower.includes('network') ||
-    lower.includes('could not resolve host')
-  ) {
-    return 'network'
-  }
   if (lower.includes('http 403') || lower.includes('resource not accessible')) {
     return 'permission'
   }
@@ -215,6 +213,8 @@ function safePRRefreshErrorMessage(
       return 'GitHub authentication is unavailable. Check your gh login.'
     case 'network':
       return 'GitHub is unreachable right now. Check your network and try again.'
+    case 'server_error':
+      return "GitHub's API is temporarily unavailable (server error). This is a GitHub-side issue."
     case 'permission':
       return 'GitHub did not allow access to this pull request.'
     case 'repo_unavailable':
@@ -449,17 +449,13 @@ export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
 }
 
 // Why: main-process maps omit repoId because the IPC handler never receives
-// a repo identifier beyond path. The renderer stamps repoId after IPC so
-// single-repo and cross-repo items are uniform downstream.
-type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
+// a repo identifier beyond path. Exported because runtime consumers receive
+// listWorkItems results before the renderer stamps repoId.
+export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
-const WORK_ITEM_ISSUE_LIST_JSON_FIELDS = 'number,title,state,url,labels,updatedAt,author,assignees'
-
-// Why: the Tasks pager slices pages on updatedAt, so every list/search fetch
-// must return rows newest-updated-first for the cursor to advance correctly.
-// This is the search-qualifier spelling of the same contract the REST list
-// paths express as `sort=updated&direction=desc`; keep the two in sync (#8649).
-const WORK_ITEM_LIST_SORT_QUALIFIER = 'sort:updated-desc'
+// Why: issue numbers follow creation order within a repository. Pinning this
+// sort keeps gh's rich PR rows aligned with numbered Search API issue pages.
+const WORK_ITEM_NUMBER_SORT_QUALIFIER = 'sort:created-desc'
 
 const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
@@ -489,13 +485,29 @@ function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
-    author:
-      typeof item.user === 'object' && item.user !== null && 'login' in item.user
-        ? String((item.user as { login?: unknown }).login ?? '')
-        : typeof item.author === 'object' && item.author !== null && 'login' in item.author
-          ? String((item.author as { login?: unknown }).login ?? '')
-          : null,
+    ...authorFieldsFromUnknown(item),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
+  }
+}
+
+/**
+ * Derive both the author login and its API avatar_url in one place so GHE
+ * avatars render (the login-only `github.com/{login}.png` URL 404s on GHE).
+ *
+ * REST exposes `user.avatar_url`; gh/GraphQL expose `author.avatarUrl`. `gh pr
+ * view` omits the avatar entirely, so authorAvatarUrl is left undefined and the
+ * UI falls back to the login URL then a placeholder. See #8784.
+ */
+function authorFieldsFromUnknown(
+  item: Record<string, unknown>
+): Pick<MainWorkItem, 'author' | 'authorAvatarUrl'> {
+  const user = userFromUnknown(item.user ?? item.author)
+  if (!user) {
+    return { author: null }
+  }
+  return {
+    author: user.login,
+    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {})
   }
 }
 
@@ -750,12 +762,7 @@ function mapPullRequestWorkItem(
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
-    author:
-      typeof item.user === 'object' && item.user !== null && 'login' in item.user
-        ? String((item.user as { login?: unknown }).login ?? '')
-        : typeof item.author === 'object' && item.author !== null && 'login' in item.author
-          ? String((item.author as { login?: unknown }).login ?? '')
-          : null,
+    ...authorFieldsFromUnknown(item),
     branchName:
       typeof item.head === 'object' && item.head !== null && 'ref' in item.head
         ? String((item.head as { ref?: unknown }).ref ?? '')
@@ -956,78 +963,98 @@ async function fetchPullRequestWorkItem(
   return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
-function buildWorkItemListArgs(args: {
+type WorkItemListRequest = {
+  args: string[]
+  offset: number
+}
+
+function normalizeWorkItemPage(page: number | undefined): number {
+  return typeof page === 'number' && Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1
+}
+
+function buildWorkItemListRequest(args: {
   kind: 'issue' | 'pr'
   ownerRepo: OwnerRepo | null
   limit: number
   query: ParsedTaskQuery
-  before?: string
-}): string[] {
-  const { kind, ownerRepo, limit, query, before } = args
-  const fields = kind === 'issue' ? WORK_ITEM_ISSUE_LIST_JSON_FIELDS : WORK_ITEM_PR_LIST_JSON_FIELDS
-  const command = kind === 'issue' ? ['issue', 'list'] : ['pr', 'list']
-  const out = [...command, '--limit', String(limit), '--json', fields]
+  page: number
+}): WorkItemListRequest {
+  const { kind, ownerRepo, limit, query, page } = args
+  const searchParts: string[] = []
 
-  if (ownerRepo) {
-    out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  if (kind === 'issue' && ownerRepo) {
+    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
+  searchParts.push(kind === 'issue' ? 'is:issue' : 'is:pr')
+
+  if (query.state === 'open') {
+    searchParts.push('is:open')
+  } else if (query.state === 'closed') {
+    searchParts.push('is:closed')
+    if (kind === 'pr') {
+      searchParts.push('-is:merged')
+    }
+  } else if (query.state === 'merged') {
+    searchParts.push('is:merged')
   }
 
-  if (query.state) {
-    out.push('--state', query.state)
+  if (kind === 'pr' && query.draft) {
+    searchParts.push('draft:true')
   }
-  // Why: GitHub considers merged PRs as "closed". When the user filters for
-  // closed-only, exclude merged PRs via the search predicate so the displayed
-  // and counted results match the user's intent.
-  const excludeMergedFromClosed = kind === 'pr' && query.state === 'closed'
 
   if (query.assignee) {
-    out.push('--assignee', query.assignee)
+    searchParts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
   if (query.author) {
-    out.push('--author', query.author)
+    searchParts.push(`author:${quoteGitHubSearchValue(query.author)}`)
   }
   if (query.labels.length > 0) {
     for (const label of query.labels) {
-      out.push('--label', label)
+      searchParts.push(`label:${quoteGitHubSearchValue(label)}`)
     }
   }
-  // Why: only add --draft when the user explicitly typed `is:draft`. Previously
-  // this fired for any PR-scoped open query, which made `is:pr is:open` (the
-  // "PRs" preset) silently filter to drafts-only.
-  if (kind === 'pr' && query.draft) {
-    out.push('--draft')
-  }
-
-  const searchParts: string[] = []
-  if (excludeMergedFromClosed) {
-    searchParts.push('-is:merged')
-  }
-  // Why: cursor-based pagination. GitHub search supports updated:<=DATE to
-  // fetch items at or older than the cursor. We use the oldest item's updatedAt
-  // from the previous page as the cursor. The bound is inclusive (`<=`) so items
-  // sharing the boundary row's exact updatedAt aren't skipped between pages; the
-  // renderer dedupes the re-fetched boundary rows by id (#8649).
-  if (before) {
-    searchParts.push(`updated:<=${before}`)
-  }
   if (kind === 'pr' && query.reviewRequested) {
-    searchParts.push(`review-requested:${query.reviewRequested}`)
+    searchParts.push(`review-requested:${quoteGitHubSearchValue(query.reviewRequested)}`)
   }
   if (kind === 'pr' && query.reviewedBy) {
-    searchParts.push(`reviewed-by:${query.reviewedBy}`)
+    searchParts.push(`reviewed-by:${quoteGitHubSearchValue(query.reviewedBy)}`)
   }
   if (query.freeText) {
     searchParts.push(query.freeText)
   }
-  // Why: pagination cursors slice on updatedAt, but `gh issue list` defaults
-  // to created-desc and `--search` defaults to best-match. `gh issue/pr list`
-  // has no --sort flag, so the only lever is the search query — which forces us
-  // to always emit --search. Without pinning the sort, recently-updated old
-  // items never appear on any page, so the pager advertises pages the fetch
-  // chain can never reach (#8649).
-  searchParts.push(WORK_ITEM_LIST_SORT_QUALIFIER)
+
+  if (kind === 'issue') {
+    return {
+      args: [
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent(searchParts.join(' '))}&sort=created&order=desc&per_page=${limit}&page=${page}`,
+        '--jq',
+        '.items'
+      ],
+      offset: 0
+    }
+  }
+
+  // Why: search/issues omits the PR fields used by the Tasks management
+  // columns. Fetch through gh's rich PR list and slice its stable created sort.
+  searchParts.push(WORK_ITEM_NUMBER_SORT_QUALIFIER)
+  const out = [
+    'pr',
+    'list',
+    '--limit',
+    String(Math.min(page * limit, 1000)),
+    '--state',
+    'all',
+    '--json',
+    WORK_ITEM_PR_LIST_JSON_FIELDS
+  ]
+  if (ownerRepo) {
+    out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
   out.push('--search', searchParts.join(' '))
-  return out
+  return { args: out, offset: (page - 1) * limit }
 }
 
 // Why: internal shape shared by listRecentWorkItems / listQueriedWorkItems so
@@ -1105,6 +1132,7 @@ async function listRecentWorkItems(
   issueOwnerRepo: OwnerRepo | null,
   prOwnerRepo: OwnerRepo | null,
   limit: number,
+  page: number,
   connectionId?: string | null,
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
@@ -1112,72 +1140,49 @@ async function listRecentWorkItems(
   const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
-  const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
+  const recentQuery = parseTaskQuery('is:open')
+  const issueRequest = buildWorkItemListRequest({
+    kind: 'issue',
+    ownerRepo: issueOwnerRepo,
+    limit,
+    query: recentQuery,
+    page
+  })
+  const prRequest = buildWorkItemListRequest({
+    kind: 'pr',
+    ownerRepo: prOwnerRepo,
+    limit,
+    query: recentQuery,
+    page
+  })
+  if (noCache) {
+    issueRequest.args.splice(1, 2)
+  }
   if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
     // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
     // PR half — the UI renders partial results plus a banner for the failing
     // side, matching the parent design doc's partial-failure rule (§2).
     const [issuesSettled, prsSettled] = await Promise.allSettled([
       issueOwnerRepo
-        ? ghExecFileAsync(
-            [
-              'api',
-              ...restCacheArgs,
-              `repos/${issueOwnerRepo.owner}/${issueOwnerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
-            ],
-            ghOptions
-          )
+        ? ghExecFileAsync(issueRequest.args, ghOptions)
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghCwdResolvedExec(
-              repoContext,
-              [
-                'issue',
-                'list',
-                '--limit',
-                String(limit),
-                '--state',
-                'open',
-                '--json',
-                WORK_ITEM_ISSUE_LIST_JSON_FIELDS
-              ],
-              ghOptions
-            ),
+          : ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
       prOwnerRepo
-        ? ghExecFileAsync(
-            [
-              'api',
-              ...restCacheArgs,
-              `repos/${prOwnerRepo.owner}/${prOwnerRepo.repo}/pulls?per_page=${limit}&state=open&sort=updated&direction=desc`
-            ],
-            ghOptions
-          )
+        ? ghExecFileAsync(prRequest.args, ghOptions)
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghCwdResolvedExec(
-              repoContext,
-              [
-                'pr',
-                'list',
-                '--limit',
-                String(limit),
-                '--state',
-                'open',
-                '--json',
-                WORK_ITEM_PR_LIST_JSON_FIELDS
-              ],
-              ghOptions
-            )
+          : ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
     ])
 
     let issues: MainWorkItem[] = []
     let issuesError: ClassifiedError | undefined
     if (issuesSettled.status === 'fulfilled') {
       issues = (JSON.parse(issuesSettled.value.stdout) as Record<string, unknown>[])
-        // Why: the GitHub issues REST endpoint also returns pull requests with a
-        // `pull_request` marker. The new-workspace task picker needs distinct
-        // issue vs PR buckets, so drop PR-shaped issue rows here before merging.
+        // Why: the GitHub search/issues endpoint may still return PRs with a
+        // pull_request marker even when queried with is:issue. Filter them out
+        // here to keep the issue and PR buckets clean.
         .filter((item) => !('pull_request' in item))
         .map(mapIssueWorkItem)
     } else {
@@ -1190,9 +1195,9 @@ async function listRecentWorkItems(
 
     let prs: MainWorkItem[] = []
     if (prsSettled.status === 'fulfilled') {
-      prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[]).map((item) =>
-        mapPullRequestWorkItem(item, prOwnerRepo)
-      )
+      prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[])
+        .slice(prRequest.offset, prRequest.offset + limit)
+        .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       prs = await hydrateWorkItemRepositoryMergeMetadata(prs, prOwnerRepo, ghOptions)
     } else {
       // Why: PR-side failures must preserve the pre-diff behavior of
@@ -1215,7 +1220,7 @@ async function listRecentWorkItems(
     }
 
     return {
-      items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit),
+      items: sortWorkItemsByNumber([...issues, ...prs]).slice(0, limit),
       issuesError
     }
   }
@@ -1228,45 +1233,19 @@ async function listRecentWorkItems(
   // effectively unusable for the feature — reject-all matches reality. If
   // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
-    ghCwdResolvedExec(
-      repoContext,
-      [
-        'issue',
-        'list',
-        '--limit',
-        String(limit),
-        '--state',
-        'open',
-        '--json',
-        WORK_ITEM_ISSUE_LIST_JSON_FIELDS
-      ],
-      ghOptions
-    ),
-    ghCwdResolvedExec(
-      repoContext,
-      [
-        'pr',
-        'list',
-        '--limit',
-        String(limit),
-        '--state',
-        'open',
-        '--json',
-        WORK_ITEM_PR_LIST_JSON_FIELDS
-      ],
-      ghOptions
-    )
+    ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
+    ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
   ])
 
-  const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[]).map(
-    mapIssueWorkItem
-  )
-  const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map((item) =>
-    mapPullRequestWorkItem(item, null)
-  )
+  const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[])
+    .filter((item) => !('pull_request' in item))
+    .map(mapIssueWorkItem)
+  const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[])
+    .slice(prRequest.offset, prRequest.offset + limit)
+    .map((item) => mapPullRequestWorkItem(item, null))
 
   return {
-    items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+    items: sortWorkItemsByNumber([...issues, ...prs]).slice(0, limit)
   }
 }
 
@@ -1276,7 +1255,7 @@ async function listQueriedWorkItems(
   prOwnerRepo: OwnerRepo | null,
   query: ParsedTaskQuery,
   limit: number,
-  before?: string,
+  page?: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
@@ -1291,6 +1270,9 @@ async function listQueriedWorkItems(
     query.reviewedBy !== null
   const issueScope = query.scope !== 'pr' && !hasPrOnlyFilter
   const prScope = query.scope !== 'issue'
+  let successfulRequestCount = 0
+  let nonAvailabilityFailureCount = 0
+  let availabilityError: unknown
 
   // Why: run the issue and PR fetches in parallel but surface the
   // issue-side error separately so the IPC envelope can carry it up. PR-side
@@ -1302,22 +1284,29 @@ async function listQueriedWorkItems(
     if (requiresExplicitRepo && !issueOwnerRepo) {
       return { items: [] }
     }
-    const args = buildWorkItemListArgs({
+    const request = buildWorkItemListRequest({
       kind: 'issue',
       ownerRepo: issueOwnerRepo,
       limit,
       query,
-      before
+      page: page ?? 1
     })
     try {
       const { stdout } = issueOwnerRepo
-        ? await ghExecFileAsync(args, ghOptions)
-        : await ghCwdResolvedExec(repoContext, args, ghOptions)
-      return {
-        items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
-      }
+        ? await ghExecFileAsync(request.args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
+      const items = (JSON.parse(stdout) as Record<string, unknown>[])
+        .filter((item) => !('pull_request' in item))
+        .map(mapIssueWorkItem)
+      successfulRequestCount += 1
+      return { items }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
+      }
       return { items: [], issuesError: classifyListIssuesError(stderr) }
     }
   })()
@@ -1329,34 +1318,47 @@ async function listQueriedWorkItems(
     if (requiresExplicitRepo && !prOwnerRepo) {
       return []
     }
-    const args = buildWorkItemListArgs({
+    const request = buildWorkItemListRequest({
       kind: 'pr',
       ownerRepo: prOwnerRepo,
       limit,
       query,
-      before
+      page: page ?? 1
     })
     try {
       const { stdout } = prOwnerRepo
-        ? await ghExecFileAsync(args, ghOptions)
-        : await ghCwdResolvedExec(repoContext, args, ghOptions)
-      const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
-        mapPullRequestWorkItem(item, prOwnerRepo)
-      )
+        ? await ghExecFileAsync(request.args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
+      const mapped = (JSON.parse(stdout) as Record<string, unknown>[])
+        .slice(request.offset, request.offset + limit)
+        .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       const hydrated = await hydrateWorkItemRepositoryMergeMetadata(mapped, prOwnerRepo, ghOptions)
+      successfulRequestCount += 1
       if (query.state === 'closed') {
         return hydrated.filter((item) => item.state !== 'merged')
       }
       return hydrated
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
+      const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
+      }
       return []
     }
   })()
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
+  if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
+    // Why: combined queries normally preserve either successful half. When
+    // every attempted half hit the same availability class, propagate one of
+    // those existing failures so Tasks can distinguish an outage from no data.
+    throw availabilityError
+  }
   return {
-    items: sortWorkItemsByUpdatedAt([...issueResult.items, ...prItems]).slice(0, limit),
+    items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
     issuesError: issueResult.issuesError
   }
 }
@@ -1365,13 +1367,14 @@ export async function listWorkItems(
   repoPath: string,
   limit = 24,
   query?: string,
-  before?: string,
+  page?: number,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
   const trimmedQuery = query?.trim() ?? ''
+  const requestedPage = normalizeWorkItemPage(page)
   if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
     return {
       items: [],
@@ -1401,6 +1404,7 @@ export async function listWorkItems(
           issueOwnerRepo,
           prOwnerRepo,
           limit,
+          requestedPage,
           connectionId,
           noCache,
           localGitOptions
@@ -1411,7 +1415,7 @@ export async function listWorkItems(
           prOwnerRepo,
           parseTaskQuery(trimmedQuery),
           limit,
-          before,
+          requestedPage,
           connectionId,
           localGitOptions
         )
@@ -1480,7 +1484,7 @@ function buildSearchQueryString(
 }
 
 function quoteGitHubSearchValue(value: string): string {
-  return /\s/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value
+  return /[\s"]/.test(value) ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : value
 }
 
 async function countWorkItemsForQuery(
@@ -3214,6 +3218,7 @@ export async function getPRForBranchOutcome(
         ...(confirmedContainedHeadOid ? { confirmedContainedHeadOid } : {}),
         ...(headDivergedFromMergedPRAtOid ? { headDivergedFromMergedPRAtOid } : {}),
         ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
+        ...(data.headRefName ? { headRefName: data.headRefName } : {}),
         prRepo: dataRepo ?? undefined,
         headRepo: dataHeadRepo ?? undefined,
         conflictSummary

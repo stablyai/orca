@@ -14,6 +14,8 @@ import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -96,6 +98,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { AppState } from '../store/types'
@@ -1212,6 +1215,18 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: a tray/menu-bar "Settings…" click can fire before this listener
+    // attaches on a fresh window; consume any intent queued for us. Guarded
+    // with `?.` so a stale preload bundle doesn't crash the listener set.
+    void window.api.ui
+      .consumePendingOpenSettings?.()
+      .then((open) => {
+        if (open) {
+          useAppStore.getState().openSettingsPage()
+        }
+      })
+      .catch(() => {})
+
     unsubs.push(
       window.api.ui.onOpenSetupGuide?.(() => {
         useAppStore.getState().openModal('setup-guide', { telemetrySource: 'help_menu' })
@@ -1666,6 +1681,32 @@ export function useIpcEvents(): void {
       )
     )
 
+    // Why: background-mounting a mobile-subscribed tab attaches a PTY that this
+    // renderer never mounted, without navigating the desktop (STA-1840).
+    unsubs.push(
+      window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
+        if (!worktreeId) {
+          return
+        }
+        // Why: synthetic pty handles need persisted-tab resolution, but a miss
+        // must not mount every saved terminal in a large hidden worktree.
+        const mount = planMobileTerminalTabMount(
+          useAppStore.getState(),
+          {
+            worktreeId,
+            ...(tabId ? { tabId } : {}),
+            ...(ptyId ? { ptyId } : {})
+          },
+          {
+            isTabMounted: hasRegisteredRuntimeTerminalTab
+          }
+        )
+        if (mount) {
+          requestBackgroundTerminalWorktreeMount(mount)
+        }
+      })
+    )
+
     // Why: CLI-driven terminal creation sends a request and waits for the
     // tabId reply so it can resolve a handle the caller can use immediately.
     // This mirrors the browser's onRequestTabCreate/replyTabCreate pattern.
@@ -1981,6 +2022,40 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: during an in-place renderer reload, an older preload can briefly
+    // remain installed. Keep the new request listener additive at that seam.
+    if (window.api.ui.onTerminalTabCloseRequest) {
+      unsubs.push(
+        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
+          let responded = false
+          const respond = (error?: string): void => {
+            if (responded) {
+              return
+            }
+            responded = true
+            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+          }
+          closeTerminalTab(tabId, {
+            rejectPinned: true,
+            onCancel: () => respond('terminal_tab_pinned'),
+            onClosed: () => {
+              void (async () => {
+                const state = useAppStore.getState()
+                await persistWorkspaceSessionByHost(
+                  window.api.session,
+                  buildWorkspaceSessionPayload(state),
+                  state
+                )
+                respond()
+              })().catch((error: unknown) => {
+                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+              })
+            }
+          })
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onSleepWorktree(({ worktreeId }) => {
         void runSleepWorktree(worktreeId)
@@ -2032,6 +2107,18 @@ export function useIpcEvents(): void {
         })
       })
     )
+
+    const unsubscribeCertificateFailure = window.api.browser.onCertificateFailureChanged?.(
+      ({ browserPageId, failure }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        useAppStore.getState().setBrowserPageCertificateFailure(browserPageId, failure)
+      }
+    )
+    if (unsubscribeCertificateFailure) {
+      unsubs.push(unsubscribeCertificateFailure)
+    }
 
     // Why: agent-browser drives navigation via CDP, bypassing Electron's webview
     // event system. The renderer's did-navigate listener never fires for those
@@ -2100,10 +2187,8 @@ export function useIpcEvents(): void {
         if (getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
           return
         }
-        // Why: the guest process can request "open this link in Orca", but it
-        // does not own Orca's worktree/tab model. Resolve the source page's
-        // worktree and create a new outer browser tab so the link opens as a
-        // separate tab in the outer Orca tab bar.
+        // Why: only the renderer owns Orca's tab model. Creating the tab with
+        // the default activation behavior brings the clicked link forward.
         store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
       })
     )
@@ -3075,6 +3160,32 @@ export function useIpcEvents(): void {
       ) {
         return 'dropped'
       }
+      const existingStatus = store.agentStatusByPaneKey[paneKey]
+      if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
+        // Why: the store rejects out-of-order status rows; keep metadata-only
+        // session identity on the same accepted event boundary.
+        return 'dropped'
+      }
+      if (data.providerSessionOnly) {
+        if (!data.providerSession || data.agentType !== 'pi') {
+          return 'dropped'
+        }
+        store.recordAgentProviderSession(
+          paneKey,
+          'pi',
+          data.providerSession,
+          { updatedAt: data.receivedAt },
+          {
+            tabId: ownerTabId,
+            worktreeId: data.worktreeId ?? owningWorktreeId,
+            // Why: persist the WSL-normalized ownership id, not the raw relay
+            // provenance; a `wsl:*` connectionId would misroute later resumes.
+            ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
+          },
+          data.launchToken ? { launchToken: data.launchToken } : undefined
+        )
+        return 'applied'
+      }
       const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
       const statusPayload = data.orchestration
         ? { ...resolvedPayload, orchestration: data.orchestration }
@@ -3082,12 +3193,6 @@ export function useIpcEvents(): void {
       const statusPayloadWithTurnBoundary = data.promptInteractionKey
         ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
         : statusPayload
-      const existingStatus = store.agentStatusByPaneKey[paneKey]
-      if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
-        // Why: the store rejects out-of-order status rows; keep notification and
-        // terminal lifecycle effects on the same accepted event boundary.
-        return 'dropped'
-      }
       const identity = resolveAgentStatusIdentity({
         existing: existingStatus
           ? {

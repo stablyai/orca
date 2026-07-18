@@ -5,7 +5,11 @@ import {
   flushTerminalOutput,
   requestTerminalBacklogRecovery
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  enforceTerminalCurrentScrollIntent,
+  syncTerminalScrollIntentFromViewport
+} from '@/lib/pane-manager/terminal-scroll-intent'
+import { resetTerminalLinkifierHoverState } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { fitAndFocusPanes, fitPanes, focusActivePane } from './pane-helpers'
 import { scheduleTabRevealWebglAtlasRecovery } from './terminal-webgl-atlas-recovery'
 
@@ -51,6 +55,13 @@ export function resumeTerminalVisibility({
   captureViewportPositions,
   withSuppressedScrollTracking
 }: ResumeTerminalVisibilityArgs): void {
+  // Why: hiding the surface fired mouseleave, which cleared xterm's current
+  // link but left its hover cell cache; without this reset a link stays dead
+  // until a scroll when the pointer returns to the same cell on reveal.
+  for (const pane of manager.getPanes()) {
+    resetTerminalLinkifierHoverState(pane.terminal)
+  }
+  syncTerminalViewportIntents(manager)
   // Why: WebGL resume can disturb xterm's viewport bookkeeping before the
   // post-resume fit runs. Capture numeric viewport positions first; the
   // restore path avoids content matching so duplicate agent log lines do
@@ -133,6 +144,7 @@ export function recoverVisibleTerminalWindowWake({
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: WINDOW_WAKE_FLUSH_CHARS })
   }
+  syncTerminalViewportIntents(manager)
   manager.resumeRendering()
   if (isActive) {
     fitAndFocusPanes(manager)
@@ -170,6 +182,7 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
     requestTerminalBacklogRecovery(pane.terminal)
     flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
   }
+  syncTerminalViewportIntents(manager)
   // Resume WebGL immediately so the terminal shows its last-known state
   // on the first painted frame. macOS context creation is ~5 ms; on
   // Windows (ANGLE -> D3D11) it can be 100-500 ms but a deferred resume
@@ -188,5 +201,13 @@ function resumeTerminalVisibilityHeavy(manager: PaneManager, isActive: boolean):
 function enforceTerminalViewportIntents(manager: PaneManager): void {
   for (const pane of manager.getPanes()) {
     enforceTerminalCurrentScrollIntent(pane.terminal)
+  }
+}
+
+function syncTerminalViewportIntents(manager: PaneManager): void {
+  for (const pane of manager.getPanes()) {
+    // Why: native scrollback trimming moves a pinned viewport content-stably.
+    // Capture that live position before resume/fit can disturb it.
+    syncTerminalScrollIntentFromViewport(pane.terminal)
   }
 }

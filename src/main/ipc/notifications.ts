@@ -436,8 +436,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       // hold back the dot. It rides the notification dispatch, so it follows the
       // renderer's per-source decision to notify: bells always reach here, while
       // an agent completion is suppressed upstream when its notification is
-      // disabled. Tray exists only on Windows, so setTrayAttention no-ops
-      // elsewhere.
+      // disabled. The status item exists on Windows and macOS, so
+      // setTrayAttention lights its attention dot there and no-ops on Linux.
       if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
         const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
         if (!isMainWindowVisible(activeWindow)) {

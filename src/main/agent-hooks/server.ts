@@ -22,6 +22,7 @@ import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
+  clearClaudeAnsweredQuestionWait,
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
@@ -57,9 +58,17 @@ import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
 } from '../../shared/agent-interrupt-intent'
+import {
+  isAskUserQuestionTool,
+  type AgentQuestionAnsweredInferenceRequest
+} from '../../shared/agent-question-answered-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
-import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import {
+  getAgentResumeArgv,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 
 export type { AgentHookSource }
@@ -174,6 +183,33 @@ export function isValidPaneKey(value: unknown): value is string {
   )
 }
 
+function dropHydratedIdleClaudeSubagents(
+  payload: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  if (
+    payload.agentType !== 'claude' ||
+    !payload.subagents?.some((subagent) => subagent.state === 'idle')
+  ) {
+    return payload
+  }
+  const workingSubagents = payload.subagents.filter((subagent) => subagent.state === 'working')
+  // Why: older builds persisted finished Claude children as idle rows. Prune
+  // them from the replay payload itself so restart cannot resurrect the pile.
+  return {
+    ...payload,
+    subagents: workingSubagents.length > 0 ? workingSubagents : undefined
+  }
+}
+
+// Why: the sole gate deciding whether a providerSessionOnly row is trustworthy
+// enough to keep. Shared so the hydrate and relay-ingest paths can't drift.
+function isValidPiProviderSessionOnly(
+  providerSession: AgentProviderSessionMetadata | undefined,
+  agentType: AgentType | undefined
+): boolean {
+  return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
+}
+
 function sanitizeHydratedEntry(
   paneKey: string,
   rawEntry: unknown
@@ -230,6 +266,11 @@ function sanitizeHydratedEntry(
   if (!payload) {
     return null
   }
+  const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
+  const providerSessionOnly = record.providerSessionOnly === true
+  if (providerSessionOnly && !isValidPiProviderSessionOnly(providerSession, payload.agentType)) {
+    return null
+  }
   return {
     paneKey,
     launchToken: typeof record.launchToken === 'string' ? record.launchToken : undefined,
@@ -241,7 +282,8 @@ function sanitizeHydratedEntry(
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
-    providerSession: normalizeAgentProviderSession(record.providerSession) ?? undefined,
+    providerSession,
+    providerSessionOnly: providerSessionOnly ? true : undefined,
     payload,
     receivedAt,
     stateStartedAt
@@ -258,6 +300,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+    ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...entry.payload
   }
@@ -335,7 +378,12 @@ function shouldKeepClaudePermissionVisible(
     return false
   }
   // Why: only real permission requests stay sticky across concurrent subagent
-  // activity; interactive questions clear on the next working hook.
+  // activity; interactive questions clear on the next working hook. Newer
+  // Claude reports the AskUserQuestion wait AS a PermissionRequest, so the
+  // tool name — not the event name — decides which rule applies.
+  if (isAskUserQuestionTool(previous.payload.toolName)) {
+    return false
+  }
   return true
 }
 
@@ -540,6 +588,9 @@ export class AgentHookServer {
     if (!existing) {
       return false
     }
+    if (existing.providerSessionOnly) {
+      return false
+    }
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
     // Why: Droid's Ctrl+C does not interrupt the current turn; repeated Ctrl+C
@@ -608,14 +659,81 @@ export class AgentHookServer {
     return true
   }
 
-  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
-    return Array.from(this.state.lastStatusByPaneKey.entries(), ([paneKey, entry]) => {
-      const enriched = entry as EnrichedAgentHookEventPayload
-      return {
-        state: enriched.payload.state,
-        receivedAt: enriched.receivedAt,
-        observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+  /** Guarded fallback for a hook Claude never sends: answering AskUserQuestion
+   *  produces no event, so the amber wait would otherwise linger until the
+   *  agent's next tool or turn end. The renderer reports the submit keystroke;
+   *  this re-validates its baseline against the cached status (a racing real
+   *  hook wins) and synthesizes the post-answer state. */
+  inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
+    if (!isValidPaneKey(request.paneKey)) {
+      return false
+    }
+    const existing = this.state.lastStatusByPaneKey.get(request.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!existing) {
+      return false
+    }
+    const payload = existing.payload
+    // Why: only Claude's interactive question may clear on typed input. The
+    // tool name is the discriminator, not the hook event — Claude versions
+    // differ on whether the AskUserQuestion wait arrives as PreToolUse or
+    // PermissionRequest. Real permission waits (other tools) stay sticky until
+    // the approved tool resumes — a denied or ignored permission must keep
+    // demanding attention even though approving is also a keystroke.
+    if (
+      payload.agentType !== 'claude' ||
+      payload.state !== 'waiting' ||
+      !isAskUserQuestionTool(payload.toolName)
+    ) {
+      return false
+    }
+    if (
+      payload.agentType !== request.baselineAgentType ||
+      payload.prompt !== request.baselinePrompt ||
+      existing.receivedAt !== request.baselineUpdatedAt ||
+      existing.stateStartedAt !== request.baselineStateStartedAt ||
+      Date.now() - existing.receivedAt > AGENT_STATUS_STALE_AFTER_MS
+    ) {
+      return false
+    }
+    // Why: sync the listener's lead-turn record too — a later child lifecycle
+    // event would otherwise re-emit the stale waiting state and resurrect the
+    // dismissed question card.
+    const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
+    const inferred = this.applyNormalizedStatus({
+      paneKey: existing.paneKey,
+      tabId: existing.tabId,
+      worktreeId: existing.worktreeId,
+      connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
+      payload: {
+        state: restored.state,
+        prompt: payload.prompt,
+        agentType: payload.agentType,
+        ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
+        ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
+    })
+    console.debug('[agent-hooks] inferred answered question status', {
+      paneKey: inferred.paneKey,
+      state: inferred.payload.state
+    })
+    return true
+  }
+
+  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
+    return Array.from(this.state.lastStatusByPaneKey.entries()).flatMap(([paneKey, entry]) => {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      return enriched.providerSessionOnly
+        ? []
+        : [
+            {
+              state: enriched.payload.state,
+              receivedAt: enriched.receivedAt,
+              observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+            }
+          ]
     })
   }
 
@@ -779,6 +897,18 @@ export class AgentHookServer {
       | EnrichedAgentHookEventPayload
       | undefined
     const now = Date.now()
+    if (payload.providerSessionOnly) {
+      // Why: Pi session_start must replace stale turn state and survive snapshot
+      // replay, but it must not emit prompt telemetry or a fabricated status.
+      const enriched = this.attachStatusTiming(payload, now)
+      this.clearAssistantMessageRetry(enriched.paneKey)
+      this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
+      this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+      this.onAgentStatus?.(enriched)
+      return enriched
+    }
     const identity = resolveAgentStatusIdentity({
       existing: previous
         ? {
@@ -1283,6 +1413,7 @@ export class AgentHookServer {
       toolAgentId?: string
       toolAgentType?: string
       providerSession?: unknown
+      providerSessionOnly?: unknown
       isReplay?: boolean
       payload: unknown
     },
@@ -1377,6 +1508,12 @@ export class AgentHookServer {
     if (!normalizedPayload) {
       return
     }
+    if (
+      envelope.providerSessionOnly === true &&
+      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
+    ) {
+      return
+    }
     // Why: run the same warn-once diagnostics the HTTP path runs (cross-build
     // version mismatch, dev-vs-prod env mismatch). Use `this.env` as the
     // expected env so the messages match what the local server produces.
@@ -1398,6 +1535,7 @@ export class AgentHookServer {
       toolAgentId,
       toolAgentType,
       providerSession,
+      providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       payload: normalizedPayload
     }
@@ -1758,6 +1896,7 @@ export class AgentHookServer {
     }
     let hydrated = 0
     let dropped = 0
+    let prunedLegacyClaudeSubagents = 0
     // Why: bound disk growth — drop anything older than HYDRATE_MAX_AGE_MS so
     // entries from worktrees archived weeks ago do not pile up forever. Use
     // Date.now() once to keep the cutoff consistent across all entries this
@@ -1771,11 +1910,15 @@ export class AgentHookServer {
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
+        const hydratedPayload = dropHydratedIdleClaudeSubagents(entry.payload)
+        if (hydratedPayload !== entry.payload) {
+          prunedLegacyClaudeSubagents +=
+            (entry.payload.subagents?.length ?? 0) - (hydratedPayload.subagents?.length ?? 0)
+          entry.payload = hydratedPayload
+        }
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
-        // Why: the in-memory subagent roster died with the previous process.
-        // Reseed it from the persisted snapshot so the next teammate-bearing
-        // Stop (whose task ids never match lifecycle ids) doesn't silently
-        // drop the replayed child rows.
+        // Why: preserve only working children across restart. Live activity
+        // confirms them; a later complete inventory may reap stale seeds.
         if (entry.payload.subagents) {
           seedClaudeSubagentRosterFromSnapshots(
             this.state,
@@ -1793,18 +1936,16 @@ export class AgentHookServer {
         `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
       )
     }
-    if (hydrated > 0 && dropped === 0) {
+    if (dropped > 0 || prunedLegacyClaudeSubagents > 0) {
+      // Why: persist load-time pruning once so legacy idle rows do not consume
+      // parse/filter work again on every launch.
+      this.runStatusPersist()
+    } else if (hydrated > 0) {
       // Why: prime from the raw on-disk bytes (not a re-serialization) so the
       // dedup is robust against future shape drift in serializeStatusFile.
       // Only prime when hydration was lossless — if entries were dropped
       // during sanitize, the in-memory map diverges from the on-disk bytes.
       this.lastWrittenJson = raw
-    } else if (dropped > 0) {
-      // Why: clean the stale on-disk file now so a user who has not run an
-      // agent in 8+ days does not re-drop the same entries on every cold
-      // boot. Synchronous variant is safe at start time and avoids
-      // unref'd-timer-during-quit edge cases.
-      this.runStatusPersist()
     }
   }
 

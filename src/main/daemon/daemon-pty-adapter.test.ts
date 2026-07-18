@@ -50,7 +50,7 @@ function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
     pause: vi.fn<() => void>(),
     resume: vi.fn<() => void>(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -604,7 +604,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('listProcesses', () => {
     it('returns active sessions', async () => {
-      await adapter.spawn({ cols: 80, rows: 24 })
+      await adapter.spawn({ cols: 80, rows: 24, cwd: '/repo/owned-before-osc7' })
       await adapter.spawn({ cols: 80, rows: 24 })
 
       const procs = await adapter.listProcesses()
@@ -612,6 +612,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0]).toHaveProperty('id')
       expect(procs[0]).toHaveProperty('cwd')
       expect(procs[0]).toHaveProperty('title')
+      expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
     })
   })
 
@@ -1295,6 +1296,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Server running')
       expect(result.coldRestore!.cwd).toBe('/projects/myapp')
+      expect(result.coldRestore).toMatchObject({ cols: 120, rows: 40 })
       expect(lastSpawnOpts).toMatchObject({
         sessionId,
         cwd: '/projects/myapp',

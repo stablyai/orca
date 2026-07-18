@@ -12,6 +12,7 @@ import type {
   GitHubWorkItem,
   JiraIssue,
   LinearIssue,
+  ManualRepoOrderEntry,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
@@ -30,6 +31,10 @@ import type {
   VisibleWorkspaceHostIds,
   TopLevelView
 } from '../../../../shared/types'
+import {
+  applyManualRepoOrder,
+  normalizeManualRepoOrder
+} from '../../../../shared/manual-repo-order'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
@@ -716,6 +721,7 @@ export type UISlice = {
       title: string
       url: string
       linearIdentifier?: string
+      linearBranchName?: string
     } | null
     /** Why: starting from a task must preserve where provider data came from
      *  separately from the host selected to run the workspace. */
@@ -889,6 +895,7 @@ export type UISlice = {
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
   workspaceHostOrder: WorkspaceHostOrder
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
+  manualRepoOrder: ManualRepoOrderEntry[]
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
   hideAutomationGeneratedWorkspaces: boolean
@@ -2060,6 +2067,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceHostOrder })
     window.api.ui.set({ workspaceHostOrder }).catch(console.error)
   },
+  manualRepoOrder: [],
 
   hideDefaultBranchWorkspace: false,
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
@@ -2372,6 +2380,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   hydratePersistedUI: (ui, source = 'sync') =>
     set((s) => {
+      const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
+      const orderedRepos = applyManualRepoOrder(s.repos, manualRepoOrder)
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
       const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
       // Why: persisted UI from pre-rename builds used sidekick* keys. Read
@@ -2474,6 +2484,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
+        manualRepoOrder,
+        // Why: UI state can arrive after a catalog or from another client; apply
+        // the desktop-owned overlay immediately instead of waiting for a refetch.
+        repos: orderedRepos,
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
