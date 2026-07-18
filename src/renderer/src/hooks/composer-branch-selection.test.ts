@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getComposerRepoWorktreeBranches,
   isBranchCheckedOutInWorktrees,
   resolveComposerBranchNameOverrideForCreate,
   resolveComposerBranchReuse,
@@ -206,6 +207,20 @@ describe('isBranchCheckedOutInWorktrees', () => {
     expect(isBranchCheckedOutInWorktrees('feature-x', ['feature-x'])).toBe(true)
     expect(isBranchCheckedOutInWorktrees('feature-x', ['refs/heads/main', ''])).toBe(false)
     expect(isBranchCheckedOutInWorktrees('feature-x', [])).toBe(false)
+  })
+})
+
+describe('getComposerRepoWorktreeBranches', () => {
+  it('supplies only the selected repo branches to reuse eligibility', () => {
+    expect(
+      getComposerRepoWorktreeBranches(
+        [
+          { repoId: 'repo-a', branch: 'feature/a' },
+          { repoId: 'repo-b', branch: 'feature/b' }
+        ],
+        'repo-a'
+      )
+    ).toEqual(['feature/a'])
   })
 })
 

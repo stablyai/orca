@@ -109,4 +109,67 @@ describe('registerPetHandlers', () => {
       readFile(join(userDataDir, 'sidekicks', 'custom', result.id, 'spritesheet.png'))
     ).resolves.toEqual(sheetBytes)
   })
+
+  function webpVp8x(width: number, height: number): Buffer {
+    const u24 = (value: number): Buffer =>
+      Buffer.from([value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff])
+    const payload = Buffer.concat([Buffer.from([0, 0, 0, 0]), u24(width - 1), u24(height - 1)])
+    const size = Buffer.alloc(4)
+    size.writeUInt32LE(payload.byteLength, 0)
+    const riffSize = Buffer.alloc(4)
+    riffSize.writeUInt32LE(4 + 8 + payload.byteLength, 0)
+    return Buffer.concat([
+      Buffer.from('RIFF'),
+      riffSize,
+      Buffer.from('WEBP'),
+      Buffer.from('VP8X'),
+      size,
+      payload
+    ])
+  }
+
+  async function writeSpriteBundle(
+    animations: Record<string, { row: number; frames: number; frameDurationsMs?: number[] }>
+  ): Promise<string> {
+    const bundleDir = join(tempDir, 'durations.codex-pet')
+    await mkdir(bundleDir, { recursive: true })
+    await writeFile(
+      join(bundleDir, 'pet.json'),
+      JSON.stringify({
+        id: 'durations',
+        displayName: 'Durations',
+        spritesheetPath: 'sheet.webp',
+        frame: { width: 2, height: 2 },
+        animations
+      })
+    )
+    await writeFile(join(bundleDir, 'sheet.webp'), webpVp8x(4, 2))
+    return bundleDir
+  }
+
+  it('imports a bundle whose animations declare per-frame durations', async () => {
+    const bundleDir = await writeSpriteBundle({
+      idle: { row: 0, frames: 2, frameDurationsMs: [1680, 1920] }
+    })
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
+
+    const result = (await getHandler('pet:importPetBundle')({ sender: {} })) as CustomPet
+
+    expect(result.sprite?.animations?.idle).toEqual({
+      row: 0,
+      frames: 2,
+      frameDurationsMs: [1680, 1920]
+    })
+  })
+
+  it('rejects a bundle whose frame durations do not match the frame count', async () => {
+    const bundleDir = await writeSpriteBundle({
+      idle: { row: 0, frames: 2, frameDurationsMs: [1680] }
+    })
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
+
+    await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(
+      'declares 1 frame durations but 2 frames'
+    )
+  })
 })

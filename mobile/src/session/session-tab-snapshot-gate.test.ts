@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   acceptSessionSnapshot,
   applyClosedTabTombstones,
+  confirmsMirroredTabSelection,
   type AppliedSnapshotMarker
 } from './session-tab-snapshot-gate'
 
@@ -47,6 +48,18 @@ describe('acceptSessionSnapshot', () => {
     // A strictly older snapshot from the same (null) publisher is rejected.
     expect(acceptSessionSnapshot({ snapshotVersion: 4 }, marker)).toBe(false)
     expect(marker).toEqual({ epoch: null, version: 5 })
+  })
+})
+
+describe('confirmsMirroredTabSelection', () => {
+  it('does not treat phone-local persistence as desktop focus confirmation', () => {
+    expect(confirmsMirroredTabSelection('mobile-local:abc')).toBe(false)
+  })
+
+  it('accepts renderer, headless, and legacy publications as confirmation', () => {
+    expect(confirmsMirroredTabSelection('renderer:abc')).toBe(true)
+    expect(confirmsMirroredTabSelection('headless:abc')).toBe(true)
+    expect(confirmsMirroredTabSelection()).toBe(true)
   })
 })
 

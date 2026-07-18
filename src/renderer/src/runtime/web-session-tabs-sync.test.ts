@@ -64,6 +64,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     activeWorktreeId: WT,
     agentStatusByPaneKey: {},
     agentStatusEpoch: 0,
+    browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},
     browserTabsByWorktree: {},
     groupsByWorktree: {},
@@ -2359,6 +2360,21 @@ describe('applyWebSessionTabsSnapshot', () => {
             loading: false,
             canGoBack: true,
             canGoForward: false,
+            loadError: {
+              code: -202,
+              description: 'ERR_CERT_AUTHORITY_INVALID',
+              validatedUrl: 'https://localhost:3443/'
+            },
+            certificateFailure: {
+              challengeId: 'challenge-1',
+              browserPageId: 'host-browser-page',
+              errorCode: -202,
+              error: 'ERR_CERT_AUTHORITY_INVALID',
+              origin: 'https://localhost:3443',
+              displayHost: 'localhost:3443',
+              canProceed: true,
+              observedAt: 123
+            },
             color: '#3b82f6',
             isPinned: true,
             isActive: true
@@ -2390,12 +2406,27 @@ describe('applyWebSessionTabsSnapshot', () => {
         worktreeId: WT,
         url: 'https://example.com/',
         title: 'Example Domain',
-        loading: false
+        loading: false,
+        loadError: {
+          code: -202,
+          description: 'ERR_CERT_AUTHORITY_INVALID',
+          validatedUrl: 'https://localhost:3443/'
+        }
       }
     ])
     expect(patch.remoteBrowserPageHandlesByPageId?.['host-browser-page']).toEqual({
       environmentId: ENV,
       remotePageId: 'host-browser-page'
+    })
+    expect(patch.browserCertificateFailuresByPageId?.['host-browser-page']).toEqual({
+      challengeId: 'challenge-1',
+      browserPageId: 'host-browser-page',
+      errorCode: -202,
+      error: 'ERR_CERT_AUTHORITY_INVALID',
+      origin: 'https://localhost:3443',
+      displayHost: 'localhost:3443',
+      canProceed: true,
+      observedAt: 123
     })
     expect(patch.unifiedTabsByWorktree?.[WT]).toEqual(
       expect.arrayContaining([
@@ -2888,6 +2919,18 @@ describe('applyWebSessionTabsSnapshot', () => {
         remoteBrowserPageHandlesByPageId: {
           [page.id]: { environmentId: ENV, remotePageId: 'host-browser-page' }
         },
+        browserCertificateFailuresByPageId: {
+          [page.id]: {
+            challengeId: 'stale-challenge',
+            browserPageId: 'host-browser-page',
+            errorCode: -202,
+            error: 'ERR_CERT_AUTHORITY_INVALID',
+            origin: 'https://localhost:3443',
+            displayHost: 'localhost:3443',
+            canProceed: true,
+            observedAt: 100
+          }
+        },
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: existingTabs }
       }),
@@ -2945,6 +2988,9 @@ describe('applyWebSessionTabsSnapshot', () => {
         })
       ])
     )
+    // Why: older runtimes omit this transient field. Omission must clear an
+    // earlier challenge instead of leaving an unsafe action wired to stale RPC input.
+    expect(patch.browserCertificateFailuresByPageId).toEqual({})
   })
 
   it('uses local markdown preview file ids while preserving the host unified tab id', () => {

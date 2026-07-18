@@ -112,7 +112,9 @@ const PetManifestSchema = z
         z.string().min(1).max(64),
         z.object({
           row: z.number().int().min(0).max(256),
-          frames: z.number().int().positive().max(512)
+          frames: z.number().int().positive().max(512),
+          // Why: cap each hold at 60s so a bad manifest can't freeze the overlay.
+          frameDurationsMs: z.array(z.number().positive().max(60_000)).max(512).optional()
         })
       )
       .optional()
@@ -392,6 +394,11 @@ export function registerPetHandlers(): void {
           if (anim.frames > columns) {
             throw new Error(
               `Animation "${name}" has ${anim.frames} frames but sheet only has ${columns} columns.`
+            )
+          }
+          if (anim.frameDurationsMs && anim.frameDurationsMs.length !== anim.frames) {
+            throw new Error(
+              `Animation "${name}" declares ${anim.frameDurationsMs.length} frame durations but ${anim.frames} frames.`
             )
           }
         }

@@ -12,6 +12,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 const REQUEST_TIMEOUT_MS = 5000
@@ -97,6 +98,7 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      await cancelUnreadResponseBody(response)
       return null
     }
     return (await response.json()) as T

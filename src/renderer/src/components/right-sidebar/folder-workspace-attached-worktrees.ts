@@ -5,6 +5,7 @@ import type {
   WorktreeLineage,
   WorkspaceLineage
 } from '../../../../shared/types'
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null
@@ -195,6 +196,6 @@ function isCurrentLineagePair(
 function sortWorktreesByRecentActivity(left: Worktree, right: Worktree): number {
   return (
     getWorktreeActivityTime(right) - getWorktreeActivityTime(left) ||
-    left.displayName.localeCompare(right.displayName)
+    compareWorktreeDisplayName(left, right)
   )
 }

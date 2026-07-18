@@ -45,6 +45,24 @@ export function removeRemoteTreeCommand(host: RemoteHostPlatform, remotePath: st
   )
 }
 
+export function moveRemoteTreeCommand(
+  host: RemoteHostPlatform,
+  sourcePath: string,
+  destinationPath: string
+): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `mv ${shellEscape(sourcePath)} ${shellEscape(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
+  }
+  return powerShellCommand(
+    [
+      'try {',
+      `Move-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Destination ${powerShellLiteral(destinationPath)} -ErrorAction Stop`,
+      "'MOVED'",
+      `} catch { 'BUSY' }`
+    ].join('; ')
+  )
+}
+
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
@@ -77,36 +95,6 @@ export function probeRelayInstalledCommand(
       `$watcher = ${powerShellLiteral(relayWatcherJs)}`,
       `$complete = ${powerShellLiteral(installComplete)}`,
       "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
-    ].join('; ')
-  )
-}
-
-export function acquireInstallLockParentCommand(
-  host: RemoteHostPlatform,
-  remoteRelayDir: string
-): string {
-  return makeRemoteDirectoryCommand(host, remoteRelayDir)
-}
-
-export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
-  }
-  // New-Item has no -LiteralPath parameter; using it breaks stock Windows PowerShell.
-  return powerShellCommand(
-    `$ErrorActionPreference = "Stop"; try { $null = New-Item -ItemType Directory -Path ${powerShellLiteral(lockDir)}; 'OK' } catch { 'BUSY' }`
-  )
-}
-
-export function lockMtimeEpochCommand(host: RemoteHostPlatform, lockDir: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `stat -c %Y ${shellEscape(lockDir)} 2>/dev/null || stat -f %m ${shellEscape(lockDir)} 2>/dev/null || echo`
-  }
-  return powerShellCommand(
-    [
-      `$item = Get-Item -LiteralPath ${powerShellLiteral(lockDir)} -ErrorAction Stop`,
-      '$dto = [DateTimeOffset]$item.LastWriteTimeUtc',
-      'Write-Output $dto.ToUnixTimeSeconds()'
     ].join('; ')
   )
 }
@@ -155,9 +143,9 @@ export function relayLivenessProbeCommand(
 ): string {
   if (!isWindowsRemoteHost(host)) {
     return (
-      `for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
-      `[ -S "$f" ] && echo ALIVE && break; ` +
-      'done; true'
+      `state=DEAD; for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
+      `[ -S "$f" ] && state=ALIVE && break; ` +
+      'done; echo "$state"'
     )
   }
   if (!windowsOptions) {

@@ -467,7 +467,10 @@ async function main(): Promise<void> {
 
   const ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
   const fsHandler = new FsHandler(dispatcher, context)
-  const gitHandler = new GitHandler(dispatcher, context)
+  const watchRegistry = fsHandler.getWatchRegistry()
+  ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
+  watchRegistry.setWorktreePtyTeardown((rootPath) => ptyHandler.shutdownForWorktreePath(rootPath))
+  const gitHandler = new GitHandler(dispatcher, context, watchRegistry)
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
@@ -1014,25 +1017,41 @@ async function main(): Promise<void> {
     })
   }
 
+  let shutdownInFlight = false
   function shutdown(): void {
+    if (shutdownInFlight) {
+      return
+    }
+    shutdownInFlight = true
     relayLogLine(
       `[relay] Shutdown: ptys=${ptyHandler.activePtyCount}, clients=${socketClients.size}, ownsSocket=${ownsSocketPath}`
     )
     graceDeadlineAt = null
     graceReason = null
-    dispatcher.dispose()
-    ptyHandler.dispose()
-    fsHandler.dispose()
-    gitHandler.dispose()
-    hookServer.stop()
-    // Why: Node's Unix server.close() can unlink the listen path. If the path
-    // was externally removed and rebound by a newer relay, closing this older
-    // server would strand the newer daemon behind a missing socket.
-    if (socketServer && ownsCurrentSocketPath()) {
-      socketServer.close()
-    }
-    cleanupOwnedSocket()
-    process.exit(0)
+    void ptyHandler
+      .dispose()
+      .then(() => {
+        dispatcher.dispose()
+        fsHandler.dispose()
+        gitHandler.dispose()
+        hookServer.stop()
+        // Why: Node's Unix server.close() can unlink the listen path. If the path
+        // was externally removed and rebound by a newer relay, closing this older
+        // server would strand the newer daemon behind a missing socket.
+        if (socketServer && ownsCurrentSocketPath()) {
+          socketServer.close()
+        }
+        cleanupOwnedSocket()
+        process.exit(0)
+      })
+      .catch((error) => {
+        // Why: keep owning a PTY whose native kill was rejected; exiting here
+        // would turn a transient signal failure into an orphan remote shell.
+        shutdownInFlight = false
+        relayLogLine(
+          `[relay] Shutdown deferred: ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
   }
 
   process.on('SIGTERM', shutdown)

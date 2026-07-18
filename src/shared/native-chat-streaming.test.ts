@@ -47,6 +47,22 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBe('Working on it')
   })
 
+  it('treats an optimistic user echo as the active streaming-turn boundary', () => {
+    const optimistic = {
+      ...user('new prompt'),
+      id: 'pending:send-1',
+      timestamp: 20,
+      source: 'scrape' as const
+    }
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [assistant('A much longer answer from the completed prior turn'), optimistic],
+        previewText: 'New reply',
+        working: true
+      })
+    ).toBe('New reply')
+  })
+
   it('drops the preview once the real assistant turn contains it (no duplicate)', () => {
     expect(
       deriveNativeChatStreamingText({

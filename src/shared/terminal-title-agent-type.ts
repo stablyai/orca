@@ -5,6 +5,7 @@ import {
   titleHasAgentName
 } from './agent-name-token-match'
 import { isCursorAgentTitle } from './agent-title-core'
+import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
@@ -80,7 +81,7 @@ export function isPiAgentTitle(title: string): boolean {
  * agents have different (or no) caching semantics.
  */
 export function isClaudeAgent(title: string): boolean {
-  if (!title || isClaudeManagementTitle(title)) {
+  if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
     return false
   }
   const lower = title.toLowerCase()
@@ -123,6 +124,11 @@ export function isClaudeManagementTitle(title: string): boolean {
 export function getAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
+  }
+  // Why: the native marker owns the whole title; its session text may name or
+  // include status glyphs from other agents without changing OpenCode identity.
+  if (isOpenCodeNativeTitle(title)) {
+    return 'OpenCode'
   }
   // Why: Claude Code title text is often the task title. If that task mentions
   // another CLI, the Claude-specific prefix is the identity signal, not the words.

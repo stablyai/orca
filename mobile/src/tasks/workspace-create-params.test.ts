@@ -144,7 +144,7 @@ describe('task workspace create params', () => {
     ).toMatchObject({
       repo: 'id:repo-linear',
       name: 'eng-42',
-      displayName: 'Ship Linear parity',
+      displayName: 'ENG-42 Ship Linear parity',
       linkedLinearIssue: 'ENG-42',
       startupDraft: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
       createdWithAgent: 'grok'

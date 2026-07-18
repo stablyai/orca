@@ -6,6 +6,7 @@ import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
+import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
 import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
 import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
@@ -217,6 +218,7 @@ window.onerror = function(msg) {
   var statusDotPendingSelector = false;
   var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
   var term = null; ${TERMINAL_QUERY_REPLY_JS}
+  ${TERMINAL_SURFACE_SWAP_JS}
   var scrollIndicator = document.getElementById('scroll-indicator');
   var scrollThumb = document.getElementById('scroll-thumb');
   var scrollIndicatorHideTimer = null;
@@ -713,22 +715,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : [];
     initialOscLinkRowOffset = 0;
     initialOscLinkEvictionReady = false;
-    var oldTerm = term;
-    var oldSurface = surface;
-    var nextSurface = null;
-    disposeTermObservers();
-    if (oldTerm) {
-      nextSurface = document.createElement('div');
-      nextSurface.id = 'terminal-surface';
-      nextSurface.style.visibility = 'hidden';
-      nextSurface.style.position = 'absolute';
-      nextSurface.style.left = '0';
-      nextSurface.style.top = '0';
-      document.getElementById('terminal-container').appendChild(nextSurface);
-      surface = nextSurface;
-      attachSurfaceEventHandlers(surface);
-      oldSurface.removeAttribute('id');
-    }
+    var surfaceSwap = beginTerminalSurfaceSwap();
+    var nextSurface = surfaceSwap.nextSurface;
 
     applyTerminalTheme(nextTheme);
     term = new Terminal({
@@ -749,6 +737,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       convertEol: false,
       allowProposedApi: true
     });
+    var nextTerm = term;
+    pendingTerm = nextTerm;
     term.open(surface);
     attachWebglAddon(true);
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
@@ -768,14 +758,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       everReady = true;
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
-        if (nextSurface && oldSurface) {
-          nextSurface.style.visibility = 'visible';
-          nextSurface.style.position = '';
-          nextSurface.style.left = '';
-          nextSurface.style.top = '';
-          oldSurface.remove();
-          if (oldTerm) oldTerm.dispose();
-        }
+        commitTerminalSurfaceSwap(surfaceSwap, nextTerm);
         // Why: restore the reader's place after the rewrapped buffer replays.
         // Replay lands at bottom, so only act when they were scrolled up (rows>0).
         if (scrollAnchorRows > 0 && term && term.buffer && term.buffer.active) {

@@ -6,12 +6,18 @@ import {
   type RawGiteaPullRequest
 } from './pull-request-mappers'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import { invalidateGiteaPullRequestScan, scanGiteaPullRequests } from './pull-request-scan-cache'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
+// Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
+// reviewer data per PR). The default 5s cap aborted responses right as they
+// completed, so the work was discarded and retried on the next refresh (#8807).
+const PULL_REQUEST_LIST_TIMEOUT_MS = 15_000
 const PULL_REQUEST_PAGE_LIMIT = 50
 const MAX_PULL_REQUEST_PAGES = 5
 
@@ -84,6 +90,7 @@ async function requestJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      await cancelUnreadResponseBody(response)
       return null
     }
     return (await response.json()) as T
@@ -102,6 +109,16 @@ function requestJson<T>(
 
 function encodedRepoPath(repo: GiteaRepoRef): string {
   return `${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}`
+}
+
+function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
+  return `${configuredApiBaseUrl(repo)}/${encodedRepoPath(repo)}`
+}
+
+/** Invalidate the shared /pulls scan after Orca itself creates a PR so the
+ *  next worktree-card refresh sees it instead of a cached miss. */
+export function invalidateGiteaPullRequestScanForRepo(repo: GiteaRepoRef): void {
+  invalidateGiteaPullRequestScan(giteaPullRequestScanKey(repo))
 }
 
 async function getCommitStatus(
@@ -227,26 +244,24 @@ export async function getGiteaPullRequestForBranch(
   }
 
   if (branchName) {
-    for (let page = 1; page <= MAX_PULL_REQUEST_PAGES; page++) {
-      const list = await requestJson<RawGiteaPullRequest[]>(
-        repo,
-        `/repos/${encodedRepoPath(repo)}/pulls`,
-        {
+    const pullRequests = await scanGiteaPullRequests(
+      giteaPullRequestScanKey(repo),
+      (page) =>
+        requestJson<RawGiteaPullRequest[]>(repo, `/repos/${encodedRepoPath(repo)}/pulls`, {
           searchParams: {
             state: 'all',
             sort: 'recentupdate',
             page,
             limit: PULL_REQUEST_PAGE_LIMIT
-          }
-        }
-      )
-      const raw = list?.find((item) => matchesBranch(item, branchName))
-      if (raw) {
-        return normalizePullRequest(repo, raw)
-      }
-      if (!list || list.length < PULL_REQUEST_PAGE_LIMIT) {
-        break
-      }
+          },
+          timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS
+        }),
+      PULL_REQUEST_PAGE_LIMIT,
+      MAX_PULL_REQUEST_PAGES
+    )
+    const raw = pullRequests.find((item) => matchesBranch(item, branchName))
+    if (raw) {
+      return normalizePullRequest(repo, raw)
     }
   }
 

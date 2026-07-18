@@ -6,6 +6,7 @@ import { getInstallCopy, type IosChannel } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
@@ -25,6 +26,8 @@ type MobilePageContentProps = {
   openInstallUrl: () => void
   pairAnotherDevice: () => void
   pairLoading: boolean
+  connectionMode: MobilePairingConnectionMode
+  handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
   platform: Platform
@@ -58,6 +61,8 @@ export function MobilePageContent({
   openInstallUrl,
   pairAnotherDevice,
   pairLoading,
+  connectionMode,
+  handleConnectionModeChange,
   pairQrDataUrl,
   pairingUrl,
   platform,
@@ -104,6 +109,8 @@ export function MobilePageContent({
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
               pairLoading={pairLoading}
+              connectionMode={connectionMode}
+              onConnectionModeChange={handleConnectionModeChange}
               onRegeneratePairing={() => generatePairing(true)}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}

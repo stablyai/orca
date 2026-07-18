@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
+  forEachLivePaneForDesyncSentinel,
   refitAndRefreshAllTerminalPanes,
   registerLivePaneManager,
   resetAndRefreshAllTerminalWebglAtlases,
@@ -152,5 +153,29 @@ describe('pane manager registry', () => {
     expect(broken.refreshAllPanes).not.toHaveBeenCalled()
     expect(healthy.fitAllPanes).toHaveBeenCalledTimes(1)
     expect(healthy.refreshAllPanes).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps pane keys stable when an earlier manager unregisters', () => {
+    const first = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [{ id: 1, terminal: {} }]
+    }
+    const second = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      getPanes: () => [{ id: 1, terminal: {} }]
+    }
+    registerLivePaneManager(first)
+    registeredManagers.push(first)
+    registerLivePaneManager(second)
+    registeredManagers.push(second)
+    const before: string[] = []
+    forEachLivePaneForDesyncSentinel((paneKey) => before.push(paneKey))
+
+    unregisterLivePaneManager(first)
+    const after: string[] = []
+    forEachLivePaneForDesyncSentinel((paneKey) => after.push(paneKey))
+
+    expect(before).toHaveLength(2)
+    expect(after).toEqual([before[1]])
   })
 })

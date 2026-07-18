@@ -14,6 +14,10 @@ import {
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionsSurface
+} from '../../../../shared/native-chat-session-options'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -45,6 +49,8 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  sessionOptionsSurface: SessionOptionsSurface | null
+  sessionOptionsSnapshot: SessionOptionDescriptor[]
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -81,12 +87,15 @@ export function NativeChatComposerField({
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
-  onStop
+  onStop,
+  sessionOptionsSurface,
+  sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
   return (
     <div className="shrink-0 bg-background">
-      <div className="px-3 py-2 sm:px-4">
-        <div className="relative mx-auto w-full max-w-3xl">
+      {/* Extra bottom padding keeps the input box off the window rim. */}
+      <div className="px-3 pt-2 pb-4 sm:px-4">
+        <div className="relative mx-auto w-full max-w-4xl">
           {autocomplete.mode === 'slash' && autocomplete.suggestions.length > 0 ? (
             <NativeChatSlashMenu
               suggestions={autocomplete.suggestions}
@@ -113,8 +122,11 @@ export function NativeChatComposerField({
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
             className={cn(
-              'rounded-xl border border-input bg-card p-1.5 shadow-xs transition-colors',
-              'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30'
+              // Why: always-on hairline (token-level border, not focus ring) —
+              // no focus/click border flash. The box is a container, not a
+              // focus target.
+              'rounded-lg border border-border p-1.5 shadow-xs',
+              'bg-muted/50 dark:bg-input/40'
             )}
           >
             {imageAttachments.length > 0 ? (
@@ -181,6 +193,8 @@ export function NativeChatComposerField({
                 onDictationHoldEnd={onDictationHoldEnd}
                 onSend={onSend}
                 onStop={onStop}
+                sessionOptionsSurface={sessionOptionsSurface}
+                sessionOptionsSnapshot={sessionOptionsSnapshot}
               />
             </div>
           </div>

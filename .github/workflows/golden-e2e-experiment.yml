@@ -9,6 +9,8 @@ on:
       - 'tests/e2e/fixtures/terminal-emoji-table.md'
       - 'tests/e2e/helpers/**'
       - 'tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts'
+      - 'tests/e2e/terminal-webgl-atlas-budget.spec.ts'
+      - 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'
       - 'src/renderer/src/components/sidebar/SidebarHeader.tsx'
       - 'src/renderer/src/lib/pane-manager/**'
   workflow_dispatch:

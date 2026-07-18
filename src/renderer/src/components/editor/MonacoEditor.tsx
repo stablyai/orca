@@ -15,7 +15,11 @@ import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-select
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
-import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
+import {
+  syncContentOnMount,
+  syncContentUpdate,
+  type MonacoContentSyncMode
+} from './monaco-content-sync'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import {
   beginProgrammaticContentSync,
@@ -44,7 +48,11 @@ import {
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import {
+  installEditorAddReviewNoteShortcut,
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
 import { Plus } from 'lucide-react'
 import {
   getMonacoMarkdownSelectionAnnotationTarget,
@@ -77,6 +85,7 @@ type MonacoEditorProps = {
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
+  liveTail?: boolean
   autoHeight?: boolean
 }
 
@@ -101,6 +110,7 @@ export default function MonacoEditor({
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
+  liveTail = false,
   autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -131,6 +141,8 @@ export default function MonacoEditor({
   propsRef.current = { relativePath, language, onSave, onContentChange }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
+  const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
+  contentSyncModeRef.current = readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
 
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -190,6 +202,10 @@ export default function MonacoEditor({
   const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
+  // Why: the Monaco mount closure installs its keydown listeners once, so the
+  // add-review-note shortcut reads the live selection target through a ref.
+  const selectionAnnotationTargetRef = useRef<MonacoMarkdownSelectionAnnotationTarget | null>(null)
+  selectionAnnotationTargetRef.current = selectionAnnotationTarget
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -370,7 +386,11 @@ export default function MonacoEditor({
       beginProgrammaticContentSync(filePath)
       isApplyingProgrammaticContentRef.current = true
       try {
-        const didSyncOnMount = syncContentOnMount(editorInstance, contentRef.current)
+        const didSyncOnMount = syncContentOnMount(
+          editorInstance,
+          contentRef.current,
+          contentSyncModeRef.current
+        )
         if (didSyncOnMount) {
           lastSyncedContentRef.current = contentRef.current
         }
@@ -401,6 +421,18 @@ export default function MonacoEditor({
         propsRef.current.onSave(value)
       })
       const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+      // Opens the same composer as the selection "+" button; the target ref
+      // mirrors the last-rendered selection target and is null unless markdown
+      // annotations are enabled and text is selected.
+      const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
+        const target = selectionAnnotationTargetRef.current
+        if (!target) {
+          return false
+        }
+        setCommentPopover(target)
+        setSelectionAnnotationTarget(null)
+        return true
+      })
       const searchInFilesAction = editorInstance.addAction({
         id: 'orca.searchInFiles',
         label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
@@ -500,6 +532,7 @@ export default function MonacoEditor({
         gutterMouseDownSub.dispose()
         cleanupSaveShortcut()
         cleanupFindShortcut()
+        cleanupAddReviewNoteShortcut()
         editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
         searchInFilesAction.dispose()
         autoHeightSub?.dispose()
@@ -672,7 +705,7 @@ export default function MonacoEditor({
     beginProgrammaticContentSync(filePath)
     isApplyingProgrammaticContentRef.current = true
     try {
-      syncContentUpdate(ed, content)
+      syncContentUpdate(ed, content, contentSyncModeRef.current)
       lastSyncedContentRef.current = content
     } finally {
       isApplyingProgrammaticContentRef.current = false

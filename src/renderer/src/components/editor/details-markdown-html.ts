@@ -1,5 +1,23 @@
 import type { MarkdownToken } from '@tiptap/core'
 
+// Toggle summaries can render at heading scales 1–4, mirroring the plain
+// heading levels the slash menu / toolbar dropdown offer (h1–h4).
+export type ToggleHeadingVariant = 'heading-1' | 'heading-2' | 'heading-3' | 'heading-4'
+
+export const TOGGLE_HEADING_VARIANTS: readonly ToggleHeadingVariant[] = [
+  'heading-1',
+  'heading-2',
+  'heading-3',
+  'heading-4'
+]
+
+export function parseToggleHeadingVariant(value: unknown): ToggleHeadingVariant | null {
+  return typeof value === 'string' &&
+    TOGGLE_HEADING_VARIANTS.includes(value as ToggleHeadingVariant)
+    ? (value as ToggleHeadingVariant)
+    : null
+}
+
 export type DetailsHtmlToken = MarkdownToken & {
   attributes?: Record<string, unknown>
   bodyTokens?: MarkdownToken[]
@@ -28,11 +46,16 @@ export function escapeDetailsHtml(value: string): string {
 }
 
 export function parseDetailsAttributes(rawAttributes: string): Record<string, unknown> {
+  // Why: validation accepts normal HTML whitespace around `=`, so parsing
+  // must accept it too or an editable toggle loses its heading variant.
+  const variantMatch = rawAttributes.match(
+    /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-4])"|'(heading-[1-4])'|(heading-[1-4]))(?:\s|$)/i
+  )
   return {
     open: /\sopen(?:\s|=|$)/i.test(rawAttributes),
-    variant: /\sdata-orca-toggle=(?:"heading-1"|'heading-1'|heading-1)(?:\s|$)/i.test(rawAttributes)
-      ? 'heading-1'
-      : null
+    variant: parseToggleHeadingVariant(
+      (variantMatch?.[1] ?? variantMatch?.[2] ?? variantMatch?.[3])?.toLowerCase()
+    )
   }
 }
 
@@ -47,8 +70,9 @@ export function detailsBodyHtmlToMarkdown(body: string): string {
 export function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): string {
   const attributes = ['class="orca-details"']
 
-  if (attrs?.variant === 'heading-1') {
-    attributes.push('data-orca-toggle="heading-1"')
+  const variant = parseToggleHeadingVariant(attrs?.variant)
+  if (variant) {
+    attributes.push(`data-orca-toggle="${variant}"`)
   }
 
   if (attrs?.open === true) {
@@ -155,7 +179,10 @@ function hasOnlySupportedDetailsAttributes(rawAttributes: string): boolean {
     rawAttributes
       .replace(/\s+open(?:\s*=\s*(?:""|"open"|''|'open'|open))?(?=\s|$)/giu, '')
       .replace(/\s+class\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/giu, '')
-      .replace(/\s+data-orca-toggle\s*=\s*(?:"heading-1"|'heading-1'|heading-1)(?=\s|$)/giu, '')
+      .replace(
+        /\s+data-orca-toggle\s*=\s*(?:"heading-[1-4]"|'heading-[1-4]'|heading-[1-4])(?=\s|$)/giu,
+        ''
+      )
       .trim() === ''
   )
 }

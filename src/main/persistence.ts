@@ -172,6 +172,7 @@ import {
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import { normalizeManualRepoOrder } from '../shared/manual-repo-order'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
@@ -2264,9 +2265,32 @@ function normalizeLegacyPaneKeyAliasEntries(value: unknown): LegacyPaneKeyAliasE
       return false
     }
     const legacy = parseLegacyNumericPaneKey(candidate.legacyPaneKey)
+    const relocatedSource = parsePaneKey(candidate.legacyPaneKey)
     const stable = parsePaneKey(candidate.stablePaneKey)
-    return Boolean(legacy && stable && legacy.tabId === stable.tabId)
+    return Boolean(stable && ((legacy && legacy.tabId === stable.tabId) || relocatedSource))
   })
+}
+
+function registerPersistedPaneKeyAlias(entry: LegacyPaneKeyAliasEntry): void {
+  if (parseLegacyNumericPaneKey(entry.legacyPaneKey)) {
+    agentHookServer.registerPaneKeyAlias(
+      entry.legacyPaneKey,
+      entry.stablePaneKey,
+      entry.ptyId,
+      entry.updatedAt,
+      { overwriteExisting: false }
+    )
+    return
+  }
+  // Why: detached agents keep their original UUID pane key across restarts;
+  // restore the physical-to-current-owner mapping before hook replay begins.
+  agentHookServer.transferPaneAuthority(
+    entry.legacyPaneKey,
+    entry.stablePaneKey,
+    entry.ptyId,
+    entry.updatedAt,
+    { authorityVerified: false }
+  )
 }
 
 function mergeLegacyPaneKeyAliasEntries(
@@ -2613,7 +2637,7 @@ export class Store {
   private writesFrozen = false
   // Why: hash of the plaintext state as of the last successful write. Saves
   // triggered by mutations that net out to identical state skip the full
-  // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
+  // multi-MB serialize + tmp write + rename. Hashing plaintext (not the
   // written payload) because encrypt() uses a random IV per call, so the
   // on-disk bytes differ even for identical state.
   private lastWrittenStateHash: string | null = null
@@ -2648,13 +2672,7 @@ export class Store {
       setMigrationUnsupportedPty(entry)
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
-      agentHookServer.registerPaneKeyAlias(
-        entry.legacyPaneKey,
-        entry.stablePaneKey,
-        entry.ptyId,
-        entry.updatedAt,
-        { overwriteExisting: false }
-      )
+      registerPersistedPaneKeyAlias(entry)
     }
     setMigrationUnsupportedPtyPersistenceListener((entries) => {
       this.state.migrationUnsupportedPtyEntries = entries
@@ -3182,6 +3200,9 @@ export class Store {
             // Why: persisted settings can be user-edited or written by older
             // builds; keep tray-minimize false unless the stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+            // Why: missing means default-on, and the value must round-trip
+            // unchanged on non-mac hosts; the darwin consumers gate the effect.
+            showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -3523,7 +3544,10 @@ export class Store {
       this.loadNeedsSave = true
     }
 
-    const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+    const migrated = this.migrateTabSwitchKeybindings(
+      this.migrateTelemetry(result, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
 
     // githubCache lives in a sidecar file now (see getGithubCacheFile). A
     // legacy in-file cache (pre-sidecar build, or a downgrade round-trip) is
@@ -3559,6 +3583,34 @@ export class Store {
   //     the banner resolves (the consent resolver returns `pending_banner`
   //     until then, so nothing transmits).
   //   - `installId` — anonymous UUID v4. Stable across launches; not surfaced in the UI.
+  // One-shot cohort freeze for the tab-switch keybinding convention swap. Runs
+  // on every `load()` but is a no-op once `tabSwitchKeybindingSeed` is set. The
+  // decision must be frozen on the first post-swap launch: `fileExistedOnLoad`
+  // only distinguishes existing vs fresh on that first run (a fresh install's
+  // data file exists on every subsequent launch), so persist the verdict now.
+  private migrateTabSwitchKeybindings(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const existing = state.settings?.tabSwitchKeybindingSeed
+    if (existing === 'pending' || existing === 'done') {
+      return state
+    }
+    // Why: mark dirty so the frozen cohort survives the next restart even if no
+    // other setting changes this session; without this a fresh install could be
+    // re-read as "existing" once its data file lands on disk.
+    this.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        // Existing installs pin the old chords via a keybindings.json seed;
+        // fresh installs need nothing beyond the new registry defaults.
+        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+      }
+    }
+  }
+
   private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
     // Why: the one-shot is complete only when all three invariants hold.
@@ -3681,7 +3733,10 @@ export class Store {
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
-    return JSON.stringify(stateToSave, null, 2)
+    // Why compact: ~20-30% fewer bytes (state-shape dependent; measured 21% on
+    // real state) and less serialize time on the sync-flush path; all readers
+    // JSON.parse, so on-disk formatting is irrelevant.
+    return JSON.stringify(stateToSave)
   }
 
   // Why: async writes avoid blocking the main Electron thread on every
@@ -3788,7 +3843,7 @@ export class Store {
     }
   }
 
-  private flushOrThrow(): void {
+  flushOrThrow(): void {
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
@@ -4248,6 +4303,37 @@ export class Store {
       next.push(repo)
     }
     this.state.repos = next
+    this.syncProjectHostSetupCompatibilityState()
+    this.scheduleSave()
+    return true
+  }
+
+  // Why: repo ids are unique only within an execution host, and renderer drags
+  // persist one complete permutation per host when local and SSH repos coexist.
+  reorderReposForHost(orderedIds: string[], hostId: ExecutionHostId): boolean {
+    const current = this.state.repos
+    const hostRepos = current.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+    if (orderedIds.length !== hostRepos.length) {
+      return false
+    }
+    const byId = new Map(hostRepos.map((repo) => [repo.id, repo]))
+    if (byId.size !== hostRepos.length) {
+      return false
+    }
+    const seen = new Set<string>()
+    const reorderedHostRepos: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = typeof id === 'string' && !seen.has(id) ? byId.get(id) : undefined
+      if (!repo) {
+        return false
+      }
+      seen.add(id)
+      reorderedHostRepos.push(repo)
+    }
+    let nextHostIndex = 0
+    this.state.repos = current.map((repo) =>
+      getRepoExecutionHostId(repo) === hostId ? reorderedHostRepos[nextHostIndex++] : repo
+    )
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
     return true
@@ -5216,6 +5302,9 @@ export class Store {
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
     }
+    if ('showMenuBarIcon' in updates) {
+      sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
@@ -5392,6 +5481,7 @@ export class Store {
         this.state.ui?.visibleWorkspaceHostIds
       ),
       workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder: normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -5477,6 +5567,10 @@ export class Store {
         updates.workspaceHostOrder !== undefined
           ? normalizeExecutionHostOrder(updates.workspaceHostOrder)
           : normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder:
+        updates.manualRepoOrder !== undefined
+          ? normalizeManualRepoOrder(updates.manualRepoOrder)
+          : normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
@@ -5689,13 +5783,7 @@ export class Store {
       }
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
-      agentHookServer.registerPaneKeyAlias(
-        entry.legacyPaneKey,
-        entry.stablePaneKey,
-        entry.ptyId,
-        entry.updatedAt,
-        { overwriteExisting: false }
-      )
+      registerPersistedPaneKeyAlias(entry)
     }
     session = normalized.session
     const remappedLeases = remapSshRemotePtyLeaseLeafIds(

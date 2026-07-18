@@ -139,6 +139,22 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.isGitRepo')
   })
 
+  it('runs remote worktree deletion inside the relay watcher fence', async () => {
+    const removalError = new Error('fenced before Git')
+    const runWithRemovalFence = vi.fn(async () => {
+      throw removalError
+    })
+    handler.dispose()
+    handler = new GitHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
+      runWithRemovalFence
+    })
+
+    await expect(
+      dispatcher.callRequest('git.removeWorktree', { worktreePath: '/repo-feature' })
+    ).rejects.toBe(removalError)
+    expect(runWithRemovalFence).toHaveBeenCalledWith('/repo-feature', expect.any(Function))
+  })
+
   describe('abortMerge', () => {
     it('aborts an in-progress merge', async () => {
       gitInit(tmpDir)

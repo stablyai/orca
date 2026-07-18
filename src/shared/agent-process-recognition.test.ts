@@ -198,6 +198,20 @@ describe('agent process recognition', () => {
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
   })
 
+  it('recognizes only the agent subcommand of the generic Orca CLI', () => {
+    expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
+      agent: 'claude-agent-teams',
+      processName: 'orca'
+    })
+    expect(recognizeAgentProcessFromCommandLine('orca status')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('orca-dev terminal list')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('node /usr/local/bin/orca claude-teams')).toEqual({
+      agent: 'claude-agent-teams',
+      processName: 'orca'
+    })
+    expect(recognizeAgentProcessFromCommandLine('node /usr/local/bin/orca status')).toBeNull()
+  })
+
   it('does not classify prompt text as a wrapped agent command', () => {
     expect(
       recognizeAgentProcessFromCommandLine(

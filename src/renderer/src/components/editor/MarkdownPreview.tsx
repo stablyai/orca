@@ -68,6 +68,10 @@ import {
   isMarkdownPreviewFindShortcut,
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
+import {
+  getMarkdownAnnotationBlockKeyForSelection,
+  isMarkdownPreviewAddReviewNoteShortcut
+} from './markdown-preview-annotation-shortcut'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -310,7 +314,7 @@ const markdownPreviewSanitizeSchema = {
       ...(defaultSchema.attributes?.details ?? []),
       'open',
       ['className', 'orca-details'],
-      ['dataOrcaToggle', 'heading-1']
+      ['dataOrcaToggle', 'heading-1', 'heading-2', 'heading-3', 'heading-4']
     ],
     h1: [...(defaultSchema.attributes?.h1 ?? []), 'id'],
     h2: [...(defaultSchema.attributes?.h2 ?? []), 'id'],
@@ -484,12 +488,18 @@ export default function MarkdownPreview({
     input.focus()
     input.select()
   }, [])
-  const matchesRef = useRef<HTMLElement[]>([])
+  const matchesRef = useRef<Range[]>([])
+  // Stable token identifying this preview in the document-global highlight
+  // registry, so split/floating previews don't clobber each other's Find paint.
+  const searchInstanceRef = useRef<object>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
   const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
+  // Bumps whenever the match ranges are recomputed, so the active-highlight
+  // effect re-runs even when a streamed rerender yields the same count/index.
+  const [searchRevision, setSearchRevision] = useState(0)
   const [activeMatchIndex, setActiveMatchIndex] = useState(-1)
   const isMac = navigator.userAgent.includes('Mac')
   const openFile = useAppStore((s) => s.openFile)
@@ -619,12 +629,11 @@ export default function MarkdownPreview({
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
-  // Why: front matter is hidden by default (#4468) and controlled from the
-  // markdown preview actions menu, keeping metadata out of the reading surface
-  // unless the user explicitly asks for it.
+  // Why: front matter shows by default and is toggled off from the markdown
+  // preview actions menu; the store map only carries per-file hide overrides.
   const toggleableSourceFileId: string | null = sourceFileId ?? null
   const frontmatterVisible = toggleableSourceFileId
-    ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? false)
+    ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? true)
     : true
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
@@ -836,29 +845,36 @@ export default function MarkdownPreview({
       return
     }
 
+    const instanceId = searchInstanceRef.current
+
     if (!isSearchOpen) {
       matchesRef.current = []
       setMatchCount(0)
-      clearMarkdownPreviewSearchHighlights(body)
+      clearMarkdownPreviewSearchHighlights(instanceId)
       return
     }
 
-    // Search decorations are applied imperatively because the rendered preview is
-    // already owned by react-markdown. Rewriting the markdown AST for transient
-    // find state would make navigation and link rendering much harder to reason about.
-    const matches = applyMarkdownPreviewSearchHighlights(body, query)
+    // Search decorations are painted via the CSS Custom Highlight API (Ranges,
+    // no DOM mutation) because the rendered preview is owned by react-markdown;
+    // splitting its nodes to inject <mark> corrupted react's tree (crash 237acef1).
+    const matches = applyMarkdownPreviewSearchHighlights(instanceId, body, query)
     matchesRef.current = matches
     setMatchCount(matches.length)
+    setSearchRevision((v) => v + 1)
     setActiveMatchIndex((cur) =>
       matches.length === 0 ? -1 : cur >= 0 && cur < matches.length ? cur : 0
     )
 
-    return () => clearMarkdownPreviewSearchHighlights(body)
+    return () => clearMarkdownPreviewSearchHighlights(instanceId)
   }, [renderedContent, isSearchOpen, query])
 
   useEffect(() => {
-    setActiveMarkdownPreviewSearchMatch(matchesRef.current, activeMatchIndex)
-  }, [activeMatchIndex, matchCount])
+    setActiveMarkdownPreviewSearchMatch(
+      searchInstanceRef.current,
+      matchesRef.current,
+      activeMatchIndex
+    )
+  }, [activeMatchIndex, matchCount, searchRevision])
 
   useLayoutEffect(() => {
     if (!initialAnchor || initialAnchor === lastAppliedInitialAnchorRef.current) {
@@ -904,6 +920,20 @@ export default function MarkdownPreview({
         return
       }
 
+      if (
+        isMarkdownPreviewAddReviewNoteShortcut(event, getShortcutPlatform(), keybindings) &&
+        targetInsidePreview &&
+        markdownAnnotationsEnabled
+      ) {
+        const blockKey = getMarkdownAnnotationBlockKeyForSelection(root, window.getSelection())
+        if (blockKey) {
+          event.preventDefault()
+          event.stopPropagation()
+          setActiveAnnotationBlockKey(blockKey)
+        }
+        return
+      }
+
       if (!isSearchOpen) {
         return
       }
@@ -918,7 +948,7 @@ export default function MarkdownPreview({
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [closeSearch, isSearchOpen, keybindings, openSearch])
+  }, [closeSearch, isSearchOpen, keybindings, markdownAnnotationsEnabled, openSearch])
 
   const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
     if (markdownReviewNotes.length === 0) {
@@ -1236,6 +1266,7 @@ export default function MarkdownPreview({
           className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''}`.trim()}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
+          data-annotation-block-key={blockKey}
           onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
         >
           {rendered}
@@ -1656,6 +1687,11 @@ export default function MarkdownPreview({
         }
         const blockKey = `li:${range.startLine}-${range.endLine}`
         const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
+        const controls = renderAnnotationControls(
+          range,
+          blockKey,
+          getMarkdownPreviewAnnotationQuote(children)
+        )
         return (
           <li {...props}>
             <div
@@ -1664,14 +1700,13 @@ export default function MarkdownPreview({
               }`.trim()}
               data-source-line={range.startLine}
               data-source-end-line={range.endLine}
+              // Why: only advertise the block to the add-review-note shortcut
+              // when the composer can actually render (mirrors wrapAnnotatedBlock).
+              data-annotation-block-key={controls ? blockKey : undefined}
               onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
             >
               <span className="markdown-annotation-list-content">{children}</span>
-              {renderAnnotationControls(
-                range,
-                blockKey,
-                getMarkdownPreviewAnnotationQuote(children)
-              )}
+              {controls}
             </div>
           </li>
         )
@@ -1920,7 +1955,10 @@ export default function MarkdownPreview({
             ) : null}
           </div>
         ) : null}
-        <div ref={bodyRef} className="markdown-body">
+        {/* Why: translate="no" keeps browser/OS page-translation from swapping
+            text nodes react owns, which otherwise triggers the same
+            insertBefore/removeChild reconciliation crash (237acef1). */}
+        <div ref={bodyRef} className="markdown-body" translate="no">
           {/* Why: remarkFrontmatter strips front matter from normal markdown
         output. When the user opts in from the preview actions menu, render the
         raw metadata as a compact read-only block above the document body. */}

@@ -34,6 +34,7 @@ import {
   Wrench
 } from 'lucide-react'
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
+import { LinearIcon } from '@/components/icons/LinearIcon'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
@@ -55,6 +56,7 @@ import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-c
 import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
+import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -71,12 +73,14 @@ import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-s
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { translate } from '@/i18n/i18n'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
@@ -112,6 +116,7 @@ export function buildSettingsNavigationMetadata({
   isWindowsTerminalHost = isWindows,
   isWebClient,
   isDev = import.meta.env.DEV,
+  isLinearConnected = false,
   repos
 }: {
   isMac: boolean
@@ -119,6 +124,7 @@ export function buildSettingsNavigationMetadata({
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
   isDev?: boolean
+  isLinearConnected?: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -130,6 +136,12 @@ export function buildSettingsNavigationMetadata({
   const runtimeEnvironmentsSearchEntry = isWebClient
     ? getWebRuntimeEnvironmentsSearchEntry()
     : getRuntimeEnvironmentsSearchEntry()
+  const reposById = new Map<string, Repo>()
+  for (const repo of repos) {
+    if (!reposById.has(repo.id)) {
+      reposById.set(repo.id, repo)
+    }
+  }
 
   return [
     // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
@@ -172,6 +184,23 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getOrchestrationPaneSearchEntries(),
       group: 'capabilities'
     },
+    // Why: only surfaced once Linear is connected — a capability that needs a
+    // linked provider before the agent skill has anything to act on.
+    ...(isLinearConnected
+      ? [
+          {
+            id: 'linear',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.linearDescription',
+              'Give agents the skill to read and update your linked Linear tickets.'
+            ),
+            icon: LinearIcon,
+            searchEntries: getLinearAgentSkillPaneSearchEntries(),
+            group: 'capabilities'
+          }
+        ]
+      : []),
     ...(showDesktopOnlySettings
       ? [
           {
@@ -375,7 +404,8 @@ export function buildSettingsNavigationMetadata({
       icon: Palette,
       searchEntries: getAppearancePaneSearchEntries({
         showWarpImport: showDesktopOnlySettings,
-        showSystemTray: showDesktopOnlySettings && isWindows
+        showSystemTray: showDesktopOnlySettings && isWindows,
+        showMenuBarIcon: showDesktopOnlySettings && isMac
       }),
       group: 'interface'
     },
@@ -537,16 +567,30 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getExperimentalPaneSearchEntries(),
       group: 'experimental'
     },
-    ...repos.map((repo) => ({
-      id: `repo-${repo.id}`,
-      title: repo.displayName,
-      description: `${getRepoKindLabel(repo)} • ${repo.path}`,
-      icon: SlidersHorizontal,
-      searchEntries: getRepositoryPaneSearchEntries(repo, {
-        windowsRuntimeSupported: isWindowsTerminalHost
-      }),
-      group: 'repositories'
-    }))
+    // Why: one nav row per project, not per repo row — a project set up on
+    // multiple hosts (local + a Remote Orca Server, or two clones) collapses to
+    // a single entry. Derived from repos alone so this list matches the panes.
+    ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
+      const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
+      const hostSummary =
+        setups.length > 1
+          ? translate(
+              'auto.hooks.useSettingsNavigationMetadata.projectHostsSummary',
+              '{{value0}} hosts',
+              { value0: setups.length }
+            )
+          : (setups[0]?.path ?? representativeRepo.path)
+      return {
+        id: `repo-${representativeRepoId}`,
+        title: project.displayName,
+        description: `${getRepoKindLabel(project)} • ${hostSummary}`,
+        icon: SlidersHorizontal,
+        searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {
+          windowsRuntimeSupported: isWindowsTerminalHost
+        }),
+        group: 'repositories'
+      }
+    })
   ]
 }
 
@@ -562,6 +606,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
+  const isLinearConnected = useLinearProviderConnected()
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -585,9 +630,10 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWindowsTerminalHost,
         isWebClient,
         isDev: import.meta.env.DEV,
+        isLinearConnected,
         repos
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
-    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos, activeLocale]
+    [isMac, isWindows, isWindowsTerminalHost, isWebClient, isLinearConnected, repos, activeLocale]
   )
 }

@@ -29,3 +29,19 @@ export function parseWorkspaceKey(value: string): WorkspaceScope | null {
 export function isWorkspaceKey(value: string): value is WorkspaceKey {
   return parseWorkspaceKey(value) !== null
 }
+
+// Why: folder workspaces are tracked by the scoped active key, while older
+// worktree-only paths still read activeWorktreeId.
+export function getActiveSidebarWorkspaceId(
+  activeWorkspaceKey: string | null,
+  activeWorktreeId: string | null
+): string | null {
+  const scope = activeWorkspaceKey ? parseWorkspaceKey(activeWorkspaceKey) : null
+  if (scope?.type === 'folder') {
+    return folderWorkspaceKey(scope.folderWorkspaceId)
+  }
+  if (scope?.type === 'worktree') {
+    return scope.worktreeId
+  }
+  return activeWorktreeId
+}

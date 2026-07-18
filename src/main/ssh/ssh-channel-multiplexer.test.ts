@@ -305,6 +305,25 @@ describe('SshChannelMultiplexer', () => {
       expect(() => vi.advanceTimersByTime(5_000)).not.toThrow()
       expect(mux.isDisposed()).toBe(true)
     })
+
+    it('drives keepalive sends AND dead-link detection from a single interval', () => {
+      // The keepalive send and the liveness/timeout check were merged from two
+      // 5s intervals into one; there must be exactly one recurring timer.
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Send half: a keepalive is written on the tick.
+      const before = transport.written.length
+      vi.advanceTimersByTime(5_000)
+      expect(transport.written.length).toBeGreaterThan(before)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Check half: with no inbound frames or acks, the same interval declares
+      // the link dead (no-data + oldest-unacked both exceed the 20s window).
+      expect(mux.isDisposed()).toBe(false)
+      vi.advanceTimersByTime(25_000)
+      expect(mux.isDisposed()).toBe(true)
+    })
   })
 
   describe('wake guard (timer pause across system sleep, #7773)', () => {

@@ -1,25 +1,18 @@
-import { extname } from 'node:path'
 import type {
-  AiVaultAgent,
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { FileStat, IFilesystemProvider } from '../providers/types'
+import type { IFilesystemProvider } from '../providers/types'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { sessionSortTime } from './session-scanner-accumulator'
-import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
-import type { FileWithMtime } from './session-scanner-types'
+import { createAntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
 import { errorMessage } from './session-scanner-values'
+import { discoverRemoteSourceCandidates } from './remote-session-scanner-discovery'
 import { remoteSessionSources } from './remote-session-scanner-sources'
-import type {
-  RemoteScannerContext,
-  RemoteSessionCandidate,
-  RemoteSessionSource
-} from './remote-session-scanner-types'
+import type { RemoteScannerContext, RemoteSessionCandidate } from './remote-session-scanner-types'
 
 const DEFAULT_REMOTE_SCAN_LIMIT = 1000
 const REMOTE_SCAN_CONCURRENCY = 8
@@ -39,7 +32,15 @@ export async function scanRemoteAiVaultSessions(args: {
     provider: args.provider,
     executionHostId: args.executionHostId,
     hostPlatform: args.hostPlatform,
-    titleCaches: new Map()
+    titleCaches: new Map(),
+    antigravityWorkspaceResolver: createAntigravityWorkspaceResolver(async (historyPath) => {
+      try {
+        const read = await args.provider.readFile(historyPath)
+        return read.isBinary ? null : read.content
+      } catch {
+        return null
+      }
+    })
   }
   const candidates = (
     await mapRemoteScanConcurrently(
@@ -71,70 +72,6 @@ export async function scanRemoteAiVaultSessions(args: {
     issues,
     scannedAt: new Date().toISOString()
   }
-}
-
-async function discoverRemoteSourceCandidates(args: {
-  source: RemoteSessionSource
-  context: RemoteScannerContext
-  issues: AiVaultScanIssue[]
-}): Promise<RemoteSessionCandidate[]> {
-  const walked = await walkRemoteSessionFiles(
-    args.source,
-    args.context.provider,
-    args.context.hostPlatform
-  )
-  const partition = args.source.collectSubagentSiblingCounts
-    ? partitionSubagentTranscriptPaths(walked)
-    : null
-  const paths = partition ? partition.sessionFilePaths : walked
-  const files = await mapRemoteScanConcurrently(paths, (path) =>
-    statRemoteFile(
-      args.context.provider,
-      path,
-      args.source.agent,
-      args.context.executionHostId,
-      args.issues
-    )
-  )
-  return files
-    .filter((file): file is FileWithMtime => Boolean(file))
-    .map((file) => ({
-      source: args.source,
-      file,
-      subagentTranscriptCount: partition?.subagentTranscriptCounts.get(file.path) ?? 0
-    }))
-}
-
-async function walkRemoteSessionFiles(
-  source: RemoteSessionSource,
-  provider: IFilesystemProvider,
-  hostPlatform: RemoteHostPlatform,
-  dirPath = source.rootDir
-): Promise<string[]> {
-  let entries
-  try {
-    entries = await provider.readDir(dirPath)
-  } catch {
-    return []
-  }
-
-  const extensions = new Set(source.extensions)
-  const files: string[] = []
-  for (const entry of entries) {
-    const fullPath = joinRemotePath(hostPlatform, dirPath, entry.name)
-    if (entry.isDirectory && !entry.isSymlink) {
-      files.push(...(await walkRemoteSessionFiles(source, provider, hostPlatform, fullPath)))
-      continue
-    }
-    if (
-      !entry.isSymlink &&
-      extensions.has(extname(entry.name).toLowerCase()) &&
-      (source.filePredicate?.(fullPath) ?? true)
-    ) {
-      files.push(fullPath)
-    }
-  }
-  return files
 }
 
 async function parseRemoteSessionCandidates(args: {
@@ -252,30 +189,6 @@ function isRemoteSessionInScope(session: AiVaultSession, scopePaths: readonly st
 
 function normalizeRemoteScopePaths(scopePaths: readonly string[]): string[] {
   return scopePaths.map((scopePath) => scopePath.trim()).filter(Boolean)
-}
-
-async function statRemoteFile(
-  provider: IFilesystemProvider,
-  path: string,
-  agent: AiVaultAgent,
-  executionHostId: ExecutionHostId,
-  issues: AiVaultScanIssue[]
-): Promise<FileWithMtime | null> {
-  try {
-    const stat = await provider.stat(path)
-    const mtimeMs = remoteStatMtimeMs(stat)
-    return { path, mtimeMs, modifiedAt: new Date(mtimeMs).toISOString() }
-  } catch (err) {
-    issues.push({ executionHostId, agent, path, message: errorMessage(err) })
-    return null
-  }
-}
-
-function remoteStatMtimeMs(stat: FileStat): number {
-  if (typeof stat.mtimeMs === 'number' && Number.isFinite(stat.mtimeMs)) {
-    return stat.mtimeMs
-  }
-  return stat.mtime > 10_000_000_000 ? stat.mtime : stat.mtime * 1000
 }
 
 function canStopParsingRemoteSessions(

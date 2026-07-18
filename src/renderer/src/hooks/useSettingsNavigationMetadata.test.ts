@@ -13,13 +13,20 @@ const repo = {
 } satisfies Repo
 
 function ids(
-  args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean; isDev?: boolean } = {}
+  args: {
+    isMac?: boolean
+    isWindows?: boolean
+    isWebClient?: boolean
+    isDev?: boolean
+    isLinearConnected?: boolean
+  } = {}
 ): string[] {
   return buildSettingsNavigationMetadata({
     isMac: args.isMac ?? false,
     isWindows: args.isWindows ?? false,
     isWebClient: args.isWebClient ?? false,
     isDev: args.isDev ?? false,
+    isLinearConnected: args.isLinearConnected ?? false,
     repos: [repo]
   }).map((section) => section.id)
 }
@@ -38,6 +45,27 @@ describe('settings navigation metadata', () => {
       'mobile',
       'git'
     ])
+  })
+
+  it('adds the Linear capability section right after Orchestration only when connected', () => {
+    expect(ids()).not.toContain('linear')
+
+    const connectedIds = ids({ isLinearConnected: true })
+    expect(connectedIds).toContain('linear')
+    expect(connectedIds.indexOf('linear')).toBe(connectedIds.indexOf('orchestration') + 1)
+
+    const linearSection = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      isLinearConnected: true,
+      repos: [repo]
+    }).find((section) => section.id === 'linear')
+    expect(linearSection?.group).toBe('capabilities')
+  })
+
+  it('keeps the Linear capability section available on web clients when connected', () => {
+    expect(ids({ isWebClient: true, isLinearConnected: true })).toContain('linear')
   })
 
   it('places Mobile under Set Up instead of its own sidebar group', () => {
@@ -179,6 +207,42 @@ describe('settings navigation metadata', () => {
     expect(ids()).not.toContain('dev')
     expect(ids({ isDev: true })).toContain('dev')
     expect(ids({ isDev: true, isWebClient: true })).not.toContain('dev')
+  })
+
+  it('renders one repo nav section per project even across execution hosts', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        {
+          id: 'local-1',
+          path: '/a',
+          displayName: 'App',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote
+        },
+        {
+          id: 'remote-9',
+          path: '/b',
+          displayName: 'App',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote,
+          executionHostId: 'runtime:home-mac'
+        }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections).toHaveLength(1)
+    expect(repoSections[0].id).toBe('repo-local-1')
   })
 
   it('keeps macOS permissions mac-only', () => {
