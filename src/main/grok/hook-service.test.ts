@@ -106,8 +106,13 @@ describe('GrokHookService', () => {
       // cmd expands %VAR% before `if` chains, so only a goto-skip is safe.
       expect(script).toContain('set "ORCA_GROK_HOME="')
       expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
-      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
-      expect(script).toContain('%GROK_HOME:~4096,1%')
+      // Why: length guard must precede the %GROK_HOME% copy so oversized values
+      // never expand on the set line (cmd ~8191 limit / envelope drop).
+      const lengthGuardIdx = script.indexOf('if not "%GROK_HOME:~4096,1%"=="" goto :orca_grok_home_ready')
+      const setCopyIdx = script.indexOf('set "ORCA_GROK_HOME=%GROK_HOME%"')
+      expect(lengthGuardIdx).toBeGreaterThan(-1)
+      expect(setCopyIdx).toBeGreaterThan(-1)
+      expect(lengthGuardIdx).toBeLessThan(setCopyIdx)
       expect(script).toContain('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
       expect(script).toContain(
         'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
@@ -240,6 +245,61 @@ describe('GrokHookService', () => {
         ORCA_AGENT_HOOK_VERSION: '1'
       }
       delete env.GROK_HOME
+
+      const result = await new Promise<{ exitCode: number | null; stderr: string }>(
+        (resolve, reject) => {
+          const child = spawn('cmd.exe', ['/d', '/c', scriptPath], {
+            env,
+            stdio: ['pipe', 'ignore', 'pipe']
+          })
+          let stderr = ''
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL')
+            reject(new Error('grok-hook.cmd timed out'))
+          }, 10_000)
+          child.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString('utf8')
+          })
+          child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+          })
+          child.on('close', (exitCode) => {
+            clearTimeout(timeout)
+            resolve({ exitCode, stderr })
+          })
+          child.stdin.end('{"hookEventName":"pre_tool_use","sessionId":"test"}')
+        }
+      )
+
+      expect(result.exitCode, `stderr=${result.stderr}`).toBe(0)
+      expect(result.stderr).not.toMatch(/syntax of the command is incorrect/i)
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'exits 0 with Orca env set and GROK_HOME longer than the envelope (drop before set)',
+    async () => {
+      expect(new GrokHookService().install().state).toBe('installed')
+      const scriptPath = join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME)
+      // Why: over envelope max but under cmd's ~8191 limit so inheritance works;
+      // the length guard must skip the set copy without parse/expand failure.
+      const grokHome = `C:\\${'x'.repeat(4200)}`
+
+      const env: NodeJS.ProcessEnv = {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
+        ),
+        GROK_HOME: grokHome,
+        ORCA_AGENT_HOOK_PORT: '1',
+        ORCA_AGENT_HOOK_TOKEN: 'test-token',
+        ORCA_PANE_KEY: 'test-pane',
+        ORCA_TAB_ID: 'test-tab',
+        ORCA_AGENT_LAUNCH_TOKEN: 'test-launch',
+        ORCA_WORKTREE_ID: 'test-worktree',
+        ORCA_AGENT_HOOK_ENV: 'test',
+        ORCA_AGENT_HOOK_VERSION: '1'
+      }
 
       const result = await new Promise<{ exitCode: number | null; stderr: string }>(
         (resolve, reject) => {

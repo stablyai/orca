@@ -28,25 +28,6 @@ afterEach(() => {
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
 })
 
-function findGitBash(): string {
-  if (process.env.KIMI_SHELL_PATH) {
-    return process.env.KIMI_SHELL_PATH
-  }
-  const candidates = [
-    process.env.ProgramFiles && join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe'),
-    process.env['ProgramFiles(x86)'] &&
-      join(process.env['ProgramFiles(x86)'], 'Git', 'bin', 'bash.exe'),
-    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe')
-  ]
-  const bash = candidates.find((candidate): candidate is string =>
-    Boolean(candidate && existsSync(candidate))
-  )
-  if (!bash) {
-    throw new Error('Git Bash is required for the Windows Kimi hook lifecycle test')
-  }
-  return bash
-}
-
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
@@ -201,9 +182,13 @@ function hookEnvironment(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   }
 }
 
-/** Prefer a real Git Bash on Windows; Store `bash.exe` stubs often exit 127. */
-function resolveWindowsTestBash(): string {
-  if (process.env.KIMI_SHELL_PATH) {
+/**
+ * Prefer a real Git Bash on Windows; Store `bash.exe` stubs often exit 127.
+ * Returns null when no on-disk executable is found so callers can skip instead
+ * of spawning a PATH lookup that may not exist (or is a broken stub).
+ */
+function resolveWindowsTestBash(): string | null {
+  if (process.env.KIMI_SHELL_PATH && existsSync(process.env.KIMI_SHELL_PATH)) {
     return process.env.KIMI_SHELL_PATH
   }
   const candidates = [
@@ -226,7 +211,7 @@ function resolveWindowsTestBash(): string {
       return candidate
     }
   }
-  return 'bash.exe'
+  return null
 }
 
 // Why: the Git Bash safe-path tests only exercise the bare `.cmd` fast path when
@@ -356,7 +341,6 @@ describe('Windows managed hook stdin structure', () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
       try {
-        const gitBash = findGitBash()
         for (const entry of LOCAL_INSTALLERS) {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
@@ -369,24 +353,32 @@ describe('Windows managed hook stdin structure', () => {
             (name.endsWith('-hook.cmd') && !name.startsWith('antigravity-'))
         )
         expect(mainScripts).toHaveLength(12)
+        const gitBash = resolveWindowsTestBash()
         for (const fileName of mainScripts) {
           const scriptPath = join(hooksDir, fileName)
+          if (fileName.endsWith('.sh')) {
+            if (!gitBash) {
+              // No verified Git Bash on this host — skip .sh live spawn rather
+              // than shell out to a missing/stub `bash.exe` PATH lookup.
+              continue
+            }
+            const result = await runHookProcess(gitBash, [scriptPath], hookEnvironment())
+            expect(result.exitCode, `${fileName} exit code`).toBe(0)
+            expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
+            continue
+          }
           const executable = fileName.endsWith('.cmd')
             ? 'cmd.exe'
-            : fileName.endsWith('.ps1')
-              ? join(
-                  process.env.SystemRoot ?? 'C:\\Windows',
-                  'System32',
-                  'WindowsPowerShell',
-                  'v1.0',
-                  'powershell.exe'
-                )
-              : gitBash
+            : join(
+                process.env.SystemRoot ?? 'C:\\Windows',
+                'System32',
+                'WindowsPowerShell',
+                'v1.0',
+                'powershell.exe'
+              )
           const args = fileName.endsWith('.cmd')
             ? ['/d', '/c', scriptPath]
-            : fileName.endsWith('.ps1')
-              ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
-              : [scriptPath]
+            : ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
           expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
@@ -454,11 +446,12 @@ describe('Windows managed hook stdin structure', () => {
           /powershell\.exe/i
         )
         expect(command).toBe(claudeScript.replaceAll('\\', '/'))
-        const result = await runHookProcess(
-          resolveWindowsTestBash(),
-          ['-c', command],
-          hookEnvironment()
-        )
+        const gitBash = resolveWindowsTestBash()
+        if (!gitBash) {
+          ctx.skip()
+          return
+        }
+        const result = await runHookProcess(gitBash, ['-c', command], hookEnvironment())
         expect(result.exitCode, 'claude git bash bare .cmd exit code').toBe(0)
         expect(result.stdinErrors, 'claude git bash bare .cmd stdin errors').toHaveLength(0)
       } finally {

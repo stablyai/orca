@@ -32,8 +32,12 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       'set "ORCA_GROK_HOME="',
       `if not defined GROK_HOME goto :${grokHomeReadyLabel}`,
+      // Why: length-check BEFORE `set "ORCA_GROK_HOME=%GROK_HOME%"`. cmd expands
+      // %GROK_HOME% on the set line; a home longer than the envelope (or near
+      // cmd's ~8191 char limit) must not be copied at all — drop by skipping
+      // the assignment rather than assign-then-clear.
+      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" goto :${grokHomeReadyLabel}`,
       'set "ORCA_GROK_HOME=%GROK_HOME%"',
-      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME="`,
       `if not defined ORCA_GROK_HOME goto :${grokHomeReadyLabel}`,
       // Why: a trailing backslash escapes curl's closing argv quote on Windows,
       // merging the payload option into grokHome and dropping the hook body.
