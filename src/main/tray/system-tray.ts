@@ -4,6 +4,7 @@ import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate
 import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
+import { stampTrayDevBadge } from './tray-dev-badge'
 
 export type SystemTrayOptions = {
   /** App icon id from settings; the tray reuses the app icon image. */
@@ -138,6 +139,33 @@ function createMacMenuBarImage(): NativeImage | null {
   return image
 }
 
+// Why: dev builds reuse the production template glyph, so without a marker a
+// dev status item is indistinguishable from the installed app's. Stamping the
+// badge into the template (instead of tray.setTitle) keeps the status item at
+// the exact production width, and the attention tint path inherits it since it
+// reads these same pixels.
+function stampMacDevBadge(base: NativeImage): NativeImage {
+  try {
+    const stamped = stampTrayDevBadge(base)
+    if (base.getScaleFactors().includes(2)) {
+      // Why: createFromBitmap starts from 1x pixels only, so the @2x
+      // representation must be rebuilt or the badge blurs on Retina.
+      const retinaStamped = stampTrayDevBadge(base, 2)
+      stamped.addRepresentation({
+        scaleFactor: 2,
+        dataURL: retinaStamped.toDataURL()
+      })
+    }
+    stamped.setTemplateImage(true)
+    return stamped
+  } catch (error) {
+    // Why: the badge is diagnostics-only chrome; a NativeImage failure must
+    // degrade to the plain icon, not abort tray creation.
+    console.warn('[system-tray] dev badge could not be stamped; showing plain icon', error)
+    return base
+  }
+}
+
 function watchMacAppearance(): void {
   if (nativeThemeUpdatedListener) {
     return
@@ -190,6 +218,9 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
     if (!baseTrayImage) {
       return null
     }
+    if (devIndicator) {
+      baseTrayImage = stampMacDevBadge(baseTrayImage)
+    }
   } else {
     baseTrayImage = createAppIconImage(opts.appIcon).resize({
       width: TRAY_ICON_SIZE,
@@ -198,11 +229,6 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   }
 
   tray = new Tray(baseTrayImage)
-  if (process.platform === 'darwin' && devIndicator) {
-    // Why: dev builds reuse the production template glyph, so without a marker
-    // a dev status item is indistinguishable from the installed app's.
-    tray.setTitle('DEV')
-  }
   // Why: reflect any attention event that fired before the tray existed.
   applyTrayImage()
 
