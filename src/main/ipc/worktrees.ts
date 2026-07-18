@@ -703,12 +703,15 @@ function createSshWorktreeMetaIndex(entries: [string, WorktreeMeta][]): SshWorkt
 }
 
 function synthesizeSshGitWorktree(repo: Repo, path: string, meta: WorktreeMeta): GitWorktreeInfo {
+  const isRepoRootPath = areWorktreePathsEqual(path, repo.path)
   return {
     path,
     head: '',
     branch: '',
-    isBare: false,
-    isMainWorktree: areWorktreePathsEqual(path, repo.path),
+    // Why: a bare repo's root is its git dir, not a checkout; only the root
+    // path can be the bare entry — linked worktrees always have working trees.
+    isBare: repo.isBare === true && isRepoRootPath,
+    isMainWorktree: isRepoRootPath,
     ...(meta.sparseDirectories !== undefined ||
     meta.sparseBaseRef !== undefined ||
     meta.sparsePresetId !== undefined
@@ -751,9 +754,19 @@ function buildDetectedGitWorktrees(
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
+  // Why: the bare entry `git worktree list` emits for a bare repo is the git
+  // dir itself — it has no working tree and must never surface as a workspace.
+  // Its presence is also the lazy backfill signal for repos added before
+  // Repo.isBare existed.
+  const bareEntry = gitWorktrees.find((gitWorktree) => gitWorktree.isBare)
+  if (bareEntry && repo.isBare !== true && repo.kind !== 'folder') {
+    store.updateRepo(repo.id, { isBare: true })
+  }
   // Why: a prunable registration has no working directory (issue #8389); only
   // this listing omits it — removal/cleanup flows list worktrees separately.
-  const liveWorktrees = gitWorktrees.filter((gitWorktree) => !gitWorktree.prunable)
+  const liveWorktrees = gitWorktrees.filter(
+    (gitWorktree) => !gitWorktree.prunable && !gitWorktree.isBare
+  )
   return dedupeWorktreesByPath(liveWorktrees).map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     let meta = store.getWorktreeMeta(worktreeId)

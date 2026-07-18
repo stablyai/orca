@@ -273,6 +273,7 @@ describe('registerWorktreeHandlers', () => {
   const store = {
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    updateRepo: vi.fn(),
     getProjects: vi.fn(),
     getSparsePresets: vi.fn(),
     getSettings: vi.fn(),
@@ -348,6 +349,7 @@ describe('registerWorktreeHandlers', () => {
       mainWindow.webContents.send,
       store.getRepos,
       store.getRepo,
+      store.updateRepo,
       store.getProjects,
       store.getSparsePresets,
       store.getSettings,
@@ -2279,6 +2281,60 @@ describe('registerWorktreeHandlers', () => {
       branchNameOverride: 'feature/add-feature',
       pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
     })
+  })
+
+  it('filters the bare entry out of detected worktrees and backfills repo.isBare', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: '',
+        branch: '',
+        isBare: true,
+        isMainWorktree: true
+      },
+      {
+        path: '/workspace/feature',
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })) as {
+      worktrees: { path: string }[]
+    }
+
+    expect(result.worktrees.map((worktree) => worktree.path)).toEqual(['/workspace/feature'])
+    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { isBare: true })
+  })
+
+  it('does not re-stamp isBare on a repo already marked bare', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: null,
+      isBare: true
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: '',
+        branch: '',
+        isBare: true,
+        isMainWorktree: true
+      }
+    ])
+
+    const result = (await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })) as {
+      worktrees: { path: string }[]
+    }
+
+    expect(result.worktrees).toEqual([])
+    expect(store.updateRepo).not.toHaveBeenCalled()
   })
 
   it('lists detected worktrees through the selected WSL project runtime', async () => {

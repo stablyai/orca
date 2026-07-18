@@ -15149,20 +15149,24 @@ export class OrcaRuntimeService {
     if (scan.ok) {
       this.pruneLineageForMissingRepoWorktrees(repo, scan.worktrees)
     }
-    const detected = scan.worktrees.map((gitWorktree) => {
-      const worktreeId = `${repo.id}::${gitWorktree.path}`
-      const meta = this.store?.getWorktreeMeta(worktreeId)
-      const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
-      const detectedWorktree = this.toRuntimeDetectedWorktree(repo, worktree)
-      if (scan.ok) {
-        return detectedWorktree
-      }
-      return {
-        ...detectedWorktree,
-        visible: true,
-        ownership: detectedWorktree.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
-      } satisfies DetectedWorktree
-    })
+    // Why: a bare repo's own entry is its git dir, not a workspace.
+    const detected = scan.worktrees
+      .filter((gitWorktree) => !gitWorktree.isBare)
+      .map((gitWorktree) => {
+        const worktreeId = `${repo.id}::${gitWorktree.path}`
+        const meta = this.store?.getWorktreeMeta(worktreeId)
+        const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+        const detectedWorktree = this.toRuntimeDetectedWorktree(repo, worktree)
+        if (scan.ok) {
+          return detectedWorktree
+        }
+        return {
+          ...detectedWorktree,
+          visible: true,
+          ownership:
+            detectedWorktree.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
+        } satisfies DetectedWorktree
+      })
     return {
       repoId: repo.id,
       authoritative: scan.ok,
@@ -21283,32 +21287,35 @@ export class OrcaRuntimeService {
         if (scan.ok) {
           this.pruneLineageForMissingRepoWorktrees(repo, gitWorktrees)
         }
-        return gitWorktrees.map((gitWorktree) => {
-          const worktreeId = `${repo.id}::${gitWorktree.path}`
-          // Why: lineage validation needs a durable instance ID even when the
-          // runtime sees a workspace before the renderer's discovery-stamp path.
-          const existingMeta = metaById[worktreeId]
-          const meta =
-            existingMeta && existingMeta.instanceId
-              ? existingMeta
-              : this.store?.setWorktreeMeta(worktreeId, {})
-          const merged = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
-          return {
-            ...merged,
-            parentWorktreeId: null,
-            childWorktreeIds: [],
-            lineage: null,
-            git: {
-              path: gitWorktree.path,
-              head: gitWorktree.head,
-              branch: gitWorktree.branch,
-              isBare: gitWorktree.isBare,
-              isMainWorktree: gitWorktree.isMainWorktree
-            },
-            displayName: merged.displayName,
-            comment: merged.comment
-          }
-        })
+        // Why: a bare repo's own entry is its git dir, not a workspace.
+        return gitWorktrees
+          .filter((gitWorktree) => !gitWorktree.isBare)
+          .map((gitWorktree) => {
+            const worktreeId = `${repo.id}::${gitWorktree.path}`
+            // Why: lineage validation needs a durable instance ID even when the
+            // runtime sees a workspace before the renderer's discovery-stamp path.
+            const existingMeta = metaById[worktreeId]
+            const meta =
+              existingMeta && existingMeta.instanceId
+                ? existingMeta
+                : this.store?.setWorktreeMeta(worktreeId, {})
+            const merged = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+            return {
+              ...merged,
+              parentWorktreeId: null,
+              childWorktreeIds: [],
+              lineage: null,
+              git: {
+                path: gitWorktree.path,
+                head: gitWorktree.head,
+                branch: gitWorktree.branch,
+                isBare: gitWorktree.isBare,
+                isMainWorktree: gitWorktree.isMainWorktree
+              },
+              displayName: merged.displayName,
+              comment: merged.comment
+            }
+          })
       })
     )
     const worktrees = this.attachLineageToResolvedWorktrees(perRepoWorktrees.flat())
