@@ -34,7 +34,10 @@ type RelayControlClientOptions = {
   onDrain: (message: RelayDrainMessage) => void
   onClose: (code: number) => void
   createSocket?: (url: string, relayJwt: string) => WebSocket
+  livenessTimeoutMs?: number
 }
+
+const RELAY_CONTROL_LIVENESS_TIMEOUT_MS = 45_000
 
 function controlWebSocketUrl(cellUrl: string): { origin: string; url: string } {
   const parsed = new URL(cellUrl)
@@ -62,6 +65,7 @@ export class RelayControlClient {
   private state: RelayControlState = 'idle'
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
+  private livenessTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: RelayControlClientOptions) {
     this.options = options
@@ -154,6 +158,7 @@ export class RelayControlClient {
 
   closeNow(): void {
     this.state = 'closed'
+    this.clearLivenessTimer()
     this.requests.rejectAll(new Error('relay_control_closed'))
     this.socket?.terminate()
     this.socket = null
@@ -183,6 +188,9 @@ export class RelayControlClient {
   }
 
   private handleMessage(raw: RawData): void {
+    if (this.state === 'active' || this.state === 'draining') {
+      this.armLivenessTimer()
+    }
     const message = parseRelayControlMessage(raw)
     if (!message) {
       this.failProtocol('invalid control JSON')
@@ -249,6 +257,7 @@ export class RelayControlClient {
       return
     }
     this.state = 'active'
+    this.armLivenessTimer()
     this.connectResolve?.(ack.data)
     this.clearConnectPromise()
   }
@@ -269,6 +278,7 @@ export class RelayControlClient {
   private handleClose(code: number): void {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
+    this.clearLivenessTimer()
     if (wasConnecting) {
       this.connectReject?.(new Error(`relay_control_closed_${code}`))
       this.clearConnectPromise()
@@ -280,5 +290,26 @@ export class RelayControlClient {
   private clearConnectPromise(): void {
     this.connectResolve = null
     this.connectReject = null
+  }
+
+  private armLivenessTimer(): void {
+    this.clearLivenessTimer()
+    const timeoutMs = this.options.livenessTimeoutMs ?? RELAY_CONTROL_LIVENESS_TIMEOUT_MS
+    this.livenessTimer = setTimeout(() => {
+      this.livenessTimer = null
+      if (this.state === 'active' || this.state === 'draining') {
+        // Why: a half-open TCP path may never emit close; terminating it lets the
+        // origin pool re-resolve the relay instead of staying falsely registered.
+        this.socket?.terminate()
+      }
+    }, timeoutMs)
+    this.livenessTimer.unref?.()
+  }
+
+  private clearLivenessTimer(): void {
+    if (this.livenessTimer) {
+      clearTimeout(this.livenessTimer)
+      this.livenessTimer = null
+    }
   }
 }
