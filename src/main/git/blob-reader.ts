@@ -45,10 +45,10 @@ let divergenceEventsSent = 0
 let divergenceLogged = false
 
 // Why: in on-mode the first reads plus a 1/128 sample are re-run via CLI in the
-// background and compared; one mismatch poisons the session back to CLI-only so
-// a gix/git disagreement can never persist for a user. ONLY sampled reads are
-// verified — unsampled native reads in `on` mode are served without a CLI
-// cross-check, which is the accepted cost of `on` mode.
+// background and compared; a mismatch that reproduces on a second read poisons
+// the session back to CLI-only so a gix/git disagreement can never persist for a
+// user. ONLY sampled reads are verified — unsampled native reads in `on` mode
+// are served without a CLI cross-check, which is the accepted cost of `on` mode.
 const ALWAYS_SAMPLE_FIRST_READS = 3
 const SAMPLE_EVERY_NTH_READ = 128
 const MAX_DIVERGENCE_EVENTS_PER_SESSION = 5
@@ -72,7 +72,7 @@ export async function readGitBlobRaw(
       readBlobViaCli(request, options)
     ])
     if (nativeOutcome && !options.signal?.aborted) {
-      compareAndRecord(request, nativeOutcome, cliOutcome)
+      scheduleDivergenceCheck(module, request, nativeOutcome, cliOutcome, options)
     }
     return cliOutcome
   }
@@ -87,7 +87,7 @@ export async function readGitBlobRaw(
     // to found:false; mirror it so abort races behave identically.
     return { found: false, tooLarge: false }
   }
-  maybeSampleVerify(request, nativeOutcome, options)
+  maybeSampleVerify(module, request, nativeOutcome, options)
   return nativeOutcome
 }
 
@@ -130,6 +130,7 @@ async function readBlobViaNative(
 }
 
 function maybeSampleVerify(
+  module: GitNativeModule,
   request: BlobReadRequest,
   nativeOutcome: RawBlobOutcome,
   options: GitRuntimeOptions
@@ -140,35 +141,86 @@ function maybeSampleVerify(
   if (!sampled) {
     return
   }
-  // Why: the verify spawn must not inherit the caller's abort signal — an
-  // aborted CLI read would masquerade as a divergence.
+  // on-mode has no CLI outcome yet — scheduleDivergenceCheck reads it.
+  scheduleDivergenceCheck(module, request, nativeOutcome, undefined, options)
+}
+
+// Why: the verify reads must not inherit the caller's abort signal — an aborted
+// CLI read would masquerade as a divergence.
+function cliVerifyOptions(options: GitRuntimeOptions): GitRuntimeOptions {
   const { signal: _signal, ...verifyOptions } = options
-  // Why: fire-and-forget runs with no unhandledRejection handler in main; the
-  // trailing .catch guarantees a rejected verify (or a throwing compare) can
-  // never surface as an unhandled rejection that could terminate the process.
-  void readBlobViaCli(request, verifyOptions)
-    .then((cliOutcome) => {
-      compareAndRecord(request, nativeOutcome, cliOutcome)
-    })
+  return verifyOptions
+}
+
+// Schedules the background native-vs-CLI comparison off the read's hot path.
+// Fire-and-forget runs with no unhandledRejection handler in main, so the
+// trailing .catch guarantees a rejected read (or a throwing record) can never
+// surface as an unhandled rejection that could terminate the process. Shadow
+// mode passes the CLI outcome it already has; on-mode reads it here.
+function scheduleDivergenceCheck(
+  module: GitNativeModule,
+  request: BlobReadRequest,
+  nativeOutcome: RawBlobOutcome,
+  cliOutcomeOrOptions: RawBlobOutcome | undefined,
+  options: GitRuntimeOptions
+): void {
+  const verifyOptions = cliVerifyOptions(options)
+  const cliOutcome = cliOutcomeOrOptions
+    ? Promise.resolve(cliOutcomeOrOptions)
+    : readBlobViaCli(request, verifyOptions)
+  void cliOutcome
+    .then((cli) => confirmAndRecordDivergence(module, request, nativeOutcome, cli, verifyOptions))
     .catch(() => {})
 }
 
-function compareAndRecord(
+async function confirmAndRecordDivergence(
+  module: GitNativeModule,
   request: BlobReadRequest,
   nativeOutcome: RawBlobOutcome,
-  cliOutcome: RawBlobOutcome
-): void {
-  const divergence =
-    nativeOutcome.found !== cliOutcome.found
-      ? 'presence'
-      : nativeOutcome.tooLarge !== cliOutcome.tooLarge
-        ? 'too_large'
-        : !buffersEqual(nativeOutcome.bytes, cliOutcome.bytes)
-          ? 'bytes'
-          : null
-  if (!divergence) {
+  cliOutcome: RawBlobOutcome,
+  verifyOptions: GitRuntimeOptions
+): Promise<void> {
+  if (divergenceKind(nativeOutcome, cliOutcome) === null) {
     return
   }
+  // Why: the CLI verify runs after the native read, so a legitimate HEAD move or
+  // index change in between shows up as a one-shot divergence. Re-read both and
+  // only poison if it reproduces — a transient state change can't spuriously and
+  // permanently disable native reads (or emit a misleading divergence event).
+  const [native2, cli2] = await Promise.all([
+    readBlobViaNative(module, request).catch(() => null),
+    readBlobViaCli(request, verifyOptions)
+  ])
+  if (!native2) {
+    return
+  }
+  const divergence = divergenceKind(native2, cli2)
+  if (divergence === null) {
+    return
+  }
+  recordDivergence(request, divergence)
+}
+
+function divergenceKind(
+  nativeOutcome: RawBlobOutcome,
+  cliOutcome: RawBlobOutcome
+): 'presence' | 'too_large' | 'bytes' | null {
+  if (nativeOutcome.found !== cliOutcome.found) {
+    return 'presence'
+  }
+  if (nativeOutcome.tooLarge !== cliOutcome.tooLarge) {
+    return 'too_large'
+  }
+  if (!buffersEqual(nativeOutcome.bytes, cliOutcome.bytes)) {
+    return 'bytes'
+  }
+  return null
+}
+
+function recordDivergence(
+  request: BlobReadRequest,
+  divergence: 'presence' | 'too_large' | 'bytes'
+): void {
   sessionPoisoned = true
   if (!divergenceLogged) {
     // Why: telemetry is a hard no-op on dev/contributor builds, so a dogfooder

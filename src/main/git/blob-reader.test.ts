@@ -166,10 +166,13 @@ describe('readGitBlobRaw (native modes)', () => {
       gitPath: 'a.txt'
     })
     expect(raw.bytes?.toString()).toBe('cli-different')
-    expect(track).toHaveBeenCalledWith('git_native_shadow_divergence', {
-      read_kind: 'rev',
-      divergence: 'bytes'
-    })
+    // Divergence is confirmed by a background re-verify before poisoning/telemetry.
+    await vi.waitFor(() =>
+      expect(track).toHaveBeenCalledWith('git_native_shadow_divergence', {
+        read_kind: 'rev',
+        divergence: 'bytes'
+      })
+    )
   })
 
   it('shadow mode reports presence divergence when native and CLI disagree on existence', async () => {
@@ -185,10 +188,12 @@ describe('readGitBlobRaw (native modes)', () => {
       gitPath: 'a.txt'
     })
     expect(raw.bytes?.toString()).toBe('cli')
-    expect(track).toHaveBeenCalledWith('git_native_shadow_divergence', {
-      read_kind: 'rev',
-      divergence: 'presence'
-    })
+    await vi.waitFor(() =>
+      expect(track).toHaveBeenCalledWith('git_native_shadow_divergence', {
+        read_kind: 'rev',
+        divergence: 'presence'
+      })
+    )
   })
 
   it('poisons the session after a sampled divergence in on mode', async () => {
@@ -209,6 +214,38 @@ describe('readGitBlobRaw (native modes)', () => {
     })
     expect(native.readBlobAtRevPath).not.toHaveBeenCalled()
     expect(raw.bytes?.toString()).toBe('cli-truth')
+  })
+
+  it('does not poison when a divergence does not reproduce on re-verify (transient state change)', async () => {
+    // Native returns stale bytes on the first read but agrees with the CLI on
+    // the re-verify — a legitimate concurrent stage/commit, not a gix bug. The
+    // session must NOT poison and no divergence event may fire.
+    const native = fakeNativeModule()
+    native.readBlobAtRevPath = vi
+      .fn()
+      .mockResolvedValueOnce({ found: true, tooLarge: false, data: Buffer.from('stale') })
+      .mockResolvedValue({ found: true, tooLarge: false, data: Buffer.from('fresh') })
+    mockedLoad.mockReturnValue(native as never)
+    mockedExec.mockResolvedValue({ stdout: Buffer.from('fresh') } as never)
+    configureNativeGitBlobReads(() => 'on')
+    const first = await readGitBlobRaw({
+      kind: 'rev',
+      worktreePath: '/repo',
+      rev: 'HEAD',
+      gitPath: 'a.txt'
+    })
+    expect(first.bytes?.toString()).toBe('stale')
+    // Initial native read + the re-verify's native re-read = 2 calls.
+    await vi.waitFor(() => expect(native.readBlobAtRevPath).toHaveBeenCalledTimes(2))
+    expect(track).not.toHaveBeenCalled()
+    // Not poisoned: the next read still serves native (now the fresh value).
+    const second = await readGitBlobRaw({
+      kind: 'rev',
+      worktreePath: '/repo',
+      rev: 'HEAD',
+      gitPath: 'b.txt'
+    })
+    expect(second.bytes?.toString()).toBe('fresh')
   })
 
   it('never uses native for WSL-routed reads', async () => {

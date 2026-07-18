@@ -53,14 +53,16 @@ impl Task for RevPathTask {
     type JsValue = NativeBlobResult;
 
     fn compute(&mut self) -> Result<Self::Output> {
-        // Errors are swallowed to NotFound here by design; the try_read_* seam
-        // in blob_read.rs exists if divergence reports ever need error reasons.
-        Ok(blob_read::read_blob_at_rev_path(
+        // Operational failures (repo open / rev / object read) reject so the TS
+        // seam falls back to the git CLI; only genuinely-absent paths resolve as
+        // NotFound. See blob_read::read_blob_at_rev_path.
+        blob_read::read_blob_at_rev_path(
             Path::new(&self.repo_path),
             &self.rev,
             &self.path,
             u64::from(self.max_bytes),
-        ))
+        )
+        .map_err(|e| Error::from_reason(e.to_string()))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
@@ -94,13 +96,15 @@ impl Task for IndexPathTask {
     type JsValue = NativeBlobResult;
 
     fn compute(&mut self) -> Result<Self::Output> {
-        // Errors are swallowed to NotFound here by design; the try_read_* seam
-        // in blob_read.rs exists if divergence reports ever need error reasons.
-        Ok(blob_read::read_blob_at_index_path(
+        // Operational failures reject so the TS seam falls back to the git CLI;
+        // only genuinely-absent paths resolve as NotFound. See
+        // blob_read::read_blob_at_index_path.
+        blob_read::read_blob_at_index_path(
             Path::new(&self.repo_path),
             &self.path,
             u64::from(self.max_bytes),
-        ))
+        )
+        .map_err(|e| Error::from_reason(e.to_string()))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {

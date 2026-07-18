@@ -7,26 +7,22 @@ pub enum BlobOutcome {
     Found(Vec<u8>),
 }
 
+pub type ReadResult = Result<BlobOutcome, Box<dyn std::error::Error + Send + Sync>>;
+
 /// Equivalent of `git show --end-of-options <rev>:<path>` for regular files:
 /// raw object bytes, no filters — matching what the CLI path returns today.
+///
+/// `Ok(NotFound)` is returned only for a genuinely-absent path (the CLI would
+/// also report it missing). Operational failures — repo open, rev resolution,
+/// object read — are returned as `Err` so the N-API layer rejects and the
+/// TypeScript seam falls back to the git CLI instead of serving an empty diff
+/// (e.g. a repo feature gix cannot handle but the user's git can).
 pub fn read_blob_at_rev_path(
     repo_path: &Path,
     rev: &str,
     path: &str,
     max_bytes: u64,
-) -> BlobOutcome {
-    match try_read_rev_path(repo_path, rev, path, max_bytes) {
-        Ok(outcome) => outcome,
-        Err(_) => BlobOutcome::NotFound,
-    }
-}
-
-fn try_read_rev_path(
-    repo_path: &Path,
-    rev: &str,
-    path: &str,
-    max_bytes: u64,
-) -> Result<BlobOutcome, Box<dyn std::error::Error + Send + Sync>> {
+) -> ReadResult {
     let repo = gix::open(repo_path)?;
     let object = repo.rev_parse_single(rev)?.object()?;
     let tree = object.peel_to_tree()?;
@@ -44,22 +40,11 @@ fn try_read_rev_path(
 }
 
 /// Equivalent of `git show :<path>`: the stage-0 index entry's blob. Unmerged
-/// paths have no stage-0 entry and read as NotFound, matching the CLI error path.
-pub fn read_blob_at_index_path(repo_path: &Path, path: &str, max_bytes: u64) -> BlobOutcome {
-    match try_read_index_path(repo_path, path, max_bytes) {
-        Ok(outcome) => outcome,
-        Err(_) => BlobOutcome::NotFound,
-    }
-}
-
-fn try_read_index_path(
-    repo_path: &Path,
-    path: &str,
-    max_bytes: u64,
-) -> Result<BlobOutcome, Box<dyn std::error::Error + Send + Sync>> {
+/// paths have no stage-0 entry and read as `Ok(NotFound)`, matching the CLI's
+/// missing result. Operational failures return `Err` (see `read_blob_at_rev_path`).
+pub fn read_blob_at_index_path(repo_path: &Path, path: &str, max_bytes: u64) -> ReadResult {
     let repo = gix::open(repo_path)?;
-    // gix::open on a linked worktree resolves that worktree's private index;
-    // a fresh repo has no index file and errors here, reading as NotFound.
+    // gix::open on a linked worktree resolves that worktree's private index.
     let index = repo.index()?;
     let Some(entry) =
         index.entry_by_path_and_stage(path.into(), gix::index::entry::Stage::Unconflicted)
@@ -77,7 +62,7 @@ pub(crate) fn read_blob_bounded(
     repo: &gix::Repository,
     id: gix::ObjectId,
     max_bytes: u64,
-) -> Result<BlobOutcome, Box<dyn std::error::Error + Send + Sync>> {
+) -> ReadResult {
     // Why: gate on the object header so a >max blob is never decompressed into
     // memory — mirrors the CLI path's maxBuffer overflow behavior.
     let header = repo.find_header(id)?;

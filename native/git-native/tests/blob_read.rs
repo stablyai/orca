@@ -3,7 +3,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use git_native::blob_read::{read_blob_at_index_path, read_blob_at_rev_path, BlobOutcome};
+use git_native::blob_read::{
+    read_blob_at_index_path, read_blob_at_rev_path, BlobOutcome, ReadResult,
+};
 
 // Hermetic fixtures: contributor system/global git config (hooks, filters,
 // fsmonitor) must not leak in. The global path lives under .git/ and is never
@@ -67,10 +69,10 @@ fn stage_gitlink(dir: &Path, oid: &str, rel: &str) {
 
 // track_caller: panic locations point at the failing test, not this helper.
 #[track_caller]
-fn assert_found(outcome: BlobOutcome, expected: &[u8]) {
+fn assert_found(outcome: ReadResult, expected: &[u8]) {
     match outcome {
-        BlobOutcome::Found(bytes) => assert_eq!(bytes, expected),
-        other => panic!("expected Found, got {:?}", other),
+        Ok(BlobOutcome::Found(bytes)) => assert_eq!(bytes, expected),
+        other => panic!("expected Ok(Found), got {:?}", other),
     }
 }
 
@@ -110,7 +112,7 @@ fn reads_nested_path_and_explicit_commit_oid() {
     // A tree path must not read as a blob.
     assert!(matches!(
         read_blob_at_rev_path(&dir, "HEAD", "sub dir", MAX),
-        BlobOutcome::NotFound
+        Ok(BlobOutcome::NotFound)
     ));
 }
 
@@ -123,26 +125,31 @@ fn gitlink_entry_is_not_found() {
     git(&dir, &["commit", "--quiet", "-m", "s"]);
     assert!(matches!(
         read_blob_at_rev_path(&dir, "HEAD", "submod", MAX),
-        BlobOutcome::NotFound
+        Ok(BlobOutcome::NotFound)
     ));
 }
 
 #[test]
-fn missing_path_and_bad_rev_are_not_found() {
+fn missing_path_is_not_found() {
+    // A genuinely-absent path (valid rev, path not in the tree) resolves as
+    // NotFound — the CLI agrees, so no fallback is needed.
     let (_tmp, dir) = init_repo();
     commit_file(&dir, "a.txt", b"x");
     assert!(matches!(
         read_blob_at_rev_path(&dir, "HEAD", "nope.txt", MAX),
-        BlobOutcome::NotFound
+        Ok(BlobOutcome::NotFound)
     ));
-    assert!(matches!(
-        read_blob_at_rev_path(&dir, "deadbeef", "a.txt", MAX),
-        BlobOutcome::NotFound
-    ));
-    assert!(matches!(
-        read_blob_at_rev_path(Path::new("/nonexistent-repo"), "HEAD", "a.txt", MAX),
-        BlobOutcome::NotFound
-    ));
+}
+
+#[test]
+fn operational_failures_return_err_so_cli_fallback_runs() {
+    // A bad rev and an unopenable repo are operational failures, not genuine
+    // absence: they must return Err so the N-API layer rejects and the TS seam
+    // falls back to the git CLI rather than showing an empty diff.
+    let (_tmp, dir) = init_repo();
+    commit_file(&dir, "a.txt", b"x");
+    assert!(read_blob_at_rev_path(&dir, "deadbeef", "a.txt", MAX).is_err());
+    assert!(read_blob_at_rev_path(Path::new("/nonexistent-repo"), "HEAD", "a.txt", MAX).is_err());
 }
 
 #[test]
@@ -152,7 +159,7 @@ fn oversized_blob_is_too_large() {
     // A blob larger than max_bytes must report TooLarge, not Found or an error.
     assert!(matches!(
         read_blob_at_rev_path(&dir, "HEAD", "big.bin", 16),
-        BlobOutcome::TooLarge
+        Ok(BlobOutcome::TooLarge)
     ));
 }
 
@@ -253,7 +260,7 @@ fn index_read_finds_newly_added_file_absent_from_head() {
     // And HEAD does not have it:
     assert!(matches!(
         read_blob_at_rev_path(&dir, "HEAD", "new.txt", MAX),
-        BlobOutcome::NotFound
+        Ok(BlobOutcome::NotFound)
     ));
 }
 
@@ -263,18 +270,16 @@ fn index_read_missing_path_is_not_found() {
     commit_file(&dir, "a.txt", b"x");
     assert!(matches!(
         read_blob_at_index_path(&dir, "nope.txt", MAX),
-        BlobOutcome::NotFound
+        Ok(BlobOutcome::NotFound)
     ));
 }
 
 #[test]
-fn index_read_in_fresh_repo_without_index_file_is_not_found() {
-    // `git init` creates no index file; the open-index error must read as NotFound.
+fn index_read_in_fresh_repo_without_index_file_returns_err() {
+    // `git init` creates no index file; reading the index errors, which is an
+    // operational failure — Err so the caller falls back to the git CLI.
     let (_tmp, dir) = init_repo();
-    assert!(matches!(
-        read_blob_at_index_path(&dir, "a.txt", MAX),
-        BlobOutcome::NotFound
-    ));
+    assert!(read_blob_at_index_path(&dir, "a.txt", MAX).is_err());
 }
 
 #[test]
@@ -291,7 +296,7 @@ fn unmerged_path_has_no_stage_zero_entry() {
     assert!(!merged.status.success(), "merge should conflict");
     assert!(matches!(
         read_blob_at_index_path(&dir, "c.txt", MAX),
-        BlobOutcome::NotFound
+        Ok(BlobOutcome::NotFound)
     ));
 }
 
@@ -304,7 +309,7 @@ fn staged_gitlink_entry_is_not_found_in_index() {
     stage_gitlink(&dir, &oid, "submod");
     assert!(matches!(
         read_blob_at_index_path(&dir, "submod", MAX),
-        BlobOutcome::NotFound
+        Ok(BlobOutcome::NotFound)
     ));
 }
 
@@ -326,7 +331,7 @@ fn index_read_size_boundary_matches_rev_reads() {
     // TooLarge, exactly-at-limit succeeds.
     assert!(matches!(
         read_blob_at_index_path(&dir, "big.bin", 16),
-        BlobOutcome::TooLarge
+        Ok(BlobOutcome::TooLarge)
     ));
     assert_found(read_blob_at_index_path(&dir, "big.bin", 32), &[7u8; 32]);
 }

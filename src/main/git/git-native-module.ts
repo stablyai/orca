@@ -5,9 +5,10 @@ import { track } from '../telemetry/client'
 
 /**
  * Invariants: `tooLarge: true` implies `found: true`; `data` is present iff
- * `found && !tooLarge`. The native side maps read errors to not-found and
- * never rejects in normal operation, but callers should still catch
- * rejections (napi task infrastructure can reject in principle).
+ * `found && !tooLarge`. The native side returns not-found only for a
+ * genuinely-absent rev/path; operational failures (repo open, rev resolution,
+ * object read) REJECT so the caller can fall back to the git CLI. Callers must
+ * therefore catch rejections rather than assuming a resolved result.
  */
 export type NativeBlobResult = {
   found: boolean
@@ -78,10 +79,16 @@ export function loadGitNativeModule(): GitNativeModule | null {
   }
   if (failureClass !== null) {
     // Why: a broken addon must degrade silently to the CLI path for the user;
-    // one low-cardinality event makes fleet-wide breakage observable. Single
-    // track call outside the try/catch so a throwing track can neither
-    // double-emit nor escape the never-throw load contract.
-    track('git_native_load_failed', { error_class: failureClass })
+    // one low-cardinality event makes fleet-wide breakage observable. The
+    // track call is guarded so a throwing track() (posthog / validate /
+    // getSettings have no internal guard) can neither double-emit nor escape
+    // loadGitNativeModule — an escape would abort the read instead of returning
+    // null for CLI fallback.
+    try {
+      track('git_native_load_failed', { error_class: failureClass })
+    } catch {
+      // Native addon failures must always degrade to the CLI path.
+    }
   }
   return cached.module
 }
