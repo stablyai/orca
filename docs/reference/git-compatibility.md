@@ -60,3 +60,38 @@ PR checks run the capability contract against real Git 2.25.5, 2.38.1, and
 Keep the unit tests alongside that matrix. They cover concurrent probes,
 native/WSL/SSH/relay isolation, and error-stream shapes that a single real
 binary invocation cannot exercise deterministically.
+
+## Native blob reads (experimental)
+
+The `experimentalNativeGit` setting routes diff blob reads (`git show <rev>:<path>`
+and `git show :<path>`) through an in-process gitoxide reader (`native/git-native`)
+instead of `git` subprocess spawns. It is **off by default**; there is no settings-UI
+toggle yet (enable via the setting in the config file or the `ORCA_NATIVE_GIT` env).
+Compatibility contract:
+
+- The reader bypasses the user's git binary entirely, so it adds **no** git-version
+  surface. The CLI path remains intact and is the automatic fallback whenever the
+  native addon is missing, fails to load, errors on a read, or a sampled verification
+  detects any divergence from CLI output — in which case the session "poisons" back
+  to CLI-only for its lifetime and emits a `git_native_shadow_divergence` telemetry
+  event (`read_kind` + `divergence` only; no paths or content).
+- Scope: native-host repos only. WSL-routed repos (`\\wsl.localhost` UNC paths or a
+  `wslDistro` option) and SSH worktrees always use the existing CLI / relay paths.
+- Modes (env `ORCA_NATIVE_GIT` overrides the setting): `0` / `off` / `false` force
+  CLI; `1` forces native; `shadow` dual-runs every read, serves the CLI result, and
+  reports any divergence. With no env override, the `experimentalNativeGit` setting
+  decides on/off.
+- Verification: a differential parity suite (`blob-reader.parity.test.ts`) compares
+  native output against real `git` byte-for-byte over a fixture matrix (loose and
+  packed objects, CRLF, unicode paths, binary, empty files, the 10 MB size boundary,
+  staged vs HEAD, linked-worktree private index, unmerged paths). CI builds the addon
+  and runs this suite under `ORCA_REQUIRE_GIT_NATIVE=1` so a missing addon fails loudly.
+  Coverage boundary: PR CI gates parity on Linux only; macOS/Windows byte parity relies
+  on `shadow` telemetry rather than a per-platform CI gate (gix is platform-agnostic and
+  paths are forward-slash-normalized before the read), so flip the flag on for real users
+  only after clean cross-platform `shadow` results.
+- Known intentional divergences (native returns not-found; excluded from the parity
+  oracle): gitlink/submodule entries and sparse-dir entries — `git show` pretty-prints
+  a locally-resolvable gitlink commit, but Orca routes submodules away before blob
+  reads so this path is never hit in production. Also on the shadow-telemetry watchlist:
+  `git replace` refs and sparse-index repositories.
