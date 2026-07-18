@@ -112,6 +112,10 @@ export function applyParsedSshHostInput(draft: EditingTarget): EditingTarget {
   }
 }
 
+/**
+ * Prefills a draft from a picked tailnet peer, preferring the MagicDNS name over
+ * the raw tailnet IP and only filling the label when the user hasn't set one.
+ */
 export function applyTailnetPeerToDraft(
   draft: EditingTarget,
   peer: TailnetPeerSuggestion

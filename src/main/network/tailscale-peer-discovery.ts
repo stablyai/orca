@@ -71,6 +71,13 @@ function normalizeDnsName(dnsName: unknown): string {
   return typeof dnsName === 'string' ? dnsName.replace(/\.$/, '') : ''
 }
 
+/**
+ * Parses `tailscale status --json` output into SSH-target suggestions.
+ *
+ * Skips Mullvad exit nodes and peers with neither a MagicDNS name nor a tailnet
+ * IPv4, then sorts online peers first and alphabetically by host name. Returns an
+ * empty array on malformed or unexpected JSON.
+ */
 export function parseTailscaleStatusPeers(statusJson: string): TailnetPeerSuggestion[] {
   let status: unknown
   try {
@@ -121,6 +128,14 @@ export function parseTailscaleStatusPeers(statusJson: string): TailnetPeerSugges
   return suggestions
 }
 
+/**
+ * Discovers online tailnet peers by running the Tailscale CLI, probing known
+ * install locations until one succeeds and caching the result for a short TTL.
+ *
+ * @param runStatus - Override for invoking `tailscale status` (injected in tests).
+ * @returns Discovery result; `available` is false when the CLI is missing or the
+ * daemon is unreachable.
+ */
 export async function discoverTailnetPeers(
   runStatus: (binary: string) => Promise<string> = runTailscaleStatus
 ): Promise<TailnetPeerDiscovery> {
@@ -150,6 +165,7 @@ export async function discoverTailnetPeers(
   return discovery
 }
 
+/** Clears the discovery cache and remembered binary path so tests start clean. */
 export function __resetTailnetPeerDiscoveryForTests(): void {
   cache = null
   workingBinary = null

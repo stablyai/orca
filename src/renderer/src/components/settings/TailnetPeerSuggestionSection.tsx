@@ -13,6 +13,13 @@ type TailnetPeerSuggestionSectionProps = {
   onPick: (peer: TailnetPeerSuggestion) => void
 }
 
+/**
+ * Renders clickable chips for online tailnet peers to prefill the SSH target
+ * form. Returns null when no peers are discovered — e.g. Tailscale isn't
+ * installed — so the section stays hidden rather than empty.
+ *
+ * @param onPick - Called with the chosen peer when a chip is clicked.
+ */
 export function TailnetPeerSuggestionSection({
   onPick
 }: TailnetPeerSuggestionSectionProps): React.JSX.Element | null {
