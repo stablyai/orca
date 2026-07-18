@@ -17820,6 +17820,61 @@ describe('connectPanePty', () => {
     }
   })
 
+  it.each([
+    {
+      name: 'Claude history resume',
+      launchAgent: 'claude',
+      agentKind: 'claude',
+      requestKind: 'resume'
+    },
+    {
+      name: 'fresh Codex launch',
+      launchAgent: 'codex',
+      agentKind: 'codex',
+      requestKind: 'new'
+    }
+  ])(
+    'keeps focus reports enabled for a native Windows $name',
+    async ({ launchAgent, agentKind, requestKind }) => {
+      const restoreUserAgent = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      try {
+        const pane = createPane(1)
+        pane.terminal.modes.sendFocusMode = true
+
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          createDeps({
+            startup: {
+              command: `${launchAgent} session-command`,
+              launchAgent,
+              telemetry: {
+                agent_kind: agentKind,
+                launch_source: 'sidebar',
+                request_kind: requestKind
+              }
+            }
+          }) as never
+        )
+
+        transport.sendInput.mockClear()
+        sendTerminalInputThroughPane(pane, '\x1b[O')
+        sendTerminalInputThroughPane(pane, '\x1b[I')
+
+        expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O')
+        expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I')
+      } finally {
+        restoreUserAgent()
+      }
+    }
+  )
+
   it('drops only focus reports while native Windows Codex is done and resumes them when working', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
