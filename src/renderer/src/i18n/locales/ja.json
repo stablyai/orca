@@ -9655,6 +9655,7 @@
             "createPrIntentConfigureAi": "commit メッセージを追加するか、Source Control AI 設定を構成してください。",
             "createPrIntentGenerateFailed": "commit メッセージを生成できませんでした。追加してから再試行してください。",
             "createPrIntentCommitFailed": "変更を commit できませんでした。問題を修正してから Create PR を再試行してください。",
+            "createPrIntentNeedsSync": "レビューを作成する前にこのブランチを同期してください。",
             "createPrIntentBranchNotReady": "このブランチはまだレビューを作成できる状態ではありません。",
             "createPrIntentPublishing": "ブランチを公開中…",
             "createPrIntentForcePushing": "lease 付きで強制プッシュ中…",
@@ -9692,8 +9693,8 @@
               "834cb3f23d": "AIで修正",
               "783a808870": "閉じる"
             },
-            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
-            "createPrIntentSyncing": "Syncing branch…"
+            "createPrIntentSyncConflicts": "同期で競合が発生しました。解決してから Create PR を再試行してください。",
+            "createPrIntentSyncing": "ブランチを同期中…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",

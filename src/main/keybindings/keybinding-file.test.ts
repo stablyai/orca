@@ -368,6 +368,17 @@ describe('keybinding-file', () => {
     })
   })
 
+  it('throws instead of freezing the seed when a legacy binding fails normalization', () => {
+    // A dropped pin must not be silent: the service catches the throw and keeps
+    // the cohort pending so a corrected build can retry the seed.
+    expect(() =>
+      seedLegacyTabSwitchBindings(filePath, 'darwin', {
+        'tab.nextSameType': ['J']
+      })
+    ).toThrow(/normalize/i)
+    expect(readKeybindingFile(filePath, 'darwin').platformOverrides.darwin).toEqual({})
+  })
+
   it('does not replace an unreadable keybindings file while seeding', () => {
     const unreadableContents = '{{{not json'
     writeFileSync(filePath, unreadableContents, 'utf8')

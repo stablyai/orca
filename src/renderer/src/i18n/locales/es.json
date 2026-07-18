@@ -9655,6 +9655,7 @@
             "createPrIntentConfigureAi": "Agrega un mensaje de commit o configura la IA de Source Control.",
             "createPrIntentGenerateFailed": "No se pudo generar un mensaje de commit. Agrega uno y vuelve a intentarlo.",
             "createPrIntentCommitFailed": "No se pudo hacer commit de los cambios. Corrige el issue y vuelve a intentar Crear PR.",
+            "createPrIntentNeedsSync": "Sincroniza esta rama antes de crear una revisión.",
             "createPrIntentBranchNotReady": "La rama aún no está lista para crear una revisión.",
             "createPrIntentPublishing": "Publicando rama…",
             "createPrIntentForcePushing": "Haciendo force push con lease…",
@@ -9692,8 +9693,8 @@
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
             },
-            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
-            "createPrIntentSyncing": "Syncing branch…"
+            "createPrIntentSyncConflicts": "La sincronización encontró conflictos. Resuélvelos y vuelve a intentar Crear PR.",
+            "createPrIntentSyncing": "Sincronizando rama…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",

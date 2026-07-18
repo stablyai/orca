@@ -9655,6 +9655,7 @@
             "createPrIntentConfigureAi": "commit 메시지를 추가하거나 Source Control AI 설정을 구성하세요.",
             "createPrIntentGenerateFailed": "commit 메시지를 생성할 수 없습니다. 메시지를 추가한 다음 다시 시도하세요.",
             "createPrIntentCommitFailed": "변경 사항을 commit 할 수 없습니다. 문제를 수정한 다음 Create PR을 다시 시도하세요.",
+            "createPrIntentNeedsSync": "리뷰를 만들기 전에 이 브랜치를 동기화하세요.",
             "createPrIntentBranchNotReady": "브랜치가 아직 리뷰를 만들 준비가 되지 않았습니다.",
             "createPrIntentPublishing": "브랜치를 게시하는 중…",
             "createPrIntentForcePushing": "lease로 강제 푸시하는 중…",
@@ -9692,8 +9693,8 @@
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
             },
-            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
-            "createPrIntentSyncing": "Syncing branch…"
+            "createPrIntentSyncConflicts": "동기화 중 충돌이 발생했습니다. 해결한 다음 Create PR을 다시 시도하세요.",
+            "createPrIntentSyncing": "브랜치를 동기화하는 중…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

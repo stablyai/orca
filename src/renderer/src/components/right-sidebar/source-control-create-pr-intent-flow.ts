@@ -147,10 +147,16 @@ export function resolveCreatePrIntentRemoteStep({
   }
 
   if (hostedReviewCreation.blockedReason === 'needs_sync') {
-    // Why: patch-equivalent divergence (extra remote commits already applied
-    // locally) resolves by force-pushing with lease; any other behind branch is
-    // resolved by running the existing sync (fetch → pull → conditional push).
-    return shouldForcePushWithLeaseForUpstream(upstreamStatus) ? 'force_push' : 'sync'
+    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
+      return 'force_push'
+    }
+    // Why: auto-sync only a behind-only branch, where the pull is a fast-forward
+    // that cannot create a merge commit or strand the worktree mid-merge. A
+    // genuinely diverged branch keeps the explicit sync-first stop so Create PR
+    // never merges without consent.
+    return upstreamStatus?.hasUpstream && upstreamStatus.ahead === 0 && upstreamStatus.behind > 0
+      ? 'sync'
+      : 'blocked'
   }
 
   return 'none'
@@ -172,27 +178,6 @@ export function isCreatePrIntentSyncConflictError(error: CreatePrIntentRemoteFai
     return false
   }
   return isMergeConflictErrorMessage(error.rawError ?? '')
-}
-
-// The actionable remote steps that show an in-progress notice while running.
-export type CreatePrIntentProgressStep = 'publish' | 'force_push' | 'sync' | 'push'
-
-export function resolveCreatePrIntentProgressStep(
-  remoteStep: CreatePrIntentRemoteStep
-): CreatePrIntentProgressStep {
-  // Why: 'blocked'/'none' are handled before this runs, so every remaining step
-  // is actionable; anything that is not publish/force_push/sync is a plain push.
-  return remoteStep === 'publish' || remoteStep === 'force_push' || remoteStep === 'sync'
-    ? remoteStep
-    : 'push'
-}
-
-export function resolveCreatePrIntentRemoteFailureNoticeKind(
-  error: CreatePrIntentRemoteFailure
-): 'sync_conflict' | 'remote_failed' {
-  // Why: only a genuine sync merge-conflict earns the "resolve conflicts" notice;
-  // push-stage rejections and fetch/network/auth failures fall to generic copy.
-  return isCreatePrIntentSyncConflictError(error) ? 'sync_conflict' : 'remote_failed'
 }
 
 export function getCreatePrIntentCommitFailureNoticeMessage(

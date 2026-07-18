@@ -8,8 +8,6 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   isCreatePrIntentSyncConflictError,
-  resolveCreatePrIntentProgressStep,
-  resolveCreatePrIntentRemoteFailureNoticeKind,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep
 } from './source-control-create-pr-intent-flow'
@@ -232,7 +230,9 @@ describe('source-control Create PR intent flow helpers', () => {
     ).toBe('force_push')
   })
 
-  it('syncs ordinary behind branches and blocks unpublished branches without commits', () => {
+  it('syncs behind-only branches, blocks diverged and unpublished-without-commits branches', () => {
+    // Genuinely diverged (local + non-equivalent remote commits): auto-syncing
+    // would merge without consent, so the intent flow keeps the explicit stop.
     expect(
       resolveCreatePrIntentRemoteStep({
         upstreamStatus: { hasUpstream: true, ahead: 1, behind: 1 },
@@ -245,9 +245,9 @@ describe('source-control Create PR intent flow helpers', () => {
           nextAction: 'sync'
         }
       })
-    ).toBe('sync')
+    ).toBe('blocked')
 
-    // Behind with no local commits (pure fast-forward case) also auto-syncs.
+    // Behind with no local commits (pure fast-forward case) auto-syncs.
     expect(
       resolveCreatePrIntentRemoteStep({
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
@@ -372,44 +372,5 @@ describe('source-control Create PR intent flow helpers', () => {
         rawError: "error: path 'src/app.ts' needs merge"
       })
     ).toBe(true)
-  })
-
-  it('maps each actionable remote step to its progress notice', () => {
-    expect(resolveCreatePrIntentProgressStep('publish')).toBe('publish')
-    expect(resolveCreatePrIntentProgressStep('force_push')).toBe('force_push')
-    expect(resolveCreatePrIntentProgressStep('sync')).toBe('sync')
-    // 'push' and any step that is not publish/force_push/sync render the push copy.
-    expect(resolveCreatePrIntentProgressStep('push')).toBe('push')
-    expect(resolveCreatePrIntentProgressStep('blocked')).toBe('push')
-    expect(resolveCreatePrIntentProgressStep('none')).toBe('push')
-  })
-
-  it('picks the sync-conflict notice only for a genuine sync merge conflict', () => {
-    expect(
-      resolveCreatePrIntentRemoteFailureNoticeKind({
-        kind: 'sync',
-        syncPushStage: false,
-        rawError: 'CONFLICT (content): Merge conflict in src/app.ts'
-      })
-    ).toBe('sync_conflict')
-    // Push-stage sync rejection -> generic copy so push recovery drives the fix.
-    expect(
-      resolveCreatePrIntentRemoteFailureNoticeKind({
-        kind: 'sync',
-        syncPushStage: true,
-        rawError: 'CONFLICT (content): Merge conflict in src/app.ts'
-      })
-    ).toBe('remote_failed')
-    // Fetch/auth failures and missing errors -> generic copy.
-    expect(
-      resolveCreatePrIntentRemoteFailureNoticeKind({
-        kind: 'sync',
-        syncPushStage: false,
-        rawError: 'fatal: Authentication failed for remote'
-      })
-    ).toBe('remote_failed')
-    expect(resolveCreatePrIntentRemoteFailureNoticeKind({ kind: 'push' })).toBe('remote_failed')
-    expect(resolveCreatePrIntentRemoteFailureNoticeKind(null)).toBe('remote_failed')
-    expect(resolveCreatePrIntentRemoteFailureNoticeKind(undefined)).toBe('remote_failed')
   })
 })

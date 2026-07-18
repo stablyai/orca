@@ -9678,6 +9678,7 @@
             "createPrIntentConfigureAi": "Add a commit message or configure Source Control AI settings.",
             "createPrIntentGenerateFailed": "Could not generate a commit message. Add one and retry.",
             "createPrIntentCommitFailed": "Could not commit changes. Fix the issue, then retry Create PR.",
+            "createPrIntentNeedsSync": "Sync this branch before creating a review.",
             "createPrIntentBranchNotReady": "Branch is not ready to create a review yet.",
             "createPrIntentPublishing": "Publishing branch…",
             "createPrIntentForcePushing": "Force pushing with lease…",
