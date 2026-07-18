@@ -3907,7 +3907,7 @@ export function normalizeHookPayload(
   const transportPayload =
     payload ??
     (providerSessionOnly
-      ? parseAgentStatusPayload(JSON.stringify({ state: 'done', prompt: '', agentType: 'pi' }))
+      ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: 'pi' })
       : null)
   return transportPayload
     ? {
