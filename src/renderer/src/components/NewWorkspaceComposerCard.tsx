@@ -341,9 +341,22 @@ function WorkspaceRunTargetCombobox({
                 <Server className="size-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{option.label}</div>
-                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {option.path}
-                  </div>
+                  {/* Why: worktree paths often overflow the truncated row; a deliberate hover reveals the full path. */}
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {option.path}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      align="start"
+                      sideOffset={6}
+                      className="max-w-[420px] break-all"
+                    >
+                      {option.path}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </CommandItem>
             ))}
