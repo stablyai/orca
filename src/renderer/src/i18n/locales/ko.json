@@ -10659,7 +10659,8 @@
           },
           "ProjectCombobox": {
             "search": "프로젝트 검색...",
-            "empty": "검색과 일치하는 프로젝트가 없습니다."
+            "empty": "검색과 일치하는 프로젝트가 없습니다.",
+            "addProject": "Add a new project"
           }
         }
       },

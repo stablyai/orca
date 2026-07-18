@@ -10659,7 +10659,8 @@
           },
           "ProjectCombobox": {
             "search": "搜索项目...",
-            "empty": "没有匹配搜索的项目。"
+            "empty": "没有匹配搜索的项目。",
+            "addProject": "Add a new project"
           }
         }
       },
