@@ -1404,7 +1404,7 @@ const gitNativeLoadFailedSchema = z
 const gitNativeShadowDivergenceSchema = z
   .object({
     read_kind: z.enum(['rev', 'index']),
-    divergence: z.enum(['found', 'too_large', 'bytes'])
+    divergence: z.enum(['presence', 'too_large', 'bytes'])
   })
   .strict()
 
