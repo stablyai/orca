@@ -41,6 +41,34 @@ authority.
 | `merge-tree-write-tree` | Derive real-merge conflicts and no-op tree proofs | Omit the conflict summary and keep conservative branch cleanup behavior before Git 2.38 |
 | `merge-tree-merge-base` | Supply the already-resolved merge base            | Use the older two-commit `merge-tree --write-tree` form                                 |
 
+## Bare Repositories
+
+A repo added from a bare directory (`git clone --bare` / `git init --bare`)
+has no working tree: `repo.path` is the git dir itself. Orca models this with
+`Repo.isBare`, stamped at add time by `rev-parse --is-bare-repository` (with a
+filesystem-marker fallback when git cannot answer) on every execution host,
+and lazily backfilled when a worktree listing reports a `bare` first entry.
+
+Rules for code that touches a repo root:
+
+- Never treat `repo.path` as a checkout. `git worktree list` reports the bare
+  entry first with the `bare` attribute; it is filtered out of every
+  detected-workspace listing and must never receive working-tree commands
+  (`status`, `pull`, `checkout`) or working-tree reads/writes (`orca.yaml`,
+  `.gitignore`, icons).
+- Path plumbing differs: the git dir is `repo.path` itself (not
+  `<repo>/.git`), and the linked-worktree admin dir is `<repo>/worktrees`
+  (not `<repo>/.git/worktrees`).
+- Relative workspace dirs resolve beside the bare dir, not inside it — a
+  relative `worktrees` value would otherwise collide with git's admin dir.
+- Default base-ref resolution cannot rely on `refs/remotes/origin/*` or
+  `origin/HEAD`; bare clones fetch straight into `refs/heads/*`. After the
+  probe list, `symbolic-ref HEAD` (verified against a real ref) is the final
+  fallback. An unborn HEAD still resolves to no default, which fails loudly.
+- All commands involved (`worktree list --porcelain` `bare` attribute,
+  `rev-parse --is-bare-repository`, `symbolic-ref HEAD`) are within the
+  Git 2.25 baseline; no capability probe is needed for bareness itself.
+
 ## Why Not `simple-git`
 
 `simple-git` is a process wrapper around the installed Git binary. Its custom
