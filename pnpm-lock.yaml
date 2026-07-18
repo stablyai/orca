@@ -74,8 +74,8 @@ importers:
         specifier: ^17.0.8
         version: 17.0.8(i18next@26.3.1(typescript@7.0.2))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@7.0.2)
       serve-sim:
-        specifier: ^0.1.40
-        version: 0.1.40(typescript@7.0.2)
+        specifier: ^0.1.42
+        version: 0.1.42(typescript@7.0.2)
       sherpa-onnx:
         specifier: 1.12.37
         version: 1.12.37
@@ -6121,8 +6121,8 @@ packages:
     resolution: {integrity: sha512-8I8TjW5KMOKsZQTvoxjuSIa7foAwPWGOts+6o7sgjz41/qMD9VQHEDxi6PBvK2l0MXUmqZyNpUK+T2tQaaElvw==}
     engines: {node: '>=10'}
 
-  serve-sim@0.1.40:
-    resolution: {integrity: sha512-32JSUriN/EnNR3zx6fmiOKjuFrbA8VHWR2J3dX8T51Z/xkSmrSLOwaz/3W9lPiCIaF2O3LT4qpAhLkp0f1kVaw==}
+  serve-sim@0.1.42:
+    resolution: {integrity: sha512-QhIR2IX4FK46wg5XTVcGAG9fEbdE/lOKNGnjNW+ZCMSrWvGMZPeeUuSltxB9xqO3a3RWIIWf9OUysGgIx2L/kg==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -12862,11 +12862,14 @@ snapshots:
       type-fest: 0.13.1
     optional: true
 
-  serve-sim@0.1.40(typescript@7.0.2):
+  serve-sim@0.1.42(typescript@7.0.2):
     dependencies:
       inspect-webkit: 0.0.5(typescript@7.0.2)
+      ws: 8.21.0
     transitivePeerDependencies:
+      - bufferutil
       - typescript
+      - utf-8-validate
 
   serve-static@2.2.1:
     dependencies:

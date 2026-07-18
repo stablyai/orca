@@ -118,7 +118,7 @@
     "posthog-node": "^5.33.3",
     "qrcode": "^1.5.4",
     "react-i18next": "^17.0.8",
-    "serve-sim": "^0.1.40",
+    "serve-sim": "^0.1.42",
     "sherpa-onnx": "1.12.37",
     "ssh2": "^1.17.0",
     "tweetnacl": "^1.0.3",
