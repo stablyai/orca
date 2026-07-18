@@ -3157,6 +3157,16 @@ export function connectPanePty(
   let unsubscribeWindowsDoneTerminalModeReset: (() => void) | null = null
   if (isNativeWindowsConpty) {
     const initialAgentStatus = state.agentStatusByPaneKey[cacheKey]
+    if (
+      !initialAgentStatus &&
+      paneStartup?.telemetry?.launch_source === 'sidebar' &&
+      paneStartup.telemetry.request_kind === 'resume' &&
+      (paneStartup.launchAgent === 'codex' || paneStartup.telemetry.agent_kind === 'codex')
+    ) {
+      // Why: history resumes open on a completed Codex composer without a done
+      // row, so arm the same Windows stale-focus guard until work starts again.
+      suppressNativeWindowsIdleCodexFocusReports = true
+    }
     if (initialAgentStatus?.state === 'done') {
       setFocusReportSuppressionForAgentCompletion(undefined, initialAgentStatus.agentType)
     }

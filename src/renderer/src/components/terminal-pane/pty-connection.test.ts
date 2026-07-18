@@ -17766,6 +17766,60 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('drops native Windows Codex focus reports while a history resume is idle', async () => {
+    const restoreUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    try {
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      pane.terminal.modes.sendFocusMode = true
+
+      connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        createDeps({
+          startup: {
+            command: "codex 'resume' 'codex-session-1'",
+            launchAgent: 'codex',
+            telemetry: {
+              agent_kind: 'codex',
+              launch_source: 'sidebar',
+              request_kind: 'resume'
+            }
+          }
+        }) as never
+      )
+
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
+      transport.sendInput.mockClear()
+
+      sendTerminalInputThroughPane(pane, '\x1b[O')
+      sendTerminalInputThroughPane(pane, '\x1b[I')
+      expect(transport.sendInput).not.toHaveBeenCalled()
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'working',
+        prompt: 'continue the resumed session',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'codex',
+        paneKey,
+        stateHistory: []
+      }
+      notifyStoreSubscribers()
+
+      sendTerminalInputThroughPane(pane, '\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+    } finally {
+      restoreUserAgent()
+    }
+  })
+
   it('drops only focus reports while native Windows Codex is done and resumes them when working', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
