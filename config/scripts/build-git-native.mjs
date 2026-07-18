@@ -25,8 +25,12 @@ function hasRustup() {
 }
 
 function hostLibName() {
-  if (process.platform === 'win32') return 'git_native.dll'
-  if (process.platform === 'darwin') return 'libgit_native.dylib'
+  if (process.platform === 'win32') {
+    return 'git_native.dll'
+  }
+  if (process.platform === 'darwin') {
+    return 'libgit_native.dylib'
+  }
   return 'libgit_native.so'
 }
 
@@ -52,7 +56,10 @@ if (process.platform === 'darwin' && process.env.ORCA_MAC_RELEASE === '1') {
   // .node would silently fall back to CLI on the other arch.
   for (const triple of ['aarch64-apple-darwin', 'x86_64-apple-darwin']) {
     execFileSync('rustup', ['target', 'add', triple], { cwd: crateDir, stdio: 'inherit' })
-    execFileSync('cargo', ['build', '--release', '--target', triple], { cwd: crateDir, stdio: 'inherit' })
+    execFileSync('cargo', ['build', '--release', '--target', triple], {
+      cwd: crateDir,
+      stdio: 'inherit'
+    })
   }
   execFileSync(
     'lipo',
