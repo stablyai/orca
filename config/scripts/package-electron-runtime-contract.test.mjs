@@ -78,6 +78,13 @@ describe('Electron runtime package contract', () => {
       "const runtime = suite === 'unit' || suite === 'computer-e2e' ? 'node' : 'electron'"
     )
     expect(heavySuiteRunner).toContain('config/scripts/ensure-native-runtime.mjs')
+    expect(heavySuiteRunner).not.toContain("'pnpm.cmd'")
+
+    const globalSetup = readFileSync(join(projectDir, 'tests/e2e/global-setup.ts'), 'utf8')
+    expect(globalSetup).toContain(
+      "execFileSync('git', ['worktree', 'add', '-b', 'e2e-secondary', worktreeDir]"
+    )
+    expect(globalSetup).not.toMatch(/execSync\([^\n]+worktree/)
   })
 
   it('keeps Windows and Linux package builds off the macOS native helper build', () => {

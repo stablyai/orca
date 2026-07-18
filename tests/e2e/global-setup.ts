@@ -10,7 +10,7 @@
  * temp file so the worker fixture can pick it up at runtime.
  */
 
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
@@ -89,7 +89,7 @@ export default function globalSetup(): void {
     // Why: several tests verify worktree-switching behavior (terminal content
     // retention, browser tab retention). They need at least 2 worktrees.
     // Creating one here makes those tests run instead of being skipped.
-    execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
+    execFileSync('git', ['worktree', 'add', '-b', 'e2e-secondary', worktreeDir], {
       cwd: testRepoDir,
       stdio: 'pipe'
     })

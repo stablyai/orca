@@ -188,8 +188,23 @@ describe('Electron E2E run scope', () => {
     const linkedRepo = path.join(testRoot, 'orca-e2e-repo-linked')
     symlinkSync(outsideRoot, linkedRepo, process.platform === 'win32' ? 'junction' : 'dir')
 
-    expect(() => writeE2ERunManifest(scope, [linkedRepo])).toThrow(/outside the E2E temp directory/)
+    expect(() => writeE2ERunManifest(scope, [linkedRepo])).toThrow(/symbolic link/)
     expect(existsSync(outsideRoot)).toBe(true)
+  })
+
+  it('rejects an in-root symlink instead of deleting another run resource', () => {
+    const testRoot = createTestRoot()
+    const scope = resolveE2ERunScope({
+      tempDir: testRoot,
+      env: { ORCA_E2E_RUN_ID: 'run-a' }
+    })
+    const otherRunRepo = path.join(testRoot, 'orca-e2e-repo-other-run')
+    const linkedRepo = path.join(testRoot, 'orca-e2e-repo-linked')
+    mkdirSync(otherRunRepo)
+    symlinkSync(otherRunRepo, linkedRepo, process.platform === 'win32' ? 'junction' : 'dir')
+
+    expect(() => writeE2ERunManifest(scope, [linkedRepo])).toThrow(/symbolic link/)
+    expect(existsSync(otherRunRepo)).toBe(true)
   })
 
   it('rejects unsafe run IDs before creating control paths', () => {

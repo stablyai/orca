@@ -11,7 +11,8 @@ import {
   normalizeForwardedArgs,
   resolveSuitePlan,
   runHeavyTestSuite,
-  terminateChildTree
+  terminateChildTree,
+  wrapWindowsHeavySuiteStep
 } from './run-heavy-test-suite.mjs'
 
 const fixturePath = fileURLToPath(
@@ -59,6 +60,12 @@ afterEach(async () => {
 })
 
 describe('heavy test suite admission', () => {
+  it('rejects Windows batch commands instead of passing arguments through cmd.exe', () => {
+    expect(() =>
+      wrapWindowsHeavySuiteStep({ command: 'pnpm.cmd', args: ['test', '& calc'] }, 'win32')
+    ).toThrow(/batch commands/i)
+  })
+
   it('keeps admission until a spawned child closes when metadata publication fails', async () => {
     const testRoot = createTestRoot()
     const child = new EventEmitter()
@@ -210,6 +217,120 @@ describe('heavy test suite admission', () => {
     expect(cleanupRun).toHaveBeenCalledOnce()
     expect(existsSync(preparedRun.scope.manifestFile)).toBe(false)
     expect(existsSync(preparedRun.testRepoDir)).toBe(false)
+    expect(existsSync(getHeavySuiteLockPath(testRoot))).toBe(false)
+  })
+
+  it('keeps admission and escalation ownership after the direct child closes', async () => {
+    vi.useFakeTimers()
+    const testRoot = createTestRoot()
+    const signalSource = new EventEmitter()
+    const child = new EventEmitter()
+    child.pid = 4321
+    let treeAlive = true
+    const cleanupRun = vi.fn(() => {
+      expect(treeAlive).toBe(false)
+    })
+    const terminateChild = vi.fn((_pid, signal) => {
+      if (signal === 'SIGTERM') {
+        queueMicrotask(() => child.emit('close', null, 'SIGTERM'))
+      } else if (signal === 'SIGKILL') {
+        treeAlive = false
+      }
+    })
+    const spawnProcess = vi.fn(() => {
+      queueMicrotask(() => signalSource.emit('SIGTERM'))
+      return child
+    })
+
+    const resultPromise = runHeavyTestSuite({
+      suite: 'fixture',
+      steps: [{ command: 'fixture', args: [] }],
+      tempDir: testRoot,
+      signalSource,
+      spawnProcess,
+      terminateChild,
+      cleanupRun,
+      isChildTreeAlive: () => treeAlive,
+      forceKillAfterMs: 10
+    })
+    await Promise.resolve()
+    expect(existsSync(getHeavySuiteLockPath(testRoot))).toBe(true)
+    await vi.advanceTimersByTimeAsync(20)
+    const result = await resultPromise
+
+    expect(result).toBe(143)
+    expect(terminateChild).toHaveBeenNthCalledWith(1, 4321, 'SIGTERM', expect.any(Object))
+    expect(terminateChild).toHaveBeenNthCalledWith(2, 4321, 'SIGKILL', expect.any(Object))
+    expect(cleanupRun).toHaveBeenCalledOnce()
+    expect(existsSync(getHeavySuiteLockPath(testRoot))).toBe(false)
+  })
+
+  it('runs Windows steps in a kill-on-close job and terminates by retained handle', async () => {
+    const testRoot = createTestRoot()
+    const signalSource = new EventEmitter()
+    const child = new EventEmitter()
+    child.pid = 4321
+    child.kill = vi.fn()
+    const terminateChild = vi.fn()
+    const spawnProcess = vi.fn(() => {
+      queueMicrotask(() => {
+        signalSource.emit('SIGTERM')
+        child.emit('exit', 0, null)
+        child.emit('close', 0, null)
+      })
+      return child
+    })
+
+    const result = await runHeavyTestSuite({
+      suite: 'fixture',
+      steps: [
+        {
+          command: 'fixture',
+          args: ['--flag', 'space value', 'quote"value', '&|^%'],
+          env: { PATH: process.env.PATH, REPORT_MARKER: '1' },
+          stdio: ['ignore', 42, 43]
+        }
+      ],
+      tempDir: testRoot,
+      platform: 'win32',
+      signalSource,
+      spawnProcess,
+      terminateChild
+    })
+
+    expect(result).toBe(143)
+    expect(spawnProcess).toHaveBeenCalledWith(
+      'powershell.exe',
+      expect.arrayContaining(['-NoProfile', '-NonInteractive', '-File']),
+      expect.objectContaining({ detached: false, stdio: ['ignore', 42, 43] })
+    )
+    const wrapperEnvironment = spawnProcess.mock.calls[0][2].env
+    expect(
+      JSON.parse(
+        Buffer.from(wrapperEnvironment.ORCA_WINDOWS_HEAVY_SUITE_STEP, 'base64').toString('utf8')
+      )
+    ).toEqual({ command: 'fixture', args: ['--flag', 'space value', 'quote"value', '&|^%'] })
+    expect(wrapperEnvironment.REPORT_MARKER).toBe('1')
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(terminateChild).not.toHaveBeenCalled()
+    expect(existsSync(getHeavySuiteLockPath(testRoot))).toBe(false)
+  })
+
+  it('returns the shutdown signal received during owned cleanup', async () => {
+    const testRoot = createTestRoot()
+    const signalSource = new EventEmitter()
+
+    const result = await runHeavyTestSuite({
+      suite: 'fixture',
+      steps: [],
+      tempDir: testRoot,
+      signalSource,
+      cleanupRun: async () => {
+        signalSource.emit('SIGHUP')
+      }
+    })
+
+    expect(result).toBe(129)
     expect(existsSync(getHeavySuiteLockPath(testRoot))).toBe(false)
   })
 

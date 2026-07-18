@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   existsSync,
+  lstatSync,
   linkSync,
   mkdtempSync,
   readFileSync,
@@ -87,9 +88,23 @@ export function resolveE2ERunScope(options: ResolveE2ERunScopeOptions = {}): E2E
 }
 
 function normalizeOwnedResourcePath(scope: E2ERunScope, resourcePath: string): string {
-  const normalizedPath = existsSync(resourcePath)
+  let resourceExists = false
+  try {
+    const stats = lstatSync(resourcePath)
+    resourceExists = true
+    if (stats.isSymbolicLink()) {
+      throw new Error(`Refusing to clean an E2E resource symbolic link: ${resourcePath}`)
+    }
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+    if (code !== 'ENOENT') {
+      throw error
+    }
+  }
+  const canonicalParent = realpathSync(path.dirname(resourcePath))
+  const normalizedPath = resourceExists
     ? realpathSync(resourcePath)
-    : path.resolve(resourcePath)
+    : path.join(canonicalParent, path.basename(resourcePath))
   const relativePath = path.relative(scope.tempDir, normalizedPath)
   if (
     !relativePath ||

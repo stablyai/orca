@@ -5,9 +5,15 @@ import { cleanupE2ERunScope, prepareE2ERunScope } from '../../tests/e2e/e2e-run-
 import {
   HeavySuiteBusyError,
   acquireHeavySuiteLock,
+  isProcessTreeAlive,
   releaseHeavySuiteLock,
   updateHeavySuiteState
 } from './heavy-test-suite-lock.mjs'
+import {
+  signalExitCode,
+  terminateChildTree,
+  waitForProcessTreeExit
+} from './heavy-test-suite-termination.mjs'
 
 export {
   HEAVY_SUITE_LOCK_BASENAME,
@@ -20,65 +26,12 @@ export {
   releaseHeavySuiteLock,
   updateHeavySuiteState
 } from './heavy-test-suite-lock.mjs'
+export { terminateChildTree } from './heavy-test-suite-termination.mjs'
 
 const FORCE_KILL_AFTER_MS = 5_000
 const modulePath = import.meta.filename
 const repoRoot = path.resolve(import.meta.dirname, '../..')
-
-function isValidPid(pid) {
-  return Number.isInteger(pid) && pid > 0
-}
-
-export function terminateChildTree(
-  childPid,
-  signal,
-  {
-    platform = process.platform,
-    killProcess = process.kill,
-    spawnProcess = spawn,
-    onError = (error) => console.error(error)
-  } = {}
-) {
-  if (!isValidPid(childPid)) {
-    return
-  }
-  if (platform === 'win32') {
-    let taskkill
-    try {
-      taskkill = spawnProcess('taskkill', ['/pid', String(childPid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-    } catch (error) {
-      onError(error)
-      return
-    }
-    taskkill.once('error', onError)
-    taskkill.unref()
-    return
-  }
-  try {
-    killProcess(-childPid, signal)
-  } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? error.code : null
-    if (code !== 'ESRCH') {
-      onError(error)
-    }
-  }
-}
-
-function signalExitCode(signal) {
-  if (signal === 'SIGINT') {
-    return 130
-  }
-  if (signal === 'SIGTERM') {
-    return 143
-  }
-  if (signal === 'SIGHUP') {
-    return 129
-  }
-  return 1
-}
+const windowsJobRunnerPath = path.join(import.meta.dirname, 'windows-heavy-suite-job.ps1')
 
 function waitForChild(child) {
   return new Promise((resolve) => {
@@ -91,14 +44,40 @@ function waitForChild(child) {
       settled = true
       resolve(result)
     }
-    // `close` follows both spawn errors and normal exits after stdio handles
-    // close. Waiting for it prevents releasing admission while a child that
-    // emitted `error` still has a live process tree.
+    // `close` keeps admission until stdio and any tree surviving a spawn error settle.
     child.once('error', (error) => {
       childError = error
     })
     child.once('close', (code, signal) => finish({ error: childError, code, signal }))
   })
+}
+
+export function wrapWindowsHeavySuiteStep(step, platform = process.platform) {
+  if (platform !== 'win32') {
+    return step
+  }
+  if (/\.(?:cmd|bat)$/iu.test(step.command)) {
+    throw new Error(
+      '[heavy-suite] Windows batch commands are not accepted by the Job Object runner.'
+    )
+  }
+  const payload = Buffer.from(
+    JSON.stringify({ command: step.command, args: step.args ?? [] }),
+    'utf8'
+  ).toString('base64')
+  return {
+    ...step,
+    command: 'powershell.exe',
+    args: [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      windowsJobRunnerPath
+    ],
+    env: { ...(step.env ?? process.env), ORCA_WINDOWS_HEAVY_SUITE_STEP: payload }
+  }
 }
 
 export async function runHeavyTestSuite({
@@ -110,6 +89,8 @@ export async function runHeavyTestSuite({
   killProcess = process.kill,
   updateChildState = updateHeavySuiteState,
   terminateChild = terminateChildTree,
+  isChildTreeAlive = (pid) => isProcessTreeAlive(pid, { platform, killProcess }),
+  waitForChildTreeExit = waitForProcessTreeExit,
   signalSource = process,
   prepareRun = () => {},
   cleanupRun = () => {},
@@ -127,22 +108,34 @@ export async function runHeavyTestSuite({
   }
 
   let currentChild = null
+  let ownedChildPid = null
   let shutdownSignal = null
   let forcedKillTimer = null
+  let preserveAdmission = false
   const terminationErrors = []
   const recordTerminationError = (error) => {
     terminationErrors.push(error)
     console.error(error)
   }
   const stopCurrentChild = (signal) => {
-    if (currentChild?.pid) {
-      terminateChild(currentChild.pid, signal, {
-        platform,
-        killProcess,
-        spawnProcess,
-        onError: recordTerminationError
-      })
+    if (!ownedChildPid) {
+      return
     }
+    if (platform === 'win32') {
+      // Closing the wrapper's retained handle closes its kill-on-close Job Object.
+      try {
+        currentChild?.kill(signal)
+      } catch (error) {
+        recordTerminationError(error)
+      }
+      return
+    }
+    terminateChild(ownedChildPid, signal, {
+      platform,
+      killProcess,
+      spawnProcess,
+      onError: recordTerminationError
+    })
   }
   const scheduleForcedKill = () => {
     if (forcedKillTimer) {
@@ -157,9 +150,37 @@ export async function runHeavyTestSuite({
     }
     shutdownSignal = signal
     stopCurrentChild(signal)
-    if (currentChild?.pid) {
+    if (ownedChildPid) {
       scheduleForcedKill()
     }
+  }
+  const settleOwnedChildTree = async () => {
+    if (!ownedChildPid) {
+      return true
+    }
+    if (platform !== 'win32' && isChildTreeAlive(ownedChildPid)) {
+      if (!forcedKillTimer) {
+        stopCurrentChild(shutdownSignal ?? 'SIGTERM')
+        scheduleForcedKill()
+      }
+      const stopped = await waitForChildTreeExit(ownedChildPid, {
+        isChildTreeAlive,
+        timeoutMs: forceKillAfterMs * 2
+      })
+      if (!stopped) {
+        preserveAdmission = true
+        console.error(
+          `[heavy-suite] Owned process tree ${ownedChildPid} did not exit; preserving admission and run resources.`
+        )
+        return false
+      }
+    }
+    ownedChildPid = null
+    if (forcedKillTimer) {
+      clearTimeout(forcedKillTimer)
+      forcedKillTimer = null
+    }
+    return true
   }
   const signalHandlers = new Map(
     ['SIGINT', 'SIGTERM', 'SIGHUP'].map((signal) => [signal, () => beginShutdown(signal)])
@@ -192,10 +213,11 @@ export async function runHeavyTestSuite({
       }
 
       try {
-        currentChild = spawnProcess(step.command, step.args, {
-          cwd: step.cwd ?? process.cwd(),
-          env: step.env ?? process.env,
-          stdio: step.stdio ?? 'inherit',
+        const executableStep = wrapWindowsHeavySuiteStep(step, platform)
+        currentChild = spawnProcess(executableStep.command, executableStep.args, {
+          cwd: executableStep.cwd ?? process.cwd(),
+          env: executableStep.env ?? process.env,
+          stdio: executableStep.stdio ?? 'inherit',
           detached: platform !== 'win32'
         })
       } catch (error) {
@@ -208,6 +230,7 @@ export async function runHeavyTestSuite({
         if (!currentChild.pid) {
           throw new Error('[heavy-suite] Spawned child has no process id')
         }
+        ownedChildPid = currentChild.pid
         updateChildState(handle, { phase: 'running', childPid: currentChild.pid })
       } catch (error) {
         console.error(error)
@@ -217,6 +240,7 @@ export async function runHeavyTestSuite({
         }
         await completion
         currentChild = null
+        await settleOwnedChildTree()
         return 1
       }
 
@@ -227,9 +251,8 @@ export async function runHeavyTestSuite({
 
       const result = await completion
       currentChild = null
-      if (forcedKillTimer) {
-        clearTimeout(forcedKillTimer)
-        forcedKillTimer = null
+      if (!(await settleOwnedChildTree())) {
+        return 1
       }
       try {
         updateChildState(handle, { phase: 'idle', childPid: null })
@@ -262,6 +285,16 @@ export async function runHeavyTestSuite({
     executionError = error
   }
 
+  if (preserveAdmission) {
+    if (forcedKillTimer) {
+      clearTimeout(forcedKillTimer)
+    }
+    for (const [signal, handler] of signalHandlers) {
+      signalSource.off(signal, handler)
+    }
+    return 1
+  }
+
   let cleanupError = null
   try {
     await cleanupRun()
@@ -290,6 +323,9 @@ export async function runHeavyTestSuite({
   if (executionError) {
     throw executionError
   }
+  if (shutdownSignal) {
+    return signalExitCode(shutdownSignal)
+  }
   return result
 }
 
@@ -302,8 +338,11 @@ function packageManagerStep(args, env = process.env) {
       env
     }
   }
+  if (process.platform === 'win32') {
+    throw new Error('[heavy-suite] Start Windows heavy suites through a pnpm package script.')
+  }
   return {
-    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    command: 'pnpm',
     args,
     cwd: repoRoot,
     env
