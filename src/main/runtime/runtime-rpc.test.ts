@@ -3909,6 +3909,51 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('emits keepalive frames while orchestration.ask blocks for a reply', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 50
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        // Why: no reply is ever sent, so ask blocks the full window on the same
+        // hold-the-socket path check --wait uses. Without ask in the long-poll
+        // set the 30s idle timer would tear this down before it keepalives.
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_ask',
+          authToken: metadata!.authToken,
+          method: 'orchestration.ask',
+          params: {
+            to: 'term_nobody',
+            from: 'term_asker',
+            question: 'ping?',
+            timeoutMs: 300
+          }
+        })
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminals = session.frames.filter((f) => f.ok !== undefined)
+        expect(terminals).toHaveLength(1)
+        expect(terminals[0]).toMatchObject({
+          id: 'req_ask',
+          ok: true,
+          result: { timedOut: true }
+        })
+        expect(keepalives.length).toBeGreaterThanOrEqual(3)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
     it('emits keepalive frames while terminal.wait blocks and returns its structured timeout', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
