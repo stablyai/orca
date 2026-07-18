@@ -8,6 +8,7 @@ import {
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
 import type { HostProfile, PairingOffer, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
+import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({
@@ -140,6 +141,25 @@ describe('ordered pairing candidate selection', () => {
         [
           { path: 'direct', open: () => rejected },
           { path: 'relay', open: nextOpen }
+        ],
+        1000
+      )
+    ).rejects.toBeInstanceOf(PairingAuthenticationError)
+    expect(nextOpen).not.toHaveBeenCalled()
+  })
+
+  it('does not try a lower-ranked route after Relay E2EE authentication fails', async () => {
+    const rejected = fakeClient([])
+    ;(rejected.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new MobileE2EEAuthenticationError()
+    )
+    const nextOpen = vi.fn(() => fakeClient([success({})]))
+
+    await expect(
+      selectOrderedPairingCandidate(
+        [
+          { path: 'relay', open: () => rejected },
+          { path: 'direct', open: nextOpen }
         ],
         1000
       )

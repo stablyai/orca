@@ -20,12 +20,11 @@ import {
   type StableLogicalRpcClient
 } from './stable-logical-rpc-client'
 import type { HostProfile, MobileAccessEndpoint } from './types'
+import { MobileEndpointReconnectPolicy } from './mobile-endpoint-reconnect-policy'
+import { MobileEndpointSupervisorTimers } from './mobile-endpoint-supervisor-timers'
 
 const ROUTE_AUTH_TIMEOUT_MS = 3_500
 const RECONNECT_PASS_TIMEOUT_MS = 20_000
-const RETRY_DELAY_MS = 2_000
-const LEASE_ROTATION_MARGIN_MS = 30_000
-
 type RelayRouteAttempt = { ok: true } | { ok: false; error: Error; authenticationFailed: boolean }
 
 export type MobileEndpointSupervisorDependencies = {
@@ -53,8 +52,8 @@ export class MobileEndpointSupervisor {
   private foreground = true
   private operationInFlight = false
   private rotationInFlight = false
-  private retryTimer: ReturnType<typeof setTimeout> | null = null
-  private leaseTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly reconnectPolicy = new MobileEndpointReconnectPolicy()
+  private readonly timers: MobileEndpointSupervisorTimers
   private unsubscribeState: (() => void) | null = null
 
   constructor(
@@ -63,14 +62,20 @@ export class MobileEndpointSupervisor {
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
     this.host = host
+    this.timers = new MobileEndpointSupervisorTimers(dependencies.setTimer, dependencies.clearTimer)
   }
 
   async start(): Promise<void> {
-    this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
-    if (this.stopped || !this.host.relay) {
+    if (this.host.relay) {
+      this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
+    }
+    if (this.stopped) {
       return
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
+      if (this.reconnectPolicy.isPublishingState) {
+        return
+      }
       if (state === 'connected') {
         if (this.logical.getActivePath() !== 'relay') {
           void this.rotateCredentialIfNeeded()
@@ -95,12 +100,13 @@ export class MobileEndpointSupervisor {
   setForeground(foreground: boolean): void {
     this.foreground = foreground
     if (!foreground) {
-      this.clearRetryTimer()
+      this.timers.clearRetry()
       if (this.logical.getActivePath() === 'relay') {
         this.logical.suspendActiveSession()
       }
       return
     }
+    this.reconnectPolicy.reset()
     if (this.logical.getState() !== 'connected' && this.logical.getState() !== 'auth-failed') {
       void this.reconnectInOrder()
     }
@@ -110,8 +116,7 @@ export class MobileEndpointSupervisor {
     this.stopped = true
     this.unsubscribeState?.()
     this.unsubscribeState = null
-    this.clearRetryTimer()
-    this.clearLeaseTimer()
+    this.timers.clearAll()
   }
 
   private async reconnectInOrder(forceReplacement = false): Promise<void> {
@@ -124,25 +129,33 @@ export class MobileEndpointSupervisor {
     ) {
       return
     }
-    this.clearRetryTimer()
+    this.timers.clearRetry()
     this.operationInFlight = true
+    if (!forceReplacement) {
+      this.reconnectPolicy.publishPassStart(this.logical)
+    }
     const passDeadline = this.dependencies.now() + RECONNECT_PASS_TIMEOUT_MS
     try {
       for (const route of orderedHostAccessRoutes(this.host)) {
-        if (this.stopped || !this.foreground || this.dependencies.now() >= passDeadline) {
+        if (this.stopped || !this.foreground) {
           return
         }
+        // Why: deadline exhaustion must reach retry scheduling instead of parking forever.
+        if (this.dependencies.now() >= passDeadline) {
+          break
+        }
         if (await this.tryRoute(route, passDeadline)) {
+          this.reconnectPolicy.reset()
           return
         }
       }
     } finally {
       this.operationInFlight = false
     }
-    this.retryTimer = this.dependencies.setTimer(() => {
-      this.retryTimer = null
-      void this.reconnectInOrder()
-    }, RETRY_DELAY_MS)
+    const delay = forceReplacement
+      ? this.reconnectPolicy.retryDelay()
+      : this.reconnectPolicy.recordPassFailure(this.logical)
+    this.timers.scheduleRetry(delay, () => void this.reconnectInOrder(forceReplacement))
   }
 
   private async tryRoute(route: MobileAccessEndpoint, passDeadline: number): Promise<boolean> {
@@ -163,13 +176,12 @@ export class MobileEndpointSupervisor {
         this.remainingMs(routeDeadline)
       )
       await this.recordLastGood(route.url)
-      this.clearLeaseTimer()
+      this.timers.clearAll()
       void this.rotateCredentialIfNeeded()
       return true
     } catch (error) {
       session.close()
-      // Why: auth-failed is host-scoped after pinned E2EE, so another address
-      // cannot repair it and would only multiply credential guesses.
+      // Why: pinned-E2EE auth failure is host-scoped, so other IPs cannot repair it.
       if (error instanceof LogicalClientAuthenticationError) {
         this.logical.publishRouteOwnerState('auth-failed')
         return true
@@ -244,7 +256,11 @@ export class MobileEndpointSupervisor {
     if (result.ok) {
       this.bundle = result.bundle
       await this.recordLastGood(relayWebSocketUrl(this.host.relay))
-      this.scheduleLeaseRotation(result.session)
+      this.timers.scheduleLease(
+        result.session,
+        this.dependencies.now,
+        () => void this.reconnectInOrder(true)
+      )
       return { ok: true }
     }
     if (result.authenticationFailed) {
@@ -282,33 +298,6 @@ export class MobileEndpointSupervisor {
       // Pending rotation state stays durable for the next authenticated direct route.
     } finally {
       this.rotationInFlight = false
-    }
-  }
-
-  private scheduleLeaseRotation(session: MobileRelayRpcSession): void {
-    this.clearLeaseTimer()
-    const deadline = session.getLeaseExpiresAt()
-    if (!deadline) {
-      return
-    }
-    const delay = Math.max(1_000, deadline - this.dependencies.now() - LEASE_ROTATION_MARGIN_MS)
-    this.leaseTimer = this.dependencies.setTimer(() => {
-      this.leaseTimer = null
-      void this.reconnectInOrder(true)
-    }, delay)
-  }
-
-  private clearRetryTimer(): void {
-    if (this.retryTimer) {
-      this.dependencies.clearTimer(this.retryTimer)
-      this.retryTimer = null
-    }
-  }
-
-  private clearLeaseTimer(): void {
-    if (this.leaseTimer) {
-      this.dependencies.clearTimer(this.leaseTimer)
-      this.leaseTimer = null
     }
   }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createPairingOfferSchema } from './mobile-relay-pairing-offer'
+import { MAX_PAIRING_OFFER_JSON_BYTES } from './mobile-relay-pairing-offer'
 import { createMobileRelayPairingFixtures } from './mobile-relay-pairing-fixtures'
+import QRCode from 'qrcode'
 
 describe('desktop mobile-relay pairing contract', () => {
   const now = Date.UTC(2026, 6, 12, 16)
@@ -48,5 +50,27 @@ describe('desktop mobile-relay pairing contract', () => {
         publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
       }).success
     ).toBe(false)
+  })
+
+  it('keeps the maximum accepted payload within the rendered QR density budget', () => {
+    const base = {
+      v: 2 as const,
+      endpoint: 'ws://192.168.1.10:6768',
+      deviceToken: '',
+      publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+    }
+    let accepted = base
+    for (let length = 1; length <= MAX_PAIRING_OFFER_JSON_BYTES; length += 1) {
+      const candidate = { ...base, deviceToken: 'x'.repeat(length) }
+      if (schema.safeParse(candidate).success) {
+        accepted = candidate
+      }
+    }
+    const json = JSON.stringify(accepted)
+    const pairingUrl = `orca://pair?code=${Buffer.from(json).toString('base64url')}`
+    const qr = QRCode.create(pairingUrl, { errorCorrectionLevel: 'M' })
+
+    expect(Buffer.byteLength(json)).toBe(MAX_PAIRING_OFFER_JSON_BYTES)
+    expect(qr.modules.size).toBeLessThanOrEqual(109)
   })
 })

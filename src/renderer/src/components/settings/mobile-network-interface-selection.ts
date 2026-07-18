@@ -103,8 +103,10 @@ export function refreshOrderedAdvertiseAddresses(
     if (nextDiscovered.has(address)) {
       return true
     }
-    if (customAddresses?.has(address)) {
-      return true
+    if (customAddresses) {
+      // Why: the persisted custom set is authoritative on first refresh, when
+      // there is no prior discovery snapshot to identify stale OS addresses.
+      return customAddresses.has(address)
     }
     // Not in previous discovery → treated as custom (typed / persisted manual).
     if (!previousDiscovered.has(address)) {
@@ -118,6 +120,48 @@ export function refreshOrderedAdvertiseAddresses(
     return seedOrderedAdvertiseAddresses(nextInterfaces)
   }
   return capOrderedAdvertiseAddresses(kept)
+}
+
+/** Preserve Relay's relative position among direct routes that survive refresh. */
+export function reconcileRelayPreferenceIndex(
+  currentAddresses: readonly string[],
+  nextAddresses: readonly string[],
+  currentRelayIndex: number
+): number {
+  const survivors = new Set(nextAddresses)
+  return currentAddresses
+    .slice(0, Math.max(0, currentRelayIndex))
+    .filter((address) => survivors.has(address)).length
+}
+
+export function reorderAdvertiseRoutes(
+  addresses: readonly string[],
+  relayPreferenceIndex: number | undefined,
+  fromIndex: number,
+  toIndex: number
+): { addresses: string[]; relayPreferenceIndex?: number } {
+  const routes: ({ address: string } | { relay: true })[] = addresses.map((address) => ({
+    address
+  }))
+  if (relayPreferenceIndex !== undefined) {
+    routes.splice(Math.max(0, Math.min(addresses.length, relayPreferenceIndex)), 0, { relay: true })
+  }
+  if (
+    fromIndex !== toIndex &&
+    fromIndex >= 0 &&
+    toIndex >= 0 &&
+    fromIndex < routes.length &&
+    toIndex < routes.length
+  ) {
+    const [moved] = routes.splice(fromIndex, 1)
+    routes.splice(toIndex, 0, moved!)
+  }
+  const nextAddresses = routes.flatMap((route) => ('address' in route ? [route.address] : []))
+  const nextRelayIndex = routes.findIndex((route) => 'relay' in route)
+  return {
+    addresses: nextAddresses,
+    ...(nextRelayIndex >= 0 ? { relayPreferenceIndex: nextRelayIndex } : {})
+  }
 }
 
 export function orderedAdvertiseAddressesEqual(

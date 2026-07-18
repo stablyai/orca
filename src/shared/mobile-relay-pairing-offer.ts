@@ -7,13 +7,13 @@ import {
 } from './mobile-pairing-protocol-limits'
 
 export const PAIRING_OFFER_VERSION = 2
-// Why: QR payloads grow with each endpoint; ECC M / 256px stays scannable at a
+// Why: QR payloads grow with each endpoint; ECC M / 320px stays scannable at a
 // small ordered list (Tailscale + LAN + a couple customs).
 export const MAX_PAIRING_ENDPOINTS = 4
 export const MAX_PAIRING_ENDPOINT_BYTES = 320
-// Why: a 256px QR becomes unreliable when an otherwise valid collection of
+// Why: a fixed-size QR becomes unreliable when an otherwise valid collection of
 // long hostnames pushes the encoded offer into very dense QR versions.
-export const MAX_PAIRING_OFFER_JSON_BYTES = 900
+export const MAX_PAIRING_OFFER_JSON_BYTES = 640
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/

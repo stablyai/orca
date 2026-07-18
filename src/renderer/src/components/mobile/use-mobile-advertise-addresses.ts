@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { MutableRefObject } from 'react'
 import { translate } from '@/i18n/i18n'
 import {
   orderedAdvertiseAddressesEqual,
+  reconcileRelayPreferenceIndex,
   refreshOrderedAdvertiseAddresses,
   type MobileNetworkInterface
 } from '../settings/mobile-network-interface-selection'
@@ -12,40 +12,11 @@ import {
   loadMobileAdvertiseAddressState,
   saveMobileAdvertiseAddressOrder
 } from '../settings/mobile-advertise-address-order-store'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import { createMobilePairingQrRequest } from './mobile-pairing-qr-request'
-
-export type UseMobileAdvertiseAddressesArgs = {
-  mountedRef: MutableRefObject<boolean>
-  /** When true, load/refresh interfaces (Mobile flow stage active). */
-  interfacesActive: boolean
-  /** When true and no QR yet, auto-mint a pairing offer. */
-  shouldAutoGenerate: boolean
-  connectionMode: MobilePairingConnectionMode
-  advancedConnectionOrderEnabled: boolean
-}
-
-export type UseMobileAdvertiseAddressesResult = {
-  networkInterfaces: MobileNetworkInterface[]
-  selectedAddresses: string[]
-  relayPreferenceIndex: number
-  refreshingNetworkInterfaces: boolean
-  pairQrDataUrl: string | null
-  pairingUrl: string | null
-  pairLoading: boolean
-  loadNetworkInterfaces: () => Promise<void>
-  handleAddressesChange: (addresses: string[]) => void
-  handlePrimaryAddressChange: (address: string) => void
-  handleRouteOrderChange: (addresses: string[], relayIndex: number) => void
-  generatePairing: (
-    rotate: boolean,
-    addressesOverride?: readonly string[],
-    relayIndexOverride?: number
-  ) => Promise<void>
-  copyPairingCode: () => Promise<void>
-  /** Clear QR state and allow the auto-generate effect to mint again. */
-  resetPairingOffer: () => void
-}
+import type {
+  UseMobileAdvertiseAddressesArgs,
+  UseMobileAdvertiseAddressesResult
+} from './mobile-advertise-address-contract'
 
 export function useMobileAdvertiseAddresses({
   mountedRef,
@@ -72,6 +43,12 @@ export function useMobileAdvertiseAddresses({
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const hasGeneratedRef = useRef(false)
   const networkInterfacesRef = useRef<MobileNetworkInterface[]>([])
+  const selectedAddressesRef = useRef(selectedAddresses)
+  const customAddressesRef = useRef(customAddresses)
+  const relayPreferenceIndexRef = useRef(relayPreferenceIndex)
+  const generatePairingRef = useRef<UseMobileAdvertiseAddressesResult['generatePairing']>(
+    async () => {}
+  )
   const pairingRequestIdRef = useRef(0)
   const previousConnectionModeRef = useRef(connectionMode)
   const previousAdvancedConnectionOrderRef = useRef(advancedConnectionOrderEnabled)
@@ -87,6 +64,12 @@ export function useMobileAdvertiseAddresses({
     async (rotate: boolean, addressesOverride?: readonly string[], relayIndexOverride?: number) => {
       const requestId = ++pairingRequestIdRef.current
       if (mountedRef.current) {
+        if (rotate) {
+          // Why: rotation invalidates the displayed credential before later
+          // Relay/QR work can fail, so an old unscannable code must disappear.
+          setPairQrDataUrl(null)
+          setPairingUrl(null)
+        }
         setPairLoading(true)
       }
       try {
@@ -105,8 +88,8 @@ export function useMobileAdvertiseAddresses({
           if (mountedRef.current && requestId === pairingRequestIdRef.current) {
             setPairQrDataUrl(result.qrDataUrl)
             setPairingUrl(result.pairingUrl)
+            hasGeneratedRef.current = true
           }
-          hasGeneratedRef.current = true
         } else if (mountedRef.current && requestId === pairingRequestIdRef.current) {
           toast.error(
             translate(
@@ -138,6 +121,10 @@ export function useMobileAdvertiseAddresses({
       selectedAddresses
     ]
   )
+  generatePairingRef.current = generatePairing
+  selectedAddressesRef.current = selectedAddresses
+  customAddressesRef.current = customAddresses
+  relayPreferenceIndexRef.current = relayPreferenceIndex
 
   const loadNetworkInterfaces = useCallback(async () => {
     if (mountedRef.current) {
@@ -146,25 +133,35 @@ export function useMobileAdvertiseAddresses({
     try {
       const result = await window.api.mobile.listNetworkInterfaces()
       const previousInterfaces = networkInterfacesRef.current
+      const currentAddresses = selectedAddressesRef.current
+      const currentCustoms = customAddressesRef.current
+      const currentRelayIndex = relayPreferenceIndexRef.current
       const nextAddresses = refreshOrderedAdvertiseAddresses(
-        selectedAddresses,
+        currentAddresses,
         result.interfaces,
         previousInterfaces,
-        { customAddresses }
+        { customAddresses: currentCustoms }
       )
       const nextCustoms = deriveCustomAdvertiseAddresses(
         nextAddresses,
         result.interfaces,
-        customAddresses
+        currentCustoms
       )
-      const addressesChanged = !orderedAdvertiseAddressesEqual(nextAddresses, selectedAddresses)
+      const addressesChanged = !orderedAdvertiseAddressesEqual(nextAddresses, currentAddresses)
       if (mountedRef.current) {
         networkInterfacesRef.current = result.interfaces
         setNetworkInterfaces(result.interfaces)
         if (addressesChanged) {
+          const nextRelayIndex = reconcileRelayPreferenceIndex(
+            currentAddresses,
+            nextAddresses,
+            currentRelayIndex
+          )
+          selectedAddressesRef.current = nextAddresses
+          customAddressesRef.current = nextCustoms
+          relayPreferenceIndexRef.current = nextRelayIndex
           setSelectedAddresses(nextAddresses)
           setCustomAddresses(nextCustoms)
-          const nextRelayIndex = Math.min(relayPreferenceIndex, nextAddresses.length)
           setRelayPreferenceIndex(nextRelayIndex)
           persistAdvertiseOrder(nextAddresses, nextCustoms, nextRelayIndex)
         }
@@ -172,10 +169,10 @@ export function useMobileAdvertiseAddresses({
       // Remint when the ordered set changes — same rotate semantics as today's
       // single-address change path.
       if (addressesChanged && hasGeneratedRef.current && mountedRef.current) {
-        void generatePairing(
+        void generatePairingRef.current(
           true,
           nextAddresses,
-          Math.min(relayPreferenceIndex, nextAddresses.length)
+          reconcileRelayPreferenceIndex(currentAddresses, nextAddresses, currentRelayIndex)
         )
       }
     } catch {
@@ -185,14 +182,7 @@ export function useMobileAdvertiseAddresses({
         setRefreshingNetworkInterfaces(false)
       }
     }
-  }, [
-    selectedAddresses,
-    customAddresses,
-    generatePairing,
-    mountedRef,
-    persistAdvertiseOrder,
-    relayPreferenceIndex
-  ])
+  }, [mountedRef, persistAdvertiseOrder])
 
   useEffect(() => {
     if (!interfacesActive) {
@@ -211,6 +201,9 @@ export function useMobileAdvertiseAddresses({
       setSelectedAddresses(addresses)
       setCustomAddresses(nextCustoms)
       const nextRelayIndex = Math.min(relayPreferenceIndex, addresses.length)
+      selectedAddressesRef.current = addresses
+      customAddressesRef.current = nextCustoms
+      relayPreferenceIndexRef.current = nextRelayIndex
       setRelayPreferenceIndex(nextRelayIndex)
       persistAdvertiseOrder(addresses, nextCustoms, nextRelayIndex)
       // Switching advertise order must remint so the QR encodes the new list.
@@ -230,6 +223,9 @@ export function useMobileAdvertiseAddresses({
       setSelectedAddresses(addresses)
       setCustomAddresses(nextCustoms)
       setRelayPreferenceIndex(nextIndex)
+      selectedAddressesRef.current = addresses
+      customAddressesRef.current = nextCustoms
+      relayPreferenceIndexRef.current = nextIndex
       persistAdvertiseOrder(addresses, nextCustoms, nextIndex)
       void generatePairing(true, addresses, nextIndex)
     },

@@ -902,16 +902,26 @@ export class OrcaRuntimeRpcServer {
           : direct.endpoints.length
       )
     )
-    const pairingUrl = encodePairingOffer({
-      v: PAIRING_OFFER_VERSION,
-      endpoint: direct.endpoint,
-      endpoints: direct.endpoints.length > 1 ? direct.endpoints : undefined,
-      deviceToken: device.token,
-      publicKeyB64,
-      scope: 'mobile',
-      relay: relayPairing.relay,
-      ...(orderedRoutes ? { routeOrder: 1 as const, relayPreferenceIndex } : {})
-    })
+    let pairingUrl: string
+    try {
+      pairingUrl = encodePairingOffer({
+        v: PAIRING_OFFER_VERSION,
+        endpoint: direct.endpoint,
+        endpoints: direct.endpoints.length > 1 ? direct.endpoints : undefined,
+        deviceToken: device.token,
+        publicKeyB64,
+        scope: 'mobile',
+        relay: relayPairing.relay,
+        ...(orderedRoutes ? { routeOrder: 1 as const, relayPreferenceIndex } : {})
+      })
+    } catch {
+      this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
+      return refuseAutomaticWithoutRelay({
+        code: 'relay_offer_encode_failed',
+        stage: 'binding_failed',
+        message: 'Could not encode Relay pairing metadata'
+      })
+    }
     try {
       if (!this.setMobileRelayBinding(device.deviceId, relayPairing.binding)) {
         this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)

@@ -12,7 +12,12 @@ export function hostProfileFromPairingOffer(args: {
   lastConnected?: number
   lastGoodEndpoint?: string
 }): HostProfile {
-  const urls = normalizePairingEndpoints(args.offer.endpoint, args.offer.endpoints)
+  // Why: only the explicit marker opts reconnect into ordered routing; older
+  // offer producers may include unknown additive fields with legacy semantics.
+  const urls =
+    args.offer.routeOrder === 1
+      ? normalizePairingEndpoints(args.offer.endpoint, args.offer.endpoints)
+      : [args.offer.endpoint]
   const endpoints = buildMobileAccessRoutes({
     directUrls: urls,
     relayPreferenceIndex: args.offer.relayPreferenceIndex
@@ -22,6 +27,7 @@ export function hostProfileFromPairingOffer(args: {
     name: args.name,
     endpoint: urls[0]!,
     endpoints,
+    ...(args.offer.routeOrder === 1 ? { routeOrder: 1 as const } : {}),
     deviceToken: args.offer.deviceToken,
     publicKeyB64: args.offer.publicKeyB64,
     lastConnected: args.lastConnected ?? Date.now(),

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildMobileAccessRoutes, orderedHostAccessRoutes } from './mobile-access-route-order'
+import {
+  buildMobileAccessRoutes,
+  hasAuthoritativeMobileRouteOrder,
+  orderedHostAccessRoutes
+} from './mobile-access-route-order'
 import type { HostProfile } from './types'
 
 const directA = 'ws://100.64.1.20:6768'
@@ -21,6 +25,7 @@ function host(lastGoodEndpoint?: string): HostProfile {
     deviceToken: 'token',
     publicKeyB64: 'A'.repeat(44),
     lastConnected: 1,
+    routeOrder: 1,
     lastGoodEndpoint,
     endpoints: buildMobileAccessRoutes({
       directUrls: [directA, directB],
@@ -56,5 +61,22 @@ describe('mobile access route order', () => {
       'relay',
       'lan'
     ])
+  })
+
+  it('keeps unmarked legacy Relay profiles on the released routing policy', () => {
+    const ordered = host()
+    const legacy = {
+      ...ordered,
+      routeOrder: undefined,
+      lastGoodEndpoint: ordered.endpoints![1]!.url
+    }
+
+    expect(hasAuthoritativeMobileRouteOrder(legacy)).toBe(false)
+    expect(orderedHostAccessRoutes(legacy).map(({ kind }) => kind)).toEqual([
+      'tailscale',
+      'relay',
+      'lan'
+    ])
+    expect(hasAuthoritativeMobileRouteOrder(ordered)).toBe(true)
   })
 })

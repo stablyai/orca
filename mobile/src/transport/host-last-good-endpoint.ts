@@ -9,9 +9,15 @@ export function createHostLastGoodEndpointUpdater<T extends StoredHost>(
       return
     }
     try {
-      await mutate((hosts) =>
-        hosts.map((host) => (host.id === hostId ? { ...host, lastGoodEndpoint } : host))
-      )
+      await mutate((hosts) => {
+        const index = hosts.findIndex((host) => host.id === hostId)
+        if (index < 0 || hosts[index]!.lastGoodEndpoint === lastGoodEndpoint) {
+          return hosts
+        }
+        const next = hosts.slice()
+        next[index] = { ...next[index]!, lastGoodEndpoint }
+        return next
+      })
     } catch {
       // Why: last-good is a best-effort routing hint, never authoritative host data.
     }

@@ -1,4 +1,5 @@
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
+import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 
 export type PairingCandidate = {
   path: 'direct' | 'relay'
@@ -48,6 +49,11 @@ export async function selectOrderedPairingCandidate(
       client.close()
       if (isCancelled?.()) {
         throw new Error('pairing attempt cancelled')
+      }
+      if (error instanceof MobileE2EEAuthenticationError) {
+        // Why: a Relay E2EE rejection authenticates the pinned desktop identity;
+        // a lower-ranked network cannot make the host-scoped credential valid.
+        throw new PairingAuthenticationError('pinned desktop rejected Relay authentication')
       }
       if (
         error instanceof PairingAuthenticationError ||

@@ -6,7 +6,10 @@ import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 import { updateHostLastGoodEndpoint } from './host-store'
 import { createPendingRpcClient } from './pending-rpc-client'
-import { orderedHostAccessRoutes } from './mobile-access-route-order'
+import {
+  hasAuthoritativeMobileRouteOrder,
+  orderedHostAccessRoutes
+} from './mobile-access-route-order'
 
 function directDialUrls(host: HostProfile): string[] {
   const fromOverlay =
@@ -15,7 +18,7 @@ function directDialUrls(host: HostProfile): string[] {
 }
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
-  if (Platform.OS !== 'web' && host.relay) {
+  if (Platform.OS !== 'web' && hasAuthoritativeMobileRouteOrder(host)) {
     const firstRoute = orderedHostAccessRoutes(host)[0]
     const logical = createStableLogicalRpcClient(
       createPendingRpcClient(),
@@ -26,8 +29,8 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
     attachEndpointLifecycle(logical, host, onLog)
     return logical
   }
-  // Why: ordered direct endpoints (Tailscale then LAN) come from the pairing
-  // overlay; sticky last-good is separate from host.endpoint (KTD9).
+  // Why: unmarked profiles keep the released direct/Relay startup behavior;
+  // only explicit ordered profiles enter through the route supervisor above.
   let logical: ReturnType<typeof createStableLogicalRpcClient> | null = null
   const physical = connect(host.endpoint, host.deviceToken, host.publicKeyB64, {
     onLog,

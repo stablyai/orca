@@ -37,7 +37,7 @@ export type StableLogicalRpcClient = RpcClient & {
   suspendActiveSession(): void
   getActivePath(): MobileConnectionPath
   setActivePath(path: MobileConnectionPath): void
-  publishRouteOwnerState(state: ConnectionState): void
+  publishRouteOwnerState(state: ConnectionState, reconnectAttempt?: number): void
   getGeneration(): number
 }
 
@@ -56,6 +56,7 @@ export function createStableLogicalRpcClient(
   const pendingRequests = new Set<PendingRequest>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
+  let routeOwnerReconnectAttempt: number | null = null
 
   bindActiveState(initialSession, generation)
 
@@ -136,7 +137,7 @@ export function createStableLogicalRpcClient(
     },
 
     getState: () => state,
-    getReconnectAttempt: () => activeSession.getReconnectAttempt(),
+    getReconnectAttempt: () => routeOwnerReconnectAttempt ?? activeSession.getReconnectAttempt(),
     getLastConnectedAt: () => activeSession.getLastConnectedAt(),
     onStateChange(listener) {
       stateListeners.add(listener)
@@ -214,6 +215,7 @@ export function createStableLogicalRpcClient(
       generation = nextGeneration
       activeSession = nextSession
       activePath = path
+      routeOwnerReconnectAttempt = null
       suspended = false
       previousStateUnsubscribe?.()
       bindActiveState(nextSession, nextGeneration)
@@ -232,7 +234,12 @@ export function createStableLogicalRpcClient(
     setActivePath(path) {
       activePath = path
     },
-    publishRouteOwnerState: publishState,
+    publishRouteOwnerState(next, reconnectAttempt) {
+      if (reconnectAttempt !== undefined) {
+        routeOwnerReconnectAttempt = reconnectAttempt
+      }
+      publishState(next)
+    },
     getGeneration: () => generation
   }
 

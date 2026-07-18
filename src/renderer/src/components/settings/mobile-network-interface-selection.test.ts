@@ -5,6 +5,8 @@ import {
   MAX_MOBILE_ADVERTISE_ADDRESSES,
   moveAdvertiseAddress,
   orderedAdvertiseAddressesEqual,
+  reconcileRelayPreferenceIndex,
+  reorderAdvertiseRoutes,
   refreshOrderedAdvertiseAddresses,
   removeAdvertiseAddress,
   reorderAdvertiseAddresses,
@@ -117,6 +119,40 @@ describe('refreshOrderedAdvertiseAddresses', () => {
     expect(refreshOrderedAdvertiseAddresses([TAILNET.address], [LAN], [TAILNET])).toEqual([
       LAN.address
     ])
+  })
+
+  it('drops a stale persisted discovered address on the first refresh', () => {
+    expect(
+      refreshOrderedAdvertiseAddresses([TAILNET.address, LAN.address], [LAN], [], {
+        customAddresses: new Set()
+      })
+    ).toEqual([LAN.address])
+  })
+})
+
+describe('reconcileRelayPreferenceIndex', () => {
+  it('keeps Relay before a surviving route when an earlier route disappears', () => {
+    expect(reconcileRelayPreferenceIndex(['a', 'b'], ['b'], 1)).toBe(0)
+  })
+
+  it('keeps Relay after earlier survivors when a later route disappears', () => {
+    expect(reconcileRelayPreferenceIndex(['a', 'b'], ['a'], 1)).toBe(1)
+  })
+})
+
+describe('reorderAdvertiseRoutes', () => {
+  it('moves Relay ahead of direct routes without changing direct preference order', () => {
+    expect(reorderAdvertiseRoutes(['a', 'b'], 2, 2, 0)).toEqual({
+      addresses: ['a', 'b'],
+      relayPreferenceIndex: 0
+    })
+  })
+
+  it('moves a direct route across Relay and updates its insertion index', () => {
+    expect(reorderAdvertiseRoutes(['a', 'b'], 1, 2, 0)).toEqual({
+      addresses: ['b', 'a'],
+      relayPreferenceIndex: 2
+    })
   })
 })
 

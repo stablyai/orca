@@ -22,6 +22,7 @@ import { cn } from '../../lib/utils'
 import {
   addAdvertiseAddress,
   MAX_MOBILE_ADVERTISE_ADDRESSES,
+  reorderAdvertiseRoutes,
   removeAdvertiseAddress,
   type MobileNetworkInterface
 } from '../settings/mobile-network-interface-selection'
@@ -180,15 +181,11 @@ export function OrderedNetworkAddressPicker({
     if (fromIndex < 0 || toIndex < 0) {
       return
     }
-    const next = selectedRouteIds.slice()
-    const [moved] = next.splice(fromIndex, 1)
-    next.splice(toIndex, 0, moved!)
-    const nextRelayIndex = next.indexOf(RELAY_ROUTE_ID)
-    const nextAddresses = next.filter((route) => route !== RELAY_ROUTE_ID)
-    if (nextRelayIndex >= 0) {
-      onRouteOrderChange?.(nextAddresses, nextRelayIndex)
+    const next = reorderAdvertiseRoutes(selectedAddresses, relayPreferenceIndex, fromIndex, toIndex)
+    if (next.relayPreferenceIndex !== undefined) {
+      onRouteOrderChange?.(next.addresses, next.relayPreferenceIndex)
     } else {
-      onSelectedAddressesChange(nextAddresses)
+      onSelectedAddressesChange(next.addresses)
     }
   }
 

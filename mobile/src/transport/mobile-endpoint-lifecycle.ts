@@ -13,6 +13,7 @@ import { updateHostLastGoodEndpoint } from './host-store'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import { hasAuthoritativeMobileRouteOrder } from './mobile-access-route-order'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -43,7 +44,9 @@ export function startMobileEndpointLifecycle(
     await supervisor.start()
   }
 
-  if (initialHost.relay) {
+  // Why: explicit ordered hosts need one bounded route owner even without
+  // Relay; unmarked Relay hosts keep the released startup path.
+  if (initialHost.relay || hasAuthoritativeMobileRouteOrder(initialHost)) {
     owner = createSupervisor(logical, initialHost, onLog)
     void owner.start()
   } else {
@@ -81,7 +84,8 @@ function createSupervisor(
       connect(endpoint, host.deviceToken, host.publicKeyB64, {
         onLog,
         endpoints: [endpoint],
-        connectTimeoutMs: 2_750
+        connectTimeoutMs: 2_750,
+        autoReconnect: false
       }),
     openRelay: (relay, credential, confirmReqId) =>
       connectMobileRelayRpcSession({

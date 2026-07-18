@@ -1,6 +1,10 @@
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { normalizePairingEndpoints, type HostProfile, type MobileAccessEndpoint } from './types'
 
+export function hasAuthoritativeMobileRouteOrder(host: HostProfile): boolean {
+  return host.routeOrder === 1
+}
+
 export function classifyDirectEndpointKind(url: string): MobileAccessEndpoint['kind'] {
   try {
     const hostname = new URL(url).hostname
@@ -59,7 +63,11 @@ export function orderedHostAccessRoutes(host: HostProfile): MobileAccessEndpoint
     seen.add(url)
     return true
   })
-  const lastGood = host.lastGoodEndpoint?.trim()
+  // Why: sticky route promotion is part of the explicit ordered policy; old
+  // Relay profiles retain the released direct-first reconnect behavior.
+  const lastGood = hasAuthoritativeMobileRouteOrder(host)
+    ? host.lastGoodEndpoint?.trim()
+    : undefined
   const stickyIndex = lastGood ? routes.findIndex(({ url }) => url === lastGood) : -1
   if (stickyIndex <= 0) {
     return routes

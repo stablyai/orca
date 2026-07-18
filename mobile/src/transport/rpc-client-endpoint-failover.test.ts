@@ -188,6 +188,26 @@ describe('rpc-client ordered endpoint failover (U4)', () => {
     client.close()
   })
 
+  it('releases an auth pin when that address later becomes unreachable', async () => {
+    const client = connect(TS, 'token', 'server-key', { endpoints: [TS, LAN] })
+    const first = mockSockets[0]!
+    first.open()
+    first.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    first.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
+
+    await vi.advanceTimersByTimeAsync(500)
+    const pinnedRetry = mockSockets[mockSockets.length - 1]!
+    expect(pinnedRetry.endpoint).toBe(TS)
+    pinnedRetry.emitCloseOnClose = false
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    const alternative = mockSockets[mockSockets.length - 1]!
+    expect(alternative.endpoint).toBe(LAN)
+    authenticate(alternative)
+    expect(client.getState()).toBe('connected')
+    client.close()
+  })
+
   it('after sticky miss, a later reconnect pass starts at preferred order not last-good', async () => {
     const client = connect(TS, 'token', 'server-key', { endpoints: [TS, LAN] })
     mockSockets[0]!.emitCloseOnClose = false

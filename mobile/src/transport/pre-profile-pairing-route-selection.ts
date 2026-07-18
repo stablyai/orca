@@ -1,7 +1,7 @@
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import { normalizePairingEndpoints, type PairingOffer } from './types'
-import { PAIR_CONNECT_TIMEOUT_MS, PAIR_ROUTE_AUTH_TIMEOUT_MS } from './pairing-connection-attempt'
+import { PAIR_CONNECT_TIMEOUT_MS, resolvePairRouteAuthTimeout } from './pairing-connection-attempt'
 import {
   selectOrderedPairingCandidate,
   type OrderedPairingCandidate,
@@ -29,6 +29,7 @@ export async function selectPreProfilePairingRoute(args: {
   dependencies: RouteSelectionDependencies
   clients: Set<PairingCandidateClient>
   isDisposed: () => boolean
+  pairingDeadlineAt: number
 }): Promise<{ winner: PairingCandidate; journal: MobileRelayPairingJournal | null }> {
   // Why: unmarked offers must retain the released direct/Relay race; only the
   // explicit pairing marker opts a new mobile build into sequential routing.
@@ -96,7 +97,11 @@ export async function selectPreProfilePairingRoute(args: {
   const winner = orderedRoutes
     ? await selectOrderedPairingCandidate(
         candidates,
-        PAIR_ROUTE_AUTH_TIMEOUT_MS,
+        resolvePairRouteAuthTimeout(
+          candidates.length,
+          args.pairingDeadlineAt,
+          args.dependencies.now()
+        ),
         (client) => args.clients.add(client),
         args.isDisposed
       )

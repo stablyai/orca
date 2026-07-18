@@ -73,6 +73,7 @@ export function startPreProfilePairing(args: {
   dependencies?: Partial<Dependencies>
 }): PreProfilePairingAttempt {
   const dependencies = { ...defaultDependencies, ...args.dependencies }
+  const pairingDeadlineAt = dependencies.now() + args.timeoutMs
   const clients = new Set<PairingCandidateClient>()
   let disposed = false
   let timedOut = false
@@ -98,7 +99,14 @@ export function startPreProfilePairing(args: {
     dispose()
   }, args.timeoutMs)
 
-  const result = runPairing(args.offer, args.connectOptions, dependencies, clients, () => disposed)
+  const result = runPairing(
+    args.offer,
+    args.connectOptions,
+    dependencies,
+    clients,
+    () => disposed,
+    pairingDeadlineAt
+  )
     .catch((error: unknown) => {
       if (timedOut) {
         throw new Error('mobile pairing timed out')
@@ -130,7 +138,8 @@ async function runPairing(
   connectOptions: ConnectOptions | undefined,
   dependencies: Dependencies,
   clients: Set<PairingCandidateClient>,
-  isDisposed: () => boolean
+  isDisposed: () => boolean,
+  pairingDeadlineAt: number
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
   // Why: every pairing artifact must share the preserved host id so re-pairing
@@ -158,7 +167,8 @@ async function runPairing(
     connectOptions,
     dependencies,
     clients,
-    isDisposed
+    isDisposed,
+    pairingDeadlineAt
   })
   const winner = selection.winner
   journal = selection.journal

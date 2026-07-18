@@ -109,6 +109,24 @@ export class OrderedDialPass {
     this.authPinnedEndpoint = null
   }
 
+  /** Resume alternatives when the auth-retry address itself becomes unreachable. */
+  resumeAfterPinnedTransportFailure(preferredEndpoints: readonly string[]): string | null {
+    const failedEndpoint = this.authPinnedEndpoint
+    this.authPinnedEndpoint = null
+    if (!failedEndpoint) {
+      return null
+    }
+    if (this.lastGoodEndpoint === failedEndpoint) {
+      this.stickyLastGood = false
+    }
+    this.order = dedupeNonEmpty(preferredEndpoints).filter(
+      (endpoint) => endpoint !== failedEndpoint
+    )
+    this.index = 0
+    this.active = this.order.length > 0
+    return this.order[0] ?? null
+  }
+
   endPass(): void {
     if (this.active) {
       this.noteStickyMiss()

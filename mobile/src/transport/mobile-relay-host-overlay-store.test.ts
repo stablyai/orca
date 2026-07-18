@@ -19,6 +19,7 @@ const STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
 const OVERLAY: MobileRelayHostOverlay = {
   v: 2,
   hostId: 'host-1',
+  routeOrder: 1,
   endpoints: [
     { id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.10:6768' },
     {

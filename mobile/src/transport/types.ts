@@ -92,6 +92,8 @@ export type HostProfile = {
   lastConnected: number
   /** Sticky reconnect hint only (KTD9). */
   lastGoodEndpoint?: string
+  /** Explicit opt-in to authoritative sequential route ordering. */
+  routeOrder?: 1
   endpoints?: MobileAccessEndpoint[]
   relayHostId?: MobileRelayHostOverlay['relayHostId']
   relay?: MobileRelayHostOverlay['relay']
@@ -105,6 +107,7 @@ export const HostProfileSchema = z.object({
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
   lastGoodEndpoint: z.string().min(1).optional(),
+  routeOrder: z.literal(1).optional(),
   endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16).optional(),
   relayHostId: z
     .string()

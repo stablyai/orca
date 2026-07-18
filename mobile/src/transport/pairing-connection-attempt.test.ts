@@ -4,6 +4,7 @@ import {
   PAIR_MAX_DIAL_ENDPOINTS,
   PAIRING_OVERALL_TIMEOUT_MS,
   resolvePairDialPlan,
+  resolvePairRouteAuthTimeout,
   startPairingConnectionAttempt
 } from './pairing-connection-attempt'
 
@@ -54,7 +55,7 @@ describe('resolvePairDialPlan (KTD4)', () => {
     expect(plan.endpoints).toHaveLength(2)
   })
 
-  it('caps pair-time exploration at three endpoints', () => {
+  it('caps pair-time exploration at the endpoint limit', () => {
     const endpoints = [
       'ws://100.1.1.1:6768',
       'ws://192.168.1.10:6768',
@@ -74,5 +75,16 @@ describe('resolvePairDialPlan (KTD4)', () => {
     ])
     const dialBudget = plan.endpoints.length * plan.connectTimeoutMs
     expect(dialBudget + 7_000).toBeLessThanOrEqual(PAIRING_OVERALL_TIMEOUT_MS)
+  })
+
+  it('counts Relay and reserves completion time inside one absolute deadline', () => {
+    const timeout = resolvePairRouteAuthTimeout(5, PAIRING_OVERALL_TIMEOUT_MS, 0)
+    expect(timeout).toBe(3_600)
+    expect(timeout * 5 + 7_000).toBe(PAIRING_OVERALL_TIMEOUT_MS)
+  })
+
+  it('subtracts work already spent before ordered route selection', () => {
+    const timeout = resolvePairRouteAuthTimeout(5, PAIRING_OVERALL_TIMEOUT_MS, 2_500)
+    expect(timeout).toBe(3_100)
   })
 })

@@ -12,7 +12,7 @@ export const PAIR_ROUTE_AUTH_TIMEOUT_MS = 4_500
 /** Cap pair-time walk so n×timeout + handshake margin fits PAIRING_OVERALL_TIMEOUT (~25s). */
 export const PAIR_MAX_DIAL_ENDPOINTS = 4
 /** Leave room for E2EE + status.get after the last dial opens. */
-const PAIR_POST_DIAL_MARGIN_MS = 7_000
+export const PAIR_POST_DIAL_MARGIN_MS = 7_000
 
 export type PairDialPlan = {
   endpoints: string[]
@@ -39,6 +39,17 @@ export function resolvePairDialPlan(
     endpoints: capped.length > 0 ? capped : [],
     connectTimeoutMs: Math.max(1_000, connectTimeoutMs)
   }
+}
+
+/** Share one absolute deadline across all ordered routes and post-win persistence. */
+export function resolvePairRouteAuthTimeout(
+  routeCount: number,
+  deadlineAt: number,
+  now: number = Date.now()
+): number {
+  const count = Math.max(1, routeCount)
+  const routeBudget = Math.max(1, deadlineAt - now - PAIR_POST_DIAL_MARGIN_MS)
+  return Math.max(1, Math.min(PAIR_ROUTE_AUTH_TIMEOUT_MS, Math.floor(routeBudget / count)))
 }
 
 export function startPairingConnectionAttempt({

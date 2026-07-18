@@ -24,6 +24,7 @@ import {
   saveMobileRelayHostOverlay
 } from './mobile-relay-host-overlay-store'
 import { createHostLastGoodEndpointUpdater } from './host-last-good-endpoint'
+import { mobileRelayHostOverlayFromProfile } from './mobile-relay-host-overlay'
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upgrade-journal'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
@@ -152,6 +153,7 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       ...(overlay
         ? {
             endpoints: overlay.endpoints,
+            routeOrder: overlay.routeOrder,
             relayHostId: overlay.relayHostId,
             relay: overlay.relay
           }
@@ -196,7 +198,9 @@ async function mutateStoredHosts(
   const mutation = hostListMutation.then(async () => {
     const current = await readStoredHostsForMutation()
     const next = update(current)
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    if (next !== current) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+    }
   })
   hostListMutation = mutation.catch(() => {})
   return mutation
@@ -252,13 +256,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   await writeDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
   if (validated.endpoints) {
-    await saveMobileRelayHostOverlay({
-      v: 2,
-      hostId: stored.id,
-      endpoints: validated.endpoints,
-      relayHostId: validated.relayHostId,
-      relay: validated.relay
-    })
+    await saveMobileRelayHostOverlay(mobileRelayHostOverlayFromProfile(validated))
   }
   const overlayRemovalIds = [...duplicateHostIds]
   if (!validated.endpoints && updatedExistingHost) {
