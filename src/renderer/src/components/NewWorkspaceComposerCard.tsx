@@ -154,6 +154,9 @@ type NewWorkspaceComposerCardProps = {
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
   sparseControlsEnabled?: boolean
+  /** When set, "Add project" opens a host-provided flow (e.g. a nested dialog
+   *  over the composer modal) instead of swapping the store's active modal. */
+  onAddProjectOverride?: () => void
 }
 
 const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
@@ -615,7 +618,8 @@ export default function NewWorkspaceComposerCard({
   sparsePresets,
   sparseSelectedPresetId,
   onSparseSelectPreset,
-  sparseControlsEnabled = true
+  sparseControlsEnabled = true,
+  onAddProjectOverride
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   // Why: this form uses the lightweight translate() helper directly; subscribe
   // so an already-open create dialog repaints when the UI language changes.
@@ -728,8 +732,14 @@ export default function NewWorkspaceComposerCard({
   }, [detectedAgentIds, disabledTuiAgents])
 
   const handleAddRepo = React.useCallback((): void => {
+    // Why: inside the composer modal, swapping activeModal would abruptly
+    // unmount the composer; the override layers Add Project on top instead.
+    if (onAddProjectOverride) {
+      onAddProjectOverride()
+      return
+    }
     openModal('add-repo')
-  }, [openModal])
+  }, [onAddProjectOverride, openModal])
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
