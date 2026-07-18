@@ -155,6 +155,28 @@ export function recordRuntimeCreatedTerminalPaneSplit(
   return recordCreatedTerminalPaneSplit(createdPane, args)
 }
 
+export const TERMINAL_SELECTION_CLIPBOARD_DEBOUNCE_MS = 100
+
+// Why: xterm fires a selection change per mousemove during a drag-select, and
+// on Windows every clipboard write spawns a helper process, so coalesce the
+// burst into a single write once the selection settles.
+export function scheduleTerminalSelectionClipboardWrite(
+  timers: Map<number, number>,
+  paneId: number,
+  write: () => void,
+  delayMs = TERMINAL_SELECTION_CLIPBOARD_DEBOUNCE_MS
+): void {
+  const existingTimer = timers.get(paneId)
+  if (existingTimer !== undefined) {
+    window.clearTimeout(existingTimer)
+  }
+  const timer = window.setTimeout(() => {
+    timers.delete(paneId)
+    write()
+  }, delayMs)
+  timers.set(paneId, timer)
+}
+
 type TerminalScrollbackPaneManager = {
   getPanes(): { terminal: Pick<Terminal, 'options'> }[]
 }
@@ -587,6 +609,7 @@ export function useTerminalPaneLifecycle({
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const selectionCaptureTimersRef = useRef(new Map<number, number>())
+  const clipboardCaptureTimersRef = useRef(new Map<number, number>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const mode2031SeedAttemptTokensRef = useRef(new Map<number, symbol>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
@@ -653,6 +676,7 @@ export function useTerminalPaneLifecycle({
     const httpLinkClickFallbackDisposables = httpLinkClickFallbackDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
     const selectionCaptureTimers = selectionCaptureTimersRef.current
+    const clipboardCaptureTimers = clipboardCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
     const imeCompositionDisposables = imeCompositionDisposablesRef.current
     const imeNativeTextForwarderDisposables = imeNativeTextForwarderDisposablesRef.current
@@ -1126,18 +1150,26 @@ export function useTerminalPaneLifecycle({
           if (!shouldWriteClipboard) {
             return
           }
-          const selection = pane.terminal.getSelection()
-          if (!selection) {
-            return
-          }
-           void window.api.ui
-              .writeClipboardText(selection)
-              .then(() => {
-                // TODO(orca): Show a "Copied" toast notification
+          scheduleTerminalSelectionClipboardWrite(
+            clipboardCaptureTimersRef.current,
+            pane.id,
+            () => {
+              // Re-read at fire time so toggling the setting mid-drag applies.
+              if (settingsRef.current?.terminalClipboardOnSelect !== true) {
+                return
+              }
+              if (!pane.terminal.hasSelection()) {
+                return
+              }
+              const selection = pane.terminal.getSelection()
+              if (!selection) {
+                return
+              }
+              void window.api.ui.writeClipboardText(selection).catch(() => {
+                /* ignore clipboard write failures */
               })
-              .catch(() => {
-                // TODO(orca): Show a "Copy failed" toast notification
-              })
+            }
+          )
         })
         selectionDisposablesRef.current.set(pane.id, selectionDisposable)
         // Hide mouse cursor while typing — classic terminal UX, scoped to the
@@ -1271,6 +1303,11 @@ export function useTerminalPaneLifecycle({
         if (selectionCaptureTimer !== undefined) {
           window.clearTimeout(selectionCaptureTimer)
           selectionCaptureTimersRef.current.delete(paneId)
+        }
+        const clipboardCaptureTimer = clipboardCaptureTimersRef.current.get(paneId)
+        if (clipboardCaptureTimer !== undefined) {
+          window.clearTimeout(clipboardCaptureTimer)
+          clipboardCaptureTimersRef.current.delete(paneId)
         }
         const mode2031Disposables = mode2031DisposablesRef.current.get(paneId)
         if (mode2031Disposables) {
@@ -1772,6 +1809,10 @@ export function useTerminalPaneLifecycle({
         window.clearTimeout(timer)
       }
       selectionCaptureTimers.clear()
+      for (const timer of clipboardCaptureTimers.values()) {
+        window.clearTimeout(timer)
+      }
+      clipboardCaptureTimers.clear()
       for (const disposable of mouseHideDisposables.values()) {
         disposable.dispose()
       }

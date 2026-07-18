@@ -145,8 +145,22 @@ export function registerClipboardHandlers(store: Store): void {
     const newText = await assertClipboardTextWriteWithinLimitWithYield(text)
     if (process.platform === 'win32') {
       try {
-        // Use a PowerShell fallback for Windows to improve reliability
-        await runCommand('powershell', ['-Command', `Set-Clipboard -Value $input`], newText)
+        // Why: powershell.exe decodes redirected stdin with the legacy console
+        // code page, so force UTF-8 (the setter throws without a console, hence
+        // the try/catch) and read stdin raw rather than via the line-oriented
+        // `$input` enumerator. -NoProfile keeps a user profile out of the
+        // clipboard path; -NonInteractive stops the helper blocking on a prompt.
+        await runCommand(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            'try { [Console]::InputEncoding = [System.Text.UTF8Encoding]::new() } catch { }; ' +
+              'Set-Clipboard -Value ([Console]::In.ReadToEnd())'
+          ],
+          newText
+        )
       } catch (error) {
         console.error('PowerShell clipboard write failed, falling back to Electron API', error)
         clipboard.writeText(newText)

@@ -230,6 +230,69 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
   })
 
+  it('writes Windows clipboard text through a UTF-8 PowerShell helper', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      registerClipboardHandlers({} as never)
+
+      const handlers = getRegisteredHandlers()
+      await handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'héllo\nwörld')
+
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      const [command, args] = spawnMock.mock.calls[0] as unknown as [string, string[]]
+      expect(command).toBe('powershell')
+      expect(args).toContain('-NoProfile')
+      expect(args).toContain('-NonInteractive')
+
+      const script = args.at(-1) ?? ''
+      // Legacy console code pages mangle non-ASCII, so stdin must be UTF-8.
+      expect(script).toContain('[Console]::InputEncoding = [System.Text.UTF8Encoding]::new()')
+      // Raw stdin read keeps interior newlines that `$input` would re-join.
+      expect(script).toContain('[Console]::In.ReadToEnd()')
+      expect(script).not.toContain('$input')
+      // Clipboard text must never be interpolated into the script itself.
+      expect(script).not.toContain('héllo')
+      expect(childStdinEndMock).toHaveBeenCalledWith('héllo\nwörld')
+      expect(clipboardWriteTextMock).not.toHaveBeenCalled()
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('falls back to the Electron clipboard when the PowerShell helper fails', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    spawnMock.mockImplementationOnce(() => {
+      const child = {
+        stdin: { end: childStdinEndMock },
+        on: vi.fn((event: string, callback: (code?: number) => void) => {
+          if (event === 'exit') {
+            queueMicrotask(() => callback(1))
+          }
+          return child
+        })
+      }
+      return child
+    })
+    try {
+      registerClipboardHandlers({} as never)
+
+      const handlers = getRegisteredHandlers()
+      await handlers.get('clipboard:writeText')?.(makeClipboardEvent(), 'fallback text')
+
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(clipboardWriteTextMock).toHaveBeenCalledWith('fallback text')
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
   it('rejects clipboard IPC from senders outside the current main renderer', async () => {
     setTrustedClipboardRendererWebContentsId(17)
     registerClipboardHandlers({} as never)
