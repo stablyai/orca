@@ -191,7 +191,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     connection.close()
   })
 
-  it('emits one final close when reconnect attempts are exhausted', async () => {
+  it('keeps passive subscriptions alive after reaching the capped reconnect delay', async () => {
     const server = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
     const onClose = vi.fn()
@@ -215,11 +215,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
     unsafe.scheduleReconnect()
 
-    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
     expect(connection.getDiagnostics()).toMatchObject({
-      state: 'closed',
-      reconnectAttempt: 7,
-      subscriptionCount: 0
+      state: 'reconnecting',
+      reconnectAttempt: 8,
+      subscriptionCount: 1
     })
 
     connection.close()

@@ -1453,6 +1453,181 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
   })
 
+  it('retries a transient wake failure without surfacing a PTY error', async () => {
+    let subscribeAttempt = 0
+    const transportCallbacks: NonNullable<typeof subscriptionCallbacks>[] = []
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        subscribeAttempt += 1
+        transportCallbacks.push(callbacks)
+        subscriptionCallbacks = callbacks
+        if (subscribeAttempt === 2) {
+          throw new Error('Could not connect to the remote Orca runtime.')
+        }
+        queueMicrotask(emitMultiplexReady)
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: { onError } })
+    transportCallbacks[0].onError?.({
+      code: 'remote_runtime_unavailable',
+      message: 'Remote Orca runtime stopped responding; the stream connection was reset.'
+    })
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
+    expect(onError).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
+  it('retries a restored pane when the runtime is still unavailable', async () => {
+    let subscribeAttempt = 0
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        subscribeAttempt += 1
+        subscriptionCallbacks = callbacks
+        if (subscribeAttempt === 1) {
+          throw new Error('Could not connect to the remote Orca runtime.')
+        }
+        queueMicrotask(emitMultiplexReady)
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      callbacks: { onError }
+    })
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    expect(onError).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
+  it('retries when recoverable transport error arrives before multiplex ready', async () => {
+    let subscribeAttempt = 0
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        subscribeAttempt += 1
+        subscriptionCallbacks = callbacks
+        if (subscribeAttempt === 1) {
+          queueMicrotask(() =>
+            callbacks.onError?.({
+              code: 'remote_runtime_unavailable',
+              message: 'Remote Orca runtime stopped responding; the stream connection was reset.'
+            })
+          )
+        } else {
+          queueMicrotask(emitMultiplexReady)
+        }
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks: { onError } })
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    expect(onError).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
+  it('does not let a stale reconnect rearm retries after reattach', async () => {
+    let rejectStaleReconnect = (_error: Error): void => {}
+    const transportCallbacks: NonNullable<typeof subscriptionCallbacks>[] = []
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        transportCallbacks.push(callbacks)
+        subscriptionCallbacks = callbacks
+        if (transportCallbacks.length === 2) {
+          return await new Promise((_, reject) => {
+            rejectStaleReconnect = reject
+          })
+        }
+        queueMicrotask(emitMultiplexReady)
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: { onError } })
+    transportCallbacks[0].onClose?.()
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    transport.detach?.()
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks: { onError } })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
+
+    rejectStaleReconnect(new Error('Could not connect to the remote Orca runtime.'))
+    await new Promise((resolve) => setTimeout(resolve, 350))
+
+    expect(runtimeSubscribe).toHaveBeenCalledTimes(3)
+    expect(onError).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
+  it('does not let a stale same-handle attach rearm retries after reattach', async () => {
+    let rejectStaleAttach = (_error: Error): void => {}
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        subscriptionCallbacks = callbacks
+        if (runtimeSubscribe.mock.calls.length === 1) {
+          return await new Promise((_, reject) => {
+            rejectStaleAttach = reject
+          })
+        }
+        queueMicrotask(emitMultiplexReady)
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks: { onError } })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(1))
+    transport.detach?.()
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks: { onError } })
+    expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
+
+    rejectStaleAttach(new Error('Could not connect to the remote Orca runtime.'))
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await new Promise((resolve) => setTimeout(resolve, 350))
+
+    expect(runtimeSubscribe).toHaveBeenCalledTimes(2)
+    expect(onError).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
   it('releases pending claimed input when reconnect subscription fails', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
