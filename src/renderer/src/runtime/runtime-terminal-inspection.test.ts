@@ -125,7 +125,7 @@ describe('runtime terminal owner routing', () => {
         { activeRuntimeEnvironmentId: 'env-2' },
         'remote:env-1@@terminal-stale'
       )
-    ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false })
+    ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false, unavailable: true })
   })
 
   it('records accepted fire-and-forget runtime input against the owning pane key', async () => {
