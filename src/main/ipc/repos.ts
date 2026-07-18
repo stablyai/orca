@@ -60,6 +60,7 @@ import {
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
 import {
   isGitRepo,
+  isBareGitRepo,
   getGitRepoRoot,
   getRepoName,
   getBaseRefDefault,
@@ -215,6 +216,7 @@ async function addLocalRepoFromPath(
   }
 
   const detected = await detectRepoIconAndUpstream({ repoPath: resolvedPath, kind: repoKind })
+  const isBare = repoKind === 'git' && isBareGitRepo(resolvedPath)
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,
@@ -223,6 +225,7 @@ async function addLocalRepoFromPath(
     ...detected,
     addedAt: Date.now(),
     kind: repoKind,
+    ...(isBare ? { isBare: true } : {}),
     ...(repoKind === 'git'
       ? {
           externalWorktreeVisibility: 'hide' as const,
@@ -314,6 +317,7 @@ async function addRemoteRepoFromPath(
     kind: repoKind,
     connectionId: args.connectionId
   })
+  const isBare = repoKind === 'git' && (await remoteRepoIsBare(gitProvider, resolvedPath))
   const repo: Repo = {
     id: randomUUID(),
     path: resolvedPath,
@@ -323,6 +327,7 @@ async function addRemoteRepoFromPath(
     addedAt: Date.now(),
     kind: repoKind,
     connectionId: args.connectionId,
+    ...(isBare ? { isBare: true } : {}),
     ...(repoKind === 'git'
       ? {
           externalWorktreeVisibility: 'hide' as const,
@@ -339,6 +344,20 @@ async function addRemoteRepoFromPath(
   }
 
   return { repo, alreadyExisted: false }
+}
+
+async function remoteRepoIsBare(
+  gitProvider: { exec: (args: string[], cwd: string) => Promise<{ stdout: string }> },
+  remotePath: string
+): Promise<boolean> {
+  try {
+    const result = await gitProvider.exec(['rev-parse', '--is-bare-repository'], remotePath)
+    return result.stdout.trim() === 'true'
+  } catch {
+    // Why: bareness is an enhancement, not a validity gate — the repo already
+    // passed isGitRepoAsync, so a failed probe just means "treat as non-bare".
+    return false
+  }
 }
 
 function getRemoteRepoFolderName(remotePath: string): string {

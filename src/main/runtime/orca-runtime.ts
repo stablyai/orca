@@ -620,6 +620,7 @@ import {
   getDefaultRemote,
   getBranchConflictKind,
   isGitRepo,
+  isBareGitRepo,
   getRepoName,
   searchBaseRefDetails,
   getRemoteCount,
@@ -13081,6 +13082,7 @@ export class OrcaRuntimeService {
     }
 
     const detected = await detectRepoIconAndUpstream({ repoPath: path, kind })
+    const isBare = kind === 'git' && isBareGitRepo(path)
     const repo: Repo = {
       id: randomUUID(),
       path,
@@ -13090,6 +13092,7 @@ export class OrcaRuntimeService {
       ...detected,
       addedAt: Date.now(),
       kind,
+      ...(isBare ? { isBare: true } : {}),
       ...(kind === 'git'
         ? {
             externalWorktreeVisibility: 'hide' as const,

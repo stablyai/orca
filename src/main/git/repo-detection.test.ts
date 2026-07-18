@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getGitRepoRoot, isGitRepo, normalizeGitRepoRootForInputPath } from './repo'
+import { getGitRepoRoot, isBareGitRepo, isGitRepo, normalizeGitRepoRootForInputPath } from './repo'
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -326,6 +326,49 @@ describe('isGitRepo', () => {
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
     expect(getGitRepoRoot(bareRepo)).toBe(bareRepo)
+  })
+})
+
+describe('isBareGitRepo', () => {
+  let tmpDir: string
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-repo-detect-'))
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('returns true for a bare repository', () => {
+    const bareRepo = path.join(tmpDir, 'bare.git')
+    git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
+
+    expect(isBareGitRepo(bareRepo)).toBe(true)
+  })
+
+  it('returns false for a regular checkout', () => {
+    const realRepo = path.join(tmpDir, 'real')
+    mkdirSync(realRepo)
+    git(realRepo, ['init', '--quiet'])
+
+    expect(isBareGitRepo(realRepo)).toBe(false)
+  })
+
+  it('returns false for a plain directory', () => {
+    const plainDir = path.join(tmpDir, 'plain')
+    mkdirSync(plainDir)
+
+    expect(isBareGitRepo(plainDir)).toBe(false)
+  })
+
+  it('recognizes a bare repository via markers when git itself cannot be run', () => {
+    const bareRepo = path.join(tmpDir, 'bare-fallback.git')
+    git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
+
+    withGitUnavailable(() => {
+      expect(isBareGitRepo(bareRepo)).toBe(true)
+    })
   })
 })
 

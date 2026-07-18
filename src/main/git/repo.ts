@@ -152,6 +152,29 @@ function probeGitRepo(path: string): GitRepoProbeResult {
   return sawFailure ? 'indeterminate' : 'not-repo'
 }
 
+/**
+ * True when `path` is the root of a bare git repository (no working tree).
+ * Why: bare repos are valid projects but must never be treated as a
+ * workspace; callers stamp Repo.isBare from this at add time.
+ */
+export function isBareGitRepo(path: string): boolean {
+  try {
+    const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
+      cwd: path
+    }).trim()
+    if (bareRepo === 'true') {
+      return true
+    }
+    if (bareRepo === 'false') {
+      return false
+    }
+  } catch {
+    // Why: mirror isGitRepo — a spawn/config failure is not a verdict; fall
+    // back to the filesystem marker so a genuine bare repo is still flagged.
+  }
+  return hasValidBareRepoMarkerSync(path)
+}
+
 export function getGitRepoRoot(path: string): string {
   try {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
