@@ -374,4 +374,51 @@ describe('browser mobile session sync', () => {
     expect(serialized).not.toContain('private-unified-tab')
     expect(serialized).not.toContain('Private Unified Metadata')
   })
+
+  it('does not publish orphaned browser pages without a public workspace owner', () => {
+    const publicWorkspace = makeBrowserWorkspace('Public Workspace')
+    const state = makeState({
+      browserTabsByWorktree: { 'wt-1': [publicWorkspace] },
+      browserPagesByWorkspace: {
+        [publicWorkspace.id]: [
+          {
+            id: 'page-1',
+            workspaceId: publicWorkspace.id,
+            worktreeId: 'wt-1',
+            url: 'https://example.com/public-page',
+            title: 'Public Page Title',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: true,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ],
+        'orphan-private-workspace': [
+          {
+            id: 'orphan-private-page',
+            workspaceId: 'orphan-private-workspace',
+            worktreeId: 'wt-1',
+            url: 'https://chatgpt.com/c/orphan-private-conversation',
+            title: 'Orphan Private Chat Title',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 2
+          }
+        ]
+      } as unknown as AppState['browserPagesByWorkspace']
+    })
+
+    const browserProjection = getRuntimeMobileSessionSyncKey(state).browserProjection
+
+    expect(browserProjection).toContain('Public Page Title')
+    expect(browserProjection).not.toContain('orphan-private-workspace')
+    expect(browserProjection).not.toContain('orphan-private-page')
+    expect(browserProjection).not.toContain('orphan-private-conversation')
+    expect(browserProjection).not.toContain('Orphan Private Chat Title')
+  })
 })

@@ -9,7 +9,10 @@ import {
 } from '../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parseWebAiAccountWorkspaceId } from '../../../../shared/constants'
-import { normalizeWebAiAccounts } from '../../../../shared/web-ai-accounts'
+import {
+  normalizeWebAiAccounts,
+  webAiAccountMatchesWorkspace
+} from '../../../../shared/web-ai-accounts'
 
 // Why: cap the per-session history so a long-lived workspace with many
 // worktree jumps cannot grow the array unbounded. 50 is generous enough
@@ -141,10 +144,17 @@ function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
   }
   const accountId = parseWebAiAccountWorkspaceId(entry)
   if (accountId) {
-    // Why: closing the final tab must not erase a valid account from browser
-    // history; activating it can recreate the provider's home surface.
-    return normalizeWebAiAccounts(state.settings?.webAiAccounts).some(
-      (account) => account.id === accountId
+    const account = normalizeWebAiAccounts(state.settings?.webAiAccounts).find(
+      (candidate) => candidate.id === accountId
+    )
+    // Why: history points at a visible surface, not at a saved account
+    // definition. Once the final tab closes (or its profile binding drifts),
+    // skip the entry instead of allowing Back/Forward to recreate a page.
+    return (
+      account !== undefined &&
+      (state.browserTabsByWorktree?.[entry] ?? []).some((workspace) =>
+        webAiAccountMatchesWorkspace(account, workspace)
+      )
     )
   }
   const workspaceScope = parseWorkspaceKey(entry)

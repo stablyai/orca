@@ -817,9 +817,9 @@ setWorktreeNavActivator((workspaceId) => {
     if (workspace) {
       return store.activateWebAiBrowserWorkspace(workspaceId, workspace.id)
     }
-    // Why: history can outlive the account's final tab. Reopening the account
-    // restores a navigable surface without treating its synthetic ID as a repo.
-    return store.openWebAiAccount(account) !== null
+    // Why: navigation history must never recreate a closed account tab. The
+    // account row remains available for an explicit user launch instead.
+    return false
   }
   if (workspaceId === WEB_AI_BROWSER_WORKSPACE_ID) {
     return false

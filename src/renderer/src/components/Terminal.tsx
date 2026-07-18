@@ -1397,25 +1397,10 @@ function Terminal(): React.JSX.Element | null {
       void openNewBrowserTabInActiveWorkspace(targetGroupId ?? '')
       return
     }
-    if (targetGroupId) {
-      void openNewBrowserTabInActiveWorkspace(targetGroupId)
-      return
-    }
-    const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-    const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-    if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-      void createWebRuntimeSessionBrowserTab({
-        worktreeId: activeWorktreeId,
-        environmentId: runtimeEnvironmentId,
-        url: defaultUrl
-      })
-      return
-    }
-    createBrowserTab(activeWorktreeId, defaultUrl, {
-      title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
-      focusAddressBar: true
-    })
-  }, [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace])
+    // Keep all local and remote new-browser entry points in one resolver so an
+    // ordinary worktree's active Web AI tab retains its account/profile binding.
+    void openNewBrowserTabInActiveWorkspace(targetGroupId ?? '')
+  }, [activeWorktreeId, openNewBrowserTabInActiveWorkspace])
 
   const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
     if (isWebAiBrowserWorkspaceId(useAppStore.getState().activeWorktreeId)) {
@@ -1797,20 +1782,7 @@ function Terminal(): React.JSX.Element | null {
           activeWorktreeId,
           {
             openBrowserTab: handleNewBrowserTab,
-            openTerminalTab: handleNewTab,
-            openWebAiAccountTab: (account) => {
-              if (!activeWorktreeId) {
-                return
-              }
-              const targetGroupId =
-                store.activeGroupIdByWorktree[activeWorktreeId] ??
-                store.groupsByWorktree[activeWorktreeId]?.[0]?.id
-              void store.launchWebAiAccount(account, {
-                openNewTab: true,
-                targetGroupId,
-                targetWorktreeId: activeWorktreeId
-              })
-            }
+            openTerminalTab: handleNewTab
           },
           {
             activeBrowserTabId: store.activeBrowserTabId,

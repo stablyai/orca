@@ -110,7 +110,6 @@ import { isWebAiBrowserWorkspaceId } from '../../../shared/constants'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
   closeWebRuntimeSessionTab,
-  createWebRuntimeSessionBrowserTab,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
@@ -138,7 +137,7 @@ import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { normalizeWebAiAccounts } from '../../../shared/web-ai-accounts'
+import { normalizeWebAiAccounts, webAiAccountMatchesBinding } from '../../../shared/web-ai-accounts'
 import { migrateLegacyWebAiWorkspaceSession } from '@/lib/web-ai-workspace-session-migration'
 
 function getShortcutPlatform(): NodeJS.Platform {
@@ -2212,7 +2211,7 @@ export function useIpcEvents(): void {
         // does not own Orca's worktree/tab model. The store resolves the source
         // workspace so the new visible tab inherits its profile/partition (and
         // Web AI account identity) instead of silently falling back to default.
-        store.openBrowserLinkInNewTab(browserPageId, url)
+        void store.openBrowserLinkInNewTab(browserPageId, url)
       })
     )
 
@@ -2227,37 +2226,12 @@ export function useIpcEvents(): void {
         }
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
-          if (isWebAiBrowserWorkspaceId(worktreeId)) {
-            void store.openNewBrowserTabInActiveWorkspace(
-              store.activeGroupIdByWorktree[worktreeId] ?? ''
-            )
-            return
-          }
-          const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
-          if (environmentId) {
-            if (!isWebRuntimeSessionActive(environmentId)) {
-              store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-                title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
-                focusAddressBar: true
-              })
-              return
-            }
-            void (async () => {
-              // Why: paired web browser tabs are host-owned and arrive through
-              // session.tabs. On RPC failure we leave local state unchanged so
-              // the next host snapshot remains authoritative.
-              await createWebRuntimeSessionBrowserTab({
-                worktreeId,
-                environmentId,
-                url: store.browserDefaultUrl ?? 'about:blank'
-              })
-            })()
-            return
-          }
-          store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-            title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
-            focusAddressBar: true
-          })
+          // Centralize account/profile inheritance and runtime ownership in the
+          // store action. This guest-originated Cmd+T path must match the
+          // renderer shortcut, toolbar, and tab-menu behavior.
+          void store.openNewBrowserTabInActiveWorkspace(
+            store.activeGroupIdByWorktree[worktreeId] ?? ''
+          )
         }
       })
     )
@@ -2350,7 +2324,7 @@ export function useIpcEvents(): void {
     // url. The renderer creates the tab and replies with the page ID so the
     // main process can wait for registerGuest before returning to the CLI.
     unsubs.push(
-      window.api.ui.onRequestTabCreate((data) => {
+      window.api.ui.onRequestTabCreate(async (data) => {
         try {
           if (isRuntimeEnvironmentActive()) {
             // Why: browser automation targets client-local Electron webviews.
@@ -2383,20 +2357,20 @@ export function useIpcEvents(): void {
               )
             : undefined
 
-          if (isWebAiBrowserWorkspaceId(worktreeId)) {
-            const activeWorkspace = activeBrowserTabId
-              ? (store.browserTabsByWorktree[worktreeId] ?? []).find(
-                  (workspace) => workspace.id === activeBrowserTabId
-                )
-              : null
-            const account = activeWorkspace?.webAiAccountId
-              ? normalizeWebAiAccounts(store.settings?.webAiAccounts).find(
-                  (entry) =>
-                    entry.id === activeWorkspace.webAiAccountId &&
-                    entry.profileId === activeWorkspace.sessionProfileId &&
-                    entry.sessionPartition === activeWorkspace.sessionPartition
-                )
-              : null
+          const activeWorkspace = activeBrowserTabId
+            ? (store.browserTabsByWorktree[worktreeId] ?? []).find(
+                (workspace) => workspace.id === activeBrowserTabId
+              )
+            : null
+          const account = activeWorkspace?.webAiAccountId
+            ? (normalizeWebAiAccounts(store.settings?.webAiAccounts).find((entry) =>
+                webAiAccountMatchesBinding(entry, activeWorkspace)
+              ) ?? null)
+            : null
+          // Why: account-bound tabs can live in ordinary worktrees. Keep the
+          // same profile identity for CLI-created tabs there, and fail closed
+          // when a stale tag cannot be resolved to a saved account.
+          if (isWebAiBrowserWorkspaceId(worktreeId) || account || activeWorkspace?.webAiAccountId) {
             if (!account) {
               window.api.ui.replyTabCreate({
                 requestId: data.requestId,
@@ -2420,14 +2394,15 @@ export function useIpcEvents(): void {
               })
               return
             }
-            const workspace = store.openWebAiAccount(account, {
+            const launchResult = await store.launchWebAiAccount(account, {
               openNewTab: true,
               url: data.url,
               title: data.url,
               targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
-              activate: data.activate === true
+              activate: data.activate === true,
+              ...(isWebAiBrowserWorkspaceId(worktreeId) ? {} : { targetWorktreeId: worktreeId })
             })
-            if (!workspace) {
+            if (!launchResult.ok) {
               window.api.ui.replyTabCreate({
                 requestId: data.requestId,
                 error: translate(
@@ -2437,6 +2412,7 @@ export function useIpcEvents(): void {
               })
               return
             }
+            const workspace = launchResult.workspace
             const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
             const browserPageId = pages[0]?.id ?? workspace.id
             acquireBrowserAutomationBootstrapLease(worktreeId, browserPageId)
@@ -2505,9 +2481,15 @@ export function useIpcEvents(): void {
             })
             return
           }
+          const boundWebAiAccount = owningWorkspace.webAiAccountId
+            ? (normalizeWebAiAccounts(store.settings?.webAiAccounts).find((account) =>
+                webAiAccountMatchesBinding(account, owningWorkspace)
+              ) ?? null)
+            : null
           if (
-            isWebAiBrowserWorkspaceId(owningWorkspace.worktreeId) &&
-            owningWorkspace.webAiAccountId
+            boundWebAiAccount ||
+            (isWebAiBrowserWorkspaceId(owningWorkspace.worktreeId) &&
+              owningWorkspace.webAiAccountId)
           ) {
             window.api.ui.replyTabSetProfile({
               requestId: data.requestId,
@@ -2675,11 +2657,7 @@ export function useIpcEvents(): void {
         if (shortcutTarget.kind === 'web-ai-account') {
           const groupId =
             store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
-          void store.launchWebAiAccount(shortcutTarget.account, {
-            openNewTab: true,
-            targetGroupId: groupId,
-            targetWorktreeId: worktreeId
-          })
+          void store.openNewBrowserTabInActiveWorkspace(groupId ?? '')
           return
         }
         if (shortcutTarget.kind === 'browser') {

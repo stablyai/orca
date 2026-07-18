@@ -5224,6 +5224,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" eliminado.",
+          "webAiProfileInUse": "Este perfil está en uso por una o varias cuentas de IA web. Elimina esas cuentas antes de borrar el perfil.",
           "2d4bea7f35": "Se borraron las cookies predeterminadas.",
           "ebb78dfd6f": "Desde archivo…",
           "7df818977e": "Desde ",

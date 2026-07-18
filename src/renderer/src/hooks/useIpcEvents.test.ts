@@ -16,6 +16,7 @@ import type { BrowserWorkspace, TuiAgent, WebAiAccount } from '../../../shared/t
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import { getWebAiAccountWorkspaceId } from '../../../shared/constants'
+import type { WebAiAccountLaunchResult } from '../store/slices/browser'
 
 const { closeTerminalTabMock } = vi.hoisted(() => ({
   closeTerminalTabMock: vi.fn()
@@ -838,7 +839,7 @@ describe('useIpcEvents browser tab create routing', () => {
             worktreeId?: string | null
             url: string
             sessionProfileId?: string
-          }) => void)
+          }) => void | Promise<void>)
         | null
     } = { current: null }
     const activateViewListenerRef: {
@@ -952,7 +953,12 @@ describe('useIpcEvents browser tab create routing', () => {
       openWebAiAccount: vi.fn(
         (
           _account: typeof webAiAccount,
-          options: { activate?: boolean; url?: string; targetGroupId?: string }
+          options: {
+            activate?: boolean
+            url?: string
+            targetGroupId?: string
+            targetWorktreeId?: string
+          }
         ) => {
           const workspace = {
             id: 'workspace-web-ai-new',
@@ -964,6 +970,41 @@ describe('useIpcEvents browser tab create routing', () => {
           ]
           expect(options.activate).toBe(false)
           return workspace
+        }
+      ),
+      launchWebAiAccount: vi.fn<
+        (
+          account: typeof webAiAccount,
+          options: {
+            activate?: boolean
+            url?: string
+            targetGroupId?: string
+            targetWorktreeId?: string
+          }
+        ) => Promise<WebAiAccountLaunchResult>
+      >(
+        async (
+          _account: typeof webAiAccount,
+          options: {
+            activate?: boolean
+            url?: string
+            targetGroupId?: string
+            targetWorktreeId?: string
+          }
+        ) => {
+          const workspace = {
+            id: 'workspace-web-ai-new',
+            activePageId: 'page-web-ai-new',
+            pageIds: ['page-web-ai-new']
+          }
+          state.browserPagesByWorkspace['workspace-web-ai-new'] = [
+            {
+              id: 'page-web-ai-new',
+              worktreeId: options.targetWorktreeId ?? webAiWorkspaceId
+            }
+          ]
+          expect(options.activate).toBe(false)
+          return { ok: true, workspace: workspace as BrowserWorkspace, profiles: [] }
         }
       ),
       switchBrowserTabProfile: vi.fn()
@@ -1127,7 +1168,7 @@ describe('useIpcEvents browser tab create routing', () => {
     const { useIpcEvents } = await import('./useIpcEvents')
     useIpcEvents()
 
-    requestTabCreateListenerRef.current?.({
+    await requestTabCreateListenerRef.current?.({
       requestId: 'req-create',
       worktreeId: 'wt-1',
       url: 'https://example.com'
@@ -1142,13 +1183,13 @@ describe('useIpcEvents browser tab create routing', () => {
     expect(dispatchEvent).toHaveBeenCalled()
     expect(releaseBrowserAutomationVisibility).not.toHaveBeenCalled()
 
-    requestTabCreateListenerRef.current?.({
+    await requestTabCreateListenerRef.current?.({
       requestId: 'req-web-ai-create',
       worktreeId: webAiWorkspaceId,
       url: 'https://chatgpt.com/c/example'
     })
 
-    expect(state.openWebAiAccount).toHaveBeenCalledWith(webAiAccount, {
+    expect(state.launchWebAiAccount).toHaveBeenCalledWith(webAiAccount, {
       openNewTab: true,
       url: 'https://chatgpt.com/c/example',
       title: 'https://chatgpt.com/c/example',
@@ -1174,6 +1215,70 @@ describe('useIpcEvents browser tab create routing', () => {
     })
     expect(state.switchBrowserTabProfile).not.toHaveBeenCalled()
     expect(destroyPersistentWebview).not.toHaveBeenCalled()
+
+    state.browserTabsByWorktree['wt-1'].push({
+      id: 'workspace-integrated',
+      worktreeId: 'wt-1',
+      activePageId: 'page-integrated',
+      pageIds: ['page-integrated'],
+      webAiAccountId: webAiAccount.id,
+      sessionProfileId: webAiAccount.profileId,
+      sessionPartition: webAiAccount.sessionPartition
+    } as never)
+    state.browserPagesByWorkspace['workspace-integrated'] = [
+      { id: 'page-integrated', worktreeId: 'wt-1' }
+    ]
+    state.unifiedTabsByWorktree['wt-1'].push({
+      id: 'unified-integrated',
+      groupId: 'group-1',
+      contentType: 'browser',
+      entityId: 'workspace-integrated'
+    })
+    state.activeBrowserTabIdByWorktree['wt-1'] = 'workspace-integrated'
+
+    await requestTabCreateListenerRef.current?.({
+      requestId: 'req-integrated-create',
+      worktreeId: 'wt-1',
+      url: 'https://chatgpt.com/c/integrated'
+    })
+
+    expect(state.launchWebAiAccount).toHaveBeenLastCalledWith(webAiAccount, {
+      openNewTab: true,
+      url: 'https://chatgpt.com/c/integrated',
+      title: 'https://chatgpt.com/c/integrated',
+      targetGroupId: 'group-1',
+      activate: false,
+      targetWorktreeId: 'wt-1'
+    })
+
+    state.launchWebAiAccount.mockResolvedValueOnce({
+      ok: false,
+      reason: 'profile-missing',
+      profiles: []
+    })
+    await requestTabCreateListenerRef.current?.({
+      requestId: 'req-integrated-missing-profile',
+      worktreeId: 'wt-1',
+      url: 'https://chatgpt.com/c/rejected'
+    })
+
+    expect(replyTabCreate).toHaveBeenLastCalledWith({
+      requestId: 'req-integrated-missing-profile',
+      error: 'Failed to create a Web AI browser tab'
+    })
+
+    requestTabSetProfileListenerRef.current?.({
+      requestId: 'req-integrated-profile',
+      browserPageId: 'page-integrated',
+      profileId: 'another-profile',
+      sessionPartition: 'persist:another-profile'
+    })
+
+    expect(replyTabSetProfile).toHaveBeenLastCalledWith({
+      requestId: 'req-integrated-profile',
+      error: "This tab's profile is fixed by its Web AI account"
+    })
+    expect(state.switchBrowserTabProfile).not.toHaveBeenCalled()
 
     acquireBrowserAutomationVisibility.mockClear()
     dispatchEvent.mockClear()
@@ -2328,13 +2433,12 @@ describe('useIpcEvents updater integration', () => {
         sessionPartition: integratedAccount.sessionPartition
       }
     ]
+    openNewBrowserTabInActiveWorkspace.mockClear()
+    launchWebAiAccount.mockClear()
     newTerminalTabListenerRef.current()
 
-    expect(launchWebAiAccount).toHaveBeenCalledWith(integratedAccount, {
-      openNewTab: true,
-      targetGroupId: 'group-worktree',
-      targetWorktreeId: 'wt-1'
-    })
+    expect(openNewBrowserTabInActiveWorkspace).toHaveBeenCalledWith('group-worktree')
+    expect(launchWebAiAccount).not.toHaveBeenCalled()
     expect(createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
     expect(createTab).not.toHaveBeenCalled()
 

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
+import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type {
   BrowserCookieImportScope,
@@ -31,7 +32,7 @@ import {
 } from '../../../../shared/workspace-session-browser-history'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
-import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
+import { pushRecentlyClosedTabKind, type RecentlyClosedTabKind } from './recently-closed-tabs'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -113,6 +114,27 @@ export type WebAiAccountLaunchResult =
       profiles: BrowserSessionProfile[]
     }
 
+type WebAiAccountLaunchFailureReason = Extract<WebAiAccountLaunchResult, { ok: false }>['reason']
+
+function notifyWebAiAccountLaunchFailure(reason: WebAiAccountLaunchFailureReason): void {
+  toast.error(
+    reason === 'profile-check-failed'
+      ? translate(
+          'auto.components.sidebar.WebAiAccountsSection.profileCheckFailed',
+          'Could not verify browser profiles. Try again.'
+        )
+      : reason === 'profile-missing'
+        ? translate(
+            'auto.components.sidebar.WebAiAccountsSection.profileMissing',
+            'This browser profile no longer exists.'
+          )
+        : translate(
+            'auto.components.sidebar.WebAiAccountsSection.launchFailed',
+            'Failed to open this Web AI account.'
+          )
+  )
+}
+
 type BrowserTabPageState = {
   title?: string
   loading?: boolean
@@ -125,6 +147,30 @@ type BrowserTabPageState = {
 type ClosedBrowserWorkspaceSnapshot = {
   workspace: BrowserWorkspace
   pages: BrowserPage[]
+}
+
+function removeClosedBrowserSnapshotKinds(
+  kinds: readonly RecentlyClosedTabKind[],
+  snapshots: readonly ClosedBrowserWorkspaceSnapshot[],
+  retainedSnapshots: readonly ClosedBrowserWorkspaceSnapshot[]
+): RecentlyClosedTabKind[] {
+  const retainedWorkspaceIds = new Set(retainedSnapshots.map((snapshot) => snapshot.workspace.id))
+  const removedSnapshotIndexes = new Set<number>()
+  snapshots.forEach((snapshot, index) => {
+    if (!retainedWorkspaceIds.has(snapshot.workspace.id)) {
+      removedSnapshotIndexes.add(index)
+    }
+  })
+
+  let browserSnapshotIndex = 0
+  return kinds.filter((kind) => {
+    if (kind !== 'browser') {
+      return true
+    }
+    const remove = removedSnapshotIndexes.has(browserSnapshotIndex)
+    browserSnapshotIndex += 1
+    return !remove
+  })
 }
 
 function sanitizeBrowserPageAnnotation(annotation: BrowserPageAnnotation): BrowserPageAnnotation {
@@ -166,7 +212,7 @@ export type BrowserSlice = {
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
-  openBrowserLinkInNewTab: (sourcePageId: string, url: string) => BrowserWorkspace | null
+  openBrowserLinkInNewTab: (sourcePageId: string, url: string) => Promise<BrowserWorkspace | null>
   closeBrowserTab: (tabId: string) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
@@ -876,17 +922,32 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     set((state) => {
       const recentlyClosedBrowserTabsByWorktree: Record<string, ClosedBrowserWorkspaceSnapshot[]> =
         {}
+      const recentlyClosedTabKindsByWorktree = { ...state.recentlyClosedTabKindsByWorktree }
       for (const [worktreeId, snapshots] of Object.entries(
         state.recentlyClosedBrowserTabsByWorktree
       )) {
         const retained = snapshots.filter(
           (snapshot) => snapshot.workspace.webAiAccountId !== accountId
         )
+        if (retained.length !== snapshots.length) {
+          // Why: cross-type reopen history stores browser kinds separately from
+          // snapshots. Removing only the account snapshot leaves a phantom MRU entry.
+          const retainedKinds = removeClosedBrowserSnapshotKinds(
+            recentlyClosedTabKindsByWorktree[worktreeId] ?? [],
+            snapshots,
+            retained
+          )
+          if (retainedKinds.length > 0) {
+            recentlyClosedTabKindsByWorktree[worktreeId] = retainedKinds
+          } else {
+            delete recentlyClosedTabKindsByWorktree[worktreeId]
+          }
+        }
         if (retained.length > 0) {
           recentlyClosedBrowserTabsByWorktree[worktreeId] = retained
         }
       }
-      return { recentlyClosedBrowserTabsByWorktree }
+      return { recentlyClosedBrowserTabsByWorktree, recentlyClosedTabKindsByWorktree }
     })
     return true
   },
@@ -1017,14 +1078,56 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             (entry) => entry.id === accountId
           )
         : null
-      if (account) {
-        await get().launchWebAiAccount(account, {
-          openNewTab: true,
-          targetGroupId: groupId
-        })
+      if (!account) {
+        notifyWebAiAccountLaunchFailure('launch-failed')
+        return
+      }
+      const result = await get().launchWebAiAccount(account, {
+        openNewTab: true,
+        targetGroupId: groupId
+      })
+      if (!result.ok) {
+        notifyWebAiAccountLaunchFailure(result.reason)
       }
       return
     }
+
+    // Why: an ordinary worktree can host a Web AI tab alongside terminals and
+    // editors. New-browser actions from that surface must keep the active
+    // account's cookie partition instead of silently creating a default tab.
+    const activeBrowserTabId =
+      state.activeBrowserTabIdByWorktree[worktreeId] ??
+      (state.activeWorktreeId === worktreeId ? state.activeBrowserTabId : null)
+    const activeBrowserWorkspace = activeBrowserTabId
+      ? (state.browserTabsByWorktree[worktreeId] ?? []).find(
+          (workspace) => workspace.id === activeBrowserTabId
+        )
+      : null
+    const activeWebAiAccount = activeBrowserWorkspace?.webAiAccountId
+      ? normalizeWebAiAccounts(state.settings?.webAiAccounts).find((account) =>
+          webAiAccountWorkspaceBindingIsValid(account, activeBrowserWorkspace)
+        )
+      : null
+    if (activeBrowserWorkspace?.webAiAccountId && !activeWebAiAccount) {
+      // A stale or tampered account tag must never fall through to the default
+      // profile, which would cross browser identities inside the same workflow.
+      notifyWebAiAccountLaunchFailure('launch-failed')
+      return
+    }
+    if (activeWebAiAccount) {
+      const result = await get().launchWebAiAccount(activeWebAiAccount, {
+        openNewTab: true,
+        targetGroupId: groupId,
+        targetWorktreeId: worktreeId
+      })
+      if (result.ok) {
+        get().recordFeatureInteraction('browser-tab-created')
+      } else {
+        notifyWebAiAccountLaunchFailure(result.reason)
+      }
+      return
+    }
+
     const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
     if (runtimeEnvironmentId) {
@@ -1059,7 +1162,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
     get().recordFeatureInteraction('browser-tab-created')
   },
-  openBrowserLinkInNewTab: (sourcePageId, url) => {
+  openBrowserLinkInNewTab: async (sourcePageId, url) => {
     const state = get()
     const sourcePage = findPage(state.browserPagesByWorkspace, sourcePageId)
     if (!sourcePage) {
@@ -1078,15 +1181,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         )
       : null
     if (sourceWorkspace.webAiAccountId) {
-      return account
-        ? get().openWebAiAccount(account, {
-            openNewTab: true,
-            targetGroupId: sourceUnifiedTab?.groupId,
-            targetWorktreeId: sourcePage.worktreeId,
-            url,
-            title: url
-          })
-        : null
+      if (!account) {
+        return null
+      }
+      const result = await get().launchWebAiAccount(account, {
+        openNewTab: true,
+        targetGroupId: sourceUnifiedTab?.groupId,
+        targetWorktreeId: sourcePage.worktreeId,
+        url,
+        title: url
+      })
+      if (!result.ok) {
+        notifyWebAiAccountLaunchFailure(result.reason)
+        return null
+      }
+      return result.workspace
     }
     if (isWebAiAccountWorkspaceId(sourcePage.worktreeId)) {
       return null
@@ -2507,6 +2616,23 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   deleteBrowserSessionProfile: async (profileId) => {
+    // Why: Web AI accounts treat their profile partition as an identity
+    // boundary. Deleting that profile would leave a persisted sidebar account
+    // pointing at a partition that can no longer be opened safely.
+    if (
+      !isRuntimeEnvironmentActive(get()) &&
+      normalizeWebAiAccounts(get().settings?.webAiAccounts).some(
+        (account) => account.profileId === profileId
+      )
+    ) {
+      toast.error(
+        translate(
+          'auto.components.settings.BrowserProfileRow.webAiProfileInUse',
+          'This profile is used by one or more Web AI accounts. Remove those accounts before deleting the profile.'
+        )
+      )
+      return false
+    }
     if (isRuntimeEnvironmentActive(get())) {
       try {
         const result = await callRuntimeRpc<BrowserProfileDeleteResult>(

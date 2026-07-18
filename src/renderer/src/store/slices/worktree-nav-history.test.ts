@@ -1,7 +1,12 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
-import type { FolderWorkspace, WebAiAccount, Worktree } from '../../../../shared/types'
+import type {
+  BrowserWorkspace,
+  FolderWorkspace,
+  WebAiAccount,
+  Worktree
+} from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getWebAiAccountWorkspaceId } from '../../../../shared/constants'
 import {
@@ -59,6 +64,28 @@ function makeWebAiAccount(id: string): WebAiAccount {
     profileId: `profile-${id}`,
     sessionPartition: `persist:${id}`,
     createdAt: 1
+  }
+}
+
+function makeWebAiWorkspace(
+  account: WebAiAccount,
+  overrides: Partial<BrowserWorkspace> = {}
+): BrowserWorkspace {
+  return {
+    id: `browser-${account.id}`,
+    worktreeId: getWebAiAccountWorkspaceId(account.id),
+    sessionProfileId: account.profileId,
+    sessionPartition: account.sessionPartition,
+    webAiAccountId: account.id,
+    url: 'https://chatgpt.com/',
+    title: account.label,
+    loading: false,
+    faviconUrl: null,
+    canGoBack: false,
+    canGoForward: false,
+    loadError: null,
+    createdAt: 1,
+    ...overrides
   }
 }
 
@@ -208,7 +235,7 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 
-  it('treats a configured Web AI account as live after its final tab closes', () => {
+  it('treats a Web AI workspace as live while a matching browser tab exists', () => {
     const account = makeWebAiAccount('chatgpt-main')
     const workspaceId = getWebAiAccountWorkspaceId(account.id)
     const store = createHistoryStore(['child'])
@@ -219,6 +246,9 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     })
     store.setState({
       settings: { webAiAccounts: [account] } as unknown as AppState['settings'],
+      browserTabsByWorktree: {
+        [workspaceId]: [makeWebAiWorkspace(account)]
+      },
       worktreeNavHistory: ['child', workspaceId],
       worktreeNavHistoryIndex: 0
     })
@@ -228,6 +258,62 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
 
     expect(activated).toEqual([workspaceId])
     expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+  })
+
+  it('skips a Web AI workspace after its final tab closes', () => {
+    const account = makeWebAiAccount('chatgpt-main')
+    const workspaceId = getWebAiAccountWorkspaceId(account.id)
+    const store = createHistoryStore(['child'])
+    const activated: string[] = []
+    setWorktreeNavActivator((id) => {
+      activated.push(id as string)
+      return true
+    })
+    store.setState({
+      settings: { webAiAccounts: [account] } as unknown as AppState['settings'],
+      browserTabsByWorktree: {
+        [workspaceId]: [makeWebAiWorkspace(account)]
+      },
+      worktreeNavHistory: ['child', workspaceId],
+      worktreeNavHistoryIndex: 0
+    })
+
+    // Closing the final browser tab removes the synthetic workspace while the
+    // saved account remains available from the sidebar.
+    store.setState({ browserTabsByWorktree: {} })
+
+    expect(canGoForwardWorktreeHistory(store.getState() as AppState)).toBe(false)
+    store.getState().goForwardWorktree()
+
+    expect(activated).toEqual([])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('skips a Web AI workspace whose existing tab has a stale profile binding', () => {
+    const account = makeWebAiAccount('chatgpt-main')
+    const workspaceId = getWebAiAccountWorkspaceId(account.id)
+    const store = createHistoryStore(['child'])
+    const staleWorkspace = makeWebAiWorkspace(account, {
+      sessionProfileId: 'profile-replaced',
+      sessionPartition: 'persist:profile-replaced'
+    })
+    const activated: string[] = []
+    setWorktreeNavActivator((id) => {
+      activated.push(id as string)
+      return true
+    })
+    store.setState({
+      settings: { webAiAccounts: [account] } as unknown as AppState['settings'],
+      browserTabsByWorktree: { [workspaceId]: [staleWorkspace] },
+      worktreeNavHistory: ['child', workspaceId],
+      worktreeNavHistoryIndex: 0
+    })
+
+    expect(canGoForwardWorktreeHistory(store.getState() as AppState)).toBe(false)
+    store.getState().goForwardWorktree()
+
+    expect(activated).toEqual([])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 
   it('skips a Web AI workspace after its account is removed', () => {

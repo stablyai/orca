@@ -974,7 +974,6 @@ function RemoteBrowserPagePane({
   const remotePageHandle = useAppStore(
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const openBrowserLinkInNewTab = useAppStore((s) => s.openBrowserLinkInNewTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
@@ -2469,7 +2468,7 @@ function RemoteBrowserPagePane({
                       role="menuitem"
                       className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                       onClick={() => {
-                        openBrowserLinkInNewTab(browserTab.id, contextMenu.linkUrl!)
+                        void openBrowserLinkInNewTab(browserTab.id, contextMenu.linkUrl!)
                         setContextMenu(null)
                       }}
                     >
@@ -4954,7 +4953,7 @@ function BrowserPagePane({
                       role="menuitem"
                       className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                       onClick={() => {
-                        openBrowserLinkInNewTab(browserTab.id, contextMenu.linkUrl!)
+                        void openBrowserLinkInNewTab(browserTab.id, contextMenu.linkUrl!)
                         setContextMenu(null)
                       }}
                     >

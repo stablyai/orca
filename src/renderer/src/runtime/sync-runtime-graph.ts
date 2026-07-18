@@ -443,11 +443,14 @@ function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles'])
 function buildRuntimeMobileBrowserProjection(state: AppState): string {
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
-  const privateWorkspaceIds = new Set<string>()
+  const publishableWorkspaceOwnerById = new Map<string, string>()
   for (const [worktreeId, workspaces] of Object.entries(browserTabsByWorktree)) {
+    if (isWebAiBrowserWorkspaceId(worktreeId)) {
+      continue
+    }
     for (const workspace of workspaces) {
-      if (isWebAiBrowserWorkspaceId(worktreeId) || isWebAiAccountBoundBrowserWorkspace(workspace)) {
-        privateWorkspaceIds.add(workspace.id)
+      if (!isWebAiAccountBoundBrowserWorkspace(workspace)) {
+        publishableWorkspaceOwnerById.set(workspace.id, worktreeId)
       }
     }
   }
@@ -472,17 +475,26 @@ function buildRuntimeMobileBrowserProjection(state: AppState): string {
     ),
     pagesByWorkspace: Object.fromEntries(
       Object.entries(browserPagesByWorkspace)
-        .filter(([workspaceId]) => !privateWorkspaceIds.has(workspaceId))
+        // Why: page records do not carry the Web AI account tag. Publish only
+        // through a live, explicitly public workspace owner so orphaned private
+        // pages cannot fail open during hydration or cleanup.
+        .filter(([workspaceId]) => publishableWorkspaceOwnerById.has(workspaceId))
         .map(([workspaceId, pages]) => [
           workspaceId,
-          pages.map((page) => ({
-            id: page.id,
-            title: page.title,
-            url: page.url,
-            loading: page.loading,
-            canGoBack: page.canGoBack,
-            canGoForward: page.canGoForward
-          }))
+          pages
+            .filter(
+              (page) =>
+                page.workspaceId === workspaceId &&
+                page.worktreeId === publishableWorkspaceOwnerById.get(workspaceId)
+            )
+            .map((page) => ({
+              id: page.id,
+              title: page.title,
+              url: page.url,
+              loading: page.loading,
+              canGoBack: page.canGoBack,
+              canGoForward: page.canGoForward
+            }))
         ])
     )
   })

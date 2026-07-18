@@ -19,11 +19,16 @@ import { buildBrowserSessionData } from '@/lib/workspace-session'
 import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+const toastErrorMock = vi.hoisted(() => vi.fn())
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: toastErrorMock }
 }))
 
 const mockApi = {
@@ -44,6 +49,10 @@ const mockApi = {
 
 // @ts-expect-error test window mock
 globalThis.window = { api: mockApi }
+
+beforeEach(() => {
+  toastErrorMock.mockClear()
+})
 
 function createTestStore() {
   const store = create<AppState>()(
@@ -532,6 +541,36 @@ describe('createBrowserSlice closed browser workspaces', () => {
 })
 
 describe('createBrowserSlice Web AI accounts', () => {
+  it('keeps a profile referenced by a Web AI account from being deleted', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const profile = {
+      id: account.profileId,
+      scope: 'isolated' as const,
+      partition: account.sessionPartition,
+      label: account.label,
+      source: null
+    }
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      browserSessionProfiles: [profile]
+    })
+    mockApi.browser.sessionDeleteProfile.mockClear()
+
+    await expect(store.getState().deleteBrowserSessionProfile(account.profileId)).resolves.toBe(
+      false
+    )
+
+    expect(mockApi.browser.sessionDeleteProfile).not.toHaveBeenCalled()
+    expect(store.getState().browserSessionProfiles).toEqual([profile])
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'This profile is used by one or more Web AI accounts. Remove those accounts before deleting the profile.'
+    )
+  })
+
   it('does not launch when the saved profile id and partition no longer exist', async () => {
     const store = createTestStore()
     const account = webAiAccount()
@@ -1090,7 +1129,7 @@ describe('createBrowserSlice Web AI accounts', () => {
     expect(store.getState().browserPagesByWorkspace[drifted.id]).toBeUndefined()
   })
 
-  it('opens guest-requested links in a visible tab with the source account profile', () => {
+  it('opens guest-requested links in a visible tab with the source account profile', async () => {
     const store = createTestStore()
     const account = webAiAccount()
     const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
@@ -1104,8 +1143,17 @@ describe('createBrowserSlice Web AI accounts', () => {
     if (!source?.activePageId) {
       throw new Error('Expected a Web AI browser page')
     }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: account.label,
+        source: null
+      }
+    ])
 
-    const opened = store
+    const opened = await store
       .getState()
       .openBrowserLinkInNewTab(source.activePageId, 'https://chatgpt.com/c/example')
 
@@ -1118,7 +1166,7 @@ describe('createBrowserSlice Web AI accounts', () => {
     expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(2)
   })
 
-  it('keeps guest-requested links in the source worktree and account binding', () => {
+  it('keeps guest-requested links in the source worktree and account binding', async () => {
     const store = createTestStore()
     const account = webAiAccount()
     store.setState({
@@ -1136,8 +1184,17 @@ describe('createBrowserSlice Web AI accounts', () => {
     if (!source?.activePageId) {
       throw new Error('Expected an integrated Web AI browser page')
     }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: account.label,
+        source: null
+      }
+    ])
 
-    const opened = store
+    const opened = await store
       .getState()
       .openBrowserLinkInNewTab(source.activePageId, 'https://chatgpt.com/c/integrated')
 
@@ -1149,6 +1206,31 @@ describe('createBrowserSlice Web AI accounts', () => {
       sessionPartition: account.sessionPartition
     })
     expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(2)
+  })
+
+  it('rejects guest-requested account links when the saved profile is missing', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const accountWorkspaceId = getWebAiAccountWorkspaceId(account.id)
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings']
+    })
+    const source = store.getState().openWebAiAccount(account)
+    if (!source?.activePageId) {
+      throw new Error('Expected a Web AI browser page')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([])
+
+    const opened = await store
+      .getState()
+      .openBrowserLinkInNewTab(source.activePageId, 'https://chatgpt.com/c/rejected')
+
+    expect(opened).toBeNull()
+    expect(store.getState().browserTabsByWorktree[accountWorkspaceId]).toHaveLength(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('This browser profile no longer exists.')
   })
 
   it('removes stale profile workspaces before recreating the account surface', () => {
@@ -1326,10 +1408,22 @@ describe('createBrowserSlice Web AI accounts', () => {
       throw new Error('Expected an integrated Web AI browser workspace')
     }
     store.getState().closeBrowserTab(closed.id)
+    const unrelated = store.getState().createBrowserTab('wt-one', 'https://example.com')
+    store.getState().closeBrowserTab(unrelated.id)
+    store.setState((state) => ({
+      recentlyClosedTabKindsByWorktree: {
+        ...state.recentlyClosedTabKindsByWorktree,
+        'wt-one': ['terminal', ...(state.recentlyClosedTabKindsByWorktree['wt-one'] ?? [])]
+      }
+    }))
 
     expect(
-      store.getState().recentlyClosedBrowserTabsByWorktree['wt-one']?.[0]?.workspace.webAiAccountId
-    ).toBe(account.id)
+      store
+        .getState()
+        .recentlyClosedBrowserTabsByWorktree['wt-one']?.some(
+          (snapshot) => snapshot.workspace.webAiAccountId === account.id
+        )
+    ).toBe(true)
 
     await store.getState().deleteWebAiAccount(account.id)
 
@@ -1340,6 +1434,16 @@ describe('createBrowserSlice Web AI accounts', () => {
         .flat()
         .some((snapshot) => snapshot.workspace.webAiAccountId === account.id)
     ).toBe(false)
+    expect(
+      store
+        .getState()
+        .recentlyClosedBrowserTabsByWorktree['wt-one']?.map((snapshot) => snapshot.workspace.id)
+    ).toEqual([unrelated.id])
+    expect(store.getState().recentlyClosedTabKindsByWorktree['wt-one']).toEqual([
+      'terminal',
+      'browser'
+    ])
+    expect(store.getState().recentlyClosedTabKindsByWorktree['wt-two']).toBeUndefined()
   })
 
   it('keeps the workspace binding when account persistence fails', async () => {
@@ -1752,6 +1856,43 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().browserSessionProfiles[0]?.id).toBe('local-default')
   })
 
+  it('allows a remote profile to be deleted when a local Web AI account has the same id', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    const remoteProfile = {
+      id: account.profileId,
+      scope: 'isolated' as const,
+      partition: 'persist:orca-remote-profile',
+      label: 'Remote profile',
+      source: null
+    }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-delete',
+      ok: true,
+      result: { deleted: true, profileId: remoteProfile.id },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: 'env-1',
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      browserSessionProfiles: [remoteProfile],
+      browserSessionProfilesByHostId: { 'runtime:env-1': [remoteProfile] }
+    })
+
+    await expect(store.getState().deleteBrowserSessionProfile(remoteProfile.id)).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'browser.profileDelete',
+      params: { profileId: remoteProfile.id },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().browserSessionProfiles).toEqual([])
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
   it('uses the target worktree host default profile when creating a browser tab', () => {
     const store = createTestStore()
     store.setState({
@@ -1893,6 +2034,101 @@ describe('createBrowserSlice runtime guard', () => {
       sessionProfileId: account.profileId,
       sessionPartition: account.sessionPartition
     })
+  })
+
+  it('inherits an embedded Web AI account for ordinary new-browser actions', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() => ({
+        id: 'wt-project'
+      })) as unknown as AppState['getKnownWorktreeById']
+    })
+    const first = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!first) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([
+      {
+        id: account.profileId,
+        scope: 'isolated',
+        partition: account.sessionPartition,
+        label: account.label,
+        source: null
+      }
+    ])
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    const tabs = store.getState().browserTabsByWorktree['wt-project'] ?? []
+    expect(tabs).toHaveLength(2)
+    expect(tabs[1]).toMatchObject({
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: account.sessionPartition
+    })
+    expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
+  })
+
+  it('does not fall back to the default profile for a stale embedded account binding', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    mockApi.browser.sessionListProfiles.mockClear()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() => ({
+        id: 'wt-project'
+      })) as unknown as AppState['getKnownWorktreeById']
+    })
+    store.getState().createBrowserTab('wt-project', 'https://chatgpt.com/c/stale', {
+      webAiAccountId: account.id,
+      sessionProfileId: account.profileId,
+      sessionPartition: 'persist:stale-partition'
+    })
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(1)
+    expect(mockApi.browser.sessionListProfiles).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith('Failed to open this Web AI account.')
+  })
+
+  it('reports a missing profile instead of opening an unbound embedded tab', async () => {
+    const store = createTestStore()
+    const account = webAiAccount()
+    store.setState({
+      settings: {
+        activeRuntimeEnvironmentId: null,
+        webAiAccounts: [account]
+      } as AppState['settings'],
+      activeWorktreeId: 'wt-project',
+      getKnownWorktreeById: (() => ({
+        id: 'wt-project'
+      })) as unknown as AppState['getKnownWorktreeById']
+    })
+    const first = store.getState().openWebAiAccount(account, {
+      targetWorktreeId: 'wt-project'
+    })
+    if (!first) {
+      throw new Error('Expected an integrated Web AI browser workspace')
+    }
+    mockApi.browser.sessionListProfiles.mockResolvedValueOnce([])
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(store.getState().browserTabsByWorktree['wt-project']).toHaveLength(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('This browser profile no longer exists.')
   })
 
   it('creates new browser tabs through the owning runtime for desktop remote worktrees', async () => {

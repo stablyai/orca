@@ -5209,6 +5209,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "已删除配置文件“{{value0}}”。",
+          "webAiProfileInUse": "此配置文件正被一个或多个网页 AI 帐号使用。请先移除这些帐号，再删除该配置文件。",
           "2d4bea7f35": "默认 cookie 已清除。",
           "ebb78dfd6f": "从文件...",
           "7df818977e": "从",
