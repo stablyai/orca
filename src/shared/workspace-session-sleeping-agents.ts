@@ -88,7 +88,7 @@ const sleepingAgentSessionRecordSchema = z
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
-    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
+    origin: z.enum(['worktree-sleep', 'quit', 'live', 'completed']).optional()
   })
   .refine(
     (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,

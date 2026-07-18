@@ -420,9 +420,9 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  it('skips hibernated stable panes after their live PTY binding is cleared', () => {
+  it('keeps passive completed recovery owned after its live PTY binding is cleared', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    const record = makeRecord({ paneKey, origin: 'worktree-sleep', state: 'done' })
+    const record = makeRecord({ paneKey, origin: 'completed', state: 'done' })
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       terminalLayoutsByTabId: {

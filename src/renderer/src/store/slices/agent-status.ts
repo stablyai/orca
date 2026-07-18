@@ -35,6 +35,10 @@ import {
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
 import {
+  isCompletedAgentRecoveryIdentity,
+  isCompletedRecoveryRecord
+} from '@/lib/completed-agent-recovery'
+import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
   retireAgentPaneAuthorityAliasesByOwnerTab,
@@ -577,18 +581,19 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
       if (
         existing.worktreeId !== worktreeId ||
-        existing.origin !== 'live' ||
-        (liveEntry !== undefined && !isCompletedPiWithLiveRecoveryRecord(liveEntry, existing)) ||
+        (liveEntry
+          ? !isCompletedAgentRecoveryIdentity(liveEntry, existing)
+          : !isCompletedRecoveryRecord(existing)) ||
         (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
         !getAgentResumeArgv(existing.agent, existing.providerSession)
       ) {
         continue
       }
-      // Why: Pi identity is resumable with no turn row and while idle after done, so manual
-      // sleep must promote both instead of deleting the checkpoint.
+      // Why: done closes a turn while its TUI remains resumable, so manual sleep
+      // must promote the checkpoint instead of deleting the conversation.
       records[existing.paneKey] = {
         ...existing,
-        state: 'working',
+        state: existing.agent === 'pi' ? 'working' : 'done',
         capturedAt,
         updatedAt: capturedAt,
         origin: 'worktree-sleep'
@@ -1815,8 +1820,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
         )
+        // Why: `done` closes a turn, not the interactive TUI. Preserve its
+        // provider identity until shell/teardown evidence explicitly drops it.
         const liveRecoveryWorktreeId =
-          entry.state === 'done' && !retainsPiRecoveryIdentity
+          entry.state === 'done' && entry.interrupted === true
             ? null
             : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
         const liveRecoveryRecord = liveRecoveryWorktreeId
@@ -1829,7 +1836,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               worktreeId: liveRecoveryWorktreeId,
               capturedAt: updatedAt,
               launchConfig: launchConfigSource,
-              origin: 'live'
+              origin: entry.state === 'done' && !retainsPiRecoveryIdentity ? 'completed' : 'live'
             })
           : null
         let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
@@ -2118,6 +2125,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        const hasSleepingSession = paneKey in s.sleepingAgentSessionsByPaneKey
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
@@ -2135,8 +2143,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         if (hasLaunchConfig) {
           delete nextLaunchConfigs[paneKey]
         }
-        // Why: short-circuit when there's nothing to change, but still flush a pending ack or launch-config cleanup if one is present.
-        if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
+        // Why: short-circuit when there's nothing to change, but still flush pending
+        // ack, launch-config, or recovery cleanup.
+        if (!hasLive && !hasRetained && !hasSleepingSession && !migrationUnsupported.changed) {
           if (hasLaunchConfig) {
             return {
               agentLaunchConfigByPaneKey: nextLaunchConfigs,
@@ -2161,6 +2170,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         if (hasRetained) {
           delete nextRetained[paneKey]
         }
+        const nextSleepingSessions = hasSleepingSession
+          ? { ...s.sleepingAgentSessionsByPaneKey }
+          : s.sleepingAgentSessionsByPaneKey
+        if (hasSleepingSession) {
+          // Why: command-finished shell evidence and explicit dismissals mean
+          // the TUI exited, so a later restart must not relaunch it.
+          delete nextSleepingSessions[paneKey]
+        }
 
         // Why: explicit teardown must not let retention sync resurrect this row — plant a one-shot suppressor, but only when hasLive (a retained-only key has no live→gone transition to consume it, so it leaks) and not already present (re-spreading spuriously re-renders subscribers).
         const needsSuppressorWrite = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
@@ -2169,6 +2186,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
+          sleepingAgentSessionsByPaneKey: nextSleepingSessions,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
@@ -2219,6 +2237,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter(
           (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
         )
+        const sleepingKeys = Object.keys(s.sleepingAgentSessionsByPaneKey).filter((k) =>
+          k.startsWith(prefix) || completedOrphanKeySet.has(k)
+        )
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey?.startsWith(prefix) ?? false
@@ -2247,6 +2268,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           liveKeys.length === 0 &&
           launchConfigKeys.length === 0 &&
           retainedKeys.length === 0 &&
+          sleepingKeys.length === 0 &&
           !migrationUnsupported.changed
         ) {
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
@@ -2282,7 +2304,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           delete nextRetained[key]
         }
 
-        // Why: a suppressor is only consumed on a live→gone transition, so plant one only for live paneKeys and skip already-suppressed and completed-orphan keys — otherwise it leaks (mirrors dropAgentStatus).
+        const nextSleeping =
+          sleepingKeys.length > 0
+            ? { ...s.sleepingAgentSessionsByPaneKey }
+            : s.sleepingAgentSessionsByPaneKey
+        for (const key of sleepingKeys) {
+          delete nextSleeping[key]
+        }
+
+        // Why: a suppressor is only consumed on a live→gone transition, so skip
+        // retained-only, already-suppressed, and completed-orphan keys to avoid leaks.
         const suppressorAdds = liveKeys.filter(
           (k) => !completedOrphanKeySet.has(k) && !(k in s.retentionSuppressedPaneKeys)
         )
@@ -2298,6 +2329,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
+          sleepingAgentSessionsByPaneKey: nextSleeping,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           recentlyClosedAgentStatusTabIds: nextClosedTabs,
@@ -2606,11 +2638,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
-          if (entry.state === 'done') {
-            const existing = next[entry.paneKey]
-            if (!isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
-              continue
-            }
+          const existing = next[entry.paneKey]
+          // Why: completed recovery is owned by the original pane, not by the
+          // shutdown snapshot; periodic and quit capture must not promote it.
+          if (
+            existing?.origin === 'completed' &&
+            isCompletedAgentRecoveryIdentity(entry, existing)
+          ) {
+            continue
+          }
+          if (entry.state === 'done' && isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
             if (mode === 'periodic') {
               continue
             }
@@ -2619,6 +2656,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               next[entry.paneKey] = record
               changed = true
             }
+            continue
+          }
+          if (entry.state === 'done' && entry.interrupted === true) {
             continue
           }
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
@@ -2633,8 +2673,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             launchConfig: getLaunchConfigForEntry(s, entry),
             origin
           })
-          const existing = next[entry.paneKey]
-          // Why: a periodic timer must not downgrade a confirmed-quit shutdown snapshot; a live hook event supersedes it elsewhere.
+          // Why: a periodic timer must not downgrade a confirmed-quit shutdown
+          // snapshot; a live hook event supersedes it elsewhere.
           if (
             mode === 'periodic' &&
             existing?.origin === 'quit' &&

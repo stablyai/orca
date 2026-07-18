@@ -3117,6 +3117,8 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         { tabId: 'tab-1', worktreeId: wt },
         { providerSession: { key: 'session_id', id: 'sess-rollback-1' } }
       )
+    const recoveryBefore = store.getState().sleepingAgentSessionsByPaneKey[targetPaneKey]
+    expect(recoveryBefore).toBeDefined()
     mockApi.pty.kill.mockRejectedValueOnce(new Error('kill_failed'))
 
     await expect(
@@ -3130,7 +3132,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const state = store.getState()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBe(recoveryBefore)
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
   })
 
@@ -3257,6 +3259,8 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         { tabId: 'tab-1', worktreeId: wt },
         { providerSession: { key: 'session_id', id: 'target-session' } }
       )
+    const recoveryBefore = store.getState().sleepingAgentSessionsByPaneKey[targetPaneKey]
+    expect(recoveryBefore).toBeDefined()
 
     await expect(
       store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
@@ -3269,7 +3273,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     const state = store.getState()
     expect(state.ptyIdsByTabId['tab-1']).toEqual(['pty-agent', 'pty-shell'])
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBe(recoveryBefore)
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
     expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
     expect(mockRestorePtyDataHandlersAfterFailedShutdown).toHaveBeenCalledWith(handlerSnapshots)
@@ -3550,6 +3554,8 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         { tabId: 'tab-1', worktreeId: wt },
         { providerSession: { key: 'session_id', id: 'target-session' } }
       )
+    const recoveryBefore = store.getState().sleepingAgentSessionsByPaneKey[targetPaneKey]
+    expect(recoveryBefore).toBeDefined()
 
     await expect(
       store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
@@ -3568,7 +3574,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     ])
     expect(state.suppressedPtyExitIds['remote:env-1@@terminal-1']).toBeUndefined()
     expect(state.suppressedPtyExitIds['terminal-1']).toBeUndefined()
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBe(recoveryBefore)
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
   })
 
@@ -3806,6 +3812,8 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
+    const recoveryBefore = store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']
+    expect(recoveryBefore).toBeDefined()
 
     await expect(
       store.getState().shutdownWorktreeTerminals(wt, {
@@ -3815,7 +3823,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('terminal_liveness_unavailable')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBe(recoveryBefore)
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
@@ -3860,6 +3868,8 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
+    const recoveryBefore = store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']
+    expect(recoveryBefore).toBeDefined()
 
     await expect(
       store.getState().shutdownWorktreeTerminals(wt, {
@@ -3869,7 +3879,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('exact_terminal_stop_unverified')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBe(recoveryBefore)
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
@@ -4342,6 +4352,8 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       { tabId: 'tab-1', worktreeId: wt },
       { providerSession: { key: 'session_id', id: 'live-session' } }
     )
+    const recoveryBefore = store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']
+    expect(recoveryBefore).toBeDefined()
 
     await expect(
       store.getState().shutdownWorktreeTerminals(wt, {
@@ -4351,7 +4363,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       })
     ).rejects.toThrow('stop failed')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:live']).toBe(recoveryBefore)
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeDefined()
     expect(mockUnregisterPtyDataHandlers).not.toHaveBeenCalledWith(['pty-1'])
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
@@ -4478,7 +4490,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
   })
 
-  it('skips allowlisted done live sleeping pane sessions during manual sleep', async () => {
+  it('promotes allowlisted completed recovery during manual sleep', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -4529,7 +4541,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'done',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
   })
 

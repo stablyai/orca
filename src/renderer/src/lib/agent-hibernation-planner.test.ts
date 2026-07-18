@@ -400,6 +400,30 @@ describe('agent sleep planner', () => {
     ).toEqual([piEntry.paneKey])
   })
 
+  it('still hibernates panes that only retain passive completed recovery identity', () => {
+    const completedEntry = entry()
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          sleepingAgentSessionsByPaneKey: {
+            [completedEntry.paneKey]: {
+              paneKey: completedEntry.paneKey,
+              tabId: 'tab-1',
+              worktreeId: 'wt-bg',
+              agent: 'claude',
+              providerSession: completedEntry.providerSession!,
+              prompt: completedEntry.prompt,
+              state: 'done',
+              capturedAt: OLD,
+              updatedAt: OLD,
+              origin: 'completed'
+            }
+          }
+        })
+      )
+    ).toEqual([completedEntry.paneKey])
+  })
+
   it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
     expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])
   })

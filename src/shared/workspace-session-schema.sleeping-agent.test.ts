@@ -41,6 +41,35 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves passive completed recovery records', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'finished',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 9,
+          origin: 'completed'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('completed')
+    }
+  })
+
   it('preserves the authoritative Pi session file through hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

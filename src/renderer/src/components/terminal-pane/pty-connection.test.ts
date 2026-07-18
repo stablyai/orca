@@ -7412,7 +7412,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {
+  it('resumes a completed provider conversation when daemon reattach cold-restores a shell', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -7435,16 +7435,19 @@ describe('connectPanePty', () => {
         ...mockStoreState.settings,
         agentCmdOverrides: {}
       },
-      agentStatusByPaneKey: {
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
         [paneKey]: {
-          state: 'working',
-          prompt: 'finish the task',
-          agentType: 'codex',
           paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: 'finish the task',
+          state: 'done',
+          capturedAt: 2,
           updatedAt: 1,
-          stateStartedAt: 1,
-          stateHistory: [],
-          providerSession: { key: 'session_id', id: 'codex-session-1' }
+          origin: 'completed'
         }
       }
     } as StoreState
@@ -7479,6 +7482,9 @@ describe('connectPanePty', () => {
         })
       })
     )
+    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(mockStoreState.tabsByWorktree['wt-1']).toHaveLength(1)
   })
 
   it('uses WSL quoting for cold-restored agent resume in Windows-path WSL projects', async () => {

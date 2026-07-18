@@ -123,6 +123,34 @@ describe('manual sleep agent session capture', () => {
     })
   })
 
+  it('promotes passive completed recovery into a manual sleep record', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createTestStore()
+    seedTabs(store)
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'finished', agentType: 'codex' },
+        'Codex',
+        { updatedAt: NOW, stateStartedAt: NOW - 1_000 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession: { key: 'session_id', id: 'completed-session' } }
+      )
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.origin).toBe(
+      'completed'
+    )
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'done',
+      providerSession: { key: 'session_id', id: 'completed-session' }
+    })
+  })
+
   it('clears pre-existing records for rows skipped by manual capture', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

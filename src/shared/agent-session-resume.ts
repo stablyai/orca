@@ -53,11 +53,11 @@ export type SleepingAgentSessionRecord = {
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have
-   *  no origin) are consumed by worktree activation, which opens a fresh tab.
-   *  Quit/live records describe panes that still exist in the restored session,
-   *  so only the pane's own cold-restore path may consume them — activation
-   *  launching a tab too would duplicate a warm-reattached session (#5232). */
-  origin?: 'worktree-sleep' | 'quit' | 'live'
+   *  no origin) are consumed by worktree activation. Quit/live records describe
+   *  active panes, while completed records preserve a finished conversation for
+   *  its original pane without authorizing activation to open another tab.
+   */
+  origin?: 'worktree-sleep' | 'quit' | 'live' | 'completed'
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)

@@ -1,7 +1,4 @@
-import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
-import type { ChildProcess } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -15,104 +12,15 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import {
+  forceKillElectronApp,
+  forceKillProcessTree,
+  readDaemonPid,
+  readPersistedData,
+  writePersistedData
+} from './helpers/force-exit-session'
 
 const PROVIDER_SESSION_ID = 'e2e-live-force-exit-session'
-
-type PersistedWorkspaceSession = {
-  tabsByWorktree?: Record<string, { id?: unknown; ptyId?: unknown }[]>
-  terminalLayoutsByTabId?: Record<string, unknown>
-  activeWorktreeIdsOnShutdown?: unknown
-  sleepingAgentSessionsByPaneKey?: Record<
-    string,
-    {
-      providerSession?: { id?: unknown }
-      launchConfig?: {
-        agentCommand?: string
-        agentArgs?: string
-        agentEnv?: Record<string, string>
-      }
-    }
-  >
-}
-
-type PersistedData = {
-  workspaceSession?: PersistedWorkspaceSession
-}
-
-function dataFilePath(userDataDir: string): string {
-  // Fresh sessions migrate the seeded legacy file, then persist only here.
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
-}
-
-function readPersistedData(userDataDir: string): PersistedData {
-  return JSON.parse(readFileSync(dataFilePath(userDataDir), 'utf8')) as PersistedData
-}
-
-function writePersistedData(userDataDir: string, data: PersistedData): void {
-  writeFileSync(dataFilePath(userDataDir), `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-}
-
-function daemonPidPath(userDataDir: string): string {
-  return path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`)
-}
-
-function readDaemonPid(userDataDir: string): number {
-  const raw = readFileSync(daemonPidPath(userDataDir), 'utf8')
-  const parsed = JSON.parse(raw) as { pid?: unknown }
-  if (typeof parsed.pid !== 'number') {
-    throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
-  }
-  return parsed.pid
-}
-
-function hasExited(proc: ChildProcess): boolean {
-  return proc.exitCode !== null || proc.signalCode !== null
-}
-
-function waitForExit(proc: ChildProcess, timeoutMs = 5000): Promise<void> {
-  if (hasExited(proc)) {
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, timeoutMs)
-    timeout.unref?.()
-    proc.once('exit', () => {
-      clearTimeout(timeout)
-      resolve()
-    })
-  })
-}
-
-async function forceKillElectronApp(app: ElectronApplication): Promise<void> {
-  const proc = app.process()
-  if (!proc.pid || hasExited(proc)) {
-    return
-  }
-  try {
-    if (process.platform === 'win32') {
-      execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
-    } else {
-      process.kill(proc.pid, 'SIGKILL')
-    }
-  } catch {
-    // Already gone.
-  }
-  await waitForExit(proc)
-}
-
-function killPid(pid: number): void {
-  try {
-    if (process.platform === 'win32') {
-      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
-      return
-    }
-    process.kill(pid, 'SIGKILL')
-  } catch {
-    // Already gone.
-  }
-}
 
 function stripPersistedPtyOwnership(userDataDir: string): void {
   const data = readPersistedData(userDataDir)
@@ -241,7 +149,7 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
     const daemonPid = readDaemonPid(session.userDataDir)
     await forceKillElectronApp(firstApp)
     firstApp = null
-    killPid(daemonPid)
+    await forceKillProcessTree(daemonPid)
     stripPersistedPtyOwnership(session.userDataDir)
 
     const secondLaunch = await session.launch()

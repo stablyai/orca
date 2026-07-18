@@ -686,7 +686,7 @@ describe('captureAllSleepingAgentSessions', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(firstRecord)
   })
 
-  it('clears the live checkpoint when the agent finishes', () => {
+  it('keeps the conversation checkpoint when the current turn finishes', () => {
     const store = createTestStore()
     store.setState({
       tabsByWorktree: {
@@ -719,7 +719,7 @@ describe('captureAllSleepingAgentSessions', () => {
       { providerSession: { key: 'session_id', id: 'codex-session-1' } }
     )
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeDefined()
     expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()
   })
 
@@ -817,7 +817,7 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
-  it('skips done agents — there is no turn left to resume', () => {
+  it('captures an idle conversation after its current turn is done', () => {
     const store = createTestStore()
     const entry = makeAgentEntry({
       paneKey: 'tab-1:leaf-1',
@@ -834,7 +834,7 @@ describe('captureAllSleepingAgentSessions', () => {
 
     store.getState().captureAllSleepingAgentSessions('quit')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(Object.keys(store.getState().sleepingAgentSessionsByPaneKey)).toEqual(['tab-1:leaf-1'])
   })
 
   it('skips agents without a resumable provider session', () => {

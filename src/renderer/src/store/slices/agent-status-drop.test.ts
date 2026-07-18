@@ -142,15 +142,23 @@ describe('dropAgentStatus + retention suppressor', () => {
     })
     store
       .getState()
-      .setAgentStatus('tab-closed:0', { state: 'done', prompt: 'closed', agentType: 'pi' })
+      .setAgentStatus(
+        'tab-closed:0',
+        { state: 'done', prompt: 'closed', agentType: 'codex' },
+        undefined,
+        undefined,
+        { tabId: 'tab-closed', worktreeId: 'wt-1' },
+        { providerSession: { key: 'session_id', id: 'closed-session' } }
+      )
     store
       .getState()
       .setAgentStatus(
         'tab-orphan:0',
-        { state: 'done', prompt: 'orphan', agentType: 'pi' },
+        { state: 'done', prompt: 'orphan', agentType: 'codex' },
         undefined,
         undefined,
-        { worktreeId: 'wt-1' }
+        { worktreeId: 'wt-1' },
+        { providerSession: { key: 'session_id', id: 'orphan-session' } }
       )
     store
       .getState()
@@ -180,12 +188,17 @@ describe('dropAgentStatus + retention suppressor', () => {
         { worktreeId: 'wt-2' }
       )
 
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-closed:0']).toBeDefined()
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-orphan:0']).toBeDefined()
+
     store.getState().closeTab('tab-closed')
 
     const s = store.getState()
     expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
     expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
     expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
+    expect(s.sleepingAgentSessionsByPaneKey['tab-closed:0']).toBeUndefined()
+    expect(s.sleepingAgentSessionsByPaneKey['tab-orphan:0']).toBeUndefined()
     // No suppressor for the orphan: its tab is already gone, so retention sync
     // never re-surfaces it and a suppressor would leak permanently.
     expect(s.retentionSuppressedPaneKeys['tab-orphan:0']).toBeUndefined()
