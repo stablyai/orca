@@ -5,11 +5,13 @@ import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import {
-  readMobileRelayCredentialBundle,
-  writeMobileRelayCredentialBundle
+  deleteMobileRelayCredentialBundle,
+  readMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
-import { saveHost } from './host-store'
+import { saveExistingHostRelayUpgrade } from './host-store'
+import { writeMobileRelayCredentialBundleForExistingHost } from './mobile-relay-existing-host-credential-writer'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
+import { reprovisionExistingMobileRelayCredential } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
@@ -88,8 +90,12 @@ function createSupervisor(
       }),
     resolveRelay: resolveMobileRelayEndpoint,
     readBundle: readMobileRelayCredentialBundle,
-    writeBundle: writeMobileRelayCredentialBundle,
-    saveHost,
+    writeBundle: writeMobileRelayCredentialBundleForExistingHost,
+    deleteBundle: deleteMobileRelayCredentialBundle,
+    reprovisionRelay: (client, currentHost) =>
+      reprovisionExistingMobileRelayCredential({ client, host: currentHost }),
+    saveHost: saveExistingHostRelayUpgrade,
+    onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
     setTimer: setTimeout,

@@ -21,6 +21,14 @@ import {
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { deleteMobileRelayDirectUpgradeJournal } from './mobile-relay-direct-upgrade-journal'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
+import { SerializedOperationQueue } from './serialized-operation-queue'
+import {
+  MobileRelayUpgradeHostRemovedError,
+  prepareStoredHostPersistence,
+  toStoredHostProfile
+} from './stored-host-profile'
+
+export { MobileRelayUpgradeHostRemovedError } from './stored-host-profile'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
@@ -88,7 +96,7 @@ let inflightLoad: Promise<HostProfile[]> | null = null
 // Why: rename / lastConnected / remove / save all RMW the same hosts JSON.
 // Without a queue, concurrent writers re-read a stale snapshot and the last
 // setItem wins — resurrecting a removed host or dropping a rename.
-let hostListMutation: Promise<void> = Promise.resolve()
+const hostListMutation = new SerializedOperationQueue()
 
 function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
   if (!raw) {
@@ -117,7 +125,7 @@ function parseStoredHosts(raw: string | null): StoredHostProfile[] | null {
 export async function loadHosts(): Promise<HostProfile[]> {
   // Why: writers hold the mutation chain across their full RMW; wait so a
   // load right after rename/remove does not race a half-written list.
-  await hostListMutation
+  await hostListMutation.wait()
   // Why: deduplicate concurrent loadHosts() calls so multiple screens
   // mounting simultaneously share one Keychain read pass.
   if (inflightLoad) {
@@ -189,7 +197,7 @@ export async function resolvePairingHostIdentity(
 ): Promise<{ id: string; name: string }> {
   // Why: one durable read both preserves an existing identity and names a new host,
   // avoiding duplicate cards and a second serial storage read before connecting.
-  await hostListMutation
+  await hostListMutation.wait()
   const hosts = await readStoredHostsForMutation()
   const match = hosts.find((host) => host.publicKeyB64 === publicKeyB64)
   return match
@@ -217,26 +225,27 @@ async function readStoredHostsForMutation(): Promise<StoredHostProfile[]> {
 async function mutateStoredHosts(
   update: (hosts: StoredHostProfile[]) => StoredHostProfile[]
 ): Promise<void> {
-  const mutation = hostListMutation.then(async () => {
+  return hostListMutation.run(async () => {
     const current = await readStoredHostsForMutation()
     const next = update(current)
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   })
-  hostListMutation = mutation.catch(() => {})
-  return mutation
 }
 
-function toStored(host: HostProfile): StoredHostProfile {
-  return {
-    id: host.id,
-    name: host.name,
-    endpoint: host.endpoint,
-    publicKeyB64: host.publicKeyB64,
-    lastConnected: host.lastConnected
-  }
+export function runHostCredentialWriteForExistingHost(
+  hostId: string,
+  writeCredential: () => Promise<void>
+): Promise<void> {
+  // Why: serialize secret writes with host removal. Either the write commits
+  // first and removal cleans it, or removal commits first and blocks the write.
+  return hostListMutation.run(async () => {
+    const hosts = await readStoredHostsForMutation()
+    if (!hosts.some(({ id }) => id === hostId)) {
+      throw new MobileRelayUpgradeHostRemovedError('mobile relay host was removed')
+    }
+    await writeCredential()
+  })
 }
-
-export class MobileRelayUpgradeHostRemovedError extends Error {}
 
 export async function saveHost(host: HostProfile): Promise<void> {
   await persistHost(host, false)
@@ -248,63 +257,43 @@ export async function saveExistingHostRelayUpgrade(host: HostProfile): Promise<v
 
 async function persistHost(host: HostProfile, requireExisting: boolean): Promise<void> {
   const validated = HostProfileSchema.parse(host)
-  const stored = toStored(validated)
-  const duplicateHostIds = new Set<string>()
-  let updatedExistingHost = false
-  await mutateStoredHosts((hosts) => {
-    const index = hosts.findIndex((h) => h.id === stored.id)
-    for (const candidate of hosts) {
-      if (candidate.id !== stored.id && candidate.publicKeyB64 === stored.publicKeyB64) {
-        duplicateHostIds.add(candidate.id)
+  const stored = toStoredHostProfile(validated)
+  await hostListMutation.run(async () => {
+    const prepared = prepareStoredHostPersistence(
+      await readStoredHostsForMutation(),
+      stored,
+      requireExisting
+    )
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prepared.hosts))
+    // Why: hold the removal queue through token and overlay publication so a
+    // later removal always cleans every secret written by this save.
+    await writeDeviceToken(stored.id, validated.deviceToken)
+    tokenCache.set(stored.id, validated.deviceToken)
+    if (validated.endpoints) {
+      await saveMobileRelayHostOverlay({
+        v: 2,
+        hostId: stored.id,
+        endpoints: validated.endpoints,
+        relayHostId: validated.relayHostId,
+        relay: validated.relay
+      })
+    }
+    const overlayRemovalIds = [...prepared.duplicateHostIds]
+    if (!validated.endpoints && prepared.updatedExistingHost) {
+      overlayRemovalIds.push(stored.id)
+    }
+    if (overlayRemovalIds.length > 0) {
+      await removeMobileRelayHostOverlays(overlayRemovalIds)
+    }
+    for (const duplicateHostId of prepared.duplicateHostIds) {
+      tokenCache.delete(duplicateHostId)
+      try {
+        await scheduleHostCredentialCleanup(duplicateHostId, deleteHostCredentials)
+      } catch {
+        // Metadata is deduplicated; orphan-token recovery is best-effort.
       }
     }
-    if (index >= 0) {
-      updatedExistingHost = true
-      // Why: affected installs may already contain duplicate rows; an authoritative
-      // save is the safe point to collapse them to the preserved host id.
-      return hosts
-        .filter(({ id }) => !duplicateHostIds.has(id))
-        .map((candidate) => (candidate.id === stored.id ? stored : candidate))
-    }
-    if (requireExisting) {
-      // Why: an in-flight relay upgrade must not resurrect a host the user removed.
-      throw new MobileRelayUpgradeHostRemovedError('mobile relay upgrade host was removed')
-    }
-    return [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
   })
-  // Why: write metadata BEFORE the keychain token so a crash between the two
-  // leaves orphaned metadata (which loadHosts skips and removeHost can clean
-  // up) rather than an orphaned keychain token with no metadata pointer —
-  // the latter would persist forever since removeHost only deletes by hostId
-  // from current metadata.
-  await writeDeviceToken(stored.id, validated.deviceToken)
-  tokenCache.set(stored.id, validated.deviceToken)
-  if (validated.endpoints) {
-    await saveMobileRelayHostOverlay({
-      v: 2,
-      hostId: stored.id,
-      endpoints: validated.endpoints,
-      relayHostId: validated.relayHostId,
-      relay: validated.relay
-    })
-  }
-  const overlayRemovalIds = [...duplicateHostIds]
-  if (!validated.endpoints && updatedExistingHost) {
-    overlayRemovalIds.push(stored.id)
-  }
-  if (overlayRemovalIds.length > 0) {
-    // Why: reusing an id for direct-only re-pairing must not retain routing
-    // metadata from the host's previous transport state.
-    await removeMobileRelayHostOverlays(overlayRemovalIds)
-  }
-  for (const duplicateHostId of duplicateHostIds) {
-    tokenCache.delete(duplicateHostId)
-    try {
-      await scheduleHostCredentialCleanup(duplicateHostId, deleteHostCredentials)
-    } catch {
-      // Metadata is already deduplicated; orphan-token recovery is best-effort.
-    }
-  }
 }
 
 export async function removeHost(hostId: string): Promise<void> {
@@ -376,7 +365,7 @@ export async function updateLastConnected(hostId: string): Promise<void> {
 
 /** Test-only: drain module mutation chain between cases. */
 export function resetHostStoreForTests(): void {
-  hostListMutation = Promise.resolve()
+  hostListMutation.reset()
   tokenCache.clear()
   inflightLoad = null
 }

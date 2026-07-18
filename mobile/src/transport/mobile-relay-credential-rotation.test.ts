@@ -76,17 +76,21 @@ describe('mobile relay credential rotation', () => {
       })
     ])
     const writes: MobileRelayCredentialBundle[] = []
+    const onBundlePersisted = vi.fn()
 
-    const result = await rotateMobileRelayCredential({
+    const rotation = {
       client,
       bundle,
       writeBundle: async (value) => {
         writes.push(value)
       },
-      randomBytes: (length) => new Uint8Array(length).fill(length === 32 ? 7 : 8)
-    })
+      randomBytes: (length: number) => new Uint8Array(length).fill(length === 32 ? 7 : 8),
+      onBundlePersisted
+    }
+    const result = await rotateMobileRelayCredential(rotation)
 
     expect(writes).toHaveLength(2)
+    expect(onBundlePersisted.mock.calls.map(([value]) => value)).toEqual(writes)
     expect(writes[0]!.pending).toMatchObject({ reqId: installed.reqId })
     expect(writes[0]!.pending!.hash).toBe('3Ev4DHdHPRMPoN6GukAY_pi7IUAF5qWJHRK6kURvnoE')
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'pairing.provisionRelay', {

@@ -1,83 +1,68 @@
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
-import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
-import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
+import { runMobileDirectProbe } from './mobile-direct-probe-operation'
 import {
-  encodeBase64Url,
-  isDirectorResolutionFailure,
-  persistRelayHost,
-  toError
-} from './mobile-endpoint-supervisor-support'
+  createMobileEndpointHysteresis,
+  type MobileEndpointHysteresis
+} from './mobile-endpoint-hysteresis'
+import { MobileRelayCredentialRecovery } from './mobile-relay-credential-recovery'
+import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-dependencies'
+import { MobileRelayRecoveryTimer } from './mobile-relay-recovery-timer'
+import { migrateMobileRelaySession } from './mobile-relay-session-migration'
 import {
-  applyResumeConfirmation,
-  mobileRelayCredentialNeedsRotation,
-  rotateMobileRelayCredential
-} from './mobile-relay-credential-rotation'
-import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
-import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
-import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
-import type { RpcClient } from './rpc-client'
+  retryMobileRelayWithEndpointRefresh,
+  type MobileRelayAttemptResult
+} from './mobile-relay-endpoint-retry'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { HostProfile } from './types'
 
-const DIRECT_PROBE_INTERVAL_MS = 15_000
-const DIRECT_OBSERVATION_MS = 30_000
-const MINIMUM_DWELL_MS = 60_000
-const FAILURE_COOLDOWN_MS = 60_000
-const LEASE_ROTATION_MARGIN_MS = 30_000
+export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-dependencies'
 
-export type MobileEndpointSupervisorDependencies = {
-  openDirect: (endpoint: string) => RpcClient
-  openRelay: (
-    relay: MobileRelayEndpoint,
-    credential: { token: string; version: number },
-    confirmReqId: string
-  ) => MobileRelayRpcSession
-  resolveRelay: typeof resolveMobileRelayEndpoint
-  readBundle: (hostId: string) => Promise<MobileRelayCredentialBundle | null>
-  writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
-  saveHost: (host: HostProfile) => Promise<void>
-  now: () => number
-  randomBytes: (length: number) => Uint8Array
-  setTimer: typeof setTimeout
-  clearTimer: typeof clearTimeout
-}
+const DIRECT_PROBE_INTERVAL_MS = 15_000
+type RelayCredential = { token: string; version: number }
 
 export class MobileEndpointSupervisor {
-  private host: HostProfile
-  private bundle: MobileRelayCredentialBundle | null = null
   private stopped = false
+  private ready = false
   private foreground = true
   private operationInFlight = false
-  private credentialRotationInFlight = false
   private relayRotationPending = false
   private probeTimer: ReturnType<typeof setTimeout> | null = null
-  private leaseTimer: ReturnType<typeof setTimeout> | null = null
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
+  private readonly credentialRecovery: MobileRelayCredentialRecovery
+  private readonly recoveryTimer: MobileRelayRecoveryTimer
+  private readonly leaseTimer: MobileRelayRecoveryTimer
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
     host: HostProfile,
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
-    this.host = host
-    this.hysteresis = new MobileEndpointHysteresis(dependencies.now(), {
-      directSuccessesRequired: 3,
-      directObservationMs: DIRECT_OBSERVATION_MS,
-      failureCooldownMs: FAILURE_COOLDOWN_MS,
-      minimumDwellMs: MINIMUM_DWELL_MS
-    })
+    this.credentialRecovery = new MobileRelayCredentialRecovery(host, dependencies)
+    this.recoveryTimer = new MobileRelayRecoveryTimer(
+      dependencies.setTimer,
+      dependencies.clearTimer
+    )
+    this.leaseTimer = new MobileRelayRecoveryTimer(dependencies.setTimer, dependencies.clearTimer)
+    this.hysteresis = createMobileEndpointHysteresis(dependencies.now())
   }
 
   async start(): Promise<void> {
-    this.bundle = await this.dependencies.readBundle(this.host.id).catch(() => null)
-    if (this.stopped || !this.bundle || !this.host.relay) {
+    await this.credentialRecovery.load()
+    if (this.stopped || !this.credentialRecovery.host.relay) {
       return
     }
+    this.ready = true
     this.unsubscribeState = this.logical.onStateChange((state) => {
+      if (!this.foreground) {
+        return
+      }
       if (state === 'connected') {
         if (this.logical.getActivePath() !== 'relay') {
-          void this.rotateCredentialIfNeeded()
+          if (this.credentialRecovery.needsAuthenticatedRepair) {
+            void this.reprovisionRelayCredentialIfPossible()
+          } else {
+            void this.credentialRecovery.rotateIfNeeded(this.logical)
+          }
         }
         this.scheduleDirectProbe()
       } else if (state === 'reconnecting' || state === 'disconnected' || state === 'auth-failed') {
@@ -85,6 +70,11 @@ export class MobileEndpointSupervisor {
         void this.recoverRelay()
       }
     })
+    if (!this.credentialRecovery.hasUsableCredential()) {
+      this.credentialRecovery.markUnavailable()
+      await this.reprovisionRelayCredentialIfPossible()
+      return
+    }
     const initialState = this.logical.getState()
     if (
       initialState === 'reconnecting' ||
@@ -93,6 +83,12 @@ export class MobileEndpointSupervisor {
     ) {
       // Why: the first direct dial may fail before encrypted relay credentials finish loading.
       await this.recoverRelay()
+    } else if (
+      this.foreground &&
+      initialState === 'connected' &&
+      this.logical.getActivePath() !== 'relay'
+    ) {
+      await this.credentialRecovery.rotateIfNeeded(this.logical)
     } else {
       this.scheduleDirectProbe()
     }
@@ -100,8 +96,19 @@ export class MobileEndpointSupervisor {
 
   setForeground(foreground: boolean): void {
     this.foreground = foreground
+    if (!this.ready) {
+      return
+    }
     if (foreground) {
-      void this.recoverRelay(this.relayRotationPending)
+      if (
+        this.logical.getState() === 'connected' &&
+        this.logical.getActivePath() !== 'relay' &&
+        this.credentialRecovery.needsAuthenticatedRepair
+      ) {
+        void this.reprovisionRelayCredentialIfPossible()
+      } else {
+        void this.recoverRelay(this.relayRotationPending)
+      }
       this.scheduleDirectProbe(0)
     } else {
       if (this.logical.getActivePath() === 'relay') {
@@ -124,7 +131,8 @@ export class MobileEndpointSupervisor {
       this.dependencies.clearTimer(this.probeTimer)
       this.probeTimer = null
     }
-    this.clearLeaseTimer()
+    this.recoveryTimer.clear()
+    this.leaseTimer.clear()
   }
 
   private async recoverRelay(forceReplacement = false): Promise<void> {
@@ -132,88 +140,86 @@ export class MobileEndpointSupervisor {
       this.stopped ||
       !this.foreground ||
       this.operationInFlight ||
-      !this.bundle ||
-      !this.host.relay ||
+      !this.credentialRecovery.host.relay ||
       (!forceReplacement && this.logical.getState() === 'connected')
     ) {
       return
     }
     this.operationInFlight = true
+    let recovered = false
     try {
-      const credentials = [this.bundle.current, this.bundle.grace].filter(
-        (credential): credential is NonNullable<typeof credential> =>
-          Boolean(credential && credential.expiresAt > this.dependencies.now())
-      )
+      const credentials = this.credentialRecovery.usableCredentials()
+      if (credentials.length === 0) {
+        this.credentialRecovery.markUnavailable()
+        return
+      }
       for (const credential of credentials) {
-        if (await this.tryRelayCredential(credential)) {
+        const result = await this.tryRelayCredential(credential)
+        if (result.ok) {
+          recovered = true
           return
         }
+        this.credentialRecovery.recordFailure(credential.version, result.error)
       }
     } finally {
       this.operationInFlight = false
-      const retry = !forceReplacement || this.relayRotationPending
-      if (retry && this.foreground && !this.stopped && !this.leaseTimer) {
-        this.leaseTimer = this.dependencies.setTimer(() => {
-          this.leaseTimer = null
-          void this.recoverRelay(forceReplacement)
-        }, 5000)
+      if (
+        recovered &&
+        !this.stopped &&
+        this.foreground &&
+        this.logical.getState() !== 'connected'
+      ) {
+        void this.recoverRelay(this.relayRotationPending)
+      } else if (!recovered && !this.stopped && this.foreground) {
+        const directNeedsRepair =
+          this.logical.getState() === 'connected' &&
+          this.logical.getActivePath() !== 'relay' &&
+          this.credentialRecovery.needsAuthenticatedRepair
+        if (directNeedsRepair) {
+          void this.reprovisionRelayCredentialIfPossible()
+        } else if (
+          this.credentialRecovery.hasUsableCredential() &&
+          (!forceReplacement || this.relayRotationPending)
+        ) {
+          this.recoveryTimer.scheduleIfIdle(5000, () => {
+            void this.recoverRelay(forceReplacement)
+          })
+        }
       }
     }
   }
 
-  private async tryRelayCredential(credential: {
-    token: string
-    version: number
-  }): Promise<boolean> {
-    const first = await this.openAndMigrateRelay(credential)
-    if (first.ok) {
-      return true
-    }
-    if (!isDirectorResolutionFailure(first.error) || !this.host.relay) {
-      return false
-    }
-    try {
-      const resolved = await this.dependencies.resolveRelay({
-        relay: this.host.relay,
-        resumeToken: credential.token
-      })
-      this.host = await persistRelayHost(this.host, resolved, this.dependencies.saveHost)
-      return (await this.openAndMigrateRelay(credential)).ok
-    } catch {
-      return false
-    }
-  }
-
-  private async openAndMigrateRelay(credential: {
-    token: string
-    version: number
-  }): Promise<{ ok: true } | { ok: false; error: Error }> {
-    if (!this.host.relay || !this.bundle) {
-      return { ok: false, error: new Error('relay state missing') }
-    }
-    const session = this.dependencies.openRelay(
-      this.host.relay,
-      credential,
-      `confirm-${encodeBase64Url(this.dependencies.randomBytes(16))}`
-    )
-    try {
-      await this.logical.migrateTo(session, 'relay')
-      if (!this.foreground) {
-        this.logical.suspendActiveSession()
-      }
-      this.relayRotationPending = false
-      this.hysteresis.recordMigration(this.dependencies.now())
-      const confirmation = session.getResumeConfirmation()
-      if (confirmation) {
-        this.bundle = applyResumeConfirmation(this.bundle, credential.version, confirmation)
-        await this.dependencies.writeBundle(this.bundle)
-      }
-      this.scheduleLeaseRotation(session)
-      this.scheduleDirectProbe()
-      return { ok: true }
-    } catch (error) {
-      return { ok: false, error: session.getFailure() ?? toError(error) }
-    }
+  private async tryRelayCredential(credential: RelayCredential): Promise<MobileRelayAttemptResult> {
+    const retried = await retryMobileRelayWithEndpointRefresh({
+      host: this.credentialRecovery.host,
+      resumeToken: credential.token,
+      resolveRelay: this.dependencies.resolveRelay,
+      saveHost: this.dependencies.saveHost,
+      tryRelay: (host) =>
+        migrateMobileRelaySession({
+          logical: this.logical,
+          relay: host.relay,
+          credential,
+          recovery: this.credentialRecovery,
+          hysteresis: this.hysteresis,
+          leaseTimer: this.leaseTimer,
+          openRelay: this.dependencies.openRelay,
+          randomBytes: this.dependencies.randomBytes,
+          now: this.dependencies.now,
+          isForeground: () => this.foreground,
+          clearRelayRotation: () => {
+            this.recoveryTimer.clear()
+            this.relayRotationPending = false
+          },
+          requestRelayRotation: () => {
+            this.relayRotationPending = true
+            void this.recoverRelay(true)
+          },
+          scheduleDirectProbe: () => this.scheduleDirectProbe()
+        })
+    })
+    this.credentialRecovery.host = retried.host
+    return retried.result
   }
 
   private scheduleDirectProbe(delayMs = DIRECT_PROBE_INTERVAL_MS): void {
@@ -242,80 +248,65 @@ export class MobileEndpointSupervisor {
       return
     }
     this.operationInFlight = true
-    let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
     try {
-      const openDirect = this.dependencies.openDirect
-      successful = await openAuthenticatedDirectEndpoint(this.host, openDirect, 12_000)
-      if (!successful) {
-        this.hysteresis.recordDirectFailure(this.dependencies.now())
-        return
-      }
-      if (!this.hysteresis.recordDirectSuccess(this.dependencies.now())) {
-        successful.client.close()
-        return
-      }
-      await this.logical.migrateTo(successful.client, successful.path)
-      successful = null
-      this.hysteresis.recordMigration(this.dependencies.now())
-      this.clearLeaseTimer()
-      this.relayRotationPending = false
-      await this.rotateCredentialIfNeeded()
+      await runMobileDirectProbe({
+        logical: this.logical,
+        host: this.credentialRecovery.host,
+        openDirect: this.dependencies.openDirect,
+        hysteresis: this.hysteresis,
+        recovery: this.credentialRecovery,
+        recoveryTimer: this.recoveryTimer,
+        leaseTimer: this.leaseTimer,
+        now: this.dependencies.now,
+        isStopped: () => this.stopped,
+        isForeground: () => this.foreground,
+        clearRelayRotation: () => {
+          this.relayRotationPending = false
+        },
+        retryCredentialRepair: () => void this.reprovisionRelayCredentialIfPossible()
+      })
     } finally {
-      successful?.client.close()
       this.operationInFlight = false
-      if (this.relayRotationPending) {
+      if (!this.stopped && this.foreground && this.logical.getState() !== 'connected') {
+        void this.recoverRelay(this.relayRotationPending)
+      } else if (this.relayRotationPending) {
         void this.recoverRelay(true)
       }
       this.scheduleDirectProbe()
     }
   }
 
-  private async rotateCredentialIfNeeded(): Promise<void> {
-    if (
-      this.stopped ||
-      this.credentialRotationInFlight ||
-      !this.bundle ||
-      this.logical.getActivePath() === 'relay' ||
-      !mobileRelayCredentialNeedsRotation(this.bundle, this.dependencies.now())
-    ) {
+  private async reprovisionRelayCredentialIfPossible(): Promise<void> {
+    if (this.stopped || !this.foreground || this.operationInFlight) {
       return
     }
-    this.credentialRotationInFlight = true
+    if (this.logical.getState() !== 'connected' || this.logical.getActivePath() === 'relay') {
+      if (this.logical.getState() !== 'connected') {
+        void this.recoverRelay(this.relayRotationPending)
+      }
+      return
+    }
+    this.recoveryTimer.clear()
+    this.leaseTimer.clear()
+    this.operationInFlight = true
+    let outcome: Awaited<ReturnType<MobileRelayCredentialRecovery['reprovision']>> = 'unsupported'
     try {
-      const result = await rotateMobileRelayCredential({
-        client: this.logical,
-        bundle: this.bundle,
-        writeBundle: this.dependencies.writeBundle,
-        randomBytes: this.dependencies.randomBytes
-      })
-      this.bundle = result.bundle
-      this.host = await persistRelayHost(this.host, result.relay, this.dependencies.saveHost)
-    } catch {
-      // Why: pending material remains durable; the next authenticated direct
-      // opportunity must reconcile it before creating another install key.
+      outcome = await this.credentialRecovery.reprovision(this.logical)
     } finally {
-      this.credentialRotationInFlight = false
-    }
-  }
-
-  private scheduleLeaseRotation(session: MobileRelayRpcSession): void {
-    this.clearLeaseTimer()
-    const deadline = session.getLeaseExpiresAt()
-    if (!deadline) {
-      return
-    }
-    const delay = Math.max(1000, deadline - this.dependencies.now() - LEASE_ROTATION_MARGIN_MS)
-    this.leaseTimer = this.dependencies.setTimer(() => {
-      this.leaseTimer = null
-      this.relayRotationPending = true
-      void this.recoverRelay(true)
-    }, delay)
-  }
-
-  private clearLeaseTimer(): void {
-    if (this.leaseTimer) {
-      this.dependencies.clearTimer(this.leaseTimer)
-      this.leaseTimer = null
+      this.operationInFlight = false
+      if (!this.stopped && this.foreground) {
+        if (this.logical.getState() !== 'connected') {
+          void this.recoverRelay(this.relayRotationPending)
+        } else if (
+          this.logical.getActivePath() !== 'relay' &&
+          outcome === 'deferred' &&
+          this.credentialRecovery.needsAuthenticatedRepair
+        ) {
+          this.recoveryTimer.scheduleIfIdle(5000, () => {
+            void this.reprovisionRelayCredentialIfPossible()
+          })
+        }
+      }
     }
   }
 }

@@ -5,6 +5,15 @@ export type EndpointHysteresisOptions = {
   minimumDwellMs: number
 }
 
+export function createMobileEndpointHysteresis(startedAt: number): MobileEndpointHysteresis {
+  return new MobileEndpointHysteresis(startedAt, {
+    directSuccessesRequired: 3,
+    directObservationMs: 30_000,
+    failureCooldownMs: 60_000,
+    minimumDwellMs: 60_000
+  })
+}
+
 export class MobileEndpointHysteresis {
   private consecutiveDirectSuccesses = 0
   private directObservationStartedAt: number | null = null

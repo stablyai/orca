@@ -10,16 +10,18 @@ import { persistRelayHost } from './mobile-endpoint-supervisor-support'
 import {
   MobileRelayCredentialBundleSchema,
   deleteMobileRelayCredentialBundle,
-  writeMobileRelayCredentialBundle,
   type MobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import {
   createMobileRelayDirectUpgradeJournal,
   deleteMobileRelayDirectUpgradeJournal,
   readMobileRelayDirectUpgradeJournal,
-  writeMobileRelayDirectUpgradeJournal,
   type MobileRelayDirectUpgradeJournal
 } from './mobile-relay-direct-upgrade-journal'
+import {
+  writeMobileRelayCredentialBundleForExistingHost,
+  writeMobileRelayDirectUpgradeJournalForExistingHost
+} from './mobile-relay-existing-host-credential-writer'
 import type { RpcClient } from './rpc-client'
 import type { HostProfile, RpcResponse } from './types'
 
@@ -30,27 +32,46 @@ export type MobileRelayDirectUpgradeResult = {
 
 type Dependencies = {
   readJournal: typeof readMobileRelayDirectUpgradeJournal
-  writeJournal: typeof writeMobileRelayDirectUpgradeJournal
+  writeJournal: typeof writeMobileRelayDirectUpgradeJournalForExistingHost
   clearJournal: typeof deleteMobileRelayDirectUpgradeJournal
-  writeBundle: typeof writeMobileRelayCredentialBundle
+  writeBundle: typeof writeMobileRelayCredentialBundleForExistingHost
   saveHost: typeof saveExistingHostRelayUpgrade
   deleteBundle: typeof deleteMobileRelayCredentialBundle
   randomBytes: (length: number) => Uint8Array
 }
 
-export async function upgradeDirectMobileRelay(args: {
+type DirectProvisionArgs = {
   client: RpcClient
   host: HostProfile
   dependencies?: Partial<Dependencies>
-}): Promise<MobileRelayDirectUpgradeResult | null> {
+}
+
+export async function upgradeDirectMobileRelay(
+  args: DirectProvisionArgs
+): Promise<MobileRelayDirectUpgradeResult | null> {
   if (args.host.relay) {
     return null
   }
+  return provisionMobileRelayCredentialFromDirect(args)
+}
+
+export async function reprovisionExistingMobileRelayCredential(
+  args: DirectProvisionArgs
+): Promise<MobileRelayDirectUpgradeResult | null> {
+  if (!args.host.relay) {
+    return null
+  }
+  return provisionMobileRelayCredentialFromDirect(args)
+}
+
+async function provisionMobileRelayCredentialFromDirect(
+  args: DirectProvisionArgs
+): Promise<MobileRelayDirectUpgradeResult | null> {
   const dependencies: Dependencies = {
     readJournal: readMobileRelayDirectUpgradeJournal,
-    writeJournal: writeMobileRelayDirectUpgradeJournal,
+    writeJournal: writeMobileRelayDirectUpgradeJournalForExistingHost,
     clearJournal: deleteMobileRelayDirectUpgradeJournal,
-    writeBundle: writeMobileRelayCredentialBundle,
+    writeBundle: writeMobileRelayCredentialBundleForExistingHost,
     saveHost: saveExistingHostRelayUpgrade,
     deleteBundle: deleteMobileRelayCredentialBundle,
     randomBytes: ExpoCrypto.getRandomBytes,
@@ -115,10 +136,10 @@ async function publishCommitted(
       expiresAt: installed.resumeExpiresAt
     }
   })
-  // Why: the overlay must never advertise relay without its matching credential.
-  await dependencies.writeBundle(bundle)
   let updatedHost: HostProfile
   try {
+    // Why: the overlay must never advertise relay without its matching credential.
+    await dependencies.writeBundle(bundle)
     updatedHost = await persistRelayHost(host, endpoints.relay, dependencies.saveHost)
   } catch (error) {
     if (error instanceof MobileRelayUpgradeHostRemovedError) {

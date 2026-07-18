@@ -23,6 +23,7 @@ export async function rotateMobileRelayCredential(args: {
   client: RpcClient
   bundle: MobileRelayCredentialBundle
   writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
+  onBundlePersisted?: (bundle: MobileRelayCredentialBundle) => void
   randomBytes?: (length: number) => Uint8Array
 }): Promise<RotationResult> {
   let bundle = args.bundle
@@ -40,6 +41,7 @@ export async function rotateMobileRelayCredential(args: {
     // Why: a crash or lost response must leave enough material to query the
     // one global install key before any second authorization attempt.
     await args.writeBundle(bundle)
+    args.onBundlePersisted?.(bundle)
   }
 
   const pending = bundle.pending
@@ -83,6 +85,7 @@ export async function rotateMobileRelayCredential(args: {
     pending: undefined
   })
   await args.writeBundle(next)
+  args.onBundlePersisted?.(next)
   return { bundle: next, relay: endpoints.relay }
 }
 
