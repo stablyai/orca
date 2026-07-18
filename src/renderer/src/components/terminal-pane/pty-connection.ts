@@ -7817,18 +7817,29 @@ export function connectPanePty(
     )?.ptyId
     const hasSleepingAgentSession = Boolean(getSleepingRecordForPane(storeSnapshot))
 
+    // Why: a setup sibling can publish its PTY while the main pane waits for split geometry;
+    // the tab-level fallback must not steal a PTY already owned by that sibling transport.
+    const tabFallbackPtyId =
+      existingPtyId &&
+      !Array.from(deps.paneTransportsRef.current.entries()).some(
+        ([candidatePaneId, candidateTransport]) =>
+          candidatePaneId !== pane.id && candidateTransport.getPtyId() === existingPtyId
+      )
+        ? existingPtyId
+        : null
+
     const restoredSessionId = restoredPtyId ?? null
     const sleptRemoteRuntimeSessionId =
       restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && hasSleepingAgentSession
         ? restoredSessionId
         : null
     const detachedLivePtyId =
-      existingPtyId && !hadExistingPaneTransportAtConnect && !sleptRemoteRuntimeSessionId
+      tabFallbackPtyId && !hadExistingPaneTransportAtConnect && !sleptRemoteRuntimeSessionId
         ? restoredSessionId
-          ? restoredSessionId === existingPtyId
+          ? restoredSessionId === tabFallbackPtyId
             ? restoredSessionId
             : null
-          : existingPtyId
+          : tabFallbackPtyId
         : null
     const detachedRemoteLeafPtyId =
       restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && !hasSleepingAgentSession
