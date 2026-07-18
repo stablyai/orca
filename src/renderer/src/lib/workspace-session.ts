@@ -12,6 +12,9 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
+
+export { buildActiveConnectionIdsAtShutdown }
 
 /** Why (issue #1158): the debounced + shutdown session writers share this
  *  gate so a hydration failure cannot overwrite orca-data.json with the
@@ -331,18 +334,6 @@ export function buildTerminalSessionData(
   }
 }
 
-export function buildActiveConnectionIdsAtShutdown(
-  snapshot: WorkspaceSessionSnapshot
-): WorkspaceSessionState['activeConnectionIdsAtShutdown'] {
-  // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
-  // object. Object.entries() on a Map returns [] — must use Array.from().
-  const connectedTargetIds = Array.from(snapshot.sshConnectionStates.entries())
-    .filter(([, state]) => state.status === 'connected')
-    .map(([targetId]) => targetId)
-
-  return connectedTargetIds.length > 0 ? connectedTargetIds : undefined
-}
-
 export function buildWorkspaceSessionPayload(
   snapshot: WorkspaceSessionSnapshot
 ): WorkspaceSessionState {
@@ -380,7 +371,10 @@ export function buildWorkspaceSessionPayload(
     // Persist only layouts backed by real tabs so a reload cannot restore a
     // blank split pane from that transient midpoint.
     ...buildPersistedUnifiedTabSessionData(snapshot),
-    activeConnectionIdsAtShutdown: buildActiveConnectionIdsAtShutdown(snapshot),
+    activeConnectionIdsAtShutdown: buildActiveConnectionIdsAtShutdown(
+      snapshot,
+      terminalSessionData.remoteSessionIdsByTabId ?? null
+    ),
     remoteSessionIdsByTabId: terminalSessionData.remoteSessionIdsByTabId,
     // Why: per-worktree focus-recency for Cmd+J's empty-query ordering.
     // Omit when empty so sessions written by builds that never stamped

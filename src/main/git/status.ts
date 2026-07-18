@@ -1329,6 +1329,7 @@ async function loadDiff(
   let modifiedContent = ''
   let originalIsBinary = false
   let modifiedIsBinary = false
+  let modifiedDeleted = false
 
   try {
     const leftBlob = staged
@@ -1343,22 +1344,30 @@ async function loadDiff(
       const rightBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options)
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
+      modifiedDeleted = !rightBlob.exists
     } else {
       const workingTreeBlob = await readWorkingTreeFile(path.join(worktreePath, filePath))
       modifiedContent = workingTreeBlob.content
       modifiedIsBinary = workingTreeBlob.isBinary
+      modifiedDeleted = !workingTreeBlob.exists
     }
   } catch {
     // Fallback
   }
 
-  return buildDiffResult(
+  const result = buildDiffResult(
     originalContent,
     modifiedContent,
     originalIsBinary,
     modifiedIsBinary,
     filePath
   )
+  // Why: mark a proven deletion so previewers can fall back to the original bytes
+  // without mistaking a read failure's empty modified side for a deletion.
+  if (result.kind === 'binary' && modifiedDeleted) {
+    return { ...result, modifiedDeleted: true }
+  }
+  return result
 }
 
 export async function getBranchCompare(
@@ -1859,20 +1868,33 @@ async function readGitBlobAtOidPath(
 }
 
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
+  let fileStat
   try {
-    const fileStat = await stat(filePath)
-    if (!fileStat.isFile()) {
-      return { content: '', isBinary: false, exists: false }
+    fileStat = await stat(filePath)
+  } catch (error) {
+    // Why: ENOENT means the working-tree file is genuinely gone (a deletion);
+    // any other stat error is a read failure, which must not be reported as an
+    // absence since callers fall back to the original bytes only for deletions.
+    return {
+      content: '',
+      isBinary: false,
+      exists: (error as NodeJS.ErrnoException)?.code !== 'ENOENT'
     }
-    if (fileStat.size > MAX_GIT_SHOW_BYTES) {
-      // Why: git blob reads are capped through maxBuffer; mirror that bound for
-      // unstaged working-tree content before readFile can pull in huge assets.
-      return { content: '', isBinary: true, exists: true }
-    }
+  }
+  if (!fileStat.isFile()) {
+    return { content: '', isBinary: false, exists: false }
+  }
+  if (fileStat.size > MAX_GIT_SHOW_BYTES) {
+    // Why: git blob reads are capped through maxBuffer; mirror that bound for
+    // unstaged working-tree content before readFile can pull in huge assets.
+    return { content: '', isBinary: true, exists: true }
+  }
+  try {
     const buffer = await readFile(filePath)
     return bufferToBlob(buffer, filePath)
   } catch {
-    return { content: '', isBinary: false, exists: false }
+    // Why: the file exists but could not be read — a read failure, not a deletion.
+    return { content: '', isBinary: false, exists: true }
   }
 }
 

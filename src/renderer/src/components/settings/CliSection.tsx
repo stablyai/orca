@@ -390,6 +390,7 @@ export function CliSection({
                     }))
               }}
               onRecheck={refreshCliSkill}
+              freshnessSkillName={agentRuntime.runtime === 'host' ? ORCA_CLI_SKILL_NAME : undefined}
             />
           </div>
         ) : null}

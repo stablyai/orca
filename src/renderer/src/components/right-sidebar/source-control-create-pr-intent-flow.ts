@@ -5,10 +5,18 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../../../shared/hosted-review-refs'
 import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
+import { isMergeConflictErrorMessage } from '../../lib/source-control-remote-error'
+import type { SourceControlActionError } from './source-control-action-error'
 import { summarizeCommitFailure } from './commit-failure-summary'
 import { getStageAllPaths } from './discard-all-sequence'
 
-export type CreatePrIntentRemoteStep = 'publish' | 'push' | 'force_push' | 'blocked' | 'none'
+export type CreatePrIntentRemoteStep =
+  | 'publish'
+  | 'push'
+  | 'force_push'
+  | 'sync'
+  | 'blocked'
+  | 'none'
 
 export type CreatePrIntentRunToken = {
   repoId: string
@@ -138,18 +146,38 @@ export function resolveCreatePrIntentRemoteStep({
     return 'push'
   }
 
-  if (
-    hostedReviewCreation.blockedReason === 'needs_sync' &&
-    shouldForcePushWithLeaseForUpstream(upstreamStatus)
-  ) {
-    return 'force_push'
-  }
-
   if (hostedReviewCreation.blockedReason === 'needs_sync') {
-    return 'blocked'
+    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
+      return 'force_push'
+    }
+    // Why: auto-sync only a behind-only branch, where the pull is a fast-forward
+    // that cannot create a merge commit or strand the worktree mid-merge. A
+    // genuinely diverged branch keeps the explicit sync-first stop so Create PR
+    // never merges without consent.
+    return upstreamStatus?.hasUpstream && upstreamStatus.ahead === 0 && upstreamStatus.behind > 0
+      ? 'sync'
+      : 'blocked'
   }
 
   return 'none'
+}
+
+export type CreatePrIntentRemoteFailure =
+  | (Pick<SourceControlActionError, 'kind' | 'syncPushStage'> &
+      Partial<Pick<SourceControlActionError, 'rawError'>>)
+  | null
+  | undefined
+
+export function isCreatePrIntentSyncConflictError(error: CreatePrIntentRemoteFailure): boolean {
+  // Why: only a genuine merge conflict earns the "resolve conflicts" copy. A
+  // sync push-stage rejection is a push failure, and a fetch/network/auth
+  // failure during sync is neither a conflict nor push-stage — both must fall
+  // to the generic remote-failed notice, so match the raw git output rather
+  // than assuming every non-push-stage sync failure is a conflict.
+  if (error?.kind !== 'sync' || error.syncPushStage === true) {
+    return false
+  }
+  return isMergeConflictErrorMessage(error.rawError ?? '')
 }
 
 export function getCreatePrIntentCommitFailureNoticeMessage(

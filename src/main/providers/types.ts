@@ -147,6 +147,9 @@ export type PtySpawnResult = {
   coldRestore?: {
     scrollback: string
     cwd: string
+    /** Optional for compatibility with restore payloads from older app code. */
+    cols?: number
+    rows?: number
     oscLinks?: TerminalOscLinkRange[]
   }
 }
@@ -286,7 +289,7 @@ export type IFilesystemProvider = {
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal }
+    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
   ): Promise<string[]>
   scanWorkspaceSpace?(
     rootPath: string,

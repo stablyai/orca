@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  clearClaudeAnsweredQuestionWait,
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
@@ -418,6 +419,78 @@ describe('shared agent-hook-listener', () => {
       toolName: 'bash',
       toolInput: 'pnpm test'
     })
+  })
+
+  it('captures Pi session ids on Pi-compatible status events', () => {
+    const event = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'resume this task',
+          session_id: 'pi-session-1',
+          session_file: '/tmp/pi-session-1.jsonl'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'resume this task',
+      agentType: 'pi'
+    })
+    expect(event?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'pi-session-1',
+      transcriptPath: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
+  it('clears Pi turn cache and emits only resume identity on session_start', () => {
+    const start = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'before_agent_start', prompt: 'stale turn' }
+      },
+      'production'
+    )
+    expect(start?.payload.prompt).toBe('stale turn')
+
+    const sessionStart = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'pi-session-2',
+          session_file: '/tmp/pi-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: {
+        key: 'session_id',
+        id: 'pi-session-2',
+        transcriptPath: '/tmp/pi-session-2.jsonl'
+      },
+      payload: { state: 'done', prompt: '', agentType: 'pi' }
+    })
+
+    const next = normalizeHookPayload(
+      state,
+      'pi',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'tool_call', tool_name: 'bash' } },
+      'production'
+    )
+    expect(next?.payload.prompt).toBe('')
   })
 
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {
@@ -2779,6 +2852,62 @@ describe('shared agent-hook-listener', () => {
         version: '1'
       })
       expect(ok).toBe(false)
+    })
+  })
+
+  describe('clearClaudeAnsweredQuestionWait', () => {
+    const claudeEvent = (
+      payload: Record<string, unknown>
+    ): ReturnType<typeof normalizeHookPayload> =>
+      normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
+
+    it('restores working for an answered lead question and drops the card', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'pick a color' })
+      const wait = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Red or Blue?' }] }
+      })
+      expect(wait?.payload.state).toBe('waiting')
+      expect(wait?.payload.interactivePrompt).toBeDefined()
+
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+
+      // Why: a child-driven refresh re-emits the cached lead state; the linger
+      // bug would come back if it could resurrect the dismissed question.
+      const childDriven = claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'probe'
+      })
+      expect(childDriven?.payload.state).toBe('working')
+      expect(childDriven?.payload.toolName).toBeUndefined()
+      expect(childDriven?.payload.interactivePrompt).toBeUndefined()
+    })
+
+    it('restores the stashed lead state for an answered child question', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'probe' })
+      claudeEvent({ hook_event_name: 'Stop' })
+      const wait = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        agent_id: 'a1',
+        tool_input: { questions: [{ question: 'Continue?' }] }
+      })
+      expect(wait?.payload.state).toBe('waiting')
+
+      // Why: the lead already finished; the answer resumes the child, so the
+      // emitted state is gated up to working only while that child still runs.
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({ state: 'done' })
+
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(drained?.payload.state).toBe('done')
+    })
+
+    it('falls back to working when no lead record exists', () => {
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
     })
   })
 })

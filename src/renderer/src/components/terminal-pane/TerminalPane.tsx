@@ -215,6 +215,9 @@ type TerminalPaneProps = {
   // or persist to the layout snapshot, so returning to the workspace shows
   // the original split layout unchanged.
   isolatedPaneKey?: string | null
+  // Why: ephemeral one-off command terminals don't need the regular pane header's
+  // prominent split affordance, though standard split shortcuts remain available.
+  showSplitButton?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -281,6 +284,7 @@ export default function TerminalPane({
   isVisible = true,
   isWorktreeActive = isVisible,
   isolatedPaneKey = null,
+  showSplitButton = true,
   onPtyExit,
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
@@ -813,6 +817,13 @@ export default function TerminalPane({
     }
     toggleNativeChatForLeaf(activeLeafId)
   }, [toggleNativeChatForLeaf])
+  const readNativeChatTerminalScreen = useCallback((): string | null => {
+    if (!chatLeafId) {
+      return null
+    }
+    const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
+    return pane?.serializeAddon.serialize({ scrollback: 0 }) ?? null
+  }, [chatLeafId])
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
@@ -3112,6 +3123,7 @@ export default function TerminalPane({
                 launchAgent={chatPaneLaunchAgent}
                 resolvedAgent={chatPaneResolvedAgent}
                 onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
+                readTerminalScreen={readNativeChatTerminalScreen}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
                   onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
@@ -3200,6 +3212,7 @@ export default function TerminalPane({
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
+        showSplitButton={showSplitButton}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

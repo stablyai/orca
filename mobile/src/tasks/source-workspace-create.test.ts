@@ -30,7 +30,8 @@ const baseArgs = {
   setupDecision: 'inherit' as const,
   agent,
   workspaceName: undefined,
-  note: undefined
+  note: undefined,
+  supportsIdempotentCutoverRetry: true
 }
 
 describe('createWorkspaceFromComposerSource', () => {

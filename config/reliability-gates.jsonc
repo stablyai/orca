@@ -1950,7 +1950,6 @@
         "daemon stream",
         "main PTY batching",
         "runtime path provenance",
-        "runtime serve-sim detection",
         "runtime terminal wait detection",
         "renderer ACK",
         "xterm scheduler",
@@ -1971,7 +1970,7 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse, idle-path serve-sim detection, and saturated-tail wait detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse and saturated-tail wait detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6836",
         "https://github.com/stablyai/orca/pull/6858",
@@ -1979,17 +1978,15 @@
         "https://github.com/stablyai/orca/pull/7054"
       ],
       "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main runtime metadata, detectors, and tail checks, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
-      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, unchanged path-provenance history reuse for pathless output, idle serve-sim detection with split-JSON continuity, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
+      "oracle": "The current executable slice injects main-process renderer backlog pressure, then asserts unchanged path-provenance history reuse for pathless output, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty.test.ts",
         "src/main/runtime/orca-runtime-path-candidate-history.test.ts",
-        "src/main/emulator/serve-sim-state-watcher.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
@@ -2007,13 +2004,6 @@
           "assertions": [
             "reuses path-candidate history across repeated pathless PTY output",
             "copies history when new output adds a path candidate"
-          ]
-        },
-        {
-          "file": "src/main/emulator/serve-sim-state-watcher.test.ts",
-          "assertions": [
-            "does not buffer repeated brace-free PTY output while waiting for metadata",
-            "detects serve-sim metadata split across PTY chunks and releases the partial object"
           ]
         },
         {
@@ -2057,15 +2047,6 @@
           "date": "2026-07-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.37,
-          "summary": "1 test file passed, 6 tests passed on pushed commit f0e3a185593b."
-        },
-        {
-          "date": "2026-07-10",
-          "runner": "local",
-          "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
           "result": "passed",
           "durationSeconds": 21.33,
@@ -2078,11 +2059,11 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Daemon stream backpressure and focused main/renderer backlog tests are deterministic unit slices. The combined perf soak still needs runtime history before promotion."
+        "evidence": "Focused main-process backlog tests are deterministic unit slices. The combined perf soak still needs runtime history before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary output leaves the niche serve-sim detector idle while split JSON still emits and releases its partial buffer, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; restoring the old serve-sim buffer failed its scale test after 180ms with 4,096 buffer writes; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs broader hidden-output/input-latency perf artifacts before promotion."
+        "evidence": "Tests assert pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs daemon-stream contract coverage and broader hidden-output/input-latency perf artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
@@ -2094,9 +2075,8 @@
         "Keep stress variants non-blocking until stable runtime history exists."
       ],
       "knownGaps": [
-        "Current command asserts daemon stream write(false)/drain/cleanup at the batcher contract layer and main pending renderer caps at the IPC contract layer.",
+        "Daemon stream write(false)/drain/cleanup and bounded queued-tail contracts are not registered in the current command.",
         "Runtime provenance coverage is deterministic and does not include a live high-throughput provider artifact.",
-        "Serve-sim detector coverage is deterministic and does not include a live external simulator helper.",
         "Terminal-wait scale evidence is deterministic and does not yet include a live saturated-tail event-loop artifact.",
         "Current command does not prove renderer parse pressure, scheduler queue depth, event-loop delay, or active key latency.",
         "Live hidden-output pressure, active input latency, and full Electron perf artifacts remain unproved."
@@ -2167,6 +2147,116 @@
         "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests."
       ],
       "demotionRule": "Cannot promote while restored daemon ids or routing operations can silently route to local fallback."
+    },
+    {
+      "id": "terminal-provider.startup-shutdown-authority",
+      "title": "Cold-start terminal shutdown targets the installed daemon provider",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-provider",
+      "layer": "main-provider-contract",
+      "surfaces": [
+        "daemon startup",
+        "renderer terminal close",
+        "runtime terminal stop",
+        "restored terminal teardown"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "A real daemon server over a local socket proves a fresh adapter can kill a live session before any prior client operation. Main-process tests prove renderer IPC, runtime kill, and runtime exact-stop wait for the provider swap and issue zero shutdowns to the fallback provider, while SSH spawn and kill bypass the local barrier. The same shared logic runs on Linux and Windows; live platform runs remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7742",
+        "https://github.com/stablyai/orca/pull/7836"
+      ],
+      "invariant": "A local PTY shutdown requested during desktop cold start must resolve its provider only after daemon startup settles, and a fresh daemon adapter must connect before issuing the destructive request; a fallback provider must never falsely acknowledge shutdown while the restored daemon session remains live, and SSH shutdown must not wait on local startup.",
+      "oracle": "Hold the desktop provider-startup promise unresolved, request shutdown through renderer IPC and both runtime-controller entry points, install the daemon provider, and assert the fallback receives zero shutdowns while the daemon receives exactly the requested kill; prove the provider gate opens as soon as daemon authority settles even while optional hook startup remains unresolved, and prove an SSH spawn and kill complete without touching either local barrier. Separately, spawn a session through one adapter, kill it through a fresh unconnected adapter, and assert the daemon no longer lists it.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/pty.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/startup/first-window-startup-services.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "renderer local kills issue zero fallback shutdowns before startup and target the installed daemon afterward",
+            "runtime fire-and-forget local kills issue zero fallback shutdowns before startup and target the installed daemon afterward",
+            "runtime exact local stops issue zero fallback shutdowns before startup and verify the installed daemon target stopped",
+            "SSH spawns and kills bypass the unresolved local startup barrier and target the SSH provider"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "a fresh unconnected adapter kills a session hosted by the live daemon and the session disappears from daemon inventory",
+            "concurrent shutdowns through a fresh adapter perform exactly one control-plus-stream handshake and remove both daemon sessions"
+          ]
+        },
+        {
+          "file": "src/main/startup/first-window-startup-services.test.ts",
+          "assertions": [
+            "daemon provider authority opens before an unresolved optional hook startup while the broader local spawn gate remains closed",
+            "the provider authority gate shares the bounded 60-second fail-open when daemon startup hangs"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.27,
+          "summary": "3 files and 406 tests passed, including single and concurrent real-socket fresh-adapter shutdown, one control-plus-stream handshake for burst shutdown, three deferred local provider-selection teardown paths, hook-independent provider authority, and SSH barrier bypass."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused main-process provider and IPC contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused deterministic gate passed locally once and needs CI soak history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Removing the adapter connection reproduces DaemonProtocolError: Not connected, and removing the renderer startup barrier routes shutdown to the fallback. The new runtime-controller barrier assertions also fail against the prior provider-before-startup shape; saved CI red artifacts remain uncollected."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The provider-authority barrier and connection guard add no polling, timers, subprocesses, session inventories, or provider fanout; runtime exact-stop's existing post-stop verification inventory is unchanged. Shutdown does not wait for optional hook startup once daemon authority settles. Each path awaits one bounded provider promise; DaemonClient.ensureConnected is an O(1) no-op when connected and deduplicates concurrent connection attempts when disconnected. Tests deterministically count zero fallback shutdowns, exactly one target shutdown per entry point, and exactly one control-plus-stream handshake for concurrent fresh-adapter shutdowns."
+      },
+      "promotionCriteria": [
+        "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Collect a Windows cold-start close or exact-stop run against a preserved daemon PTY.",
+        "Attach saved red/green artifacts for all three provider-selection entry points."
+      ],
+      "knownGaps": [
+        "No live Electron restart-to-close journey is included; provider and IPC contracts cover the race deterministically.",
+        "The bounded daemon-startup fail-open to LocalPtyProvider remains an accepted boot-over-persistence tradeoff tracked by issue #5232.",
+        "Daemon process death and the resulting Windows ConPTY PowerShell FailFast are separate from provider-selection shutdown authority."
+      ],
+      "demotionRule": "Keep experimental or demote if the gate flakes without a product or harness bug, if any local shutdown reaches fallback before startup settles, or if shutdown adds inventory scans or retry loops."
     },
     {
       "id": "terminal-provider.ssh-remote-reattach-contract",
@@ -3896,6 +3986,7 @@
       "layer": "runtime-rpc-contract",
       "surfaces": [
         "mobile terminal",
+        "native-chat terminal overlay",
         "runtime RPC",
         "binary multiplex",
         "JSON subscribe fallback",
@@ -3917,21 +4008,25 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
+      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. PR #5824 adds a platform-neutral mobile decision gate proving chat-covered terminal streams pause and resume only after the mounted WebView is ready; live Android restore evidence remains required. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
         "https://github.com/stablyai/orca/pull/7009"
       ],
-      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, and batch sizes, while preserving output order, input locks, resize/driver events, and fallback parity or explicit fallback deprecation.",
-      "oracle": "The current executable slice asserts mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, binary live output queued while the initial snapshot loads stays <=256KB while preserving the newest tail, large binary output is split into <=48KB frames, output bursts are coalesced before emit, aborts do not register stale listeners, and stale mobile resize re-stream completions are dropped. JSON fallback parity/deprecation remains an explicit gap.",
+      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, and batch sizes; a terminal covered by native chat must have no live output subscription and must restore from fresh scrollback when revealed, while preserving output order, input locks, resize/driver events, and fallback parity or explicit fallback deprecation.",
+      "oracle": "The current executable slice asserts mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, binary live output queued while the initial snapshot loads stays <=256KB while preserving the newest tail, large binary output is split into <=48KB frames, output bursts are coalesced before emit, aborts do not register stale listeners, and stale mobile resize re-stream completions are dropped. The mobile native-chat decision test asserts an active stream pauses while covered and resumes only for a ready active terminal. JSON fallback parity and live Android scrollback restoration remain explicit gaps.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
         "src/main/runtime/rpc/terminal-output-batching.test.ts",
-        "src/main/runtime/rpc/terminal-multiplex.test.ts"
+        "src/main/runtime/rpc/terminal-multiplex.test.ts",
+        "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+        "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3956,6 +4051,21 @@
             "oversized live output frames are bounded for subscribed binary streams",
             "multibyte live output flushes when encoded bytes reach the batch budget"
           ]
+        },
+        {
+          "file": "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+          "assertions": [
+            "an active terminal stream pauses while native chat covers its WebView",
+            "the stream resumes only for the ready active terminal after chat closes",
+            "non-terminal and already-settled stream states perform no lifecycle work"
+          ]
+        },
+        {
+          "file": "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts",
+          "assertions": [
+            "a late WebView-ready transition converts a cold-start lease-only stream back to output",
+            "ordinary WebView readiness does not rerender the mobile session route"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -3967,6 +4077,15 @@
           "result": "passed",
           "durationSeconds": 3.8,
           "summary": "3 test file(s) passed, 28 tests passed on main@1282f5c2d in a clean checkout."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "The focused mobile native-chat suite passed with 3 terminal-stream lifecycle assertions in the staged PR #5824 worktree."
         }
       ],
       "runtimeBudget": {
@@ -3991,7 +4110,7 @@
         "Record byte counts and order/cursor artifacts on failure."
       ],
       "knownGaps": [
-        "Current command covers binary runtime/mobile stream contracts only.",
+        "The pure mobile decision gate does not yet prove live Android WebView scrollback restore after a chat toggle.",
         "Legacy JSON subscribe parity is undecided."
       ],
       "demotionRule": "Cannot promote while a supported stream path has uncapped snapshot or live-output buffering."
@@ -4153,6 +4272,74 @@
         "Renderer-vs-mirror comparison cannot see corruption upstream of the mirror itself (#7192's stale-width mirror); mirror-vs-PTY truth is owned by terminal-geometry.visible-convergence."
       ],
       "demotionRule": "Disable the probe if it exceeds its per-reveal budget or produces false-positive anomaly noise."
+    },
+    {
+      "id": "terminal-render.atlas-identity-invalidation",
+      "title": "A WebGL atlas identity change rebuilds cached glyph vertices",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "electron-visual-golden",
+      "surfaces": ["WebGL rendering", "shared glyph atlas", "render model"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "A deterministic macOS Electron test uses two real WebGL terminals with distinct atlas populations, attaches one renderer to the other's atlas, and compares its pixels before and after rendering. Provider paths are unaffected because atlas ownership is renderer-local; Linux and Windows GPU evidence remains pending.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/8899"],
+      "invariant": "Whenever GlyphRenderer attaches a different shared atlas, every cached glyph vertex is rebuilt before the next draw even if the old and new atlases have the same clear-model generation.",
+      "oracle": "Render terminal A and capture its non-empty canvas, populate terminal B with a distinct atlas, attach A's glyph renderer to B's atlas without changing A's buffer, render A again, and require byte-equivalent visible pixels. Also require the atlas identities to differ so the test cannot pass without exercising the transition.",
+      "commands": [
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-webgl-atlas-budget.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": ["tests/e2e/terminal-webgl-atlas-budget.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-webgl-atlas-budget.spec.ts",
+          "assertions": [
+            "the replacement scenario uses distinct atlas identities and renders a non-empty baseline",
+            "attaching the replacement atlas leaves zero pixels different from the same terminal buffer's baseline"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-webgl-atlas-budget.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 44,
+          "summary": "Both real-WebGL scenarios passed. The atlas-replacement case changed 327,165 pixels with the old generation adoption and zero pixels after identity invalidation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "fresh E2E build plus two real-WebGL atlas tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused local macOS run and the PR's macOS golden experiment job passed. The Linux golden job skipped both WebGL atlas tests because WebGL was unavailable; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The old setAtlas behavior deterministically changed 327,165 pixels after replacement; setting the last-seen generation to an invalid value on identity change produced zero changed pixels."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The added work is one existing full-model rebuild only when atlas object identity changes; ordinary frames and repeated setAtlas calls with the same object take the existing path. The field sentinel remains off by default, samples only a modifier-clicked pane in a bounded ten-second burst, reuses and releases one readback canvas, and caps renderer and disk evidence."
+      },
+      "promotionCriteria": [
+        "Accumulate stable macOS and Linux GPU runs across the release golden suite.",
+        "Add Windows GPU evidence or retain the platform gap explicitly.",
+        "Remove the flag-gated field sentinel after the confirmation window while keeping this pixel regression."
+      ],
+      "knownGaps": [
+        "The historical field capture predates renderer-internal atlas identity diagnostics, so it cannot prove this exact transition retrospectively.",
+        "The deterministic test drives the renderer transition directly rather than reproducing the original Cmd/Ctrl-click lifecycle trigger.",
+        "Windows GPU evidence is not yet recorded."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if GPU skips hide the transition, the pixel oracle flakes across stable runners, or the test no longer fails with generation adoption restored."
     },
     {
       "id": "terminal-render.pixel-refresh-repair",

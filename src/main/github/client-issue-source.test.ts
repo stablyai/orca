@@ -228,6 +228,37 @@ describe('GitHub issue source split', () => {
     )
   })
 
+  it.each(['is:issue', 'is:pr'])(
+    'propagates GitHub outages for scoped %s queries',
+    async (query) => {
+      getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+      await expect(listWorkItems('/repo-root', 10, query)).rejects.toThrow(
+        'HTTP 503: Service Unavailable'
+      )
+
+      // The outage signal reuses the failed request; it must not add retry subprocesses.
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('propagates an outage when both sides of a combined query are unavailable', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
+
+    await expect(listWorkItems('/repo-root', 10, 'is:open')).rejects.toThrow(
+      'HTTP 503: Service Unavailable'
+    )
+
+    // Classification must reuse the issue and PR requests, not retry the outage.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it("uses upstream for recent PRs when preference='upstream'", async () => {
     resolveIssueSourceMock.mockResolvedValueOnce({
       source: { owner: 'stablyai', repo: 'orca' },

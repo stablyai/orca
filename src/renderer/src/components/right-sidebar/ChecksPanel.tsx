@@ -102,6 +102,7 @@ import {
   getChecksPanelEmptyStateCopy,
   shouldShowChecksPanelPublishBranchAction
 } from './checks-panel-empty-state'
+import { getChecksPanelRefreshErrorBannerLine } from './github-refresh-error-copy'
 import { hasAmbiguousGitHubHostedReviewForChecksPanel } from './checks-panel-ambiguous-github-review'
 import { recordChecksPanelPRRefreshBreadcrumb } from './checks-panel-pr-refresh-breadcrumb'
 import {
@@ -3583,6 +3584,7 @@ export default function ChecksPanel(): React.JSX.Element {
     const emptyStateCopy = getChecksPanelEmptyStateCopy({
       operationLabel,
       prRefreshStatus: emptyReviewIsGitLab ? undefined : prRefreshState?.status,
+      prRefreshErrorType: emptyReviewIsGitLab ? undefined : prRefreshState?.errorType,
       hostedReviewBlockedReason: hostedReviewCreation?.blockedReason,
       hasUpstream: publishActionRemoteStatus?.hasUpstream,
       hasCurrentBranch: Boolean(branch),
@@ -3699,6 +3701,18 @@ export default function ChecksPanel(): React.JSX.Element {
     !settings.activeRuntimeEnvironmentId
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
+      {/* Why: a background refresh failed while cached PR data is still shown.
+          Surface it over the stale data so a GitHub outage doesn't look like a
+          normal (but silently out-of-date) panel. GitHub-only — GitLab reviews
+          don't flow through prRefreshState. */}
+      {activeReview?.provider === 'github' && prRefreshState?.status === 'error' ? (
+        <div
+          role="alert"
+          className="border-b border-border/50 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)}
+        </div>
+      ) : null}
       {/* Hosted review header */}
       <div className="px-3 py-3 border-b border-border space-y-2.5">
         {/* Review number + state badge + refresh + open link */}

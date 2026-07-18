@@ -181,6 +181,29 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it('normalizes a missing native binding as degraded node-pty availability', async () => {
+    mockPtySpawn.mockImplementationOnce(() => {
+      throw new Error(
+        'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
+      )
+    })
+
+    await expect(dispatcher.callRequest('pty.spawn', {})).rejects.toThrow(
+      'node-pty is not available on this remote host'
+    )
+    expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('preserves unrelated node-pty spawn failures', async () => {
+    mockPtySpawn.mockImplementationOnce(() => {
+      throw new Error('File not found: missing-shell.exe')
+    })
+
+    await expect(dispatcher.callRequest('pty.spawn', {})).rejects.toThrow(
+      'File not found: missing-shell.exe'
+    )
+  })
+
   it('atomically caps concurrent PTY spawn admission', async () => {
     const results = await Promise.allSettled(
       Array.from({ length: MAX_RELAY_PTY_SESSIONS + 1 }, () =>

@@ -8,15 +8,21 @@ import {
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from './quick-open-filter'
+import {
+  assertQuickOpenReaddirDeadline,
+  consumeQuickOpenReaddirFileBudget,
+  createQuickOpenReaddirBudget,
+  type QuickOpenReaddirBudget
+} from './quick-open-readdir-budget'
 
-export const QUICK_OPEN_READDIR_MAX_FILES = 10_000
-export const QUICK_OPEN_READDIR_TIMEOUT_MS = 10_000
+export {
+  createQuickOpenReaddirBudget,
+  isQuickOpenReaddirBudgetError,
+  QUICK_OPEN_READDIR_MAX_FILES,
+  QUICK_OPEN_READDIR_TIMEOUT_MS
+} from './quick-open-readdir-budget'
+
 const QUICK_OPEN_READDIR_CONCURRENCY = 32
-
-export type QuickOpenReaddirBudget = {
-  remainingFiles: number
-  deadlineMs: number
-}
 
 export type QuickOpenGitEntryKind = 'keep' | 'fill-nested-repo' | 'drop-placeholder'
 
@@ -42,42 +48,6 @@ export function parseQuickOpenGitLsFilesEntry(entry: string): QuickOpenGitLsFile
     isGitlink: false,
     isUntrackedDir: entry.endsWith('/')
   }
-}
-
-export function createQuickOpenReaddirBudget(
-  opts: { maxFiles?: number; timeoutMs?: number; nowMs?: number } = {}
-): QuickOpenReaddirBudget {
-  return {
-    remainingFiles: opts.maxFiles ?? QUICK_OPEN_READDIR_MAX_FILES,
-    deadlineMs: (opts.nowMs ?? Date.now()) + (opts.timeoutMs ?? QUICK_OPEN_READDIR_TIMEOUT_MS)
-  }
-}
-
-const FILE_LISTING_TIMED_OUT = 'File listing timed out'
-const FILE_LISTING_EXCEEDED_PREFIX = 'File listing exceeded'
-
-/**
- * Why: the readdir walk can exhaust its cap/deadline even on the git path (a
- * git monorepo parent with a huge nested repo). Callers translate only these
- * budget errors into "install rg" guidance, leaving genuine git failures with
- * their own messages.
- */
-export function isQuickOpenReaddirBudgetError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : ''
-  return message === FILE_LISTING_TIMED_OUT || message.startsWith(FILE_LISTING_EXCEEDED_PREFIX)
-}
-
-function assertWithinDeadline(budget: QuickOpenReaddirBudget): void {
-  if (Date.now() > budget.deadlineMs) {
-    throw new Error(FILE_LISTING_TIMED_OUT)
-  }
-}
-
-function consumeFileBudget(budget: QuickOpenReaddirBudget): void {
-  if (budget.remainingFiles <= 0) {
-    throw new Error(`${FILE_LISTING_EXCEEDED_PREFIX} ${QUICK_OPEN_READDIR_MAX_FILES} files`)
-  }
-  budget.remainingFiles--
 }
 
 function shouldDescend(name: string): boolean {
@@ -162,6 +132,7 @@ export async function listQuickOpenFilesWithReaddir(
     excludePathPrefixes?: readonly string[]
     workspaceRelPathPrefix?: string
     budget?: QuickOpenReaddirBudget
+    maxResults?: number
     signal?: AbortSignal
   } = {}
 ): Promise<string[]> {
@@ -175,7 +146,8 @@ export async function listQuickOpenFilesWithReaddir(
       }
     ],
     opts.budget ?? createQuickOpenReaddirBudget(),
-    opts.signal
+    opts.signal,
+    opts.maxResults
   )
 }
 
@@ -191,9 +163,13 @@ type QuickOpenReaddirRoot = {
 async function listQuickOpenFilesFromRoots(
   roots: readonly QuickOpenReaddirRoot[],
   budget: QuickOpenReaddirBudget,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxResults?: number
 ): Promise<string[]> {
   const files: string[] = []
+  if (maxResults !== undefined && maxResults <= 0) {
+    return files
+  }
   let pendingDirectories = roots.map((root) => ({
     root,
     absPath: root.rootPath,
@@ -211,7 +187,7 @@ async function listQuickOpenFilesFromRoots(
       // so the shared cap remains exact while shallow placeholder-heavy repos
       // do not pay one relay event-loop turn per directory.
       throwIfFileListingCancelled(signal)
-      assertWithinDeadline(budget)
+      assertQuickOpenReaddirDeadline(budget)
       const batch = pendingDirectories.slice(offset, offset + QUICK_OPEN_READDIR_CONCURRENCY)
       const entryGroups = await Promise.all(
         batch.map(async (pending) => {
@@ -240,12 +216,12 @@ async function listQuickOpenFilesFromRoots(
       // Why: an empty directory has no per-entry checkpoint below. Cancellation
       // or timeout that lands during readdir must still reject, never resolve [].
       throwIfFileListingCancelled(signal)
-      assertWithinDeadline(budget)
+      assertQuickOpenReaddirDeadline(budget)
 
       for (const { pending, entries } of entryGroups) {
         for (const entry of entries) {
           throwIfFileListingCancelled(signal)
-          assertWithinDeadline(budget)
+          assertQuickOpenReaddirDeadline(budget)
 
           const name = entry.name
           const absPath = join(pending.absPath, name)
@@ -266,12 +242,17 @@ async function listQuickOpenFilesFromRoots(
             (entry.isFile() || (pending.root.includeSymlinks && entry.isSymbolicLink())) &&
             shouldIncludeQuickOpenPath(workspaceRelPath)
           ) {
-            consumeFileBudget(budget)
+            consumeQuickOpenReaddirFileBudget(budget)
             files.push(
               pending.root.outputPathPrefix
                 ? `${pending.root.outputPathPrefix}/${relPath}`
                 : relPath
             )
+            // Why: a caller result limit is a successful bounded prefix, while
+            // the separate traversal budget still rejects incomplete scans.
+            if (maxResults !== undefined && files.length >= maxResults) {
+              return files
+            }
           }
         }
       }
@@ -288,6 +269,7 @@ export async function expandQuickOpenGitFileListing(opts: {
   directoryPaths?: Iterable<string>
   excludePathPrefixes?: readonly string[]
   budget?: QuickOpenReaddirBudget
+  maxResults?: number
   signal?: AbortSignal
 }): Promise<string[]> {
   const files = new Set<string>()
@@ -309,7 +291,7 @@ export async function expandQuickOpenGitFileListing(opts: {
 
   for (const rawPath of opts.gitPaths) {
     throwIfFileListingCancelled(opts.signal)
-    assertWithinDeadline(budget)
+    assertQuickOpenReaddirDeadline(budget)
 
     const { kind, relPath } = await classifyQuickOpenGitEntry(opts.rootPath, rawPath)
     if (kind === 'keep') {
@@ -325,7 +307,7 @@ export async function expandQuickOpenGitFileListing(opts: {
 
   for (const rawPath of opts.directoryPaths ?? []) {
     throwIfFileListingCancelled(opts.signal)
-    assertWithinDeadline(budget)
+    assertQuickOpenReaddirDeadline(budget)
 
     const relPath = normalizeGitEntry(rawPath)
     // Why: Git intentionally leaves collapsed directories unexpanded; reject
@@ -356,11 +338,12 @@ export async function expandQuickOpenGitFileListing(opts: {
       includeSymlinks
     })),
     budget,
-    opts.signal
+    opts.signal,
+    opts.maxResults === undefined ? undefined : Math.max(0, opts.maxResults - files.size)
   )
   for (const expandedFile of expandedFiles) {
     addFinalPath(expandedFile)
   }
 
-  return Array.from(files)
+  return Array.from(files).slice(0, opts.maxResults)
 }
