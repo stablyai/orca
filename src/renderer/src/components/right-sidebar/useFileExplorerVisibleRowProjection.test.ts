@@ -168,6 +168,50 @@ describe('file explorer visible row projection', () => {
     ])
   })
 
+  it('projects changed paths without requiring a name query or loaded folders', () => {
+    const projection = createVisibleFileExplorerRowProjection(input({}), {
+      ignoredSet: new Set(),
+      nameFilter: {
+        query: '',
+        relativePaths: ['src/modified.ts', 'docs/deleted.md'],
+        includeAllWhenQueryEmpty: true,
+        skipIgnoredQuery: true
+      },
+      showDotfiles: true,
+      showGitIgnoredFiles: true
+    })
+
+    expect(projection.getVisibleSlice(0, 10).map((entry) => entry.relativePath)).toEqual([
+      'docs',
+      'docs/deleted.md',
+      'src',
+      'src/modified.ts'
+    ])
+    expect([...getFileExplorerNameFilterExpandedPaths(projection, '', true)]).toEqual([
+      '/repo/docs',
+      '/repo/src'
+    ])
+  })
+
+  it('intersects changed paths with the existing name filter', () => {
+    const projection = createVisibleFileExplorerRowProjection(input({}), {
+      ignoredSet: new Set(),
+      nameFilter: {
+        query: 'deleted',
+        relativePaths: ['src/modified.ts', 'docs/deleted.md'],
+        includeAllWhenQueryEmpty: true,
+        skipIgnoredQuery: true
+      },
+      showDotfiles: true,
+      showGitIgnoredFiles: true
+    })
+
+    expect(projection.getVisibleSlice(0, 10).map((entry) => entry.relativePath)).toEqual([
+      'docs',
+      'docs/deleted.md'
+    ])
+  })
+
   it('hides descendants under collapsed folders while a file-name filter is active', () => {
     const projection = createVisibleFileExplorerRowProjection(
       input({

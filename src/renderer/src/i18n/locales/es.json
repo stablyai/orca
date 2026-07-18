@@ -9303,7 +9303,9 @@
             "79b1537dd3": "Selecciona un espacio de trabajo para explorar archivos",
             "4da4d89845": "Volver al explorador",
             "6ed5ce817b": "Buscar",
-            "2f4483d6c4": "No hay archivos que coincidan con este filtro"
+            "2f4483d6c4": "No hay archivos que coincidan con este filtro",
+            "noChangedFilesMatch": "No hay archivos con cambios que coincidan con este filtro.",
+            "noChangedFiles": "No hay archivos con cambios."
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "Nueva carpeta",
@@ -9345,7 +9347,8 @@
             "d95e30fe28": "Actualizar explorador",
             "6026b16950": "Contraer todo",
             "693cbeadd0": "Buscar",
-            "c1f3f3ec70": "Buscar en el contenido de los archivos"
+            "c1f3f3ec70": "Buscar en el contenido de los archivos",
+            "changedFilesOnly": "Mostrar solo archivos con cambios"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No hay archivos en este espacio de trabajo",

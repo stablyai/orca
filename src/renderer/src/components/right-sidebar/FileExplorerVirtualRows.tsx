@@ -7,7 +7,10 @@ import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplore
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
+import type { FileExplorerGitPathState } from './file-explorer-git-path-state'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+
+const EMPTY_GIT_PATH_STATES = new Map<string, FileExplorerGitPathState>()
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -18,6 +21,7 @@ type FileExplorerVirtualRowsProps = {
   dismissInlineInput: () => void
   folderStatusByRelativePath: Map<string, GitFileStatus | null>
   statusByRelativePath: Map<string, GitFileStatus>
+  gitPathStateByRelativePath?: ReadonlyMap<string, FileExplorerGitPathState>
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
   canCollapseFolderSubtree?: boolean
@@ -63,6 +67,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     dismissInlineInput,
     folderStatusByRelativePath,
     statusByRelativePath,
+    gitPathStateByRelativePath = EMPTY_GIT_PATH_STATES,
     ignoredByRelativePath,
     expanded,
     canCollapseFolderSubtree = true,
@@ -171,6 +176,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               selectedPaths={selectedPaths}
               isFlashing={flashingPath === n.path}
               nodeStatus={nodeStatus}
+              gitPathState={gitPathStateByRelativePath.get(normalizedRelativePath) ?? null}
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}

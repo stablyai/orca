@@ -1,9 +1,11 @@
 /* eslint-disable max-lines -- Why: FileExplorer coordinates tree data, selection, drag/drop, and virtual rows; splitting it during this merge would obscure the interaction invariants. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { basename, dirname } from '@/lib/path'
+import { basename, dirname, joinPath, normalizeRelativePath } from '@/lib/path'
+import { detectLanguage } from '@/lib/language-detect'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { folderRelativePathToIncludeGlob } from './file-search-include-pattern'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -55,12 +57,18 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createNewTerminalTab } from '@/components/terminal/terminal-tab-create'
+import { getFileExplorerOperationOwnerFromState } from './file-explorer-operation-owner'
+import {
+  buildFileExplorerGitPathStateMap,
+  selectFileExplorerGitEntryForPath
+} from './file-explorer-git-path-state'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
   const [nameFilterQuery, setNameFilterQuery] = useState('')
+  const [showChangedFilesOnly, setShowChangedFilesOnly] = useState(false)
   const [nameFilterCollapsedPaths, setNameFilterCollapsedPaths] = useState<Set<string>>(
     () => new Set()
   )
@@ -91,9 +99,13 @@ function FileExplorerFiles(): React.JSX.Element {
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
   const openFile = useAppStore((s) => s.openFile)
+  const openDiff = useAppStore((s) => s.openDiff)
+  const openConflictFile = useAppStore((s) => s.openConflictFile)
+  const trackConflictPath = useAppStore((s) => s.trackConflictPath)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const gitStatusHugeByWorktree = useAppStore((s) => s.gitStatusHugeByWorktree)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
   const openModal = useAppStore((s) => s.openModal)
@@ -124,6 +136,22 @@ function FileExplorerFiles(): React.JSX.Element {
   })
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
+  const hasChangedFilesFilter = isFilesViewActive && activeRepoSupportsGit && showChangedFilesOnly
+  const entries = useMemo(
+    () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, gitStatusByWorktree]
+  )
+  const hasGitStatusSnapshot = Boolean(
+    activeWorktreeId && Object.prototype.hasOwnProperty.call(gitStatusByWorktree, activeWorktreeId)
+  )
+  const gitPathStateByRelativePath = useMemo(
+    () => buildFileExplorerGitPathStateMap(entries),
+    [entries]
+  )
+  const changedRelativePaths = useMemo(() => entries.map((entry) => entry.path), [entries])
+  const filteredOperationOwner = useAppStore(
+    useShallow((state) => getFileExplorerOperationOwnerFromState(state, activeWorktreeId))
+  )
 
   const expanded = useMemo(
     () =>
@@ -149,13 +177,14 @@ function FileExplorerFiles(): React.JSX.Element {
     [nameFilterQuery]
   )
   const hasNameFilter = isFilesViewActive && hasNameFilterQuery
+  const hasFilteredProjection = hasNameFilter || hasChangedFilesFilter
   useEffect(() => {
-    if (!hasNameFilter) {
+    if (!hasFilteredProjection) {
       setNameFilterCollapsedPaths((current) => (current.size > 0 ? new Set() : current))
     }
-  }, [hasNameFilter])
+  }, [hasFilteredProjection])
   const nameFilterFiles = useRuntimeFileListForWorktree({
-    enabled: hasNameFilter && !nameFilterQueryTooLarge,
+    enabled: hasNameFilter && !hasChangedFilesFilter && !nameFilterQueryTooLarge,
     worktreeId: activeWorktreeId
   })
   const nameFilterSource = useMemo(
@@ -180,11 +209,37 @@ function FileExplorerFiles(): React.JSX.Element {
       nameFilterQueryTooLarge
     ]
   )
+  const filteredProjectionSource = useMemo(
+    () =>
+      hasChangedFilesFilter
+        ? {
+            query: hasNameFilter ? nameFilterQuery : '',
+            operationOwner: filteredOperationOwner,
+            relativePaths: hasGitStatusSnapshot
+              ? nameFilterQueryTooLarge
+                ? []
+                : changedRelativePaths
+              : null,
+            includeAllWhenQueryEmpty: true,
+            skipIgnoredQuery: true
+          }
+        : nameFilterSource,
+    [
+      changedRelativePaths,
+      filteredOperationOwner,
+      hasChangedFilesFilter,
+      hasGitStatusSnapshot,
+      hasNameFilter,
+      nameFilterQuery,
+      nameFilterQueryTooLarge,
+      nameFilterSource
+    ]
+  )
   const {
     rowProjection,
     ignoredByRelativePath,
     showGitIgnoredFiles,
-    nameFilterExpandedPaths,
+    nameFilterExpandedPaths: filteredExpandedPaths,
     toggleGitIgnoredFiles
   } = useFileExplorerVisibleRowProjection(
     activeWorktreeId,
@@ -193,27 +248,39 @@ function FileExplorerFiles(): React.JSX.Element {
     expanded,
     activeRepoSupportsGit && isFilesViewActive,
     showDotfiles,
-    nameFilterSource,
-    hasNameFilter ? nameFilterCollapsedPaths : null
+    filteredProjectionSource,
+    hasFilteredProjection ? nameFilterCollapsedPaths : null
   )
   const rowExpandedPaths = useMemo(
     () =>
-      hasNameFilter
-        ? nameFilterExpandedPaths
-        : nameFilterExpandedPaths.size > 0
-          ? new Set([...expanded, ...nameFilterExpandedPaths])
+      hasFilteredProjection
+        ? filteredExpandedPaths
+        : filteredExpandedPaths.size > 0
+          ? new Set([...expanded, ...filteredExpandedPaths])
           : expanded,
-    [expanded, hasNameFilter, nameFilterExpandedPaths]
+    [expanded, filteredExpandedPaths, hasFilteredProjection]
   )
   const visibleRowCount = rowProjection.getVisibleCount()
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
-  const canCollapseAll = isFilesViewActive && !hasNameFilter && expanded.size > 0
+  const canCollapseAll =
+    isFilesViewActive &&
+    (hasFilteredProjection ? filteredExpandedPaths.size > 0 : expanded.size > 0)
   const handleCollapseAll = useCallback(() => {
-    if (!activeWorktreeId || !isFilesViewActive || hasNameFilter) {
+    if (!activeWorktreeId || !isFilesViewActive) {
+      return
+    }
+    if (hasFilteredProjection) {
+      setNameFilterCollapsedPaths((current) => new Set([...current, ...filteredExpandedPaths]))
       return
     }
     collapseAllDirs(activeWorktreeId)
-  }, [activeWorktreeId, collapseAllDirs, hasNameFilter, isFilesViewActive])
+  }, [
+    activeWorktreeId,
+    collapseAllDirs,
+    filteredExpandedPaths,
+    hasFilteredProjection,
+    isFilesViewActive
+  ])
   const handleToggleDotfiles = useCallback(() => {
     if (activeWorktreeId) {
       toggleShowDotfilesForWorktree(activeWorktreeId)
@@ -257,10 +324,6 @@ function FileExplorerFiles(): React.JSX.Element {
     copyPathsForNode
   } = useFileExplorerSelection(rowProjection, isMac)
 
-  const entries = useMemo(
-    () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
-    [activeWorktreeId, gitStatusByWorktree]
-  )
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 
@@ -467,7 +530,12 @@ function FileExplorerFiles(): React.JSX.Element {
     () => rowProjection.getRowsByPaths(selectedPaths),
     [rowProjection, selectedPaths]
   )
-  const handleToggleNameFilterDir = useCallback(
+  const handleToggleChangedFilesOnly = useCallback(() => {
+    setShowChangedFilesOnly((current) => !current)
+    setNameFilterCollapsedPaths(new Set())
+    resetSelection()
+  }, [resetSelection])
+  const handleToggleFilteredDir = useCallback(
     (_worktreeId: string, dirPath: string) => {
       setNameFilterCollapsedPaths((current) =>
         getNextNameFilterCollapsedPaths(current, dirPath, rowExpandedPaths.has(dirPath))
@@ -475,7 +543,7 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [rowExpandedPaths]
   )
-  const handleExpandNameFilterDir = useCallback((dirPath: string) => {
+  const handleExpandFilteredDir = useCallback((dirPath: string) => {
     setNameFilterCollapsedPaths((current) =>
       getNameFilterCollapsedPathsAfterExpand(current, dirPath)
     )
@@ -485,7 +553,7 @@ function FileExplorerFiles(): React.JSX.Element {
     runtimeEnvironmentId: activeRuntimeEnvironmentId,
     openFile,
     makePreviewFilePermanent,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
+    toggleDir: hasFilteredProjection ? handleToggleFilteredDir : toggleDir,
     loadDir,
     statPath,
     markPathAsDirectory,
@@ -493,14 +561,94 @@ function FileExplorerFiles(): React.JSX.Element {
     scrollRef
   })
 
+  const getGitPathState = useCallback(
+    (node: TreeNode) =>
+      gitPathStateByRelativePath.get(normalizeRelativePath(node.relativePath)) ?? null,
+    [gitPathStateByRelativePath]
+  )
+  const openUnavailableGitPath = useCallback(
+    (node: TreeNode, preview: boolean): boolean => {
+      if (!activeWorktreeId || !worktreePath || !getGitPathState(node)) {
+        return false
+      }
+      const entry = selectFileExplorerGitEntryForPath(entries, node.relativePath)
+      if (!entry) {
+        return true
+      }
+      const language = detectLanguage(entry.path)
+      if (entry.conflictStatus === 'unresolved') {
+        if (entry.conflictKind) {
+          trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
+          openConflictFile(activeWorktreeId, worktreePath, entry, language, { preview })
+        }
+        return true
+      }
+      openDiff(
+        activeWorktreeId,
+        joinPath(worktreePath, entry.path),
+        entry.path,
+        language,
+        entry.area === 'staged',
+        { preview }
+      )
+      return true
+    },
+    [
+      activeWorktreeId,
+      entries,
+      getGitPathState,
+      openConflictFile,
+      openDiff,
+      trackConflictPath,
+      worktreePath
+    ]
+  )
+
   // Why: pass a stable activator so arrow-key navigation can hand the same
   // activate-toggles-folder / open-file-preview behavior the click handler
   // already uses, without the keyboard path re-implementing symlink handling.
   const activateNode = useCallback(
     (node: TreeNode) => {
+      if (openUnavailableGitPath(node, true)) {
+        return
+      }
       void handleClick(node)
     },
-    [handleClick]
+    [handleClick, openUnavailableGitPath]
+  )
+  const handleNodeDoubleClick = useCallback(
+    (node: TreeNode) => {
+      if (openUnavailableGitPath(node, false)) {
+        return
+      }
+      handleDoubleClick(node)
+    },
+    [handleDoubleClick, openUnavailableGitPath]
+  )
+  const handleStartRename = useCallback(
+    (node: TreeNode) => {
+      if (!getGitPathState(node)) {
+        startRename(node)
+      }
+    },
+    [getGitPathState, startRename]
+  )
+  const handleRequestDelete = useCallback(
+    (node: TreeNode) => {
+      if (!getGitPathState(node)) {
+        requestDelete(node)
+      }
+    },
+    [getGitPathState, requestDelete]
+  )
+  const handleRequestDeleteAll = useCallback(
+    (nodes: TreeNode[]) => {
+      const availableNodes = nodes.filter((node) => !getGitPathState(node))
+      if (availableNodes.length > 0) {
+        requestDeleteAll(availableNodes)
+      }
+    },
+    [getGitPathState, requestDeleteAll]
   )
   const scrollToIndex = useCallback(
     (index: number) => {
@@ -519,10 +667,10 @@ function FileExplorerFiles(): React.JSX.Element {
     selectedNode,
     activateNode,
     moveSelection,
-    toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
-    startRename,
-    requestDelete,
-    requestDeleteAll,
+    toggleDir: hasFilteredProjection ? handleToggleFilteredDir : toggleDir,
+    startRename: handleStartRename,
+    requestDelete: handleRequestDelete,
+    requestDeleteAll: handleRequestDeleteAll,
     scrollToIndex,
     activeWorktreeId
   })
@@ -533,19 +681,19 @@ function FileExplorerFiles(): React.JSX.Element {
   const handleContextMenuDelete = useCallback(
     (node: TreeNode) => {
       if (selectedPaths.has(node.path) && selectedNodes.length > 1) {
-        requestDeleteAll(selectedNodes)
+        handleRequestDeleteAll(selectedNodes)
       } else {
-        requestDelete(node)
+        handleRequestDelete(node)
       }
     },
-    [selectedPaths, selectedNodes, requestDelete, requestDeleteAll]
+    [handleRequestDelete, handleRequestDeleteAll, selectedNodes, selectedPaths]
   )
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) =>
-      selectRowWithModifiers(node, event, handleClick),
-    [handleClick, selectRowWithModifiers]
+      selectRowWithModifiers(node, event, activateNode),
+    [activateNode, selectRowWithModifiers]
   )
   const handleCollapseFolderSubtree = useCallback(
     (node: TreeNode) => {
@@ -611,19 +759,34 @@ function FileExplorerFiles(): React.JSX.Element {
   // present. Without this, external file drops would have no target surface
   // when the tree is empty, still loading, or showing a read error.
   const isEmptyState = visibleRowCount === 0 && !inlineInput
-  const isNameFilterLoading = nameFilterSource?.relativePaths === null
+  const isFilteredProjectionLoading = filteredProjectionSource?.relativePaths === null
   const isLoading =
-    isEmptyState && (hasNameFilter ? isNameFilterLoading : (rootCache?.loading ?? true))
-  const treeError = hasNameFilter ? nameFilterFiles.loadError : rootError
+    isEmptyState &&
+    (hasFilteredProjection ? isFilteredProjectionLoading : (rootCache?.loading ?? true))
+  const treeError = hasChangedFilesFilter
+    ? null
+    : hasNameFilter
+      ? nameFilterFiles.loadError
+      : rootError
   const hasError = isEmptyState && !isLoading && !!treeError
   const showTree = !isEmptyState
   const emptyMessage =
-    hasNameFilter && !nameFilterFiles.loadError
+    hasChangedFilesFilter && hasNameFilter
       ? translate(
-          'auto.components.right.sidebar.FileExplorer.2f4483d6c4',
-          'No files match this filter'
+          'auto.components.right.sidebar.FileExplorer.noChangedFilesMatch',
+          'No changed files match this filter'
         )
-      : undefined
+      : hasChangedFilesFilter
+        ? translate('auto.components.right.sidebar.FileExplorer.noChangedFiles', 'No changed files')
+        : hasNameFilter && !nameFilterFiles.loadError
+          ? translate(
+              'auto.components.right.sidebar.FileExplorer.2f4483d6c4',
+              'No files match this filter'
+            )
+          : undefined
+  const changedFilesLimit = activeWorktreeId
+    ? gitStatusHugeByWorktree[activeWorktreeId]?.limit
+    : undefined
 
   return (
     <>
@@ -643,6 +806,9 @@ function FileExplorerFiles(): React.JSX.Element {
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}
           onCollapseAll={handleCollapseAll}
+          showChangedFilesToggle={activeRepoSupportsGit}
+          showChangedFilesOnly={hasChangedFilesFilter}
+          onToggleChangedFilesOnly={handleToggleChangedFilesOnly}
           showGitIgnoredFilesToggle={activeRepoSupportsGit}
           showGitIgnoredFiles={showGitIgnoredFiles}
           onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
@@ -660,7 +826,7 @@ function FileExplorerFiles(): React.JSX.Element {
             >
               <FileExplorerNameFilter
                 query={nameFilterQuery}
-                loading={nameFilterFiles.loading}
+                loading={hasChangedFilesFilter ? !hasGitStatusSnapshot : nameFilterFiles.loading}
                 onQueryChange={setNameFilterQuery}
                 onClear={handleClearNameFilter}
               />
@@ -684,6 +850,15 @@ function FileExplorerFiles(): React.JSX.Element {
         >
           <SearchFilters {...searchPanel.filtersProps} />
         </div>
+        {hasChangedFilesFilter && changedFilesLimit ? (
+          <div className="border-b border-border px-2 py-1 text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.right.sidebar.SourceControl.tooManyChanges',
+              'Too many changes detected. Only the first {{value0}} are shown.',
+              { value0: String(changedFilesLimit) }
+            )}
+          </div>
+        ) : null}
         {/* Why: the Files and Contents views share one body slot; layering them
            avoids remounting heavy virtualized panes while preserving full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -736,9 +911,10 @@ function FileExplorerFiles(): React.JSX.Element {
                 dismissInlineInput={dismissInlineInput}
                 folderStatusByRelativePath={folderStatusByRelativePath}
                 statusByRelativePath={statusByRelativePath}
+                gitPathStateByRelativePath={gitPathStateByRelativePath}
                 ignoredByRelativePath={ignoredByRelativePath}
                 expanded={rowExpandedPaths}
-                canCollapseFolderSubtree={!hasNameFilter}
+                canCollapseFolderSubtree={!hasFilteredProjection}
                 dirCache={dirCache}
                 selectedPaths={selectedPaths}
                 activeFileId={activeFileId}
@@ -747,12 +923,12 @@ function FileExplorerFiles(): React.JSX.Element {
                 connectionId={activeRepo?.connectionId ?? null}
                 runtimeDownloadContext={runtimeDownloadContext}
                 onClick={handleRowClick}
-                onDoubleClick={handleDoubleClick}
-                onViewFile={handleClick}
+                onDoubleClick={handleNodeDoubleClick}
+                onViewFile={activateNode}
                 onContextMenuSelect={preserveSelectionForContextMenu}
                 onCopyPaths={copyPathsForNode}
                 onStartNew={startNew}
-                onStartRename={startRename}
+                onStartRename={handleStartRename}
                 onDuplicate={handleDuplicate}
                 onAddFolderAsProject={handleAddFolderAsProject}
                 canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
@@ -763,10 +939,12 @@ function FileExplorerFiles(): React.JSX.Element {
                 onMoveDrop={handleMoveDrop}
                 onDragTargetChange={setDropTargetDir}
                 onDragSourceChange={setDragSourcePath}
-                onDragExpandDir={hasNameFilter ? handleExpandNameFilterDir : handleDragExpandDir}
+                onDragExpandDir={
+                  hasFilteredProjection ? handleExpandFilteredDir : handleDragExpandDir
+                }
                 onNativeDragTargetChange={setNativeDropTargetDir}
                 onNativeDragExpandDir={
-                  hasNameFilter ? handleExpandNameFilterDir : handleNativeDragExpandDir
+                  hasFilteredProjection ? handleExpandFilteredDir : handleNativeDragExpandDir
                 }
                 dropTargetDir={dropTargetDir}
                 dragSourcePath={dragSourcePath}

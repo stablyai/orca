@@ -9326,7 +9326,9 @@
             "79b1537dd3": "Select a workspace to browse files",
             "4da4d89845": "Back to Explorer",
             "6ed5ce817b": "Search",
-            "2f4483d6c4": "No files match this filter"
+            "2f4483d6c4": "No files match this filter",
+            "noChangedFilesMatch": "No changed files match this filter",
+            "noChangedFiles": "No changed files"
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
@@ -9368,7 +9370,8 @@
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
             "693cbeadd0": "Search",
-            "c1f3f3ec70": "Search file contents"
+            "c1f3f3ec70": "Search file contents",
+            "changedFilesOnly": "Show Changed Files Only"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No files in this workspace",
