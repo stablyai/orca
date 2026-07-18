@@ -529,6 +529,44 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
   })
 })
 
+describe('getDefaultBaseRef (bare repos)', () => {
+  let tmpDir: string
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-repo-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('falls back to the HEAD branch for a bare clone with a nonstandard default branch', () => {
+    // Why: `git clone --bare` populates refs/heads/* directly — no
+    // refs/remotes/origin/* and no origin/HEAD — so with a default branch
+    // that is neither main nor master, every probe misses and only HEAD
+    // names the branch.
+    const srcDir = path.join(tmpDir, 'src')
+    git(tmpDir, ['init', '--quiet', 'src'])
+    git(srcDir, ['symbolic-ref', 'HEAD', 'refs/heads/trunk'])
+    git(srcDir, ['config', 'user.email', 'test@test.com'])
+    git(srcDir, ['config', 'user.name', 'Test'])
+    git(srcDir, ['commit', '--allow-empty', '-m', 'initial', '--quiet'])
+    git(tmpDir, ['clone', '--bare', '--quiet', srcDir, 'hub.git'])
+
+    const result = getDefaultBaseRef(path.join(tmpDir, 'hub.git'))
+
+    expect(result).toBe('trunk')
+  })
+
+  it('returns null for a fresh bare init whose HEAD is unborn', () => {
+    git(tmpDir, ['init', '--bare', '--quiet', 'empty.git'])
+
+    const result = getDefaultBaseRef(path.join(tmpDir, 'empty.git'))
+
+    expect(result).toBeNull()
+  })
+})
+
 describe('resolveDefaultBaseRefViaExec', () => {
   it('falls through from a stale origin/HEAD target to the probe list', async () => {
     const calls: string[][] = []
@@ -573,6 +611,38 @@ describe('resolveDefaultBaseRefViaExec', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main'],
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/master']
     ])
+  })
+
+  it('falls back to the HEAD branch when origin/HEAD and every probe are missing', async () => {
+    const calls: string[][] = []
+    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      calls.push(argv)
+      if (argv[0] === 'symbolic-ref' && argv.at(-1) === 'HEAD') {
+        return { stdout: 'refs/heads/trunk\n' }
+      }
+      if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/heads/trunk') {
+        return { stdout: 'trunk-sha\n' }
+      }
+      throw new Error('missing ref')
+    }
+
+    await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBe('trunk')
+
+    expect(calls.at(-2)).toEqual(['symbolic-ref', '--quiet', 'HEAD'])
+    expect(calls.at(-1)).toEqual(['rev-parse', '--verify', '--quiet', 'refs/heads/trunk'])
+  })
+
+  it('stays null when HEAD points at an unborn branch', async () => {
+    // Why: a fresh `git init --bare` has a symbolic HEAD but no commits;
+    // worktree creation must still fail loudly rather than get a bad ref.
+    const exec = async (argv: string[]): Promise<{ stdout: string }> => {
+      if (argv[0] === 'symbolic-ref' && argv.at(-1) === 'HEAD') {
+        return { stdout: 'refs/heads/main\n' }
+      }
+      throw new Error('missing ref')
+    }
+
+    await expect(resolveDefaultBaseRefViaExec(exec)).resolves.toBeNull()
   })
 })
 

@@ -540,7 +540,27 @@ export function getDefaultBaseRef(path: string): string | null {
       return returnAs
     }
   }
-  return null
+  return getHeadBranchBaseRef(path)
+}
+
+/**
+ * Last-resort default: HEAD's symbolic target. Bare clones populate neither
+ * refs/remotes/origin/* nor origin/HEAD, and a nonstandard default branch
+ * misses the main/master probes; HEAD still names the branch git itself
+ * treats as default. Unborn HEAD fails the ref verify and stays null.
+ */
+function getHeadBranchBaseRef(path: string): string | null {
+  try {
+    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'HEAD'], {
+      cwd: path
+    }).trim()
+    if (!ref.startsWith('refs/heads/') || !hasGitRef(path, ref)) {
+      return null
+    }
+    return ref.slice('refs/heads/'.length)
+  } catch {
+    return null
+  }
 }
 
 export async function getBaseRefDefault(
@@ -678,7 +698,25 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
   if (originHeadBaseRef) {
     return originHeadBaseRef
   }
-  return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
+  const probed = await resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
+  if (probed) {
+    return probed
+  }
+  return resolveHeadBranchBaseRefViaExec(exec)
+}
+
+/** Exec-callback twin of getHeadBranchBaseRef — keep the two in sync. */
+async function resolveHeadBranchBaseRefViaExec(exec: GitExec): Promise<string | null> {
+  try {
+    const { stdout } = await exec(['symbolic-ref', '--quiet', 'HEAD'])
+    const ref = stdout.trim()
+    if (!ref.startsWith('refs/heads/') || !(await hasGitRefViaExec(exec, ref))) {
+      return null
+    }
+    return ref.slice('refs/heads/'.length)
+  } catch {
+    return null
+  }
 }
 
 export function resolveDefaultBaseRefWithLocalGit(
