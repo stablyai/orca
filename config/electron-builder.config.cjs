@@ -37,9 +37,20 @@ const relayExtraResource = {
 // do not fall through to a developer checkout's node_modules.
 const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
 
+// Why: git-native is optional — contributors without cargo produce no artifact
+// and the runtime falls back to CLI git, so packaging must not hard-fail on it.
+// `to` lands the addon at process.resourcesPath/git-native/git-native.node,
+// exactly where git-native-module.ts's loader looks.
+const gitNativeResources = existsSync(
+  join(__dirname, '..', 'native', 'git-native', '.build', 'git-native.node')
+)
+  ? [{ from: 'native/git-native/.build/git-native.node', to: 'git-native/git-native.node' }]
+  : []
+
 const commonExtraResources = [
   relayExtraResource,
   ...packagedRuntimeNodeModuleResources,
+  ...gitNativeResources,
   skillFreshnessResources
 ]
 const macSpeechNativeResource = {
