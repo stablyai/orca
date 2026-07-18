@@ -13,6 +13,8 @@ export type FileExplorerNameFilterProjectionSource = {
   query: string
   relativePaths: readonly string[] | null
   operationOwner?: FileExplorerOperationOwner
+  includeAllWhenQueryEmpty?: boolean
+  skipIgnoredQuery?: boolean
 }
 
 export const FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES = 2 * 1024
@@ -168,7 +170,10 @@ export function createNameFilteredFileExplorerProjection({
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
-  if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
+  if (
+    (!nameFilter.includeAllWhenQueryEmpty && nameFilterTokens.length === 0) ||
+    nameFilter.relativePaths === null
+  ) {
     // Why: empty queries use the normal explorer projection, and loading filters must not
     // fall back to a partial cached path list.
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
@@ -250,11 +255,12 @@ function appendNameFilteredEntries(
 
 export function getFileExplorerNameFilterExpandedPaths(
   rowProjection: FileExplorerRowProjection,
-  nameFilterQuery: string
+  nameFilterQuery: string,
+  includeAllWhenQueryEmpty = false
 ): Set<string> {
   if (
     isFileExplorerNameFilterQueryTooLarge(nameFilterQuery) ||
-    getFileExplorerNameFilterTokens(nameFilterQuery).length === 0
+    (!includeAllWhenQueryEmpty && getFileExplorerNameFilterTokens(nameFilterQuery).length === 0)
   ) {
     return new Set()
   }

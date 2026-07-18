@@ -46,6 +46,7 @@ import {
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
+import type { FileExplorerGitPathState } from './file-explorer-git-path-state'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { translate } from '@/i18n/i18n'
@@ -268,6 +269,7 @@ type FileExplorerRowProps = {
   isFlashing: boolean
   selectedPaths: Set<string>
   nodeStatus: GitFileStatus | null
+  gitPathState: FileExplorerGitPathState | null
   statusColor: string | null
   isIgnored: boolean
   deleteShortcutLabel: string
@@ -311,18 +313,23 @@ export function shouldShowOpenInTerminalAction(node: TreeNode): boolean {
   return node.isDirectory
 }
 
-export function shouldShowViewFileAction(node: TreeNode): boolean {
-  return !node.isDirectory
+export function shouldShowViewFileAction(
+  node: TreeNode,
+  gitPathState: FileExplorerGitPathState | null = null
+): boolean {
+  return !node.isDirectory && gitPathState === null
 }
 
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
   connectionId?: string | null,
-  runtimeDownloadContext?: RuntimeFileOperationArgs | null
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null,
+  gitPathState: FileExplorerGitPathState | null = null
 ): boolean {
   // Why: Desktop-only because download depends on Electron's native save dialog.
   return (
     !node.isDirectory &&
+    gitPathState === null &&
     Boolean(connectionId || runtimeDownloadContext) &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
@@ -331,12 +338,14 @@ export function shouldShowRemoteDownloadAction(
 export function shouldShowCopyFileAction(
   node: TreeNode,
   connectionId?: string | null,
-  selectionSize = 1
+  selectionSize = 1,
+  gitPathState: FileExplorerGitPathState | null = null
 ): boolean {
   // Why: remote directories would require recursive materialization semantics;
   // keep this to a single concrete file reference until multi-file copy exists.
   return (
     (!connectionId || !node.isDirectory) &&
+    gitPathState === null &&
     selectionSize === 1 &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
@@ -415,6 +424,7 @@ export function FileExplorerRow({
   isFlashing,
   selectedPaths,
   nodeStatus,
+  gitPathState,
   statusColor,
   isIgnored,
   deleteShortcutLabel,
@@ -452,12 +462,19 @@ export function FileExplorerRow({
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
+  const canAccessFileSystem = gitPathState === null
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
     node,
     connectionId,
-    runtimeDownloadContext
+    runtimeDownloadContext,
+    gitPathState
   )
-  const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
+  const showCopyFileAction = shouldShowCopyFileAction(
+    node,
+    connectionId,
+    selectionSize,
+    gitPathState
+  )
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,
@@ -515,9 +532,13 @@ export function FileExplorerRow({
           data-native-file-drop-dir={rowDropDir}
           // Why: marks this draggable row so the wheel-capture handler can rescue
           // scroll Chromium swallows over draggable nodes (file-explorer-drag-scroll-marker).
-          data-explorer-draggable="true"
-          draggable
+          data-explorer-draggable={canAccessFileSystem ? 'true' : undefined}
+          draggable={canAccessFileSystem}
           onDragStart={(event) => {
+            if (!canAccessFileSystem) {
+              event.preventDefault()
+              return
+            }
             const paths =
               selectedPaths.has(node.path) && selectedPaths.size > 1
                 ? [...selectedPaths]
@@ -626,7 +647,9 @@ export function FileExplorerRow({
               // those behaviors stay intact on the icon and empty row area,
               // matching VS Code's rename hotspot.
               e.stopPropagation()
-              onStartRename(node)
+              if (canAccessFileSystem) {
+                onStartRename(node)
+              }
             }}
           >
             {node.name}
@@ -655,15 +678,19 @@ export function FileExplorerRow({
         onPointerUpCapture={stopRightButtonMenuSelection}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
-        <ContextMenuItem onSelect={() => onStartNew('file', targetDir, targetDepth)}>
-          <FilePlus />
-          {translate('auto.components.right.sidebar.FileExplorerRow.37c875d827', 'New File')}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => onStartNew('folder', targetDir, targetDepth)}>
-          <FolderPlus />
-          {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
+        {canAccessFileSystem ? (
+          <>
+            <ContextMenuItem onSelect={() => onStartNew('file', targetDir, targetDepth)}>
+              <FilePlus />
+              {translate('auto.components.right.sidebar.FileExplorerRow.37c875d827', 'New File')}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => onStartNew('folder', targetDir, targetDepth)}>
+              <FolderPlus />
+              {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        ) : null}
         {showCopyFileAction && (
           <ContextMenuItem onSelect={handleCopyFile}>
             <Copy />
@@ -694,13 +721,13 @@ export function FileExplorerRow({
             <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
           ) : null}
         </ContextMenuItem>
-        {!node.isDirectory && (
+        {canAccessFileSystem && !node.isDirectory && (
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             {translate('auto.components.right.sidebar.FileExplorerRow.0fec99bfd7', 'Duplicate')}
           </ContextMenuItem>
         )}
-        {canAddAsProject && (
+        {canAccessFileSystem && canAddAsProject && (
           <ContextMenuItem onSelect={onAddFolderAsProject}>
             <FolderPlus />
             {translate(
@@ -709,7 +736,7 @@ export function FileExplorerRow({
             )}
           </ContextMenuItem>
         )}
-        {shouldShowOpenInTerminalAction(node) && (
+        {canAccessFileSystem && shouldShowOpenInTerminalAction(node) && (
           <ContextMenuItem onSelect={onOpenInTerminal}>
             <SquareTerminal />
             {translate(
@@ -718,13 +745,13 @@ export function FileExplorerRow({
             )}
           </ContextMenuItem>
         )}
-        {shouldShowViewFileAction(node) && (
+        {shouldShowViewFileAction(node, gitPathState) && (
           <ContextMenuItem onSelect={onViewFile}>
             <File />
             {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && activeWorktreeId && (
+        {canAccessFileSystem && !node.isDirectory && activeWorktreeId && (
           <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
             <Globe />
             {translate(
@@ -733,40 +760,45 @@ export function FileExplorerRow({
             )}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
-          <ContextMenuItem
-            onSelect={() =>
-              openMarkdownPreview({
-                filePath: node.path,
-                relativePath: node.relativePath,
-                worktreeId: activeWorktreeId,
-                language: 'markdown'
-              })
-            }
-          >
-            <Eye />
-            {translate(
-              'auto.components.right.sidebar.FileExplorerRow.d87a4c42e1',
-              'Open Markdown Preview'
-            )}
-          </ContextMenuItem>
-        )}
+        {canAccessFileSystem &&
+          !node.isDirectory &&
+          activeWorktreeId &&
+          detectLanguage(node.path) === 'markdown' && (
+            <ContextMenuItem
+              onSelect={() =>
+                openMarkdownPreview({
+                  filePath: node.path,
+                  relativePath: node.relativePath,
+                  worktreeId: activeWorktreeId,
+                  language: 'markdown'
+                })
+              }
+            >
+              <Eye />
+              {translate(
+                'auto.components.right.sidebar.FileExplorerRow.d87a4c42e1',
+                'Open Markdown Preview'
+              )}
+            </ContextMenuItem>
+          )}
         {showRemoteDownloadAction && (
           <ContextMenuItem onSelect={handleDownload}>
             <Download />
             {translate('auto.components.right.sidebar.FileExplorerRow.c2112579f6', 'Download')}
           </ContextMenuItem>
         )}
-        {canCollapseFolderSubtree && shouldShowCollapseFolderAction(node, isExpanded) && (
-          <ContextMenuItem onSelect={onCollapseFolderSubtree}>
-            <ListCollapse />
-            {translate(
-              'auto.components.right.sidebar.FileExplorerRow.d6a25618aa',
-              'Collapse Folder'
-            )}
-          </ContextMenuItem>
-        )}
-        {shouldShowFindInFolderAction(node) && (
+        {canAccessFileSystem &&
+          canCollapseFolderSubtree &&
+          shouldShowCollapseFolderAction(node, isExpanded) && (
+            <ContextMenuItem onSelect={onCollapseFolderSubtree}>
+              <ListCollapse />
+              {translate(
+                'auto.components.right.sidebar.FileExplorerRow.d6a25618aa',
+                'Collapse Folder'
+              )}
+            </ContextMenuItem>
+          )}
+        {canAccessFileSystem && shouldShowFindInFolderAction(node) && (
           <ContextMenuItem onSelect={onFindInFolder}>
             <Search />
             {translate(
@@ -778,44 +810,50 @@ export function FileExplorerRow({
             ) : null}
           </ContextMenuItem>
         )}
-        <ContextMenuItem
-          onSelect={() => {
-            const state = useAppStore.getState()
-            const activeWorktree = Object.values(state.worktreesByRepo)
-              .flat()
-              .find((worktree) => worktree.id === activeWorktreeId)
-            const activeRepo = activeWorktree
-              ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
-              : null
-            if (
-              isLocalPathOpenBlocked(state.settings, {
-                connectionId: activeRepo?.connectionId ?? null
-              })
-            ) {
-              showLocalPathOpenBlockedToast()
-              return
-            }
-            window.api.shell.openPath(node.path)
-          }}
-        >
-          <ExternalLink />
-          {revealLabel}
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => onStartRename(node)}>
-          <Pencil />
-          {translate('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
-          <ContextMenuShortcut>
-            {isMac
-              ? '↩'
-              : translate('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
-          </ContextMenuShortcut>
-        </ContextMenuItem>
-        <ContextMenuItem variant="destructive" onSelect={onRequestDelete}>
-          <Trash2 />
-          {translate('auto.components.right.sidebar.FileExplorerRow.addc01145f', 'Delete')}
-          <ContextMenuShortcut>{deleteShortcutLabel}</ContextMenuShortcut>
-        </ContextMenuItem>
+        {canAccessFileSystem ? (
+          <ContextMenuItem
+            onSelect={() => {
+              const state = useAppStore.getState()
+              const activeWorktree = Object.values(state.worktreesByRepo)
+                .flat()
+                .find((worktree) => worktree.id === activeWorktreeId)
+              const activeRepo = activeWorktree
+                ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
+                : null
+              if (
+                isLocalPathOpenBlocked(state.settings, {
+                  connectionId: activeRepo?.connectionId ?? null
+                })
+              ) {
+                showLocalPathOpenBlockedToast()
+                return
+              }
+              window.api.shell.openPath(node.path)
+            }}
+          >
+            <ExternalLink />
+            {revealLabel}
+          </ContextMenuItem>
+        ) : null}
+        {canAccessFileSystem ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => onStartRename(node)}>
+              <Pencil />
+              {translate('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
+              <ContextMenuShortcut>
+                {isMac
+                  ? '↩'
+                  : translate('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
+              </ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem variant="destructive" onSelect={onRequestDelete}>
+              <Trash2 />
+              {translate('auto.components.right.sidebar.FileExplorerRow.addc01145f', 'Delete')}
+              <ContextMenuShortcut>{deleteShortcutLabel}</ContextMenuShortcut>
+            </ContextMenuItem>
+          </>
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   )

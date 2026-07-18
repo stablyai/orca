@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { Ellipsis, FileDiff, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -25,6 +25,9 @@ type FileExplorerToolbarProps = {
   canRefresh: boolean
   canCollapseAll: boolean
   onCollapseAll: () => void
+  showChangedFilesToggle: boolean
+  showChangedFilesOnly: boolean
+  onToggleChangedFilesOnly: () => void
   showGitIgnoredFilesToggle: boolean
   showGitIgnoredFiles: boolean
   onToggleGitIgnoredFiles: () => void
@@ -40,6 +43,9 @@ export function FileExplorerToolbar({
   canRefresh,
   canCollapseAll,
   onCollapseAll,
+  showChangedFilesToggle,
+  showChangedFilesOnly,
+  onToggleChangedFilesOnly,
   showGitIgnoredFilesToggle,
   showGitIgnoredFiles,
   onToggleGitIgnoredFiles,
@@ -54,6 +60,35 @@ export function FileExplorerToolbar({
       >
         {repoName}
       </span>
+      {showChangedFilesToggle ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className={cn(
+                'text-muted-foreground hover:text-foreground',
+                showChangedFilesOnly && 'bg-accent text-foreground'
+              )}
+              aria-label={translate(
+                'auto.components.right.sidebar.FileExplorerToolbar.changedFilesOnly',
+                'Show Changed Files Only'
+              )}
+              aria-pressed={showChangedFilesOnly}
+              onClick={onToggleChangedFilesOnly}
+            >
+              <FileDiff className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.changedFilesOnly',
+              'Show Changed Files Only'
+            )}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

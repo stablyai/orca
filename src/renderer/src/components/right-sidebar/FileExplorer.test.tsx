@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- File Explorer toolbar and row tests share element-walking fixtures. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { Ellipsis, FileDiff, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
@@ -284,6 +284,9 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     canRefresh: true,
     canCollapseAll: false,
     onCollapseAll: vi.fn(),
+    showChangedFilesToggle: true,
+    showChangedFilesOnly: false,
+    onToggleChangedFilesOnly: vi.fn(),
     showGitIgnoredFilesToggle: true,
     showGitIgnoredFiles: true,
     onToggleGitIgnoredFiles: vi.fn(),
@@ -319,6 +322,25 @@ describe('getNextNameFilterCollapsedPaths', () => {
 })
 
 describe('FileExplorerToolbar', () => {
+  it('exposes the changed-files filter as an accessible pressed toggle', () => {
+    const onToggleChangedFilesOnly = vi.fn()
+    const element = makeToolbar({ showChangedFilesOnly: true, onToggleChangedFilesOnly })
+
+    const button = findButtonByAriaLabel(element, 'Show Changed Files Only')
+    ;(button.props.onClick as () => void)()
+
+    expect(button.props['aria-pressed']).toBe(true)
+    expect(button.props.className).toContain('bg-accent')
+    expect(hasIcon(button, FileDiff)).toBe(true)
+    expect(onToggleChangedFilesOnly).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the changed-files toggle outside Git repositories', () => {
+    const element = makeToolbar({ showChangedFilesToggle: false })
+
+    expect(getToolbarButtonLabels(element)).not.toContain('Show Changed Files Only')
+  })
+
   it('fires the refresh action from the icon button', () => {
     const onRefresh = vi.fn()
     const element = makeToolbar({ refresh: makeRefreshState({ handleRefresh: onRefresh }) })
@@ -451,6 +473,7 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar()
 
     expect(getToolbarButtonLabels(element)).toEqual([
+      'Show Changed Files Only',
       'Collapse All',
       'Refresh Explorer',
       'More Explorer Actions'
@@ -585,6 +608,8 @@ describe('FileExplorerRow collapse folder action', () => {
   it('only shows view file for files', () => {
     expect(shouldShowViewFileAction(fileNode)).toBe(true)
     expect(shouldShowViewFileAction(directoryNode)).toBe(false)
+    expect(shouldShowViewFileAction(fileNode, 'deleted')).toBe(false)
+    expect(shouldShowViewFileAction(fileNode, 'unresolved-conflict')).toBe(false)
   })
 
   it('shows remote download only for desktop SSH or Remote Host file-like rows', () => {
@@ -600,6 +625,7 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowRemoteDownloadAction(fileNode, null)).toBe(false)
     expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1')).toBe(false)
     expect(shouldShowRemoteDownloadAction(directoryNode, null, runtimeContext)).toBe(false)
+    expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1', null, 'deleted')).toBe(false)
 
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
 
@@ -615,6 +641,7 @@ describe('FileExplorerRow collapse folder action', () => {
       expect(shouldShowCopyFileAction(fileNode, undefined, 2)).toBe(false)
       expect(shouldShowCopyFileAction(fileNode, 'ssh-1', 1)).toBe(true)
       expect(shouldShowCopyFileAction(directoryNode, 'ssh-1', 1)).toBe(false)
+      expect(shouldShowCopyFileAction(fileNode, null, 1, 'deleted')).toBe(false)
 
       ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
 
