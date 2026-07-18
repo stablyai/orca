@@ -20,6 +20,7 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { getPinnedWebPanelsEntry, PinnedWebPanelsSetting } from './PinnedWebPanelsSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
@@ -75,6 +76,7 @@ export function AppearanceWindowSidebarSection({
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
+  const pinnedWebPanelsEntry = getPinnedWebPanelsEntry()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
   const statusBarTitle = translate(
@@ -121,6 +123,21 @@ export function AppearanceWindowSidebarSection({
           forceVisible={forceVisiblePrimary}
         >
           <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={pinnedWebPanelsEntry.title}
+          description={pinnedWebPanelsEntry.description}
+          keywords={pinnedWebPanelsEntry.keywords}
+          className="space-y-2"
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={pinnedWebPanelsEntry.title}
+            description={pinnedWebPanelsEntry.description}
+            control={null}
+          />
+          <PinnedWebPanelsSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
 
         <SearchableSetting

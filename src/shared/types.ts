@@ -2758,6 +2758,10 @@ export type GlobalSettings = {
    *  landed, the floating workspace defaulted off and many profiles persisted
    *  that inherited false. Once migrated, an explicit off choice sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
+  /** User-pinned dashboard pages (Grafana, CI, issue boards, …) surfaced as
+   *  first-class sidebar entries hosting persistent webviews. Optional for
+   *  profiles saved before this setting existed; readers default to none. */
+  pinnedWebPanels?: PinnedWebPanel[]
   /** Where new Floating Workspace terminal tabs start. Empty or '~' means
    *  the user's home directory; markdown notes use Orca's app-owned
    *  floating workspace under Electron userData. */
@@ -3310,6 +3314,14 @@ export type ManualRepoOrderEntry = {
   repoId: string
 }
 
+/** A user-configured web page pinned to the left sidebar. */
+export type PinnedWebPanel = {
+  id: string
+  title: string
+  /** http(s) only — enforced by normalizePinnedWebPanels on every write. */
+  url: string
+}
+
 /** The active top-level section shown in the main content area. */
 export type TopLevelView =
   | 'terminal'
@@ -3320,6 +3332,7 @@ export type TopLevelView =
   | 'space'
   | 'skills'
   | 'mobile'
+  | 'web-panel'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

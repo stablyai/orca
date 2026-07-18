@@ -512,7 +512,8 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   automations: true,
   space: true,
   skills: true,
-  mobile: true
+  mobile: true,
+  'web-panel': true
 }
 const KNOWN_TOP_LEVEL_VIEWS = new Set<string>(Object.keys(TOP_LEVEL_VIEW_LOOKUP))
 
@@ -529,6 +530,11 @@ function sanitizeHydratedActiveView(
   // hidden page (same guard as closeSettingsPage). mobile/automations stay
   // functional when hidden, so only activity is gated here.
   if (value === 'activity' && !experimentalActivityEnabled) {
+    return 'terminal'
+  }
+  // Why: the active panel id is not persisted, so a restored 'web-panel' view
+  // would render an empty page; land on the terminal instead.
+  if (value === 'web-panel') {
     return 'terminal'
   }
   return value as TopLevelView
@@ -628,62 +634,18 @@ export type UISlice = {
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   activeView: TopLevelView
-  previousViewBeforeTasks:
-    | 'terminal'
-    | 'settings'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSettings:
-    | 'terminal'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeActivity:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'automations'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeAutomations:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'space'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSpace:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'skills'
-    | 'mobile'
-  previousViewBeforeSkills:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'mobile'
-  previousViewBeforeMobile:
-    | 'terminal'
-    | 'settings'
-    | 'tasks'
-    | 'activity'
-    | 'automations'
-    | 'space'
-    | 'skills'
+  previousViewBeforeTasks: Exclude<TopLevelView, 'tasks'>
+  previousViewBeforeSettings: Exclude<TopLevelView, 'settings'>
+  previousViewBeforeActivity: Exclude<TopLevelView, 'activity'>
+  previousViewBeforeAutomations: Exclude<TopLevelView, 'automations'>
+  previousViewBeforeSpace: Exclude<TopLevelView, 'space'>
+  previousViewBeforeSkills: Exclude<TopLevelView, 'skills'>
+  previousViewBeforeMobile: Exclude<TopLevelView, 'mobile'>
+  previousViewBeforeWebPanel: Exclude<TopLevelView, 'web-panel'>
+  /** Which pinned panel the 'web-panel' view is showing. */
+  activePinnedWebPanelId: string | null
+  openPinnedWebPanelPage: (panelId: string) => void
+  closePinnedWebPanelPage: () => void
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -1243,6 +1205,20 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforeWebPanel: 'terminal',
+  activePinnedWebPanelId: null,
+  openPinnedWebPanelPage: (panelId) =>
+    set((state) => ({
+      activeView: 'web-panel',
+      activePinnedWebPanelId: panelId,
+      previousViewBeforeWebPanel:
+        state.activeView === 'web-panel' ? state.previousViewBeforeWebPanel : state.activeView
+    })),
+  closePinnedWebPanelPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeWebPanel,
+      activePinnedWebPanelId: null
+    })),
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,

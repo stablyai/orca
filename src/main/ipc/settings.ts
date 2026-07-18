@@ -22,6 +22,7 @@ import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-s
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { normalizePinnedWebPanels } from '../../shared/pinned-web-panels'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -124,6 +125,9 @@ export function registerSettingsHandlers(
     }
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
+    }
+    if ('pinnedWebPanels' in args) {
+      sanitizedArgs.pinnedWebPanels = normalizePinnedWebPanels(args.pinnedWebPanels)
     }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
