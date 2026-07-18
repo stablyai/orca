@@ -55,6 +55,7 @@ vi.mock('../ipc/pty', () => ({
     attach: vi.fn().mockResolvedValue(undefined)
   }),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
+  clearAgentHookStatusesForConnection: vi.fn(),
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),

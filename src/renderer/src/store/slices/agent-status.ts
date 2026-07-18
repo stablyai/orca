@@ -207,6 +207,13 @@ export type AgentStatusSlice = {
    *  Used when a tab is closed — same prefix-sweep as cacheTimerByKey cleanup. */
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 
+  /** Remove live entries for a worktree without treating it as user teardown.
+   *  Used for transient connection loss so replay can restore the same panes. */
+  removeAgentStatusByWorktree: (worktreeId: string) => void
+
+  /** Remove one live entry without retiring its launch or resume identity. */
+  removeTransientAgentStatus: (paneKey: string) => void
+
   /** Remove a single entry AND suppress re-retention on its next disappearance.
    *  Used for USER-INITIATED teardown — the dashboard/hover X button, and
    *  pane close — where the user is telling us "I'm done with this row". */
@@ -2178,6 +2185,75 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
       })
       queueMicrotask(() => freshness.schedule())
+    },
+
+    /**
+     * Removes live status for one worktree while preserving reconnect metadata.
+     *
+     * @param worktreeId Worktree whose transient live rows should be removed.
+     */
+    removeAgentStatusByWorktree: (worktreeId) => {
+      let hadLive = false
+      set((s) => {
+        const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
+        const liveKeys = Object.entries(s.agentStatusByPaneKey)
+          .filter(
+            ([paneKey, entry]) =>
+              entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+          )
+          .map(([paneKey]) => paneKey)
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) =>
+            entry.worktreeId === worktreeId ||
+            (entry.paneKey ? paneKeyMatchesAnyTabPrefix(entry.paneKey, tabPrefixes) : false)
+        )
+        if (liveKeys.length === 0 && !migrationUnsupported.changed) {
+          return s
+        }
+        hadLive = liveKeys.length > 0
+        const nextLive = { ...s.agentStatusByPaneKey }
+        for (const paneKey of liveKeys) {
+          delete nextLive[paneKey]
+        }
+        return {
+          agentStatusByPaneKey: nextLive,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
+          agentStatusEpoch:
+            hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      if (hadLive) {
+        queueMicrotask(() => freshness.schedule())
+      }
+    },
+
+    /**
+     * Removes one live status without applying user-initiated teardown semantics.
+     *
+     * @param paneKey Stable pane identity whose transient row should be removed.
+     */
+    removeTransientAgentStatus: (paneKey) => {
+      let hadLive = false
+      set((s) => {
+        if (!(paneKey in s.agentStatusByPaneKey)) {
+          return s
+        }
+        hadLive = true
+        const nextLive = { ...s.agentStatusByPaneKey }
+        delete nextLive[paneKey]
+        // Why: transport loss does not retire the remote pane. Preserve launch,
+        // resume, acknowledgement, and retention identity for relay replay.
+        return {
+          agentStatusByPaneKey: nextLive,
+          agentStatusEpoch: s.agentStatusEpoch + 1,
+          sortEpoch: s.sortEpoch + 1
+        }
+      })
+      if (hadLive) {
+        queueMicrotask(() => freshness.schedule())
+      }
     },
 
     dropAgentStatus: (paneKey) => {

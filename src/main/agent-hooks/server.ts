@@ -93,7 +93,7 @@ export type AgentHookStatusChangeEntry = {
 }
 
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
-type PaneStatusClearListener = (paneKey: string) => void
+type PaneStatusClearListener = (paneKey: string, options?: { transient?: boolean }) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
@@ -1703,6 +1703,22 @@ export class AgentHookServer {
     }
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
+  }
+
+  /**
+   * Clears one visible status after transport loss without retiring pane caches.
+   *
+   * @param paneKey Stable pane identity whose transient status should be removed.
+   */
+  clearTransientStatusEntry(paneKey: string): void {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    if (!this.state.lastStatusByPaneKey.has(resolvedPaneKey)) {
+      return
+    }
+    // Why: the remote PTY may reattach and emit a partial replay event, so
+    // preserve prompt/tool context while still driving the renderer clear IPC.
+    this.dropStatusEntry(resolvedPaneKey)
+    this.onPaneStatusCleared?.(resolvedPaneKey, { transient: true })
   }
 
   dropStatusEntriesByTabPrefix(tabId: string): void {

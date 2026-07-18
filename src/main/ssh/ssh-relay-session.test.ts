@@ -70,6 +70,7 @@ vi.mock('../ipc/pty', () => ({
     attachForReconnect: vi.fn().mockResolvedValue({})
   }),
   getPtyIdsForConnection: vi.fn().mockReturnValue([]),
+  clearAgentHookStatusesForConnection: vi.fn(),
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
@@ -475,18 +476,18 @@ describe('SshRelaySession', () => {
     vi.clearAllMocks()
     mockDeploySuccess()
 
-    const { getSshPtyProvider } = await import('../ipc/pty')
+    const ptyIpc = await import('../ipc/pty')
     const mockAttach = vi.fn().mockResolvedValue(undefined)
-    vi.mocked(getSshPtyProvider).mockReturnValue({
+    vi.mocked(ptyIpc.getSshPtyProvider).mockReturnValue({
       attachForReconnect: mockAttach,
       dispose: vi.fn()
-    } as unknown as ReturnType<typeof getSshPtyProvider>)
+    } as unknown as ReturnType<typeof ptyIpc.getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-1', 'pty-2'])
 
     await session.reconnect(mockConn)
 
-    expect(mockAttach).toHaveBeenCalledWith('pty-1')
-    expect(mockAttach).toHaveBeenCalledWith('pty-2')
+    expect(ptyIpc.clearAgentHookStatusesForConnection).toHaveBeenCalledWith('target-1')
+    expect(mockAttach.mock.calls).toEqual([['pty-1'], ['pty-2']])
   })
 
   it('forwards reconnect replay after the attach attempt is still current', async () => {

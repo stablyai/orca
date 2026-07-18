@@ -1426,6 +1426,7 @@ describe('useIpcEvents updater integration', () => {
 
   it('clears stale remote PTYs when an SSH connection fully disconnects', async () => {
     const clearTabPtyId = vi.fn()
+    const removeAgentStatusByWorktree = vi.fn()
     const setSshConnectionState = vi.fn()
     const setSshTargetsMetadata = vi.fn()
     const clearRemovedSshTargetState = vi.fn()
@@ -1478,6 +1479,7 @@ describe('useIpcEvents updater integration', () => {
       clearRemoteDetectedAgents: vi.fn(),
       clearRemovedSshTargetState,
       clearTabPtyId,
+      removeAgentStatusByWorktree,
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
       worktreesByRepo: {
         'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
@@ -1664,6 +1666,8 @@ describe('useIpcEvents updater integration', () => {
     )
     expect(clearTabPtyId).toHaveBeenCalledWith('tab-1')
     expect(clearTabPtyId).not.toHaveBeenCalledWith('tab-2')
+    expect(removeAgentStatusByWorktree).toHaveBeenCalledOnce()
+    expect(removeAgentStatusByWorktree).toHaveBeenCalledWith('wt-1')
     expect(storeState.clearRemoteDetectedAgents).toHaveBeenCalledWith('conn-1')
 
     setSshConnectionState.mockClear()
@@ -4638,7 +4642,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   function buildWindowApi(args: {
     onSet: (cb: (data: AgentStatusSetData) => void) => () => void
-    onClear?: (cb: (data: { paneKey: string }) => void) => () => void
+    onClear?: (cb: (data: { paneKey: string; transient?: boolean }) => void) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
     remoteWorkspace?: Record<string, unknown>
@@ -5803,6 +5807,90 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     expect(removeAgentStatus).toHaveBeenCalledTimes(1)
     expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+  })
+
+  it('transient clear preserves pane identity and drops a pending status', async () => {
+    const setAgentStatus = vi.fn()
+    const removeAgentStatus = vi.fn()
+    const removeTransientAgentStatus = vi.fn()
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const onClearListenerRef: {
+      current: ((data: { paneKey: string; transient?: boolean }) => void) | null
+    } = { current: null }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      removeAgentStatus,
+      removeTransientAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        },
+        onClear: (cb) => {
+          onClearListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (
+      typeof onSetListenerRef.current !== 'function' ||
+      typeof onClearListenerRef.current !== 'function' ||
+      typeof subscribeListenerRef.current !== 'function'
+    ) {
+      throw new Error('Expected agent status listeners to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'status before tab hydration',
+      agentType: 'codex',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_700_000_000_000
+    })
+    expect(setAgentStatus).not.toHaveBeenCalled()
+
+    onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY, transient: true })
+    storeState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+    }
+    storeState.terminalLayoutsByTabId = {
+      'tab-future': { root: { type: 'leaf', leafId: FUTURE_LEAF_ID } }
+    }
+    subscribeListenerRef.current(storeState, storeState)
+
+    expect(removeTransientAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+    expect(removeAgentStatus).not.toHaveBeenCalled()
+    expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
   it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {

@@ -46,6 +46,8 @@ const {
   openCodeClearPtyMock,
   mimoCodeBuildPtyEnvMock,
   buildAgentHookEnvMock,
+  getAgentHookStatusSnapshotMock,
+  clearTransientAgentHookPaneStatusMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
   piBuildPtyEnvMock,
@@ -78,6 +80,8 @@ const {
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
+  getAgentHookStatusSnapshotMock: vi.fn(),
+  clearTransientAgentHookPaneStatusMock: vi.fn(),
   clearAgentHookPaneStateMock: vi.fn(),
   registerPaneKeyAliasMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
@@ -145,6 +149,8 @@ vi.mock('../mimo/hook-service', () => ({
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
     buildPtyEnv: buildAgentHookEnvMock,
+    getStatusSnapshot: getAgentHookStatusSnapshotMock,
+    clearTransientStatusEntry: clearTransientAgentHookPaneStatusMock,
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
     clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
@@ -193,11 +199,13 @@ import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-age
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
+  clearAgentHookStatusesForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
   getPtyRendererDeliveryDebugSnapshot,
   resetPtyRendererDeliveryDebug,
   getPtyIdForPaneKey,
+  getPtyIdsForConnection,
   hasPendingRendererSerializerForPaneKey,
   setPtyOwnership,
   setLocalPtyProvider,
@@ -331,6 +339,9 @@ describe('registerPtyHandlers', () => {
     mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
+    getAgentHookStatusSnapshotMock.mockReset()
+    getAgentHookStatusSnapshotMock.mockReturnValue([])
+    clearTransientAgentHookPaneStatusMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
     piBuildPtyEnvMock.mockReset()
@@ -10918,6 +10929,64 @@ describe('registerPtyHandlers', () => {
     clearProviderPtyState(second.id)
     expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
     expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
+  })
+
+  it('clears SSH agent statuses by host while preserving reattach identity', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const firstLeafId = '11111111-1111-4111-8111-111111111111'
+    const secondLeafId = '22222222-2222-4222-8222-222222222222'
+    const firstPaneKey = makePaneKey('tab-1', firstLeafId)
+    const secondPaneKey = makePaneKey('tab-2', secondLeafId)
+    const first = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: firstLeafId,
+      sessionId: 'ssh-test-pty-1',
+      env: { ORCA_PANE_KEY: firstPaneKey }
+    })) as { id: string }
+    const second = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-2',
+      tabId: 'tab-2',
+      leafId: secondLeafId,
+      sessionId: 'ssh-test-pty-2',
+      env: { ORCA_PANE_KEY: secondPaneKey }
+    })) as { id: string }
+    expect(first.id).not.toBe(second.id)
+    setPtyOwnership(first.id, 'ssh-1')
+    setPtyOwnership(second.id, 'ssh-2')
+    const firstHostPtyIds = getPtyIdsForConnection('ssh-1')
+    const secondHostPtyIds = getPtyIdsForConnection('ssh-2')
+    const restartEraPaneKey = makePaneKey('tab-restart', '33333333-3333-4333-8333-333333333333')
+    getAgentHookStatusSnapshotMock.mockReturnValue([
+      { paneKey: restartEraPaneKey, connectionId: 'ssh-1' },
+      { paneKey: secondPaneKey, connectionId: 'ssh-2' }
+    ])
+    clearTransientAgentHookPaneStatusMock.mockClear()
+
+    try {
+      clearAgentHookStatusesForConnection('ssh-1')
+      clearAgentHookStatusesForConnection('ssh-1')
+
+      expect(clearTransientAgentHookPaneStatusMock).toHaveBeenCalledTimes(4)
+      expect(clearTransientAgentHookPaneStatusMock).toHaveBeenCalledWith(firstPaneKey)
+      expect(clearTransientAgentHookPaneStatusMock).toHaveBeenCalledWith(restartEraPaneKey)
+      expect(clearTransientAgentHookPaneStatusMock).not.toHaveBeenCalledWith(secondPaneKey)
+      expect(getPtyIdsForConnection('ssh-1')).toEqual(firstHostPtyIds)
+      expect(getPtyIdsForConnection('ssh-2')).toEqual(secondHostPtyIds)
+      expect(firstHostPtyIds).toContain(first.id)
+      expect(secondHostPtyIds).toContain(second.id)
+      expect(getPtyIdForPaneKey(firstPaneKey)).toBe(first.id)
+      expect(getPtyIdForPaneKey(secondPaneKey)).toBe(second.id)
+    } finally {
+      clearProviderPtyState(first.id)
+      clearProviderPtyState(second.id)
+      deletePtyOwnership(first.id)
+      deletePtyOwnership(second.id)
+    }
   })
 
   it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {

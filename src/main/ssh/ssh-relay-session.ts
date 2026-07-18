@@ -39,6 +39,7 @@ import {
   getSshPtyProvider,
   getPtyIdsForConnection,
   clearPtyOwnershipForConnection,
+  clearAgentHookStatusesForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
   setPtyOwnership,
@@ -1011,6 +1012,10 @@ export class SshRelaySession {
 
     if (reason === 'shutdown') {
       clearPtyOwnershipForConnection(this.targetId)
+    } else {
+      // Why: detach hook notifications before clearing status so an in-flight
+      // relay event cannot recreate a ghost row during connection teardown.
+      clearAgentHookStatusesForConnection(this.targetId)
     }
 
     const ptyProvider = getSshPtyProvider(this.targetId)

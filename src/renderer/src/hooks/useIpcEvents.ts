@@ -2804,6 +2804,9 @@ export function useIpcEvents(): void {
             .map((w) => w.id)
         )
         for (const worktreeId of remoteWorktreeIds) {
+          // Why: connection loss is reversible, so purge only live status;
+          // replay on reconnect can repopulate the same pane identities.
+          useAppStore.getState().removeAgentStatusByWorktree(worktreeId)
           const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
           for (const tab of tabs) {
             if (tab.ptyId) {
@@ -3336,11 +3339,30 @@ export function useIpcEvents(): void {
       if (typeof data?.paneKey !== 'string') {
         return
       }
+      const clearedPaneKey = resolveAgentPaneAuthorityKey(data.paneKey)
+      // Why: a clear can arrive before tab hydration. Evict the queued push too,
+      // or the next store update can resurrect status that main already dropped.
+      for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
+        const pendingPaneKey = resolveAgentPaneAuthorityKey(
+          pendingAgentStatusEvents[index].data.paneKey
+        )
+        if (pendingPaneKey === clearedPaneKey) {
+          pendingAgentStatusEvents.splice(index, 1)
+        }
+      }
+      if (pendingAgentStatusEvents.length === 0 && pendingAgentStatusRetryTimer !== null) {
+        globalThis.clearTimeout(pendingAgentStatusRetryTimer)
+        pendingAgentStatusRetryTimer = null
+      }
       const store = useAppStore.getState()
-      if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
+      if (data.transient === true) {
+        store.removeTransientAgentStatus(clearedPaneKey)
         return
       }
-      store.removeAgentStatus(data.paneKey)
+      if (store.agentStatusByPaneKey[clearedPaneKey]?.state === 'done') {
+        return
+      }
+      store.removeAgentStatus(clearedPaneKey)
     })
     if (unsubscribeAgentStatusClear) {
       unsubs.push(unsubscribeAgentStatusClear)

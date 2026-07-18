@@ -4395,9 +4395,17 @@ const api = {
       ipcRenderer.on('agentStatus:set', listener)
       return () => ipcRenderer.removeListener('agentStatus:set', listener)
     },
-    onClear: (callback: (data: { paneKey: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { paneKey: string }) =>
-        callback(data)
+    /**
+     * Subscribes to main-process status removal events.
+     *
+     * @param callback Receives the pane identity and whether cleanup preserves reattach state.
+     * @returns A function that removes the IPC listener.
+     */
+    onClear: (callback: (data: { paneKey: string; transient?: boolean }) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { paneKey: string; transient?: boolean }
+      ) => callback(data)
       ipcRenderer.on('agentStatus:clear', listener)
       return () => ipcRenderer.removeListener('agentStatus:clear', listener)
     },

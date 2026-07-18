@@ -1197,11 +1197,14 @@ function openMainWindow(): BrowserWindow {
       }
     }
   )
-  agentHookServer.setPaneStatusClearListener((paneKey) => {
+  agentHookServer.setPaneStatusClearListener((paneKey, options) => {
     if (mainWindow?.isDestroyed()) {
       return
     }
-    mainWindow?.webContents.send('agentStatus:clear', { paneKey })
+    mainWindow?.webContents.send('agentStatus:clear', {
+      paneKey,
+      ...(options?.transient ? { transient: true } : {})
+    })
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (mainWindow?.isDestroyed()) {

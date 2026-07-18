@@ -1407,7 +1407,7 @@ describe('AgentHookServer listener replay', () => {
     expect(listener).toHaveBeenNthCalledWith(4, [])
   })
 
-  it('notifies pane-status-clear listener when pane teardown evicts a cached status', () => {
+  it('notifies pane-status-clear listener once for terminal and transient cleanup', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setPaneStatusClearListener(listener)
@@ -1424,8 +1424,21 @@ describe('AgentHookServer listener replay', () => {
     server.clearPaneState(PANE)
     server.clearPaneState(PANE)
 
-    expect(listener).toHaveBeenCalledTimes(1)
-    expect(listener).toHaveBeenCalledWith(PANE)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.clearTransientStatusEntry(PANE)
+    server.clearTransientStatusEntry(PANE)
+
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenNthCalledWith(1, PANE)
+    expect(listener).toHaveBeenNthCalledWith(2, PANE, { transient: true })
   })
 
   it('drops cached statuses and pane-scoped listener caches under one tab prefix', () => {

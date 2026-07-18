@@ -1169,6 +1169,38 @@ export function clearPtyOwnershipForConnection(connectionId: string): void {
   }
 }
 
+/**
+ * Clears transient agent statuses for one remote connection while retaining
+ * PTY ownership and pane mappings for a later reattach.
+ *
+ * @param connectionId SSH target identity whose visible statuses should be cleared.
+ */
+export function clearAgentHookStatusesForConnection(connectionId: string): void {
+  const paneKeys = new Set<string>()
+  for (const [ptyId, connId] of ptyOwnership) {
+    if (connId !== connectionId) {
+      continue
+    }
+    const paneKey = ptyPaneKey.get(ptyId)
+    if (paneKey && paneKeyPtyId.get(paneKey) === ptyId) {
+      paneKeys.add(paneKey)
+    }
+  }
+  // Why: restart-era reattach can rebuild PTY ownership before the in-memory
+  // pane map. Main stamps remote statuses with the target id, so include those
+  // entries without borrowing identity from another SSH host.
+  for (const entry of agentHookServer.getStatusSnapshot()) {
+    if (entry.connectionId === connectionId) {
+      paneKeys.add(entry.paneKey)
+    }
+  }
+  for (const paneKey of paneKeys) {
+    // Why: a relay disconnect does not kill the remote PTY. Drop only its
+    // live status so ownership, pane identity, and hook aliases can reattach.
+    agentHookServer.clearTransientStatusEntry(paneKey)
+  }
+}
+
 // ─── Provider-scoped PTY state cleanup ──────────────────────────────
 
 export function clearProviderPtyState(id: string): void {
