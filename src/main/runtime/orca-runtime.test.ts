@@ -47,7 +47,6 @@ import type { OrchestrationDb } from './orchestration/db'
 import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 import {
   appendNormalizedToTailBuffer,
-  appendRecentPtyOutput,
   appendRecentPtyPathCandidates,
   buildPreview,
   OrcaRuntimeService,
@@ -55,6 +54,7 @@ import {
   recentTerminalOutputIncludesPath,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
@@ -13058,11 +13058,20 @@ describe('OrcaRuntimeService', () => {
     const previous = 'old-output'.repeat(1000)
     const data = 'new-output'.repeat(1000)
     const outputLimit = 64 * 1024
-    const expected = `${previous}${data}`.slice(-outputLimit)
 
-    expect(appendRecentPtyOutput(previous, 'tail')).toBe(`${previous}tail`.slice(-outputLimit))
-    expect(appendRecentPtyOutput(previous, data)).toBe(expected)
-    expect(appendRecentPtyOutput(undefined, data)).toBe(data.slice(-outputLimit))
+    const smallTail = new RecentPtyOutputBuffer()
+    smallTail.append(previous)
+    smallTail.append('tail')
+    expect(smallTail.read()).toBe(`${previous}tail`.slice(-outputLimit))
+
+    const combined = new RecentPtyOutputBuffer()
+    combined.append(previous)
+    combined.append(data)
+    expect(combined.read()).toBe(`${previous}${data}`.slice(-outputLimit))
+
+    const fresh = new RecentPtyOutputBuffer()
+    fresh.append(data)
+    expect(fresh.read()).toBe(data.slice(-outputLimit))
   })
 
   it('keeps mobile-visible artifact paths in bounded PTY path candidates', () => {

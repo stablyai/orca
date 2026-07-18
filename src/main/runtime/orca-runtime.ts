@@ -345,6 +345,7 @@ import type {
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
+import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import {
   buildHeadlessTabGroupMove,
   buildHeadlessTabGroupSplit
@@ -1307,7 +1308,6 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
-const RECENT_PTY_OUTPUT_LIMIT = 64 * 1024
 const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
@@ -2270,7 +2270,7 @@ export class OrcaRuntimeService {
   >()
   // Why: startup draft paste can subscribe after the agent already emitted its
   // ready marker. Keep a bounded raw buffer so fast startup output is replayed.
-  private recentPtyOutputById = new Map<string, string>()
+  private recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
   // Why: mobile clients need to know when the desktop restores a terminal
   // from mobile-fit so they can update their UI. These listeners are
   // invoked from resizeForClient and onClientDisconnected/onPtyExit.
@@ -7893,10 +7893,12 @@ export class OrcaRuntimeService {
   }
 
   private recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void {
-    this.recentPtyOutputById.set(
-      ptyId,
-      appendRecentPtyOutput(this.recentPtyOutputById.get(ptyId), data)
-    )
+    let recentOutputBuffer = this.recentPtyOutputById.get(ptyId)
+    if (!recentOutputBuffer) {
+      recentOutputBuffer = new RecentPtyOutputBuffer()
+      this.recentPtyOutputById.set(ptyId, recentOutputBuffer)
+    }
+    recentOutputBuffer.append(data)
     this.recentPtyPathCandidatesById.set(
       ptyId,
       appendRecentPtyPathCandidates(this.recentPtyPathCandidatesById.get(ptyId), data)
@@ -7934,7 +7936,7 @@ export class OrcaRuntimeService {
 
   hasRecentTerminalOutputPath(handle: string, pathText: string, absolutePath: string): boolean {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    const recentOutput = ptyId ? this.recentPtyOutputById.get(ptyId) : null
+    const recentOutput = ptyId ? this.recentPtyOutputById.get(ptyId)?.read() : null
     if (recentOutput && recentTerminalOutputIncludesPath(recentOutput, pathText, absolutePath)) {
       return true
     }
@@ -15536,7 +15538,7 @@ export class OrcaRuntimeService {
       }
 
       unsubscribe = this.subscribeToTerminalData(ptyId, observeData)
-      const replay = this.recentPtyOutputById.get(ptyId)
+      const replay = this.recentPtyOutputById.get(ptyId)?.read()
       if (replay) {
         observeData(replay)
       }
@@ -26145,13 +26147,6 @@ function withTimeoutResult<T>(
       ok: false
     }
   )
-}
-
-export function appendRecentPtyOutput(previous: string | undefined, data: string): string {
-  if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
-    return data.slice(-RECENT_PTY_OUTPUT_LIMIT)
-  }
-  return `${previous ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
 }
 
 export function appendRecentPtyPathCandidates(
