@@ -90,7 +90,14 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
 
   window.on('restore', repaintAfterVisibilityTransition)
   window.on('show', repaintAfterVisibilityTransition)
-  window.on('focus', repaintAfterVisibilityTransition)
+  // Why: occlusion-uncover fires neither restore nor show; focus is the only
+  // signal. Invalidate only — the setSize jiggle would SIGWINCH every terminal
+  // on each Cmd+Tab.
+  window.on('focus', () => {
+    if (!window.isDestroyed()) {
+      window.webContents.invalidate()
+    }
+  })
   window.on('closed', clearDelayedRepaint)
 }
 

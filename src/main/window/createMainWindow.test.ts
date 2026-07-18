@@ -357,16 +357,18 @@ describe('createMainWindow', () => {
     vi.advanceTimersByTime(32)
     expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(2, 1200, 800)
 
-    // Focus 100ms later re-arms the debounced late repaint instead of stacking.
-    vi.advanceTimersByTime(68)
-    windowHandlers.get('focus')?.[0]?.()
-    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
-
-    vi.advanceTimersByTime(249)
-    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(217)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(1)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+
+    // Focus covers occlusion-uncover with invalidate only — no setSize jiggle
+    // that would resize terminals on every window focus.
+    const setSizeCalls = browserWindowInstance.setSize.mock.calls.length
+    windowHandlers.get('focus')?.[0]?.()
     expect(webContents.invalidate).toHaveBeenCalledTimes(3)
+    expect(browserWindowInstance.setSize.mock.calls.length).toBe(setSizeCalls)
   })
 
   it('supports all minus key variants for terminal zoom out', () => {
