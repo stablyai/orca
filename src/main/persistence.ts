@@ -2637,7 +2637,7 @@ export class Store {
   private writesFrozen = false
   // Why: hash of the plaintext state as of the last successful write. Saves
   // triggered by mutations that net out to identical state skip the full
-  // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
+  // multi-MB serialize + tmp write + rename. Hashing plaintext (not the
   // written payload) because encrypt() uses a random IV per call, so the
   // on-disk bytes differ even for identical state.
   private lastWrittenStateHash: string | null = null
@@ -3733,7 +3733,10 @@ export class Store {
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
-    return JSON.stringify(stateToSave, null, 2)
+    // Why compact: ~20-30% fewer bytes (state-shape dependent; measured 21% on
+    // real state) and less serialize time on the sync-flush path; all readers
+    // JSON.parse, so on-disk formatting is irrelevant.
+    return JSON.stringify(stateToSave)
   }
 
   // Why: async writes avoid blocking the main Electron thread on every

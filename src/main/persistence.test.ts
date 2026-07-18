@@ -5573,6 +5573,22 @@ describe('Store', () => {
     }
   })
 
+  it('writes compact JSON (no pretty-print indentation) that round-trips via JSON.parse', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'compact-repo', path: '/compact/repo' }))
+    store.updateUI({ sidebarWidth: 321 })
+    store.flush()
+
+    const raw = readFileSync(dataFile(), 'utf-8')
+    // Compact payload: no newline-plus-indentation from JSON.stringify(_, null, 2).
+    expect(raw).not.toMatch(/\n\s+"/)
+    const parsed = JSON.parse(raw) as PersistedState
+    expect(parsed.repos).toContainEqual(
+      expect.objectContaining({ id: 'compact-repo', path: '/compact/repo' })
+    )
+    expect(parsed.ui.sidebarWidth).toBe(321)
+  })
+
   it('migrates missing rightSidebarOpen from the legacy default setting', async () => {
     writeDataFile({
       schemaVersion: 1,
