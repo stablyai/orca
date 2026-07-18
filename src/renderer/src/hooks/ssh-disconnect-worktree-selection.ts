@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import type { Repo, Worktree } from '../../../shared/types'
 
 type SshDisconnectWorktreeState = {
@@ -17,6 +17,7 @@ export function getSshDisconnectWorktreeIds(
   state: SshDisconnectWorktreeState,
   targetId: string
 ): Set<string> {
+  const targetHostId = toSshExecutionHostId(targetId)
   const allHostIdsByRepo = new Map<string, Set<string>>()
   const targetHostIdsByRepo = new Map<string, Set<string>>()
   for (const repo of state.repos) {
@@ -24,7 +25,7 @@ export function getSshDisconnectWorktreeIds(
     const allHostIds = allHostIdsByRepo.get(repo.id) ?? new Set<string>()
     allHostIds.add(hostId)
     allHostIdsByRepo.set(repo.id, allHostIds)
-    if (repo.connectionId === targetId) {
+    if (hostId === targetHostId) {
       const targetHostIds = targetHostIdsByRepo.get(repo.id) ?? new Set<string>()
       targetHostIds.add(hostId)
       targetHostIdsByRepo.set(repo.id, targetHostIds)
