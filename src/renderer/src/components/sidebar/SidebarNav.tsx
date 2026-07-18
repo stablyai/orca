@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, CalendarClock, Globe, Search, Smartphone } from 'lucide-react'
+import { Bell, CalendarClock, Globe, Search, Smartphone, SquareTerminal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,9 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
   const activePinnedWebPanelId = useAppStore((s) => s.activePinnedWebPanelId)
   const pinnedWebPanels = useAppStore((s) => s.settings?.pinnedWebPanels)
+  const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
+  const activePinnedTerminalPanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
+  const pinnedTerminalPanels = useAppStore((s) => s.settings?.pinnedTerminalPanels)
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
@@ -181,6 +184,33 @@ const SidebarNav = React.memo(function SidebarNav() {
             )}
           >
             <Globe
+              className={cn(
+                'size-4 shrink-0',
+                !panelActive && 'text-worktree-sidebar-foreground/30'
+              )}
+              strokeWidth={panelActive ? 2.25 : 1.75}
+            />
+            <span className="min-w-0 flex-1 truncate">{panel.title}</span>
+          </button>
+        )
+      })}
+      {(pinnedTerminalPanels ?? []).map((panel) => {
+        const panelActive =
+          activeView === 'terminal-panel' && activePinnedTerminalPanelId === panel.id
+        return (
+          <button
+            key={panel.id}
+            type="button"
+            onClick={() => openPinnedTerminalPanelPage(panel.id)}
+            aria-current={panelActive ? 'page' : undefined}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+              panelActive
+                ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+            )}
+          >
+            <SquareTerminal
               className={cn(
                 'size-4 shrink-0',
                 !panelActive && 'text-worktree-sidebar-foreground/30'

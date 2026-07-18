@@ -316,6 +316,9 @@ const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityP
 const Settings = lazy(() => import('./components/settings/Settings'))
 const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const PinnedWebPanelPage = lazy(() => import('./components/pinned-web-panels/PinnedWebPanelPage'))
+const PinnedTerminalPanelPage = lazy(
+  () => import('./components/pinned-terminal-panels/PinnedTerminalPanelPage')
+)
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
@@ -478,6 +481,9 @@ function App(): React.JSX.Element {
   // Why: gates the always-mounted panel host so profiles without pinned
   // panels never fetch its lazy chunk.
   const hasPinnedWebPanels = useAppStore((s) => (s.settings?.pinnedWebPanels?.length ?? 0) > 0)
+  const hasPinnedTerminalPanels = useAppStore(
+    (s) => (s.settings?.pinnedTerminalPanels?.length ?? 0) > 0
+  )
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
@@ -2459,6 +2465,7 @@ function App(): React.JSX.Element {
                                   webviews must survive view switches, so the
                                   page hides itself instead of unmounting. */}
                               {hasPinnedWebPanels ? <PinnedWebPanelPage /> : null}
+                              {hasPinnedTerminalPanels ? <PinnedTerminalPanelPage /> : null}
                               {activeView === 'terminal' &&
                               creationLayoutActive &&
                               activePendingCreationId ? (

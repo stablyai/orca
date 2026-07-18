@@ -2762,6 +2762,10 @@ export type GlobalSettings = {
    *  first-class sidebar entries hosting persistent webviews. Optional for
    *  profiles saved before this setting existed; readers default to none. */
   pinnedWebPanels?: PinnedWebPanel[]
+  /** User-pinned terminal observability panels (nvtop, btop, watch …) surfaced
+   *  as sidebar entries hosting persistent PTYs. Optional for profiles saved
+   *  before this setting existed; readers default to none. */
+  pinnedTerminalPanels?: PinnedTerminalPanel[]
   /** Where new Floating Workspace terminal tabs start. Empty or '~' means
    *  the user's home directory; markdown notes use Orca's app-owned
    *  floating workspace under Electron userData. */
@@ -3322,6 +3326,17 @@ export type PinnedWebPanel = {
   url: string
 }
 
+/** A user-configured observability command (nvtop, btop, watch …) pinned to
+ *  the left sidebar as a persistent terminal. Remote hosts are expressed in
+ *  the command itself (`ssh node-b nvtop`) — no separate host field. */
+export type PinnedTerminalPanel = {
+  id: string
+  title: string
+  /** Sanitized by normalizePinnedTerminalPanels on every write: trimmed,
+   *  length-capped, control characters rejected. */
+  command: string
+}
+
 /** The active top-level section shown in the main content area. */
 export type TopLevelView =
   | 'terminal'
@@ -3333,6 +3348,7 @@ export type TopLevelView =
   | 'skills'
   | 'mobile'
   | 'web-panel'
+  | 'terminal-panel'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

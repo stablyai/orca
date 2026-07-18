@@ -21,6 +21,7 @@ import {
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import { getPinnedWebPanelsEntry, PinnedWebPanelsSetting } from './PinnedWebPanelsSetting'
+import { PinnedTerminalPanelsSearchableSetting } from './PinnedTerminalPanelsSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
@@ -139,6 +140,12 @@ export function AppearanceWindowSidebarSection({
           />
           <PinnedWebPanelsSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
+
+        <PinnedTerminalPanelsSearchableSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          forceVisible={forceVisiblePrimary}
+        />
 
         <SearchableSetting
           title={statusBarTitle}

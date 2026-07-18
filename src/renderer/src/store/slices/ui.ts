@@ -513,7 +513,8 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   space: true,
   skills: true,
   mobile: true,
-  'web-panel': true
+  'web-panel': true,
+  'terminal-panel': true
 }
 const KNOWN_TOP_LEVEL_VIEWS = new Set<string>(Object.keys(TOP_LEVEL_VIEW_LOOKUP))
 
@@ -534,7 +535,7 @@ function sanitizeHydratedActiveView(
   }
   // Why: the active panel id is not persisted, so a restored 'web-panel' view
   // would render an empty page; land on the terminal instead.
-  if (value === 'web-panel') {
+  if (value === 'web-panel' || value === 'terminal-panel') {
     return 'terminal'
   }
   return value as TopLevelView
@@ -646,6 +647,11 @@ export type UISlice = {
   activePinnedWebPanelId: string | null
   openPinnedWebPanelPage: (panelId: string) => void
   closePinnedWebPanelPage: () => void
+  previousViewBeforeTerminalPanel: Exclude<TopLevelView, 'terminal-panel'>
+  /** Which pinned terminal panel the 'terminal-panel' view is showing. */
+  activePinnedTerminalPanelId: string | null
+  openPinnedTerminalPanelPage: (panelId: string) => void
+  closePinnedTerminalPanelPage: () => void
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -1218,6 +1224,22 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeWebPanel,
       activePinnedWebPanelId: null
+    })),
+  previousViewBeforeTerminalPanel: 'terminal',
+  activePinnedTerminalPanelId: null,
+  openPinnedTerminalPanelPage: (panelId) =>
+    set((state) => ({
+      activeView: 'terminal-panel',
+      activePinnedTerminalPanelId: panelId,
+      previousViewBeforeTerminalPanel:
+        state.activeView === 'terminal-panel'
+          ? state.previousViewBeforeTerminalPanel
+          : state.activeView
+    })),
+  closePinnedTerminalPanelPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeTerminalPanel,
+      activePinnedTerminalPanelId: null
     })),
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
