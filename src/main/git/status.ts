@@ -1054,10 +1054,27 @@ export async function resolveGitDir(worktreePath: string): Promise<string> {
       return path.resolve(worktreePath, match[1])
     }
   } catch {
-    // `.git` is likely a directory in a non-worktree checkout.
+    // `.git` is likely a directory in a non-worktree checkout — or absent
+    // for a bare repo, whose git dir is the path itself.
+    if (await isBareGitDirRoot(worktreePath)) {
+      return worktreePath
+    }
   }
 
   return dotGitPath
+}
+
+async function isBareGitDirRoot(worktreePath: string): Promise<boolean> {
+  try {
+    const [headStat, objectsStat, refsStat] = await Promise.all([
+      stat(path.join(worktreePath, 'HEAD')),
+      stat(path.join(worktreePath, 'objects')),
+      stat(path.join(worktreePath, 'refs'))
+    ])
+    return headStat.isFile() && objectsStat.isDirectory() && refsStat.isDirectory()
+  } catch {
+    return false
+  }
 }
 
 /**
