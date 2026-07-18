@@ -10,8 +10,7 @@ const {
   writeFileSyncMock,
   spawnMock,
   resolveAgentForegroundProcessMock,
-  captureDescendantSnapshotMock,
-  terminateDescendantSnapshotMock
+  killWithDescendantSweepMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -20,8 +19,7 @@ const {
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
-  captureDescendantSnapshotMock: vi.fn(),
-  terminateDescendantSnapshotMock: vi.fn()
+  killWithDescendantSweepMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -45,8 +43,7 @@ vi.mock('node-pty', () => ({
 }))
 
 vi.mock('../pty-descendant-termination', () => ({
-  captureDescendantSnapshot: captureDescendantSnapshotMock,
-  terminateDescendantSnapshot: terminateDescendantSnapshotMock
+  killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
@@ -136,9 +133,10 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
-    captureDescendantSnapshotMock.mockReset()
-    captureDescendantSnapshotMock.mockResolvedValue(null)
-    terminateDescendantSnapshotMock.mockReset()
+    killWithDescendantSweepMock.mockReset()
+    killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) =>
+      killRoot()
+    )
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => ({
@@ -1242,12 +1240,13 @@ describe('LocalPtyProvider', () => {
     })
 
     it('waits for an in-flight agent shutdown before reusing the same session id', async () => {
-      let resolveSnapshot!: (value: null) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise<null>((resolve) => {
-          resolveSnapshot = resolve
+      let resolveSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+        await new Promise<void>((resolve) => {
+          resolveSweep = resolve
         })
-      )
+        killRoot()
+      })
       const spawnArgs = {
         cols: 80,
         rows: 24,
@@ -1262,19 +1261,20 @@ describe('LocalPtyProvider', () => {
       await Promise.resolve()
       expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 1)
 
-      resolveSnapshot(null)
+      resolveSweep()
       await shutdown
       await respawn
       expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 2)
     })
 
     it('coalesces duplicate shutdown while descendant capture is pending', async () => {
-      let resolveSnapshot!: (value: null) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise<null>((resolve) => {
-          resolveSnapshot = resolve
+      let resolveSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(async (_pid: number, killRoot: () => void) => {
+        await new Promise<void>((resolve) => {
+          resolveSweep = resolve
         })
-      )
+        killRoot()
+      })
       const { id } = await provider.spawn({
         cols: 80,
         rows: 24,
@@ -1283,22 +1283,23 @@ describe('LocalPtyProvider', () => {
 
       const first = provider.shutdown(id, { immediate: true })
       const second = provider.shutdown(id, { immediate: true })
-      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
-      resolveSnapshot(null)
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
+      resolveSweep()
       await Promise.all([first, second])
-      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
     })
 
     it('does not signal a captured tree after the tracked root exits naturally', async () => {
-      let resolveSnapshot!: (value: {
-        rootPgid: number
-        descendants: []
-        capturedAtMs: number
-      }) => void
-      captureDescendantSnapshotMock.mockReturnValue(
-        new Promise((resolve) => {
-          resolveSnapshot = resolve
-        })
+      let resolveSweep!: () => void
+      killWithDescendantSweepMock.mockImplementation(
+        async (_pid: number, killRoot: () => void, deps: { ownsRoot?: () => boolean }) => {
+          await new Promise<void>((resolve) => {
+            resolveSweep = resolve
+          })
+          if (deps.ownsRoot?.()) {
+            killRoot()
+          }
+        }
       )
       const { id } = await provider.spawn({
         cols: 80,
@@ -1308,10 +1309,10 @@ describe('LocalPtyProvider', () => {
 
       const shutdown = provider.shutdown(id, { immediate: true })
       exitCb?.({ exitCode: 0 })
-      resolveSnapshot({ rootPgid: mockProc.pid, descendants: [], capturedAtMs: Date.now() })
+      resolveSweep()
       await shutdown
 
-      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
     })
   })
 

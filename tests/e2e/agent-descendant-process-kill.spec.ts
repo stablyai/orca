@@ -19,10 +19,14 @@ function isProcessAlive(pid: number): boolean {
 // token is literally `claude` so PTY spawn recognition marks the session as an
 // agent; tab close → pty.kill routing is already covered by
 // terminal-parked-close-retirement.spec.ts, so this spec drives pty.kill.
-test('killing an agent PTY terminates its detached-pgid descendants', async ({ orcaPage }) => {
-  test.skip(process.platform === 'win32', 'descendant tree-kill is POSIX-only for now')
-
+test('killing an agent PTY terminates its detached-pgid descendants', async ({
+  orcaPage,
+  registerPostElectronShutdownCleanup
+}) => {
   const stage = mkdtempSync(join(tmpdir(), 'orca-agent-descendant-'))
+  registerPostElectronShutdownCleanup(async () => {
+    rmSync(stage, { recursive: true, force: true })
+  })
   const markerPath = join(stage, 'detached-child.pid')
   const spawnerPath = join(stage, 'spawn-detached.cjs')
   writeFileSync(
@@ -31,7 +35,7 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
       "const { spawn } = require('node:child_process')",
       // detached:true → setsid → own pgid/session, exactly the topology of an
       // agent CLI's tool subprocess that a dying shell's SIGHUP cannot reach.
-      "const child = spawn('sleep', ['31337'], { detached: true, stdio: 'ignore' })",
+      "const child = process.platform === 'win32' ? spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' }) : spawn('sleep', ['31337'], { detached: true, stdio: 'ignore' })",
       'child.unref()',
       "require('node:fs').writeFileSync(process.argv[2], String(child.pid))",
       // Stay alive like a real agent at its prompt: the detached child's ppid
@@ -41,9 +45,13 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
       ''
     ].join('\n')
   )
-  const fakeAgentPath = join(stage, 'claude')
-  writeFileSync(fakeAgentPath, `#!/bin/sh\nexec "${process.execPath}" "${spawnerPath}" "$1"\n`)
-  chmodSync(fakeAgentPath, 0o755)
+  const fakeAgentPath = join(stage, process.platform === 'win32' ? 'claude.cmd' : 'claude')
+  if (process.platform === 'win32') {
+    writeFileSync(fakeAgentPath, `@echo off\r\n"${process.execPath}" "${spawnerPath}" "%~1"\r\n`)
+  } else {
+    writeFileSync(fakeAgentPath, `#!/bin/sh\nexec "${process.execPath}" "${spawnerPath}" "$1"\n`)
+    chmodSync(fakeAgentPath, 0o755)
+  }
 
   let detachedChildPid = 0
   try {
@@ -51,18 +59,27 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
     const worktreeId = await waitForActiveWorktree(orcaPage)
 
     const ptyId = await orcaPage.evaluate(
-      async ({ command, cwd, worktreeId: wt }) => {
+      async ({ command, cwd, shellOverride, worktreeId: wt }) => {
         const result = await window.api.pty.spawn({
           cols: 120,
           rows: 40,
           cwd,
           command,
           launchAgent: 'claude',
+          ...(shellOverride ? { shellOverride } : {}),
           worktreeId: wt
         })
         return result.id
       },
-      { command: `'${fakeAgentPath}' '${markerPath}'`, cwd: stage, worktreeId }
+      {
+        ...(process.platform === 'win32' ? { shellOverride: 'cmd.exe' } : {}),
+        command:
+          process.platform === 'win32'
+            ? `"${fakeAgentPath}" "${markerPath}"`
+            : `'${fakeAgentPath}' '${markerPath}'`,
+        cwd: stage,
+        worktreeId
+      }
     )
     expect(ptyId).toBeTruthy()
 
@@ -92,6 +109,5 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
         /* already gone */
       }
     }
-    rmSync(stage, { recursive: true, force: true })
   }
 })

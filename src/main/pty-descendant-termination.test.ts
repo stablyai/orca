@@ -52,7 +52,11 @@ function snapshot(
   rootPgid: number | null = 10,
   capturedAtMs = CAPTURED_AT_MS
 ) {
-  return { rootPgid, descendants, capturedAtMs }
+  return { platform: 'posix' as const, rootPgid, descendants, capturedAtMs }
+}
+
+function windowsDescendants(...pids: number[]) {
+  return new Set(pids)
 }
 
 describe('parseProcessTable', () => {
@@ -115,10 +119,56 @@ describe('captureDescendantSnapshot', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('is a null no-op on Windows', async () => {
-    const readTable = vi.fn()
-    expect(await captureDescendantSnapshot(10, { readTable, platform: 'win32' })).toBeNull()
-    expect(readTable).not.toHaveBeenCalled()
+  it('captures Windows ConPTY members without the root', async () => {
+    const readWindowsProcessIds = vi.fn().mockResolvedValue(new Set([10, 20, 30]))
+    await expect(
+      captureDescendantSnapshot(10, {
+        platform: 'win32',
+        readWindowsDescendantPids: vi.fn().mockResolvedValue(null),
+        readWindowsProcessIds
+      })
+    ).resolves.toMatchObject({ platform: 'win32', rootPid: 10, descendants: [20, 30] })
+    expect(readWindowsProcessIds).toHaveBeenCalledWith(10)
+  })
+
+  it('captures Windows detached descendants from the live parent chain', async () => {
+    await expect(
+      captureDescendantSnapshot(10, {
+        platform: 'win32',
+        readWindowsDescendantPids: vi.fn().mockResolvedValue(windowsDescendants(20, 30)),
+        readWindowsProcessIds: vi.fn().mockResolvedValue(null)
+      })
+    ).resolves.toMatchObject({ platform: 'win32', rootPid: 10, descendants: [20, 30] })
+  })
+
+  it('unions Windows detached descendants with ConPTY members', async () => {
+    await expect(
+      captureDescendantSnapshot(10, {
+        platform: 'win32',
+        readWindowsDescendantPids: vi.fn().mockResolvedValue(windowsDescendants(20, 30)),
+        readWindowsProcessIds: vi.fn().mockResolvedValue(new Set([10, 30, 40]))
+      })
+    ).resolves.toMatchObject({ platform: 'win32', rootPid: 10, descendants: [20, 30, 40] })
+  })
+
+  it('degrades to null when both Windows snapshot sources are unavailable', async () => {
+    await expect(
+      captureDescendantSnapshot(10, {
+        platform: 'win32',
+        readWindowsDescendantPids: vi.fn().mockResolvedValue(null),
+        readWindowsProcessIds: vi.fn().mockResolvedValue(null)
+      })
+    ).resolves.toBeNull()
+  })
+
+  it('degrades to the parent-chain snapshot when Windows membership contains only the root', async () => {
+    await expect(
+      captureDescendantSnapshot(10, {
+        platform: 'win32',
+        readWindowsDescendantPids: vi.fn().mockResolvedValue(windowsDescendants(20)),
+        readWindowsProcessIds: vi.fn().mockResolvedValue(new Set([10]))
+      })
+    ).resolves.toMatchObject({ platform: 'win32', rootPid: 10, descendants: [20] })
   })
 
   it('degrades to null when ps fails', async () => {
@@ -198,6 +248,15 @@ describe('terminateDescendantSnapshot', () => {
       [20, 'SIGTERM'],
       [30, 'SIGTERM']
     ])
+  })
+
+  it('kills Windows descendants immediately and leaves the root to the caller', () => {
+    const killWindowsProcess = vi.fn()
+    terminateDescendantSnapshot(
+      { platform: 'win32', rootPid: 10, descendants: [20, 30], capturedAtMs: CAPTURED_AT_MS },
+      { killWindowsProcess }
+    )
+    expect(killWindowsProcess.mock.calls).toEqual([[20], [30]])
   })
 
   it('SIGKILLs only identity-matched survivors after the grace window', async () => {
@@ -379,5 +438,23 @@ describe('killWithDescendantSweep', () => {
     expect(ownsRoot).toHaveBeenCalledOnce()
     expect(sendSignal).not.toHaveBeenCalled()
     expect(killRoot).toHaveBeenCalledOnce()
+  })
+
+  it('kills Windows descendants before closing the root', async () => {
+    const events: string[] = []
+    const readWindowsDescendantPids = vi.fn().mockResolvedValue(windowsDescendants(20))
+    const readWindowsProcessIds = vi.fn().mockResolvedValue(new Set([10, 30]))
+    const killWindowsProcess = vi.fn(() => events.push('descendant-kill'))
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    await killWithDescendantSweep(10, killRoot, {
+      platform: 'win32',
+      readWindowsDescendantPids,
+      readWindowsProcessIds,
+      killWindowsProcess
+    })
+
+    expect(killWindowsProcess.mock.calls).toEqual([[20], [30]])
+    expect(events).toEqual(['descendant-kill', 'descendant-kill', 'root-kill'])
   })
 })

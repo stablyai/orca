@@ -55,10 +55,7 @@ import { resolveAgentForegroundProcessWithAvailability } from './agent-foregroun
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import {
-  captureDescendantSnapshot,
-  terminateDescendantSnapshot
-} from '../pty-descendant-termination'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -1075,19 +1072,25 @@ export class LocalPtyProvider implements IPtyProvider {
     operation: PtyShutdownOperation
   ): Promise<void> {
     const physicalExit = ptyPhysicalExits.get(id)
-    // Why: the snapshot must precede any signal — once the shell dies,
-    // surviving descendants reparent to pid 1 and a ppid walk can't find them.
-    const descendants = ptyAgentSessionIds.has(id)
-      ? await captureDescendantSnapshot(proc.pid)
-      : null
-    // Why: a natural exit can race the snapshot. Never signal descendants or
-    // a root PID after this exact PTY has lost ownership.
-    if (ptyProcesses.get(id) === proc) {
-      if (descendants) {
-        terminateDescendantSnapshot(descendants)
-      }
-      // Cancel startup delivery now, but preserve the exit listener and all
-      // ownership maps until node-pty reports the physical process exit.
+    if (ptyAgentSessionIds.has(id)) {
+      await killWithDescendantSweep(
+        proc.pid,
+        () => {
+          if (ptyProcesses.get(id) !== proc) {
+            return
+          }
+          // Cancel startup delivery now, but preserve the exit listener and all
+          // ownership maps until node-pty reports the physical process exit.
+          runPtyCleanup(id)
+          operation.rootSignalled = true
+          this.requestTrackedPtyShutdown(id, proc, operation.immediate)
+        },
+        {
+          ownsRoot: () => ptyProcesses.get(id) === proc,
+          readWindowsProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+        }
+      )
+    } else if (ptyProcesses.get(id) === proc) {
       runPtyCleanup(id)
       operation.rootSignalled = true
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)

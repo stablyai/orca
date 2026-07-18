@@ -1,4 +1,6 @@
 import { execFile } from 'node:child_process'
+import { readWindowsConptyProcessIds } from './providers/windows-conpty-process-membership'
+import { queryWindowsProcessDescendants } from './providers/windows-foreground-process-rows'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
@@ -15,13 +17,23 @@ export type ProcessTableRow = {
   startedAt: string
 }
 
-export type DescendantSnapshot = {
+export type PosixDescendantSnapshot = {
+  platform: 'posix'
   rootPgid: number | null
   descendants: ProcessTableRow[]
   /** Wall-clock boundary for deciding whether ps's second-resolution lstart
    *  can safely distinguish this process from a later PID reuse. */
   capturedAtMs: number
 }
+
+export type WindowsDescendantSnapshot = {
+  platform: 'win32'
+  rootPid: number
+  descendants: number[]
+  capturedAtMs: number
+}
+
+export type DescendantSnapshot = PosixDescendantSnapshot | WindowsDescendantSnapshot
 
 export type ProcessTableCapture = {
   rows: ProcessTableRow[]
@@ -147,7 +159,7 @@ export function collectDescendantRows(
   rootPid: number,
   table: ProcessTableRow[],
   capturedAtMs = Date.now()
-): DescendantSnapshot {
+): PosixDescendantSnapshot {
   const childrenByPpid = new Map<number, ProcessTableRow[]>()
   let rootRow: ProcessTableRow | null = null
   for (const row of table) {
@@ -178,20 +190,29 @@ export function collectDescendantRows(
       queue.push(child.pid)
     }
   }
-  return { rootPgid: rootRow?.pgid ?? null, descendants, capturedAtMs }
+  return { platform: 'posix', rootPgid: rootRow?.pgid ?? null, descendants, capturedAtMs }
 }
 
 type SnapshotDeps = {
   readTable?: ProcessTableReader
+  readWindowsProcessIds?: (rootPid: number) => Promise<ReadonlySet<number> | null>
+  readWindowsDescendantPids?: (rootPid: number) => Promise<ReadonlySet<number> | null>
   platform?: NodeJS.Platform
   timeoutMs?: number
+}
+
+async function readWindowsDetachedDescendantPids(
+  rootPid: number
+): Promise<ReadonlySet<number> | null> {
+  const descendants = await queryWindowsProcessDescendants(rootPid, { fresh: true })
+  return descendants ? new Set(descendants.map((candidate) => candidate.pid)) : null
 }
 
 /**
  * Snapshots a PTY root's live descendant tree. Must run BEFORE the root is
  * signalled: once the root dies, surviving descendants reparent to pid 1 and
  * can no longer be found by a ppid walk. Resolves null (never rejects) on
- * Windows, ps failure, or timeout — callers then degrade to today's
+ * ps failure, or timeout; callers then degrade to today's
  * shell-only kill.
  */
 export async function captureDescendantSnapshot(
@@ -199,8 +220,35 @@ export async function captureDescendantSnapshot(
   deps: SnapshotDeps = {}
 ): Promise<DescendantSnapshot | null> {
   const platform = deps.platform ?? process.platform
-  if (platform === 'win32' || !Number.isInteger(rootPid) || rootPid <= 0) {
+  if (!Number.isInteger(rootPid) || rootPid <= 0) {
     return null
+  }
+  if (platform === 'win32') {
+    const descendantPids = new Set<number>()
+    try {
+      for (const pid of (await (
+        deps.readWindowsDescendantPids ?? readWindowsDetachedDescendantPids
+      )(rootPid)) ?? []) {
+        descendantPids.add(pid)
+      }
+    } catch {
+      /* degrade to the console-membership snapshot */
+    }
+    try {
+      const members = await (deps.readWindowsProcessIds ?? readWindowsConptyProcessIds)(rootPid)
+      if (members?.has(rootPid)) {
+        for (const pid of members) {
+          if (pid !== rootPid) {
+            descendantPids.add(pid)
+          }
+        }
+      }
+    } catch {
+      /* degrade to the parent-chain snapshot */
+    }
+    return descendantPids.size > 0
+      ? { platform: 'win32', rootPid, descendants: [...descendantPids], capturedAtMs: Date.now() }
+      : null
   }
   const readTable = deps.readTable ?? readProcessTable
   const timeoutMs = deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
@@ -247,6 +295,7 @@ function defaultSendSignal(pid: number, signal: NodeJS.Signals): void {
 type TerminateDeps = {
   readTable?: ProcessTableReader
   sendSignal?: SignalSender
+  killWindowsProcess?: (pid: number) => void
   graceMs?: number
   timeoutMs?: number
 }
@@ -271,6 +320,18 @@ export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
 ): void {
+  if (snapshot.platform === 'win32') {
+    const killWindowsProcess =
+      deps.killWindowsProcess ?? ((pid: number) => process.kill(pid, 'SIGKILL'))
+    for (const pid of snapshot.descendants) {
+      try {
+        killWindowsProcess(pid)
+      } catch {
+        /* already gone */
+      }
+    }
+    return
+  }
   const sendSignal = deps.sendSignal ?? defaultSendSignal
   const readTable = deps.readTable ?? readProcessTable
   for (const row of snapshot.descendants) {
