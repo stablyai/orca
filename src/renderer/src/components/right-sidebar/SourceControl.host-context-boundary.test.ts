@@ -68,9 +68,22 @@ describe('SourceControl host-context boundaries', () => {
       '// Why: reset to null so that effectiveBaseRef becomes falsy until the IPC',
       'const normalizedWorktreeBaseRef ='
     )
-    expect(baseRefSection).toContain('activeRepoId')
-    expect(baseRefSection).toContain('activeRepoRuntimeEnvironmentId')
-    expect(baseRefSection).not.toContain('[activeRepo,')
-    expect(baseRefSection).not.toContain('activeRepoSettings')
+    expect(baseRefSection).toContain(
+      'getRuntimeRepoBaseRefDefault(\n      { activeRuntimeEnvironmentId: activeRepoRuntimeEnvironmentId },\n      activeRepoId'
+    )
+    const dependencyBlock = sourceBetween(baseRefSection, '  }, [', '  ])')
+    const dependencyEntries = dependencyBlock
+      .split('\n')
+      .slice(1)
+      .map((line) => line.trim().replace(/,$/, ''))
+      .filter((line) => line.length > 0 && !line.startsWith('//'))
+    expect(dependencyEntries).toEqual([
+      'activeRepoConnectionId',
+      'activeRepoExecutionHostId',
+      'activeRepoId',
+      'activeRepoRuntimeEnvironmentId',
+      'isBranchVisible',
+      'isFolder'
+    ])
   })
 })
