@@ -51,6 +51,7 @@ async function withProcessPlatform<T>(
 }
 
 beforeEach(() => {
+  vi.resetModules()
   execFileMock.mockReset()
   execFileSyncMock.mockReset()
   resetProcessTableSnapshotForTests()
@@ -141,6 +142,51 @@ describe('resolveWindowsDefaultShell', () => {
       ['query', 'HKLM\\SOFTWARE\\OpenSSH', '/v', 'DefaultShell'],
       { encoding: 'utf8', timeout: 3000, windowsHide: true }
     )
+  })
+
+  it('treats malformed OpenSSH DefaultShell output as empty and preserves the fallback chain', async () => {
+    execFileSyncMock.mockReturnValue(
+      [
+        'HKEY_LOCAL_MACHINE\\SOFTWARE\\OpenSSH',
+        '    DefaultShellCommandOption    REG_SZ    /c'
+      ].join('\n')
+    )
+
+    const { readOpenSshDefaultShell } = await import('./pty-shell-utils')
+    const powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+    expect(readOpenSshDefaultShell()).toBe('')
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe',
+        readOpenSshDefaultShell
+      )
+    ).toBe(powershell)
+  })
+
+  it('treats reg.exe failures as empty and preserves the fallback chain', async () => {
+    execFileSyncMock.mockImplementation(() => {
+      throw new Error('reg.exe failed')
+    })
+
+    const { readOpenSshDefaultShell } = await import('./pty-shell-utils')
+    const powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+    expect(readOpenSshDefaultShell()).toBe('')
+    expect(
+      resolveWindowsDefaultShell(
+        {
+          SystemRoot: 'C:\\Windows',
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe'
+        },
+        (path) => path === powershell || path === 'C:\\Windows\\System32\\cmd.exe',
+        readOpenSshDefaultShell
+      )
+    ).toBe(powershell)
   })
 
   it('preserves the fallback chain for an invalid OpenSSH DefaultShell', () => {
