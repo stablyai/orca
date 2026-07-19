@@ -829,6 +829,8 @@ function SourceControlInner(): React.JSX.Element {
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const activeRepoId = activeRepo?.id ?? null
   const activeRepoPath = activeRepo?.path ?? null
+  const activeRepoConnectionId = activeRepo?.connectionId ?? null
+  const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
@@ -897,9 +899,20 @@ function SourceControlInner(): React.JSX.Element {
   // Why: git/file mutations and repo metadata requests belong to the repo
   // OWNER host, not the currently focused host in the sidebar.
   const activeRepoSettings = useMemo(
-    () => getRepoOwnerRoutedSettings(settings, activeRepo ?? null),
-    [activeRepo, settings]
+    () =>
+      getRepoOwnerRoutedSettings(
+        settings,
+        activeRepoId
+          ? {
+              id: activeRepoId,
+              connectionId: activeRepoConnectionId,
+              executionHostId: activeRepoExecutionHostId
+            }
+          : null
+      ),
+    [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, settings]
   )
+  const activeRepoRuntimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId ?? null
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -1246,7 +1259,7 @@ function SourceControlInner(): React.JSX.Element {
   const generateError =
     activeCommitMessageGenerationRecord?.error ?? generateErrors[activeWorktreeId ?? ''] ?? null
   const activeConnectionId = activeWorktreeId
-    ? (getConnectionId(activeWorktreeId) ?? activeRepo?.connectionId ?? null)
+    ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
@@ -1423,7 +1436,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder) {
+    if (!isBranchVisible || !activeRepoId || isFolder) {
       return
     }
 
@@ -1435,7 +1448,10 @@ function SourceControlInner(): React.JSX.Element {
     setDefaultBaseRef(null)
 
     let stale = false
-    void getRuntimeRepoBaseRefDefault(activeRepoSettings, activeRepo.id)
+    void getRuntimeRepoBaseRefDefault(
+      { activeRuntimeEnvironmentId: activeRepoRuntimeEnvironmentId },
+      activeRepoId
+    )
       .then((result) => {
         if (!stale) {
           // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
@@ -1457,7 +1473,16 @@ function SourceControlInner(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [activeRepo, activeRepoSettings, isBranchVisible, isFolder])
+  }, [
+    // Why: only repo/host ownership changes should reset the base; unrelated
+    // repo metadata churn must not indirectly restart eligibility's timeout.
+    activeRepoConnectionId,
+    activeRepoExecutionHostId,
+    activeRepoId,
+    activeRepoRuntimeEnvironmentId,
+    isBranchVisible,
+    isFolder
+  ])
 
   const normalizedWorktreeBaseRef = activeWorktree?.baseRef?.trim() || null
   const normalizedRepoBaseRef = activeRepo?.worktreeBaseRef?.trim() || null
@@ -3344,6 +3369,8 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [
     // Why: unrelated repo metadata replacement must not restart a hung probe's timeout.
+    activeRepoConnectionId,
+    activeRepoExecutionHostId,
     activeRepoId,
     activeRepoPath,
     branchName,

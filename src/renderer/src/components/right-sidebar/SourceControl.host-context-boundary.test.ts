@@ -51,4 +51,26 @@ describe('SourceControl host-context boundaries', () => {
     expect(requestContext).toContain('settings,')
     expect(requestContext).not.toContain('useAppStore.getState().settings')
   })
+
+  it('keeps eligibility base refreshes scoped to repo execution ownership', () => {
+    const ownerSettingsSection = sourceBetween(
+      SOURCE_CONTROL_SOURCE,
+      'const activeRepoSettings = useMemo(',
+      'const updateSettings = useAppStore'
+    )
+    expect(ownerSettingsSection).not.toContain('activeRepo ?? null')
+    expect(ownerSettingsSection).toContain(
+      '[activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, settings]'
+    )
+
+    const baseRefSection = sourceBetween(
+      SOURCE_CONTROL_SOURCE,
+      '// Why: reset to null so that effectiveBaseRef becomes falsy until the IPC',
+      'const normalizedWorktreeBaseRef ='
+    )
+    expect(baseRefSection).toContain('activeRepoId')
+    expect(baseRefSection).toContain('activeRepoRuntimeEnvironmentId')
+    expect(baseRefSection).not.toContain('[activeRepo,')
+    expect(baseRefSection).not.toContain('activeRepoSettings')
+  })
 })
