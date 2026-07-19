@@ -235,8 +235,9 @@ type WorkspaceRunTargetComboboxProps = {
 }
 
 type HostPathTooltipPosition = {
-  horizontal: { left: number } | { right: number }
+  left: number
   top: number
+  maxWidth: number
 }
 
 const HOST_PATH_TOOLTIP_DELAY_MS = 400
@@ -272,13 +273,13 @@ function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
         return
       }
       const rect = trigger.getBoundingClientRect()
-      const anchorRight = rect.left + rect.width / 2 > window.innerWidth / 2
-      // Why: always drop below the hovered path line for a consistent, predictable placement.
+      // Why: anchor directly under the hovered path line (left-aligned to it), and cap the width to
+      // the space remaining to the viewport edge so a long path wraps instead of flying off-screen.
+      const left = Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left)
       setPosition({
-        horizontal: anchorRight
-          ? { right: HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX }
-          : { left: Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left) },
-        top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX
+        left,
+        top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX,
+        maxWidth: window.innerWidth - left - HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX
       })
     }, HOST_PATH_TOOLTIP_DELAY_MS)
   }, [])
@@ -302,8 +303,8 @@ function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
               id={tooltipId}
               role="tooltip"
               data-slot="host-path-tooltip"
-              className="pointer-events-none fixed z-[100] w-max max-w-[calc(100vw-1rem)] break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
-              style={{ ...position.horizontal, top: position.top }}
+              className="pointer-events-none fixed z-[100] w-max break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
+              style={{ left: position.left, top: position.top, maxWidth: position.maxWidth }}
             >
               {path}
             </div>,
