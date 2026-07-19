@@ -187,7 +187,30 @@ describe('readNativeChatTranscript (claude)', () => {
     if (!('messages' in result)) {
       throw new Error('expected messages')
     }
+    expect(result.messages[0].role).toBe('reasoning')
     expect(result.messages[0].blocks[0]).toEqual({ type: 'text', text: 'pondering' })
+  })
+
+  it('keeps mixed thinking-and-text assistant content on the assistant role', async () => {
+    const filePath = await writeFixture('orca-native-chat-claude-mixed-', [
+      {
+        type: 'assistant',
+        uuid: 'a-mixed',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'pondering' },
+            { type: 'text', text: 'the answer' }
+          ]
+        }
+      }
+    ])
+    const result = await readNativeChatTranscript('claude', 'sess', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected messages')
+    }
+    expect(result.messages[0].role).toBe('assistant')
   })
 })
 
