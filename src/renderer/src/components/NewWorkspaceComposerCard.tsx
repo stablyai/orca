@@ -224,6 +224,57 @@ function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
   return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
 }
 
+// Why: worktree paths overflow the truncated row, so hovering reveals the full path. We drive the
+// tooltip's open state by hand instead of using Radix's hover detection: inside this cmdk list, the
+// uncontrolled tooltip could flash open then wedge shut (Radix's shared pointer-transit state getting
+// stuck), never reopening. Controlled hover-intent — open after a delay, close after a short grace —
+// can always re-open on re-entry and debounces transient enter/leave thrash into a stable state.
+const HOST_PATH_TOOLTIP_OPEN_DELAY_MS = 400
+const HOST_PATH_TOOLTIP_CLOSE_GRACE_MS = 120
+
+function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
+  const [open, setOpen] = React.useState(false)
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const schedule = React.useCallback((next: boolean, delayMs: number): void => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+    }
+    timerRef.current = setTimeout(() => setOpen(next), delayMs)
+  }, [])
+
+  React.useEffect(
+    () => () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+      }
+    },
+    []
+  )
+
+  return (
+    <Tooltip open={open}>
+      <TooltipTrigger asChild>
+        <div
+          className="mt-0.5 truncate text-[11px] text-muted-foreground"
+          onPointerEnter={() => schedule(true, HOST_PATH_TOOLTIP_OPEN_DELAY_MS)}
+          onPointerLeave={() => schedule(false, HOST_PATH_TOOLTIP_CLOSE_GRACE_MS)}
+        >
+          {path}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        align="start"
+        sideOffset={4}
+        className="max-w-[min(520px,80vw)] px-2 py-1 text-[11px] font-normal break-all [&>span:has(svg)]:hidden"
+      >
+        {path}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 type WorkspaceRunTargetComboboxProps = {
   hostOptions: readonly ReadyProjectHostSetupOption[]
   hostValue: string | null
@@ -341,24 +392,7 @@ function WorkspaceRunTargetCombobox({
                 <Server className="size-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{option.label}</div>
-                  {/* Why: worktree paths overflow the truncated row. A controlled tooltip (not the
-                      native title, which won't reliably re-trigger between adjacent rows in Chromium)
-                      reveals the full path; styled compact + arrowless to read like an OS tooltip. */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        {option.path}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="bottom"
-                      align="start"
-                      sideOffset={4}
-                      className="max-w-[min(520px,80vw)] px-2 py-1 text-[11px] font-normal break-all [&>span:has(svg)]:hidden"
-                    >
-                      {option.path}
-                    </TooltipContent>
-                  </Tooltip>
+                  <HostPathTooltip path={option.path} />
                 </div>
               </CommandItem>
             ))}
