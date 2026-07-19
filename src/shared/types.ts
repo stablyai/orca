@@ -2762,6 +2762,10 @@ export type GlobalSettings = {
    *  first-class sidebar entries hosting persistent webviews. Optional for
    *  profiles saved before this setting existed; readers default to none. */
   pinnedWebPanels?: PinnedWebPanel[]
+  /** Collapsed state of the sidebar's "User Panels" disclosure that groups
+   *  the pinned web panels — in settings (not per-window UI state) so the
+   *  fold survives relaunch, matching the terminal-panel group folds. */
+  pinnedWebPanelsCollapsed?: boolean
   /** User-pinned terminal observability panels (nvtop, btop, watch …) surfaced
    *  as sidebar entries hosting persistent PTYs. Optional for profiles saved
    *  before this setting existed; readers default to none. */

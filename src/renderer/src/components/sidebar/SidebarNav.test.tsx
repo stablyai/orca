@@ -80,6 +80,7 @@ import {
   shouldShowSetupGuideEntry
 } from './SidebarNav'
 import SidebarNav from './SidebarNav'
+import SidebarSecondaryNav from './SidebarSecondaryNav'
 
 function gitRepo(): Repo {
   return {
@@ -143,7 +144,14 @@ async function renderSidebarNav(): Promise<HTMLDivElement> {
   const root = createRoot(container)
   mountedRoots.push(root)
   await act(async () => {
-    root.render(<SidebarNav />)
+    // Why: Automations/Agents moved below Projects into SidebarSecondaryNav;
+    // rendering the pair keeps these nav-entry assertions covering both rails.
+    root.render(
+      <>
+        <SidebarNav />
+        <SidebarSecondaryNav />
+      </>
+    )
   })
   return container
 }

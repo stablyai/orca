@@ -1,5 +1,5 @@
 import React from 'react'
-import { RotateCw, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RotateCw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -9,7 +9,10 @@ import { translate } from '@/i18n/i18n'
 import {
   destroyPinnedWebPanelWebview,
   ensurePinnedWebPanelWebview,
-  reloadPinnedWebPanelWebview
+  getPinnedWebPanelNavState,
+  navigatePinnedWebPanelWebview,
+  reloadPinnedWebPanelWebview,
+  subscribePinnedWebPanelNavState
 } from './pinned-web-panel-webview'
 
 const EMPTY_PANELS: readonly PinnedWebPanel[] = []
@@ -55,6 +58,11 @@ const PinnedWebPanelPage = React.memo(function PinnedWebPanelPage(): React.JSX.E
 
   const pageVisible = activeView === 'web-panel' && activePanelId !== null
   const activePanel = panels.find((panel) => panel.id === activePanelId)
+  // Why: dashboards without their own chrome can strand the user mid-flow —
+  // surface real back/forward controls driven by the guest's history state.
+  const navState = React.useSyncExternalStore(subscribePinnedWebPanelNavState, () =>
+    getPinnedWebPanelNavState(activePanelId)
+  )
 
   React.useEffect(() => {
     if (pageVisible && activePanelId !== null) {
@@ -92,6 +100,40 @@ const PinnedWebPanelPage = React.memo(function PinnedWebPanelPage(): React.JSX.E
   return (
     <div className={cn('min-h-0 flex-1 flex-col', pageVisible ? 'flex' : 'hidden')}>
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border px-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          disabled={!navState.canGoBack}
+          aria-label={translate(
+            'auto.components.pinned-web-panels.PinnedWebPanelPage.back',
+            'Go back'
+          )}
+          onClick={() => {
+            if (activePanelId !== null) {
+              navigatePinnedWebPanelWebview(activePanelId, 'back')
+            }
+          }}
+        >
+          <ArrowLeft className="size-3.5" strokeWidth={1.75} />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          disabled={!navState.canGoForward}
+          aria-label={translate(
+            'auto.components.pinned-web-panels.PinnedWebPanelPage.forward',
+            'Go forward'
+          )}
+          onClick={() => {
+            if (activePanelId !== null) {
+              navigatePinnedWebPanelWebview(activePanelId, 'forward')
+            }
+          }}
+        >
+          <ArrowRight className="size-3.5" strokeWidth={1.75} />
+        </Button>
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-tight">
           {activePanel?.title ?? ''}
         </span>

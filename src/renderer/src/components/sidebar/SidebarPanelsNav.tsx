@@ -63,7 +63,7 @@ function SortableWebPanelButton({
       onClick={() => onOpen(panel.id)}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+        'flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-left text-[13px] font-medium tracking-tight transition-colors',
         isDragging && 'relative z-10 opacity-80 shadow-md',
         active
           ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
@@ -241,6 +241,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
     [pinnedWebPanels, pinnedTerminalPanelsSetting, updateSettings]
   )
 
+  const webPanelsCollapsed = useAppStore((s) => s.settings?.pinnedWebPanelsCollapsed === true)
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
   if (!hasWebPanels && !hasTerminalPanels) {
@@ -254,19 +255,53 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="flex flex-col gap-0.5">
-          <SortableContext
-            items={(pinnedWebPanels ?? []).map((panel) => panel.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {(pinnedWebPanels ?? []).map((panel) => (
-              <SortableWebPanelButton
-                key={panel.id}
-                panel={panel}
-                active={activeView === 'web-panel' && activePinnedWebPanelId === panel.id}
-                onOpen={openPinnedWebPanelPage}
+          {hasWebPanels ? (
+            <button
+              type="button"
+              onClick={() => void updateSettings({ pinnedWebPanelsCollapsed: !webPanelsCollapsed })}
+              aria-expanded={!webPanelsCollapsed}
+              className={cn(
+                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
+                // Why: a collapsed fold hiding the active panel keeps accent
+                // styling so the current location stays discoverable.
+                webPanelsCollapsed &&
+                  (pinnedWebPanels ?? []).some(
+                    (panel) => activeView === 'web-panel' && activePinnedWebPanelId === panel.id
+                  )
+                  ? 'text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
+              )}
+            >
+              <ChevronRight
+                className={cn(
+                  'size-3 shrink-0 transition-transform',
+                  !webPanelsCollapsed && 'rotate-90'
+                )}
+                strokeWidth={2}
               />
-            ))}
-          </SortableContext>
+              <span className="min-w-0 flex-1 truncate">
+                {translate(
+                  'auto.components.sidebar.SidebarNav.pinnedPanelUserPanels',
+                  'User Panels'
+                )}
+              </span>
+            </button>
+          ) : null}
+          {webPanelsCollapsed ? null : (
+            <SortableContext
+              items={(pinnedWebPanels ?? []).map((panel) => panel.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {(pinnedWebPanels ?? []).map((panel) => (
+                <SortableWebPanelButton
+                  key={panel.id}
+                  panel={panel}
+                  active={activeView === 'web-panel' && activePinnedWebPanelId === panel.id}
+                  onOpen={openPinnedWebPanelPage}
+                />
+              ))}
+            </SortableContext>
+          )}
           <SortableContext
             items={groupedTerminalPanels
               .filter((section) => section.group === null)
