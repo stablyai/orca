@@ -1117,20 +1117,46 @@ export function useIpcEvents(): void {
     unsubs.push(runtimeClientEventsSync.stop)
     unsubs.push(runtimeProjectRefreshScheduler.stop)
 
+    // Why: each all-host refresh runs multi-step loaders whose interleaved
+    // set() calls write a host-merged snapshot last-writer-wins. A burst of
+    // repos:changed events would otherwise launch overlapping refreshes, and a
+    // run carrying a staler snapshot resolving later can drop a sibling host's
+    // repos/workspaces. Serialize them (lead + trailing coalesce) so only one
+    // runs at a time and the trailing run still captures the latest state.
+    let allHostRefreshInFlight = false
+    let allHostRefreshPending = false
+    const runAllHostRefresh = (): void => {
+      if (allHostRefreshInFlight) {
+        allHostRefreshPending = true
+        return
+      }
+      allHostRefreshInFlight = true
+      void (async () => {
+        try {
+          const state = useAppStore.getState()
+          await state.fetchReposForAllHosts()
+          await state.fetchProjectGroupsForAllHosts()
+          await state.fetchFolderWorkspacesForAllHosts()
+        } finally {
+          allHostRefreshInFlight = false
+          if (allHostRefreshPending) {
+            allHostRefreshPending = false
+            runAllHostRefresh()
+          }
+        }
+      })()
+    }
+
     unsubs.push(
       window.api.repos.onChanged(() => {
-        const state = useAppStore.getState()
         if (isRuntimeEnvironmentActive()) {
           // Why: the all-host sidebar includes local repos even when a runtime
           // is focused, so local store changes must refresh the local slice
           // without dropping the runtime-owned slices already shown.
-          void (async () => {
-            await state.fetchReposForAllHosts()
-            await state.fetchProjectGroupsForAllHosts()
-            await state.fetchFolderWorkspacesForAllHosts()
-          })()
+          runAllHostRefresh()
           return
         }
+        const state = useAppStore.getState()
         void state.fetchProjectGroups()
         void state.fetchFolderWorkspaces()
         void state.fetchRepos()
