@@ -250,6 +250,8 @@ function getLinuxDisplayServer(): 'wayland' | 'x11' | null {
 type AppRestartPrepOptions = {
   startedEventName: string
   abortedEventName: string
+  continueOnSaveFailure?: boolean
+  saveFailureLogPrefix?: string
 }
 
 function requestEditorHotExitBackup(): Promise<void> {
@@ -279,15 +281,20 @@ function requestEditorHotExitBackup(): Promise<void> {
 
 async function prepareRendererForAppRestart({
   startedEventName,
-  abortedEventName
+  abortedEventName,
+  continueOnSaveFailure,
+  saveFailureLogPrefix
 }: AppRestartPrepOptions): Promise<void> {
   window.dispatchEvent(new Event(startedEventName))
 
   try {
     await requestEditorHotExitBackup()
   } catch (error) {
-    window.dispatchEvent(new Event(abortedEventName))
-    throw error
+    if (!continueOnSaveFailure) {
+      window.dispatchEvent(new Event(abortedEventName))
+      throw error
+    }
+    console.warn(saveFailureLogPrefix ?? '[updater] Hot-exit backup failed; proceeding:', error)
   }
 
   // Dispatch beforeunload now so terminal buffers are captured while panes are
@@ -2763,9 +2770,15 @@ const api = {
     download: () => ipcRenderer.invoke('updater:download'),
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
+      // Why: update installs must proceed even when hot-exit backup fails;
+      // otherwise a downloaded update can get stuck behind hidden editor
+      // state. Manual app restart uses the same prep but aborts on failure.
       await prepareRendererForAppRestart({
         startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
+        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+        continueOnSaveFailure: true,
+        saveFailureLogPrefix:
+          '[updater] Hot-exit backup failed before quit; proceeding with install anyway:'
       })
       try {
         return await ipcRenderer.invoke('updater:quitAndInstall')
