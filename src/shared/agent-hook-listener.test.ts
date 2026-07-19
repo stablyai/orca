@@ -138,6 +138,37 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.agentType).toBe('claude')
   })
 
+  it('threads the configDir form field into the claude payload', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        configDir: '/home/dev/.claude-grok',
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hello' }
+      },
+      'production'
+    )
+    expect(event?.payload.configDir).toBe('/home/dev/.claude-grok')
+  })
+
+  it('keeps payloads without configDir unchanged (back-compat with installed scripts)', () => {
+    // Why: already-installed scripts do not post the field, and the updated
+    // script posts an EMPTY value for default installs — both must normalize
+    // to an absent configDir.
+    const bodyWithout = {
+      paneKey: PANE_KEY,
+      payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hello' }
+    }
+    expect(
+      normalizeHookPayload(state, 'claude', bodyWithout, 'production')?.payload.configDir
+    ).toBeUndefined()
+    expect(
+      normalizeHookPayload(state, 'claude', { ...bodyWithout, configDir: '' }, 'production')
+        ?.payload.configDir
+    ).toBeUndefined()
+  })
+
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
     const event = normalizeHookPayload(
       state,

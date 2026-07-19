@@ -19,6 +19,7 @@ import { isAbsolute, join } from 'node:path'
 
 import {
   AGENT_MODEL_MAX_LENGTH,
+  AGENT_STATUS_CONFIG_DIR_MAX_LENGTH,
   normalizeAgentStatusPayload,
   type AgentStatusState,
   type AgentSubagentSnapshot,
@@ -3911,6 +3912,13 @@ export function normalizeHookPayload(
   }
   const worktreeId = readStringField(record, 'worktreeId')
   const launchToken = readStringField(record, 'launchToken')
+  // Why: only the claude-shaped script posts this field; it carries the
+  // CLAUDE_CONFIG_DIR path (empty for default installs — readStringField
+  // collapses empty to undefined, so old scripts and default installs match).
+  const configDir =
+    source === 'claude'
+      ? readStringField(record, 'configDir')?.slice(0, AGENT_STATUS_CONFIG_DIR_MAX_LENGTH)
+      : undefined
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
   let promptInteractionKey: string | undefined
@@ -4079,7 +4087,7 @@ export function normalizeHookPayload(
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         ...(providerSession ? { providerSession } : {}),
         ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
-        payload: transportPayload
+        payload: configDir ? { ...transportPayload, configDir } : transportPayload
       }
     : null
 }

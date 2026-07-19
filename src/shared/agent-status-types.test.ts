@@ -11,6 +11,7 @@ import {
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
   AGENT_STATUS_STATES,
+  AGENT_STATUS_CONFIG_DIR_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
 
@@ -314,6 +315,25 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(result!.toolInput?.startsWith('src/index.ts ')).toBe(true)
     expect(result!.toolInput!.length).toBeLessThanOrEqual(AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
     expect(replaceSpy).not.toHaveBeenCalled()
+  })
+
+  it('round-trips configDir and drops an empty or absent value', () => {
+    // Why: configDir drives the "Claude · <flavor>" sidebar label; it must
+    // survive normalization (persist/hydrate + renderer rebuild both re-run
+    // this path) while an empty/absent field stays absent for back-compat.
+    const result = normalizeAgentStatusPayload({
+      state: 'working',
+      configDir: '/home/dev/.claude-grok'
+    })
+    expect(result!.configDir).toBe('/home/dev/.claude-grok')
+    expect(normalizeAgentStatusPayload({ state: 'working' })!.configDir).toBeUndefined()
+    expect(
+      normalizeAgentStatusPayload({ state: 'working', configDir: '  ' })!.configDir
+    ).toBeUndefined()
+    const oversized = `/home/dev/.claude-${'x'.repeat(1000)}`
+    expect(
+      normalizeAgentStatusPayload({ state: 'working', configDir: oversized })!.configDir!.length
+    ).toBeLessThanOrEqual(AGENT_STATUS_CONFIG_DIR_MAX_LENGTH)
   })
 
   it('bounds scanning when oversized single-line previews are mostly line breaks', () => {

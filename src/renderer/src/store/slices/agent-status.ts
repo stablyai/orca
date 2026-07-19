@@ -1876,7 +1876,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : payload.subagents,
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
-          // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
+          // Why: the non-default CLAUDE_CONFIG_DIR flavor is session identity —
+          // every hook post from that process carries it, so write-through.
+          ...(payload.configDir ? { configDir: payload.configDir } : {}),
+          // Why: `interrupted` is done-only; parsing clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted
         }
         generatedTitleEntry.current = entry

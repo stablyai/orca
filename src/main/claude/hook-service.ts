@@ -70,8 +70,10 @@ function getManagedScript(
       // Why: call the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls through to PTY env if missing.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: post via curl.exe, not PowerShell — Claude's launcher is already encoded PowerShell, so a PS post would double interpreter startups per hook.
-      buildWindowsAgentHookCurlPostCommand('claude'),
+      // Why: avoid a second PowerShell startup; configDir distinguishes alternate Claude configs without exposing credentials.
+      // Why: configDir identifies which CLAUDE_CONFIG_DIR flavor posted (path
+      // string only — never tokens); empty/absent means the default install.
+      buildWindowsAgentHookCurlPostCommand('claude', ['configDir=%CLAUDE_CONFIG_DIR%']),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
       ''
@@ -109,6 +111,10 @@ function getManagedScript(
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    // Why: identifies which CLAUDE_CONFIG_DIR flavor posted (path string only —
+    // never tokens). Empty for default installs and ignored by the server;
+    // pre-update scripts that omit the field behave identically.
+    '  --data-urlencode "configDir=${CLAUDE_CONFIG_DIR}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''

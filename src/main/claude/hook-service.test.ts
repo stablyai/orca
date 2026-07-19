@@ -352,6 +352,7 @@ describe('ClaudeHookService.install', () => {
         )
         expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
         expect(script).toContain('--data-urlencode "payload@-"')
+        expect(script).toContain('--data-urlencode "configDir=%CLAUDE_CONFIG_DIR%"')
         expect(script).toContain('/hook/claude')
         expect(script).not.toMatch(/Invoke-WebRequest/i)
       } finally {
@@ -404,6 +405,10 @@ describe('ClaudeHookService.installRemote', () => {
     expect(script).toContain('printf \'%s\' "$payload" | curl')
     expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    // Why: the configDir field labels which CLAUDE_CONFIG_DIR flavor posted —
+    // the path string only, never the hook token.
+    expect(script).toContain('--data-urlencode "configDir=${CLAUDE_CONFIG_DIR}"')
+    expect(script).not.toContain('configDir=${ORCA_AGENT_HOOK_TOKEN}')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
     // Why: no remote statusLine — this path serves SSH remotes and WSL guests, whose relay
     // listener doesn't route /statusline/claude and whose accounts aren't attributable locally.

@@ -3066,8 +3066,9 @@ export function useIpcEvents(): void {
         interactivePrompt: data.interactivePrompt,
         lastAssistantMessage: data.lastAssistantMessage,
         interrupted: data.interrupted,
-        // Why: same trap as interactivePrompt — this rebuild is a field whitelist, so subagent child rows vanish if omitted.
-        subagents: data.subagents
+        // Why: this rebuild is a field whitelist; omitting either field drops sidebar identity or child rows.
+        subagents: data.subagents,
+        configDir: data.configDir
       })
       if (!payload) {
         return 'dropped'

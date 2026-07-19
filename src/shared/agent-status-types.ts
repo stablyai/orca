@@ -135,6 +135,9 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** Non-default CLAUDE_CONFIG_DIR the reporting agent runs against. Drives
+   *  the sidebar flavor label ("Claude · grok"). Absent for default installs. */
+  configDir?: string
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -166,6 +169,10 @@ export type AgentStatusPayload = {
   interrupted?: boolean
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** CLAUDE_CONFIG_DIR path reported by the managed hook script when the
+   *  agent runs against a non-default config dir (path string only — never
+   *  tokens). Absent for default installs and pre-update scripts. */
+  configDir?: string
 }
 
 /**
@@ -238,6 +245,9 @@ const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
 /** Maximum character length for the agentType label. Truncated on parse. */
 export const AGENT_TYPE_MAX_LENGTH = 40
 export const AGENT_MODEL_MAX_LENGTH = 120
+/** Maximum character length for the reported configDir path. Generous enough
+ *  for real home-dir paths (Windows MAX_PATH) while bounding a hostile post. */
+export const AGENT_STATUS_CONFIG_DIR_MAX_LENGTH = 260
 
 /** Maximum subagent child rows carried per status entry. Bounds per-pane cache
  *  and IPC fanout against a runaway spawner. */
@@ -362,7 +372,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
-    subagents: normalizeSubagentsField(obj.subagents)
+    subagents: normalizeSubagentsField(obj.subagents),
+    configDir: normalizeOptionalField(obj.configDir, AGENT_STATUS_CONFIG_DIR_MAX_LENGTH)
   }
 }
 
