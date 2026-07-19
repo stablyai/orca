@@ -1,6 +1,6 @@
 # AdaL CLI in Orca
 
-AdaL CLI is a terminal-first AI coding agent. Orca can show AdaL in the default-agent picker, detect it when it is installed, and launch it inside an Orca-managed worktree.
+[AdaL](https://adalagent.ai) is the autonomous coding agent with loop engineering built in. It closes the plan → implement → test → iterate loop end-to-end, so you ship working code instead of half-finished drafts. AdaL runs as a terminal-first CLI agent and Orca can detect it on PATH, show it in the default-agent picker, and launch it inside an Orca-managed worktree.
 
 AdaL supports codebase understanding, implementation, debugging, project context, multiple AI models, MCP servers, skills, plugins, web search, image generation, and local models. See the [AdaL documentation](https://docs.sylph.ai/) for the complete feature set.
 
