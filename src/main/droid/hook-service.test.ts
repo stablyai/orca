@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -119,5 +119,56 @@ describe('DroidHookService', () => {
     expect(status.state).toBe('partial')
     expect(status.managedHooksPresent).toBe(true)
     expect(status.detail).toBe('Droid hooks are disabled in Factory settings')
+  })
+
+  // Why: remove() must be a strict no-op when Orca never installed anything — it
+  // must not create ~/.factory (or settings.json), and must not rewrite/reformat
+  // (or .bak-roll) a user settings.json that holds no managed hooks.
+  it('remove() does not create settings.json or the config dir when nothing was installed', () => {
+    const status = new DroidHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(existsSync(join(homeDir, '.factory'))).toBe(false)
+  })
+
+  it('remove() leaves a user settings file byte-identical when it holds no managed hooks', () => {
+    const configPath = join(homeDir, '.factory', 'settings.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    // Deliberately NOT Orca's serialization: tabs, no trailing newline.
+    const userContent =
+      '{\n\t"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "echo hi"}]}]}}'
+    writeFileSync(configPath, userContent)
+
+    const status = new DroidHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf-8')).toBe(userContent)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+
+  it('remove() strips managed hooks and keeps user entries when Orca did install', () => {
+    const configPath = join(homeDir, '.factory', 'settings.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'echo user' }] }] } },
+        null,
+        2
+      )}\n`
+    )
+    const service = new DroidHookService()
+    expect(service.install().state).toBe('installed')
+
+    const status = service.remove()
+
+    expect(status.state).toBe('not_installed')
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command: string }[] }[]>
+    }
+    const commands = Object.values(config.hooks).flatMap((definitions) =>
+      definitions.flatMap((definition) => (definition.hooks ?? []).map((hook) => hook.command))
+    )
+    expect(commands).toEqual(['echo user'])
   })
 })

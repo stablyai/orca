@@ -530,10 +530,18 @@ export class HermesHookService {
       }
     }
     const pluginDir = getPluginDir()
-    if (getPluginFilesState(pluginDir).managed) {
+    const pluginManaged = getPluginFilesState(pluginDir).managed
+    if (pluginManaged) {
       rmSync(pluginDir, { recursive: true, force: true })
     }
-    writeConfigFile(configPath, disablePlugin(parsed.config))
+    // Why: no-op gate — only rewrite config.yaml when Orca actually had
+    // something enabled (managed plugin on disk, or orca-status in
+    // plugins.enabled). On a pristine home this must not create ~/.hermes or a
+    // config.yaml, and a user file that never enabled orca-status stays
+    // byte-identical (no reformat, no .bak roll).
+    if (pluginManaged || getConfigEnablement(parsed.config).enabled) {
+      writeConfigFile(configPath, disablePlugin(parsed.config))
+    }
     return this.getStatus()
   }
 }

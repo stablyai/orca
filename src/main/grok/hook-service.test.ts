@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -191,5 +191,56 @@ describe('GrokHookService', () => {
           : command.includes(GROK_SCRIPT_FILE_NAME)
       )
     ).toBe(true)
+  })
+
+  // Why: remove() must be a strict no-op when Orca never installed anything — it
+  // must not create ~/.grok (or its hook config), and must not rewrite/reformat
+  // (or .bak-roll) a user hook file that holds no managed hooks.
+  it('does not create the hook config or the config dir when nothing was installed', () => {
+    const status = new GrokHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(existsSync(join(homeDir, '.grok'))).toBe(false)
+  })
+
+  it('leaves a user hook file byte-identical when it holds no managed hooks', () => {
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    // Deliberately NOT Orca's serialization: tabs, no trailing newline.
+    const userContent =
+      '{\n\t"hooks": {"Notification": [{"hooks": [{"type": "command", "command": "echo hi"}]}]}}'
+    writeFileSync(configPath, userContent)
+
+    const status = new GrokHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf-8')).toBe(userContent)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+
+  it('removes managed hooks and keeps user entries when Orca did install', () => {
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        { hooks: { Notification: [{ hooks: [{ type: 'command', command: 'echo user' }] }] } },
+        null,
+        2
+      )}\n`
+    )
+    const service = new GrokHookService()
+    expect(service.install().state).toBe('installed')
+
+    const status = service.remove()
+
+    expect(status.state).toBe('not_installed')
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command: string }[] }[]>
+    }
+    const commands = Object.values(config.hooks).flatMap((definitions) =>
+      definitions.flatMap((definition) => (definition.hooks ?? []).map((hook) => hook.command))
+    )
+    expect(commands).toEqual(['echo user'])
   })
 })

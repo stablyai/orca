@@ -7,8 +7,10 @@ import {
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
+  hookDefinitionHasManagedCommand,
   readHooksJson,
   removeManagedCommands,
+  updateHooksJsonWithRetry,
   wrapPosixHookCommand,
   wrapWindowsHookCommand,
   writeHooksJson,
@@ -271,34 +273,33 @@ export class CursorHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: 'cursor',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Cursor hooks.json'
-      }
-    }
-
-    const nextHooks = { ...config.hooks }
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      if (!Array.isArray(definitions)) {
-        continue
+    // Why: null-mutate no-op — when no managed hook is present, leave the file
+    // untouched (no dir/file creation, no reformat of a user hooks.json, no
+    // .bak roll). Mirrors install()'s stale-check retry against concurrent
+    // cursor-agent writes. A parse failure is surfaced by getStatus() below.
+    updateHooksJsonWithRetry(configPath, (current) => {
+      const nextHooks = { ...current.hooks }
+      let changed = false
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        if (!Array.isArray(definitions)) {
+          continue
+        }
+        if (!definitions.some((d) => hookDefinitionHasManagedCommand(d, isManagedCommand))) {
+          continue
+        }
+        changed = true
+        const cleaned = removeManagedCommands(definitions, isManagedCommand).filter(
+          (definition) => !isManagedCommand(definition.command as string | undefined)
+        )
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
       }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand).filter(
-        (definition) => !isManagedCommand(definition.command as string | undefined)
-      )
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
-    }
-    const nextConfig = { ...config, hooks: nextHooks }
-    writeHooksJson(configPath, nextConfig)
+      return changed ? { ...current, hooks: nextHooks } : null
+    })
     return this.getStatus()
   }
 }

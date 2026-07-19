@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { execFile, execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -89,6 +89,51 @@ describe('HermesHookService', () => {
     }
     expect(config.plugins.enabled).toEqual([_internals.HERMES_PLUGIN_NAME])
     expect(config.plugins.disabled).toEqual([])
+  })
+
+  // Why: remove() must be a strict no-op when Orca never installed anything — it
+  // must not create ~/.hermes/config.yaml or the plugin dir, and must not
+  // rewrite/reformat (or .bak-roll) a user config.yaml that never enabled
+  // orca-status.
+  it('remove() does not create config.yaml or the plugin dir when nothing was installed', () => {
+    const status = new HermesHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(existsSync(join(homeDir, 'config.yaml'))).toBe(false)
+    expect(existsSync(join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME))).toBe(false)
+  })
+
+  it('remove() leaves a user config.yaml byte-identical when orca-status is not enabled', () => {
+    const configPath = join(homeDir, 'config.yaml')
+    // Not Orca's serialization, and orca-status is absent from plugins.enabled.
+    const userContent = [
+      'model: test-model',
+      'plugins:',
+      '  enabled:',
+      '    - disk-cleanup',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, userContent, 'utf-8')
+
+    const status = new HermesHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf-8')).toBe(userContent)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+
+  it('remove() deletes the managed plugin and disables it in config when Orca did install', () => {
+    const service = new HermesHookService()
+    expect(service.install().state).toBe('installed')
+
+    const status = service.remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(existsSync(join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME))).toBe(false)
+    const config = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
+      plugins: { enabled: string[] }
+    }
+    expect(config.plugins.enabled).not.toContain(_internals.HERMES_PLUGIN_NAME)
   })
 
   it('reports partial when the plugin exists but is not enabled', () => {

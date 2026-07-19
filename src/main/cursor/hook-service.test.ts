@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -155,5 +155,56 @@ describe('CursorHookService', () => {
     expect(config.hooks.retiredEvent.map((definition) => definition.command)).toEqual([
       '/usr/local/bin/retired-user-hook'
     ])
+  })
+
+  // Why: remove() must be a strict no-op when Orca never installed anything — it
+  // must not create ~/.cursor (or hooks.json), and must not rewrite/reformat (or
+  // .bak-roll) a user hooks.json that holds no managed hooks.
+  it('does not create hooks.json or the config dir when nothing was installed', () => {
+    const status = new CursorHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(existsSync(join(homeDir, '.cursor'))).toBe(false)
+  })
+
+  it('leaves a user hooks.json byte-identical when it holds no managed hooks', () => {
+    const configPath = join(homeDir, '.cursor', 'hooks.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    // Deliberately NOT Orca's serialization: tabs, no trailing newline.
+    const userContent =
+      '{\n\t"version": 1,\n\t"hooks": {"stop": [{"command": "/usr/local/bin/user-hook"}]}}'
+    writeFileSync(configPath, userContent)
+
+    const status = new CursorHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf-8')).toBe(userContent)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+
+  it('removes managed hooks and keeps user entries when Orca did install', () => {
+    const configPath = join(homeDir, '.cursor', 'hooks.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `${JSON.stringify(
+        { version: 1, hooks: { stop: [{ command: '/usr/local/bin/user-hook' }] } },
+        null,
+        2
+      )}\n`
+    )
+    const service = new CursorHookService()
+    expect(service.install().state).toBe('installed')
+
+    const status = service.remove()
+
+    expect(status.state).toBe('not_installed')
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      hooks: Record<string, { command?: string }[]>
+    }
+    const commands = Object.values(config.hooks).flatMap((definitions) =>
+      definitions.map((definition) => definition.command)
+    )
+    expect(commands).toEqual(['/usr/local/bin/user-hook'])
   })
 })

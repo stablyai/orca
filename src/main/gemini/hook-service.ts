@@ -7,9 +7,11 @@ import {
   createManagedCommandMatcher,
   buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
+  hookDefinitionHasManagedCommand,
   MANAGED_HOOK_TIMEOUT_MILLISECONDS,
   readHooksJson,
   removeManagedCommands,
+  updateHooksJsonWithRetry,
   wrapPosixHookCommand,
   wrapWindowsHookCommand,
   writeHooksJson,
@@ -268,34 +270,37 @@ export class GeminiHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const config = readHooksJson(configPath)
-    if (!config) {
-      return {
-        agent: 'gemini',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Gemini settings.json'
-      }
-    }
-
-    const nextHooks = { ...config.hooks }
-    // Why: match by filename so remove() sweeps stale entries even after the script path moved.
+    // Why: same broad matcher as install(), so remove() also cleans up stale
+    // entries from older builds even if the current scriptPath has moved.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      // Why: fail open on malformed (non-array) entries so a broken user config never blocks uninstall.
-      if (!Array.isArray(definitions)) {
-        continue
+    // Why: null-mutate no-op — when no managed hook is present, leave the file
+    // untouched (no dir/file creation, no reformat of a user settings.json, no
+    // .bak roll). Mirrors install()'s stale-check retry against concurrent
+    // Gemini CLI writes. A parse failure is surfaced by getStatus() below.
+    updateHooksJsonWithRetry(configPath, (current) => {
+      const nextHooks = { ...current.hooks }
+      let changed = false
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        // Why: a malformed settings.json entry (non-array value for an event
+        // name) would make removeManagedCommands throw via definitions.flatMap.
+        // Skip — remove() must fail open so a broken user config never blocks
+        // uninstall.
+        if (!Array.isArray(definitions)) {
+          continue
+        }
+        if (!definitions.some((d) => hookDefinitionHasManagedCommand(d, isManagedCommand))) {
+          continue
+        }
+        changed = true
+        const cleaned = removeManagedCommands(definitions, isManagedCommand)
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
       }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
-    }
-    config.hooks = nextHooks
-    writeHooksJson(configPath, config)
+      return changed ? { ...current, hooks: nextHooks } : null
+    })
     return this.getStatus()
   }
 }

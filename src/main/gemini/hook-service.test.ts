@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type * as osModule from 'node:os'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
@@ -187,5 +187,77 @@ describe('GeminiHookService', () => {
         ? WINDOWS_POWERSHELL_LAUNCHER
         : new RegExp(managedHookFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     )
+  })
+
+  // Why: remove() must be a strict no-op when Orca never installed anything — it
+  // must not create ~/.gemini (or settings.json), and must not rewrite/reformat
+  // (or .bak-roll) a user settings.json that holds no managed hooks. A fresh
+  // temp home is used since the outer suite shares one polluted home.
+  it('remove() does not create settings.json or the config dir when nothing was installed', () => {
+    const noopHome = mkdtempSync(join(tmpdir(), 'orca-gemini-remove-noop-'))
+    homedirMock.mockReturnValue(noopHome)
+    try {
+      const status = new GeminiHookService().remove()
+      expect(status.state).toBe('not_installed')
+      expect(existsSync(join(noopHome, '.gemini'))).toBe(false)
+    } finally {
+      rmSync(noopHome, { recursive: true, force: true })
+      homedirMock.mockReturnValue(homeDir)
+    }
+  })
+
+  it('remove() leaves a user settings file byte-identical when it holds no managed hooks', () => {
+    const noopHome = mkdtempSync(join(tmpdir(), 'orca-gemini-remove-user-'))
+    homedirMock.mockReturnValue(noopHome)
+    try {
+      const settingsPath = join(noopHome, '.gemini', 'settings.json')
+      mkdirSync(dirname(settingsPath), { recursive: true })
+      // Deliberately NOT Orca's serialization: tabs, no trailing newline.
+      const userContent =
+        '{\n\t"hooks": {"BeforeAgent": [{"hooks": [{"type": "command", "command": "echo hi"}]}]}}'
+      writeFileSync(settingsPath, userContent)
+
+      const status = new GeminiHookService().remove()
+
+      expect(status.state).toBe('not_installed')
+      expect(readFileSync(settingsPath, 'utf-8')).toBe(userContent)
+      expect(existsSync(`${settingsPath}.bak`)).toBe(false)
+    } finally {
+      rmSync(noopHome, { recursive: true, force: true })
+      homedirMock.mockReturnValue(homeDir)
+    }
+  })
+
+  it('remove() strips managed hooks and keeps user entries when Orca did install', () => {
+    const noopHome = mkdtempSync(join(tmpdir(), 'orca-gemini-remove-installed-'))
+    homedirMock.mockReturnValue(noopHome)
+    try {
+      const settingsPath = join(noopHome, '.gemini', 'settings.json')
+      mkdirSync(dirname(settingsPath), { recursive: true })
+      writeFileSync(
+        settingsPath,
+        `${JSON.stringify(
+          { hooks: { BeforeAgent: [{ hooks: [{ type: 'command', command: 'echo user' }] }] } },
+          null,
+          2
+        )}\n`
+      )
+      const service = new GeminiHookService()
+      expect(service.install().state).toBe('installed')
+
+      const status = service.remove()
+
+      expect(status.state).toBe('not_installed')
+      const config = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
+        hooks: Record<string, { hooks?: { command: string }[] }[]>
+      }
+      const commands = Object.values(config.hooks).flatMap((definitions) =>
+        definitions.flatMap((definition) => (definition.hooks ?? []).map((hook) => hook.command))
+      )
+      expect(commands).toEqual(['echo user'])
+    } finally {
+      rmSync(noopHome, { recursive: true, force: true })
+      homedirMock.mockReturnValue(homeDir)
+    }
   })
 })
