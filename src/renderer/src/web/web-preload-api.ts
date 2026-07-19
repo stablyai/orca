@@ -36,6 +36,7 @@ import type {
 import type { SkillDiscoveryResult } from '../../../shared/skills'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
+import type { TailnetPeerDiscovery } from '../../../shared/tailnet-peers'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -739,6 +740,16 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     skills: createSkillsApi(),
     pty: createPtyApi(),
     ssh: createSshApi(),
+    tailscale: {
+      // Why: suggestions come from the serve host's tailscale CLI — the machine
+      // that will run the SSH connection. Older hosts without the RPC method
+      // degrade to "unavailable" instead of erroring.
+      discoverPeers: () =>
+        callRuntimeResult<TailnetPeerDiscovery>('host.tailscale.discoverPeers').catch(() => ({
+          available: false,
+          peers: []
+        }))
+    },
     wsl: {
       isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
       listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])

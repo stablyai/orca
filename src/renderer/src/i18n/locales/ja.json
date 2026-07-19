@@ -9215,6 +9215,11 @@
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
+        },
+        "TailnetPeerSuggestionSection": {
+          "7a2f6fb0a5": "Tailscale peers",
+          "60d02530dc": "+{{count}} more on your tailnet",
+          "c812f9f26b": "Online machines on your tailnet. Click one to prefill the form."
         }
       },
       "right": {

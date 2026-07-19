@@ -404,6 +404,7 @@ import type {
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
+import type { TailnetPeerDiscovery } from '../shared/tailnet-peers'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -3113,6 +3114,11 @@ export type PreloadApi = {
   }
   grokAccounts: {
     getStatus: () => Promise<GrokAccountStatus>
+  }
+  tailscale: {
+    // Tailnet machines suggested as SSH targets. Unavailable (not an error)
+    // when the Tailscale CLI is absent or the daemon is down.
+    discoverPeers: () => Promise<TailnetPeerDiscovery>
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>

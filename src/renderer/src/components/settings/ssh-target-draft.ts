@@ -5,6 +5,7 @@ import {
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
   type SshTarget
 } from '../../../../shared/ssh-types'
+import type { TailnetPeerSuggestion } from '../../../../shared/tailnet-peers'
 
 export type EditingTarget = {
   label: string
@@ -108,6 +109,23 @@ export function applyParsedSshHostInput(draft: EditingTarget): EditingTarget {
     username: draft.username.trim() || parsed.username || '',
     port:
       parsed.port !== undefined && isDefaultPortDraft(draft.port) ? String(parsed.port) : draft.port
+  }
+}
+
+/**
+ * Prefills a draft from a picked tailnet peer, preferring the MagicDNS name over
+ * the raw tailnet IP and only filling the label when the user hasn't set one.
+ */
+export function applyTailnetPeerToDraft(
+  draft: EditingTarget,
+  peer: TailnetPeerSuggestion
+): EditingTarget {
+  return {
+    ...draft,
+    // Why: MagicDNS names survive IP churn; the raw 100.x address is only a
+    // fallback for tailnets with MagicDNS disabled.
+    host: peer.dnsName || peer.ipv4 || draft.host,
+    label: draft.label.trim() ? draft.label : peer.hostName
   }
 }
 

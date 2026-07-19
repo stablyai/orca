@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   EMPTY_FORM,
   applyParsedSshHostInput,
+  applyTailnetPeerToDraft,
   getEditingTargetForSshTarget,
   getSshTargetDraftConnectionFields,
   parseRelayGracePeriodSeconds,
   parseSshHostInput
 } from './ssh-target-draft'
+import type { TailnetPeerSuggestion } from '../../../../shared/tailnet-peers'
 
 describe('parseSshHostInput', () => {
   it('parses scp-style user, host, and port input', () => {
@@ -242,5 +244,41 @@ describe('getEditingTargetForSshTarget', () => {
 
     expect(draft.relayKeepAliveUntilReset).toBe(false)
     expect(draft.relayGracePeriodSeconds).toBe('600')
+  })
+})
+
+describe('applyTailnetPeerToDraft', () => {
+  const peer: TailnetPeerSuggestion = {
+    hostName: 'sezerchicago',
+    dnsName: 'sezerchicago.tail1234.ts.net',
+    ipv4: '100.96.7.56',
+    os: 'linux',
+    online: true,
+    tailscaleSsh: true
+  }
+
+  it('prefills the host with the MagicDNS name and the label with the host name', () => {
+    const draft = applyTailnetPeerToDraft(EMPTY_FORM, peer)
+
+    expect(draft.host).toBe('sezerchicago.tail1234.ts.net')
+    expect(draft.label).toBe('sezerchicago')
+    expect(draft.port).toBe('22')
+  })
+
+  it('falls back to the tailnet IPv4 when MagicDNS is disabled', () => {
+    const draft = applyTailnetPeerToDraft(EMPTY_FORM, { ...peer, dnsName: '' })
+
+    expect(draft.host).toBe('100.96.7.56')
+  })
+
+  it('keeps a label and username the user already typed', () => {
+    const draft = applyTailnetPeerToDraft(
+      { ...EMPTY_FORM, label: 'My Oracle box', username: 'ubuntu' },
+      peer
+    )
+
+    expect(draft.label).toBe('My Oracle box')
+    expect(draft.username).toBe('ubuntu')
+    expect(draft.host).toBe('sezerchicago.tail1234.ts.net')
   })
 })
