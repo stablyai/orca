@@ -1,9 +1,10 @@
 /* eslint-disable max-lines -- Why: the row owns dense file-tree rendering plus its context menu, drag target, and inline-input sibling contract. */
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { basename } from '@/lib/path'
 import {
   ChevronRight,
   CircleSlash,
+  ClipboardPaste,
   Copy,
   Download,
   ExternalLink,
@@ -38,6 +39,10 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { openFileInBrowserTab } from '@/lib/file-preview'
+import {
+  getCachedPastableClipboardFilePaths,
+  getPastableClipboardFilePaths
+} from './file-explorer-clipboard-paste'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
@@ -284,6 +289,7 @@ type FileExplorerRowProps = {
   onContextMenuSelect: () => void
   onCopyPaths: (pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
+  onPasteFiles: (sourcePaths: string[], destinationDir: string) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
   onAddFolderAsProject: () => void
@@ -455,6 +461,7 @@ export function FileExplorerRow({
   onContextMenuSelect,
   onCopyPaths,
   onStartNew,
+  onPasteFiles,
   onStartRename,
   onDuplicate,
   onAddFolderAsProject,
@@ -513,15 +520,34 @@ export function FileExplorerRow({
     void downloadRemoteFile(node, downloadTarget)
   }, [connectionId, node, runtimeDownloadContext])
   const handleCopyFile = useCallback(() => {
-    void copyFileToOsClipboard(node, connectionId)
+    // Why: re-probe right after our own copy so Paste is warm before the
+    // user's next right-click instead of popping in late.
+    void copyFileToOsClipboard(node, connectionId).then(() =>
+      getPastableClipboardFilePaths({ force: true })
+    )
   }, [connectionId, node])
+  // Why: probed on menu open — Paste only appears when the OS clipboard
+  // actually holds file references, mirroring Explorer/Finder.
+  const [pastablePaths, setPastablePaths] = useState<string[]>([])
+  // Why: the probe spawns a process on Windows; a slow result from a menu the
+  // user already closed must not resurface stale paths on the next open.
+  const pasteProbeGenerationRef = useRef(0)
 
   return (
     <ContextMenu
       onOpenChange={(open) => {
+        const probeGeneration = ++pasteProbeGenerationRef.current
         if (!open) {
+          setPastablePaths([])
           return
         }
+        // Why: instant render from the warm cache; the probe reconciles late.
+        setPastablePaths(getCachedPastableClipboardFilePaths())
+        void getPastableClipboardFilePaths().then((paths) => {
+          if (pasteProbeGenerationRef.current === probeGeneration) {
+            setPastablePaths(paths)
+          }
+        })
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         onContextMenuSelect()
       }}
@@ -689,6 +715,18 @@ export function FileExplorerRow({
           <FolderPlus />
           {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
         </ContextMenuItem>
+        {pastablePaths.length > 0 ? (
+          <ContextMenuItem onSelect={() => onPasteFiles(pastablePaths, targetDir)}>
+            <ClipboardPaste />
+            {pastablePaths.length > 1
+              ? translate(
+                  'auto.components.right.sidebar.FileExplorerRow.pasteFiles',
+                  'Paste {{value0}} Files',
+                  { value0: pastablePaths.length }
+                )
+              : translate('auto.components.right.sidebar.FileExplorerRow.paste', 'Paste')}
+          </ContextMenuItem>
+        ) : null}
         <ContextMenuSeparator />
         {showCopyFileAction && (
           <ContextMenuItem onSelect={handleCopyFile}>

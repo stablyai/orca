@@ -9306,7 +9306,9 @@
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新規フォルダー",
-            "21fe46ed36": "新規ファイル"
+            "21fe46ed36": "新規ファイル",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerRow": {
             "addc01145f": "削除",
@@ -9338,7 +9340,9 @@
             "f9d7ca753d": "パスのコピー",
             "3161c4e425": "フォルダ",
             "e887fa4b2e": "ターミナルで開く",
-            "1d8e182c32": "ファイルを表示"
+            "1d8e182c32": "ファイルを表示",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",
@@ -10345,6 +10349,10 @@
                 }
               }
             }
+          },
+          "fileExplorerClipboardPaste": {
+            "failed": "Failed to paste {{value0}} {{value1}}.",
+            "skipped": "Skipped {{value0}} {{value1}}."
           }
         }
       },

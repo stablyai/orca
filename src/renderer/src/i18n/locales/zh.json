@@ -9306,7 +9306,9 @@
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "新建文件夹",
-            "21fe46ed36": "新文件"
+            "21fe46ed36": "新文件",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerRow": {
             "addc01145f": "删除",
@@ -9338,7 +9340,9 @@
             "f9d7ca753d": "复制路径",
             "3161c4e425": "文件夹",
             "e887fa4b2e": "在终端中打开",
-            "1d8e182c32": "查看文件"
+            "1d8e182c32": "查看文件",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
@@ -10345,6 +10349,10 @@
                 }
               }
             }
+          },
+          "fileExplorerClipboardPaste": {
+            "failed": "Failed to paste {{value0}} {{value1}}.",
+            "skipped": "Skipped {{value0}} {{value1}}."
           }
         }
       },

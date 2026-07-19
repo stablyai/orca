@@ -9306,7 +9306,9 @@
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "새 폴더",
-            "21fe46ed36": "새 파일"
+            "21fe46ed36": "새 파일",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerRow": {
             "addc01145f": "삭제",
@@ -9338,7 +9340,9 @@
             "f9d7ca753d": "경로 복사",
             "3161c4e425": "폴더",
             "e887fa4b2e": "터미널에서 열기",
-            "1d8e182c32": "파일 보기"
+            "1d8e182c32": "파일 보기",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",
@@ -10345,6 +10349,10 @@
                 }
               }
             }
+          },
+          "fileExplorerClipboardPaste": {
+            "failed": "Failed to paste {{value0}} {{value1}}.",
+            "skipped": "Skipped {{value0}} {{value1}}."
           }
         }
       },

@@ -3000,6 +3000,7 @@ export type PreloadApi = {
           }
         | string
     ) => Promise<{ ok: boolean; reason?: string }>
+    readClipboardFilePaths: () => Promise<string[]>
     onFileDrop: (callback: (data: NativeFileDropPayload) => void) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void

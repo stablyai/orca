@@ -9329,7 +9329,9 @@
           },
           "FileExplorerBackgroundMenu": {
             "3b5e2dcb8d": "New Folder",
-            "21fe46ed36": "New File"
+            "21fe46ed36": "New File",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerRow": {
             "addc01145f": "Delete",
@@ -9361,7 +9363,9 @@
             "f9d7ca753d": "Copy Paths",
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
-            "1d8e182c32": "View File"
+            "1d8e182c32": "View File",
+            "pasteFiles": "Paste {{value0}} Files",
+            "paste": "Paste"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -10368,6 +10372,10 @@
                 }
               }
             }
+          },
+          "fileExplorerClipboardPaste": {
+            "failed": "Failed to paste {{value0}} {{value1}}.",
+            "skipped": "Skipped {{value0}} {{value1}}."
           }
         }
       },
