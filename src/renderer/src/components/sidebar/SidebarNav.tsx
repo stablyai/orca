@@ -90,22 +90,24 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
   const activePinnedTerminalPanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
   const pinnedTerminalPanels = useAppStore((s) => s.settings?.pinnedTerminalPanels)
-  // Why: session-local collapse — persisting rail folds isn't worth a schema
-  // field; groups reopen on relaunch.
-  const [collapsedTerminalPanelGroups, setCollapsedTerminalPanelGroups] = React.useState<
-    ReadonlySet<string>
-  >(() => new Set())
-  const toggleTerminalPanelGroup = React.useCallback((group: string) => {
-    setCollapsedTerminalPanelGroups((prev) => {
-      const next = new Set(prev)
+  const collapsedGroupsSetting = useAppStore((s) => s.settings?.collapsedPinnedTerminalPanelGroups)
+  const collapsedTerminalPanelGroups = React.useMemo(
+    () => new Set(collapsedGroupsSetting ?? []),
+    [collapsedGroupsSetting]
+  )
+  const updateSettingsForGroups = useAppStore((s) => s.updateSettings)
+  const toggleTerminalPanelGroup = React.useCallback(
+    (group: string) => {
+      const next = new Set(collapsedTerminalPanelGroups)
       if (next.has(group)) {
         next.delete(group)
       } else {
         next.add(group)
       }
-      return next
-    })
-  }, [])
+      void updateSettingsForGroups({ collapsedPinnedTerminalPanelGroups: [...next].sort() })
+    },
+    [collapsedTerminalPanelGroups, updateSettingsForGroups]
+  )
   // Why: sections keep first-appearance order from settings; panels stay in
   // authored order inside their group so the rail mirrors the settings list.
   const groupedTerminalPanels = React.useMemo(() => {

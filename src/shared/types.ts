@@ -2766,6 +2766,10 @@ export type GlobalSettings = {
    *  as sidebar entries hosting persistent PTYs. Optional for profiles saved
    *  before this setting existed; readers default to none. */
   pinnedTerminalPanels?: PinnedTerminalPanel[]
+  /** Collapsed pinned-terminal-panel group labels — in settings (not
+   *  per-window UI state) so rail folds survive relaunch and both windows
+   *  of a profile agree. */
+  collapsedPinnedTerminalPanelGroups?: string[]
   /** Where new Floating Workspace terminal tabs start. Empty or '~' means
    *  the user's home directory; markdown notes use Orca's app-owned
    *  floating workspace under Electron userData. */
