@@ -118,7 +118,13 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { parseWslPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
-import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import {
+  addOrcaWslInteropEnv,
+  ORCA_WSL_OPENCODE_MATERIALIZER_ENV,
+  ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV
+} from '../pty/wsl-orca-env'
+import { configureWslOpenCodeShellMaterializer } from '../pty/wsl-opencode-shell-materializer'
+import { WSL_HOOK_RELAY_INSTANCE_ENV } from '../../shared/wsl-hook-relay-contract'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
 import { beginTerminalInstall } from './watcher-removal-gate'
 import {
@@ -214,9 +220,15 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENV',
   'ORCA_AGENT_HOOK_VERSION',
   'ORCA_AGENT_HOOK_ENDPOINT',
+  WSL_HOOK_RELAY_INSTANCE_ENV,
   // Why: PR 2778 briefly exported this scoped Claude settings path. Keep
   // deleting stale inherited values so older PTYs cannot leak the reverted path.
   'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
+] as const
+const HOST_SCOPED_AGENT_HOOK_ENV_KEYS = [
+  ...AGENT_HOOK_RUNTIME_ENV_KEYS,
+  ORCA_WSL_OPENCODE_MATERIALIZER_ENV,
+  ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV
 ] as const
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
@@ -764,7 +776,7 @@ function getInheritedAgentHookEnvKeysToDelete(
   // Why: daemon/local providers merge process.env after main-process cleanup.
   // Delete reverted or unavailable hook env keys there without dropping fresh
   // receiver coordinates that buildPtyHostEnv intentionally set.
-  return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
+  return HOST_SCOPED_AGENT_HOOK_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
 // Why: when agent status is disabled, a nested Orca terminal can still pass
@@ -887,23 +899,31 @@ export function buildPtyHostEnv(
       : resolveScopedPiAgentSourceDir(baseEnv, 'omp')
 
   if (opts.agentStatusHooksEnabled) {
-    // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
-    // value cannot coexist with an Orca-only injection. Hand the user's value
-    // (when present) to the hook service and let it materialize a source-scoped
-    // mirror overlay that lets the user's plugins and Orca's status plugin
-    // load together. See docs/opencode-config-dir-collision.md.
-    Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
-    if (baseEnv.OPENCODE_CONFIG_DIR) {
-      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
-      // wrappers restore this PTY-scoped value after user startup files run.
-      baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
-      if (preexistingOpenCodeConfigDir) {
-        // Why: terminals launched from another Orca terminal inherit the overlay
-        // as OPENCODE_CONFIG_DIR; keep the original source so overlays do not
-        // mirror overlays and drop the user's real config.
-        baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
-      } else {
-        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    if (opts.isWsl === true) {
+      configureWslOpenCodeShellMaterializer(
+        baseEnv,
+        opts.userDataPath,
+        preexistingOpenCodeConfigDir
+      )
+    } else {
+      // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
+      // value cannot coexist with an Orca-only injection. Hand the user's value
+      // (when present) to the hook service and let it materialize a source-scoped
+      // mirror overlay that lets the user's plugins and Orca's status plugin
+      // load together. See docs/opencode-config-dir-collision.md.
+      Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+      if (baseEnv.OPENCODE_CONFIG_DIR) {
+        // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
+        // wrappers restore this PTY-scoped value after user startup files run.
+        baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
+        if (preexistingOpenCodeConfigDir) {
+          // Why: terminals launched from another Orca terminal inherit the overlay
+          // as OPENCODE_CONFIG_DIR; keep the original source so overlays do not
+          // mirror overlays and drop the user's real config.
+          baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
+        } else {
+          delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+        }
       }
     }
     if (isMimoLaunchCommand(launchCommandHint)) {
@@ -924,6 +944,8 @@ export function buildPtyHostEnv(
       overlay: 'ORCA_OPENCODE_CONFIG_DIR',
       source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
     })
+    delete baseEnv[ORCA_WSL_OPENCODE_MATERIALIZER_ENV]
+    delete baseEnv[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'MIMOCODE_HOME',
       overlay: 'ORCA_MIMOCODE_HOME',
@@ -950,6 +972,10 @@ export function buildPtyHostEnv(
       // guest home, point restart re-coordination at the relay-written
       // guest-side endpoint file instead of the /p-translated Windows one.
       const distro = opts.wslDistro ?? null
+      const instanceKey = wslHookRelayManager.getInstanceKey()
+      if (instanceKey) {
+        baseEnv[WSL_HOOK_RELAY_INSTANCE_ENV] = instanceKey
+      }
       wslHookRelayManager.ensureForDistro(distro)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {

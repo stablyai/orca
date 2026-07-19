@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { addOrcaWslInteropEnv } from './wsl-orca-env'
+import { ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV } from '../../shared/wsl-opencode-materializer-contract'
 
 describe('addOrcaWslInteropEnv', () => {
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
@@ -69,5 +70,74 @@ describe('addOrcaWslInteropEnv', () => {
     const env: Record<string, string> = { ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc' }
     addOrcaWslInteropEnv(env)
     expect(env.WSLENV).toBe('ORCA_WSL_HOOK_RELAY_VERSION/u')
+  })
+
+  it('path-translates only the WSL OpenCode materializer script', () => {
+    const env: Record<string, string> = {
+      ORCA_WSL_OPENCODE_MATERIALIZER:
+        'C:\\Users\\jin\\AppData\\Roaming\\Orca\\wsl-opencode-materializer\\materialize.sh'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe('ORCA_WSL_OPENCODE_MATERIALIZER/p')
+  })
+
+  it('refuses to import host OpenCode roots even when inherited WSLENV requested them', () => {
+    const env: Record<string, string> = {
+      WSLENV:
+        'KEEP/u:OPENCODE_CONFIG_DIR/p:OPENCODE_CONFIG_DIR/u:ORCA_OPENCODE_CONFIG_DIR/p:ORCA_OPENCODE_SOURCE_CONFIG_DIR/p',
+      OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\opencode-overlay',
+      ORCA_OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\opencode-overlay',
+      ORCA_OPENCODE_SOURCE_CONFIG_DIR: 'C:\\Users\\jin\\opencode-source',
+      [ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]: 'C:\\Users\\jin\\stale-guest-source',
+      ORCA_WSL_OPENCODE_MATERIALIZER: 'C:\\Users\\jin\\materialize.sh'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe('KEEP/u:ORCA_WSL_OPENCODE_MATERIALIZER/p')
+  })
+
+  it('crosses only the captured guest source in managed-hook mode', () => {
+    const env: Record<string, string> = {
+      WSLENV: 'KEEP/u:OPENCODE_CONFIG_DIR/u:ORCA_OPENCODE_SOURCE_CONFIG_DIR/p',
+      OPENCODE_CONFIG_DIR: '/home/jin/company-opencode',
+      ORCA_OPENCODE_SOURCE_CONFIG_DIR: 'C:\\Users\\jin\\host-source',
+      ORCA_WSL_OPENCODE_MATERIALIZER: 'C:\\Users\\jin\\materialize.sh',
+      [ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]: '/home/jin/company-opencode'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV?.split(':')).toEqual([
+      'KEEP/u',
+      'ORCA_WSL_OPENCODE_MATERIALIZER/p',
+      `${ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV}/u`
+    ])
+  })
+
+  it('preserves an intentional guest OpenCode pass-through when managed hooks are off', () => {
+    const env: Record<string, string> = {
+      WSLENV: 'KEEP/u:OPENCODE_CONFIG_DIR/u',
+      OPENCODE_CONFIG_DIR: '/home/jin/company-opencode'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe('KEEP/u:OPENCODE_CONFIG_DIR/u')
+    expect(env.OPENCODE_CONFIG_DIR).toBe('/home/jin/company-opencode')
+  })
+
+  it('preserves an intentional user OpenCode pass-through when managed hooks are off', () => {
+    const env: Record<string, string> = {
+      WSLENV: 'KEEP/u:OPENCODE_CONFIG_DIR/p',
+      OPENCODE_CONFIG_DIR: 'C:\\Users\\jin\\company-opencode'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe('KEEP/u:OPENCODE_CONFIG_DIR/p')
+    expect(env.OPENCODE_CONFIG_DIR).toBe('C:\\Users\\jin\\company-opencode')
   })
 })

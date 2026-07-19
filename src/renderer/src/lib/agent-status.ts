@@ -187,7 +187,7 @@ export { isExplicitAgentStatusFresh } from './pane-agent-evidence'
  * | Explicit State | Visual Status | Meaning                        |
  * |----------------|---------------|--------------------------------|
  * | working        | working       | agent actively executing       |
- * | blocked        | permission    | agent needs user attention     |
+ * | blocked        | blocked       | agent cannot proceed           |
  * | waiting        | permission    | agent needs user attention     |
  * | done           | done          | task complete but pane live    |
  */
@@ -196,6 +196,7 @@ export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): Work
     case 'working':
       return 'working'
     case 'blocked':
+      return 'blocked'
     case 'waiting':
       return 'permission'
     case 'done':

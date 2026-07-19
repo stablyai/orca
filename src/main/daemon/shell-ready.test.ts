@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as ShellReadyModule from './shell-ready'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
+import { getWslOpenCodeShellMaterializerBlock } from '../pty/wsl-opencode-shell-materializer-block'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
@@ -214,6 +215,33 @@ describePosix('daemon shell-ready launch config', () => {
     expect(config.args).toEqual(['-l'])
     expect(config.env.ZDOTDIR).toBe(join(userDataPath, 'shell-ready', 'zsh'))
     expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
+  })
+
+  it('runs the WSL OpenCode materializer after guest startup and before readiness', async () => {
+    const { getDaemonBashShellReadyRcfileContent, getShellReadyLaunchConfig } =
+      await importFreshShellReady()
+    const materializerBlock = getWslOpenCodeShellMaterializerBlock()
+    const bashRc = getDaemonBashShellReadyRcfileContent()
+
+    expect(bashRc.indexOf(materializerBlock)).toBeGreaterThan(
+      bashRc.indexOf('source "$HOME/.bash_profile"')
+    )
+    expect(bashRc.indexOf('orca-shell-ready')).toBeGreaterThan(bashRc.indexOf(materializerBlock))
+
+    getShellReadyLaunchConfig('/bin/zsh')
+    const zshRoot = join(userDataPath, 'shell-ready', 'zsh')
+    const zshRc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
+    const zshLogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
+
+    expect(zshRc.indexOf(materializerBlock)).toBeGreaterThan(
+      zshRc.indexOf('source "$_orca_home/.zshrc"')
+    )
+    expect(zshLogin.indexOf(materializerBlock)).toBeGreaterThan(
+      zshLogin.indexOf('source "$_orca_home/.zlogin"')
+    )
+    expect(zshLogin.indexOf('orca-shell-ready')).toBeGreaterThan(
+      zshLogin.indexOf(materializerBlock)
+    )
   })
 
   it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {

@@ -2242,12 +2242,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 >
                   <PanelsTopLeft className="size-3.5" />
                   {showFloatingWorkspaceAttentionDot ? (
-                    // Why: amber = Orca's "needs attention" convention; ring
-                    // matches the button fill so the dot reads on the icon.
+                    // Why: match the contrast-safe attention cue used by tabs
+                    // and cards; the ring cuts it out from the button fill.
                     <span
                       aria-hidden
                       data-floating-terminal-attention
-                      className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500 ring-1 ring-secondary"
+                      className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-status-attention ring-1 ring-secondary"
                     />
                   ) : null}
                 </button>

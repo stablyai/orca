@@ -2924,7 +2924,8 @@
             "splitTerminal": "拆分终端"
           },
           "TerminalTabLeadingIcon": {
-            "7ab2964bea": "未读的代理完成"
+            "7ab2964bea": "未读的代理完成",
+            "unreadTerminalActivity": "未读的终端活动"
           }
         }
       },

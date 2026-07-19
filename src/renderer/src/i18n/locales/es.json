@@ -2924,7 +2924,8 @@
             "splitTerminal": "Dividir terminal"
           },
           "TerminalTabLeadingIcon": {
-            "7ab2964bea": "Finalización de agente sin leer"
+            "7ab2964bea": "Finalización de agente sin leer",
+            "unreadTerminalActivity": "Actividad de terminal sin leer"
           }
         }
       },

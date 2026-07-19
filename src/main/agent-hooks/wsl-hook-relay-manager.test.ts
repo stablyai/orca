@@ -19,6 +19,7 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../../shared/agent-hook-relay'
+import { WSL_HOOK_RELAY_INSTANCE_ENV } from '../../shared/wsl-hook-relay-contract'
 
 type GuestHarness = {
   transport: MultiplexerTransport
@@ -212,10 +213,16 @@ describe('WslHookRelayManager', () => {
 
   it('starts one relay per distro, installs hooks, exposes the guest endpoint path, and forwards envelopes', async () => {
     const { manager, deps } = createManager({})
+    expect(manager.getInstanceKey()).toBe('testinstance')
     manager.ensureForDistro('Ubuntu')
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
+    expect(deps.spawnRelay).toHaveBeenCalledWith(
+      'Ubuntu',
+      expect.objectContaining({ [WSL_HOOK_RELAY_INSTANCE_ENV]: manager.getInstanceKey() }),
+      '0.1.0+abc'
+    )
     // Codex is the one agent whose home Orca redirects for WSL sessions.
     expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
       codexHomeDir: `${home}/.local/share/orca/codex-runtime-home/home`
@@ -322,12 +329,39 @@ describe('WslHookRelayManager', () => {
 
   it('is inert off-Windows and when remote hooks are disabled', async () => {
     const offPlatform = createManager({ platform: () => 'darwin' })
+    expect(offPlatform.manager.getInstanceKey()).toBeNull()
     offPlatform.manager.ensureForDistro('Ubuntu')
     const disabled = createManager({ remoteHooksEnabled: () => false })
+    expect(disabled.manager.getInstanceKey()).toBeNull()
     disabled.manager.ensureForDistro('Ubuntu')
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(offPlatform.deps.spawnRelay).not.toHaveBeenCalled()
     expect(disabled.deps.spawnRelay).not.toHaveBeenCalled()
+  })
+
+  it('uses one cached port fallback when the configured instance key is invalid', async () => {
+    const { manager, deps } = createManager({ instanceKey: () => 'bad key$' })
+
+    expect(manager.getInstanceKey()).toBe('port43117')
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(1))
+
+    expect(deps.spawnRelay).toHaveBeenCalledWith(
+      'Ubuntu',
+      expect.objectContaining({ [WSL_HOOK_RELAY_INSTANCE_ENV]: 'port43117' }),
+      '0.1.0+abc'
+    )
+    expect(manager.getInstanceKey()).toBe('port43117')
+    manager.disposeAll()
+  })
+
+  it('does not expose an endpoint namespace without usable hook coordinates', () => {
+    const { manager } = createManager({
+      hookCoordsEnv: () => ({ ORCA_AGENT_HOOK_PORT: 'not-a-port' })
+    })
+
+    expect(manager.getInstanceKey()).toBeNull()
+    manager.disposeAll()
   })
 
   it('requires WSL fs-bridge home coordinates before exposing an endpoint path', () => {

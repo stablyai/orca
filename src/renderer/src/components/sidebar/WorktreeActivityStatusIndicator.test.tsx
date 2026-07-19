@@ -1,7 +1,7 @@
-import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeStatus } from '@/lib/worktree-status'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +15,9 @@ vi.mock('./use-worktree-activity-status', () => ({
 function renderMarkup(status: WorktreeStatus): string {
   mocks.status = status
   return renderToStaticMarkup(
-    React.createElement(WorktreeActivityStatusIndicator, { worktreeId: 'wt-child' })
+    <TooltipProvider>
+      <WorktreeActivityStatusIndicator worktreeId="wt-child" />
+    </TooltipProvider>
   )
 }
 
@@ -28,14 +30,30 @@ describe('WorktreeActivityStatusIndicator', () => {
     const markup = renderMarkup('inactive')
 
     expect(markup).toContain('Inactive')
-    expect(markup).toContain('bg-neutral-500/40')
-    expect(markup).not.toContain('bg-emerald-500')
+    expect(markup).toContain('bg-muted-foreground')
+    expect(markup).not.toContain('bg-status-success')
   })
 
   it('renders the shared active status when the worktree is live', () => {
     const markup = renderMarkup('active')
 
     expect(markup).toContain('Active')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('bg-status-success')
+  })
+
+  it('preserves a blocked worktree as destructive', () => {
+    const markup = renderMarkup('blocked')
+
+    expect(markup).toContain('Blocked')
+    expect(markup).toContain('bg-destructive')
+    expect(markup).not.toContain('bg-status-attention')
+  })
+
+  it('preserves an interrupted worktree as destructive', () => {
+    const markup = renderMarkup('interrupted')
+
+    expect(markup).toContain('Interrupted')
+    expect(markup).toContain('bg-destructive')
+    expect(markup).not.toContain('bg-status-success')
   })
 })

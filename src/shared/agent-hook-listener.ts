@@ -1618,11 +1618,35 @@ function extractOpenCodeToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  if (eventName === 'MessagePart' && hookPayload.role === 'assistant') {
-    const text = readString(hookPayload, 'text')
-    if (text) {
-      return { lastAssistantMessage: capOpenCodeHookText(text) }
+  if (eventName === 'MessagePart') {
+    if (hookPayload.role === 'user') {
+      // Why: the user part is OpenCode's only reliable new-turn boundary;
+      // repeated busy events also occur during retries and compaction.
+      return { ...clearActiveToolFieldsUpdate(), clearLastAssistantMessage: true }
     }
+    if (hookPayload.role === 'assistant') {
+      const text = readString(hookPayload, 'text')
+      if (text) {
+        return { lastAssistantMessage: capOpenCodeHookText(text) }
+      }
+    }
+  }
+  if (eventName === 'PermissionRequest') {
+    const permission = readString(hookPayload, 'permission')
+    const patterns = Array.isArray(hookPayload.patterns)
+      ? hookPayload.patterns.filter(
+          (pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0
+        )
+      : []
+    // Why: OpenCode supplies a permission category and patterns, not generic
+    // tool fields; surface context without inventing approval actions for its TUI.
+    return toolUpdate(
+      {
+        toolName: permission,
+        toolInput: patterns.length > 0 ? patterns.join(', ') : undefined
+      },
+      { hasToolInputField: hasOwnField(hookPayload, 'patterns') }
+    )
   }
   if (eventName === 'AskUserQuestion') {
     // Why: OpenCode posts the question.asked event's `event.properties` as the
@@ -1634,8 +1658,35 @@ function extractOpenCodeToolFields(
       : stripHookEnvelopeKeys(hookPayload)
     return {
       hasToolUpdate: true,
+      toolName: 'AskUserQuestion',
       interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
+  }
+  if (eventName === 'SessionError') {
+    const error =
+      typeof hookPayload.error === 'object' && hookPayload.error !== null
+        ? (hookPayload.error as Record<string, unknown>)
+        : {}
+    const data =
+      typeof error.data === 'object' && error.data !== null
+        ? (error.data as Record<string, unknown>)
+        : {}
+    return toolUpdate(
+      {
+        toolName: readString(error, 'name') ?? 'OpenCode error',
+        toolInput: readString(data, 'message') ?? readString(error, 'message') ?? 'Session failed'
+      },
+      { hasToolInputField: true }
+    )
+  }
+  if (
+    eventName === 'SessionBusy' ||
+    eventName === 'SessionIdle' ||
+    eventName === 'SessionAborted'
+  ) {
+    // Why: authoritative lifecycle boundaries retire request/tool context so an
+    // answered permission or interrupted tool cannot still look in-flight.
+    return clearActiveToolFieldsUpdate()
   }
   return {}
 }
@@ -3247,11 +3298,15 @@ function normalizeOpenCodeFamilyEvent(
   const stateName =
     eventName === 'SessionBusy' || eventName === 'MessagePart'
       ? 'working'
-      : eventName === 'SessionIdle'
-        ? 'done'
-        : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
-          ? 'waiting'
-          : null
+      : eventName === 'SessionError'
+        ? 'blocked'
+        : eventName === 'SessionIdle'
+          ? 'done'
+          : eventName === 'SessionAborted'
+            ? 'done'
+            : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
+              ? 'waiting'
+              : null
 
   if (!stateName) {
     return null
@@ -3274,7 +3329,8 @@ function normalizeOpenCodeFamilyEvent(
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted: eventName === 'SessionAborted' ? true : undefined
     })
   )
 }

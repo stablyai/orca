@@ -18,6 +18,7 @@ const setWorkspacePortScanRefreshing = vi.fn()
 const cacheTimerMocks = vi.hoisted(() => ({
   usePromptCacheCountdownStartedAt: vi.fn()
 }))
+const activityStatusMocks = vi.hoisted(() => ({ status: 'active' }))
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'ports']
 let hostedReviewCache: Record<string, unknown> = {}
@@ -80,7 +81,9 @@ vi.mock('@/components/ui/hover-card', () => ({
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => (
+    <span data-test-tooltip-content="">{children}</span>
+  ),
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
@@ -93,7 +96,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => 'active'
+  useWorktreeActivityStatus: () => activityStatusMocks.status
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -192,6 +195,7 @@ describe('WorktreeCard compact hover details', () => {
     settings = { compactWorktreeCards: true }
     agentActivityDisplayMode = undefined
     mockInlineAgentRows = []
+    activityStatusMocks.status = 'active'
     cacheTimerMocks.usePromptCacheCountdownStartedAt.mockReturnValue(null)
   })
 
@@ -422,6 +426,38 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup.match(/data-hover-open-delay="100"/g)).toHaveLength(1)
     expect(markup).toContain('Reviewer handoff note')
   })
+
+  it.each([
+    ['working', 'Working', 'border-status-working'],
+    ['interrupted', 'Interrupted', 'bg-destructive']
+  ])(
+    'keeps exact %s status discoverable in the whole-card hover without a competing tooltip',
+    async (status, label, glyphClassName) => {
+      settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+      worktreeCardProperties = ['status', 'comment']
+      activityStatusMocks.status = status
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree({ comment: 'Hover owner' })}
+          repo={makeRepo()}
+          isActive={false}
+        />
+      )
+      const activitySection =
+        markup.match(
+          new RegExp(
+            `<section[^>]*data-worktree-hover-activity-status="${status}"[\\s\\S]*?</section>`
+          )
+        )?.[0] ?? ''
+
+      expectParentBodyIsHoverTrigger(markup)
+      expect(activitySection).toContain(`Activity: ${label}`)
+      expect(activitySection).toContain(glyphClassName)
+      expect(markup).not.toContain(`data-test-tooltip-content="">${label}</span>`)
+    }
+  )
 
   it('keeps long workspace and branch identity in whole-card hover details when the branch row is hidden', async () => {
     settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }

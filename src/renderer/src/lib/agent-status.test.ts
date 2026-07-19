@@ -833,8 +833,8 @@ describe('mapAgentStatusStateToVisualStatus', () => {
     expect(mapAgentStatusStateToVisualStatus('working')).toBe('working')
   })
 
-  it("maps 'blocked' to 'permission'", () => {
-    expect(mapAgentStatusStateToVisualStatus('blocked')).toBe('permission')
+  it("maps 'blocked' to 'blocked'", () => {
+    expect(mapAgentStatusStateToVisualStatus('blocked')).toBe('blocked')
   })
 
   it("maps 'waiting' to 'permission'", () => {

@@ -82,7 +82,8 @@ vi.mock('./shell-icons', () => ({
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: ({ agent }: { agent: string }) => <span data-agent-catalog-icon={agent} />
+  AgentIcon: ({ agent }: { agent: string }) => <span data-agent-catalog-icon={agent} />,
+  getAgentLabel: () => 'Claude'
 }))
 
 vi.mock('../../../../shared/agent-title-decoration', () => ({

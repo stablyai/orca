@@ -38,7 +38,7 @@ describe('getWorktreeStatus', () => {
     )
 
     expect(status).toBe('permission')
-    expect(getWorktreeStatusLabel(status)).toBe('Needs permission')
+    expect(getWorktreeStatusLabel(status)).toBe('Needs attention')
   })
 
   it('treats browser-only worktrees as active', () => {
@@ -57,6 +57,13 @@ describe('getWorktreeStatus', () => {
     const status = getWorktreeStatus([], [], {}, {}, { liveAgentStatus: 'permission' })
 
     expect(status).toBe('permission')
+  })
+
+  it('preserves a blocked agent status without a renderer PTY', () => {
+    const status = getWorktreeStatus([], [], {}, {}, { liveAgentStatus: 'blocked' })
+
+    expect(status).toBe('blocked')
+    expect(getWorktreeStatusLabel(status)).toBe('Blocked')
   })
 
   it('returns inactive when neither tabs nor browser state are live', () => {
@@ -238,6 +245,41 @@ describe('resolveWorktreeStatus', () => {
     })
 
     expect(status).toBe('permission')
+  })
+
+  it('lets an explicit blocked row outrank permission and working siblings', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasBlocked: true,
+      hasPermission: true,
+      hasLiveWorking: true,
+      hasLiveInterrupted: true,
+      hasLiveDone: true,
+      hasRetainedDone: true
+    })
+
+    expect(status).toBe('blocked')
+  })
+
+  it('keeps live states above interrupted and interrupted above successful done', () => {
+    const base = {
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveInterrupted: true,
+      hasLiveDone: true,
+      hasRetainedDone: true
+    }
+
+    expect(resolveWorktreeStatus(base)).toBe('interrupted')
+    expect(resolveWorktreeStatus({ ...base, hasLiveWorking: true })).toBe('working')
+    expect(resolveWorktreeStatus({ ...base, hasPermission: true })).toBe('permission')
+    expect(resolveWorktreeStatus({ ...base, hasBlocked: true })).toBe('blocked')
+    expect(getWorktreeStatusLabel(resolveWorktreeStatus(base))).toBe('Interrupted')
   })
 
   it('promotes to working from a fresh explicit agent row before pane titles restore', () => {

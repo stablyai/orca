@@ -357,6 +357,18 @@ describe('WorktreeCardAgents', () => {
     expect(markup).not.toContain('Prompt cache expires')
   })
 
+  it('shows live request context on a compact waiting row', async () => {
+    const { CompactAgentRow } = await import('./worktree-card-compact-agents')
+    const agent = mockAgent({ state: 'waiting', prompt: 'Ship this?' }) as DashboardAgentRowData
+    agent.entry.toolName = 'bash'
+    agent.entry.toolInput = 'git push'
+    const markup = renderToStaticMarkup(
+      <CompactAgentRow agent={agent} now={2000} onActivate={vi.fn()} />
+    )
+
+    expect(markup).toContain('bash: git push')
+  })
+
   it('marks only the focused agent row', async () => {
     mockAgentActivityDisplayMode = 'full'
     mockFocusedAgentPaneKey = 'tab-1:2'

@@ -2947,7 +2947,8 @@
             "splitTerminal": "Split terminal"
           },
           "TerminalTabLeadingIcon": {
-            "7ab2964bea": "Unread agent completion"
+            "7ab2964bea": "Unread agent completion",
+            "unreadTerminalActivity": "Unread terminal activity"
           }
         }
       },

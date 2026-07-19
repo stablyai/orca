@@ -108,8 +108,10 @@ function getSectionWorktreeStatus(
     runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
     agentStatusPaneIdsByTabId: agentSummary.agentStatusPaneIdsByTabId,
     terminalLayoutRootsByTabId: state.terminalLayoutRootsByTabId,
+    hasBlocked: agentSummary.hasBlocked,
     hasPermission: agentSummary.hasPermission,
     hasLiveWorking: agentSummary.hasLiveWorking,
+    hasLiveInterrupted: agentSummary.hasLiveInterrupted,
     hasLiveDone: agentSummary.hasLiveDone,
     hasRetainedDone: agentSummary.hasRetainedDone
   })

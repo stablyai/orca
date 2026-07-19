@@ -87,7 +87,7 @@ export function AgentRow(props: {
           <AgentStateDot state="working" size="md" />
         ) : (
           <span
-            className="inline-flex items-center justify-center text-emerald-500"
+            className="inline-flex items-center justify-center text-status-success"
             style={{
               height: 'var(--feature-wall-agent-status-icon, 12px)',
               width: 'var(--feature-wall-agent-status-icon, 12px)'

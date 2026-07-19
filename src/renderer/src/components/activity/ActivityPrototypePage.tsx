@@ -1374,15 +1374,20 @@ function ThreadRow({
               </div>
             </div>
             <span className="inline-flex shrink-0 items-center gap-1.5 pt-px">
-              <span className="inline-flex size-4 shrink-0 items-center justify-center">
+              <span
+                className="inline-flex size-4 shrink-0 items-center justify-center"
+                role={thread.unread ? 'img' : undefined}
+                aria-label={
+                  thread.unread
+                    ? translate(
+                        'auto.components.activity.ActivityPrototypePage.beb2c19173',
+                        'Unread'
+                      )
+                    : undefined
+                }
+              >
                 {thread.unread ? (
-                  <FilledBellIcon
-                    className="size-[13px] shrink-0 text-amber-500 drop-shadow-sm"
-                    aria-label={translate(
-                      'auto.components.activity.ActivityPrototypePage.beb2c19173',
-                      'Unread'
-                    )}
-                  />
+                  <FilledBellIcon className="size-[13px] shrink-0 text-status-attention drop-shadow-sm" />
                 ) : (
                   <Tooltip>
                     <TooltipTrigger asChild>

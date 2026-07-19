@@ -44,6 +44,7 @@ function makeTab(id: string, worktreeId: string): TerminalTab {
 function makeAgentStatusEntry(args: {
   paneKey: string
   state: AgentStatusEntry['state']
+  interrupted?: boolean
   worktreeId?: string
   parentPaneKey?: string
 }): AgentStatusEntry {
@@ -54,6 +55,7 @@ function makeAgentStatusEntry(args: {
     updatedAt: 1_000,
     stateStartedAt: 1_000,
     stateHistory: [],
+    interrupted: args.interrupted,
     worktreeId: args.worktreeId,
     orchestration: args.parentPaneKey
       ? {
@@ -169,6 +171,28 @@ describe('useWorktreeActivityStatus', () => {
     }
 
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
+  })
+
+  it('preserves an interrupted hook outcome instead of reporting successful done', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    mockState = {
+      ...mockState,
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId)]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1']
+      },
+      agentStatusEpoch: 1,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done', interrupted: true })
+      }
+    }
+
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>interrupted</span>'
+    )
   })
 
   it('lets a retained done row override the same pane stale working title', () => {

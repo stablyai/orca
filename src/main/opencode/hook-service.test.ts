@@ -28,14 +28,16 @@ import { OpenCodeHookService, _internals } from './hook-service'
 const { isUsableId, toSafeDirName } = _internals
 
 describe('OpenCode hook plugin source', () => {
-  it('filters child sessions via parentID lookup before forwarding events', () => {
+  it('rolls child attention up to its root while filtering child lifecycle events', () => {
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain('async function isChildSession(client, sessionID)')
-    expect(source).toContain('const sessions = await client.session.list();')
-    expect(source).toContain('const isChild = !!session?.parentID;')
-    expect(source).toContain('if (sessionID && (await isChildSession(client, sessionID))) {')
-    expect(source).toContain('return true;')
+    expect(source).toContain('async function resolveRootSessionID(client, sessionID)')
+    expect(source).toContain('const response = await client.session.list();')
+    expect(source).toContain('while (session) {')
+    expect(source).toContain('if (!rootSessionID || rootSessionID !== sessionID) return;')
+    expect(
+      source.indexOf('if (event.type === "permission.asked" || event.type === "question.asked")')
+    ).toBeLessThan(source.indexOf('if (!rootSessionID || rootSessionID !== sessionID) return;'))
   })
 
   it('still accepts an optional opaque plugin context instead of destructuring', () => {
@@ -95,26 +97,60 @@ describe('OpenCode hook plugin source', () => {
     // moments — `permission.asked` (blocks on tool approval) and
     // `question.asked` (the agent called an ask-the-user tool). The plugin
     // must forward both so the server-side normalizer can map each to
-    // `waiting` and render the red indicator. Dropping `question.asked`
+    // `waiting` and render the amber needs-attention indicator. Dropping `question.asked`
     // leaves the pane stuck in `working` while the agent is actually idle,
     // waiting on a human reply — exactly the bug other OpenCode integrations
     // also handle.
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain('if (event.type === "question.asked")')
-    expect(source).toContain('await post("AskUserQuestion", event.properties || {});')
+    expect(source).toContain(
+      'if (event.type === "permission.asked" || event.type === "question.asked")'
+    )
+    expect(source).toContain(
+      'event.type === "permission.asked" ? "PermissionRequest" : "AskUserQuestion"'
+    )
+    expect(source).toContain('event.type === "permission.asked" ? "permission" : "question"')
+  })
+
+  it('restores working after OpenCode resolves a permission or question', () => {
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('if (event.type === "permission.replied")')
+    expect(source).toContain(
+      'if (event.type === "question.replied" || event.type === "question.rejected")'
+    )
+    expect(source).toContain('await resolveWaiting(properties, "permission");')
+    expect(source).toContain('await resolveWaiting(properties, "question");')
+    expect(source).toContain('await publishAggregateStatus(resolved.rootSessionID);')
+  })
+
+  it('serializes fire-and-forget OpenCode event callbacks', () => {
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('let eventQueue = Promise.resolve();')
+    expect(source).toContain('event: ({ event }) => enqueuePluginWork(() => handleEvent(event))')
+  })
+
+  it('does not treat session.error as an idle lifecycle event', () => {
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('if (event.type === "session.error") {')
+    expect(source).not.toContain(
+      'if (event.type === "session.idle" || event.type === "session.error")'
+    )
   })
 
   it('forwards sessionID on status and message posts for resume metadata', () => {
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain(
-      'await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });'
-    )
+    expect(source).toContain('text: capMessagePartText(part.text),')
+    expect(source).toContain('messageID: part.messageID,')
+    expect(source).toContain('sessionID,')
     expect(source).toContain('messageID: pending.messageID,')
     expect(source).toContain('sessionID: pending.sessionID,')
-    expect(source).toContain('await setStatus("busy", { sessionID });')
-    expect(source.match(/await setStatus\("idle", \{ sessionID \}\);/g) ?? []).toHaveLength(2)
+    expect(source).toContain('busyRootSessionIds.add(rootSessionID);')
+    expect(source).toContain('busyRootSessionIds.delete(rootSessionID);')
+    expect(source).toContain('await publishAggregateStatus(rootSessionID);')
   })
 
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {

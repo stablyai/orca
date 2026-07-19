@@ -5,6 +5,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import { installWslGuestHooks } from './wsl-hook-fs-adapter'
 import { buildWslRelaySpawnEnv, launchWslRelayWithInstall } from './wsl-hook-relay-launch'
+import { WslHookRelayInstanceKeyResolver } from './wsl-hook-relay-instance-key'
 import {
   defaultWslHookRelayDeps,
   FAILURE_COOLDOWN_BASE_MS,
@@ -21,7 +22,6 @@ import { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
 import {
-  sanitizeWslHookInstanceKey,
   WSL_HOOK_FS_METHODS,
   wslHookRelayEndpointFilePath
 } from '../../shared/wsl-hook-relay-contract'
@@ -51,6 +51,7 @@ export class WslHookRelayManager {
   private recovery: WslRelayRecovery
   private states = new Map<string, DistroState>()
   private defaultDistro: string | null = null
+  private instanceKeyResolver = new WslHookRelayInstanceKeyResolver()
   private disposed = false
   private warnedBundleMissing = false
 
@@ -83,6 +84,14 @@ export class WslHookRelayManager {
         `[agent-hooks] WSL hook relay ensure failed: ${err instanceof Error ? err.message : String(err)}`
       )
     })
+  }
+
+  /** Exact endpoint namespace the guest relay will use, available before connect. */
+  getInstanceKey(): string | null {
+    if (this.disposed || this.deps.platform() !== 'win32' || !this.deps.remoteHooksEnabled()) {
+      return null
+    }
+    return this.instanceKeyResolver.resolve(this.deps.hookCoordsEnv(), this.deps.instanceKey)
   }
 
   /** Guest endpoint file path once known; null before first connect
@@ -136,8 +145,10 @@ export class WslHookRelayManager {
     }
     // Why: restart-stable instance identity keeps the guest endpoint file at
     // ONE path across restarts so daemon-surviving agents re-coordinate.
-    const instanceKey =
-      sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined) ?? `port${port}`
+    const instanceKey = this.instanceKeyResolver.resolve(coords, this.deps.instanceKey)
+    if (!instanceKey) {
+      return
+    }
     if (existing) {
       this.recovery.clearTimers(existing)
     }

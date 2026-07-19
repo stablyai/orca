@@ -1,14 +1,21 @@
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TerminalTab, TuiAgent } from '../../../../shared/types'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { ShellIcon } from './shell-icons'
-import type { TerminalTabActivityStatus } from './terminal-tab-activity-status'
+import type {
+  TerminalTabActivityStatus,
+  TerminalTabUnreadKind
+} from './terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
 
 type TerminalTabLeadingIconProps = {
   agent: TuiAgent | null
+  activityAgent?: TuiAgent | null
+  unreadAgent?: TuiAgent | null
+  unreadKind: TerminalTabUnreadKind | null
   activityStatus: TerminalTabActivityStatus
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
@@ -17,8 +24,11 @@ type TerminalTabLeadingIconProps = {
 
 type TerminalTabAgentIdentityIconProps = {
   agent: TuiAgent
-  isActive: boolean
   className?: string
+}
+
+function providerStatusLabel(agent: TuiAgent | null, statusLabel: string): string {
+  return agent ? `${getAgentLabel(agent)} · ${statusLabel}` : statusLabel
 }
 
 /**
@@ -36,6 +46,10 @@ function activityDotState(status: TerminalTabActivityStatus): AgentDotState | nu
       return 'permission'
     case 'done':
       return 'done'
+    case 'blocked':
+      return 'blocked'
+    case 'interrupted':
+      return 'interrupted'
     case 'active':
     case 'inactive':
       return null
@@ -45,63 +59,134 @@ function activityDotState(status: TerminalTabActivityStatus): AgentDotState | nu
 /** Keep the provider glyph treatment identical across every terminal-tab state. */
 function TerminalTabAgentIdentityIcon({
   agent,
-  isActive,
   className
 }: TerminalTabAgentIdentityIconProps): React.JSX.Element {
   return (
-    <span
-      className={cn('inline-flex', !isActive && 'opacity-70', className)}
-      data-agent-icon={agent}
-      aria-hidden
-    >
+    <span className={cn('inline-flex', className)} data-agent-icon={agent} aria-hidden>
       <AgentIcon agent={agent} size={12} />
     </span>
   )
 }
 
-/** Render a terminal tab's current state without hiding its agent or shell identity. */
+/** Render a tab state with provider identity only when ownership is truthful. */
 export function TerminalTabLeadingIcon({
   agent,
+  activityAgent,
+  unreadAgent,
+  unreadKind,
   activityStatus,
   shell,
   showUnreadActivity,
   isActive
 }: TerminalTabLeadingIconProps): React.JSX.Element {
-  if (showUnreadActivity) {
-    return (
-      <span
-        data-testid="tab-activity-bell"
-        aria-label={translate(
-          'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
-          'Unread agent completion'
-        )}
-        className="mr-1 inline-flex shrink-0 items-center gap-1"
-      >
-        <FilledBellIcon className="size-3 text-amber-500 drop-shadow-sm" />
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
-      </span>
-    )
-  }
-
   const dotState = activityDotState(activityStatus)
-  if (dotState) {
+  // Why: the tab state aggregates every split pane, while `agent` describes
+  // the focused pane. Use the winning/unread pane provider when unique; an
+  // explicit null intentionally yields truthful provider-neutral copy.
+  const displayedAgent = showUnreadActivity
+    ? unreadAgent === undefined
+      ? agent
+      : unreadAgent
+    : dotState
+      ? activityAgent === undefined
+        ? agent
+        : activityAgent
+      : agent
+
+  if (showUnreadActivity) {
+    const unreadLabel =
+      unreadKind === 'agent-completion'
+        ? translate(
+            'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
+            'Unread agent completion'
+          )
+        : translate(
+            'auto.components.tab.bar.TerminalTabLeadingIcon.unreadTerminalActivity',
+            'Unread terminal activity'
+          )
+    const label = providerStatusLabel(displayedAgent, unreadLabel)
     return (
-      <span
-        data-testid="tab-agent-activity-indicator"
-        data-agent-activity-status={activityStatus}
-        className="mr-1 inline-flex shrink-0 items-center gap-1"
-      >
-        <AgentStateDot state={dotState} size="md" />
-        {/* Why: status and identity answer different questions. Keep the agent
-            logo beside the state glyph so parallel tabs remain scannable. */}
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            data-testid="tab-activity-bell"
+            data-unread-kind={unreadKind ?? undefined}
+            role="img"
+            aria-label={label}
+            className={cn(
+              'mr-1 inline-flex shrink-0 items-center',
+              (displayedAgent || agent) && 'w-7 gap-1'
+            )}
+          >
+            <FilledBellIcon className="size-3 text-status-attention drop-shadow-sm" />
+            {displayedAgent ? (
+              <TerminalTabAgentIdentityIcon agent={displayedAgent} />
+            ) : agent ? (
+              // Why: mixed provider ownership requires neutral copy, but the
+              // identity slot stays reserved so the tab title never jumps.
+              <span className="size-3 shrink-0" aria-hidden />
+            ) : null}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
     )
   }
 
-  if (agent) {
+  if (dotState) {
+    const label = providerStatusLabel(displayedAgent, agentStateLabel(dotState))
     return (
-      <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} className="mr-1 shrink-0" />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            data-testid="tab-agent-activity-indicator"
+            data-agent-activity-status={activityStatus}
+            role="img"
+            aria-label={label}
+            className={cn(
+              'mr-1 inline-flex shrink-0 items-center',
+              (displayedAgent || agent) && 'w-7 gap-1'
+            )}
+          >
+            <AgentStateDot state={dotState} size="md" aria-hidden="true" />
+            {/* Why: status and identity answer different questions. Show the
+                provider only when every winning pane agrees on its owner. */}
+            {displayedAgent ? (
+              <TerminalTabAgentIdentityIcon agent={displayedAgent} />
+            ) : agent ? (
+              <span className="size-3 shrink-0" aria-hidden />
+            ) : null}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  if (displayedAgent) {
+    const label = getAgentLabel(displayedAgent)
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="mr-1 inline-flex w-7 shrink-0 items-center gap-1"
+            role="img"
+            aria-label={label}
+          >
+            {/* Why: reserve the status column so the title never shifts when this
+                quiet tab starts working, needs attention, or completes. */}
+            <span className="size-3 shrink-0" aria-hidden />
+            <TerminalTabAgentIdentityIcon agent={displayedAgent} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
     )
   }
 

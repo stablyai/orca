@@ -1,11 +1,17 @@
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
+import { agentTypeToIconAgent, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import {
+  collectTabTitleActivityAgentTypes,
+  resolveWorktreeStatus,
+  type WorktreeStatus
+} from '@/lib/worktree-status'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type AgentType
 } from '../../../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
 // a container of tabs. Reuse the WorktreeCard status vocabulary and resolver so
@@ -14,13 +20,28 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/typ
 export type TerminalTabActivityStatus = WorktreeStatus
 
 // Per-tab live-hook flags, mirroring applyLiveAgentState in
-// worktree-agent-activity-summary.ts. blocked/waiting collapse to permission,
-// matching every other status surface in the app.
+// worktree-agent-activity-summary.ts. Keep destructive outcomes separate because
+// this tab surface can show their exact glyphs instead of an aggregate dot.
 type TerminalTabActivityFlags = {
+  hasBlocked: boolean
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveDone: boolean
+  hasLiveInterrupted: boolean
+  agentsByStatus: Record<ProviderOwnedActivityStatus, Set<TuiAgent | null>>
   paneIds: Set<string>
+}
+
+type ProviderOwnedActivityStatus = 'blocked' | 'permission' | 'working' | 'interrupted' | 'done'
+
+function createAgentCandidates(): Record<ProviderOwnedActivityStatus, Set<TuiAgent | null>> {
+  return {
+    blocked: new Set(),
+    permission: new Set(),
+    working: new Set(),
+    interrupted: new Set(),
+    done: new Set()
+  }
 }
 
 type FlagsCache = {
@@ -65,23 +86,35 @@ function getTerminalTabActivityFlags(
     let flags = flagsByTabId.get(identity.tabId)
     if (!flags) {
       flags = {
+        hasBlocked: false,
         hasPermission: false,
         hasLiveWorking: false,
         hasLiveDone: false,
+        hasLiveInterrupted: false,
+        agentsByStatus: createAgentCandidates(),
         paneIds: new Set()
       }
       flagsByTabId.set(identity.tabId, flags)
     }
     flags.paneIds.add(identity.paneId)
-    if (entry.state === 'blocked' || entry.state === 'waiting') {
+    const agent = agentTypeToIconAgent(entry.agentType)
+    if (entry.state === 'blocked') {
+      flags.hasBlocked = true
+      flags.agentsByStatus.blocked.add(agent)
+    } else if (entry.state === 'waiting') {
       flags.hasPermission = true
+      flags.agentsByStatus.permission.add(agent)
     } else if (entry.state === 'working') {
       flags.hasLiveWorking = true
+      flags.agentsByStatus.working.add(agent)
     } else if (entry.state === 'done') {
-      // Why: an interrupted `done` still reads as completed here, matching the
-      // WorktreeCard dot (resolveWorktreeStatus has no interrupted state); only
-      // the smart-sort ordering treats interrupts as idle.
       flags.hasLiveDone = true
+      if (entry.interrupted === true) {
+        flags.hasLiveInterrupted = true
+        flags.agentsByStatus.interrupted.add(agent)
+      } else {
+        flags.agentsByStatus.done.add(agent)
+      }
     }
   }
 
@@ -104,7 +137,7 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
 type TerminalTabActivityInput = {
-  tab: Pick<TerminalTab, 'id' | 'title'>
+  tab: Pick<TerminalTab, 'id' | 'title'> & Partial<Pick<TerminalTab, 'launchAgent'>>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
   // Why: the store bumps this at the 30m stale boundary without replacing the
   // pane-status map; it is the flag cache's invalidation key (see above).
@@ -118,36 +151,96 @@ type TerminalTabActivityInput = {
  * Resolve a terminal tab's status glyph through the canonical WorktreeCard
  * resolver. Fresh hook state is authoritative per pane; hookless-but-live panes
  * fall back to the same title heuristic used by the sidebar and smart sort.
- * Returns a `WorktreeStatus` primitive so the tab re-renders only when it flips.
+ * Returns one primitive status so the tab re-renders only when that value flips.
  */
-export function resolveTerminalTabActivityStatus({
+export function resolveTerminalTabActivityStatus(
+  input: TerminalTabActivityInput
+): TerminalTabActivityStatus {
+  return resolveTerminalTabActivityPresentation(input).status
+}
+
+export type TerminalTabActivityPresentation = {
+  status: TerminalTabActivityStatus
+  agent: TuiAgent | null | undefined
+}
+
+/** Resolve both the winning aggregate state and the pane provider that owns it. */
+export function resolveTerminalTabActivityPresentation({
   tab,
   agentStatusByPaneKey,
   agentStatusEpoch,
   runtimePaneTitlesByTabId,
   ptyIdsByTabId,
   terminalLayout
-}: TerminalTabActivityInput): TerminalTabActivityStatus {
+}: TerminalTabActivityInput): TerminalTabActivityPresentation {
   const flags = getTerminalTabActivityFlags(agentStatusByPaneKey, agentStatusEpoch).get(tab.id)
-  return resolveWorktreeStatus({
+  const resolvedPaneTitlesByTabId = runtimePaneTitlesByTabId ?? {}
+  const resolvedPtyIdsByTabId = ptyIdsByTabId ?? {}
+  const terminalLayoutsByTabId = terminalLayout ? { [tab.id]: terminalLayout } : undefined
+  const titleSelectionOptions = {
+    agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
+    terminalLayoutsByTabId
+  }
+  const status = resolveWorktreeStatus({
     tabs: [tab],
     browserTabs: [],
-    ptyIdsByTabId: ptyIdsByTabId ?? {},
-    runtimePaneTitlesByTabId: runtimePaneTitlesByTabId ?? {},
-    agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
-    terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
+    ptyIdsByTabId: resolvedPtyIdsByTabId,
+    runtimePaneTitlesByTabId: resolvedPaneTitlesByTabId,
+    ...titleSelectionOptions,
+    hasBlocked: flags?.hasBlocked ?? false,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
+    hasLiveInterrupted: flags?.hasLiveInterrupted ?? false,
     hasLiveDone: flags?.hasLiveDone ?? false,
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
     hasRetainedDone: false
   })
+  const titleAgentTypes =
+    (status === 'working' || status === 'permission') &&
+    tabHasLivePty(resolvedPtyIdsByTabId, tab.id)
+      ? collectTabTitleActivityAgentTypes(
+          tab,
+          resolvedPaneTitlesByTabId,
+          status,
+          titleSelectionOptions
+        )
+      : EMPTY_AGENT_TYPES
+  return { status, agent: resolveUniqueWinningAgent(status, flags, titleAgentTypes) }
+}
+
+const EMPTY_AGENT_TYPES: ReadonlySet<AgentType> = new Set()
+
+function resolveUniqueWinningAgent(
+  status: TerminalTabActivityStatus,
+  flags: TerminalTabActivityFlags | undefined,
+  titleAgentTypes: ReadonlySet<AgentType>
+): TuiAgent | null | undefined {
+  const candidates = new Set<TuiAgent | null>()
+  if (status !== 'active' && status !== 'inactive') {
+    for (const agent of flags?.agentsByStatus[status] ?? []) {
+      candidates.add(agent)
+    }
+  }
+  for (const agentType of titleAgentTypes) {
+    candidates.add(agentTypeToIconAgent(agentType))
+  }
+  // Why: undefined means no winning ownership evidence, so the tab may keep
+  // its focused identity. Null is reserved for conflicting or unknown owners.
+  if (candidates.size === 0) {
+    return undefined
+  }
+  // Why: a provider label is truthful only when every pane that produced the
+  // winning state agrees; unknown or mixed providers require aggregate copy.
+  if (candidates.size !== 1) {
+    return null
+  }
+  return candidates.values().next().value ?? null
 }
 
 /** True while the tab shows a live in-turn signal (spinner or needs-input). */
 export function isTerminalTabActivityLive(status: TerminalTabActivityStatus): boolean {
-  return status === 'working' || status === 'permission'
+  return status === 'working' || status === 'permission' || status === 'blocked'
 }
 
 /** Match pane-level unread completion markers to their owning terminal tab. */
@@ -156,16 +249,100 @@ export function hasUnreadAgentCompletionForTerminalTab(
   tabId: string
 ): boolean {
   for (const paneKey of Object.keys(unreadAgentCompletionPanes ?? {})) {
-    // paneKey is `${tabId}:${leafId}` and tab ids never contain ":", so the
-    // prefix up to the first ":" is the owning tab id (see
-    // selectFloatingWorkspaceHasUnread). Prefix-match to keep legacy keys.
-    const separatorIndex = paneKey.indexOf(':')
-    const owningTabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
-    if (owningTabId === tabId) {
+    if (paneKeyBelongsToTab(paneKey, tabId)) {
       return true
     }
   }
   return false
+}
+
+type TerminalTabUnreadActivityInput = {
+  tabId: string
+  hasUnreadTerminalTab?: boolean
+  unreadAgentCompletionPanes?: Record<string, true>
+  agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  retainedAgentsByPaneKey?: Record<string, { entry: Pick<AgentStatusEntry, 'agentType'> }>
+  sleepingAgentSessionsByPaneKey?: Record<string, { agent: TuiAgent }>
+}
+
+export type TerminalTabUnreadActivity = {
+  hasUnread: boolean
+  kind: TerminalTabUnreadKind | null
+  agent: TuiAgent | null | undefined
+}
+
+export type TerminalTabUnreadKind = 'terminal-activity' | 'agent-completion'
+
+type TerminalTabUnreadVisibilityInput = {
+  hasUnreadActivity: boolean
+  unreadActivityKind: TerminalTabUnreadKind | null
+  activityStatus: TerminalTabActivityStatus
+  isEditing: boolean
+}
+
+/** Resolve whether unread owns the terminal tab's leading status lane. */
+export function shouldShowTerminalTabUnreadActivity({
+  hasUnreadActivity,
+  unreadActivityKind,
+  activityStatus,
+  isEditing
+}: TerminalTabUnreadVisibilityInput): boolean {
+  if (!hasUnreadActivity || unreadActivityKind === null || isEditing) {
+    return false
+  }
+  // Why: interrupted is a newer destructive outcome, not a live state, but it
+  // must still replace stale unread from an earlier turn just like the sidebar.
+  return activityStatus !== 'interrupted' && !isTerminalTabActivityLive(activityStatus)
+}
+
+/** Resolve unread presence and the exact completion-pane provider when unique. */
+export function resolveTerminalTabUnreadActivity({
+  tabId,
+  hasUnreadTerminalTab = false,
+  unreadAgentCompletionPanes,
+  agentStatusByPaneKey,
+  retainedAgentsByPaneKey,
+  sleepingAgentSessionsByPaneKey
+}: TerminalTabUnreadActivityInput): TerminalTabUnreadActivity {
+  const candidates = new Set<TuiAgent | null>()
+  let hasUnreadAgentCompletion = false
+  for (const paneKey of Object.keys(unreadAgentCompletionPanes ?? {})) {
+    if (!paneKeyBelongsToTab(paneKey, tabId)) {
+      continue
+    }
+    hasUnreadAgentCompletion = true
+    candidates.add(
+      agentTypeToIconAgent(agentStatusByPaneKey?.[paneKey]?.agentType) ??
+        agentTypeToIconAgent(retainedAgentsByPaneKey?.[paneKey]?.entry.agentType) ??
+        sleepingAgentSessionsByPaneKey?.[paneKey]?.agent ??
+        null
+    )
+  }
+  return {
+    hasUnread: hasUnreadTerminalTab || hasUnreadAgentCompletion,
+    // Why: completion is the more specific event when both unread sources are
+    // present; generic bytes must never claim that an agent completed.
+    kind: hasUnreadAgentCompletion
+      ? 'agent-completion'
+      : hasUnreadTerminalTab
+        ? 'terminal-activity'
+        : null,
+    // Generic terminal unread has no contradictory pane owner, so undefined
+    // preserves the tab identity. Completion evidence must agree or stay neutral.
+    agent: !hasUnreadAgentCompletion
+      ? undefined
+      : candidates.size === 1
+        ? (candidates.values().next().value ?? null)
+        : null
+  }
+}
+
+function paneKeyBelongsToTab(paneKey: string, tabId: string): boolean {
+  // paneKey is `${tabId}:${leafId}` and tab ids never contain ":". Prefix
+  // matching also keeps legacy numeric and temporarily malformed keys safe.
+  const separatorIndex = paneKey.indexOf(':')
+  const owningTabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
+  return owningTabId === tabId
 }
 
 /** Test-only: clear the memoized per-tab flag cache between cases. */

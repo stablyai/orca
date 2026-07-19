@@ -24,11 +24,8 @@ import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-widt
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
-import {
-  hasUnreadAgentCompletionForTerminalTab,
-  isTerminalTabActivityLive,
-  resolveTerminalTabActivityStatus
-} from './terminal-tab-activity-status'
+import { shouldShowTerminalTabUnreadActivity } from './terminal-tab-activity-status'
+import { useTerminalTabStatusPresentation } from './use-terminal-tab-status-presentation'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -85,27 +82,15 @@ export default function SortableTab({
   isChatView = false,
   onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
-  // Why: agent-completion unread is pane-keyed and exists even when the
-  // experimental generic terminal-attention setting is off. Collapse both
-  // sources to one per-tab primitive so unrelated tabs do not re-render.
-  const hasUnreadActivity = useAppStore(
-    (s) =>
-      s.unreadTerminalTabs[tab.id] === true ||
-      hasUnreadAgentCompletionForTerminalTab(s.unreadAgentCompletionPanes, tab.id)
-  )
-  // Why: the resolver returns a WorktreeStatus primitive, so unrelated agent
-  // updates can't repaint this tab. The per-tab pane bucketing it reads is
-  // memoized once per store snapshot, so this stays O(1) per tab per write.
-  const activityStatus = useAppStore((s) =>
-    resolveTerminalTabActivityStatus({
-      tab,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      agentStatusEpoch: s.agentStatusEpoch,
-      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
-    })
-  )
+  // Why: pane-aggregate state and unread must carry pane-aggregate provider
+  // ownership; the hook selects stable primitives so unrelated tabs stay quiet.
+  const {
+    hasUnreadActivity,
+    unreadActivityKind,
+    unreadActivityAgent,
+    status: activityStatus,
+    agent: activityAgent
+  } = useTerminalTabStatusPresentation(tab)
   const renamingTabId = useAppStore((s) => s.renamingTabId)
   const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
@@ -137,11 +122,12 @@ export default function SortableTab({
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isEditing, setIsEditing] = useState(false)
-  // Why: a live working/needs-input state is newer and more specific than an
-  // unread event from the prior turn. It owns the icon until the turn ends;
-  // the unread completion bell then returns if the tab is still unvisited.
-  const showUnreadActivity =
-    hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
+  const showUnreadActivity = shouldShowTerminalTabUnreadActivity({
+    hasUnreadActivity,
+    unreadActivityKind,
+    activityStatus,
+    isEditing
+  })
   const [renameValue, setRenameValue] = useState('')
   const renameFocusFrameRef = useRef<number | null>(null)
   // Why: React's synthetic onBlur fires during the Input's unmount when isEditing flips
@@ -307,10 +293,13 @@ export default function SortableTab({
       {showUnreadActivity && (
         // Why: a real DOM child leaves both drop-indicator pseudo-elements
         // available and keeps pointer events reaching the tab beneath it.
-        <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
+        <span aria-hidden className="pointer-events-none absolute inset-0 bg-status-attention/10" />
       )}
       <TerminalTabLeadingIcon
         agent={tabAgent}
+        activityAgent={activityAgent}
+        unreadAgent={unreadActivityAgent}
+        unreadKind={unreadActivityKind}
         activityStatus={activityStatus}
         shell={shellForIcon}
         showUnreadActivity={showUnreadActivity}

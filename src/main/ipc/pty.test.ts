@@ -12,6 +12,7 @@ import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { TuiAgent } from '../../shared/types'
+import { ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV } from '../../shared/wsl-opencode-materializer-contract'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
@@ -43,6 +44,7 @@ const {
   getPathMock,
   loginPreflightExecFileMock,
   spawnMock,
+  configureWslOpenCodeShellMaterializerMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   mimoCodeBuildPtyEnvMock,
@@ -75,6 +77,7 @@ const {
   getPathMock: vi.fn(),
   loginPreflightExecFileMock: vi.fn(),
   spawnMock: vi.fn(),
+  configureWslOpenCodeShellMaterializerMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   mimoCodeBuildPtyEnvMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
@@ -143,6 +146,10 @@ vi.mock('../opencode/hook-service', () => ({
     buildPtyEnv: openCodeBuildPtyEnvMock,
     clearPty: openCodeClearPtyMock
   }
+}))
+
+vi.mock('../pty/wsl-opencode-shell-materializer', () => ({
+  configureWslOpenCodeShellMaterializer: configureWslOpenCodeShellMaterializerMock
 }))
 
 vi.mock('../mimo/hook-service', () => ({
@@ -338,6 +345,7 @@ describe('registerPtyHandlers', () => {
     getPathMock.mockReset()
     loginPreflightExecFileMock.mockReset()
     spawnMock.mockReset()
+    configureWslOpenCodeShellMaterializerMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
@@ -397,6 +405,34 @@ describe('registerPtyHandlers', () => {
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
     readFileSyncMock.mockReturnValue('')
+    configureWslOpenCodeShellMaterializerMock.mockImplementation(
+      (env: Record<string, string>, userDataPath: string, inheritedSourceConfigDir?: string) => {
+        const isGuestPath = (value: string | undefined): value is string =>
+          typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
+        const guestSource = isGuestPath(env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV])
+          ? env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]
+          : isGuestPath(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR)
+            ? env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+            : env.OPENCODE_CONFIG_DIR !== env.ORCA_OPENCODE_CONFIG_DIR &&
+                isGuestPath(env.OPENCODE_CONFIG_DIR)
+              ? env.OPENCODE_CONFIG_DIR
+              : isGuestPath(inheritedSourceConfigDir)
+                ? inheritedSourceConfigDir
+                : undefined
+        delete env.OPENCODE_CONFIG_DIR
+        delete env.ORCA_OPENCODE_CONFIG_DIR
+        delete env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+        delete env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]
+        if (guestSource) {
+          env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV] = guestSource
+        }
+        env.ORCA_WSL_OPENCODE_MATERIALIZER = join(
+          userDataPath,
+          'wsl-opencode-materializer',
+          'materialize.sh'
+        )
+      }
+    )
     openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
       ORCA_OPENCODE_HOOK_PORT: '4567',
       ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
@@ -959,6 +995,7 @@ describe('registerPtyHandlers', () => {
       // Why: clear any ambient OPENCODE_CONFIG_DIR so the mock's value is used
       const env = await spawnAndGetEnv(undefined, { OPENCODE_CONFIG_DIR: undefined })
       expect(openCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(configureWslOpenCodeShellMaterializerMock).not.toHaveBeenCalled()
       expect(openCodeBuildPtyEnvMock.mock.calls[0]?.[0]).toEqual(expect.any(String))
       expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
       expect(env.ORCA_OPENCODE_HOOK_TOKEN).toBe('opencode-token')
@@ -1575,6 +1612,80 @@ describe('registerPtyHandlers', () => {
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalled()
         expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
         expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
+      })
+
+      it('uses the guest materializer instead of a host OpenCode overlay for daemon WSL', async () => {
+        const env = await withWin32Platform(() =>
+          daemonSpawnAndGetEnv(
+            {
+              OPENCODE_CONFIG_DIR: 'C:\\host-overlay',
+              ORCA_OPENCODE_CONFIG_DIR: 'C:\\host-overlay',
+              ORCA_OPENCODE_SOURCE_CONFIG_DIR: 'C:\\user-config'
+            },
+            undefined,
+            undefined,
+            undefined,
+            { shellOverride: 'wsl.exe' }
+          )
+        )
+
+        expect(configureWslOpenCodeShellMaterializerMock).toHaveBeenCalledWith(
+          expect.any(Object),
+          '/tmp/orca-user-data',
+          'C:\\user-config'
+        )
+        expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+        expect(env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]).toBeUndefined()
+        expect(env.ORCA_WSL_OPENCODE_MATERIALIZER).toBe(
+          join('/tmp/orca-user-data', 'wsl-opencode-materializer', 'materialize.sh')
+        )
+      })
+
+      it('preserves a guest OpenCode source for daemon WSL materialization', async () => {
+        const env = await withWin32Platform(() =>
+          daemonSpawnAndGetEnv(
+            {
+              WSLENV: 'KEEP/u:OPENCODE_CONFIG_DIR/u',
+              OPENCODE_CONFIG_DIR: '/home/jin/company-opencode'
+            },
+            undefined,
+            undefined,
+            undefined,
+            { shellOverride: 'wsl.exe' }
+          )
+        )
+
+        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]).toBe('/home/jin/company-opencode')
+        expect(env.ORCA_WSL_OPENCODE_MATERIALIZER).toEqual(expect.any(String))
+      })
+
+      it('preserves a process-env-only guest OpenCode source for daemon WSL', async () => {
+        const env = await withWin32Platform(() =>
+          daemonSpawnAndGetEnv(
+            {},
+            undefined,
+            undefined,
+            {
+              WSLENV: 'KEEP/u:OPENCODE_CONFIG_DIR/u',
+              OPENCODE_CONFIG_DIR: '/home/jin/company-opencode'
+            },
+            { shellOverride: 'wsl.exe' }
+          )
+        )
+
+        expect(configureWslOpenCodeShellMaterializerMock).toHaveBeenCalledWith(
+          expect.any(Object),
+          '/tmp/orca-user-data',
+          '/home/jin/company-opencode'
+        )
+        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]).toBe('/home/jin/company-opencode')
+        expect(env.ORCA_WSL_OPENCODE_MATERIALIZER).toEqual(expect.any(String))
       })
 
       it('mirrors a user-provided OPENCODE_CONFIG_DIR into a source-scoped overlay on the daemon path', async () => {
@@ -6444,6 +6555,18 @@ describe('registerPtyHandlers', () => {
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
     expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
     expect(env.ORCA_CLI_COMMAND).toBe('orca-ide')
+    expect(configureWslOpenCodeShellMaterializerMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      '/tmp/orca-user-data',
+      undefined
+    )
+    expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+    expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_WSL_HOOK_INSTANCE).toEqual(expect.any(String))
+    expect(env.ORCA_WSL_OPENCODE_MATERIALIZER).toBe(
+      join('/tmp/orca-user-data', 'wsl-opencode-materializer', 'materialize.sh')
+    )
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'ORCA_TERMINAL_HANDLE/u',
@@ -6451,11 +6574,120 @@ describe('registerPtyHandlers', () => {
         'ORCA_CLI_COMMAND/u',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
+        'ORCA_WSL_HOOK_INSTANCE/u',
+        'ORCA_WSL_OPENCODE_MATERIALIZER/p',
         'ORCA_OMP_SOURCE_AGENT_DIR/p',
         'ORCA_OMP_STATUS_EXTENSION/p',
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])
     )
+  })
+
+  it('forwards an explicit guest OpenCode source through managed local WSL', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        env: {
+          WSLENV: 'KEEP/u:OPENCODE_CONFIG_DIR/u',
+          OPENCODE_CONFIG_DIR: '/home/jin/company-opencode'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+    expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]).toBe('/home/jin/company-opencode')
+    expect(env.WSLENV?.split(':')).toEqual(
+      expect.arrayContaining([
+        'KEEP/u',
+        `${ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV}/u`,
+        'ORCA_WSL_HOOK_INSTANCE/u'
+      ])
+    )
+    expect(env.WSLENV).not.toContain('OPENCODE_CONFIG_DIR/u')
+  })
+
+  it('preserves intentional OpenCode WSLENV when status hooks are disabled', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+        agentStatusHooksEnabled: false
+      })) as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        env: {
+          WSLENV: 'KEEP/u:OPENCODE_CONFIG_DIR/u',
+          OPENCODE_CONFIG_DIR: '/home/jin/company-opencode'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+    expect(configureWslOpenCodeShellMaterializerMock).not.toHaveBeenCalled()
+    expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+    expect(env.OPENCODE_CONFIG_DIR).toBe('/home/jin/company-opencode')
+    expect(env.WSLENV?.split(':')).toEqual(
+      expect.arrayContaining(['KEEP/u', 'OPENCODE_CONFIG_DIR/u'])
+    )
+    expect(env.ORCA_WSL_OPENCODE_MATERIALIZER).toBeUndefined()
+  })
+
+  it('keeps a WSL terminal usable when OpenCode host materialization fails', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    configureWslOpenCodeShellMaterializerMock.mockImplementationOnce(
+      (env: Record<string, string>) => {
+        delete env.OPENCODE_CONFIG_DIR
+        delete env.ORCA_OPENCODE_CONFIG_DIR
+        delete env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+        delete env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]
+      }
+    )
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        env: {
+          OPENCODE_CONFIG_DIR: 'C:\\host-overlay',
+          ORCA_OPENCODE_CONFIG_DIR: 'C:\\host-overlay',
+          ORCA_OPENCODE_SOURCE_CONFIG_DIR: 'C:\\user-config'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env as Record<string, string>
+    expect(spawnCall[0]).toBe('wsl.exe')
+    expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_WSL_OPENCODE_MATERIALIZER).toBeUndefined()
   })
 
   it('forces managed ORCA_USER_DATA_PATH for WSL spawns even when the caller provides a stale root', async () => {

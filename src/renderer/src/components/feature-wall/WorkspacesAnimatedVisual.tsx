@@ -128,7 +128,7 @@ export function WorkspacesAnimatedVisual(props: { reducedMotion: boolean }): JSX
               }}
             >
               <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
-                <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
+                <span className="inline-block size-[9px] rounded-full bg-status-success" />
                 <div className="min-w-0">
                   <div className="truncate text-[15px] font-semibold leading-[1.2] text-foreground">
                     {ws.name}

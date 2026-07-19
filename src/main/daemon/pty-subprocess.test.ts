@@ -2585,6 +2585,10 @@ describe('createPtySubprocess', () => {
         env: {
           ORCA_TERMINAL_HANDLE: 'term_wsl',
           ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
+          ORCA_WSL_OPENCODE_MATERIALIZER:
+            'C:\\Users\\jin\\AppData\\Roaming\\Orca\\wsl-opencode-materializer\\materialize.sh',
+          ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR: '/home/jin/company-opencode',
+          ORCA_WSL_HOOK_INSTANCE: 'test-instance',
           WSLENV: 'FOO/u'
         }
       })
@@ -2615,6 +2619,9 @@ describe('createPtySubprocess', () => {
         'FOO/u',
         'ORCA_TERMINAL_HANDLE/u',
         'ORCA_HERMES_STARTUP_QUERY',
+        'ORCA_WSL_HOOK_INSTANCE/u',
+        'ORCA_WSL_OPENCODE_MATERIALIZER/p',
+        'ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR/u',
         POWERLEVEL10K_WIZARD_DISABLE_ENV
       ])
     )

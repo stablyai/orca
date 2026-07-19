@@ -239,13 +239,12 @@ export function FloatingTerminalToggleButton({
           >
             <PanelsTopLeft className="size-4" />
             {showAttentionDot ? (
-              // Why: amber matches Orca's "needs attention / unread" convention
-              // (the tab-unread bell); the ring matches the button fill so the
-              // dot reads on both light (bg-card) and dark (dark:bg-accent).
+              // Why: the semantic attention token keeps this unread cue aligned
+              // with tabs/cards and contrast-safe in both themes.
               <span
                 aria-hidden
                 data-floating-terminal-attention
-                className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-amber-500 ring-2 ring-card dark:ring-accent"
+                className="pointer-events-none absolute right-1 top-1 size-2 rounded-full bg-status-attention ring-2 ring-card dark:ring-accent"
               />
             ) : null}
           </Button>

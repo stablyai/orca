@@ -55,7 +55,9 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => (
+    <span data-test-tooltip-content="">{children}</span>
+  ),
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
@@ -176,7 +178,7 @@ describe('WorktreeCard linked PR display', () => {
     )
 
     expect(markup).toContain('Active')
-    expect(markup).toContain('bg-emerald-500')
+    expect(markup).toContain('bg-status-success')
     expect(markup).not.toContain('PR: Open')
     expect(markup).not.toContain('Linked PR #456')
   }, 20_000)
@@ -204,7 +206,7 @@ describe('WorktreeCard linked PR display', () => {
     const readTitleTag = getInlineRenameTitleTag(readMarkup)
 
     expect(unreadMarkup).toContain('aria-label="Mark as read"')
-    expect(unreadMarkup).toContain('text-amber-500')
+    expect(unreadMarkup).toContain('text-status-attention')
     expect(unreadMarkup).not.toContain('PR checks: Failed · Mark read')
     expect(unreadMarkup).not.toContain('size-[13px] translate-x-px')
     expect(readTitleTag).toContain('font-normal text-foreground')
@@ -237,10 +239,10 @@ describe('WorktreeCard linked PR display', () => {
     expect(unreadMarkup).not.toContain('Mark read')
     expect(unreadMarkup).toContain('size-[13px] translate-x-px')
     expect(unreadMarkup).not.toContain('lucide-bell')
-    expect(unreadMarkup).not.toContain('text-amber-500')
+    expect(unreadMarkup).not.toContain('text-status-attention')
     expect(unreadMarkup).toContain('data-worktree-status-lane-unread=""')
     expect(unreadMarkup).toContain('data-worktree-unread-alert=""')
-    expect(unreadMarkup).toContain('bg-amber-500')
+    expect(unreadMarkup).toContain('bg-status-attention')
     expect(getInlineRenameTitleTag(unreadMarkup)).toContain('font-semibold text-foreground')
     expect(getInlineRenameTitleTag(readMarkup)).toContain('font-normal text-foreground/80')
   }, 20_000)
@@ -254,6 +256,8 @@ describe('WorktreeCard linked PR display', () => {
     )
 
     expect(markup).toContain('PR: Open')
+    expect(markup.match(/PR: Open/g)).toHaveLength(1)
+    expect(markup).not.toContain('data-test-tooltip-content=""><span>PR: Open</span>')
     expect(markup).not.toContain('Linked PR #456')
   }, 20_000)
 

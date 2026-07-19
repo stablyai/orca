@@ -205,14 +205,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // ("Working", "Done", "Waiting", …) so every row is identifiable at a
   // glance.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
-  // Why: the tool row describes what the agent is *currently* doing; once it
-  // leaves working, that line goes stale and misleads (a done row showing
-  // "Bash: pnpm test" reads as if the command is still running). Gate tool
-  // fields on `state === 'working'`. The assistant message is the opposite
-  // — it's the reply, most useful on `done`, so we always show it.
+  // Why: tool metadata is current only while working or blocked on input; hide
+  // it afterward so a completed row cannot look like a tool is still running.
   const isWorking = agent.state === 'working'
-  const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  const hasLiveToolContext = isWorking || agent.state === 'waiting' || agent.state === 'blocked'
+  const toolName = hasLiveToolContext ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolInput = hasLiveToolContext ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
@@ -324,11 +322,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             overpowering the prompt text. */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <span
-              className="inline-flex shrink-0 items-center justify-center"
-              aria-label={dotTooltipLabel}
-            >
-              <AgentStateDot state={dotState} size={stateDotSize} />
+            <span className="inline-flex shrink-0 items-center justify-center">
+              <AgentStateDot
+                state={dotState}
+                size={stateDotSize}
+                // Why: interrupted already has a visible, labeled outcome below;
+                // hiding this redundant glyph keeps screen readers to one status.
+                aria-hidden={isInterrupted ? true : undefined}
+                aria-label={isInterrupted ? undefined : dotTooltipLabel}
+              />
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

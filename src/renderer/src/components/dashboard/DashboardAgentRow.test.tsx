@@ -240,12 +240,17 @@ describe('DashboardAgentRow', () => {
   })
 
   it('renders waiting rows with the amber permission color', () => {
-    const markup = renderRow(makeAgent({}, { state: 'waiting' }))
+    const markup = renderRow(
+      makeAgent({}, { state: 'waiting', toolName: 'bash', toolInput: 'git push' })
+    )
     const tokens = classTokens(markup)
 
     expect(markup).toContain('aria-label="Waiting for input"')
-    expect(tokens).toContain('bg-amber-500')
-    expect(tokens).not.toContain('bg-red-500')
+    expect(markup.match(/aria-label="Waiting for input"/g)).toHaveLength(1)
+    expect(tokens).toContain('bg-status-attention')
+    expect(tokens).not.toContain('bg-destructive')
+    expect(markup).toContain('>bash</code>')
+    expect(markup).toContain('git push')
   })
 
   it('keeps blocked rows red', () => {
@@ -253,8 +258,8 @@ describe('DashboardAgentRow', () => {
     const tokens = classTokens(markup)
 
     expect(markup).toContain('aria-label="Blocked"')
-    expect(tokens).toContain('bg-red-500')
-    expect(tokens).not.toContain('bg-amber-500')
+    expect(tokens).toContain('bg-destructive')
+    expect(tokens).not.toContain('bg-status-attention')
   })
 
   it('keeps each row hover boundary inside an anonymous ancestor group', () => {
@@ -310,7 +315,8 @@ describe('DashboardAgentRow', () => {
     // on the response line so it does not compete with the user's prompt.
     expect(markup).toContain('data-slot="tooltip-trigger"')
     expect(markup).toContain('aria-label="Interrupted by user"')
-    expect(markup).toContain('bg-red-500')
+    expect(markup.match(/aria-label="Interrupted by user"/g)).toHaveLength(1)
+    expect(markup).toContain('bg-destructive')
     expect(markup).not.toContain('data-slot="badge"')
     expect(interruptedIndex).toBeGreaterThan(promptIndex)
     expect(markup).not.toContain('lucide-circle-check')

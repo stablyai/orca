@@ -2924,7 +2924,8 @@
             "splitTerminal": "ターミナルを分割"
           },
           "TerminalTabLeadingIcon": {
-            "7ab2964bea": "未読のエージェント完了"
+            "7ab2964bea": "未読のエージェント完了",
+            "unreadTerminalActivity": "未読のターミナルアクティビティ"
           }
         }
       },

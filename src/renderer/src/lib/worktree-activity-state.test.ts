@@ -197,7 +197,7 @@ describe('getWorktreeIdsWithLiveAgent', () => {
     }
   )
 
-  it('reports working and permission states with permission taking priority', () => {
+  it('reports blocked, permission, and working with actionable states taking priority', () => {
     const entries = {
       'tab-1:leaf-1': makeAgentEntry({
         paneKey: 'tab-1:leaf-1',
@@ -212,6 +212,16 @@ describe('getWorktreeIdsWithLiveAgent', () => {
       'tab-3:leaf-3': makeAgentEntry({
         paneKey: 'tab-3:leaf-3',
         worktreeId: 'wt-2',
+        state: 'waiting'
+      }),
+      'tab-4:leaf-4': makeAgentEntry({
+        paneKey: 'tab-4:leaf-4',
+        worktreeId: 'wt-3',
+        state: 'working'
+      }),
+      'tab-5:leaf-5': makeAgentEntry({
+        paneKey: 'tab-5:leaf-5',
+        worktreeId: 'wt-3',
         state: 'blocked'
       })
     }
@@ -219,7 +229,8 @@ describe('getWorktreeIdsWithLiveAgent', () => {
     expect(getLiveAgentStatusByWorktreeId(entries, {}, NOW)).toEqual(
       new Map([
         ['wt-1', 'working'],
-        ['wt-2', 'permission']
+        ['wt-2', 'permission'],
+        ['wt-3', 'blocked']
       ])
     )
   })

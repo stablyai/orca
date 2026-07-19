@@ -20,6 +20,7 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import { getWslOpenCodeShellMaterializerBlock } from '../pty/wsl-opencode-shell-materializer-block'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   getZshEnvTemplate,
@@ -148,6 +149,7 @@ __orca_restore_agent_teams_path() {
 __orca_restore_agent_teams_path
 # Why: user startup files may set the default OpenCode config after Orca's
 # spawn env; restore the Orca-managed config dir before the first prompt.
+${getWslOpenCodeShellMaterializerBlock()}
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}
@@ -264,6 +266,7 @@ __orca_restore_agent_teams_path() {
 [[ ! -o login ]] && __orca_restore_agent_teams_path
 if [[ ! -o login ]]; then
   # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
+  ${getWslOpenCodeShellMaterializerBlock()}
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
   ${getPosixOmpShellWrapper()}
@@ -324,6 +327,7 @@ __orca_restore_agent_teams_path() {
 }
 __orca_restore_agent_teams_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
+${getWslOpenCodeShellMaterializerBlock()}
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 ${getPosixOmpShellWrapper()}

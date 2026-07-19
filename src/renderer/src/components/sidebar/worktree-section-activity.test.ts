@@ -197,4 +197,30 @@ describe('buildWorktreeSectionActivitySummaries', () => {
       runningCount: 1
     })
   })
+
+  it('does not count an interrupted completion as running', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({ repoId: repo.id })
+    const now = Date.now()
+    const entry: AgentStatusEntry = {
+      state: 'done',
+      interrupted: true,
+      prompt: '',
+      updatedAt: now,
+      stateStartedAt: now,
+      paneKey: makePaneKey('tab-1', LEAF_ID),
+      stateHistory: []
+    }
+    const state = makeState({
+      tabsByWorktree: {
+        [worktree.id]: [makeTerminalTab({ id: 'tab-1', worktreeId: worktree.id })]
+      },
+      agentStatusEpoch: 1,
+      agentStatusByPaneKey: { [entry.paneKey]: entry }
+    })
+
+    const summaries = buildSummaries({ worktrees: [worktree], repos: [repo], state })
+
+    expect(summaries.get(`repo:${repo.id}`)).toEqual({ runningCount: 0 })
+  })
 })

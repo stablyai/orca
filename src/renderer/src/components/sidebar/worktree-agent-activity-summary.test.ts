@@ -13,6 +13,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 function makeAgentStatusEntry(args: {
   paneKey: string
   state: AgentStatusEntry['state']
+  interrupted?: boolean
   worktreeId?: string
   parentPaneKey?: string
 }): AgentStatusEntry {
@@ -23,6 +24,7 @@ function makeAgentStatusEntry(args: {
     updatedAt: 1_000,
     stateStartedAt: 1_000,
     stateHistory: [],
+    interrupted: args.interrupted,
     worktreeId: args.worktreeId,
     orchestration: args.parentPaneKey
       ? {
@@ -163,6 +165,65 @@ describe('selectWorktreeAgentActivitySummary', () => {
       hasLiveDone: true
     })
     expect(nowSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps blocked separate from generic waiting attention', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const blockedPaneKey = makePaneKey('tab-1', LEAF_ID)
+    const waitingPaneKey = makePaneKey('tab-2', LEAF_ID)
+    const worktreeId = 'repo::/wt-1'
+    const state: AgentActivityInput = {
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId), makeTab('tab-2', worktreeId)]
+      },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [blockedPaneKey]: makeAgentStatusEntry({ paneKey: blockedPaneKey, state: 'blocked' }),
+        [waitingPaneKey]: makeAgentStatusEntry({ paneKey: waitingPaneKey, state: 'waiting' })
+      },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(selectWorktreeAgentActivitySummary(state, worktreeId)).toMatchObject({
+      hasBlocked: true,
+      hasPermission: true,
+      hasLiveWorking: false
+    })
+  })
+
+  it('changes the cached summary when a done turn becomes interrupted', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const worktreeId = 'repo::/wt-1'
+    const shared = {
+      tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId)] },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+    const completed: AgentActivityInput = {
+      ...shared,
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done' })
+      }
+    }
+    const interrupted: AgentActivityInput = {
+      ...shared,
+      agentStatusEpoch: 1,
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done', interrupted: true })
+      }
+    }
+
+    const completedSummary = selectWorktreeAgentActivitySummary(completed, worktreeId)
+    const interruptedSummary = selectWorktreeAgentActivitySummary(interrupted, worktreeId)
+
+    expect(completedSummary).toMatchObject({ hasLiveDone: true, hasLiveInterrupted: false })
+    expect(interruptedSummary).toMatchObject({ hasLiveDone: true, hasLiveInterrupted: true })
+    expect(interruptedSummary).not.toBe(completedSummary)
   })
 
   it('limits summary-reference churn to the transitioning worktree at scale', () => {

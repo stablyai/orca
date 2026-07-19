@@ -13,8 +13,10 @@ import {
 } from '../../../../shared/agent-status-types'
 
 export type WorktreeAgentActivitySummary = {
+  hasBlocked: boolean
   hasPermission: boolean
   hasLiveWorking: boolean
+  hasLiveInterrupted: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -23,8 +25,10 @@ export type WorktreeAgentActivitySummary = {
 const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>> = {}
 
 const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
+  hasBlocked: false,
   hasPermission: false,
   hasLiveWorking: false,
+  hasLiveInterrupted: false,
   hasLiveDone: false,
   hasRetainedDone: false,
   agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
@@ -168,8 +172,10 @@ function summariesEqual(
   next: WorktreeAgentActivitySummary
 ): boolean {
   return (
+    previous.hasBlocked === next.hasBlocked &&
     previous.hasPermission === next.hasPermission &&
     previous.hasLiveWorking === next.hasLiveWorking &&
+    previous.hasLiveInterrupted === next.hasLiveInterrupted &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
     agentStatusPaneIdsByTabIdEqual(
@@ -207,14 +213,21 @@ function agentStatusPaneIdsByTabIdEqual(
 
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state'>
+  entry: Pick<AgentStatusEntry, 'state' | 'interrupted'>
 ): void {
-  if (entry.state === 'blocked' || entry.state === 'waiting') {
+  if (entry.state === 'blocked') {
+    summary.hasBlocked = true
+  } else if (entry.state === 'waiting') {
     summary.hasPermission = true
   } else if (entry.state === 'working') {
     summary.hasLiveWorking = true
   } else if (entry.state === 'done') {
     summary.hasLiveDone = true
+    // Why: an interrupted turn is terminal but not successful; preserve that
+    // outcome separately while `hasLiveDone` still suppresses stale titles.
+    if (entry.interrupted === true) {
+      summary.hasLiveInterrupted = true
+    }
   }
 }
 

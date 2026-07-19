@@ -14,7 +14,9 @@ export function DashboardAgentRowToolStep({
   toolName,
   toolInput
 }: DashboardAgentRowToolStepProps): React.JSX.Element | null {
-  if (!isWorking) {
+  // Waiting/blocked rows render a real request name, but only working reserves
+  // an empty line while tool metadata is still in flight.
+  if (!isWorking && !toolName) {
     return null
   }
 

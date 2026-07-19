@@ -55,6 +55,10 @@ describe('CmdJPaletteFeatureTipVisual', () => {
     expect(html).not.toContain('animate-spin')
     expect(html).not.toContain('animate-cmd-j-tip-caret')
     expect(html).not.toContain('animate-cmd-j-tip-result-in')
+    expect(html).toContain('bg-status-success')
+    expect(html).toContain('border-status-working')
+    expect(html).not.toContain('bg-emerald-500')
+    expect(html).not.toContain('border-yellow-500')
   })
 
   it('does not schedule animation timers when reduced motion is preferred', async () => {

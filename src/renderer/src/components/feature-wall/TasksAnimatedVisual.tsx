@@ -294,9 +294,9 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
       >
         <div className="flex items-center gap-1.5 px-1 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           {workspaceCreating ? (
-            <span className="inline-block size-[9px] animate-spin rounded-full border-[1.5px] border-yellow-500 border-t-transparent" />
+            <span className="inline-block size-[9px] animate-spin rounded-full border-[1.5px] border-status-working border-t-transparent" />
           ) : (
-            <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
+            <span className="inline-block size-[9px] rounded-full bg-status-success" />
           )}
           <span>
             {workspaceCreating
@@ -316,7 +316,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
             className="animate-[tasks-workspace-in_320ms_cubic-bezier(.2,.8,.2,1)_both] rounded-[10px] bg-foreground/[0.05] px-2 py-2.5 shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]"
           >
             <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
-              <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
+              <span className="inline-block size-[9px] rounded-full bg-status-success" />
               <div className="min-w-0">
                 <div className="truncate text-[15px] font-semibold leading-[1.2] text-foreground">
                   {workspaceIssue.title}

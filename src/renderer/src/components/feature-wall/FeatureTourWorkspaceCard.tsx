@@ -29,7 +29,7 @@ export function FeatureTourWorkspaceCard({
         {status === 'working' ? (
           <WorkingSpinner />
         ) : (
-          <span className="size-2 rounded-full bg-emerald-500" />
+          <span className="size-2 rounded-full bg-status-success" />
         )}
         <span
           className={cn(
@@ -46,7 +46,7 @@ export function FeatureTourWorkspaceCard({
             {agent.state === 'working' ? (
               <WorkingSpinner size="xs" />
             ) : (
-              <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
+              <span className="inline-block size-1.5 rounded-full bg-status-success" />
             )}
             {agent.kind === 'claude' ? (
               <ClaudeIcon size={13} />

@@ -134,6 +134,35 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
     expect(forward.mock.calls[0][0].paneKey).toBe(PANE_KEY)
   })
 
+  it('forwards authenticated OpenCode work with its source and normalized state', async () => {
+    const forward = vi.fn()
+    server = new RelayAgentHookServer({ endpointDir: tmpDir, token: 'host-issued-token', forward })
+    await server.start()
+    const { port } = server.getCoordinates()
+
+    const response = await fetch(`http://127.0.0.1:${port}/hook/opencode`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': 'host-issued-token'
+      },
+      body: JSON.stringify({
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionBusy', sessionID: 'opencode-session-1' }
+      })
+    })
+
+    expect(response.status).toBe(204)
+    expect(forward).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'opencode',
+        paneKey: PANE_KEY,
+        hookEventName: 'SessionBusy',
+        payload: expect.objectContaining({ state: 'working', agentType: 'opencode' })
+      })
+    )
+  })
+
   it('publishes the fallback port + fixed token into the endpoint file after EADDRINUSE', async () => {
     const occupant = createServer()
     const occupiedPort = await new Promise<number>((resolve) => {

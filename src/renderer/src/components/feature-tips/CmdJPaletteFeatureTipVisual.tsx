@@ -191,11 +191,11 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
               >
                 <span className="flex w-4 shrink-0 items-center justify-center">
                   {result.status === 'done' ? (
-                    <span className="size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                    <span className="size-2.5 rounded-full bg-status-success" aria-hidden="true" />
                   ) : (
                     // Why: this tip can stay mounted while Orca is idle; mirror
                     // the sidebar's static working ring instead of spinning.
-                    <span className="block size-2.5 rounded-full border-[1.5px] border-yellow-500 bg-yellow-500/15" />
+                    <span className="block size-2.5 rounded-full border-[1.5px] border-status-working bg-status-working/15" />
                   )}
                 </span>
                 <div className="min-w-0 flex-1">

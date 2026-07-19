@@ -68,7 +68,7 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
       <SupportedAgentsMarquee reducedMotion={reducedMotion} />
       <div className="rounded-[10px] bg-foreground/[0.05] px-2 py-2.5 shadow-[inset_0_0_0_1px_rgba(24,24,27,0.06)]">
         <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
-          <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
+          <span className="inline-block size-[9px] rounded-full bg-status-success" />
           <div className="truncate text-[15.5px] font-semibold leading-[1.2]">
             {translate(
               'auto.components.feature.wall.agents.orchestration.StatusesPage.79971d1539',
@@ -157,7 +157,7 @@ function AgentRow(props: {
       <span
         className={cn(
           'truncate text-[13px] leading-[1.3]',
-          props.permission ? 'text-red-700 dark:text-red-300' : 'text-muted-foreground'
+          props.permission ? 'text-status-attention' : 'text-muted-foreground'
         )}
       >
         {props.children}

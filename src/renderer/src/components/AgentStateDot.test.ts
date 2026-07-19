@@ -17,10 +17,10 @@ function renderDotClassNames(state: AgentDotState): string[] {
 }
 
 describe('AgentStateDot', () => {
-  it('renders working as a yellow spinner', () => {
+  it('renders working with the semantic working spinner', () => {
     const markup = renderMarkup('working')
 
-    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-status-working')
     expect(markup).toContain('border-t-transparent')
     expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
     expect(markup).toContain('motion-reduce:animate-none')
@@ -37,7 +37,7 @@ describe('AgentStateDot', () => {
     // class hook + emerald text color, identifying the check icon without
     // coupling to the exact SVG path markup lucide emits.
     expect(markup).toContain('lucide-circle-check')
-    expect(markup).toContain('text-emerald-500')
+    expect(markup).toContain('text-status-success')
   })
 
   it.each(['permission', 'waiting'] satisfies AgentDotState[])(
@@ -45,8 +45,8 @@ describe('AgentStateDot', () => {
     (state) => {
       const classNames = renderDotClassNames(state)
 
-      expect(classNames).toContain('bg-amber-500')
-      expect(classNames).not.toContain('bg-red-500')
+      expect(classNames).toContain('bg-status-attention')
+      expect(classNames).not.toContain('bg-destructive')
     }
   )
 
@@ -55,8 +55,36 @@ describe('AgentStateDot', () => {
     (state) => {
       const classNames = renderDotClassNames(state)
 
-      expect(classNames).toContain('bg-red-500')
-      expect(classNames).not.toContain('bg-amber-500')
+      expect(classNames).toContain('bg-destructive')
+      expect(classNames).not.toContain('bg-status-attention')
     }
   )
+
+  it('renders idle with the theme-aware muted foreground', () => {
+    expect(renderDotClassNames('idle')).toContain('bg-muted-foreground')
+  })
+
+  it('supports one caller-owned accessible label without duplicating it', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(AgentStateDot, {
+        state: 'interrupted',
+        'aria-label': 'Interrupted by user'
+      })
+    )
+
+    expect(markup.match(/aria-label=/g)).toHaveLength(1)
+    expect(markup).toContain('role="img"')
+    expect(markup).toContain('aria-label="Interrupted by user"')
+    expect(markup).not.toContain('aria-label="Interrupted"')
+  })
+
+  it('can be hidden when adjacent text already owns the state label', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(AgentStateDot, { state: 'done', 'aria-hidden': 'true' })
+    )
+
+    expect(markup).toContain('aria-hidden="true"')
+    expect(markup).not.toContain('role="img"')
+    expect(markup).not.toContain('aria-label=')
+  })
 })

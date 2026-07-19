@@ -369,8 +369,213 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event?.payload.state).toBe('waiting')
+    expect(event?.payload.toolName).toBe('AskUserQuestion')
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })
+
+  it.each(['opencode', 'mimo-code'] as const)(
+    'clears %s previous-turn response and tool context on the next user message',
+    (source) => {
+      normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'MessagePart',
+            role: 'assistant',
+            text: 'old answer',
+            messageID: 'assistant-1',
+            sessionID: 'root'
+          }
+        },
+        'production'
+      )
+      const done = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: { hook_event_name: 'SessionIdle', sessionID: 'root' }
+        },
+        'production'
+      )
+      const user = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'MessagePart',
+            role: 'user',
+            text: 'new prompt',
+            messageID: 'user-2',
+            sessionID: 'root'
+          }
+        },
+        'production'
+      )
+      const busy = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: { hook_event_name: 'SessionBusy', sessionID: 'root' }
+        },
+        'production'
+      )
+
+      expect(done?.payload.lastAssistantMessage).toBe('old answer')
+      for (const event of [user, busy]) {
+        expect(event?.payload).toMatchObject({ state: 'working', prompt: 'new prompt' })
+        expect(event?.payload.lastAssistantMessage).toBeUndefined()
+        expect(event?.payload.toolName).toBeUndefined()
+        expect(event?.payload.toolInput).toBeUndefined()
+      }
+
+      const permission = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PermissionRequest',
+            permission: 'bash',
+            patterns: ['git push'],
+            sessionID: 'root'
+          }
+        },
+        'production'
+      )
+      const nextUser = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'MessagePart',
+            role: 'user',
+            text: 'another prompt',
+            messageID: 'user-3',
+            sessionID: 'root'
+          }
+        },
+        'production'
+      )
+      expect(permission?.payload.toolName).toBe('bash')
+      expect(nextUser?.payload.toolName).toBeUndefined()
+      expect(nextUser?.payload.toolInput).toBeUndefined()
+    }
+  )
+
+  it('surfaces OpenCode permission context and clears it when work resumes', () => {
+    const permission = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          permission: 'bash',
+          patterns: ['git push --force', 'npm publish']
+        }
+      },
+      'production'
+    )
+    const resumed = normalizeHookPayload(
+      state,
+      'opencode',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionBusy' }
+      },
+      'production'
+    )
+
+    expect(permission?.payload).toMatchObject({
+      state: 'waiting',
+      toolName: 'bash',
+      toolInput: 'git push --force, npm publish'
+    })
+    // OpenCode's TUI approval protocol is not Orca's generic Allow/Deny card.
+    expect(permission?.payload.interactivePrompt).toBeUndefined()
+    expect(resumed?.payload.state).toBe('working')
+    expect(resumed?.payload.toolName).toBeUndefined()
+    expect(resumed?.payload.toolInput).toBeUndefined()
+  })
+
+  it.each(['opencode', 'mimo-code'] as const)(
+    'normalizes %s terminal errors as blocked with provider context',
+    (source) => {
+      const failed = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'SessionError',
+            sessionID: 'failed-session',
+            error: { name: 'ProviderAuthError', data: { message: 'Token expired' } }
+          }
+        },
+        'production'
+      )
+
+      expect(failed?.payload).toMatchObject({
+        agentType: source,
+        state: 'blocked',
+        toolName: 'ProviderAuthError',
+        toolInput: 'Token expired'
+      })
+      expect(failed?.payload.interrupted).toBeUndefined()
+      expect(failed?.providerSession).toMatchObject({
+        key: 'session_id',
+        id: 'failed-session'
+      })
+    }
+  )
+
+  it.each(['opencode', 'mimo-code'] as const)(
+    'normalizes %s aborts as interrupted completion and clears pending context',
+    (source) => {
+      normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'PermissionRequest',
+            sessionID: 'aborted-session',
+            permission: 'bash',
+            patterns: ['git push']
+          }
+        },
+        'production'
+      )
+      const aborted = normalizeHookPayload(
+        state,
+        source,
+        {
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'SessionAborted',
+            sessionID: 'aborted-session',
+            error: { name: 'MessageAbortedError', data: { message: 'Stopped by user' } }
+          }
+        },
+        'production'
+      )
+
+      expect(aborted?.payload).toMatchObject({
+        agentType: source,
+        state: 'done',
+        interrupted: true
+      })
+      expect(aborted?.payload.toolName).toBeUndefined()
+      expect(aborted?.payload.toolInput).toBeUndefined()
+      expect(aborted?.payload.interactivePrompt).toBeUndefined()
+    }
+  )
 
   it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
     const event = normalizeHookPayload(

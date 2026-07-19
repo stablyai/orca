@@ -32,8 +32,8 @@ export function WorkingSpinner({
   return (
     <span
       className={cn(
-        'inline-block shrink-0 rounded-full border-yellow-500',
-        reducedMotion ? 'border-t-yellow-500' : 'animate-spin border-t-transparent',
+        'inline-block shrink-0 rounded-full border-status-working',
+        reducedMotion ? 'border-t-status-working' : 'animate-spin border-t-transparent',
         ring
       )}
       aria-hidden

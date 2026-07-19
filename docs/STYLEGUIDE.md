@@ -45,6 +45,18 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 
 The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
 
+### Agent status colors
+
+Agent and worktree status glyphs use semantic, theme-aware tokens. These values are chosen for at least 3:1 graphical contrast against the app's light and dark chrome; do not replace them with raw Tailwind `*-500` palette classes.
+
+| Token              | State                                    |
+| ------------------ | ---------------------------------------- |
+| `status-working`   | Actively running / retrying              |
+| `status-attention` | Waiting for permission, input, or unread |
+| `status-success`   | Completed / active quiet state           |
+| `destructive`      | Blocked, interrupted, or failed          |
+| `muted-foreground` | Idle / inactive                          |
+
 ### Git decoration colors
 
 For diff status, file-tree decorations, and the changes view, use the git decoration tokens (mirroring VS Code's palette so users transferring from VS Code aren't surprised):

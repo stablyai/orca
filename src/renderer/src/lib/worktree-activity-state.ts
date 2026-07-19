@@ -12,7 +12,7 @@ type BrowserLikeTab = { id: string }
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
 type PtyIdsByTabId = Record<string, string[]>
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
-export type LiveAgentWorktreeStatus = 'working' | 'permission'
+export type LiveAgentWorktreeStatus = 'working' | 'permission' | 'blocked'
 
 /**
  * Worktree ids that currently have a live agent session, derived from the
@@ -50,8 +50,11 @@ export function getLiveAgentStatusByWorktreeId(
   for (const entry of entries) {
     const worktreeId = resolveAgentStatusWorktreeId(entry, worktreeIdByTabId)
     if (worktreeId) {
-      const status = entry.state === 'working' ? 'working' : 'permission'
-      if (status === 'permission' || !result.has(worktreeId)) {
+      const status =
+        entry.state === 'blocked' ? 'blocked' : entry.state === 'waiting' ? 'permission' : 'working'
+      const current = result.get(worktreeId)
+      // Why: the worktree aggregate must preserve the strongest visible state.
+      if (status === 'blocked' || (status === 'permission' && current !== 'blocked') || !current) {
         result.set(worktreeId, status)
       }
     }

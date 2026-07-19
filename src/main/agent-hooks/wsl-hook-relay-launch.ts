@@ -15,7 +15,11 @@ import {
   type waitForWslRelaySentinel,
   type WslRelayStartupFailure
 } from './wsl-hook-relay-sentinel'
-import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import {
+  addOrcaWslInteropEnv,
+  ORCA_WSL_OPENCODE_MATERIALIZER_ENV,
+  ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV
+} from '../pty/wsl-orca-env'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
   WSL_HOOK_RELAY_DIR,
@@ -325,6 +329,10 @@ export function buildWslRelaySpawnEnv(
   // Why: the relay derives its own guest endpoint path; a /p-translated
   // Windows endpoint here would only add WSLENV noise.
   delete env.ORCA_AGENT_HOOK_ENDPOINT
+  // Why: the relay never launches OpenCode or a guest login shell. Crossing a
+  // terminal-only materializer would expose a host path with no consumer.
+  delete env[ORCA_WSL_OPENCODE_MATERIALIZER_ENV]
+  delete env[ORCA_WSL_OPENCODE_SOURCE_CONFIG_DIR_ENV]
   addOrcaWslInteropEnv(env as Record<string, string>)
   return env
 }

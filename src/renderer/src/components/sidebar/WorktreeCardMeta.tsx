@@ -28,6 +28,7 @@ import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSecti
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
+import { WorktreeCardHoverActivityStatus } from './WorktreeCardStatusSlot'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -138,6 +139,7 @@ export function WorktreeCardDetailsHover({
   comment,
   automationProvenance,
   children,
+  activityStatusWorktreeId,
   branchName,
   workspaceTitle,
   identityOrder = 'workspace-first',
@@ -242,7 +244,8 @@ export function WorktreeCardDetailsHover({
   if (
     !showIdentityHeader &&
     !hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance }) &&
-    !detailsAfter
+    !detailsAfter &&
+    !activityStatusWorktreeId
   ) {
     return children
   }
@@ -274,6 +277,12 @@ export function WorktreeCardDetailsHover({
               onRenameWorkspaceTitle={onRenameWorkspaceTitle}
               onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
             />
+          )}
+
+          {activityStatusWorktreeId && (
+            // Why: the whole-card hover suppresses the nested status tooltip;
+            // keep the exact aggregate state discoverable on its owning surface.
+            <WorktreeCardHoverActivityStatus worktreeId={activityStatusWorktreeId} />
           )}
 
           <WorktreeCardIssueDetailSection

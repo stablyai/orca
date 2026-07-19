@@ -23,11 +23,8 @@ export type AgentDotState =
   | 'failed'
   | 'done'
   | 'idle'
-  // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
-  // collapses blocked + waiting into a single "needs attention" state. Keep
-  // this as a distinct member so that flow can render without inventing a new
-  // vocabulary, while rendering it with the same amber attention color as the
-  // worktree-level permission dot.
+  // Why: title heuristics know only generic attention, not the exact blocker;
+  // keep that aggregate state separate from explicit blocked and waiting rows.
   | 'permission'
 
 /** Return the accessible label shared by every visual agent-state marker. */
@@ -52,7 +49,7 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
-type Props = {
+type Props = Pick<React.ComponentProps<'span'>, 'aria-label' | 'aria-hidden'> & {
   state: AgentDotState
   size?: 'sm' | 'md'
   className?: string
@@ -62,23 +59,29 @@ type Props = {
 export const AgentStateDot = React.memo(function AgentStateDot({
   state,
   size = 'sm',
-  className
+  className,
+  'aria-label': ariaLabel,
+  'aria-hidden': ariaHidden
 }: Props): React.JSX.Element {
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
+  const hiddenFromAssistiveTech = ariaHidden === true || ariaHidden === 'true'
+  const accessibilityProps = hiddenFromAssistiveTech
+    ? ({ 'aria-hidden': ariaHidden } as const)
+    : ({ role: 'img', 'aria-label': ariaLabel ?? agentStateLabel(state) } as const)
 
   if (state === 'working') {
     return (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        {...accessibilityProps}
       >
         <span
           className={cn(
             // Why: match the sidebar worktree spinner's stepped cadence so
             // long-running visible agents do not keep a full-frame-rate loop.
-            'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite] motion-reduce:animate-none',
+            'block rounded-full border-2 border-status-working border-t-transparent [animation:spin_1s_steps(12,end)_infinite] motion-reduce:animate-none',
             inner
           )}
         />
@@ -94,9 +97,9 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     return (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        {...accessibilityProps}
       >
-        <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
+        <CircleCheck className={cn('text-status-success', icon)} aria-hidden="true" />
       </span>
     )
   }
@@ -104,17 +107,17 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   return (
     <span
       className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-      aria-label={agentStateLabel(state)}
+      {...accessibilityProps}
     >
       <span
         className={cn(
           'block rounded-full',
           inner,
           state === 'permission' || state === 'waiting'
-            ? 'bg-amber-500'
+            ? 'bg-status-attention'
             : state === 'blocked' || state === 'interrupted' || state === 'failed'
-              ? 'bg-red-500'
-              : 'bg-neutral-500/40'
+              ? 'bg-destructive'
+              : 'bg-muted-foreground'
         )}
       />
     </span>

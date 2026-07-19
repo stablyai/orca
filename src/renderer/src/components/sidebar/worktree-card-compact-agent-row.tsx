@@ -53,7 +53,7 @@ function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
-  if (agent.state === 'working') {
+  if (agent.state === 'working' || agent.state === 'waiting' || agent.state === 'blocked') {
     const toolName = agent.entry.toolName?.trim() ?? ''
     const toolInput = agent.entry.toolInput?.trim() ?? ''
     if (toolName && toolInput) {

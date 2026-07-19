@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
+
+const activityMocks = vi.hoisted(() => ({ status: 'active' }))
+
+vi.mock('./use-worktree-activity-status', () => ({
+  useWorktreeActivityStatus: () => activityMocks.status
+}))
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -27,6 +33,32 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 describe('WorktreeCardDetailsHover', () => {
+  beforeEach(() => {
+    activityMocks.status = 'active'
+  })
+
+  it.each([
+    ['working', 'Working', 'border-status-working'],
+    ['interrupted', 'Interrupted', 'bg-destructive']
+  ])('names a %s workspace status with its semantic glyph', (status, label, glyphClassName) => {
+    activityMocks.status = status
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        activityStatusWorktreeId="wt-1"
+        issue={null}
+        linearIssue={null}
+        review={null}
+        comment={null}
+      >
+        <span>Workspace card</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(markup).toContain(`data-worktree-hover-activity-status="${status}"`)
+    expect(markup).toContain(`Activity: ${label}`)
+    expect(markup).toContain(glyphClassName)
+  })
+
   it('wraps workspace and branch identity so long names stay readable in the hover panel', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover

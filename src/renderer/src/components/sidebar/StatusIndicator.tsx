@@ -1,6 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // Why: re-export WorktreeStatus under the existing `Status` alias so the
 // sidebar component and the canonical lib share one source of truth — the
@@ -8,58 +9,80 @@ import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-stat
 // (e.g., 'error') and the other didn't.
 export type Status = WorktreeStatus
 
-type StatusIndicatorProps = React.ComponentProps<'span'> & {
+type StatusIndicatorProps = Omit<React.ComponentProps<'span'>, 'title'> & {
   status: Status
+  showTooltip?: boolean
+  tooltipSide?: React.ComponentProps<typeof TooltipContent>['side']
+  tooltipSideOffset?: number
+  tooltipLabel?: React.ReactNode
 }
 
 const StatusIndicator = React.memo(function StatusIndicator({
   status,
   className,
-  title,
+  showTooltip = true,
+  tooltipSide = 'top',
+  tooltipSideOffset = 4,
+  tooltipLabel,
+  'aria-label': ariaLabel,
+  'aria-hidden': ariaHidden,
   ...rest
 }: StatusIndicatorProps) {
-  // Why: surface the status label as a native tooltip so hovering the dot
-  // reveals the state — matters especially for 'active' vs 'done', which
-  // share the same emerald dot. Callers pass aria-hidden="true" alongside
-  // an sr-only label, so the `title` attribute is ignored by AT and only
-  // serves sighted users on hover. Callers can override by passing their
-  // own `title`.
-  const resolvedTitle = title ?? getWorktreeStatusLabel(status)
+  const label = getWorktreeStatusLabel(status)
+  const hiddenFromAssistiveTech = ariaHidden === true || ariaHidden === 'true'
 
-  if (status === 'working') {
-    return (
+  const indicator =
+    status === 'working' ? (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-        title={resolvedTitle}
+        role={hiddenFromAssistiveTech ? undefined : 'img'}
+        aria-label={hiddenFromAssistiveTech ? undefined : (ariaLabel ?? label)}
+        aria-hidden={ariaHidden}
         {...rest}
       >
         {/* Why: a stepped spin preserves the worker-is-running affordance while
             avoiding a full-refresh-rate compositor loop for long agent runs. */}
-        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]" />
+        <span className="block size-2 rounded-full border-2 border-status-working border-t-transparent [animation:spin_1s_steps(12,end)_infinite] motion-reduce:animate-none" />
+      </span>
+    ) : (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        role={hiddenFromAssistiveTech ? undefined : 'img'}
+        aria-label={hiddenFromAssistiveTech ? undefined : (ariaLabel ?? label)}
+        aria-hidden={ariaHidden}
+        {...rest}
+      >
+        <span
+          className={cn(
+            'block size-2 rounded-full',
+            status === 'blocked' || status === 'interrupted'
+              ? 'bg-destructive'
+              : status === 'permission'
+                ? 'bg-status-attention'
+                : status === 'done' || status === 'active'
+                  ? // Green dot for both hook-reported 'done' and the heuristic
+                    // 'active' (terminal open, quiet). Working uses a yellow
+                    // ring above; 'inactive' stays grey.
+                    'bg-status-success'
+                  : 'bg-muted-foreground'
+          )}
+        />
       </span>
     )
+
+  if (!showTooltip) {
+    return indicator
   }
 
+  // Why: active and done intentionally share a glyph; the documented Tooltip
+  // primitive makes their exact meaning discoverable without a native title.
   return (
-    <span
-      className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-      title={resolvedTitle}
-      {...rest}
-    >
-      <span
-        className={cn(
-          'block size-2 rounded-full',
-          status === 'permission'
-            ? 'bg-amber-500'
-            : status === 'done' || status === 'active'
-              ? // Green dot for both hook-reported 'done' and the heuristic
-                // 'active' (terminal open, quiet). Working uses a yellow
-                // ring above; 'inactive' stays grey.
-                'bg-emerald-500'
-              : 'bg-neutral-500/40'
-        )}
-      />
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>{indicator}</TooltipTrigger>
+      <TooltipContent side={tooltipSide} sideOffset={tooltipSideOffset}>
+        {tooltipLabel ?? label}
+      </TooltipContent>
+    </Tooltip>
   )
 })
 

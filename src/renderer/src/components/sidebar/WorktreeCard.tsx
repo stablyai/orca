@@ -1388,6 +1388,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
             prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
             hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            // Why: the whole-card details hover names this exact activity state;
+            // letting both overlays open from the same pointer target makes them compete.
+            statusTooltipEnabled={!hasHoverDetails}
           />
         </div>
       ) : null}
@@ -1819,6 +1822,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
         automationHostId={worktree.hostId}
+        activityStatusWorktreeId={showStatus ? worktree.id : undefined}
         branchName={hoverBranchName}
         workspaceTitle={hoverWorkspaceTitle}
         workspaceTitleRenameDisabled={isDeleting || affiliateListMode}

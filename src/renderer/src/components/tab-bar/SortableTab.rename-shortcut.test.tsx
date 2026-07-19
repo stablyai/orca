@@ -216,6 +216,18 @@ vi.mock('@/store', () => ({
   useAppStore: useAppStoreExport
 }))
 
+// Why: these direct-call tests emulate only the rename hooks; status aggregation
+// has its own render tests and otherwise pulls Zustand's real React hook runtime.
+vi.mock('./use-terminal-tab-status-presentation', () => ({
+  useTerminalTabStatusPresentation: () => ({
+    status: 'active',
+    agent: null,
+    hasUnreadActivity: false,
+    unreadActivityKind: null,
+    unreadActivityAgent: null
+  })
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>

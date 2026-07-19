@@ -1,10 +1,9 @@
 /**
  * Executes the generated OpenCode plugin source (the artifact that runs inside
- * OpenCode's process) to verify streamed message.part.updated events are
- * coalesced and capped before POSTing to Orca's agent-hook server. The
- * un-throttled plugin re-posted the full accumulated reply per streamed
- * append — O(n²) bytes per turn — which saturated Orca's main + renderer
- * event loops on Windows and froze the UI mid-reply.
+ * OpenCode's process) to verify current message.part.delta streams and older
+ * full message.part.updated snapshots are coalesced and capped before POSTing
+ * to Orca's agent-hook server. Token-cadence posts saturated Orca's main +
+ * renderer event loops on Windows and froze the UI mid-reply.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -95,7 +94,22 @@ describe('OpenCode plugin MessagePart throttling', () => {
         type: 'message.part.updated',
         properties: {
           sessionID: 'session-1',
-          part: { type: 'text', text, messageID: 'msg-assistant' }
+          part: { id: 'part-assistant', type: 'text', text, messageID: 'msg-assistant' }
+        }
+      }
+    }
+  }
+
+  function assistantDeltaEvent(delta: string): { event: unknown } {
+    return {
+      event: {
+        type: 'message.part.delta',
+        properties: {
+          sessionID: 'session-1',
+          messageID: 'msg-assistant',
+          partID: 'part-assistant',
+          field: 'text',
+          delta
         }
       }
     }
@@ -117,16 +131,17 @@ describe('OpenCode plugin MessagePart throttling', () => {
     return posts.filter((post) => post.body.payload.hook_event_name === 'MessagePart')
   }
 
-  it('coalesces a streamed reply into leading + trailing posts with capped text', async () => {
+  it('accumulates current delta streams into leading + trailing capped previews', async () => {
     const handler = await loadPluginEventHandler()
     await seedAssistantRole(handler)
+    await handler(assistantPartEvent(''))
 
-    // Simulate a streaming turn: 50 part updates, each carrying the full
-    // accumulated text so far (how OpenCode actually publishes parts).
+    // Current OpenCode sends an empty text-start part followed by deltas.
     let text = ''
     for (let i = 0; i < 50; i++) {
-      text += 'chunk-of-streamed-reply-text-'.repeat(10)
-      await handler(assistantPartEvent(text))
+      const delta = 'chunk-of-streamed-reply-text-'.repeat(10)
+      text += delta
+      await handler(assistantDeltaEvent(delta))
     }
 
     // Leading edge only — everything else is pending behind the throttle.
@@ -142,6 +157,40 @@ describe('OpenCode plugin MessagePart throttling', () => {
     expect(text.startsWith(trailing.text!)).toBe(true)
   })
 
+  it('keeps compatibility with older repeated full-part snapshots', async () => {
+    const handler = await loadPluginEventHandler()
+    await seedAssistantRole(handler)
+
+    await handler(assistantPartEvent('first'))
+    await handler(assistantPartEvent('first second'))
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(messagePartPosts().map((post) => post.body.payload.text)).toEqual([
+      'first',
+      'first second'
+    ])
+  })
+
+  it('keeps failed delta delivery inside the throttle instead of retrying every event', async () => {
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      posts.push({ url: String(url), body: JSON.parse(String(init?.body)) })
+      return new Response(null, { status: 503 })
+    }) as typeof globalThis.fetch
+    const handler = await loadPluginEventHandler()
+    await seedAssistantRole(handler)
+
+    for (let index = 0; index < 50; index++) {
+      await handler(assistantDeltaEvent(`chunk-${index}`))
+    }
+
+    // A stale token or restarting hook server must not turn each OpenCode
+    // token into its own failed request and block the shared event queue.
+    expect(messagePartPosts()).toHaveLength(1)
+
+    await vi.advanceTimersByTimeAsync(250)
+    expect(messagePartPosts()).toHaveLength(2)
+  })
+
   it('flushes the pending reply snapshot before posting SessionIdle', async () => {
     const handler = await loadPluginEventHandler()
     await seedAssistantRole(handler)
@@ -154,8 +203,9 @@ describe('OpenCode plugin MessagePart throttling', () => {
     })
     posts.length = 0
 
-    await handler(assistantPartEvent('first'))
-    await handler(assistantPartEvent('first final'))
+    await handler(assistantPartEvent(''))
+    await handler(assistantDeltaEvent('first'))
+    await handler(assistantDeltaEvent(' final'))
     expect(messagePartPosts()).toHaveLength(1)
 
     await handler({
