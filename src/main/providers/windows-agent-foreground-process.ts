@@ -98,11 +98,7 @@ function windowsCandidatesContainRecognizedAgent(
   }
   return candidates
     .filter((candidate) => windowsCandidateMatchesFallbackWrapper(candidate, fallbackProcess))
-    .some(
-      (candidate) =>
-        recognizeAgentProcessFromCommandLine(candidate.command) !== null ||
-        recognizeAgentProcessFromCommandLine(candidate.name) !== null
-    )
+    .some((candidate) => recognizeWindowsCandidateAgent(candidate) !== null)
 }
 
 function resolveWindowsProcessName(
@@ -124,9 +120,7 @@ function resolveWindowsProcessName(
     )
   }
   const [candidate] = wrapperCandidates
-  const recognized =
-    recognizeAgentProcessFromCommandLine(candidate.command) ??
-    recognizeAgentProcessFromCommandLine(candidate.name)
+  const recognized = recognizeWindowsCandidateAgent(candidate)
   if (recognized) {
     return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
   }
@@ -285,9 +279,19 @@ function commandLineContainsPath(haystack: string, contextPath: string): boolean
 function recognizeWindowsProcessCandidate(
   candidate: WindowsProcessRow
 ): RecognizedAgentProcess | null {
+  return recognizeWindowsCandidateAgent(candidate)
+}
+
+function recognizeWindowsCandidateAgent(
+  candidate: WindowsProcessRow
+): RecognizedAgentProcess | null {
+  // Why: a renamed/forked agent binary hides from its command line and node-pty
+  // name, but the CIM scan already carries its real image path — recognize the
+  // executable basename with no extra probe (the ExecutablePath is free here).
   return (
     recognizeAgentProcessFromCommandLine(candidate.command) ??
-    recognizeAgentProcessFromCommandLine(candidate.name)
+    recognizeAgentProcessFromCommandLine(candidate.name) ??
+    (candidate.executablePath ? recognizeAgentProcess(candidate.executablePath) : null)
   )
 }
 

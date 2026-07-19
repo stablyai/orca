@@ -9,11 +9,31 @@ vi.mock('child_process', () => ({
 }))
 
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
+import { resetProcessExecutablePathCacheForTests } from '../../shared/process-executable-recognition'
 import {
   resolveAgentForegroundProcess,
   resolveAgentForegroundProcessWithAvailability
 } from './agent-foreground-process'
 import { resetWindowsProcessRowsSnapshotForTests } from './windows-foreground-process-rows'
+
+// Why: the exe-evidence pass forks `lsof` on macOS for unrecognized non-shell
+// foreground candidates. Route `ps` and `lsof` through the one execFile mock.
+function mockPsAndLsof(psStdout: string, lsofByPid: Record<number, string> = {}): void {
+  execFileMock.mockImplementation((cmd: string, args: string[], _opts: unknown, cb: unknown) => {
+    const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+    if (cmd === 'lsof') {
+      const pid = Number(args[args.indexOf('-p') + 1])
+      const image = lsofByPid[pid]
+      callback(null, { stdout: image ? `p${pid}\nn${image}` : '', stderr: '' })
+      return
+    }
+    callback(null, { stdout: psStdout, stderr: '' })
+  })
+}
+
+function lsofCallCount(): number {
+  return execFileMock.mock.calls.filter((call) => call[0] === 'lsof').length
+}
 
 // Why: the module wraps execFile with promisify, so the mock must honor the
 // Node callback contract — invoke the last arg with (err, { stdout, stderr }).
@@ -77,6 +97,7 @@ describe('resolveAgentForegroundProcess', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     resetProcessTableSnapshotForTests()
+    resetProcessExecutablePathCacheForTests()
     // Why: the Windows rows reader caches across calls (500ms TTL), so each
     // case's execFile mock must not be answered by the previous case's rows.
     resetWindowsProcessRowsSnapshotForTests()
@@ -259,6 +280,44 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'node')).resolves.toBe('codex')
   })
 
+  it('recognizes a renamed/forked agent binary via its executable image', async () => {
+    // argv0-renamed real binary: the command line hides the agent, but the
+    // executable image at ~/.local/bin/grok recognizes it.
+    mockPsAndLsof(['100 99 Ss   bash -i', '101 100 S+   my-cli --serve'].join('\n'), {
+      101: '/Users/dev/.local/bin/grok'
+    })
+
+    await expect(resolveAgentForegroundProcess(100, 'bash')).resolves.toBe('grok')
+    expect(lsofCallCount()).toBe(1)
+  })
+
+  it('does not run executable-image lookup when a candidate is recognized', async () => {
+    mockPsAndLsof(['100 99 Ss   bash -i', '101 100 S+   grok --serve'].join('\n'))
+
+    await expect(resolveAgentForegroundProcess(100, 'bash')).resolves.toBe('grok')
+    // Lazy: recognition succeeded on the command line, so no lsof fork.
+    expect(lsofCallCount()).toBe(0)
+  })
+
+  it('does not fabricate an agent when the executable image is an interpreter', async () => {
+    mockPsAndLsof(['100 99 Ss   bash -i', '101 100 S+   my-worker'].join('\n'), {
+      101: '/usr/local/bin/node'
+    })
+
+    await expect(resolveAgentForegroundProcess(100, 'bash')).resolves.toBe('bash')
+  })
+
+  it('does not probe suspended (non-foreground) candidates for executable evidence', async () => {
+    // '+' marks the shell as foreground; the stopped 'my-cli' child is not
+    // probed, so no lsof fork and no false agent identity.
+    mockPsAndLsof(['100 99 Ss+  bash -i', '101 100 T    my-cli --serve'].join('\n'), {
+      101: '/Users/dev/.local/bin/grok'
+    })
+
+    await expect(resolveAgentForegroundProcess(100, 'bash')).resolves.toBe('bash')
+    expect(lsofCallCount()).toBe(0)
+  })
+
   it('recognizes Windows wrapper-launched agents from descendant command lines', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(
@@ -336,6 +395,37 @@ describe('resolveAgentForegroundProcess', () => {
     )
 
     await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('cursor-agent')
+  })
+
+  it('recognizes a renamed Windows agent binary from its ExecutablePath', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: windowsProcessJsonRows([
+            {
+              CommandLine: 'powershell.exe',
+              Name: 'powershell.exe',
+              ParentProcessId: 99,
+              ProcessId: 100
+            },
+            {
+              // argv0-renamed: neither command line nor node-pty name recognizes,
+              // but the CIM scan's ExecutablePath does.
+              CommandLine: 'my-cli --serve',
+              Name: 'my-cli.exe',
+              ParentProcessId: 100,
+              ProcessId: 101,
+              ExecutablePath: 'C:\\Users\\dev\\.local\\bin\\grok.exe'
+            }
+          ]),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('grok')
   })
 
   it('recognizes Windows Git Bash shell-rooted agent launches', async () => {

@@ -12,6 +12,7 @@ vi.mock('child_process', () => ({
 
 import { resetWindowsProcessRowsSnapshotForTests } from '../main/providers/windows-foreground-process-rows'
 import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot'
+import { resetProcessExecutablePathCacheForTests } from '../shared/process-executable-recognition'
 import {
   getForegroundProcessName,
   isProcessAlive,
@@ -56,6 +57,7 @@ beforeEach(() => {
   execFileSyncMock.mockReset()
   resetProcessTableSnapshotForTests()
   resetWindowsProcessRowsSnapshotForTests()
+  resetProcessExecutablePathCacheForTests()
 })
 
 describe('isProcessAlive', () => {
@@ -475,6 +477,42 @@ describe('getForegroundProcessName', () => {
       })
 
       await expect(getForegroundProcessName(100, 'pi')).resolves.toBe('pi')
+    })
+  })
+
+  it('recognizes a renamed SSH relay agent binary via its executable image', async () => {
+    // The shell reports a bash foreground, but a renamed/forked agent binary
+    // ('my-cli') holds the terminal foreground; its executable image resolves it.
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   bash -l', '101 100 S+   my-cli --serve'].join('\n')
+          }
+        }
+        if (command === 'lsof') {
+          return { stdout: 'p101\nn/Users/dev/.local/bin/grok' }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'bash')).resolves.toBe('grok')
+    })
+  })
+
+  it('does not fork lsof when an SSH relay descendant is recognized by command line', async () => {
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   bash -l', '101 100 S+   grok --serve'].join('\n')
+          }
+        }
+        return new Error(`unexpected command ${command}`)
+      })
+
+      await expect(getForegroundProcessName(100, 'bash')).resolves.toBe('grok')
+      expect(execFileMock.mock.calls.some((call) => call[0] === 'lsof')).toBe(false)
     })
   })
 

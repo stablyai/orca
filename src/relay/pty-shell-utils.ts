@@ -10,6 +10,7 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
+import { recognizeAgentFromExecutablePath } from '../shared/process-executable-recognition'
 import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
 import {
   resolveOuterWrapperForegroundProcess,
@@ -268,6 +269,21 @@ async function getRecognizedForegroundDescendant(
         // Why: return the outer wrapper (omp) rather than the deeper wrapped child
         // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
         return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
+      }
+    }
+    // Why: a renamed/forked agent binary (argv0 rename, native fork at a
+    // non-standard path) hides from command-line recognition. Lazily resolve
+    // the real executable image for the still-unrecognized non-shell foreground
+    // candidates and re-run recognition — per-PID cached, foreground-only, no
+    // extra `ps` scan. Interpreter forks resolve to node/python and stay
+    // unrecognized (script CLIs are covered by argv recognition above).
+    for (const candidate of inspectionCandidates) {
+      if (!candidate.stat.includes('+') || isShellProcess(processCommandToken(candidate.command))) {
+        continue
+      }
+      const recognized = await recognizeAgentFromExecutablePath(candidate.pid)
+      if (recognized) {
+        return recognized.processName
       }
     }
   } catch {
