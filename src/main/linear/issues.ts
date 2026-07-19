@@ -38,6 +38,7 @@ type LinearIssueNode = {
   id: string
   identifier: string
   title: string
+  branchName?: string | null
   description?: string | null
   url: string
   dueDate?: string | null
@@ -143,6 +144,7 @@ const LINEAR_ISSUE_NODE_FIELDS = `
   id
   identifier
   title
+  branchName
   description
   url
   dueDate
@@ -399,6 +401,7 @@ function mapRawIssueForWorkspace(
     id: issue.id,
     identifier: issue.identifier,
     title: issue.title,
+    branchName: issue.branchName ?? undefined,
     description: issue.description ?? undefined,
     url: issue.url,
     state: {

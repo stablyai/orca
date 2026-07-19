@@ -98,7 +98,14 @@ describe('listWorkItems', () => {
       source: await getIssueOwnerRepoMock(),
       fellBack: false
     }))
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    // Why: since #7331 `resolvePrWorkItemSource` fetches origin through
+    // `getOwnerRepoForRemote` (getOwnerRepo became upstream-first). Delegate
+    // the origin probe to `getOwnerRepoMock` so existing tests keep defining
+    // the PR-side origin through it; default upstream to null.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
     _resetGhCwdRepoNegativeCache()
@@ -262,7 +269,10 @@ describe('listWorkItems', () => {
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
 
     await listWorkItems(
@@ -282,7 +292,12 @@ describe('listWorkItems', () => {
       null,
       localGitOptions
     )
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
+      '/repo-root',
+      'origin',
+      null,
+      localGitOptions
+    )
     expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
       '/repo-root',
       'upstream',

@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { SkillDiscoverySource, SkillProvider, SkillSourceKind } from '../../shared/skills'
 import type { Repo } from '../../shared/types'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
 
@@ -25,6 +26,7 @@ export function buildSkillDiscoverySources(
     homeDir?: string
     cwd?: string
     repos?: Repo[]
+    includeCwd?: boolean
   } = {}
 ): SkillScanRoot[] {
   const home = args.homeDir ?? homedir()
@@ -62,12 +64,16 @@ export function buildSkillDiscoverySources(
 
   const projectPaths = new Set<string>()
   for (const repo of args.repos ?? []) {
-    if (repo.connectionId) {
+    // Why: runtime-owned repos can have no legacy connectionId while their
+    // paths are meaningful only on a remote host.
+    if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
       continue
     }
     projectPaths.add(repo.path)
   }
-  projectPaths.add(cwd)
+  if (args.includeCwd !== false) {
+    projectPaths.add(cwd)
+  }
 
   for (const repoPath of projectPaths) {
     const label = `Repo ${basename(repoPath)}`

@@ -30,6 +30,7 @@ export type CreateWorkspaceFromComposerArgs = {
   workspaceName: string | undefined
   note: string | undefined
   nameIsAutoManaged?: boolean
+  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -92,6 +93,7 @@ async function createWorkItemWorkspace(args: {
   workspaceName: string | undefined
   note: string | undefined
   nameIsAutoManaged?: boolean
+  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
@@ -136,6 +138,7 @@ async function createWorkItemWorkspace(args: {
   return createWorktreeWithNameRetry({
     client,
     baseName,
+    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
     buildParams: (name) => ({ ...params, name })
   })
 }
@@ -148,6 +151,7 @@ async function createBranchWorkspace(args: {
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   note: string | undefined
+  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
@@ -173,6 +177,7 @@ async function createBranchWorkspace(args: {
     return createWorktreeWithNameRetry({
       client,
       baseName,
+      supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
       maxAttempts: 1,
       buildParams: (name) =>
         applyCommon({
@@ -195,6 +200,7 @@ async function createBranchWorkspace(args: {
   return createWorktreeWithNameRetry({
     client,
     baseName,
+    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
     buildParams: (candidate) => {
       const params: Record<string, unknown> = {
         repo: `id:${targetRepoId}`,
@@ -219,6 +225,7 @@ async function createNewBranchWorkspace(args: {
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   note: string | undefined
+  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, note } = args
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
@@ -230,6 +237,7 @@ async function createNewBranchWorkspace(args: {
   return createWorktreeWithNameRetry({
     client,
     baseName: selection.branchName,
+    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
     buildParams: (candidate) => {
       const params: Record<string, unknown> = {
         repo: `id:${targetRepoId}`,

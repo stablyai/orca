@@ -11,6 +11,7 @@ export function sshConnectionStatesEqual(
     a?.status === b.status &&
     a?.error === b.error &&
     a?.reconnectAttempt === b.reconnectAttempt &&
+    a?.supportsFolderDownload === b.supportsFolderDownload &&
     a?.remotePlatform === b.remotePlatform
   )
 }

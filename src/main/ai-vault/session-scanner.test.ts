@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
-import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  jsonLines,
+  writeAntigravityScannerFixture
+} from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
 
@@ -423,6 +427,9 @@ describe('scanAiVaultSessions', () => {
       })
     )
 
+    const antigravitySessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    await writeAntigravityScannerFixture(roots.antigravityBrainDir, antigravitySessionId)
+
     await mkdir(roots.copilotSessionsDir, { recursive: true })
     await writeFile(
       join(roots.copilotSessionsDir, 'copilot-session.jsonl'),
@@ -718,11 +725,7 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({
-      ...roots,
-      platform: 'darwin',
-      limit: 20
-    })
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
@@ -739,6 +742,7 @@ describe('scanAiVaultSessions', () => {
       `cd '/tmp/codex' && CODEX_HOME='${root}' codex resume 'codex-session'`
     )
     expect(commandByAgent.get('gemini')).toBe("gemini --resume 'gemini-session'")
+    expect(commandByAgent.get('antigravity')).toBe(`agy --conversation '${antigravitySessionId}'`)
     expect(commandByAgent.get('copilot')).toBe(
       "cd '/tmp/copilot' && copilot --resume='copilot-session'"
     )

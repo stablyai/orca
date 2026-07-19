@@ -105,6 +105,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
         agentEnv: {}
       },
       launchToken: expect.any(String),
+      sessionOptions: undefined,
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'sidebar',

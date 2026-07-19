@@ -402,6 +402,7 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: {},
+      sessionOptions: undefined,
       platform: 'win32',
       isRemote: false
     })
@@ -525,6 +526,7 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
+      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true
     })
@@ -534,6 +536,7 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
+      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true,
       allowEmptyPromptLaunch: true

@@ -324,9 +324,9 @@ describe('createPtySubprocess', () => {
     expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
   })
 
-  it('uses a new daemon protocol for post-merge Git guard behavior', () => {
-    expect(PROTOCOL_VERSION).toBeGreaterThan(21)
-    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(21)
+  it('uses a new daemon protocol for the macOS login preflight host behavior', () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThan(22)
+    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(22)
   })
 
   it('resolves a missing Unix default before spawning node-pty', () => {
@@ -518,17 +518,11 @@ describe('createPtySubprocess', () => {
       }
     }
 
-    // On macOS the shell is spawned through /usr/bin/login so terminal children
-    // carry their own TCC identity (#6996); the real shell rides behind it, and
-    // env(1) re-asserts the SHELL that login(1) would overwrite.
+    // The sync subprocess layer consumes the capability prepared by its async
+    // daemon boundary; this cwd-repair test deliberately exercises it unprepared.
     expect(spawnMock).toHaveBeenCalledWith(
-      '/usr/bin/login',
-      expect.arrayContaining([
-        '-flpq',
-        '/usr/bin/env',
-        expect.stringMatching(/^SHELL=/),
-        '/bin/bash'
-      ]),
+      '/bin/bash',
+      expect.any(Array),
       expect.objectContaining({ cwd: originalCwd })
     )
   })
@@ -2210,7 +2204,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'C:\\PortableGit\\bin\\bash.exe',
-      ['--login', '-i'],
+      ['-c', 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'],
       expect.objectContaining({
         cwd: 'C:\\Users\\jin\\repo',
         env: expect.objectContaining({ CHERE_INVOKING: '1' })

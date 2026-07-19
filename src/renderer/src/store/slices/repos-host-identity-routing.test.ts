@@ -496,6 +496,42 @@ describe('repo slice host identity routing', () => {
     })
   })
 
+  it('persists a moved paired-host project block without reversing its host occurrences', async () => {
+    reposReorderForHost.mockResolvedValue({ status: 'applied' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-paired-project-reorder',
+      ok: true,
+      result: { status: 'applied' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const charlie = { ...remoteDuplicate, id: 'charlie' }
+    const store = createTestStore()
+    store.setState({ repos: [bravo, localDuplicate, charlie, remoteDuplicate] })
+
+    await store.getState().reorderRepos(['same-repo', 'same-repo', 'bravo', 'charlie'])
+
+    expect(store.getState().repos).toEqual([localDuplicate, remoteDuplicate, bravo, charlie])
+    expect(uiSet).toHaveBeenCalledWith({
+      manualRepoOrder: [
+        { hostId: 'local', repoId: 'same-repo' },
+        { hostId: 'runtime:env-1', repoId: 'same-repo' },
+        { hostId: 'local', repoId: 'bravo' },
+        { hostId: 'runtime:env-1', repoId: 'charlie' }
+      ]
+    })
+    expect(reposReorderForHost).toHaveBeenCalledWith({
+      hostId: 'local',
+      orderedIds: ['same-repo', 'bravo']
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.reorder',
+      params: { orderedIds: ['same-repo', 'charlie'] },
+      timeoutMs: 15_000
+    })
+  })
+
   it('persists a complete cross-host overlay alongside host-local permutations', async () => {
     reposReorderForHost.mockResolvedValue({ status: 'applied' })
     runtimeEnvironmentCall.mockResolvedValue({

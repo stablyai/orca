@@ -6,7 +6,6 @@ import type {
   PreflightStatus,
   RefreshAgentsResult,
   NativeChatApi,
-  NativeChatReadSessionResult,
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -35,6 +34,7 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
@@ -126,6 +126,10 @@ import {
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 import { translate } from '@/i18n/i18n'
 import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
+import {
+  parseRuntimeNativeChatReadSessionResult,
+  parseRuntimeNativeChatTurnLifecycle
+} from '@/components/native-chat/native-chat-runtime-contract'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -498,7 +502,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
-      pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
+      pickFloatingWorkspaceDirectory: () => Promise.resolve(null),
+      // Browser fallback has no app-owned userData directory; rejecting keeps
+      // the sentinel from claiming that sensitive evidence was persisted.
+      writeTerminalRenderDesyncEvidence: () =>
+        Promise.reject(
+          new Error('Terminal render evidence is unavailable in the browser fallback.')
+        )
     },
     starNag: {
       onShow: () => noopUnsubscribe,
@@ -650,6 +660,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           })
         )
       },
+      // localStorage writes synchronously, so there is no deferred web flush.
+      flush: async () => {},
       readTerminalScrollback: () => null,
       setSync: (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
@@ -742,6 +754,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onClear: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
       inferInterrupt: () => Promise.resolve(false),
+      inferQuestionAnswered: () => Promise.resolve(false),
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
@@ -1081,48 +1094,132 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
 // undefined on web and the chat view showed no messages.
 function createNativeChatApi(): NativeChatApi {
   return {
-    readSession: (agent, sessionId, limit, transcriptPath) =>
-      callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
-        agent,
-        sessionId,
-        limit,
-        transcriptPath
-      }),
-    subscribe: (args, onAppended) => {
+    readSession: async (agent, sessionId, limit, transcriptPath) =>
+      parseRuntimeNativeChatReadSessionResult(
+        await callRuntimeResult<unknown>('nativeChat.readSession', {
+          agent,
+          sessionId,
+          limit,
+          transcriptPath
+        })
+      ),
+    subscribe: (args, onFrame) => {
       // No paired runtime yet: nothing to subscribe to, and
       // requireActiveEnvironment() would throw. Return a no-op teardown so the
       // chat view mounts cleanly until a runtime is paired (only the not-paired
       // case is swallowed — real subscribe errors still surface via .catch).
       const environment = requireActiveEnvironmentOrNull()
       if (!environment) {
+        onFrame({
+          type: 'snapshot',
+          messages: [],
+          hasMore: false,
+          error: translate(
+            'components.native-chat.state.pairHost',
+            'Pair a host to view agent chat history.'
+          )
+        })
         return () => {}
       }
       let handle: { unsubscribe: () => void } | null = null
       let cancelled = false
+      let receivedInitial = false
       void getClientForEnvironment(environment)
         .subscribe(
           'nativeChat.subscribe',
-          { agent: args.agent, sessionId: args.sessionId, transcriptPath: args.transcriptPath },
+          {
+            agent: args.agent,
+            sessionId: args.sessionId,
+            subscriptionId: args.subscriptionId,
+            transcriptPath: args.transcriptPath,
+            limit: args.limit
+          },
           {
             onResponse: (response) => {
-              if (cancelled || !response.ok) {
+              if (cancelled) {
+                return
+              }
+              if (!response.ok) {
+                if (!receivedInitial) {
+                  receivedInitial = true
+                  onFrame({
+                    type: 'snapshot',
+                    messages: [],
+                    hasMore: false,
+                    error: response.error.message
+                  })
+                }
                 return
               }
               const result = response.result as {
                 type?: string
                 messages?: NativeChatAppendedMessages
+                hasMore?: boolean
+                error?: string
+                lifecycle?: unknown
               }
-              if (result?.type === 'appended' && Array.isArray(result.messages)) {
-                onAppended(result.messages)
+              const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
+              if (
+                (result?.type === 'appended' ||
+                  result?.type === 'snapshot' ||
+                  result?.type === 'replacement') &&
+                Array.isArray(result.messages)
+              ) {
+                if (!receivedInitial) {
+                  receivedInitial = true
+                  onFrame({
+                    type: 'snapshot',
+                    messages: result.messages,
+                    hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {})
+                  })
+                } else if (result.type === 'snapshot') {
+                  onFrame({
+                    type: 'snapshot',
+                    messages: result.messages,
+                    hasMore: result.hasMore ?? false,
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {})
+                  })
+                } else {
+                  onFrame(
+                    result.type === 'replacement'
+                      ? {
+                          type: 'replacement',
+                          messages: result.messages,
+                          hasMore: result.hasMore ?? false,
+                          ...(lifecycle ? { lifecycle } : {})
+                        }
+                      : {
+                          type: 'appended',
+                          messages: result.messages,
+                          ...(lifecycle ? { lifecycle } : {})
+                        }
+                  )
+                }
+              } else if (!receivedInitial) {
+                // Why: an ok response whose payload shape we don't recognize would
+                // otherwise never flip receivedInitial, stranding the view on
+                // 'loading'. Settle it with an empty snapshot (carrying any error
+                // the runtime sent) so the UI resolves.
+                receivedInitial = true
+                onFrame({
+                  type: 'snapshot',
+                  messages: [],
+                  hasMore: false,
+                  ...(result?.error ? { error: result.error } : {})
+                })
               }
             }
           },
           {
             // Why: send nativeChat.unsubscribe on teardown so the server reaps
             // the transcript fs-watcher on view-toggle, not just on socket close
-            // (the watcher-leak fix). Uses the same agent:sessionId cleanup token
-            // mobile sends, via the shared key-builder so it can't drift.
-            buildUnsubscribe: () => buildNativeChatUnsubscribe(args.agent, args.sessionId)
+            // (the watcher-leak fix). Echo the pane-specific token so two panes
+            // watching one session cannot tear down each other's watcher.
+            buildUnsubscribe: () =>
+              buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
           }
         )
         .then((h) => {
@@ -1132,7 +1229,17 @@ function createNativeChatApi(): NativeChatApi {
             handle = h
           }
         })
-        .catch(() => {})
+        .catch((err: unknown) => {
+          if (!cancelled && !receivedInitial) {
+            receivedInitial = true
+            onFrame({
+              type: 'snapshot',
+              messages: [],
+              hasMore: false,
+              error: err instanceof Error ? err.message : String(err)
+            })
+          }
+        })
       return () => {
         cancelled = true
         handle?.unsubscribe()
@@ -1513,6 +1620,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     onLocalLogTailChanged: () => noopUnsubscribe,
     downloadFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    downloadFolder: async () => {
+      throw new Error('Remote folder download is unavailable in paired web clients.')
     },
     saveDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
@@ -1907,12 +2017,14 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
 
 function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   return {
-    registerGuest: () => Promise.resolve(),
+    registerGuest: () => Promise.resolve(false),
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
     setAnnotationViewportBridge: () => Promise.resolve(false),
     onGuestLoadFailed: () => noopUnsubscribe,
+    onCertificateFailureChanged: () => noopUnsubscribe,
+    proceedCertificate: () => Promise.resolve({ ok: false, reason: 'missing' }),
     onPermissionDenied: () => noopUnsubscribe,
     onPopup: () => noopUnsubscribe,
     onDownloadRequested: () => noopUnsubscribe,
@@ -2376,6 +2488,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
+    // Why: the web client has no native tray/menu bar, so there is never a
+    // queued open-settings intent to consume.
+    consumePendingOpenSettings: () => Promise.resolve(false),
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
@@ -2437,6 +2552,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onMobileMarkdownRequest: () => noopUnsubscribe,
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
+    onTerminalTabCloseRequest: () => noopUnsubscribe,
+    respondTerminalTabClose: () => {},
     onSleepWorktree: () => noopUnsubscribe,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is
     // desktop-host-scoped, so the web client never receives this signal.
@@ -2653,7 +2770,16 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         skills: [],
         sources: [],
         scannedAt: Date.now()
-      }))
+      })),
+    // Why: browser clients have no local skill homes, and remote-host
+    // freshness stays disabled until its update rail has equivalent coverage.
+    freshnessInventory: (): Promise<SkillFreshnessInventory> =>
+      Promise.resolve({
+        schemaVersion: 1,
+        installations: [],
+        eligibleUpdateNames: [],
+        scannedAt: Date.now()
+      })
   }
 }
 

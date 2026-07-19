@@ -27,6 +27,7 @@ import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
   SessionNotFoundError,
+  TerminalAttachCanceledError,
   type HelloMessage,
   type DaemonRequest
 } from './types'
@@ -35,6 +36,7 @@ export type DaemonServerOptions = {
   socketPath: string
   tokenPath: string
   ptySpawnHealthCheck?: () => Promise<void>
+  preparePtySpawn?: () => Promise<void>
   log?: DaemonFileLog
   spawnSubprocess: (opts: {
     sessionId: string
@@ -53,6 +55,10 @@ type ConnectedClient = {
   streamSocket: Socket | null
 }
 
+type PendingPtySpawnPreparation = {
+  canceled: boolean
+}
+
 export class DaemonServer {
   private server: Server | null = null
   private token: string
@@ -60,6 +66,7 @@ export class DaemonServer {
   private socketPath: string
   private tokenPath: string
   private ptySpawnHealthCheck: () => Promise<void>
+  private preparePtySpawn: () => Promise<void>
   private log: DaemonFileLog
 
   private clients = new Map<string, ConnectedClient>()
@@ -96,6 +103,7 @@ export class DaemonServer {
   })
   private streamClientIdBySessionId = new Map<string, string>()
   private lastInputAtBySessionId = new Map<string, number>()
+  private pendingPtySpawnPreparations = new Map<string, Set<PendingPtySpawnPreparation>>()
   private stopStreamBacklogProbe: () => void = () => {}
 
   // Why: main-process PTY IPC has the same recent-input bypass, but daemon
@@ -111,6 +119,7 @@ export class DaemonServer {
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
     this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
+    this.preparePtySpawn = opts.preparePtySpawn ?? (() => Promise.resolve())
     this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
       clients: Array.from(this.clients.values(), (client) => ({
         clientId: client.clientId,
@@ -149,6 +158,7 @@ export class DaemonServer {
   async shutdown(): Promise<void> {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
+    this.cancelAllPendingPtySpawnPreparations()
     try {
       await this.host.dispose()
     } catch (err) {
@@ -335,12 +345,50 @@ export class DaemonServer {
     }
   }
 
+  private async preparePtySpawnUnlessCanceled(sessionId: string): Promise<void> {
+    const preparation: PendingPtySpawnPreparation = { canceled: false }
+    const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
+    pending.add(preparation)
+    this.pendingPtySpawnPreparations.set(sessionId, pending)
+    try {
+      // Why: registration precedes the async capability probe so a concurrent
+      // close can cancel this exact creation before a subprocess exists.
+      await this.preparePtySpawn()
+      if (preparation.canceled) {
+        throw new TerminalAttachCanceledError(sessionId)
+      }
+    } finally {
+      pending.delete(preparation)
+      if (pending.size === 0) {
+        this.pendingPtySpawnPreparations.delete(sessionId)
+      }
+    }
+  }
+
+  private cancelPendingPtySpawnPreparations(sessionId: string): boolean {
+    const pending = this.pendingPtySpawnPreparations.get(sessionId)
+    if (!pending) {
+      return false
+    }
+    for (const preparation of pending) {
+      preparation.canceled = true
+    }
+    return true
+  }
+
+  private cancelAllPendingPtySpawnPreparations(): void {
+    for (const sessionId of this.pendingPtySpawnPreparations.keys()) {
+      this.cancelPendingPtySpawnPreparations(sessionId)
+    }
+  }
+
   private async routeRequest(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.clients.get(clientId)
 
     switch (request.type) {
       case 'createOrAttach': {
         const p = request.payload
+        await this.preparePtySpawnUnlessCanceled(p.sessionId)
         const result = await this.host.createOrAttach({
           sessionId: p.sessionId,
           cols: p.cols,
@@ -424,6 +472,7 @@ export class DaemonServer {
       }
 
       case 'cancelCreateOrAttach':
+        this.cancelPendingPtySpawnPreparations(request.payload.sessionId)
         return {}
 
       case 'write':
@@ -500,14 +549,26 @@ export class DaemonServer {
         return {}
       }
 
-      case 'kill':
+      case 'kill': {
+        const canceledPendingSpawn = this.cancelPendingPtySpawnPreparations(
+          request.payload.sessionId
+        )
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
         this.log.log('session-killed', {
           sessionId: request.payload.sessionId,
           immediate: request.payload.immediate === true
         })
-        await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        try {
+          await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        } catch (error) {
+          // Why: a kill that wins before session registration has already
+          // canceled the pending spawn and therefore completed its intent.
+          if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
+            throw error
+          }
+        }
         return {}
+      }
 
       case 'signal':
         this.host.signal(request.payload.sessionId, request.payload.signal)

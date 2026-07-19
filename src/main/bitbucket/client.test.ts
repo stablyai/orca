@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
@@ -121,5 +122,20 @@ describe('Bitbucket client', () => {
       authenticated: true,
       account: 'bitbucket-user'
     })
+  })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () =>
+      cancelTrackingResponse(502, () => {
+        cancelledBodies += 1
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/bitbucket')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
   })
 })

@@ -89,6 +89,7 @@ function createContext(editor: Editor): KeyHandlerContext {
       subscribe: () => () => {},
       update: () => {}
     },
+    openAnnotationPopoverRef: { current: vi.fn() },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),

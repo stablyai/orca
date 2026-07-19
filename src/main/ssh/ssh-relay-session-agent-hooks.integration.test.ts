@@ -414,19 +414,22 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
 
     relay.notifyAgentHook(
       makeEnvelope({
-        source: 'claude',
-        hookEventName: 'PreToolUse',
+        source: 'pi',
+        hookEventName: 'session_start',
         promptInteractionKey: 'command-code-transcript-user-3',
         toolUseId: 'toolu-1',
         toolAgentId: 'agent-subagent-a',
         toolAgentType: 'Review',
-        providerSession: { key: 'session_id', id: 'ssh-relay-session-1' },
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'ssh-relay-session-1',
+          transcriptPath: '/tmp/ssh-relay-session-1.jsonl'
+        },
         payload: {
-          state: 'working',
-          prompt: 'remote prompt',
-          agentType: 'claude',
-          toolName: 'Bash',
-          toolInput: 'pnpm test'
+          state: 'done',
+          prompt: '',
+          agentType: 'pi'
         }
       })
     )
@@ -434,12 +437,17 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     await vi.waitFor(() =>
       expect(ingestSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          hookEventName: 'PreToolUse',
+          hookEventName: 'session_start',
           promptInteractionKey: 'command-code-transcript-user-3',
           toolUseId: 'toolu-1',
           toolAgentId: 'agent-subagent-a',
           toolAgentType: 'Review',
-          providerSession: { key: 'session_id', id: 'ssh-relay-session-1' }
+          providerSessionOnly: true,
+          providerSession: {
+            key: 'session_id',
+            id: 'ssh-relay-session-1',
+            transcriptPath: '/tmp/ssh-relay-session-1.jsonl'
+          }
         }),
         'conn-hook-metadata'
       )

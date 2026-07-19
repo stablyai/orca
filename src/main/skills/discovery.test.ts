@@ -83,6 +83,41 @@ describe('skill discovery', () => {
     }
   })
 
+  it('does not add runtime-owned repository paths to local scan roots', () => {
+    const runtimeRepo = makeRepo('/runtime/repo')
+    runtimeRepo.executionHostId = 'runtime:environment-1'
+
+    const roots = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      repos: [runtimeRepo]
+    })
+
+    expect(roots.map((root) => root.path.replace(/\\/g, '/'))).not.toContain(
+      '/runtime/repo/.agents/skills'
+    )
+  })
+
+  it('can exclude the implicit cwd without excluding explicit local repositories', () => {
+    const defaultRoots = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      repos: [makeRepo('/workspace/known')]
+    })
+    const explicitRoots = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      repos: [makeRepo('/workspace/known')],
+      includeCwd: false
+    })
+
+    const normalizedDefaultPaths = defaultRoots.map((root) => root.path.replace(/\\/g, '/'))
+    const normalizedExplicitPaths = explicitRoots.map((root) => root.path.replace(/\\/g, '/'))
+    expect(normalizedDefaultPaths).toContain('/workspace/current/.agents/skills')
+    expect(normalizedExplicitPaths).not.toContain('/workspace/current/.agents/skills')
+    expect(normalizedExplicitPaths).toContain('/workspace/known/.agents/skills')
+  })
+
   it('discovers skill packages through symlinked skill directories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

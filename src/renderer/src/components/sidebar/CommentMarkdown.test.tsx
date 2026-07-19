@@ -3,6 +3,33 @@ import { describe, expect, it } from 'vitest'
 import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
 
 describe('CommentMarkdown', () => {
+  it('marks compact headings so a parent can opt into block flow', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content={'## Walkthrough\n\nAdds verify:changed, which collects.'} />
+    )
+
+    expect(markup).toContain('comment-md-h comment-md-h2')
+    expect(markup).toContain('comment-md-p')
+    expect(markup).toContain('role="heading"')
+    expect(markup).toContain('aria-level="2"')
+    // Weight-only styling stays the compact default; block flow is opt-in.
+    expect(markup).toContain('font-bold')
+  })
+
+  it('marks adjacent compact paragraphs inside disclosure content', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown
+        content={
+          '<details><summary>More</summary>\n\nFirst paragraph.\n\nSecond paragraph.\n\n</details>'
+        }
+      />
+    )
+
+    expect(markup).toContain(
+      '<span class="comment-md-p">First paragraph.</span>\n<span class="comment-md-p">Second paragraph.</span>'
+    )
+  })
+
   it('autolinks same-repo GitHub issue references when repo context is provided', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown

@@ -64,7 +64,25 @@ function isUsageAuthError(message: string | null): boolean {
   return Boolean(message && USAGE_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(message)))
 }
 
+function getDelegatedCliRefreshProvider(
+  p: ProviderRateLimits
+): Extract<ProviderRateLimits['provider'], 'grok' | 'kimi'> | null {
+  if (p.usageMetadata?.failureKind !== 'delegated-refresh-required') {
+    return null
+  }
+  // Why: only these providers require a user-run CLI to rotate the read-only
+  // session Orca consumes; Claude handles the same failure kind in-app.
+  return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
+}
+
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
+  const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
+  if (delegatedCliProvider === 'grok') {
+    return translate('auto.components.status.bar.tooltip.e2c6a4f917', 'Run Grok to refresh')
+  }
+  if (delegatedCliProvider === 'kimi') {
+    return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
+  }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
       case 'deferred-by-live-session':
@@ -106,6 +124,19 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   )
   if (!p.error) {
     return fallback
+  }
+  const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
+  if (delegatedCliProvider === 'grok') {
+    return translate(
+      'auto.components.status.bar.tooltip.d1b7f509ac',
+      'Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.'
+    )
+  }
+  if (delegatedCliProvider === 'kimi') {
+    return translate(
+      'auto.components.status.bar.tooltip.a37e8c15d4',
+      'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {

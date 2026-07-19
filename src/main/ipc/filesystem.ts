@@ -122,6 +122,8 @@ import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
+import { sanitizeLocalDownloadFilename } from '../local-download-filename'
+import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
@@ -148,9 +150,6 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
 }
-const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
-const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
-
 async function readLocalLogSnapshot(filePath: string): Promise<{
   content: string
   isBinary: boolean
@@ -192,18 +191,6 @@ function validateRequiredString(value: unknown, label: string): string {
   return value
 }
 
-function sanitizeSaveDialogFilename(remoteBasename: string): string {
-  const sanitized = Array.from(remoteBasename, (char) =>
-    char.charCodeAt(0) < 32 || LOCAL_FILENAME_REPLACEMENT_CHARS.has(char) ? '_' : char
-  )
-    .join('')
-    .replace(/[. ]+$/g, '')
-  if (!sanitized || WINDOWS_RESERVED_LOCAL_BASENAME.test(sanitized)) {
-    return 'download'
-  }
-  return sanitized
-}
-
 function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 'base64'): Buffer {
   if (encoding === 'base64') {
     return Buffer.from(content, 'base64')
@@ -223,6 +210,8 @@ type DownloadSession = {
 const DOWNLOAD_SESSION_TTL_MS = 30 * 60 * 1000
 
 function createSiblingTransferPath(destinationPath: string, suffix: string): string {
+  // Why: promotion uses rename/no-clobber operations that must stay on the
+  // destination volume, so transfer paths intentionally remain siblings.
   return join(dirname(destinationPath), `.${randomUUID()}.${suffix}`)
 }
 
@@ -641,7 +630,7 @@ export function registerFilesystemHandlers(
       }
 
       const remoteBasename = getRuntimePathBasename(filePath)
-      const defaultPath = sanitizeSaveDialogFilename(remoteBasename)
+      const defaultPath = sanitizeLocalDownloadFilename(remoteBasename)
       const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
       const dialogResult = parentWindow
         ? await dialog.showSaveDialog(parentWindow, { defaultPath })
@@ -667,13 +656,15 @@ export function registerFilesystemHandlers(
     }
   )
 
+  registerFilesystemDownloadFolderHandlers()
+
   ipcMain.handle(
     'fs:saveDownloadedFile',
     async (
       event,
       args: { suggestedName?: string; content?: string; encoding?: 'utf8' | 'base64' }
     ): Promise<DownloadFileResult> => {
-      const suggestedName = sanitizeSaveDialogFilename(
+      const suggestedName = sanitizeLocalDownloadFilename(
         validateRequiredString(args?.suggestedName, 'suggestedName')
       )
       if (typeof args?.content !== 'string') {
@@ -719,7 +710,7 @@ export function registerFilesystemHandlers(
           destinationPath: string
         }
     > => {
-      const suggestedName = sanitizeSaveDialogFilename(
+      const suggestedName = sanitizeLocalDownloadFilename(
         validateRequiredString(args?.suggestedName, 'suggestedName')
       )
       const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined

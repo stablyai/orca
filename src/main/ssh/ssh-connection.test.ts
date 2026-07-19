@@ -23,6 +23,7 @@ type MockSshClient = {
   lastExecCommand?: string
   lastConnectConfig?: unknown
   exec: (cmd: string, cb: (err: Error | undefined, channel: unknown) => void) => void
+  sftp: (cb: (err: Error | undefined, channel: unknown) => void) => void
 }
 let clientInstances: MockSshClient[] = []
 
@@ -304,6 +305,7 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(conn.getState().status).toBe('connected')
+    expect(conn.getState().supportsFolderDownload).toBe(true)
     expect(callbacks.onStateChange).toHaveBeenCalledWith(
       'target-1',
       expect.objectContaining({ status: 'connected' })
@@ -690,15 +692,15 @@ describe('SshConnection', () => {
 
     vi.useFakeTimers()
     try {
-      const outcomePromise = conn
-        .exec('printf ready')
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
+      const outcomePromise = conn.exec('printf ready').catch((error: Error) => error)
 
       await vi.advanceTimersByTimeAsync(30_000)
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
-      expect(outcome).toBe('SSH exec channel timed out')
+      expect(outcome).toMatchObject({
+        message: 'SSH exec channel timed out',
+        sshChannelCloseConfirmed: false
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -784,15 +786,54 @@ describe('SshConnection', () => {
     try {
       const outcomePromise = conn
         .exec('printf ready', { signal: controller.signal })
-        .then(() => 'opened')
-        .catch((error: Error) => error.name)
+        .catch((error: Error) => error)
 
       controller.abort()
       // Why: a hung socket must not pin the aborted caller for the full 30s
       // connect timeout — the abort settles at the 5s grace bound instead.
       await vi.advanceTimersByTimeAsync(5_000)
 
-      await expect(outcomePromise).resolves.toBe('AbortError')
+      await expect(outcomePromise).resolves.toMatchObject({
+        name: 'AbortError',
+        sshChannelCloseConfirmed: false
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drains an exec channel that opens after the abort grace has settled', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+    const controller = new AbortController()
+    const lateChannel = Object.assign(new EventEmitter(), {
+      close: vi.fn(),
+      resume: vi.fn(),
+      stderr: { resume: vi.fn() }
+    })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready', { signal: controller.signal })
+        .catch((error: Error) => error)
+
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const outcome = await outcomePromise
+      expect(outcome).toMatchObject({
+        name: 'AbortError',
+        sshChannelCloseConfirmed: false
+      })
+
+      pendingExecCallback?.(undefined, lateChannel)
+
+      expect(lateChannel.resume).toHaveBeenCalledTimes(1)
+      expect(lateChannel.stderr.resume).toHaveBeenCalledTimes(1)
+      expect(lateChannel.close).toHaveBeenCalledTimes(1)
+      lateChannel.emit('close')
+      expect(outcome).toMatchObject({ sshChannelCloseConfirmed: true })
     } finally {
       vi.useRealTimers()
     }
@@ -837,7 +878,7 @@ describe('SshConnection', () => {
     const lateChannel = Object.assign(new EventEmitter(), {
       close: vi.fn(),
       resume: vi.fn(),
-      stderr: { resume: vi.fn() }
+      stderr: Object.assign(new EventEmitter(), { resume: vi.fn() })
     })
 
     const outcomePromise = conn
@@ -855,9 +896,39 @@ describe('SshConnection', () => {
     expect(early).toBe('pending')
     expect(lateChannel.close).toHaveBeenCalledTimes(1)
     expect(lateChannel.resume).toHaveBeenCalled()
+    expect(() => lateChannel.emit('error', new Error('late channel teardown'))).not.toThrow()
+    expect(() => lateChannel.stderr.emit('error', new Error('late stderr teardown'))).not.toThrow()
 
     lateChannel.emit('close')
     await expect(outcomePromise).resolves.toBe('AbortError')
+  })
+
+  it('removes the late-channel close listener when abort grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    vi.useFakeTimers()
+    try {
+      sftpBehavior = 'pending'
+      const controller = new AbortController()
+      const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+      const outcomePromise = conn
+        .sftp(controller.signal)
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+      await vi.advanceTimersByTimeAsync(0)
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+      expect(() => lateSftp.emit('error', new Error('late SFTP teardown'))).not.toThrow()
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('times out when ssh2 never opens an SFTP channel', async () => {
@@ -867,15 +938,13 @@ describe('SshConnection', () => {
 
     vi.useFakeTimers()
     try {
-      const outcomePromise = conn
-        .sftp()
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
+      const outcomePromise = conn.sftp().catch((error: Error) => error)
 
       await vi.advanceTimersByTimeAsync(30_000)
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
-      expect(outcome).toBe('SSH SFTP channel timed out')
+      expect(outcome).toMatchObject({ message: 'SSH SFTP channel timed out' })
+      expect(outcome).not.toHaveProperty('sshChannelCloseConfirmed')
     } finally {
       vi.useRealTimers()
     }
@@ -904,6 +973,55 @@ describe('SshConnection', () => {
     }
   })
 
+  it('cancels a pending SFTP channel open and ends the late channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = { end: vi.fn() }
+
+    const outcomePromise = conn
+      .sftp({ signal: controller.signal })
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    await Promise.resolve()
+    controller.abort()
+    pendingSftpCallback?.(undefined, lateSftp)
+
+    await expect(outcomePromise).resolves.toBe('AbortError')
+    expect(lateSftp.end).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the late SFTP close listener when the bounded grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp({ signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      await Promise.resolve()
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+      expect(lateSftp.end).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -912,6 +1030,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getState().supportsFolderDownload).toBe(false)
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
@@ -1366,6 +1485,61 @@ describe('SshConnection', () => {
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
+  })
+
+  it('composes a caller abort into system SSH relay uploads', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const controller = new AbortController()
+    let transferSignal: AbortSignal | undefined
+    vi.mocked(uploadDirectoryViaSystemSsh).mockImplementationOnce(
+      (_target, _localDir, _remoteDir, options) => {
+        transferSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
+            once: true
+          })
+        })
+      }
+    )
+
+    await conn.connect()
+    const upload = conn.uploadDirectory('/tmp/local-relay', '/remote/relay', {
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(transferSignal).toBeDefined())
+    controller.abort()
+
+    await expect(upload).rejects.toMatchObject({ name: 'AbortError' })
+    expect(transferSignal?.aborted).toBe(true)
+  })
+
+  it('keeps connection disconnect cancellation linked to caller-scoped relay writes', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const controller = new AbortController()
+    let transferSignal: AbortSignal | undefined
+    vi.mocked(writeFileViaSystemSsh).mockImplementationOnce(
+      (_target, _remotePath, _contents, options) => {
+        transferSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
+            once: true
+          })
+        })
+      }
+    )
+
+    await conn.connect()
+    const write = conn.writeFile('/remote/relay/.version', '0.1.0', {
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(transferSignal).toBeDefined())
+    await conn.disconnect()
+
+    await expect(write).rejects.toMatchObject({ name: 'AbortError' })
+    expect(controller.signal.aborted).toBe(false)
+    expect(transferSignal?.aborted).toBe(true)
   })
 
   it('keeps an upload session cancelled after the connection disconnects', async () => {

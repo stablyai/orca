@@ -81,9 +81,16 @@ import {
 } from '../ipc/parcel-watcher-process-failure'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import {
+  rankRuntimeMobileFilePaths,
+  RuntimeMobileFilePathSearchCache
+} from './runtime-mobile-file-path-search'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
+const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
+const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
+const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
@@ -408,6 +415,10 @@ export type RuntimeFileCommandHost = {
 export class RuntimeFileCommands {
   private activeRuntimeTextSearches = new Map<string, ChildProcess>()
   private terminalFileGrants = new Map<string, TerminalFileGrant>()
+  private mobileFilePathSearchCache = new RuntimeMobileFilePathSearchCache(
+    MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES,
+    MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS
+  )
 
   constructor(private readonly host: RuntimeFileCommandHost) {}
 
@@ -437,11 +448,57 @@ export class RuntimeFileCommands {
     }
   }
 
+  async searchMobileFilePaths(
+    worktreeSelector: string,
+    query: string,
+    limit: number
+  ): Promise<RuntimeFileListResult> {
+    const store = this.host.requireStore()
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = target
+    const cacheKey = `${connectionId ?? 'local'}:${worktree.id}:${worktree.path}`
+    const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
+      const listed = connectionId
+        ? await this.listRemoteMobileFiles(
+            worktree.path,
+            connectionId,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+        : await listQuickOpenFiles(
+            worktree.path,
+            store,
+            undefined,
+            undefined,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+      const safePaths = listed
+        .filter((relativePath) => isSafeMobileRelativePath(relativePath))
+        .sort((a, b) => a.localeCompare(b))
+      return {
+        paths: safePaths.slice(0, MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT),
+        totalCount: safePaths.length,
+        truncated: safePaths.length > MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT
+      }
+    })
+    const matches = rankRuntimeMobileFilePaths(inventory.paths, query, limit)
+    return {
+      worktree: worktree.id,
+      rootPath: worktree.path,
+      files: matches.paths.map((relativePath) => ({
+        relativePath,
+        basename: basenameFromRelativePath(relativePath),
+        kind: isMobileBinaryPath(relativePath) ? ('binary' as const) : ('text' as const)
+      })),
+      totalCount: matches.totalCount,
+      truncated: inventory.truncated || matches.totalCount > limit
+    }
+  }
+
   async openMobileFile(
     worktreeSelector: string,
     relativePath: string
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -458,6 +515,9 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
+    // Why: CLI/agents treat opened:true as success. Stat first so missing paths
+    // fail the RPC instead of creating a ghost editor tab that only errors on read.
+    await this.assertMobileOpenTargetExists(filePath, connectionId)
     // Why: the service's internal runtimeId is not a registered runtime env selector
     // (those live in orca-environments.json). Passing it caused Unknown environment
     // errors on content load for CLI-initiated opens (via files.open from orca cli
@@ -466,6 +526,25 @@ export class RuntimeFileCommands {
     // allowing correct routing for local vs remote envs.
     this.host.openFile(worktree.id, filePath, relativePath, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
+  }
+
+  private async assertMobileOpenTargetExists(
+    filePath: string,
+    connectionId?: string
+  ): Promise<void> {
+    try {
+      await (connectionId
+        ? this.statRemoteTerminalPath(filePath, connectionId)
+        : stat(await resolveAuthorizedPath(filePath, this.host.requireStore())))
+    } catch (error) {
+      if (
+        isENOENT(error) ||
+        (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+      ) {
+        throw new Error(`ENOENT: no such file or directory, open '${filePath}'`)
+      }
+      throw error
+    }
   }
 
   async openMobileDiff(
@@ -1730,12 +1809,16 @@ export class RuntimeFileCommands {
     }
   }
 
-  private async listRemoteMobileFiles(rootPath: string, connectionId: string): Promise<string[]> {
+  private async listRemoteMobileFiles(
+    rootPath: string,
+    connectionId: string,
+    maxResults?: number
+  ): Promise<string[]> {
     const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
       return []
     }
-    return provider.listFiles(rootPath)
+    return provider.listFiles(rootPath, { maxResults })
   }
 
   private async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {

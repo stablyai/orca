@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import {
   getAzureDevOpsAuthStatus,
   getAzureDevOpsPullRequestForBranch,
@@ -175,5 +176,23 @@ describe('Azure DevOps client', () => {
       state: 'merged',
       headSha: 'newsha'
     })
+  })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () =>
+      cancelTrackingResponse(502, () => {
+        cancelledBodies += 1
+      })
+    )
+    globalThis.fetch = fetchMock as never
+
+    await getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
   })
 })

@@ -9,6 +9,7 @@ export type CreateReviewIntentKind =
   | 'message_required'
   | 'no_upstream'
   | 'needs_push'
+  | 'needs_sync'
   | 'force_push'
 
 export type CreateReviewIntentEligibility = {
@@ -69,6 +70,19 @@ export function resolveCreateReviewIntentEligibility({
     shouldForcePushWithLeaseForUpstream(upstreamStatus)
   ) {
     return { eligible: true, kind: 'force_push' }
+  }
+
+  // Why: a behind-only branch (no local commits) is safe to prepare with a
+  // fast-forward sync, so the intent flow can handle it in one click. A
+  // genuinely diverged branch stays ineligible — syncing it would merge
+  // without consent, so the user keeps the explicit sync-first step.
+  if (
+    hostedReviewCreation.blockedReason === 'needs_sync' &&
+    upstreamStatus?.hasUpstream === true &&
+    upstreamStatus.ahead === 0 &&
+    upstreamStatus.behind > 0
+  ) {
+    return { eligible: true, kind: 'needs_sync' }
   }
 
   return { eligible: false, kind: null }

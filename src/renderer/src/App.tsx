@@ -59,6 +59,8 @@ import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
+import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
+import { SkillFreshnessUpdateDialog } from './components/skills/SkillFreshnessUpdateDialog'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
@@ -164,7 +166,11 @@ import {
   type KeybindingContext,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -1001,7 +1007,13 @@ function App(): React.JSX.Element {
           // tabs through pty.attach on the relay. Passphrase-protected targets
           // are deferred to tab focus to avoid stacking credential dialogs at
           // startup before the user has context.
-          const connectionIds = sessionRead.session.activeConnectionIdsAtShutdown ?? []
+          // Why: runtime-owned (ephemeral-VM) targets must never be dialed from
+          // the renderer — ssh.connect would dispose the runtime layer's live
+          // relay session. Main's windowless-promotion path can persist such
+          // ids into this list, so filter at the consumption boundary too.
+          const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(
+            (targetId) => !isRuntimeOwnedSshTargetId(targetId)
+          )
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
@@ -1359,7 +1371,7 @@ function App(): React.JSX.Element {
       // which is in-memory. Capture them into the persisted sleeping-session
       // map so a daemon/session death while the app is closed can still
       // cold-restore via the agent's resume command (#5232).
-      useAppStore.getState().captureAllSleepingAgentSessions()
+      useAppStore.getState().captureAllSleepingAgentSessions('quit')
       // Why: re-read state after capture() calls populated scrollback buffers
       // into the store via Zustand setters. The earlier read is only for the
       // gating flags and would miss those updates.
@@ -1386,7 +1398,7 @@ function App(): React.JSX.Element {
       if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
         return
       }
-      useAppStore.getState().captureAllSleepingAgentSessions()
+      useAppStore.getState().captureAllSleepingAgentSessions('periodic')
     }, SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [])
@@ -2818,10 +2830,20 @@ function App(): React.JSX.Element {
             >
               <RecentTabSwitcher />
             </RecoverableRenderErrorBoundary>
+            {/* Why: the dialog hosts a live terminal pane, which requires the
+                link-routing preference context; mounting outside crashes it. */}
+            <RecoverableRenderErrorBoundary
+              boundaryId="overlay.skill-freshness-update-dialog"
+              surface="overlay"
+              compact
+            >
+              <SkillFreshnessUpdateDialog />
+            </RecoverableRenderErrorBoundary>
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
       </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+      <SkillFreshnessNudge />
       <PinnedTabCloseDialog />
       {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and

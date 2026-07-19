@@ -1,14 +1,28 @@
 /* eslint-disable max-lines -- Why: the update card owns the full updater lifecycle in one
    renderer surface. Keeping the state machine and its presentation variants together avoids
    scattering tightly coupled update behavior across multiple files. */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
-import { AlertCircle, Check, Loader2, Minus, Network, RotateCw, X } from 'lucide-react'
+import {
+  AlertCircle,
+  Check,
+  ChevronRight,
+  Loader2,
+  Minus,
+  Network,
+  RotateCw,
+  ShieldAlert,
+  X
+} from 'lucide-react'
 import type { ChangelogData } from '../../../shared/types'
+import {
+  isWindowsSignatureCheckUnavailableFailure,
+  isWindowsSignatureMismatchFailure
+} from '../../../shared/updater-windows-signature-check'
 import { translate } from '@/i18n/i18n'
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -37,11 +51,16 @@ export function isHttp2ProtocolError(message: string): boolean {
 }
 
 type ErrorCardModel = {
-  variant?: 'default' | 'http1Compatibility'
+  variant?: 'default' | 'http1Compatibility' | 'security'
   title: string
   summary: string
-  message: string
+  /** Optional guidance box between the summary and the raw error output. */
+  explainer?: string
+  /** Raw error text, shown only when the user expands "Show details". */
+  detail?: string
   releaseUrl: string
+  /** Overrides the secondary button label (defaults to "Download Manually"). */
+  manualLabel?: string
   primaryAction?: {
     label: string
     pendingLabel?: string
@@ -337,7 +356,16 @@ export function UpdateCard() {
       })
   }
 
+  // Why: classify each failure so the card leads with one plain sentence and
+  // the right action, and keeps the raw error behind "Show details" instead of
+  // dumping a PowerShell/stack trace as the headline. Order matters: the
+  // security-stop (wrong publisher) must win over the AV/EDR "check couldn't
+  // run" case so a real integrity failure is never softened into "try again".
   const isHttp2UpdateError = status.state === 'error' && isHttp2ProtocolError(status.message)
+  const isSignatureMismatchError =
+    status.state === 'error' && isWindowsSignatureMismatchFailure(status.message)
+  const isSignatureCheckBlockedError =
+    status.state === 'error' && isWindowsSignatureCheckUnavailableFailure(status.message)
   const errorCard: ErrorCardModel | null =
     status.state === 'error'
       ? isHttp2UpdateError
@@ -345,7 +373,11 @@ export function UpdateCard() {
             variant: 'http1Compatibility',
             title: translate('auto.components.UpdateCard.1339b82cee', 'HTTP/2 Download Blocked'),
             summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
-            message: compatibilitySetupError ?? status.message,
+            explainer: translate(
+              'auto.components.UpdateCard.90559b14e3',
+              'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
+            ),
+            detail: compatibilitySetupError ?? status.message,
             releaseUrl: releaseUrlForVersion(cachedVersion),
             primaryAction: {
               label: translate('auto.components.UpdateCard.933c6fdf5b', 'Enable & Restart'),
@@ -354,35 +386,71 @@ export function UpdateCard() {
               onClick: handleEnableHttp1Compatibility
             }
           }
-        : {
-            // Why: title is scoped to the operation that failed so check-time
-            // failures (commonly GitHub-side) don't read as a bug in Orca.
-            title: cachedVersion ? 'Update Error' : 'Update Check Failed',
-            summary: cachedVersion
-              ? 'Could not complete the update.'
-              : 'Could not check for updates.',
-            message: status.message,
-            releaseUrl: releaseUrlForVersion(cachedVersion),
-            // Why: check-time failures are often transient (offline, GitHub
-            // hiccup), so offer a Re-check next to "Download Manually" instead
-            // of forcing the user into the manual fallback.
-            primaryAction: cachedVersion
-              ? {
+        : isSignatureMismatchError
+          ? {
+              // Security stop: the installer is readable but signed by the wrong
+              // publisher. No retry — only a path to the verified download.
+              variant: 'security',
+              title: translate('auto.components.UpdateCard.5b309b19f3', "Update Wasn't Installed"),
+              summary: translate(
+                'auto.components.UpdateCard.092f09fc14',
+                "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version."
+              ),
+              detail: status.message,
+              // Why: linking the rejected version directly would invite users
+              // to bypass the publisher check by running the same installer.
+              releaseUrl: releaseUrlForVersion(null),
+              manualLabel: translate(
+                'auto.components.UpdateCard.c9ff9b9ec2',
+                'Check official releases'
+              )
+            }
+          : isSignatureCheckBlockedError
+            ? {
+                title: translate(
+                  'auto.components.UpdateCard.e944c2de43',
+                  'Update Verification Blocked'
+                ),
+                summary: translate(
+                  'auto.components.UpdateCard.a05992a26b',
+                  "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases."
+                ),
+                detail: status.message,
+                releaseUrl: releaseUrlForVersion(cachedVersion),
+                primaryAction: {
                   label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
                   onClick: handleUpdate
                 }
-              : {
-                  label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
-                  onClick: () => {
-                    void window.api.updater.check({ includePrerelease: false })
-                  }
-                }
-          }
+              }
+            : {
+                // Why: title is scoped to the operation that failed so check-time
+                // failures (commonly GitHub-side) don't read as a bug in Orca.
+                title: cachedVersion ? 'Update Error' : 'Update Check Failed',
+                summary: cachedVersion
+                  ? 'Could not complete the update.'
+                  : 'Could not check for updates.',
+                detail: status.message,
+                releaseUrl: releaseUrlForVersion(cachedVersion),
+                // Why: check-time failures are often transient (offline, GitHub
+                // hiccup), so offer a Re-check next to "Download Manually" instead
+                // of forcing the user into the manual fallback.
+                primaryAction: cachedVersion
+                  ? {
+                      label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
+                      onClick: handleUpdate
+                    }
+                  : {
+                      label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
+                      onClick: () => {
+                        void window.api.updater.check({ includePrerelease: false })
+                      }
+                    }
+              }
       : installError
         ? {
             title: translate('auto.components.UpdateCard.4cf109845a', 'Update Error'),
             summary: 'Could not restart to install the update.',
-            message: installError,
+            detail: installError,
             releaseUrl: releaseUrlForVersion(cachedVersion),
             primaryAction: {
               label: translate('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
@@ -494,8 +562,10 @@ export function UpdateCard() {
         <ErrorCardContent
           title={errorCard.title}
           summary={errorCard.summary}
-          message={errorCard.message}
+          explainer={errorCard.explainer}
+          detail={errorCard.detail}
           releaseUrl={errorCard.releaseUrl}
+          manualLabel={errorCard.manualLabel}
           variant={errorCard.variant}
           primaryAction={errorCard.primaryAction}
           onClose={handleCollapseWithAnimation}
@@ -892,16 +962,20 @@ function ErrorCardContent({
   variant = 'default',
   title,
   summary,
-  message,
+  explainer,
+  detail,
   releaseUrl,
+  manualLabel,
   primaryAction,
   onClose
 }: {
-  variant?: 'default' | 'http1Compatibility'
+  variant?: 'default' | 'http1Compatibility' | 'security'
   title: string
   summary: string
-  message: string
+  explainer?: string
+  detail?: string
   releaseUrl: string
+  manualLabel?: string
   primaryAction?: {
     label: string
     pendingLabel?: string
@@ -910,12 +984,23 @@ function ErrorCardContent({
   }
   onClose: () => void
 }) {
+  // Why: the raw error is kept for support but starts collapsed so the card
+  // leads with the plain-language summary, not a PowerShell/stack dump.
+  const [showDetails, setShowDetails] = useState(false)
+  const detailId = useId()
   const isCompatibility = variant === 'http1Compatibility'
-  const Icon = isCompatibility ? Network : AlertCircle
+  const isSecurity = variant === 'security'
+  const Icon = isCompatibility ? Network : isSecurity ? ShieldAlert : AlertCircle
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground">
+        <div
+          className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/50 ${
+            isSecurity
+              ? 'border-destructive/30 text-destructive'
+              : 'border-border text-muted-foreground'
+          }`}
+        >
           <Icon className="size-4" />
         </div>
         <div className="min-w-0 flex-1 space-y-1">
@@ -933,25 +1018,45 @@ function ErrorCardContent({
         </Button>
       </div>
 
-      {isCompatibility ? (
+      {explainer ? (
         <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2">
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {translate(
-              'auto.components.UpdateCard.90559b14e3',
-              'This turns on a process-wide Electron networking switch after restart. Use it for corporate VPNs or proxies that reject HTTP/2 update downloads.'
-            )}
-          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{explainer}</p>
         </div>
       ) : null}
 
-      <div className="rounded-md bg-muted/40 px-3 py-2">
-        <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
-          {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
-        </p>
-        <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
-          {message}
-        </p>
-      </div>
+      {/* Why: a caret disclosure sits directly above the raw error it reveals,
+          so the card leads with the plain summary and expands the last-error
+          block in place — the action buttons stay pinned below it. */}
+      {detail ? (
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="-ml-2 self-start text-muted-foreground hover:text-foreground"
+            onClick={() => setShowDetails((prev) => !prev)}
+            aria-expanded={showDetails}
+            aria-controls={detailId}
+          >
+            <ChevronRight
+              className={`size-3.5 transition-transform motion-reduce:transition-none ${showDetails ? 'rotate-90' : ''}`}
+            />
+            {showDetails
+              ? translate('auto.components.UpdateCard.5194358929', 'Hide details')
+              : translate('auto.components.UpdateCard.8bc9e17d8f', 'Show details')}
+          </Button>
+          {showDetails ? (
+            <div id={detailId} className="rounded-md bg-muted/40 px-3 py-2">
+              <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">
+                {translate('auto.components.UpdateCard.3553a8672f', 'Last error')}
+              </p>
+              <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
+                {detail}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex gap-2">
         {primaryAction && (
@@ -976,9 +1081,9 @@ function ErrorCardContent({
           variant="outline"
           size="sm"
           onClick={() => void window.api.shell.openUrl(releaseUrl)}
-          className={primaryAction ? 'flex-1' : 'w-full'}
+          className="flex-1"
         >
-          {translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
+          {manualLabel ?? translate('auto.components.UpdateCard.47126bcf57', 'Download Manually')}
         </Button>
       </div>
     </div>

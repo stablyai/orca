@@ -8,6 +8,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
+import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
 // Why: rendered as a DOM sibling overlay inside the editor container rather
@@ -139,6 +140,17 @@ export function DiffCommentPopover({
     // Why: the draft field should receive focus as soon as the popover mounts;
     // no external system needs a post-render Effect for this.
     textarea?.focus()
+  }, [])
+
+  // Why: product B — the composer autofocuses its textarea, so a second
+  // add-review-note chord must not remount the draft; consume it on the
+  // popover subtree (not window) so other panes/surfaces keep their chord.
+  useEffect(() => {
+    const popover = popoverRef.current
+    if (!popover) {
+      return
+    }
+    return installOpenDraftAddReviewNoteGuard(popover)
   }, [])
 
   // Why: Monaco's editor area does not bubble a synthetic React click up to

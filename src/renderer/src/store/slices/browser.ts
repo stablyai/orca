@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
+  BrowserCertificateFailure,
   BrowserHistoryEntry,
   BrowserLoadError,
   BrowserPage,
@@ -117,6 +118,7 @@ export type RemoteBrowserPageHandle = {
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
+  browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
   activeBrowserTabId: string | null
@@ -159,6 +161,10 @@ export type BrowserSlice = {
   consumeAddressBarFocusRequest: (pageId: string) => boolean
   updateBrowserTabPageState: (pageId: string, updates: BrowserTabPageState) => void
   updateBrowserPageState: (pageId: string, updates: BrowserTabPageState) => void
+  setBrowserPageCertificateFailure: (
+    pageId: string,
+    failure: BrowserCertificateFailure | null
+  ) => void
   setBrowserTabUrl: (pageId: string, url: string) => void
   setBrowserPageUrl: (pageId: string, url: string) => void
   setRemoteBrowserPageHandle: (pageId: string, handle: RemoteBrowserPageHandle) => void
@@ -473,6 +479,7 @@ function findPage(
 export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
+  browserCertificateFailuresByPageId: {},
   browserAnnotationsByPageId: {},
   remoteBrowserPageHandlesByPageId: {},
   activeBrowserTabId: null,
@@ -675,8 +682,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
       delete nextBrowserPagesByWorkspace[tabId]
       const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+      const nextBrowserCertificateFailuresByPageId = {
+        ...s.browserCertificateFailuresByPageId
+      }
       for (const page of closedPages) {
         delete nextBrowserAnnotationsByPageId[page.id]
+        delete nextBrowserCertificateFailuresByPageId[page.id]
       }
       remotePagesToClose = closedPages.flatMap((page) => {
         const handle = s.remoteBrowserPageHandlesByPageId[page.id]
@@ -766,6 +777,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         recentlyClosedTabKindsByWorktree: nextRecentlyClosedTabKindsByWorktree,
         recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
         remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
+        browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
         browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
       }
     })
@@ -1040,6 +1052,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       delete nextRemoteBrowserPageHandlesByPageId[pageId]
       const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
       delete nextBrowserAnnotationsByPageId[pageId]
+      const nextBrowserCertificateFailuresByPageId = {
+        ...s.browserCertificateFailuresByPageId
+      }
+      delete nextBrowserCertificateFailuresByPageId[pageId]
 
       return {
         browserPagesByWorkspace: {
@@ -1072,6 +1088,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           )
         ),
         remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
+        browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
         browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
       }
     })
@@ -1367,6 +1384,32 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }
       return nextState
     })
+    if (updates.loadError === null) {
+      get().setBrowserPageCertificateFailure(pageId, null)
+    }
+  },
+
+  setBrowserPageCertificateFailure: (pageId, failure) => {
+    set((s) => {
+      const current = s.browserCertificateFailuresByPageId[pageId]
+      if (failure === null) {
+        if (!current) {
+          return s
+        }
+        const nextFailures = { ...s.browserCertificateFailuresByPageId }
+        delete nextFailures[pageId]
+        return { browserCertificateFailuresByPageId: nextFailures }
+      }
+      if (!findPage(s.browserPagesByWorkspace, pageId) || current === failure) {
+        return s
+      }
+      return {
+        browserCertificateFailuresByPageId: {
+          ...s.browserCertificateFailuresByPageId,
+          [pageId]: failure
+        }
+      }
+    })
   },
 
   setBrowserTabUrl: (pageId, url) => get().setBrowserPageUrl(pageId, url),
@@ -1425,6 +1468,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           : {})
       }
     })
+    get().setBrowserPageCertificateFailure(pageId, null)
   },
 
   setRemoteBrowserPageHandle: (pageId, handle) => {
@@ -1688,6 +1732,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         activeTabType,
         remoteBrowserPageHandlesByPageId: {},
+        browserCertificateFailuresByPageId: {},
         browserAnnotationsByPageId: {},
         browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? [])
       }

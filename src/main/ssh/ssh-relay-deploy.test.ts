@@ -42,6 +42,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    (error as Error & { sshChannelCloseConfirmed?: boolean }).sshChannelCloseConfirmed === false,
   execCommand: vi.fn().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
 }))
 
@@ -49,27 +52,38 @@ vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
-// Why: the versioned-install module shells out to the remote for install
-// state, lock acquisition, and GC. Tests stub these to no-ops so the deploy
-// happy-path is exercised without a real SSH connection.
+// Why: the versioned-install modules shell out for install state, locking,
+// and GC. Stub them so deploy tests need no real SSH connection.
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+abcdef012345'),
   computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
   isRelayAlreadyInstalled: vi.fn().mockResolvedValue(true),
-  acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   finalizeInstall: vi.fn().mockResolvedValue(undefined),
   abandonInstall: vi.fn().mockResolvedValue(undefined),
   gcOldRelayVersions: vi.fn().mockResolvedValue(undefined)
 }))
 
+vi.mock('./ssh-relay-install-lock', () => ({
+  acquireInstallLock: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('./ssh-relay-repair-lock', () => ({
+  tryAcquireRelayRepairLock: vi.fn().mockResolvedValue('acquired')
+}))
+
 vi.mock('./ssh-connection-utils', () => ({
-  shellEscape: (s: string) => `'${s}'`
+  shellEscape: (s: string) => `'${s}'`,
+  createSshOperationAbortError: () =>
+    Object.assign(new Error('SSH operation was cancelled'), {
+      name: 'AbortError'
+    })
 }))
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
+import { acquireInstallLock } from './ssh-relay-install-lock'
 import type { SshConnection } from './ssh-connection'
 import type * as SshRemoteNodeResolution from './ssh-remote-node-resolution'
 import {
@@ -133,7 +147,8 @@ describe('deployAndLaunchRelay', () => {
 
     expect(mockExecCommand).toHaveBeenCalledWith(
       conn,
-      "printf '\\n%s ' '__ORCA_REMOTE_PLATFORM__'; uname -sm"
+      "printf '\\n%s ' '__ORCA_REMOTE_PLATFORM__'; uname -sm",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
   })
 
@@ -151,6 +166,26 @@ describe('deployAndLaunchRelay', () => {
 
     expect(progress).toContain('Detecting remote platform...')
     expect(progress).toContain('Starting relay...')
+  })
+
+  it('does not launch fresh after unconfirmed stale-socket cleanup', async () => {
+    const conn = makeMockConnection()
+    const unconfirmedCleanup = Object.assign(new Error('socket cleanup still running'), {
+      sshChannelCloseConfirmed: false
+    })
+    vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('stale relay reconnect failed'))
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockResolvedValueOnce('/home/user')
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+      .mockResolvedValueOnce('ALIVE')
+      .mockRejectedValueOnce(unconfirmedCleanup)
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toBe(unconfirmedCleanup)
+
+    const commands = vi.mocked(conn.exec).mock.calls.map(([command]) => command)
+    expect(commands).toHaveLength(1)
+    expect(commands.some((command) => command.includes('--detached'))).toBe(false)
   })
 
   it('resolves the remote node path once per deploy', async () => {
@@ -202,7 +237,7 @@ describe('deployAndLaunchRelay', () => {
       assertionError = err
     } finally {
       // Drain the rest of the happy path so a failed assertion does not leave
-      // the deploy promise pending until its 300s timeout.
+      // the deploy promise pending until the overall deploy timeout.
       mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
       mockExecCommand.mockResolvedValueOnce('READY') // socket poll
@@ -287,7 +322,10 @@ describe('deployAndLaunchRelay', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(2)
+    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(3)
+    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[2]?.[3]).toMatchObject({
+      rethrowSessionLimitErrors: true
+    })
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
   })
 
@@ -314,11 +352,17 @@ describe('deployAndLaunchRelay', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(2)
+    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(3)
     expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[0]?.[3]).toMatchObject({
       rethrowSessionLimitErrors: true
     })
-    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[1]?.[3]).toBeUndefined()
+    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[1]?.[3]).toMatchObject({
+      rethrowSessionLimitErrors: undefined,
+      signal: expect.any(AbortSignal)
+    })
+    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[2]?.[3]).toMatchObject({
+      rethrowSessionLimitErrors: true
+    })
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
   })
 
@@ -499,7 +543,10 @@ describe('deployAndLaunchRelay', () => {
     expect(sawLegacyDir).toBe(false)
   })
 
-  it('has a 300-second overall timeout', async () => {
+  it('bounds the overall deploy so install + rebuild both fit under the timeout', async () => {
+    // Why: the outer bound must exceed the worst-case sequential native-deps
+    // work — a first install (240s) AND a follow-up rebuild (240s) — so a
+    // legitimate install-then-rebuild is not falsely timed out mid-repair.
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
 
@@ -511,13 +558,138 @@ describe('deployAndLaunchRelay', () => {
     // Catch the rejection immediately to avoid unhandled rejection warning
     const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
 
+    // Not timed out yet at the old 300s bound (install + rebuild need more).
     await vi.advanceTimersByTimeAsync(301_000)
+    expect(await Promise.race([promise, Promise.resolve('pending')])).toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(600_000)
 
     const result = await promise
     expect(result).toBeInstanceOf(Error)
-    expect((result as Error).message).toBe('Relay deployment timed out after 300s')
+    expect((result as Error).message).toBe('Relay deployment timed out after 900s')
 
     vi.useRealTimers()
+  })
+
+  it('aborts a contended install-lock wait at the overall deploy timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = makeMockConnection()
+      vi.mocked(execCommand)
+        .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        .mockResolvedValueOnce('/home/user')
+      vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false)
+      let lockSignal: AbortSignal | undefined
+      vi.mocked(acquireInstallLock).mockImplementationOnce((_conn, _dir, _host, options) => {
+        lockSignal = options?.signal
+        return new Promise<void>((_resolve, reject) => {
+          lockSignal?.addEventListener('abort', () => reject(lockSignal?.reason), { once: true })
+        })
+      })
+
+      const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(acquireInstallLock).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(900_000)
+
+      const result = await promise
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).message).toBe('Relay deployment timed out after 900s')
+      expect(lockSignal?.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts an in-progress relay upload at the overall deploy timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = makeMockConnection()
+      vi.mocked(execCommand)
+        .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        .mockResolvedValueOnce('/home/user')
+        .mockResolvedValueOnce('') // mkdir remote relay dir
+      vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false).mockResolvedValueOnce(false)
+      let uploadSignal: AbortSignal | undefined
+      conn.uploadDirectory = vi.fn((_localDir, _remoteDir, options) => {
+        uploadSignal = options?.signal
+        return new Promise<void>((_resolve, reject) => {
+          uploadSignal?.addEventListener('abort', () => reject(uploadSignal?.reason), {
+            once: true
+          })
+        })
+      })
+
+      const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(conn.uploadDirectory).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(900_000)
+
+      const result = await promise
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).message).toBe('Relay deployment timed out after 900s')
+      expect(uploadSignal?.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts a launch started near the deploy deadline and closes its channel once', async () => {
+    vi.useFakeTimers()
+    try {
+      const launchChannel = {
+        on: vi.fn(),
+        stderr: { on: vi.fn() },
+        stdin: {},
+        stdout: { on: vi.fn() },
+        close: vi.fn()
+      }
+      const conn = makeMockConnection()
+      vi.mocked(conn.exec).mockResolvedValue(launchChannel as never)
+      const mockExecCommand = vi.mocked(execCommand)
+      mockExecCommand
+        .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        .mockResolvedValueOnce('/home/user')
+        .mockImplementationOnce(
+          () =>
+            new Promise<string>((resolve) =>
+              setTimeout(() => resolve('ORCA-NATIVE-DEPS-OK'), 899_900)
+            )
+        )
+        .mockResolvedValueOnce('DEAD')
+        .mockImplementationOnce((_conn, _command, options) => {
+          return new Promise<string>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              'abort',
+              () => {
+                const error = new Error('SSH operation was cancelled')
+                error.name = 'AbortError'
+                reject(error)
+              },
+              { once: true }
+            )
+          })
+        })
+
+      const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
+      await vi.advanceTimersByTimeAsync(899_900)
+      expect(conn.exec).toHaveBeenCalledTimes(1)
+      expect(launchChannel.close).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(100)
+
+      const result = await promise
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).message).toBe('Relay deployment timed out after 900s')
+      expect(launchChannel.close).toHaveBeenCalledTimes(1)
+      expect(mockExecCommand).toHaveBeenCalledTimes(5)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(mockExecCommand).toHaveBeenCalledTimes(5)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('uses distinct target-specific relay socket paths', async () => {
@@ -596,6 +768,20 @@ describe('deployAndLaunchRelay', () => {
     expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
     const waitScript = decodedScripts.find((script) => script.includes('deadline=Date.now()')) ?? ''
     expect(waitScript).toContain('setTimeout(attempt,intervalMs)')
+    const windowsLaunchCalls = mockExecCommand.mock.calls.filter(([, command]) => {
+      const script = decodePowerShellCommand(command)
+      return (
+        script?.includes('.windows-active-pipe') ||
+        script?.includes('Invoke-CimMethod') ||
+        script?.includes('deadline=Date.now()')
+      )
+    })
+    expect(windowsLaunchCalls.length).toBeGreaterThan(0)
+    expect(
+      windowsLaunchCalls.every(([, , options]) => options?.signal instanceof AbortSignal)
+    ).toBe(true)
+    expect(vi.mocked(conn.exec).mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
+    expect(vi.mocked(waitForSentinel).mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal)
   })
 
   it('relaunches Windows remotes on a fallback pipe when reconnecting the occupied pipe fails', async () => {

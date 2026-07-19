@@ -1,9 +1,15 @@
+// 'cloud' = Atlassian Cloud (email + API token, Basic auth, REST v3).
+// 'server' = self-hosted Jira Server/Data Center (personal access token,
+// Bearer auth, REST v2). Older stored sites omit the field and mean 'cloud'.
+export type JiraAuthType = 'cloud' | 'server'
+
 export type JiraSite = {
   id: string
   siteUrl: string
   email: string
   displayName: string
   accountId: string
+  authType?: JiraAuthType
 }
 
 export type JiraViewer = {
@@ -130,8 +136,11 @@ export type JiraIssueFilter = 'assigned' | 'reported' | 'all' | 'done'
 
 export type JiraConnectArgs = {
   siteUrl: string
+  // Ignored for 'server' auth: self-hosted PATs authenticate via Bearer
+  // header alone, so the email field may be empty.
   email: string
   apiToken: string
+  authType?: JiraAuthType
 }
 
 export type JiraCreateIssueArgs = {

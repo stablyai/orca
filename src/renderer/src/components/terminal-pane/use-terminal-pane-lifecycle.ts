@@ -106,10 +106,8 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
-import {
-  markTerminalPinnedViewport,
-  syncTerminalScrollIntentSoon
-} from '@/lib/pane-manager/terminal-scroll-intent'
+import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-intent'
+import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { captureParkedTerminalPaneCandidates } from './terminal-parked-tab-watchers'
 import { e2eConfig } from '@/lib/e2e-config'
@@ -270,13 +268,14 @@ type UseTerminalPaneLifecycleDeps = {
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
-  updateTabPtyId: (tabId: string, ptyId: string) => void
+  updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   markTerminalTabUnread: (tabId: string) => void
   markTerminalPaneUnread: (paneKey: string) => void
@@ -540,6 +539,7 @@ export function useTerminalPaneLifecycle({
   isActiveRef,
   isVisibleRef,
   onPtyExitRef,
+  onAgentExitedRef,
   onPtyErrorRef,
   clearTabPtyId,
   consumeSuppressedPtyExit,
@@ -759,6 +759,7 @@ export function useTerminalPaneLifecycle({
       isActiveRef,
       isVisibleRef,
       onPtyExitRef,
+      onAgentExitedRef,
       onPtyErrorRef,
       clearTabPtyId,
       consumeSuppressedPtyExit,
@@ -1024,11 +1025,20 @@ export function useTerminalPaneLifecycle({
           }
 
           if (e.type === 'keydown') {
+            const shouldSyncCurrentTerminal = (): boolean =>
+              managerRef.current
+                ?.getPanes()
+                .some((candidate) => candidate.terminal === pane.terminal) === true
             if (e.key === 'PageUp' || e.key === 'Home') {
               markTerminalPinnedViewport(pane.terminal)
-              syncTerminalScrollIntentSoon(pane.terminal, { preservePinnedAtBottom: true })
+              syncTerminalScrollIntentSoon(pane.terminal, {
+                preservePinnedAtBottom: true,
+                shouldSync: shouldSyncCurrentTerminal
+              })
             } else if (e.key === 'PageDown' || e.key === 'End') {
-              syncTerminalScrollIntentSoon(pane.terminal)
+              syncTerminalScrollIntentSoon(pane.terminal, {
+                shouldSync: shouldSyncCurrentTerminal
+              })
             }
           }
 
