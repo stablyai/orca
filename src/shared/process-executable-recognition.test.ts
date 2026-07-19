@@ -1,14 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn()
+const { execFileMock, readlinkSyncMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  readlinkSyncMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
   execFile: execFileMock
 }))
 
+vi.mock('fs', () => ({
+  readlinkSync: readlinkSyncMock
+}))
+
 import {
+  readProcessExecutablePathCacheSizeForTests,
   recognizeAgentFromExecutablePath,
   resetProcessExecutablePathCacheForTests,
   resolveProcessExecutablePath
@@ -26,6 +32,7 @@ function mockLsof(stdout: string): void {
 describe('process-executable-recognition', () => {
   beforeEach(() => {
     execFileMock.mockReset()
+    readlinkSyncMock.mockReset()
     resetProcessExecutablePathCacheForTests()
   })
 
@@ -42,6 +49,21 @@ describe('process-executable-recognition', () => {
       })
     ).resolves.toEqual({ agent: 'grok', processName: 'grok' })
     expect(readLinuxExecutable).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads /proc/PID/exe via the default Linux reader when none is injected', async () => {
+    readlinkSyncMock.mockReturnValue('/home/dev/.local/bin/grok')
+    await expect(resolveProcessExecutablePath(4242, { platform: 'linux' })).resolves.toBe(
+      '/home/dev/.local/bin/grok'
+    )
+    expect(readlinkSyncMock).toHaveBeenCalledWith('/proc/4242/exe')
+  })
+
+  it('returns null when the default Linux reader throws (process exited mid-read)', async () => {
+    readlinkSyncMock.mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
+    await expect(resolveProcessExecutablePath(4243, { platform: 'linux' })).resolves.toBeNull()
   })
 
   it('recognizes a renamed binary from the macOS lsof executable image', async () => {
@@ -124,6 +146,53 @@ describe('process-executable-recognition', () => {
         readLinuxExecutable: async () => '/usr/local/bin/node'
       })
     ).resolves.toBeNull()
+  })
+
+  it('rejects a renamed headless one-shot even when argv0 is a quoted spaced path', async () => {
+    // Why: a quoted path with an internal space must not split mid-path — the
+    // dangling quote would otherwise swallow `--print`, bypassing the headless
+    // guard and mislabeling the image as an interactive agent.
+    await expect(
+      recognizeAgentFromExecutablePath(
+        3690,
+        '"C:\\Program Files\\tools\\my launcher.exe" --print "summarize"',
+        { platform: 'linux', readLinuxExecutable: async () => '/usr/local/bin/claude' }
+      )
+    ).resolves.toBeNull()
+  })
+
+  it('recognizes a genuine interactive agent behind a quoted spaced argv0', async () => {
+    await expect(
+      recognizeAgentFromExecutablePath(3691, '"C:\\Program Files\\tools\\my cli.exe" chat', {
+        platform: 'linux',
+        readLinuxExecutable: async () => '/usr/local/bin/claude'
+      })
+    ).resolves.toEqual({ agent: 'claude', processName: 'claude' })
+  })
+
+  it('recognizes orca claude-teams behind a quoted spaced argv0 (no false negative)', async () => {
+    // Why: the naive split also dropped the `claude-teams` subcommand into a
+    // dangling-quote token, making a genuine agent launch fail recognition.
+    await expect(
+      recognizeAgentFromExecutablePath(3692, '"C:\\Program Files\\x\\my orca.exe" claude-teams', {
+        platform: 'linux',
+        readLinuxExecutable: async () => '/usr/local/bin/orca'
+      })
+    ).resolves.toEqual({ agent: 'claude-agent-teams', processName: 'orca' })
+  })
+
+  it('bounds the cache: distinct never-reused PIDs do not accumulate past the cap', async () => {
+    let now = 0
+    const readLinuxExecutable = vi.fn(async () => '/usr/local/bin/node')
+    const deps = { platform: 'linux' as const, readLinuxExecutable, now: () => now }
+    // Fill past the soft cap with distinct PIDs, then advance beyond the TTL so
+    // the next insert sweeps the expired entries instead of growing unbounded.
+    for (let pid = 1; pid <= 512; pid += 1) {
+      await resolveProcessExecutablePath(pid, deps)
+    }
+    now = 5_001 // past the 5s cache TTL so the next insert sweeps expired entries
+    await resolveProcessExecutablePath(9999, deps)
+    expect(readProcessExecutablePathCacheSizeForTests()).toBeLessThan(512)
   })
 
   it('returns null on unsupported platforms without invoking a reader', async () => {

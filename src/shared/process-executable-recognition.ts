@@ -18,6 +18,11 @@ const execFile = promisify(execFileCb)
 // PID-reuse risk).
 const EXECUTABLE_PATH_CACHE_TTL_MS = 5_000
 const EXECUTABLE_PATH_LOOKUP_TIMEOUT_MS = 3_000
+// Why: entries are keyed by PID and only overwritten on re-lookup, so PIDs never
+// probed again (every distinct non-shell foreground command — vim, git, node…)
+// would accumulate forever in a long-lived daemon. Sweep expired entries once
+// the map crosses this soft cap to keep it bounded to the active TTL window.
+const EXECUTABLE_PATH_CACHE_MAX_ENTRIES = 512
 
 export type ProcessExecutablePathDeps = {
   platform?: NodeJS.Platform
@@ -49,8 +54,19 @@ export async function resolveProcessExecutablePath(
   } else if (platform === 'darwin') {
     path = await (deps.readMacExecutable ?? readMacExecutableImage)(pid)
   }
+  if (executablePathCache.size >= EXECUTABLE_PATH_CACHE_MAX_ENTRIES) {
+    pruneExpiredExecutablePaths(now)
+  }
   executablePathCache.set(pid, { path, at: now })
   return path
+}
+
+function pruneExpiredExecutablePaths(now: number): void {
+  for (const [cachedPid, entry] of executablePathCache) {
+    if (now - entry.at >= EXECUTABLE_PATH_CACHE_TTL_MS) {
+      executablePathCache.delete(cachedPid)
+    }
+  }
 }
 
 /**
@@ -83,12 +99,28 @@ export function recognizeAgentFromExecutableImage(
   executablePath: string,
   command: string | null | undefined
 ): RecognizedAgentProcess | null {
-  const trimmed = (command ?? '').trim()
-  const firstWhitespace = trimmed.search(/\s/)
-  const args = firstWhitespace === -1 ? '' : trimmed.slice(firstWhitespace + 1).trim()
+  const args = stripLeadingArgv0(command ?? '')
   // Quote the path so a space inside it stays a single argv0 token.
   const argv0 = `"${executablePath.replace(/"/g, '')}"`
   return recognizeAgentProcessFromCommandLine(args ? `${argv0} ${args}` : argv0)
+}
+
+// Why: strip the original argv0 quote-aware. A quoted path with an internal
+// space (e.g. Windows `"C:\Program Files\x\renamed.exe" --print`) split on the
+// first whitespace would break mid-path and leave a dangling quote that
+// swallows the following tokens — burying `--print` so the headless-one-shot
+// guard we substitute argv0 to preserve gets bypassed and the image mislabeled.
+function stripLeadingArgv0(command: string): string {
+  const trimmed = command.trim()
+  const quote = trimmed[0]
+  if (quote === '"' || quote === "'") {
+    const close = trimmed.indexOf(quote, 1)
+    if (close !== -1) {
+      return trimmed.slice(close + 1).trim()
+    }
+  }
+  const firstWhitespace = trimmed.search(/\s/)
+  return firstWhitespace === -1 ? '' : trimmed.slice(firstWhitespace + 1).trim()
 }
 
 async function readLinuxProcExe(pid: number): Promise<string | null> {
@@ -130,4 +162,9 @@ async function readMacExecutableImage(pid: number): Promise<string | null> {
  */
 export function resetProcessExecutablePathCacheForTests(): void {
   executablePathCache.clear()
+}
+
+/** Test-only: observe the cache size to assert the map stays bounded. */
+export function readProcessExecutablePathCacheSizeForTests(): number {
+  return executablePathCache.size
 }
