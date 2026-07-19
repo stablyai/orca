@@ -363,6 +363,79 @@ describe('ClaudeHookService.install', () => {
   )
 })
 
+describe('ClaudeHookService.remove', () => {
+  // Why: remove() must be a strict no-op when Orca never installed anything —
+  // it must not create ~/.claude (or its settings.json), and it must not
+  // rewrite/reformat (or .bak-roll) a user settings file with no managed hooks.
+  it('does not create settings.json or the config dir when nothing was installed', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-remove-noop-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const status = new ClaudeHookService().remove()
+      expect(status.state).toBe('not_installed')
+      expect(existsSync(join(tmpHome, '.claude'))).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves a user settings file byte-identical when it holds no managed hooks', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-remove-user-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const settingsPath = join(tmpHome, '.claude', 'settings.json')
+      mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+      // Deliberately NOT Orca's serialization: tabs, no trailing newline.
+      const userContent = '{\n\t"env": {"AWS_REGION": "us-west-2"},\n\t"hooks": {}}'
+      writeFileSync(settingsPath, userContent)
+
+      const status = new ClaudeHookService().remove()
+
+      expect(status.state).toBe('not_installed')
+      expect(readFileSync(settingsPath, 'utf-8')).toBe(userContent)
+      expect(existsSync(`${settingsPath}.bak`)).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('removes managed hooks and keeps user entries when Orca did install', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-remove-installed-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const settingsPath = join(tmpHome, '.claude', 'settings.json')
+      mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          hooks: { Stop: [{ hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] }] }
+        })
+      )
+      const service = new ClaudeHookService()
+      expect(service.install().state).toBe('installed')
+
+      const status = service.remove()
+
+      expect(status.state).toBe('not_installed')
+      const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
+        hooks: Record<string, { hooks: { command: string }[] }[]>
+      }
+      const commands = Object.values(settings.hooks).flatMap((definitions) =>
+        definitions.flatMap((definition) => definition.hooks.map((hook) => hook.command))
+      )
+      expect(commands).toEqual(['/usr/local/bin/user-hook'])
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('ClaudeHookService.installRemote', () => {
   it('writes Claude settings + managed script under the remote $HOME', async () => {
     const svc = new ClaudeHookService()

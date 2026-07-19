@@ -311,19 +311,19 @@ export class ClaudeHookService {
       }
     }
     // Why: same stale-check as install() — a concurrent CLI settings write
-    // between our read and replace must be re-merged, not overwritten.
-    // writeHooksJson already skips identical content, covering the old
-    // `changed === false` no-write path.
+    // between our read and replace must be re-merged, not overwritten. The
+    // null return keeps the no-op guarantee: nothing managed present means no
+    // write at all (no file/dir creation, no reformat, no .bak roll).
     updateHooksJsonWithRetry(configPath, (current) => {
-      const { config: hooksRemoved } = removeManagedHooks(
+      const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
         current,
         getManagedScriptFileName(this.options.settings)
       )
-      const { config: nextConfig } = removeManagedStatusLine(
+      const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
         hooksRemoved,
         getStatusLineScriptFileName(this.options.settings)
       )
-      return nextConfig
+      return hooksChanged || statusLineChanged ? nextConfig : null
     })
     if (this.options.agent === 'claude') {
       try {

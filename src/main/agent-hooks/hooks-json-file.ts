@@ -70,10 +70,13 @@ export function readRawHooksFile(configPath: string): string | null {
  *  between our read and our replace, the attempt is discarded and re-run
  *  against the fresh content so no concurrent keys are lost. The final
  *  attempt drops the guard so install still converges under a pathological
- *  writer. Returns the written config, or null when the file is unparseable. */
+ *  writer. `mutate` may return null to signal "nothing to change" — the file
+ *  is then left untouched (not created, not reformatted, no .bak roll).
+ *  Returns the written (or unchanged) config, or null when the file is
+ *  unparseable. */
 export function updateHooksJsonWithRetry(
   configPath: string,
-  mutate: (config: HooksConfig) => HooksConfig,
+  mutate: (config: HooksConfig) => HooksConfig | null,
   maxAttempts = 3
 ): HooksConfig | null {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -82,6 +85,12 @@ export function updateHooksJsonWithRetry(
       return null
     }
     const next = mutate(config)
+    if (next === null) {
+      // Why: no-op — skip the write entirely so e.g. remove() on a file that
+      // holds no managed hooks neither creates a missing settings.json nor
+      // rewrites (and reformats) a user file Orca never touched.
+      return config
+    }
     const options = attempt < maxAttempts ? { expectedDiskContent: baseline } : {}
     if (writeHooksJson(configPath, next, options)) {
       return next
