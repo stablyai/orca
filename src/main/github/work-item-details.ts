@@ -36,6 +36,13 @@ const MAX_PR_FILES = 300
 // Bound drawer detail work so one huge issue cannot monopolize gh/API time.
 const MAX_ISSUE_TIMELINE_ITEMS = 300
 const GITHUB_REST_PAGE_SIZE = 100
+// Why: the item cap counts only mapped/supported events, so an issue with many
+// unsupported events (subscribed/labeled/referenced) but few supported ones
+// would walk the entire timeline one sequential gh subprocess per 100 raw
+// events. Cap the page count so a bot-noisy issue cannot hold a gh semaphore
+// slot for the whole timeline. 20 pages (up to 2000 raw events) leaves ample
+// headroom above the 3 pages needed to fill the supported-item cap.
+const MAX_ISSUE_TIMELINE_PAGES = 20
 // Why: hosted PR files must exceed the renderer's large-diff threshold before
 // we give up on the raw fetch; otherwise the UI sees an empty diff instead of
 // the safety fallback.
@@ -288,7 +295,11 @@ async function getIssueTimelineItems(
 ): Promise<GitHubIssueTimelineItem[]> {
   try {
     const items: GitHubIssueTimelineItem[] = []
-    for (let page = 1; items.length < MAX_ISSUE_TIMELINE_ITEMS; page += 1) {
+    for (
+      let page = 1;
+      items.length < MAX_ISSUE_TIMELINE_ITEMS && page <= MAX_ISSUE_TIMELINE_PAGES;
+      page += 1
+    ) {
       const { stdout } = await ghExecFileAsync(
         [
           'api',
