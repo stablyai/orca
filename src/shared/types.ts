@@ -2710,6 +2710,12 @@ export type GlobalSettings = {
    *  view instead of the raw terminal. Off by default so existing workflows are
    *  unchanged. Optional for legacy-settings compatibility; defaults applied. */
   openAgentTabsInChatByDefault?: boolean
+  /** Experimental: floating, always-on-top status pill that aggregates every
+   *  live agent session (working / blocked / waiting / done) into a small
+   *  non-activating overlay anchored at the top of the screen. Click focuses
+   *  the Orca main window on the most recent active pane. Off by default
+   *  while the cross-platform windowing and placement are exercised. */
+  experimentalFloatingStatusPill?: boolean
   /** Experimental: native chat surface for Claude/Codex terminal sessions.
    *  Off by default while the desktop UX is still being exercised. */
   experimentalNativeChat?: boolean

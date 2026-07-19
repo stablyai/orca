@@ -48,6 +48,7 @@ import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
+import { StatusPillCoordinator } from './window/status-pill/status-pill-coordinator'
 import { ensureMainI18n, setMainUiLanguage } from './i18n/main-i18n'
 import {
   getNextDefaultOnAppearanceSettingValue,
@@ -240,6 +241,7 @@ let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let unsubscribeSystemResumeBroadcast: (() => void) | null = null
+let statusPillCoordinator: StatusPillCoordinator | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
@@ -1841,6 +1843,28 @@ app.whenReady().then(async () => {
   unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     agentAwakeService?.setStatuses(statuses)
   })
+  // Why: the floating status pill rides the same multi-listener status stream
+  // as AgentAwakeService, but its lifecycle follows the
+  // `experimentalFloatingStatusPill` setting (default off). Created here so it
+  // can react to settings + hook events from the start; no-op until enabled.
+  // The runtime is passed as a live getter rather than a captured value so
+  // the pill keeps working even if `runtime` is reassigned later in startup.
+  statusPillCoordinator = new StatusPillCoordinator({
+    store,
+    agentHookServer,
+    runtime: {
+      getAgentStatusTerminalHandleForPaneKey: (paneKey) =>
+        runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey),
+      sendTerminal: (handle, action, options) => {
+        if (!runtime) {
+          return Promise.reject(new Error('runtime_not_ready'))
+        }
+        return runtime.sendTerminal(handle, action, options)
+      }
+    },
+    onFocusMainWindow: () => focusExistingWindow(),
+    warn: console.warn
+  })
   // Why: telemetry must initialize before any IPC handler / renderer can
   // call `track()`. The client is a no-op in dev/contributor builds
   // (`IS_OFFICIAL_BUILD === false`) and a no-op while `TELEMETRY_ENABLED`
@@ -2416,6 +2440,8 @@ app.on('before-quit', () => {
   unsubscribeSystemResumeBroadcast = null
   unsubscribeAgentAwakeStatusChanges?.()
   unsubscribeAgentAwakeStatusChanges = null
+  statusPillCoordinator?.destroy()
+  statusPillCoordinator = null
   agentAwakeService?.dispose()
   agentAwakeService = null
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to

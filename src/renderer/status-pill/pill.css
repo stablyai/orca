@@ -1,0 +1,647 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: Geist;
+  src: url('../src/assets/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-border: var(--border);
+}
+
+:root {
+  /* Light mode tokens — pill body, frosted-glass tint, label colors. Tuned to
+     stay legible on a bright desktop wallpaper without losing the glass
+     overlay feel. */
+  --background: rgba(255, 255, 255, 0.72);
+  --foreground: #0f172a;
+  --muted-foreground: #475569;
+  --primary: #0f172a;
+  --border: rgba(15, 23, 42, 0.08);
+  --panel-bg: rgba(255, 255, 255, 0.82);
+  --diff-bg: rgba(15, 23, 42, 0.04);
+  --chip-bg: rgba(15, 23, 42, 0.06);
+  --shadow-color: rgba(15, 23, 42, 0.18);
+}
+
+.dark {
+  /* Dark mode tokens — glass over dark wallpaper, soft muted text, subtle
+     border. Matches the Vibe Island aesthetic at night. */
+  --background: rgba(15, 17, 22, 0.62);
+  --foreground: #f1f5f9;
+  --muted-foreground: #94a3b8;
+  --primary: #fafafa;
+  --border: rgba(255, 255, 255, 0.06);
+  --panel-bg: rgba(13, 16, 22, 0.78);
+  --diff-bg: rgba(0, 0, 0, 0.32);
+  --chip-bg: rgba(255, 255, 255, 0.04);
+  --shadow-color: rgba(0, 0, 0, 0.42);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  color: var(--foreground);
+  font-family:
+    Geist,
+    -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Text',
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0;
+}
+
+/* ── Resting pill ───────────────────────────────────── */
+.pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 14px 0 12px;
+  border-radius: 17px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 10px 28px var(--shadow-color),
+    0 2px 6px var(--shadow-color);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  /* Why: GPU-friendly properties only so the hover lift + theme swap stay on
+     the compositor thread instead of triggering layout. */
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 200ms ease,
+    border-color 200ms ease;
+  cursor: pointer;
+  will-change: transform;
+}
+
+.pill:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 14px 36px var(--shadow-color),
+    0 4px 10px var(--shadow-color);
+}
+
+.pill:active {
+  transform: translateY(0);
+  transition-duration: 80ms;
+}
+
+/* ── Indicator dot + halo ring ─────────────────────── */
+.indicator {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+}
+
+.indicator-dot {
+  position: absolute;
+  inset: 1.5px;
+  border-radius: 50%;
+  background: var(--indicator-color, var(--muted-foreground));
+}
+
+.indicator-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--indicator-color, var(--muted-foreground));
+  opacity: 0.35;
+  filter: blur(3px);
+  will-change: transform, opacity;
+}
+
+.pill-working {
+  --indicator-color: #34d399;
+}
+.pill-blocked {
+  --indicator-color: #fbbf24;
+}
+.pill-waiting {
+  --indicator-color: #60a5fa;
+}
+.pill-done {
+  --indicator-color: #94a3b8;
+}
+.pill-idle {
+  --indicator-color: var(--muted-foreground);
+}
+
+.pill-pulse .indicator-ring {
+  animation: indicator-pulse 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.pill-blocked.pill-pulse .indicator-ring {
+  animation-duration: 1.4s;
+}
+.pill-waiting.pill-pulse .indicator-ring {
+  animation-duration: 1.8s;
+}
+
+@keyframes indicator-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.62;
+    transform: scale(1.18);
+  }
+}
+
+/* ── Counts in sub-chips ───────────────────────────── */
+.counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.count-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 9px;
+  background: var(--chip-bg);
+}
+
+.count-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.count-dot-working {
+  background: #34d399;
+}
+.count-dot-blocked {
+  background: #fbbf24;
+}
+.count-dot-waiting {
+  background: #60a5fa;
+}
+.count-dot-done {
+  background: #94a3b8;
+}
+
+.count-value {
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+}
+
+.divider {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.label {
+  font-weight: 500;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.label-idle {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+/* ── Expanded panel ────────────────────────────────── */
+.panel {
+  width: 460px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 24px 60px var(--shadow-color),
+    0 6px 16px var(--shadow-color);
+  overflow: hidden;
+  transform-origin: top center;
+  /* Why: 18ms stagger so the panel feels like it grows out of the pill rather
+     than popping in next to it. cubic-bezier spring for a natural ease-out. */
+  animation: panel-grow 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes panel-grow {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-head .indicator {
+  width: 10px;
+  height: 10px;
+}
+.panel-head .indicator-dot {
+  inset: 1.5px;
+}
+
+.panel-title {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: -0.005em;
+}
+
+.panel-meta {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-list {
+  padding: 6px 0 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.agent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  position: relative;
+  /* Why: stagger fade-in so the panel reveals like a list, not a single
+     chunk. Keeps hover/focus transitions smooth too. */
+  animation: row-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.agent-row + .agent-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: var(--border);
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agent-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.av-claude {
+  background: #d97757;
+  color: #1c0c04;
+}
+.av-codex {
+  background: #10b981;
+  color: #052e1f;
+}
+.av-gemini {
+  background: #60a5fa;
+  color: #0b1f3d;
+}
+.av-cursor {
+  background: #a78bfa;
+  color: #1a103d;
+}
+.av-default {
+  background: var(--muted-foreground);
+  color: var(--background);
+}
+
+.agent-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--foreground);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-name .term {
+  color: var(--muted-foreground);
+  font-weight: 400;
+  margin-left: 6px;
+  font-size: 11.5px;
+}
+
+.agent-prompt {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.agent-time {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.agent-state {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-state.working {
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
+}
+.agent-state.done {
+  background: var(--muted-foreground);
+}
+.agent-state.waiting {
+  background: #60a5fa;
+}
+
+/* ── Entrance for the whole pill on first mount ────── */
+.pill-enter {
+  animation: pill-enter 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes pill-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Permission / question card ────────────────────── */
+.perm-card {
+  padding: 14px 16px 16px;
+  border-bottom: 1px solid var(--border);
+  animation: card-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.perm-path {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+.perm-agent {
+  font-weight: 600;
+  color: var(--foreground);
+  letter-spacing: -0.005em;
+}
+
+.perm-tool {
+  font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.perm-question {
+  font-size: 13px;
+  color: var(--foreground);
+  font-weight: 500;
+  line-height: 1.4;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.005em;
+}
+
+.perm-summary {
+  margin: 0 0 10px 0;
+  padding: 8px 10px;
+  background: var(--diff-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.perm-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.perm-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.perm-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #fca5a5;
+}
+
+.btn {
+  flex: 1;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 80ms ease;
+  will-change: transform;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.btn-option {
+  flex: 1;
+  justify-content: flex-start;
+  padding: 0 10px;
+  height: 30px;
+  background: var(--chip-bg);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.btn-option:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.btn-deny {
+  background: rgba(248, 113, 113, 0.08);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.2);
+}
+.btn-deny:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.16);
+}
+
+.btn-allow {
+  background: var(--chip-bg);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.btn-allow:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-allow-always {
+  background: #34d399;
+  color: #052e1f;
+  font-weight: 600;
+}
+.btn-allow-always:hover:not(:disabled) {
+  background: #6ee7b7;
+}
+
+.btn-label {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.kbd {
+  font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.32);
+  color: inherit;
+  opacity: 0.7;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.btn-allow-always .kbd {
+  background: rgba(5, 46, 31, 0.32);
+  color: #052e1f;
+}
+
+/* ── Accessibility: respect reduced motion ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .pill:hover,
+  .pill:active,
+  .pill-pulse .indicator-ring,
+  .panel,
+  .agent-row {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

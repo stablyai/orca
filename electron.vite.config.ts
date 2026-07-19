@@ -217,6 +217,15 @@ export default defineConfig({
     build: {
       externalizeDeps: {
         exclude: ['@electron-toolkit/preload']
+      },
+      rollupOptions: {
+        // Why: the status-pill renderer has its own minimal preload so the
+        // floating overlay only sees its narrow IPC surface, not the full
+        // main-window API.
+        input: {
+          index: resolve('src/preload/index.ts'),
+          'status-pill': resolve('src/preload/status-pill.ts')
+        }
       }
     }
   },
@@ -230,6 +239,16 @@ export default defineConfig({
     plugins: [react(), tailwindcss()],
     worker: {
       format: 'es'
+    },
+    build: {
+      rollupOptions: {
+        // Why: the floating status pill is a separate top-level renderer
+        // entry (small bundle, dedicated preload) so the overlay stays cheap.
+        input: {
+          index: resolve('src/renderer/index.html'),
+          'status-pill': resolve('src/renderer/status-pill/index.html')
+        }
+      }
     }
   }
 })

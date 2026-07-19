@@ -185,7 +185,55 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
-    getEphemeralVmsSearchEntry()
+    getEphemeralVmsSearchEntry(),
+    {
+      title: translate(
+        'auto.components.settings.experimental.search.floatingStatusPill.title',
+        'Floating status pill'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.floatingStatusPill.description',
+        'Always-on-top compact overlay that aggregates every running agent (working, waiting, done) and jumps to the active pane on click. Sits under the macOS notch on notch hardware, top-center elsewhere.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.floating',
+          'floating'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.status',
+          'status'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.pill',
+          'pill'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.notch',
+          'notch'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.island',
+          'island'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.overlay',
+          'overlay'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.agents',
+          'agents'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingStatusPill.activity',
+          'activity'
+        )
+      ]
+    }
   ]
 )
 
@@ -226,6 +274,12 @@ export function getExperimentalSearchEntry() {
     ),
     ephemeralVms: findEntry(
       translate('auto.components.settings.ephemeralVms.search.title', 'Per-Workspace Environments')
+    ),
+    floatingStatusPill: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.floatingStatusPill.title',
+        'Floating status pill'
+      )
     )
   } as const
 }
