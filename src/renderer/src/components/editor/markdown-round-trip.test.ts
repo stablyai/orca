@@ -166,6 +166,12 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
+  it('preserves details blocks with unsupported toggle variants as passthrough html', () => {
+    const input =
+      '<details data-orca-toggle="heading-6"><summary>Toggle</summary><p>Body</p></details>\n'
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
   it('preserves details blocks with closing tags inside fenced code as passthrough html', () => {
     const input = [
       '<details><summary>Toggle</summary>',
