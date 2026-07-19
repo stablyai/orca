@@ -7434,3 +7434,117 @@ describe('AgentHookServer provider-session pane attribution', () => {
     expect(internals.providerSessionPanes.has(`session-${total - 1}`)).toBe(true)
   })
 })
+
+describe('AgentHookServer fork lineage and input rebind', () => {
+  const postClaude = (
+    server: AgentHookServer,
+    payload: Record<string, unknown>
+  ): Promise<Response> => {
+    const env = server.buildPtyEnv()
+    return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify(buildBody(payload))
+    })
+  }
+
+  it('inherits the parent binding for a resume-forked session via the daemon roster', async () => {
+    const configDir = mkdtempSync(join(tmpdir(), 'orca-claude-config-'))
+    const parentId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    const forkId = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
+    const projectDir = join(configDir, 'projects', '-tmp-proj')
+    mkdirSync(projectDir, { recursive: true })
+    mkdirSync(join(configDir, 'daemon'), { recursive: true })
+    writeFileSync(
+      join(configDir, 'daemon', 'roster.json'),
+      JSON.stringify({
+        workers: {
+          [forkId.slice(0, 8)]: {
+            sessionId: forkId,
+            dispatch: { launch: { mode: 'resume', sessionId: `/x/${parentId}.jsonl` } }
+          }
+        }
+      })
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      server.registerProviderSessionPane(parentId, GOOD_PANE, 'pty-parent')
+      await expect(
+        postClaude(server, {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'forked turn',
+          session_id: forkId,
+          transcript_path: join(projectDir, `${forkId}.jsonl`)
+        })
+      ).resolves.toMatchObject({ status: 204 })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: GOOD_PANE, prompt: 'forked turn' })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('binds an unknown session at prompt time to the pane with fresh input', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      server.setClaudePaneInputProbe(() => ({ paneKey: GOOD_PANE, ptyId: 'pty-live' }))
+      await expect(
+        postClaude(server, {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'attached turn',
+          session_id: 'cccccccc-dddd-4eee-8fff-000000000000'
+        })
+      ).resolves.toMatchObject({ status: 204 })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: GOOD_PANE, prompt: 'attached turn' })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not steal a pane for mid-turn events or when the probe is empty', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      // Probe returns null (no recent input) — prompt stays on the posted pane.
+      server.setClaudePaneInputProbe(() => null)
+      await expect(
+        postClaude(server, {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'no signal',
+          session_id: 'dddddddd-eeee-4fff-8000-111111111111'
+        })
+      ).resolves.toMatchObject({ status: 204 })
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, prompt: 'no signal' })
+      ])
+
+      // Mid-turn tool event never consults the probe even when it has signal.
+      let probed = 0
+      server.setClaudePaneInputProbe(() => {
+        probed += 1
+        return { paneKey: GOOD_PANE, ptyId: 'pty-live' }
+      })
+      await expect(
+        postClaude(server, {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          session_id: 'dddddddd-eeee-4fff-8000-111111111111'
+        })
+      ).resolves.toMatchObject({ status: 204 })
+      expect(probed).toBe(0)
+    } finally {
+      server.stop()
+    }
+  })
+})

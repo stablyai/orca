@@ -73,6 +73,7 @@ import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-se
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
 import {
   isClaudeAuthSwitchInProgress,
+  isLiveClaudePty,
   markClaudePtyExited,
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
@@ -207,6 +208,30 @@ const ptyPaneKey = new Map<string, string>()
 // back into the pane's data stream) need to find the ptyId for that paneKey.
 // Kept in lock-step with ptyPaneKey via the same spawn and teardown sites.
 const paneKeyPtyId = new Map<string, string>()
+
+// Why: fleet-view/`/resume` attach swaps a Claude session inside an existing
+// client with no spawn, so the hook server sees an unbound session id at the
+// next UserPromptSubmit. The Claude pane the user typed in most recently
+// (within windowMs) names the owner. Ambiguity (no candidate) returns null —
+// attribution then falls back to the posted key. lastInputAtByPty uses
+// performance.now(), so the window compares against the same clock.
+agentHookServer.setClaudePaneInputProbe((windowMs) => {
+  const now = performance.now()
+  let best: { paneKey: string; ptyId: string; at: number } | null = null
+  for (const [ptyId, at] of lastInputAtByPty) {
+    if (now - at > windowMs || !isLiveClaudePty(ptyId)) {
+      continue
+    }
+    const paneKey = ptyPaneKey.get(ptyId)
+    if (!paneKey) {
+      continue
+    }
+    if (!best || at > best.at) {
+      best = { paneKey, ptyId, at }
+    }
+  }
+  return best ? { paneKey: best.paneKey, ptyId: best.ptyId } : null
+})
 
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_PORT',

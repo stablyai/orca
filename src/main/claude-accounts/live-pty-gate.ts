@@ -61,6 +61,10 @@ export function hasLiveClaudePtys(): boolean {
   return liveClaudePtyIds.size > 0
 }
 
+export function isLiveClaudePty(ptyId: string): boolean {
+  return liveClaudePtyIds.has(ptyId)
+}
+
 export function beginClaudeAuthSwitch(): void {
   if (switchInProgress) {
     throw new Error('A Claude account switch is already in progress.')
