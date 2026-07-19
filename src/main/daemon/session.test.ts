@@ -195,6 +195,44 @@ describe('Session', () => {
     })
   })
 
+  describe('win32 conin atomic sequence guard', () => {
+    const realPlatform = process.platform
+    const setPlatform = (value: NodeJS.Platform) =>
+      Object.defineProperty(process, 'platform', { value, configurable: true })
+
+    afterEach(() => {
+      setPlatform(realPlatform)
+    })
+
+    // Why: ConPTY drops VT input-parser state at conin write boundaries — a
+    // split sequence's head is swallowed and its tail typed as literal
+    // keystrokes (the "backspace types a space" resume corruption).
+    it('joins an escape sequence split across writes into one conin write', () => {
+      setPlatform('win32')
+      createSession({ shellReadySupported: false })
+      session.write('\x1b[?997;1')
+      expect(subprocess.written).toEqual([])
+      session.write('n')
+      expect(subprocess.written).toEqual(['\x1b[?997;1n'])
+    })
+
+    it('flushes a held partial on the flush window instead of holding forever', () => {
+      setPlatform('win32')
+      createSession({ shellReadySupported: false })
+      session.write('\x1b[?99')
+      vi.advanceTimersByTime(1000)
+      expect(subprocess.written).toEqual(['\x1b[?99'])
+    })
+
+    it('leaves non-Windows write granularity untouched', () => {
+      setPlatform('linux')
+      createSession({ shellReadySupported: false })
+      session.write('\x1b[?997;1')
+      session.write('n')
+      expect(subprocess.written).toEqual(['\x1b[?997;1', 'n'])
+    })
+  })
+
   describe('emulator does not reply to terminal queries', () => {
     // Why: daemon emulator parses in-process synchronously — before
     // handleSubprocessData forwards bytes onward — so any auto-reply it

@@ -2811,6 +2811,77 @@
       "demotionRule": "Cannot promote if standard-key behavior is inferred without PTY byte evidence."
     },
     {
+      "id": "terminal-input.windows-conpty-write-atomicity",
+      "title": "Escape sequences reach ConPTY conin whole, never split across writes",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-platform",
+      "layer": "daemon-session-write-path",
+      "surfaces": [
+        "Windows ConPTY",
+        "terminal input routing",
+        "bracketed paste",
+        "query replies",
+        "session resume"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "providers": [
+        "daemon",
+        "wsl"
+      ],
+      "coveredPlatforms": [
+        "windows"
+      ],
+      "coveredProviders": [
+        "daemon"
+      ],
+      "coverageNotes": "Deterministic unit coverage for the guard (join/hold/flush/ESC-disambiguation/cap) plus a real-ConPTY integration oracle that documents the raw defect (split CSI head swallowed, tail typed) and proves guarded whole-sequence delivery. WSL sessions share the daemon write path but have no dedicated live run.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/9259"
+      ],
+      "invariant": "Any escape sequence written to a Windows ConPTY conin must be contained in a single write: conhost's input parser drops VT state at write boundaries, silently swallowing a split sequence's head and delivering its tail as literal keystrokes (stuck bracketed paste, composer corruption, backspace inserting blanks after session resume).",
+      "oracle": "Byte-level: a raw-stdin child under a real ConPTY receives exactly the joined sequence when the daemon guard is active, and receives the corrupted literal tail when writes are split without it.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/conin-atomic-sequence-writer.test.ts src/main/daemon/session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/conin-atomic-sequence-writer.conpty.integration.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/conin-atomic-sequence-writer.test.ts",
+        "src/main/daemon/conin-atomic-sequence-writer.conpty.integration.test.ts",
+        "src/main/daemon/session.test.ts"
+      ],
+      "assertionRefs": [],
+      "evidenceRuns": [],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "unit suite everywhere; real-ConPTY integration on Windows only"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New gate; integration oracle ran green on Windows 11 26200 at authoring time."
+      },
+      "redGreenEvidence": {
+        "status": "captured",
+        "evidence": "The integration file's first test asserts the raw ConPTY defect (split \\x1b[?997;1 + n delivers literal n); the second asserts guarded whole-sequence delivery through the same ConPTY."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Guard is pass-through (no timer, no copy) for any write that ends parser-clean — the shape of every ordinary keystroke and paste; only a write ending mid-sequence arms one short timer."
+      },
+      "promotionCriteria": [
+        "Windows CI runs the real-ConPTY integration oracle without silent skips.",
+        "Field breadcrumbs (coninJoinedSplitSequence / coninFlushedDanglingPartial) confirm the guard engages on real resume storms."
+      ],
+      "knownGaps": [
+        "The upstream producer that emits split sequences in the field is not yet pinpointed; the guard neutralizes the class at the last hop.",
+        "WSL provider shares the code path but has no dedicated live-run evidence.",
+        "Renderer-to-daemon message loss during reconnect (fire-and-forget write notify) can still drop whole sequences; the guard cannot repair missing bytes."
+      ],
+      "demotionRule": "Demote if the ESC hold window measurably delays real Escape keypresses or the integration oracle flakes on Windows CI."
+    },
+    {
       "id": "terminal-input.windows-modified-enter-routing",
       "title": "Windows modified Enter routes agent-compatible bytes to the active pane",
       "maturity": "experimental",
