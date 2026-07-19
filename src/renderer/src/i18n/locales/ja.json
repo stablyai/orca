@@ -341,7 +341,8 @@
               "2db0bd7515": "Orca CLI 登録は利用できません",
               "8d6eedf97e": "Orca CLI を PATH に登録できませんでした。",
               "0f116999f1": "セットアップ前にシェルを再起動するか、Orca CLI ディレクトリを PATH に追加します。",
-              "15cbedc3e3": "agent スキル セットアップを実行する前に、Orca CLI をインストールします。"
+              "15cbedc3e3": "agent スキル セットアップを実行する前に、Orca CLI をインストールします。",
+              "windowsPathUnknown": "Orca could not check your Windows user PATH"
             }
           }
         }
@@ -5305,7 +5306,8 @@
           "0c9f3cf9da": "Orca がグローバル agent スキルをチェックしてインストールする場所を選択します。",
           "f00d6aa9b5": "このマシンでは WSL を利用できません。",
           "7c776ff9d8": "wsl",
-          "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。"
+          "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。",
+          "windowsPathUnknown": "WSL shell command PATH could not be checked"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "ソース管理 AI をカスタマイズしていない repos によって使用されます。",

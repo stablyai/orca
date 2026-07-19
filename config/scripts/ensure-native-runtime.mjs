@@ -11,7 +11,10 @@ const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
 
-const NATIVE_MODULES = ['node-pty']
+const NATIVE_MODULES = [
+  'node-pty',
+  ...(process.platform === 'win32' ? ['windows-native-registry'] : [])
+]
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
@@ -240,6 +243,12 @@ function collectNativeModuleFailures() {
 }
 
 function loadNativeModule(moduleName) {
+  if (moduleName === 'windows-native-registry') {
+    const registry = require(moduleName)
+    // Why: the package defers loading its .node addon until the first registry call.
+    registry.getRegistryKey(registry.HK.CU, 'Environment')
+    return
+  }
   if (moduleName === 'node-pty') {
     loadNodePtyNativeModule()
     return

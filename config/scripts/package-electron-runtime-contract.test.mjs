@@ -25,6 +25,35 @@ describe('Electron runtime package contract', () => {
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
   })
 
+  it('keeps the native Windows registry addon optional and platform-gated', () => {
+    const rebuildScript = readFileSync(
+      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      'utf8'
+    )
+    const ensureScript = readFileSync(
+      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      'utf8'
+    )
+    const packagedRuntime = readFileSync(
+      join(projectDir, 'config/packaged-runtime-node-modules.cjs'),
+      'utf8'
+    )
+
+    expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
+    // Why: pnpm installs optional target architectures on every host; the root
+    // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
+    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
+    expect(rebuildScript).toContain(
+      "rebuildPlatform === 'win32' ? ['windows-native-registry'] : []"
+    )
+    expect(ensureScript).toContain(
+      "process.platform === 'win32' ? ['windows-native-registry'] : []"
+    )
+    expect(packagedRuntime).toContain(
+      "process.platform === 'win32' ? ['windows-native-registry'] : []"
+    )
+  })
+
   it('guards package scripts that launch Electron tooling', () => {
     const scripts = packageJson.scripts
     const guardedScripts = [

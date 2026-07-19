@@ -155,7 +155,8 @@ export function CliSection({
     void refreshStatus()
   }, [refreshStatus])
 
-  const isEnabled = status?.state === 'installed'
+  const pathStatusUnknown = currentPlatform === 'win32' && status?.pathConfigured === null
+  const isEnabled = status?.state === 'installed' && !pathStatusUnknown
   const isSupported = status?.supported ?? false
   const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
   const revealLabel = getRevealLabel(currentPlatform)
@@ -251,7 +252,9 @@ export function CliSection({
             <Label>
               {translate('auto.components.settings.CliSection.38edbb5721', 'Shell command')}
             </Label>
-            <p className="text-xs text-muted-foreground">
+            <p
+              className={`text-xs ${pathStatusUnknown ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+            >
               {loading
                 ? translate(
                     'auto.components.settings.CliSection.d363e5929b',
@@ -286,11 +289,11 @@ export function CliSection({
               <button
                 role="switch"
                 aria-checked={isEnabled}
-                disabled={loading || !isSupported || busyAction !== null}
+                disabled={loading || !isSupported || pathStatusUnknown || busyAction !== null}
                 onClick={() => setDialogOpen(true)}
                 className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
                   isEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-                } ${loading || !isSupported || busyAction !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                } ${loading || !isSupported || pathStatusUnknown || busyAction !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               >
                 <span
                   className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
@@ -319,7 +322,9 @@ export function CliSection({
           </p>
         ) : null}
 
-        {status?.state === 'installed' && !status.pathConfigured && status.pathDirectory ? (
+        {status?.state === 'installed' &&
+        status.pathConfigured === false &&
+        status.pathDirectory ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
             {status.pathDirectory}{' '}
             {translate(

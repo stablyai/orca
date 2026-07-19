@@ -364,7 +364,8 @@
               "2db0bd7515": "Orca CLI registration is unavailable",
               "8d6eedf97e": "Failed to register the Orca CLI in PATH.",
               "0f116999f1": "Restart your shell or add the Orca CLI directory to PATH before setup.",
-              "15cbedc3e3": "Install the Orca CLI before running agent skill setup."
+              "15cbedc3e3": "Install the Orca CLI before running agent skill setup.",
+              "windowsPathUnknown": "Orca could not check your Windows user PATH"
             }
           }
         }
@@ -5343,7 +5344,8 @@
           "0c9f3cf9da": "Choose where Orca checks and installs global agent skills.",
           "f00d6aa9b5": "WSL is not available on this machine.",
           "7c776ff9d8": "wsl",
-          "fc0fcf72fd": "Register the WSL shell command before skill setup."
+          "fc0fcf72fd": "Register the WSL shell command before skill setup.",
+          "windowsPathUnknown": "WSL shell command PATH could not be checked"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "Used by repositories that have not customized Source Control AI.",

@@ -29,7 +29,9 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'tweetnacl',
   'ws',
   'yaml',
-  'zod'
+  'zod',
+  // Why: the optional package is absent on macOS/Linux and must never affect their packaging.
+  ...(process.platform === 'win32' ? ['windows-native-registry'] : [])
 ]
 
 const NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM = {
