@@ -27,6 +27,7 @@ import {
   wrapWindowsGitBashHookCommand,
   readHooksJsonWithRaw,
   wrapWindowsHookCommand,
+  updateHooksJsonWithRetry,
   writeManagedScript,
   writeHooksJson,
   type HooksConfig
@@ -190,6 +191,60 @@ describe('writeHooksJson', () => {
 
     const entries = readdirSync(tmpDir)
     expect(entries.filter((e) => e.endsWith('.tmp'))).toHaveLength(0)
+  })
+})
+
+describe('updateHooksJsonWithRetry', () => {
+  it('re-merges instead of clobbering a concurrent settings.json write', () => {
+    // Why: the CLI rewrites its own settings.json; a write landing between
+    // Orca's read and replace must survive (previously last-writer-wins).
+    writeFileSync(configPath, `${JSON.stringify({ userKey: 'keep' }, null, 2)}\n`, 'utf-8')
+    let mutateCalls = 0
+
+    const result = updateHooksJsonWithRetry(configPath, (config) => {
+      mutateCalls += 1
+      if (mutateCalls === 1) {
+        // Simulate a concurrent writer mutating the file mid read-modify-write.
+        writeFileSync(
+          configPath,
+          `${JSON.stringify({ userKey: 'keep', concurrentKey: 'also-keep' }, null, 2)}\n`,
+          'utf-8'
+        )
+      }
+      return { ...config, managed: true }
+    })
+
+    expect(mutateCalls).toBe(2)
+    expect(result).not.toBeNull()
+    const written = JSON.parse(readFileSync(configPath, 'utf-8'))
+    expect(written).toEqual({ userKey: 'keep', concurrentKey: 'also-keep', managed: true })
+  })
+
+  it('returns null and writes nothing when settings.json is unparseable', () => {
+    writeFileSync(configPath, 'not json {{', 'utf-8')
+    const result = updateHooksJsonWithRetry(configPath, (config) => ({ ...config, managed: true }))
+    expect(result).toBeNull()
+    expect(readFileSync(configPath, 'utf-8')).toBe('not json {{')
+  })
+
+  it('drops the stale guard on the final attempt so the install converges', () => {
+    writeFileSync(configPath, `${JSON.stringify({ v: 0 }, null, 2)}\n`, 'utf-8')
+    let mutateCalls = 0
+
+    const result = updateHooksJsonWithRetry(
+      configPath,
+      (config) => {
+        mutateCalls += 1
+        // A pathological writer that races EVERY attempt.
+        writeFileSync(configPath, `${JSON.stringify({ v: mutateCalls }, null, 2)}\n`, 'utf-8')
+        return { ...config, managed: true }
+      },
+      2
+    )
+
+    expect(mutateCalls).toBe(2)
+    expect(result).not.toBeNull()
+    expect(JSON.parse(readFileSync(configPath, 'utf-8')).managed).toBe(true)
   })
 })
 

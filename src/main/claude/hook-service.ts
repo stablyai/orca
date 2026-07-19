@@ -4,7 +4,7 @@ import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared
 import {
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
-  writeHooksJson,
+  updateHooksJsonWithRetry,
   writeManagedScript,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -184,20 +184,34 @@ export class ClaudeHookService {
     }
 
     const command = getManagedCommand(scriptPath)
-    let nextConfig = applyManagedHooks(
-      config,
-      command,
-      getManagedScriptFileName(this.options.settings)
-    )
     writeManagedScript(
       scriptPath,
       getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
     )
-    // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
-    if (this.options.agent === 'claude') {
-      nextConfig = this.installManagedStatusLine(nextConfig)
+    // Why: settings.json is also rewritten by the CLI itself; the retry helper
+    // re-merges on concurrent change instead of clobbering it (last-writer-wins
+    // previously lost keys written between our read and our replace).
+    const updated = updateHooksJsonWithRetry(configPath, (current) => {
+      let nextConfig = applyManagedHooks(
+        current,
+        command,
+        getManagedScriptFileName(this.options.settings)
+      )
+      // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+      if (this.options.agent === 'claude') {
+        nextConfig = this.installManagedStatusLine(nextConfig)
+      }
+      return nextConfig
+    })
+    if (!updated) {
+      return {
+        agent: this.options.agent,
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: `Could not parse ${this.options.displayName} settings.json`
+      }
     }
-    writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
 
@@ -290,17 +304,21 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
-      config,
-      getManagedScriptFileName(this.options.settings)
-    )
-    const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
-      hooksRemoved,
-      getStatusLineScriptFileName(this.options.settings)
-    )
-    if (hooksChanged || statusLineChanged) {
-      writeHooksJson(configPath, nextConfig)
-    }
+    // Why: same stale-check as install() — a concurrent CLI settings write
+    // between our read and replace must be re-merged, not overwritten.
+    // writeHooksJson already skips identical content, covering the old
+    // `changed === false` no-write path.
+    updateHooksJsonWithRetry(configPath, (current) => {
+      const { config: hooksRemoved } = removeManagedHooks(
+        current,
+        getManagedScriptFileName(this.options.settings)
+      )
+      const { config: nextConfig } = removeManagedStatusLine(
+        hooksRemoved,
+        getStatusLineScriptFileName(this.options.settings)
+      )
+      return nextConfig
+    })
     if (this.options.agent === 'claude') {
       try {
         // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.

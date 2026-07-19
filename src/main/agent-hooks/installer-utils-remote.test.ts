@@ -201,6 +201,34 @@ describe('installer-utils-remote', () => {
     expect(fs.modes.get('/home/u/.claude/settings.json')).toBe(0o600)
   })
 
+  it('writes a one-shot backup before first modifying an existing settings.json', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    const original = `${JSON.stringify({ hooks: {}, userKey: 'pristine' }, null, 2)}\n`
+    fs.files.set(path, original)
+    fs.modes.set(path, 0o640)
+
+    await writeHooksJsonRemote(sftp, path, {
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'first' }] }] }
+    })
+    expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
+    expect(fs.modes.get(`${path}.orca-backup`)).toBe(0o640)
+
+    // A later write must NOT rotate the backup — it stays the pre-Orca
+    // original, unlike the local rolling .bak.
+    await writeHooksJsonRemote(sftp, path, {
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'second' }] }] }
+    })
+    expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
+  })
+
+  it('does not write a backup on first install (no pre-existing settings.json)', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    await writeHooksJsonRemote(sftp, path, { hooks: {} })
+    expect(fs.files.has(`${path}.orca-backup`)).toBe(false)
+  })
+
   it('preserves existing config file mode across atomic replacement', async () => {
     const { sftp, fs } = createFakeSftp()
     const path = '/home/u/.codex/config.toml'

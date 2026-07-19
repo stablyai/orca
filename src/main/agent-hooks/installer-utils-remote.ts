@@ -46,11 +46,17 @@ export async function readHooksJsonRemote(
   }
 }
 
+/** Suffix of the one-shot pristine backup taken before Orca's FIRST
+ *  modification of a remote settings file. Never rotated by later writes, so
+ *  the pre-Orca original stays recoverable (the local `.bak` rolls forward
+ *  on every write; SFTP paths have more partial-failure modes, so the remote
+ *  keeps the original instead). */
+export const REMOTE_HOOKS_BACKUP_SUFFIX = '.orca-backup'
+
 /** Atomically write a JSON config to the remote — write to a tmp path then
- *  rename, mirroring the local writeHooksJson contract. The .bak rotation is
- *  intentionally NOT carried over: the remote file is the user's, and a
- *  per-target backup convention belongs alongside the remote installer UI
- *  (out of scope for this commit). */
+ *  rename, mirroring the local writeHooksJson contract. Before the first
+ *  modification of an existing file a one-shot backup is written next to it
+ *  (see REMOTE_HOOKS_BACKUP_SUFFIX). */
 export async function writeHooksJsonRemote(
   sftp: SFTPWrapper,
   remotePath: string,
@@ -61,13 +67,17 @@ export async function writeHooksJsonRemote(
   const serialized = `${JSON.stringify(config, null, 2)}\n`
   // Why: skip the write when on-disk content is identical so repeated
   // install() calls do not bump the file's mtime / inode unnecessarily.
+  let existingContent: string | null = null
   try {
-    const existing = await readFile(sftp, remotePath)
-    if (existing === serialized) {
-      return
-    }
+    existingContent = await readFile(sftp, remotePath)
   } catch {
-    // ENOENT or read error — fall through to the write below.
+    // ENOENT or read error — treat as absent and fall through to the write.
+  }
+  if (existingContent === serialized) {
+    return
+  }
+  if (existingContent !== null) {
+    await writeOneShotBackup(sftp, remotePath, existingContent)
   }
   // Why: tmp + rename so a partial network drop mid-write does not leave a
   // truncated settings.json that the agent CLI would refuse to load.
@@ -167,6 +177,28 @@ export async function writeTextFileRemoteAtomic(
       // already gone or never created
     }
   }
+}
+
+/** Write `<remotePath>.orca-backup` once, before Orca first modifies the
+ *  file. An existing backup is never overwritten — it is the user's pre-Orca
+ *  original. Failure propagates: silently proceeding without the backup would
+ *  defeat its purpose, and the caller already surfaces a structured error. */
+async function writeOneShotBackup(
+  sftp: SFTPWrapper,
+  remotePath: string,
+  content: string
+): Promise<void> {
+  const backupPath = `${remotePath}${REMOTE_HOOKS_BACKUP_SUFFIX}`
+  try {
+    await statMode(sftp, backupPath)
+    return
+  } catch (err) {
+    if (!isNoEntryError(err)) {
+      throw err
+    }
+  }
+  const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
+  await writeFile(sftp, backupPath, content, mode)
 }
 
 // ─── Private SFTP primitives ────────────────────────────────────────

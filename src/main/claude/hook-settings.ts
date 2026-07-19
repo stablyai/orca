@@ -13,7 +13,9 @@ import {
 } from '../agent-hooks/installer-utils'
 
 export type ClaudeCompatibleHookSettings = {
-  configDirName: '.claude' | '.openclaude'
+  // Why: widened from '.claude' | '.openclaude' — discovered CLAUDE_CONFIG_DIR
+  // flavor dirs (e.g. `.claude-<name>`) reuse this settings shape per dir.
+  configDirName: string
   scriptBaseName: 'claude-hook' | 'openclaude-hook'
 }
 
