@@ -2766,6 +2766,10 @@ export type GlobalSettings = {
    *  the pinned web panels — in settings (not per-window UI state) so the
    *  fold survives relaunch, matching the terminal-panel group folds. */
   pinnedWebPanelsCollapsed?: boolean
+  /** Named split-window arrangements of pinned panels ("all nodes btop"),
+   *  sanitized by normalizePanelLayouts on every write. Optional for profiles
+   *  saved before this setting existed; readers default to none. */
+  panelLayouts?: PanelLayout[]
   /** User-pinned terminal observability panels (nvtop, btop, watch …) surfaced
    *  as sidebar entries hosting persistent PTYs. Optional for profiles saved
    *  before this setting existed; readers default to none. */
@@ -3357,6 +3361,32 @@ export type PinnedTerminalPanel = {
   enabled?: boolean
 }
 
+/** One tile of a saved panel layout: a reference to a pinned panel. The
+ *  panel's command/url/host always come from the live pinned-panel entry, so
+ *  editing a panel updates every layout that shows it. */
+export type PanelLayoutLeaf = {
+  kind: 'terminal' | 'web'
+  panelId: string
+}
+
+/** A resizable split holding two or more tiles or nested splits. `sizes` are
+ *  relative flex weights matching `children`; absent means equal shares. */
+export type PanelLayoutSplit = {
+  direction: 'row' | 'column'
+  children: PanelLayoutNode[]
+  sizes?: number[]
+}
+
+export type PanelLayoutNode = PanelLayoutLeaf | PanelLayoutSplit
+
+/** A named, saved split-window arrangement of pinned panels (e.g. "all nodes
+ *  btop"), openable from the sidebar as one unit. */
+export type PanelLayout = {
+  id: string
+  title: string
+  root: PanelLayoutNode
+}
+
 /** The active top-level section shown in the main content area. */
 export type TopLevelView =
   | 'terminal'
@@ -3369,6 +3399,7 @@ export type TopLevelView =
   | 'mobile'
   | 'web-panel'
   | 'terminal-panel'
+  | 'panel-canvas'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null

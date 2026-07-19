@@ -5,6 +5,8 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { PinnedTerminalPanel } from '../../../../shared/types'
 import {
+  getPinnedTerminalPanelIdFromWorktreeId,
+  isPinnedTerminalPanelCanvasWorktreeId,
   pinnedTerminalPanelWorktreeId,
   resolvePinnedTerminalPanelSshTargetIdFromLabels
 } from '../../../../shared/pinned-terminal-panels'
@@ -116,11 +118,19 @@ const PinnedTerminalPanelPage = React.memo(
         panels.map((panel) => pinnedTerminalPanelWorktreeId(panel.id))
       )
       const state = useAppStore.getState()
+      const panelIds = new Set(panels.map((panel) => panel.id))
       for (const worktreeId of Object.keys(state.tabsByWorktree)) {
         if (!worktreeId.startsWith(pinnedTerminalPanelWorktreeId(''))) {
           continue
         }
-        if (panelWorktreeIds.has(worktreeId)) {
+        // Why: canvas tiles own their tab lifecycle — only reap them here when
+        // their backing panel was deleted (the tile can no longer render it).
+        if (isPinnedTerminalPanelCanvasWorktreeId(worktreeId)) {
+          const panelId = getPinnedTerminalPanelIdFromWorktreeId(worktreeId)
+          if (panelId !== null && panelIds.has(panelId)) {
+            continue
+          }
+        } else if (panelWorktreeIds.has(worktreeId)) {
           continue
         }
         for (const tab of state.tabsByWorktree[worktreeId] ?? []) {

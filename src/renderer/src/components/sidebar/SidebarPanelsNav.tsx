@@ -1,17 +1,22 @@
 import React from 'react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { ChevronRight, Globe, SquareTerminal } from 'lucide-react'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import type { PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
+import type { PinnedTerminalPanel } from '../../../../shared/types'
 import {
   PINNED_TERMINAL_PANELS_ROOT_FOLD,
   visiblePinnedTerminalPanels
 } from '../../../../shared/pinned-terminal-panels'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import {
+  PanelLayoutButton,
+  SortableTerminalPanelButton,
+  SortableWebPanelButton
+} from './SidebarPanelRows'
 
 function movedBefore<T extends { id: string }>(
   items: readonly T[],
@@ -27,97 +32,6 @@ function movedBefore<T extends { id: string }>(
   const [moved] = next.splice(from, 1)
   next.splice(to, 0, moved)
   return next
-}
-
-function sortableRowStyle(
-  transform: { x: number; y: number } | null,
-  transition: string | undefined
-): React.CSSProperties {
-  return {
-    // Why: @dnd-kit/utilities isn't a dependency; the translate string is
-    // trivial to build and sortable only ever needs a translation.
-    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-    transition
-  }
-}
-
-function SortableWebPanelButton({
-  panel,
-  active,
-  onOpen
-}: {
-  panel: PinnedWebPanel
-  active: boolean
-  onOpen: (panelId: string) => void
-}): React.JSX.Element {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: panel.id
-  })
-  return (
-    <button
-      ref={setNodeRef}
-      style={sortableRowStyle(transform, transition)}
-      type="button"
-      {...attributes}
-      {...listeners}
-      onClick={() => onOpen(panel.id)}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-md py-1.5 pr-2 pl-8 text-left text-[13px] font-medium tracking-tight transition-colors',
-        isDragging && 'relative z-10 opacity-80 shadow-md',
-        active
-          ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-      )}
-    >
-      <Globe
-        className={cn('size-4 shrink-0', !active && 'text-worktree-sidebar-foreground/30')}
-        strokeWidth={active ? 2.25 : 1.75}
-      />
-      <span className="min-w-0 flex-1 truncate">{panel.title}</span>
-    </button>
-  )
-}
-
-function SortableTerminalPanelButton({
-  panel,
-  active,
-  nested = false,
-  onOpen
-}: {
-  panel: PinnedTerminalPanel
-  active: boolean
-  nested?: boolean
-  onOpen: (panelId: string) => void
-}): React.JSX.Element {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: panel.id
-  })
-  return (
-    <button
-      ref={setNodeRef}
-      style={sortableRowStyle(transform, transition)}
-      type="button"
-      {...attributes}
-      {...listeners}
-      onClick={() => onOpen(panel.id)}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-[13px] font-medium tracking-tight transition-colors',
-        nested ? 'pl-8' : 'pl-2',
-        isDragging && 'relative z-10 opacity-80 shadow-md',
-        active
-          ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-      )}
-    >
-      <SquareTerminal
-        className={cn('size-4 shrink-0', !active && 'text-worktree-sidebar-foreground/30')}
-        strokeWidth={active ? 2.25 : 1.75}
-      />
-      <span className="min-w-0 flex-1 truncate">{panel.title}</span>
-    </button>
-  )
 }
 
 /**
@@ -142,6 +56,23 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   )
   const activeView = useAppStore((s) => s.activeView)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const panelLayouts = useAppStore((s) => s.settings?.panelLayouts)
+  const activePanelLayoutId = useAppStore((s) => s.activePanelLayoutId)
+  const openPanelLayoutInCanvas = useAppStore((s) => s.openPanelLayoutInCanvas)
+  const setActivePanelLayoutId = useAppStore((s) => s.setActivePanelLayoutId)
+  const deletePanelLayout = React.useCallback(
+    (layoutId: string) => {
+      void updateSettings({
+        panelLayouts: (panelLayouts ?? []).filter((layout) => layout.id !== layoutId)
+      })
+      // Why: a canvas opened from the deleted layout must not keep offering
+      // "Save" against an id that no longer exists.
+      if (useAppStore.getState().activePanelLayoutId === layoutId) {
+        setActivePanelLayoutId(null)
+      }
+    },
+    [panelLayouts, updateSettings, setActivePanelLayoutId]
+  )
   // Why: filter in a memo, not the selector — a selector returning a fresh
   // array every call would re-render on each store update.
   const pinnedTerminalPanels = React.useMemo(
@@ -244,7 +175,8 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   const webPanelsCollapsed = useAppStore((s) => s.settings?.pinnedWebPanelsCollapsed === true)
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
-  if (!hasWebPanels && !hasTerminalPanels) {
+  const hasLayouts = (panelLayouts ?? []).length > 0
+  if (!hasWebPanels && !hasTerminalPanels && !hasLayouts) {
     return null
   }
 
@@ -255,6 +187,24 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="flex flex-col gap-0.5">
+          {hasLayouts ? (
+            <>
+              <div className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase text-worktree-sidebar-foreground/50">
+                <span className="min-w-0 flex-1 truncate">
+                  {translate('auto.components.sidebar.SidebarPanelsNav.layouts', 'Layouts')}
+                </span>
+              </div>
+              {(panelLayouts ?? []).map((layout) => (
+                <PanelLayoutButton
+                  key={layout.id}
+                  layout={layout}
+                  active={activeView === 'panel-canvas' && activePanelLayoutId === layout.id}
+                  onOpen={openPanelLayoutInCanvas}
+                  onDelete={deletePanelLayout}
+                />
+              ))}
+            </>
+          ) : null}
           {hasWebPanels ? (
             <button
               type="button"

@@ -319,6 +319,7 @@ const PinnedWebPanelPage = lazy(() => import('./components/pinned-web-panels/Pin
 const PinnedTerminalPanelPage = lazy(
   () => import('./components/pinned-terminal-panels/PinnedTerminalPanelPage')
 )
+const PanelCanvasPage = lazy(() => import('./components/panel-canvas/PanelCanvasPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
@@ -484,6 +485,7 @@ function App(): React.JSX.Element {
   const hasPinnedTerminalPanels = useAppStore(
     (s) => (s.settings?.pinnedTerminalPanels?.length ?? 0) > 0
   )
+  const hasPanelCanvas = useAppStore((s) => s.panelCanvasRoot !== null)
   const activeModal = useAppStore((s) => s.activeModal)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
@@ -2466,6 +2468,7 @@ function App(): React.JSX.Element {
                                   page hides itself instead of unmounting. */}
                               {hasPinnedWebPanels ? <PinnedWebPanelPage /> : null}
                               {hasPinnedTerminalPanels ? <PinnedTerminalPanelPage /> : null}
+                              {hasPanelCanvas ? <PanelCanvasPage /> : null}
                               {activeView === 'terminal' &&
                               creationLayoutActive &&
                               activePendingCreationId ? (

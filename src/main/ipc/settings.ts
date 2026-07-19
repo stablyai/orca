@@ -24,6 +24,7 @@ import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { normalizePinnedWebPanels } from '../../shared/pinned-web-panels'
 import { normalizePinnedTerminalPanels } from '../../shared/pinned-terminal-panels'
+import { normalizePanelLayouts } from '../../shared/panel-layouts'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -132,6 +133,9 @@ export function registerSettingsHandlers(
     }
     if ('pinnedTerminalPanels' in args) {
       sanitizedArgs.pinnedTerminalPanels = normalizePinnedTerminalPanels(args.pinnedTerminalPanels)
+    }
+    if ('panelLayouts' in args) {
+      sanitizedArgs.panelLayouts = normalizePanelLayouts(args.panelLayouts)
     }
     if ('pinnedTerminalPanelsEnabled' in args) {
       // Why: absent-means-enabled — anything but an explicit false is enabled.

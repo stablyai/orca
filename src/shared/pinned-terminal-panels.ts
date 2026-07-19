@@ -35,11 +35,34 @@ export function pinnedTerminalPanelWorktreeId(panelId: string): string {
   return `${PANEL_WORKTREE_ID_PREFIX}${panelId}`
 }
 
+const PANEL_CANVAS_WORKTREE_ID_MARKER = '::canvas::'
+
+/** Tab host for one canvas tile. Distinct from the panel's own tab host so a
+ *  layout tile owns a fresh PTY (the same tab cannot render in two mounted
+ *  TerminalPanes), while the embedded panel id keeps host resolution — which
+ *  only ever sees a worktree id — pointed at the panel's configured SSH host. */
+export function pinnedTerminalPanelCanvasWorktreeId(panelId: string, leafId: string): string {
+  return `${PANEL_WORKTREE_ID_PREFIX}${panelId}${PANEL_CANVAS_WORKTREE_ID_MARKER}${leafId}`
+}
+
+export function isPinnedTerminalPanelCanvasWorktreeId(worktreeId: string): boolean {
+  return (
+    worktreeId.startsWith(PANEL_WORKTREE_ID_PREFIX) &&
+    worktreeId.includes(PANEL_CANVAS_WORKTREE_ID_MARKER)
+  )
+}
+
 export function getPinnedTerminalPanelIdFromWorktreeId(worktreeId: string): string | null {
   if (!worktreeId.startsWith(PANEL_WORKTREE_ID_PREFIX)) {
     return null
   }
-  const panelId = worktreeId.slice(PANEL_WORKTREE_ID_PREFIX.length)
+  let panelId = worktreeId.slice(PANEL_WORKTREE_ID_PREFIX.length)
+  // Why: canvas tile hosts carry a `::canvas::<leafId>` suffix; every caller
+  // (host resolution, sentinel checks) wants the owning panel id.
+  const canvasMarker = panelId.indexOf(PANEL_CANVAS_WORKTREE_ID_MARKER)
+  if (canvasMarker !== -1) {
+    panelId = panelId.slice(0, canvasMarker)
+  }
   return panelId.length > 0 ? panelId : null
 }
 

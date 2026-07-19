@@ -4025,7 +4025,8 @@
           "0ccba862b8": "GitHub 작업 열기",
           "fee535205b": "작업",
           "d599269755": "사이드바에서 숨기기",
-          "pinnedPanelNodes": "Nodes"
+          "pinnedPanelNodes": "Nodes",
+          "pinnedPanelUserPanels": "User Panels"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "지우기",
@@ -4782,6 +4783,12 @@
           "cancel": "취소",
           "forget": "Orca에서 제거",
           "reconnectAndDelete": "재연결 후 삭제"
+        },
+        "SidebarPanelsNav": {
+          "canvasSplitRight": "Add to canvas (split right)",
+          "canvasSplitDown": "Add to canvas (split down)",
+          "deleteLayout": "Delete layout",
+          "layouts": "Layouts"
         }
       },
       "shared": {
@@ -13260,7 +13267,25 @@
       "pinned-web-panels": {
         "PinnedWebPanelPage": {
           "reload": "Reload panel",
-          "close": "Close panel"
+          "close": "Close panel",
+          "back": "Go back",
+          "forward": "Go forward"
+        }
+      },
+      "panel-canvas": {
+        "PanelCanvasPage": {
+          "scratchTitle": "Panel canvas",
+          "layoutNamePlaceholder": "Layout name",
+          "saveConfirm": "Save",
+          "save": "Save",
+          "saveAs": "Save as…",
+          "close": "Close canvas",
+          "reloadTile": "Reload tile",
+          "splitRight": "Split right",
+          "splitDown": "Split down",
+          "closeTile": "Close tile",
+          "missingPanel": "Panel removed",
+          "missingPanelBody": "This pinned panel was deleted in Settings."
         }
       }
     },

@@ -4025,7 +4025,8 @@
           "0ccba862b8": "打开 GitHub 任务",
           "fee535205b": "任务",
           "d599269755": "从侧边栏隐藏",
-          "pinnedPanelNodes": "Nodes"
+          "pinnedPanelNodes": "Nodes",
+          "pinnedPanelUserPanels": "User Panels"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -4782,6 +4783,12 @@
           "cancel": "取消",
           "forget": "从 Orca 中移除",
           "reconnectAndDelete": "重新连接并删除"
+        },
+        "SidebarPanelsNav": {
+          "canvasSplitRight": "Add to canvas (split right)",
+          "canvasSplitDown": "Add to canvas (split down)",
+          "deleteLayout": "Delete layout",
+          "layouts": "Layouts"
         }
       },
       "shared": {
@@ -13260,7 +13267,25 @@
       "pinned-web-panels": {
         "PinnedWebPanelPage": {
           "reload": "Reload panel",
-          "close": "Close panel"
+          "close": "Close panel",
+          "back": "Go back",
+          "forward": "Go forward"
+        }
+      },
+      "panel-canvas": {
+        "PanelCanvasPage": {
+          "scratchTitle": "Panel canvas",
+          "layoutNamePlaceholder": "Layout name",
+          "saveConfirm": "Save",
+          "save": "Save",
+          "saveAs": "Save as…",
+          "close": "Close canvas",
+          "reloadTile": "Reload tile",
+          "splitRight": "Split right",
+          "splitDown": "Split down",
+          "closeTile": "Close tile",
+          "missingPanel": "Panel removed",
+          "missingPanelBody": "This pinned panel was deleted in Settings."
         }
       }
     },
