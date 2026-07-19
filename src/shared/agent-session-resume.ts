@@ -12,7 +12,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'mimo-code',
   'droid',
   'grok',
-  'devin'
+  'devin',
+  'adal'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -212,6 +213,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'adal': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
+    }
     case 'amp':
     case 'cursor':
     case 'omp':
@@ -250,5 +255,7 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
     case 'devin':
       return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
+    case 'adal':
+      return providerSession.key === 'session_id' ? ['adal', '--resume', id] : null
   }
 }

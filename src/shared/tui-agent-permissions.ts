@@ -14,6 +14,7 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   amp: '--dangerously-allow-all',
   kiro: '--trust-all-tools',
   crush: '--yolo',
+  adal: '--yolo',
   autohand: '--unrestricted',
   cline: '--auto-approve true',
   'command-code': '--yolo',
