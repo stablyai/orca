@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { isShellProcess } from '../../../../shared/shell-process-detection'
 import type { TuiAgent } from '../../../../shared/types'
 
 // Why: expire identity after the coordinator's slowest 15s cadence so exited
@@ -12,6 +13,10 @@ const OBSERVATION_REFRESH_QUANTUM_MS = 5_000
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
   agent: TuiAgent | null
+  /** Raw process-table basename behind this evidence, when a read produced one.
+   *  Lets a consumer render a neutral live identity for an unrecognized (fork)
+   *  agent instead of collapsing it to "bare shell". */
+  rawProcessName?: string | null
   /** True only when fresh provider evidence is safe for input-byte routing. */
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
@@ -42,6 +47,36 @@ export type PaneForegroundAgentSlice = {
   clearPaneForegroundAgentByWorktree: (worktreeId: string) => void
 }
 
+type PaneForegroundLivenessArgs = {
+  now: number
+  paneBoundPtyId?: string
+  liveTabPtyIds?: readonly string[]
+}
+
+/**
+ * The TTL + PTY-binding gate shared by every fresh-evidence read: evidence
+ * counts only while it is within the TTL and still bound to a live PTY, at the
+ * finest liveness granularity the caller can supply.
+ */
+function isFreshPaneForegroundEvidence(
+  entry: PaneForegroundAgentEntry,
+  args: PaneForegroundLivenessArgs
+): boolean {
+  if (entry.observedAt === undefined) {
+    return false
+  }
+  if (args.now - entry.observedAt > PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS) {
+    return false
+  }
+  if (args.paneBoundPtyId !== undefined) {
+    return entry.ptyId === undefined || entry.ptyId === args.paneBoundPtyId
+  }
+  if (entry.ptyId !== undefined) {
+    return args.liveTabPtyIds?.includes(entry.ptyId) === true
+  }
+  return (args.liveTabPtyIds?.length ?? 0) > 0
+}
+
 /**
  * Attribution-grade read of a pane's process identity: the agent counts only
  * while the evidence is fresh (TTL) and the pane still has a live PTY — at the
@@ -49,21 +84,32 @@ export type PaneForegroundAgentSlice = {
  */
 export function resolveFreshPaneForegroundAgent(
   entry: PaneForegroundAgentEntry | undefined,
-  args: { now: number; paneBoundPtyId?: string; liveTabPtyIds?: readonly string[] }
+  args: PaneForegroundLivenessArgs
 ): TuiAgent | null {
-  if (!entry?.agent || entry.observedAt === undefined) {
+  if (!entry?.agent) {
     return null
   }
-  if (args.now - entry.observedAt > PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS) {
+  return isFreshPaneForegroundEvidence(entry, args) ? entry.agent : null
+}
+
+/**
+ * Fresh unknown-live evidence: a live, non-shell foreground process with no
+ * recognized engine. Gated by the same TTL/PTY binding as the agent read so a
+ * dead fork process cannot keep painting the tab after the pane moved on.
+ */
+export function resolveFreshPaneForegroundRawProcess(
+  entry: PaneForegroundAgentEntry | undefined,
+  args: PaneForegroundLivenessArgs
+): string | null {
+  if (
+    !entry ||
+    entry.agent !== null ||
+    !entry.rawProcessName ||
+    isShellProcess(entry.rawProcessName)
+  ) {
     return null
   }
-  if (args.paneBoundPtyId !== undefined) {
-    return entry.ptyId === undefined || entry.ptyId === args.paneBoundPtyId ? entry.agent : null
-  }
-  if (entry.ptyId !== undefined) {
-    return args.liveTabPtyIds?.includes(entry.ptyId) === true ? entry.agent : null
-  }
-  return (args.liveTabPtyIds?.length ?? 0) > 0 ? entry.agent : null
+  return isFreshPaneForegroundEvidence(entry, args) ? entry.rawProcessName : null
 }
 
 export const createPaneForegroundAgentSlice: StateCreator<
@@ -80,6 +126,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
       if (
         current &&
         current.agent === entry.agent &&
+        current.rawProcessName === entry.rawProcessName &&
         current.routingTrusted === entry.routingTrusted &&
 current.routingRevoked === entry.routingRevoked &&
         current.shellForeground === entry.shellForeground &&

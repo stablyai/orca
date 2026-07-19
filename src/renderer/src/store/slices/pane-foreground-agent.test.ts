@@ -4,6 +4,7 @@ import type { TerminalTab } from '../../../../shared/types'
 import {
   PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS,
   resolveFreshPaneForegroundAgent,
+  resolveFreshPaneForegroundRawProcess,
   type PaneForegroundAgentEntry
 } from './pane-foreground-agent'
 
@@ -276,5 +277,60 @@ describe('resolveFreshPaneForegroundAgent', () => {
         liveTabPtyIds: ['pty-9']
       })
     ).toBe('claude')
+  })
+})
+
+describe('resolveFreshPaneForegroundRawProcess', () => {
+  const rawEntry = (
+    overrides: Partial<PaneForegroundAgentEntry> = {}
+  ): PaneForegroundAgentEntry => ({
+    agent: null,
+    rawProcessName: 'my-fork',
+    shellForeground: false,
+    observedAt: 10_000,
+    ptyId: 'pty-1',
+    ...overrides
+  })
+
+  it('returns a fresh, non-shell, engineless raw name bound to a live pane PTY', () => {
+    expect(
+      resolveFreshPaneForegroundRawProcess(rawEntry(), { now: 10_500, paneBoundPtyId: 'pty-1' })
+    ).toBe('my-fork')
+  })
+
+  it('rejects a raw name once its evidence is past the TTL', () => {
+    expect(
+      resolveFreshPaneForegroundRawProcess(rawEntry(), {
+        now: 10_000 + PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS + 1,
+        paneBoundPtyId: 'pty-1'
+      })
+    ).toBeNull()
+  })
+
+  it('rejects a raw name bound to a PTY the pane no longer runs', () => {
+    expect(
+      resolveFreshPaneForegroundRawProcess(rawEntry(), { now: 10_500, paneBoundPtyId: 'pty-2' })
+    ).toBeNull()
+  })
+
+  it('never treats a recognized engine or a shell as an unknown-live raw name', () => {
+    expect(
+      resolveFreshPaneForegroundRawProcess(rawEntry({ agent: 'claude' }), {
+        now: 10_500,
+        paneBoundPtyId: 'pty-1'
+      })
+    ).toBeNull()
+    expect(
+      resolveFreshPaneForegroundRawProcess(rawEntry({ rawProcessName: 'zsh' }), {
+        now: 10_500,
+        paneBoundPtyId: 'pty-1'
+      })
+    ).toBeNull()
+    expect(
+      resolveFreshPaneForegroundRawProcess(rawEntry({ rawProcessName: null }), {
+        now: 10_500,
+        paneBoundPtyId: 'pty-1'
+      })
+    ).toBeNull()
   })
 })

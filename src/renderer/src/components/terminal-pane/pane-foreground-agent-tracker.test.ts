@@ -228,7 +228,7 @@ describe('createPaneForegroundAgentTracker', () => {
     expect(publish).toHaveBeenLastCalledWith({ agent: 'claude', shellForeground: false })
   })
 
-  it('stops after the ladder and publishes no identity for a persistent unknown process', async () => {
+  it('carries the raw name for a persistent unknown non-shell process (unknown-live source)', async () => {
     readForegroundProcess.mockResolvedValue('some-unknown-tool')
     const tracker = makeTracker()
 
@@ -238,7 +238,13 @@ describe('createPaneForegroundAgentTracker', () => {
     )
 
     expect(readForegroundProcess).toHaveBeenCalledTimes(3)
-    expect(publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
+    // Why: no recognized engine, but the live non-shell name is carried so the
+    // renderer can show a neutral live identity instead of a bare shell.
+    expect(publish).toHaveBeenLastCalledWith({
+      agent: null,
+      shellForeground: false,
+      rawProcessName: 'some-unknown-tool'
+    })
   })
 
   it('does not treat a nested shell seen mid-command as prompt proof', async () => {

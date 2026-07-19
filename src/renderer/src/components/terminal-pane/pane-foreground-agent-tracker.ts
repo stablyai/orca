@@ -1,7 +1,5 @@
-import {
-  isAgentForegroundWrapperProcess,
-  recognizeAgentProcess
-} from '../../../../shared/agent-process-recognition'
+import { isAgentForegroundWrapperProcess } from '../../../../shared/agent-process-recognition'
+import { resolveForegroundProcess } from '../../../../shared/foreground-process-resolution'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
 import type { TuiAgent } from '../../../../shared/types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
@@ -124,12 +122,20 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     if (disposed || generation !== readGeneration || trackablePtyId() !== ptyId) {
       return
     }
-    const recognized = recognizeAgentProcess(processName)
-    if (recognized) {
+    // Why: the structured resolution splits the read into engine (recognized
+    // agent) and an unknown-live raw name — a live, non-shell foreground with no
+    // recognized engine. Only that raw name is carried on the entry, so the
+    // renderer can show a neutral live identity instead of collapsing it to a
+    // bare shell. Recognized agents already publish their engine; shells need no
+    // raw name (the consumer rejects them).
+    const resolution = resolveForegroundProcess(processName)
+    const unknownLiveRawName =
+      !resolution.engine && !resolution.isShell ? resolution.rawProcessName : null
+    if (resolution.engine) {
       hasForegroundAgentEvidence = true
       hasAgentExpectation = false
       deps.publish({
-        agent: recognized.agent,
+        agent: resolution.engine,
         shellForeground: false,
         ...(requiresRoutingConfirmation ? { routingTrusted: true } : {})
       })
@@ -160,7 +166,14 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     }
     if (reason === 'command') {
       hasAgentExpectation = false
-      deps.publish({ agent: null, shellForeground: false })
+      // Why: an unrecognized but live non-shell foreground (a renamed/fork
+      // agent) reaches here after the retry ladder — carry its raw name so the
+      // renderer can render a neutral live identity for it.
+      deps.publish({
+        agent: null,
+        shellForeground: false,
+        ...(unknownLiveRawName !== null ? { rawProcessName: unknownLiveRawName } : {})
+      })
       return
     }
     if (reason === 'visible-pty') {
