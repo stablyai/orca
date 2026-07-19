@@ -4,7 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { PinnedTerminalPanel } from '../../../../shared/types'
-import { pinnedTerminalPanelWorktreeId } from '../../../../shared/pinned-terminal-panels'
+import {
+  pinnedTerminalPanelWorktreeId,
+  resolvePinnedTerminalPanelSshTargetIdFromLabels
+} from '../../../../shared/pinned-terminal-panels'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
@@ -78,6 +81,18 @@ const PinnedTerminalPanelPage = React.memo(
       const worktreeId = pinnedTerminalPanelWorktreeId(panel.id)
       const state = useAppStore.getState()
       if ((state.tabsByWorktree[worktreeId] ?? []).length > 0) {
+        return
+      }
+      // Why: an unresolvable host must not spawn at all — downstream fallbacks
+      // would run the command on the local machine, which is the one outcome a
+      // host-pinned observability panel must never have.
+      if (
+        panel.host !== undefined &&
+        resolvePinnedTerminalPanelSshTargetIdFromLabels(state.sshTargetLabels, panel.host) === null
+      ) {
+        console.warn(
+          `[pinned-terminal-panels] host "${panel.host}" matches no SSH target; refusing local fallback`
+        )
         return
       }
       const tab = state.createTab(worktreeId, undefined, undefined, {

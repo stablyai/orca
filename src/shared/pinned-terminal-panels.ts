@@ -63,6 +63,27 @@ export function getPinnedTerminalPanelHostForWorktreeId(
  *  the name they already use ("node-b"), not Orca's opaque target id. Returns
  *  null when nothing matches — callers must treat that as unresolved, never as
  *  local, so a typo can't silently run the command on the wrong machine. */
+/** Renderer-side variant over the hydrated id->label map (the renderer never
+ *  holds full SshTarget records). Matches target id or label; labels from an
+ *  ssh-config import are the aliases operators type ("node-b"). */
+export function resolvePinnedTerminalPanelSshTargetIdFromLabels(
+  labels: ReadonlyMap<string, string> | null | undefined,
+  panelHost: string
+): string | null {
+  if (!labels) {
+    return null
+  }
+  if (labels.has(panelHost)) {
+    return panelHost
+  }
+  for (const [id, label] of labels) {
+    if (label === panelHost) {
+      return id
+    }
+  }
+  return null
+}
+
 export function resolvePinnedTerminalPanelSshTargetId(
   targets: readonly Pick<SshTarget, 'id' | 'label' | 'configHost' | 'host'>[] | null | undefined,
   panelHost: string

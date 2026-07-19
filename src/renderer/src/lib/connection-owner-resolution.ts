@@ -1,12 +1,11 @@
 import type { AppState } from '@/store/types'
 import type { PinnedTerminalPanel } from '../../../shared/types'
-import type { SshTarget } from '../../../shared/ssh-types'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import {
   getPinnedTerminalPanelHostForWorktreeId,
   isPinnedTerminalPanelWorktreeId,
   isSentinelWorktreeId,
-  resolvePinnedTerminalPanelSshTargetId
+  resolvePinnedTerminalPanelSshTargetIdFromLabels
 } from '../../../shared/pinned-terminal-panels'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -25,10 +24,9 @@ type ConnectionOwnerState = Pick<
 > & {
   // Why: structural (not AppState['settings']) so narrow test states and
   // intersected caller state types don't have to satisfy full GlobalSettings.
-  settings?: {
-    pinnedTerminalPanels?: readonly PinnedTerminalPanel[]
-    sshTargets?: readonly SshTarget[]
-  } | null
+  settings?: { pinnedTerminalPanels?: readonly PinnedTerminalPanel[] } | null
+  /** Hydrated SSH target id->label map (ssh slice); panel host resolution. */
+  sshTargetLabels?: ReadonlyMap<string, string>
 }
 
 export function createConnectionIdForFileSelector(
@@ -79,7 +77,9 @@ export function getConnectionIdFromState(
     // Why: undefined (not null) for an unresolvable host — null means "local",
     // and a panel pointed at a missing/typo'd SSH target must not silently run
     // its command on this machine (see isWorktreeConnectionResolved).
-    return resolvePinnedTerminalPanelSshTargetId(state.settings?.sshTargets, panelHost) ?? undefined
+    return (
+      resolvePinnedTerminalPanelSshTargetIdFromLabels(state.sshTargetLabels, panelHost) ?? undefined
+    )
   }
   if (isSentinelWorktreeId(worktreeId)) {
     return null

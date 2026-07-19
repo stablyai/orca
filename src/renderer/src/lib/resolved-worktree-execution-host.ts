@@ -8,7 +8,7 @@ import {
   getPinnedTerminalPanelHostForWorktreeId,
   isPinnedTerminalPanelWorktreeId,
   isSentinelWorktreeId,
-  resolvePinnedTerminalPanelSshTargetId
+  resolvePinnedTerminalPanelSshTargetIdFromLabels
 } from '../../../shared/pinned-terminal-panels'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -63,7 +63,7 @@ export function getResolvedExecutionHostIdForWorktree(
     if (host === null) {
       return LOCAL_EXECUTION_HOST_ID
     }
-    const targetId = resolvePinnedTerminalPanelSshTargetId(state.settings?.sshTargets, host)
+    const targetId = resolvePinnedTerminalPanelSshTargetIdFromLabels(state.sshTargetLabels, host)
     // Why: null (unknown host), never local — see connection-owner-resolution.
     return targetId !== null ? toSshExecutionHostId(targetId) : null
   }
