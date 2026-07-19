@@ -17,6 +17,23 @@ export function buildLoadingHostedReviewCreationEligibility(
   }
 }
 
+export function resolveHostedReviewCreationProviderForTarget(
+  hint: {
+    repoId: string | null
+    worktreeId: string | null
+    branch: string
+    provider: HostedReviewProvider
+  },
+  target: { repoId: string | null; worktreeId: string | null; branch: string },
+  fallback: HostedReviewProvider
+): HostedReviewProvider {
+  return hint.repoId === target.repoId &&
+    hint.worktreeId === target.worktreeId &&
+    hint.branch === target.branch
+    ? hint.provider
+    : fallback
+}
+
 /**
  * Local-status-only eligibility used when the remote creation probe fails or
  * times out, so a failed probe still offers the actionable commit/publish/sync

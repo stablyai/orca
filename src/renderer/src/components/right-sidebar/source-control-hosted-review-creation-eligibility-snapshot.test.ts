@@ -1,8 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { buildLocalBlockerHostedReviewCreationEligibility } from './source-control-hosted-review-creation-eligibility-snapshot'
+import {
+  buildLocalBlockerHostedReviewCreationEligibility,
+  resolveHostedReviewCreationProviderForTarget
+} from './source-control-hosted-review-creation-eligibility-snapshot'
 import { resolveCreatePrIntentEligibility } from './source-control-create-pr-intent-state'
 
 const featureBranch = { branch: 'feature/create-pr', baseRef: 'main' }
+
+describe('resolveHostedReviewCreationProviderForTarget', () => {
+  const target = { repoId: 'repo-1', worktreeId: 'worktree-1', branch: 'feature/create-pr' }
+
+  it('preserves a known self-hosted provider for the same target', () => {
+    expect(
+      resolveHostedReviewCreationProviderForTarget(
+        { ...target, provider: 'gitlab' },
+        target,
+        'github'
+      )
+    ).toBe('gitlab')
+  })
+
+  it('does not leak a provider hint across worktrees', () => {
+    expect(
+      resolveHostedReviewCreationProviderForTarget(
+        { ...target, provider: 'gitlab' },
+        { ...target, worktreeId: 'worktree-2' },
+        'github'
+      )
+    ).toBe('github')
+  })
+})
 
 describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
   it('reports dirty when there are uncommitted changes', () => {

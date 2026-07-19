@@ -393,6 +393,27 @@ describe('hosted review slice', () => {
     )
     await vi.advanceTimersByTimeAsync(30_000)
     await assertion
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears the timeout as soon as a local eligibility probe settles', async () => {
+    vi.useFakeTimers()
+    mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
+      provider: 'github',
+      review: null,
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null
+    })
+
+    const store = makeStore()
+    await store.getState().getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('uses the selected worktree selector for runtime pull request creation', async () => {

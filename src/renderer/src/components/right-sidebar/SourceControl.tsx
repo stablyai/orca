@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownUp,
   AlertTriangle,
@@ -266,7 +266,8 @@ import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-i
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
   buildLoadingHostedReviewCreationEligibility,
-  buildLocalBlockerHostedReviewCreationEligibility
+  buildLocalBlockerHostedReviewCreationEligibility,
+  resolveHostedReviewCreationProviderForTarget
 } from './source-control-hosted-review-creation-eligibility-snapshot'
 import {
   resolveCreatePrHeaderAction,
@@ -826,6 +827,8 @@ function SourceControlInner(): React.JSX.Element {
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRepoId = activeRepo?.id ?? null
+  const activeRepoPath = activeRepo?.path ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
@@ -1608,11 +1611,13 @@ function SourceControlInner(): React.JSX.Element {
       remoteInferredHostedReviewProvider
     ]
   )
-  // Why: the eligibility probe's failure fallback needs the current provider
-  // without adding it to the probe effect's deps (which would re-run the probe
-  // on every provider recompute).
-  const provisionalHostedReviewProviderRef = useRef(provisionalHostedReviewProvider)
-  provisionalHostedReviewProviderRef.current = provisionalHostedReviewProvider
+  const resolveCurrentHostedReviewCreationProvider = useEffectEvent(() =>
+    resolveHostedReviewCreationProviderForTarget(
+      hostedReviewCreationProviderHintRef.current,
+      { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+      provisionalHostedReviewProvider
+    )
+  )
   useEffect(() => {
     const hasConcreteProviderHint =
       hostedReview !== null ||
@@ -1651,18 +1656,16 @@ function SourceControlInner(): React.JSX.Element {
     // upstream/dirty/base state is reconciling after commit or push, while
     // preserving provider copy from the previous safe snapshot.
     if (isHostedReviewCreationLoading) {
-      const providerHint = hostedReviewCreationProviderHintRef.current
-      const provider =
-        providerHint.repoId === (activeRepo?.id ?? null) &&
-        providerHint.worktreeId === (activeWorktreeId ?? null) &&
-        providerHint.branch === branchName
-          ? providerHint.provider
-          : provisionalHostedReviewProvider
+      const provider = resolveHostedReviewCreationProviderForTarget(
+        hostedReviewCreationProviderHintRef.current,
+        { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+        provisionalHostedReviewProvider
+      )
       return buildLoadingHostedReviewCreationEligibility(provider)
     }
     return hostedReviewCreation
   }, [
-    activeRepo?.id,
+    activeRepoId,
     activeWorktreeId,
     branchName,
     hostedReviewCreation,
@@ -3240,7 +3243,14 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder || !branchName || !activeWorktreeId) {
+    if (
+      !isBranchVisible ||
+      !activeRepoId ||
+      !activeRepoPath ||
+      isFolder ||
+      !branchName ||
+      !activeWorktreeId
+    ) {
       setHostedReviewCreationState(null)
       setHostedReviewCreationRequestState(null)
       return
@@ -3255,7 +3265,7 @@ function SourceControlInner(): React.JSX.Element {
     }
     let stale = false
     setHostedReviewCreationRequestState({
-      repoId: activeRepo.id,
+      repoId: activeRepoId,
       worktreeId: activeWorktreeId,
       branch: branchName,
       status: 'loading'
@@ -3264,8 +3274,8 @@ function SourceControlInner(): React.JSX.Element {
     // to click while the new preflight is still resolving.
     setHostedReviewCreationState(null)
     void getHostedReviewCreationEligibility({
-      repoPath: activeRepo.path,
-      repoId: activeRepo.id,
+      repoPath: activeRepoPath,
+      repoId: activeRepoId,
       ...(worktreePath ? { worktreePath } : {}),
       branch: branchName,
       base: effectiveBaseRef ?? null,
@@ -3283,7 +3293,7 @@ function SourceControlInner(): React.JSX.Element {
       .then((result) => {
         if (!stale) {
           setHostedReviewCreationState({
-            repoId: activeRepo.id,
+            repoId: activeRepoId,
             worktreeId: activeWorktreeId,
             branch: branchName,
             data: result
@@ -3301,7 +3311,7 @@ function SourceControlInner(): React.JSX.Element {
         // upstream, needs push/sync), surface the actionable preparation intent;
         // otherwise fall back to the retryable failed state.
         const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
-          provisionalHostedReviewProviderRef.current,
+          resolveCurrentHostedReviewCreationProvider(),
           {
             branch: branchName,
             baseRef: effectiveBaseRef,
@@ -3313,7 +3323,7 @@ function SourceControlInner(): React.JSX.Element {
         )
         if (localBlocker) {
           setHostedReviewCreationState({
-            repoId: activeRepo.id,
+            repoId: activeRepoId,
             worktreeId: activeWorktreeId,
             branch: branchName,
             data: localBlocker
@@ -3323,7 +3333,7 @@ function SourceControlInner(): React.JSX.Element {
         }
         setHostedReviewCreationState(null)
         setHostedReviewCreationRequestState({
-          repoId: activeRepo.id,
+          repoId: activeRepoId,
           worktreeId: activeWorktreeId,
           branch: branchName,
           status: 'failed'
@@ -3333,7 +3343,9 @@ function SourceControlInner(): React.JSX.Element {
       stale = true
     }
   }, [
-    activeRepo,
+    // Why: unrelated repo metadata replacement must not restart a hung probe's timeout.
+    activeRepoId,
+    activeRepoPath,
     branchName,
     effectiveBaseRef,
     getHostedReviewCreationEligibility,
