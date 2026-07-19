@@ -41,6 +41,10 @@ vi.mock('../providers/ssh-pty-provider', () => ({
   }
 }))
 
+vi.mock('../herdr/herdr-provider-factory', () => ({
+  createSshHerdrPtyProvider: (provider: unknown) => provider
+}))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     constructor(...args: unknown[]) {

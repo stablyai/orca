@@ -54,6 +54,7 @@ import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
 import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 import { makeRemoteDirectoryCommand } from './ssh-remote-commands'
+import { createSshHerdrPtyProvider } from '../herdr/herdr-provider-factory'
 import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -533,7 +534,15 @@ export class SshRelaySession {
     this.wireUpRemoteOrcaCli(mux)
 
     const ptyProvider = new SshPtyProvider(this.targetId, mux, this.remoteCliBridgeEnv ?? undefined)
-    registerSshPtyProvider(this.targetId, ptyProvider)
+    registerSshPtyProvider(
+      this.targetId,
+      createSshHerdrPtyProvider(
+        ptyProvider,
+        this.store,
+        this.requireReadyConnection(),
+        this.targetId
+      )
+    )
 
     const connection = this.requireReadyConnection()
     const createSftp =

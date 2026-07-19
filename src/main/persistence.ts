@@ -2287,13 +2287,17 @@ function mergeProjectHostSetupCompatibilityState(
     }))
   const projectedProjects = projection.projects.map((project) => {
     const existingProject = existingProjectsById.get(project.id)
-    return existingProject?.localWindowsRuntimePreference
-      ? {
-          ...project,
-          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
-          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
-        }
-      : project
+    if (!existingProject) return project
+    return {
+      ...project,
+      ...(existingProject.localWindowsRuntimePreference
+        ? { localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference }
+        : {}),
+      ...(existingProject.herdrSessionName
+        ? { herdrSessionName: existingProject.herdrSessionName }
+        : {}),
+      updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
+    }
   })
   return {
     projects: [...projectedProjects, ...independentProjects],
@@ -3717,6 +3721,14 @@ export class Store {
         project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
           updates.localWindowsRuntimePreference
         )
+      }
+    }
+    if ('herdrSessionName' in updates) {
+      const sessionName = updates.herdrSessionName?.trim()
+      if (!sessionName) {
+        delete project.herdrSessionName
+      } else {
+        project.herdrSessionName = sessionName
       }
     }
     project.updatedAt = Date.now()

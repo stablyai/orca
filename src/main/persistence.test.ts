@@ -525,6 +525,28 @@ describe('Store', () => {
     })
   })
 
+  it('preserves a repo-backed project Herdr session name through projection reload', async () => {
+    const repo = makeRepo({ id: 'r1', path: '/repo', displayName: 'Repo' })
+    const project = makeProject({
+      id: 'repo:r1',
+      sourceRepoIds: ['r1'],
+      herdrSessionName: 'orca-repo-session'
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      repos: [repo],
+      projects: [project],
+      projectHostSetups: []
+    })
+
+    const store = await createStore()
+
+    expect(store.getProjects()[0]?.herdrSessionName).toBe('orca-repo-session')
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getProjects()[0]?.herdrSessionName).toBe('orca-repo-session')
+  })
+
   it('migrates legacy WSL agent settings into the global Windows runtime default', async () => {
     writeDataFile({
       schemaVersion: 1,

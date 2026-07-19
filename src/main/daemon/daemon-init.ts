@@ -51,6 +51,10 @@ import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
+import type { Store } from '../persistence'
+import type { IPtyProvider } from '../providers/types'
+import { createLocalHerdrPtyProvider } from '../herdr/herdr-provider-factory'
+import type { HerdrPtyProvider } from '../herdr/herdr-pty-provider'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -69,6 +73,8 @@ let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
 let adapter: DaemonProvider | null = null
+let herdrStore: Store | null = null
+let herdrProvider: HerdrPtyProvider | null = null
 // Why: coalesce concurrent restartDaemon() calls so two entries can't race the 7-step sequence against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
 
@@ -629,10 +635,22 @@ function createOutOfProcessLauncher(
   }
 }
 
+function routeLocalProviderThroughHerdr(provider: IPtyProvider): IPtyProvider {
+  if (!herdrStore) return provider
+  if (herdrProvider) {
+    herdrProvider.replaceFallback(provider)
+    return herdrProvider
+  }
+  herdrProvider = createLocalHerdrPtyProvider(provider, herdrStore)
+  return herdrProvider
+}
+
 export async function initDaemonPtyProvider(
   signal?: AbortSignal,
-  options: { macosLoginSessionWatch?: boolean } = {}
+  options: { macosLoginSessionWatch?: boolean } = {},
+  store?: Store | null
 ): Promise<void> {
+  herdrStore = store ?? null
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
@@ -717,7 +735,7 @@ export async function initDaemonPtyProvider(
   }
   spawner = newSpawner
   adapter = routedAdapter
-  setLocalPtyProvider(routedAdapter)
+  setLocalPtyProvider(routeLocalProviderThroughHerdr(routedAdapter))
   // Why: the first window may register PTY listeners before daemon init finishes; rebind so daemon PTYs still fan out events.
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
@@ -758,7 +776,7 @@ export function getDaemonProvider(): DaemonProvider | null {
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
 export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
   adapter = newAdapter
-  setLocalPtyProvider(newAdapter)
+  setLocalPtyProvider(routeLocalProviderThroughHerdr(newAdapter))
 }
 
 function getCurrentDaemonAdapter(provider: DaemonProvider): DaemonPtyAdapter {
@@ -904,12 +922,16 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
 // Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
 // Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
 export async function disconnectDaemon(): Promise<void> {
+  herdrProvider?.dispose()
+  herdrProvider = null
   await adapter?.disconnectOnly()
   adapter = null
 }
 
 /** Kill the daemon and all its sessions. Use for full cleanup only. */
 export async function shutdownDaemon(): Promise<void> {
+  herdrProvider?.dispose()
+  herdrProvider = null
   adapter?.dispose()
   adapter = null
   await spawner?.shutdown()
