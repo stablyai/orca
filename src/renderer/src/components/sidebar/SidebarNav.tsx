@@ -1,20 +1,7 @@
 import React from 'react'
-import {
-  Bell,
-  CalendarClock,
-  ChevronRight,
-  Globe,
-  Search,
-  Smartphone,
-  SquareTerminal
-} from 'lucide-react'
+import { Bell, CalendarClock, Search, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import type { PinnedTerminalPanel } from '../../../../shared/types'
-import {
-  PINNED_TERMINAL_PANELS_ROOT_FOLD,
-  visiblePinnedTerminalPanels
-} from '../../../../shared/pinned-terminal-panels'
 import { cn } from '@/lib/utils'
 import type { GlobalSettings } from '../../../../shared/types'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
@@ -47,39 +34,6 @@ export function shouldShowAutomationsButton(
   return settings?.showAutomationsButton !== false
 }
 
-function PinnedTerminalPanelButton({
-  panel,
-  active,
-  nested = false,
-  onOpen
-}: {
-  panel: PinnedTerminalPanel
-  active: boolean
-  nested?: boolean
-  onOpen: (panelId: string) => void
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(panel.id)}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-[13px] font-medium tracking-tight transition-colors',
-        nested ? 'pl-8' : 'pl-2',
-        active
-          ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-      )}
-    >
-      <SquareTerminal
-        className={cn('size-4 shrink-0', !active && 'text-worktree-sidebar-foreground/30')}
-        strokeWidth={active ? 2.25 : 1.75}
-      />
-      <span className="min-w-0 flex-1 truncate">{panel.title}</span>
-    </button>
-  )
-}
-
 const SidebarNav = React.memo(function SidebarNav() {
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
@@ -88,67 +42,6 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const openActivityPage = useAppStore((s) => s.openActivityPage)
   const openMobilePage = useAppStore((s) => s.openMobilePage)
-  const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
-  const activePinnedWebPanelId = useAppStore((s) => s.activePinnedWebPanelId)
-  const pinnedWebPanels = useAppStore((s) => s.settings?.pinnedWebPanels)
-  const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
-  const activePinnedTerminalPanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
-  const pinnedTerminalPanelsSetting = useAppStore((s) => s.settings?.pinnedTerminalPanels)
-  const pinnedTerminalPanelsEnabled = useAppStore(
-    (s) => s.settings?.pinnedTerminalPanelsEnabled !== false
-  )
-  // Why: filter in a memo, not the selector — a selector returning a fresh
-  // array every call would re-render on each store update.
-  const pinnedTerminalPanels = React.useMemo(
-    () =>
-      visiblePinnedTerminalPanels({
-        pinnedTerminalPanels: pinnedTerminalPanelsSetting,
-        pinnedTerminalPanelsEnabled
-      }),
-    [pinnedTerminalPanelsSetting, pinnedTerminalPanelsEnabled]
-  )
-  const collapsedGroupsSetting = useAppStore((s) => s.settings?.collapsedPinnedTerminalPanelGroups)
-  const collapsedTerminalPanelGroups = React.useMemo(
-    () => new Set(collapsedGroupsSetting ?? []),
-    [collapsedGroupsSetting]
-  )
-  const updateSettingsForGroups = useAppStore((s) => s.updateSettings)
-  const toggleTerminalPanelGroup = React.useCallback(
-    (group: string) => {
-      const next = new Set(collapsedTerminalPanelGroups)
-      if (next.has(group)) {
-        next.delete(group)
-      } else {
-        next.add(group)
-      }
-      void updateSettingsForGroups({ collapsedPinnedTerminalPanelGroups: [...next].sort() })
-    },
-    [collapsedTerminalPanelGroups, updateSettingsForGroups]
-  )
-  // Why: sections keep first-appearance order from settings; panels stay in
-  // authored order inside their group so the rail mirrors the settings list.
-  const groupedTerminalPanels = React.useMemo(() => {
-    const sections: { group: string | null; panels: PinnedTerminalPanel[] }[] = []
-    const sectionByGroup = new Map<
-      string,
-      { group: string | null; panels: PinnedTerminalPanel[] }
-    >()
-    for (const panel of pinnedTerminalPanels) {
-      const group = panel.group ?? null
-      if (group === null) {
-        sections.push({ group: null, panels: [panel] })
-        continue
-      }
-      let section = sectionByGroup.get(group)
-      if (!section) {
-        section = { group, panels: [] }
-        sectionByGroup.set(group, section)
-        sections.push(section)
-      }
-      section.panels.push(panel)
-    }
-    return sections
-  }, [pinnedTerminalPanels])
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
@@ -269,116 +162,6 @@ const SidebarNav = React.memo(function SidebarNav() {
           <HideSidebarMenu onHide={hideMobileButton} />
         </ContextMenu>
       ) : null}
-      {(pinnedWebPanels ?? []).map((panel) => {
-        const panelActive = activeView === 'web-panel' && activePinnedWebPanelId === panel.id
-        return (
-          <button
-            key={panel.id}
-            type="button"
-            onClick={() => openPinnedWebPanelPage(panel.id)}
-            aria-current={panelActive ? 'page' : undefined}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-              panelActive
-                ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
-                : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
-            )}
-          >
-            <Globe
-              className={cn(
-                'size-4 shrink-0',
-                !panelActive && 'text-worktree-sidebar-foreground/30'
-              )}
-              strokeWidth={panelActive ? 2.25 : 1.75}
-            />
-            <span className="min-w-0 flex-1 truncate">{panel.title}</span>
-          </button>
-        )
-      })}
-      {groupedTerminalPanels
-        .filter((section) => section.group === null)
-        .flatMap((section) =>
-          section.panels.map((panel) => (
-            <PinnedTerminalPanelButton
-              key={panel.id}
-              panel={panel}
-              active={activeView === 'terminal-panel' && activePinnedTerminalPanelId === panel.id}
-              onOpen={openPinnedTerminalPanelPage}
-            />
-          ))
-        )}
-      {groupedTerminalPanels.some((section) => section.group !== null) ? (
-        <button
-          type="button"
-          onClick={() => toggleTerminalPanelGroup(PINNED_TERMINAL_PANELS_ROOT_FOLD)}
-          aria-expanded={!collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD)}
-          className={cn(
-            'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
-            'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
-          )}
-        >
-          <ChevronRight
-            className={cn(
-              'size-3 shrink-0 transition-transform',
-              !collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD) && 'rotate-90'
-            )}
-            strokeWidth={2}
-          />
-          <span className="min-w-0 flex-1 truncate">
-            {translate('auto.components.sidebar.SidebarNav.pinnedPanelNodes', 'Nodes')}
-          </span>
-        </button>
-      ) : null}
-      {collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD)
-        ? null
-        : groupedTerminalPanels.map((section) => {
-            const { group } = section
-            return group === null ? null : (
-              <div key={`group:${group}`}>
-                <button
-                  type="button"
-                  onClick={() => toggleTerminalPanelGroup(group)}
-                  aria-expanded={!collapsedTerminalPanelGroups.has(group)}
-                  className={cn(
-                    'flex w-full items-center gap-1.5 rounded-md py-1 pr-2 pl-4 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
-                    // Why: a collapsed group hiding the active panel keeps accent
-                    // styling so the current location stays discoverable.
-                    collapsedTerminalPanelGroups.has(group) &&
-                      section.panels.some(
-                        (panel) =>
-                          activeView === 'terminal-panel' &&
-                          activePinnedTerminalPanelId === panel.id
-                      )
-                      ? 'text-worktree-sidebar-accent-foreground'
-                      : 'text-worktree-sidebar-foreground/40 hover:text-worktree-sidebar-foreground/70'
-                  )}
-                >
-                  <ChevronRight
-                    className={cn(
-                      'size-3 shrink-0 transition-transform',
-                      !collapsedTerminalPanelGroups.has(group) && 'rotate-90'
-                    )}
-                    strokeWidth={2}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{group}</span>
-                </button>
-                {!collapsedTerminalPanelGroups.has(group)
-                  ? section.panels.map((panel) => (
-                      <PinnedTerminalPanelButton
-                        key={panel.id}
-                        panel={panel}
-                        nested
-                        active={
-                          activeView === 'terminal-panel' &&
-                          activePinnedTerminalPanelId === panel.id
-                        }
-                        onOpen={openPinnedTerminalPanelPage}
-                      />
-                    ))
-                  : null}
-              </div>
-            )
-          })}
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
