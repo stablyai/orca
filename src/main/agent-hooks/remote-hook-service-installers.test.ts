@@ -108,7 +108,19 @@ function createFakeSftp(initialFiles: Record<string, string> = {}): {
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
       if (fs.dirs.has(path)) {
-        cb(null, [])
+        // Why: derive the listing from seeded files/dirs so config-dir
+        // discovery (which readdirs the remote home) sees fixture entries.
+        const prefix = path === '/' ? '/' : `${path}/`
+        const names = new Set<string>()
+        for (const candidate of [...fs.files.keys(), ...fs.dirs]) {
+          if (candidate !== path && candidate.startsWith(prefix)) {
+            names.add(candidate.slice(prefix.length).split('/')[0])
+          }
+        }
+        cb(
+          null,
+          [...names].map((filename) => ({ filename }))
+        )
         return
       }
       cb(noEntryError(path))
@@ -754,6 +766,32 @@ describe('remote hook service installers', () => {
       claudeInstall.mockRestore()
       openClaudeInstall.mockRestore()
     }
+  })
+
+  // Why: the static-agent parity invariant above cannot cover discovered
+  // Claude config dirs — they are dynamic per-host instances of the already
+  // registered `claude` agent, so their remote coverage lives here.
+  it('installs managed hooks into discovered remote Claude config dirs', async () => {
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.claude-grok/settings.json': JSON.stringify({ hooks: {} }),
+      // Matches the name pattern but carries no marker file — must be skipped.
+      '/home/dev/.claude-empty/notes.txt': 'not a marker'
+    })
+
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev')
+
+    const claudeResults = results.filter((r) => r.agent === 'claude')
+    expect(claudeResults.map((r) => [r.configPath, r.state])).toEqual([
+      ['/home/dev/.claude/settings.json', 'installed'],
+      ['/home/dev/.claude-grok/settings.json', 'installed']
+    ])
+    const flavorSettings = JSON.parse(fs.files.get('/home/dev/.claude-grok/settings.json')!) as {
+      hooks: Record<string, { hooks: { command: string }[] }[]>
+    }
+    const command = flavorSettings.hooks.Stop?.[0]?.hooks?.[0]?.command
+    // Same shared script as the default .claude install — no per-dir copies.
+    expect(command).toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
+    expect(fs.files.has('/home/dev/.claude-empty/settings.json')).toBe(false)
   })
 
   it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {

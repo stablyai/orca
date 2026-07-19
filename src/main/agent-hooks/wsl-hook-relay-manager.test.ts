@@ -2,7 +2,7 @@
 // bridge (including a full run of the unchanged remote hook installers), and
 // the per-distro relay manager state machine with fault injection.
 import { EventEmitter } from 'node:events'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -133,6 +133,24 @@ describe.skipIf(process.platform === 'win32')(
       expect(claudeSettings.hooks).toBeTruthy()
       const script = readFileSync(join(home, '.orca', 'agent-hooks', 'claude-hook.sh'), 'utf8')
       expect(script).toContain('/hook/claude')
+    }, 20_000)
+
+    // Why: WSL guests inherit discovered-config-dir installs through the same
+    // SFTP-shaped adapter (readdir/stat over the fs bridge) — lock that in.
+    it('installs managed hooks into a discovered Claude config dir on the WSL guest', async () => {
+      mkdirSync(join(home, '.claude-grok'), { recursive: true })
+      writeFileSync(join(home, '.claude-grok', 'settings.json'), JSON.stringify({ hooks: {} }))
+      const adapter = createWslHookSftpAdapter(harness.mux)
+
+      const results = await installRemoteManagedAgentHooks(adapter, home)
+
+      const claudePaths = results.filter((r) => r.agent === 'claude').map((r) => r.configPath)
+      expect(claudePaths).toContain(`${home}/.claude-grok/settings.json`)
+      const flavorSettings = JSON.parse(
+        readFileSync(join(home, '.claude-grok', 'settings.json'), 'utf8')
+      ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+      const command = flavorSettings.hooks.Stop?.[0]?.hooks?.[0]?.command
+      expect(command).toContain('.orca/agent-hooks/claude-hook.sh')
     }, 20_000)
   }
 )

@@ -1,7 +1,8 @@
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
-import { claudeHookService } from '../claude/hook-service'
+import { claudeHookService, createClaudeConfigDirHookService } from '../claude/hook-service'
+import { discoverRemoteClaudeConfigDirNames } from '../claude/claude-config-dir-discovery'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
@@ -72,9 +73,36 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant
  *  test can assert every locally-managed agent that implements `installRemote`
- *  is registered here — the omission that hid Droid/Copilot status over SSH. */
+ *  is registered here — the omission that hid Droid/Copilot status over SSH.
+ *  The parity invariant covers STATIC agents only; discovered Claude config
+ *  dirs are dynamic per-host instances of the already-registered `claude`
+ *  agent and are exercised by their own tests. */
 export const REMOTE_MANAGED_HOOK_INSTALLER_AGENTS: readonly AgentHookInstallStatus['agent'][] =
   REMOTE_MANAGED_HOOK_INSTALLERS.map(([agent]) => agent)
+
+/** Install managed hooks into every discovered `~/.claude-<name>` flavor dir
+ *  on the remote. Mirrors the local discovered-dir flow; runs over the same
+ *  SFTP-shaped transport (SSH or the WSL fs bridge), so both hosts inherit it.
+ *  No remote ledger: the remote flow is install-only today (no managed remote
+ *  uninstall exists to consume one). */
+async function installRemoteDiscoveredClaudeConfigDirHooks(
+  sftp: SFTPWrapper,
+  remoteHome: string
+): Promise<AgentHookInstallStatus[]> {
+  const results: AgentHookInstallStatus[] = []
+  for (const dirName of await discoverRemoteClaudeConfigDirNames(sftp, remoteHome)) {
+    const result = await createClaudeConfigDirHookService(dirName).installRemote(sftp, remoteHome)
+    results.push(result)
+    if (result.state === 'error') {
+      // Why: name-free warn — discovered dir names/paths are user-private
+      // observed data and must stay out of logs.
+      console.warn(
+        '[agent-hooks] Remote claude managed hook install failed for a discovered config dir'
+      )
+    }
+  }
+  return results
+}
 
 export async function installRemoteManagedAgentHooks(
   sftp: SFTPWrapper,
@@ -114,6 +142,14 @@ export async function installRemoteManagedAgentHooks(
         detail
       })
     }
+  }
+  try {
+    results.push(...(await installRemoteDiscoveredClaudeConfigDirHooks(sftp, remoteHome)))
+  } catch (error) {
+    // Why: same fail-open contract as the static loop — discovery problems
+    // degrade status reporting only, never SSH/WSL workspace startup.
+    const detail = error instanceof Error ? error.message : String(error)
+    console.warn(`[agent-hooks] Remote claude config-dir hook install threw: ${detail}`)
   }
   return results
 }
