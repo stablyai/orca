@@ -364,6 +364,43 @@ describe('AgentAwakeService', () => {
     service.dispose()
   })
 
+  it('drops foreground-agent evidence at the 2h cap even while revalidation keeps confirming', () => {
+    vi.useFakeTimers()
+    let now = 1_000
+    const blocker = createBlocker()
+    const service = createService(
+      () => now,
+      blocker,
+      createMacosAssertion(),
+      createLinuxAssertion(),
+      null,
+      () => true
+    )
+
+    service.setEnabled(true)
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+    now += AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS
+    vi.advanceTimersByTime(AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS)
+
+    expect(blocker.stop).not.toHaveBeenCalled()
+
+    // Why: revalidation renews observedAt every TTL, so only the reportedAt cap
+    // can end this evidence. The timer firing at the cap must both drop it and
+    // stop the blocker (regression: it survived the prune with no next timer).
+    while (now < 1_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS) {
+      const step = Math.min(
+        AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS,
+        1_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS - now
+      )
+      now += step
+      vi.advanceTimersByTime(step)
+    }
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(vi.getTimerCount()).toBe(0)
+    service.dispose()
+  })
+
   it('unsubscribes the resume listener on dispose', () => {
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()

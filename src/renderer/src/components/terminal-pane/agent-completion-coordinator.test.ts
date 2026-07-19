@@ -118,10 +118,13 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(2_000)
     await flushAsyncTicks()
 
-    expect(onForegroundAgentInspected).toHaveBeenCalledWith({
-      agent: 'codex',
-      processName: 'codex'
-    })
+    expect(onForegroundAgentInspected).toHaveBeenCalledWith(
+      {
+        agent: 'codex',
+        processName: 'codex'
+      },
+      'pty-1'
+    )
 
     onForegroundAgentInspected.mockClear()
     foregroundProcess = 'vim'

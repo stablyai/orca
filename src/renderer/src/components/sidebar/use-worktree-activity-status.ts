@@ -9,6 +9,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import { usePaneForegroundAgentEvidenceExpiryTick } from './use-pane-foreground-agent-evidence-expiry'
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
@@ -30,6 +31,10 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     agentStatusPaneIdsByTabId,
     paneForegroundAgentByPaneKey
   } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
+  // Why: process-identity evidence decays by wall clock, not by store writes;
+  // this tick forces one recompute at the earliest TTL boundary so a stale
+  // working ring drops even when tracker/coordinator go silent.
+  const evidenceExpiryTick = usePaneForegroundAgentEvidenceExpiryTick(paneForegroundAgentByPaneKey)
 
   // Why: compact and detailed cards need the same status-dot semantics:
   // runtime liveness gates title-derived states, then explicit agent rows can
@@ -49,7 +54,11 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasLiveDone,
         hasRetainedDone
       }),
+    // Why: evidenceExpiryTick is an extra dep on purpose — it forces the
+    // Date.now() read inside resolveWorktreeStatus to re-evaluate at the TTL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      evidenceExpiryTick,
       tabs,
       browserTabs,
       ptyIdsForWorktree,

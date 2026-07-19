@@ -368,21 +368,32 @@ describe('buildTitleDerivedAgentRows', () => {
   })
 
   // Why: non-braille Claude activity markers without a Claude token must not
-  // invent a Claude row from launchAgent alone (split-pane residual risk).
-  it('does not turn generic Codex-launched task titles into Claude Code rows', () => {
-    const launchAgent: TuiAgent = 'codex'
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1', { launchAgent })],
-      entries: [],
-      retained: [],
-      runtimePaneTitlesByTabId: {
-        'tab-1': { 1: '✳ refactor split-pane status' }
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
-      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
-      now: 2000
-    })
+  // invent a Claude row from launchAgent alone. Braille-only titles may fall
+  // back to launchAgent (Codex over SSH, #8711) — still never Claude.
+  it.each([
+    ['✳ refactor split-pane status', null],
+    ['⠐ refactor split-pane status', 'codex']
+  ] as const)(
+    'does not turn generic Codex-launched task title %s into Claude Code rows',
+    (title, expectedAgent) => {
+      const launchAgent: TuiAgent = 'codex'
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { launchAgent })],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: {
+          'tab-1': { 1: title }
+        },
+        ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+        now: 2000
+      })
 
-    expect(rows).toHaveLength(0)
-  })
+      if (expectedAgent === null) {
+        expect(rows).toHaveLength(0)
+      } else {
+        expect(rows.map((row) => row.agentType)).toEqual([expectedAgent])
+      }
+    }
+  )
 })

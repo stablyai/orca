@@ -40,13 +40,21 @@ export class ForegroundAgentEvidenceLedger {
   pruneAndCount(staleAfterMs: number): number {
     const now = this.now()
     for (const [ptyId, evidence] of this.evidenceByPtyId) {
-      if (now - evidence.observedAt <= AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS) {
+      // Why: the 2h cap is unconditional — revalidation renews observedAt, so a
+      // TTL-only prune would keep a capped entry alive with no timer scheduled
+      // (nextExpiry treats the cap as expired) and block sleep forever.
+      if (now - evidence.reportedAt >= staleAfterMs) {
+        this.evidenceByPtyId.delete(ptyId)
         continue
       }
-      // Why: renew from the runtime's live cache (never a scan), hard-capped by
-      // the same 2h window hook statuses get so a stale cache cannot block
-      // sleep indefinitely. Anything else expires with the TTL.
-      if (now - evidence.reportedAt <= staleAfterMs && this.revalidate?.(ptyId) === true) {
+      // Why: strict `<` mirrors nextExpiry's `expiry <= now`, so a timer firing
+      // exactly at the TTL boundary always renews or deletes, never stalls.
+      if (now - evidence.observedAt < AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS) {
+        continue
+      }
+      // Why: renew from the runtime's live cache (never a scan); anything the
+      // cache no longer confirms expires with the TTL.
+      if (this.revalidate?.(ptyId) === true) {
         evidence.observedAt = now
       } else {
         this.evidenceByPtyId.delete(ptyId)

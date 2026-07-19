@@ -2406,14 +2406,16 @@ agent: foreground.agent,
         isFreshNonDoneAgentStatus(currentStatus) && currentAgentForReplacement === replacement.agent
       )
     },
-    onForegroundAgentInspected: (process) => {
-      const inspectedPtyId = transport.getPtyId()
+    onForegroundAgentInspected: (process, inspectedPtyId) => {
       // Why: same local-only gate as the tracker — remote/WSL inspections must
-      // not become renderer process evidence for this pane.
-      if (!inspectedPtyId || !isForegroundTrackingAllowed(inspectedPtyId)) {
+      // not become renderer process evidence for this pane — and an inspection
+      // of a PTY the pane no longer owns (respawn race) must not either.
+      if (!isForegroundTrackingAllowed(inspectedPtyId) || transport.getPtyId() !== inspectedPtyId) {
         return
       }
-      useAppStore.getState().refreshPaneForegroundAgentObservation(cacheKey, process.agent)
+      useAppStore
+        .getState()
+        .refreshPaneForegroundAgentObservation(cacheKey, process.agent, inspectedPtyId)
     },
     shouldSuppressConfirmedProcessExitCompletion: (exited) => {
       const currentStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]

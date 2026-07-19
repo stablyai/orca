@@ -85,7 +85,10 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
     expect(state.paneForegroundAgentByPaneKey[targetPaneKey]).toEqual({
       agent: 'droid',
       routingTrusted: true,
-      shellForeground: false
+      shellForeground: false,
+      // Why: setPaneForegroundAgent stamps observedAt centrally; the transfer
+      // preserves the entry (TTL keeps gating attribution on the new key).
+      observedAt: expect.any(Number)
     })
     expect(state.agentLaunchConfigByPaneKey[sourcePaneKey]).toBeUndefined()
     expect(state.agentLaunchConfigByPaneKey[targetPaneKey]?.identity).toMatchObject({
@@ -111,7 +114,8 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
     expect(state.agentStatusEpoch).toBeGreaterThan(epochBeforeDetach)
     expect(state.paneForegroundAgentByPaneKey[siblingPaneKey]).toEqual({
       agent: 'antigravity',
-      shellForeground: false
+      shellForeground: false,
+      observedAt: expect.any(Number)
     })
     expect(resolveWindowsShiftEnterEncodingForPane(state, targetPaneKey)).toBe('csi-u')
     expect(resolveWindowsShiftEnterEncodingForPane(state, siblingPaneKey)).toBe('alt-enter')

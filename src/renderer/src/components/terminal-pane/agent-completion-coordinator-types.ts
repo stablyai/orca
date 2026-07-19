@@ -37,8 +37,9 @@ export type AgentCompletionCoordinatorOptions = {
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
   // Why: each inspection that recognizes a foreground agent is fresh identity
   // evidence; callers use it to keep TTL-gated attribution alive without
-  // adding scans of their own.
-  onForegroundAgentInspected?: (process: RecognizedAgentProcess) => void
+  // adding scans of their own. `inspectedPtyId` is the PTY the inspection ran
+  // against, so evidence can be bound to it (the pane may rebind meanwhile).
+  onForegroundAgentInspected?: (process: RecognizedAgentProcess, inspectedPtyId: string) => void
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
   // Why: on hosts where one inspection forks a whole-process-table scan (local

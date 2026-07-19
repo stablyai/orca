@@ -470,7 +470,10 @@ export function createAgentCompletionCoordinator(
     establishAgentEvidence()
   }
 
-  function handleProcessInspectionResult(result: RuntimeTerminalProcessInspection): boolean {
+  function handleProcessInspectionResult(
+    result: RuntimeTerminalProcessInspection,
+    inspectedPtyId: string
+  ): boolean {
     if (result.unavailable === true) {
       // Why: unknown liveness breaks the consecutive-idle proof without erasing known agent ownership.
       pendingProcessExitAgent = null
@@ -481,7 +484,9 @@ export function createAgentCompletionCoordinator(
     consecutiveInspectionErrors = 0
     const recognized = recognizeAgentProcess(result.foregroundProcess)
     if (recognized) {
-      options.onForegroundAgentInspected?.(recognized)
+      // Why: pass the PTY the inspection actually ran against so consumers can
+      // bind the evidence — the pane may have rebound to a new PTY meanwhile.
+      options.onForegroundAgentInspected?.(recognized, inspectedPtyId)
       handleRecognizedProcess(recognized)
       return true
     }
@@ -554,7 +559,7 @@ export function createAgentCompletionCoordinator(
               !pendingTitle ||
               (priority === 'pending-title' && pendingTitle.id === pendingTitleIdAtRequest)
             if (appliesToCurrentPendingTitle) {
-              inspectedRecognizedAgent = handleProcessInspectionResult(result)
+              inspectedRecognizedAgent = handleProcessInspectionResult(result, ptyId)
             }
             inspectionSucceeded = true
           }

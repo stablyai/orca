@@ -168,16 +168,39 @@ describe('pane foreground agent slice', () => {
     expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']).toBe(initial)
   })
 
-  it('creates identity-only evidence from an observation on a pane without an entry', () => {
+  it('creates identity-only evidence bound to the inspected PTY on a pane without an entry', () => {
     vi.spyOn(Date, 'now').mockReturnValue(10_000)
     const store = createTestStore()
 
-    store.getState().refreshPaneForegroundAgentObservation('tab-1:leaf-1', 'claude')
+    store.getState().refreshPaneForegroundAgentObservation('tab-1:leaf-1', 'claude', 'pty-1')
 
     expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']).toEqual({
       agent: 'claude',
       shellForeground: false,
-      observedAt: 10_000
+      observedAt: 10_000,
+      ptyId: 'pty-1'
+    })
+  })
+
+  it('rebinds evidence held for a previous PTY instead of keeping it fresh across a respawn', () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(10_000)
+    const store = createTestStore()
+    store.getState().setPaneForegroundAgent('tab-1:leaf-1', {
+      agent: 'claude',
+      shellForeground: false,
+      routingTrusted: true,
+      ptyId: 'pty-old'
+    })
+
+    nowSpy.mockReturnValue(20_000)
+    store.getState().refreshPaneForegroundAgentObservation('tab-1:leaf-1', 'claude', 'pty-new')
+
+    // Why: identity-only rebind — routing trust belonged to the old PTY.
+    expect(store.getState().paneForegroundAgentByPaneKey['tab-1:leaf-1']).toEqual({
+      agent: 'claude',
+      shellForeground: false,
+      observedAt: 20_000,
+      ptyId: 'pty-new'
     })
   })
 })

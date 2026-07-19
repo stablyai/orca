@@ -19858,10 +19858,12 @@ describe('connectPanePty', () => {
     })
     expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
     // Why: recognized inspections must also keep the pane's process-identity
-    // observation fresh for TTL-gated sidebar attribution (no new scans).
+    // observation fresh for TTL-gated sidebar attribution (no new scans), and
+    // must bind the evidence to the PTY the inspection ran against.
     expect(mockStoreState.refreshPaneForegroundAgentObservation).toHaveBeenCalledWith(
       makePaneKey('tab-1', LEAF_1),
-      'codex'
+      'codex',
+      'pty-codex'
     )
   })
 

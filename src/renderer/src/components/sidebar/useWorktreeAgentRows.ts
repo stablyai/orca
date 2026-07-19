@@ -24,6 +24,7 @@ import {
   EMPTY_PANE_FOREGROUND_AGENTS,
   selectWorktreeAgentActivitySummary
 } from './worktree-agent-activity-summary'
+import { usePaneForegroundAgentEvidenceExpiryTick } from './use-pane-foreground-agent-evidence-expiry'
 
 export { buildWorktreeAgentRows } from './worktree-agent-rows'
 export {
@@ -89,6 +90,10 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const agentFreshnessSignature = useAppStore((s) =>
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
+  // Why: process-identity evidence decays by wall clock, not by store writes;
+  // this tick forces one recompute at the earliest TTL boundary so a stale row
+  // drops even when tracker/coordinator go silent after the last publish.
+  const evidenceExpiryTick = usePaneForegroundAgentEvidenceExpiryTick(paneForegroundAgentByPaneKey)
 
   return useMemo<DashboardAgentRow[]>(() => {
     if (!active) {
@@ -132,6 +137,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
     paneForegroundAgentByPaneKey,
-    agentFreshnessSignature
+    agentFreshnessSignature,
+    evidenceExpiryTick
   ])
 }
