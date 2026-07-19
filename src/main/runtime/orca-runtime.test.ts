@@ -17007,6 +17007,119 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('demotes stale hydrated hook status to identity-only in the headless fallback', async () => {
+    // Why: hook rows hydrate from last-status.json for up to 7 days across
+    // restarts; a stale 'working' state must not resurface as live activity,
+    // but providerSession must survive so native chat still resolves.
+    const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)
+    const staleReceivedAt = Date.now() - 60 * 60 * 1000
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: 'persisted-pty',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Persisted Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              launchAgent: 'codex'
+            }
+          ]
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          state: 'working',
+          prompt: 'old prompt',
+          interactivePrompt: '{"questions":[]}',
+          toolName: 'Bash',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: staleReceivedAt,
+          stateStartedAt: staleReceivedAt,
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    const terminalTab = result.tabs.find((tab) => tab.type === 'terminal')
+    const agentStatus =
+      terminalTab && 'agentStatus' in terminalTab ? terminalTab.agentStatus : undefined
+    expect(agentStatus).toMatchObject({
+      state: 'done',
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    })
+    expect(agentStatus).not.toHaveProperty('interactivePrompt')
+    expect(agentStatus).not.toHaveProperty('toolName')
+  })
+
+  it('does not consult the hook fallback for non-headless publications', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = makePaneKey('tab-1', leafId)
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          state: 'working',
+          prompt: 'live prompt',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `tab-1::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${leafId}`,
+              parentTabId: 'tab-1',
+              leafId,
+              title: 'Terminal 1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    // Renderer-published snapshots omit agentStatus deliberately; the hook
+    // fallback is headless-only and must not fill it in here.
+    const terminalTab = result.tabs.find((tab) => tab.type === 'terminal')
+    const agentStatus =
+      terminalTab && 'agentStatus' in terminalTab ? terminalTab.agentStatus : undefined
+    expect(agentStatus ?? undefined).toBeUndefined()
+  })
+
   it('keeps renderer-vetted mobile agent status for custom-titled terminals', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '11111111-1111-4111-8111-111111111111'

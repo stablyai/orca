@@ -6951,6 +6951,25 @@ export class OrcaRuntimeService {
         providerSessionOnly: _providerSessionOnly,
         ...statusFields
       } = entry
+      // Why: hook rows hydrate from last-status.json for up to 7 days across
+      // restarts; keep resume identity for native chat but never resurrect a
+      // stale working/prompt state as live activity on paired clients.
+      if (Date.now() - receivedAt > AGENT_STATUS_STALE_AFTER_MS && statusFields.state !== 'done') {
+        return {
+          state: 'done',
+          prompt: '',
+          updatedAt: receivedAt,
+          stateStartedAt: statusFields.stateStartedAt,
+          paneKey: statusFields.paneKey,
+          stateHistory: [],
+          ...(statusFields.agentType ? { agentType: statusFields.agentType } : {}),
+          ...(statusFields.providerSession
+            ? { providerSession: statusFields.providerSession }
+            : {}),
+          ...(statusFields.tabId ? { tabId: statusFields.tabId } : {}),
+          ...(statusFields.worktreeId ? { worktreeId: statusFields.worktreeId } : {})
+        }
+      }
       return { ...statusFields, updatedAt: receivedAt, stateHistory: [] }
     }
     return null
