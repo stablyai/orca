@@ -12007,7 +12007,9 @@
                 "2f9d6b4e10": "토글 제목 3",
                 "8c1a3e7d52": "작은 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다.",
                 "5e0b9c2a71": "토글 제목 4",
-                "d4f16a8b39": "중첩된 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다."
+                "d4f16a8b39": "중첩된 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다.",
+                "21d8c463e5": "Toggle H5",
+                "dc239b41ad": "Create a collapsible section with a deep heading summary."
               }
             }
           }

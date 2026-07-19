@@ -132,7 +132,7 @@ describe('rich markdown round trip', () => {
     )
   })
 
-  it.each(['heading-2', 'heading-3', 'heading-4'])(
+  it.each(['heading-2', 'heading-3', 'heading-4', 'heading-5'])(
     'preserves %s-styled details blocks',
     (variant) => {
       expect(
@@ -208,7 +208,8 @@ describe('rich markdown round trip', () => {
   it.each([
     ['toggle-h2', 'heading-2'],
     ['toggle-h3', 'heading-3'],
-    ['toggle-h4', 'heading-4']
+    ['toggle-h4', 'heading-4'],
+    ['toggle-h5', 'heading-5']
   ] as const)('inserts editable %s toggles from slash commands', (commandId, variant) => {
     expect(slashCommandMarkdown(commandId)).toBe(
       `<details class="orca-details" data-orca-toggle="${variant}" open>\n<summary></summary>\n\n\n\n</details>`
