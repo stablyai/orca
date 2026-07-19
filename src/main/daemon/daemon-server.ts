@@ -419,7 +419,7 @@ export class DaemonServer {
           pid: result.pid,
           shellState: result.shellState,
           ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-          ...(result.wslDistro ? { wslDistro: result.wslDistro } : {}),
+          wslDistro: result.wslDistro,
           ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {})
         }
       }

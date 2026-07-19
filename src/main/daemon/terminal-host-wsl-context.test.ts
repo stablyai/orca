@@ -60,6 +60,39 @@ describe('TerminalHost WSL context', () => {
     }
   })
 
+  it('returns authoritative null when a native session is attached with a WSL preference', async () => {
+    const spawnSubprocess = vi.fn(() => createSubprocess())
+    host = new TerminalHost({ spawnSubprocess })
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const created = await host.createOrAttach({
+        sessionId: 'session-native',
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\server\\share\\repo',
+        shellOverride: 'powershell.exe',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      const attached = await host.createOrAttach({
+        sessionId: 'session-native',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(created.wslDistro).toBeNull()
+      expect(attached.wslDistro).toBeNull()
+      expect(spawnSubprocess).toHaveBeenCalledOnce()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
   it('uses a remembered distro only when the selected shell is WSL', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

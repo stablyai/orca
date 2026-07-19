@@ -8,17 +8,24 @@ export type DaemonCreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
-  wslDistro?: string
+  /** Undefined only when talking to a daemon predating WSL session context. */
+  wslDistro?: string | null
 }
 
 export function getDaemonSessionResultMetadata(session: {
   launchAgent: TuiAgent | null
   historySeeded: boolean | undefined
   wslDistro: string | null
-}): Pick<DaemonCreateOrAttachResult, 'launchAgent' | 'historySeeded' | 'wslDistro'> {
+}): {
+  launchAgent?: TuiAgent
+  historySeeded?: boolean
+  wslDistro: string | null
+} {
   return {
     ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
     ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
-    ...(session.wslDistro ? { wslDistro: session.wslDistro } : {})
+    // Why: null authoritatively identifies a native session; omission is
+    // reserved for older daemons that predate this wire field.
+    wslDistro: session.wslDistro
   }
 }

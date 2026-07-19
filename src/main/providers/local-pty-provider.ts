@@ -93,6 +93,9 @@ const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 const ptyTerminalHandle = new Map<string, string>()
 const ptyInitialCwd = new Map<string, string>()
+// Why: reattach requests carry current settings, not the live process's launch
+// context. Keep the first creator's WSL/native identity for the PTY incarnation.
+const ptyWslDistroById = new Map<string, string | null>()
 // Why: node-pty callbacks must be disposed before environment teardown, but
 // onExit separately owns physical process-exit proof during termination.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
@@ -228,6 +231,7 @@ function clearPtyState(id: string): void {
   ptyAgentForegroundContextPaths.delete(id)
   ptyTerminalHandle.delete(id)
   ptyInitialCwd.delete(id)
+  ptyWslDistroById.delete(id)
   ptyLoadGeneration.delete(id)
   ptyTerminationMode.delete(id)
   ptyPhysicalExits.delete(id)
@@ -471,12 +475,18 @@ export class LocalPtyProvider implements IPtyProvider {
       }
       const existing = ptyProcesses.get(reattachId)
       if (existing) {
+        const existingWslDistro = ptyWslDistroById.get(reattachId)
         try {
           existing.resize(args.cols, args.rows)
         } catch {
           /* Existing PTY may reject resize during teardown; still return the live handle. */
         }
-        return { id: reattachId, pid: existing.pid, isReattach: true }
+        return {
+          id: reattachId,
+          pid: existing.pid,
+          ...(ptyWslDistroById.has(reattachId) ? { wslDistro: existingWslDistro ?? null } : {}),
+          isReattach: true
+        }
       }
     }
     const id = allocatePtyId(reattachId ?? undefined)
@@ -823,9 +833,15 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const proc = spawnResult.process
+    const spawnedShellIsWsl =
+      process.platform === 'win32' && pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const spawnedWslDistro = spawnedShellIsWsl ? (launchWslDistro ?? undefined) : null
     createPtyPhysicalExit(id)
     ptyProcesses.set(id, proc)
     ptyInitialCwd.set(id, cwd)
+    if (spawnedWslDistro !== undefined) {
+      ptyWslDistroById.set(id, spawnedWslDistro)
+    }
     // Why both signals: launchAgent is the caller's explicit intent and
     // survives command rewriting (e.g. auth env prefixes); recognition covers
     // callers that pass a bare agent command line without the flag.
@@ -983,7 +999,11 @@ export class LocalPtyProvider implements IPtyProvider {
     // briefly 0/undefined if node-pty hasn't observed the forked child yet.
     const rawPid = proc.pid
     const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
-    return { id, pid }
+    return {
+      id,
+      pid,
+      ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
+    }
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.

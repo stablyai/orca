@@ -111,8 +111,10 @@ export type PtySpawnResult = {
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
-  /** Immutable local WSL execution context returned by a daemon session. */
-  wslDistro?: string
+  /** Immutable local WSL execution context returned by a daemon session.
+   *  Null authoritatively identifies a native session; undefined means the
+   *  provider cannot report the context (including older daemons). */
+  wslDistro?: string | null
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string

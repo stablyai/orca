@@ -140,6 +140,38 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.id).toContain('wt-1')
     })
 
+    it('keeps a reattached native UNC session native despite a conflicting WSL preference', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        const sessionId = 'native-conflicting-wsl-attach'
+        const created = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId,
+          cwd: '\\\\server\\share\\repo',
+          shellOverride: 'powershell.exe'
+        })
+        const attached = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId,
+          cwd: 'C:\\repo',
+          shellOverride: 'wsl.exe',
+          terminalWindowsWslDistro: 'Ubuntu'
+        })
+
+        expect(created.wslDistro).toBeNull()
+        expect(attached.wslDistro).toBeNull()
+        expect(attached.isReattach).toBe(true)
+        expect(lastSpawnOpts?.cwd).toBe('\\\\server\\share\\repo')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
+
     itOnPosix('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {
       await adapter.spawn({
         cols: 80,

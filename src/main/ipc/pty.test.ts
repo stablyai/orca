@@ -1401,14 +1401,18 @@ describe('registerPtyHandlers', () => {
       // OpenCode plugin dir, Pi managed extension env, Codex home, and dev-mode CLI
       // overrides were silently missing for daemon users (the common case).
 
-      function setupDaemonAdapter(supportsGitCredentialGuardHost = true) {
+      function setupDaemonAdapter(
+        supportsGitCredentialGuardHost = true,
+        reportedWslDistro?: string | null
+      ) {
         const daemonSpawn = vi.fn(
           async (options: {
             env: Record<string, string>
             sessionId?: string
             isNewSession?: boolean
           }) => ({
-            id: options.sessionId ?? 'daemon-pty'
+            id: options.sessionId ?? 'daemon-pty',
+            ...(reportedWslDistro !== undefined ? { wslDistro: reportedWslDistro } : {})
           })
         )
         setLocalPtyProvider({
@@ -1918,6 +1922,67 @@ describe('registerPtyHandlers', () => {
             undefined,
             true
           )
+        })
+      })
+
+      it('distinguishes an attached native context from an older daemon fallback', async () => {
+        await withWin32Platform(async () => {
+          _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+          const settings = {
+            localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+            terminalWindowsShell: 'wsl.exe',
+            terminalWindowsWslDistro: 'Ubuntu',
+            terminalWindowsPowerShellImplementation: 'auto'
+          }
+          const cases: {
+            reportedWslDistro: string | null | undefined
+            expectedWslDistro: string | null
+            sessionId: string
+          }[] = [
+            {
+              reportedWslDistro: null,
+              expectedWslDistro: null,
+              sessionId: 'native-session'
+            },
+            {
+              reportedWslDistro: undefined,
+              expectedWslDistro: 'Ubuntu',
+              sessionId: 'older-daemon-session'
+            }
+          ]
+
+          for (const testCase of cases) {
+            setupDaemonAdapter(true, testCase.reportedWslDistro)
+            const runtime = {
+              setPtyController: vi.fn(),
+              createPreAllocatedTerminalHandle: vi.fn(() => null),
+              preAllocateHandleForPty: vi.fn(),
+              registerPty: vi.fn(),
+              onPtySpawned: vi.fn(),
+              onPtyExit: vi.fn(),
+              onPtyData: vi.fn(),
+              preparePtyExecutionContext: vi.fn().mockReturnValue(true)
+            }
+            handlers.clear()
+            registerPtyHandlers(
+              mainWindow as never,
+              runtime as never,
+              undefined,
+              (() => settings) as never
+            )
+
+            await handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              sessionId: testCase.sessionId,
+              cwd: '\\\\server\\share\\repo'
+            })
+
+            expect(runtime.preparePtyExecutionContext).toHaveBeenLastCalledWith(
+              testCase.sessionId,
+              testCase.expectedWslDistro
+            )
+          }
         })
       })
 

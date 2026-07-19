@@ -299,10 +299,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     let result = await createOrAttach(scrollback)
-    wslDistro = result.wslDistro ?? wslDistro
+    let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
+    // Why: explicit null from a current daemon overrides the caller's WSL
+    // preference; undefined preserves compatibility with older daemons.
+    wslDistro = providerWslDistro ?? undefined
     if (wslDistro) {
       this.wslDistrosBySessionId.set(sessionId, wslDistro)
-    } else if (result.isNew) {
+    } else if (providerWslDistro === null || result.isNew) {
       this.wslDistrosBySessionId.delete(sessionId)
     }
     const launchIdentity = (): { launchAgent?: NonNullable<typeof result.launchAgent> } =>
@@ -335,7 +338,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         pid,
         ...launchIdentity(),
         coldRestore: cachedRestore,
-        ...(wslDistro ? { wslDistro } : {}),
+        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(!result.isNew ? { isReattach: true } : {})
       }
     }
@@ -359,10 +362,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
         effectiveCols = restoreInfo.cols
         effectiveRows = restoreInfo.rows
         result = await createOrAttach(scrollback)
-        wslDistro = result.wslDistro ?? wslDistro
+        providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
+        wslDistro = providerWslDistro ?? undefined
         if (wslDistro) {
           this.wslDistrosBySessionId.set(sessionId, wslDistro)
-        } else if (result.isNew) {
+        } else if (providerWslDistro === null || result.isNew) {
           this.wslDistrosBySessionId.delete(sessionId)
         }
         pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
@@ -407,7 +411,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           pid,
           ...launchIdentity(),
           coldRestore,
-          ...(wslDistro ? { wslDistro } : {}),
+          ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
           ...(providerSequence ? { providerSequence } : {}),
           ...(!result.isNew ? { isReattach: true } : {})
         }
@@ -416,7 +420,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
-        ...(wslDistro ? { wslDistro } : {}),
+        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {})
       }
     }
@@ -456,7 +460,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
-        ...(wslDistro ? { wslDistro } : {}),
+        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {}),
         ...(isReattach ? { isReattach: true } : {})
       }
@@ -476,7 +480,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       id: sessionId,
       pid,
       ...launchIdentity(),
-      ...(wslDistro ? { wslDistro } : {}),
+      ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
