@@ -341,14 +341,24 @@ function WorkspaceRunTargetCombobox({
                 <Server className="size-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{option.label}</div>
-                  {/* Why: worktree paths often overflow the truncated row; the native title
-                      shows the full path on hover without a bulky custom tooltip. */}
-                  <div
-                    title={option.path}
-                    className="mt-0.5 truncate text-[11px] text-muted-foreground"
-                  >
-                    {option.path}
-                  </div>
+                  {/* Why: worktree paths overflow the truncated row. A controlled tooltip (not the
+                      native title, which won't reliably re-trigger between adjacent rows in Chromium)
+                      reveals the full path; styled compact + arrowless to read like an OS tooltip. */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {option.path}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      align="start"
+                      sideOffset={4}
+                      className="max-w-[min(520px,80vw)] px-2 py-1 text-[11px] font-normal break-all [&>span:has(svg)]:hidden"
+                    >
+                      {option.path}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </CommandItem>
             ))}
