@@ -1899,7 +1899,7 @@ function extractCopilotToolFields(
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind?: 'pi' | 'omp'
+  agentKind: 'pi' | 'omp'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -3430,16 +3430,12 @@ function normalizePiCompatibleEvent(
     return null
   }
 
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields(agentType, eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
-  )
-
+  // Why: gate on the event's own tool_name (matching the Claude/Grok normalizers),
+  // not a merged snapshot, so a partial follow-up event can't inherit a stale
+  // ask_user_question name from the tool cache and spuriously re-enter blocked.
   const isPiAskUserQuestion =
     agentType === 'pi' &&
-    isAskUserQuestionTool(snapshot.toolName) &&
+    isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
   const stateName = isPiAskUserQuestion
@@ -3458,6 +3454,13 @@ function normalizePiCompatibleEvent(
   if (!stateName) {
     return null
   }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields(agentType, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
+  )
 
   return parseAgentStatusPayload(
     JSON.stringify({
