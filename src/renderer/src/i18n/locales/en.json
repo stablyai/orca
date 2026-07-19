@@ -13326,6 +13326,12 @@
         "running": "Running…",
         "result": "Result"
       },
+      "tasks": {
+        "summaryOne": "1 task ({{value1}} done, {{value2}} in progress, {{value3}} open)",
+        "summary": "{{value0}} tasks ({{value1}} done, {{value2}} in progress, {{value3}} open)",
+        "moreCompleted": "+{{value0}} completed",
+        "more": "+{{value0}} more"
+      },
       "status": {
         "responding": "Agent is responding"
       },

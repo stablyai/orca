@@ -13303,6 +13303,12 @@
         "running": "실행 중…",
         "result": "결과"
       },
+      "tasks": {
+        "summaryOne": "작업 1개 (완료 {{value1}}개, 진행 중 {{value2}}개, 대기 {{value3}}개)",
+        "summary": "작업 {{value0}}개 (완료 {{value1}}개, 진행 중 {{value2}}개, 대기 {{value3}}개)",
+        "moreCompleted": "+{{value0}}개 완료",
+        "more": "+{{value0}}개 더 보기"
+      },
       "status": {
         "responding": "Agent이 응답 중입니다."
       },

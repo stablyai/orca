@@ -13303,6 +13303,12 @@
         "running": "正在运行…",
         "result": "结果"
       },
+      "tasks": {
+        "summaryOne": "1 个任务（{{value1}} 个已完成，{{value2}} 个进行中，{{value3}} 个待处理）",
+        "summary": "{{value0}} 个任务（{{value1}} 个已完成，{{value2}} 个进行中，{{value3}} 个待处理）",
+        "moreCompleted": "+{{value0}} 个已完成",
+        "more": "+{{value0}} 个更多任务"
+      },
       "status": {
         "responding": "智能体正在回复"
       },

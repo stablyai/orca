@@ -8,6 +8,7 @@ import {
   readNativeChatTranscriptTail,
   readNativeChatTranscriptTailFile
 } from './transcript-tail-reader'
+import { deriveNativeChatTasks } from '../../shared/native-chat-task-list'
 
 let tempRoots: string[] = []
 
@@ -188,6 +189,82 @@ describe('readNativeChatTranscript (claude)', () => {
       throw new Error('expected messages')
     }
     expect(result.messages[0].blocks[0]).toEqual({ type: 'text', text: 'pondering' })
+  })
+
+  it('preserves Claude task tools so the latest checklist can be rebuilt', async () => {
+    const filePath = await writeFixture('orca-native-chat-claude-tasks-', [
+      {
+        type: 'assistant',
+        uuid: 'task-create',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'create-1',
+              name: 'TaskCreate',
+              input: { subject: 'Implement task list', activeForm: 'Implementing task list' }
+            }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        uuid: 'task-create-result',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'create-1',
+              content: { task: { id: '1', subject: 'Implement task list' } }
+            }
+          ]
+        }
+      },
+      {
+        type: 'assistant',
+        uuid: 'task-update',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'update-1',
+              name: 'TaskUpdate',
+              input: { taskId: '1', status: 'in_progress' }
+            }
+          ]
+        }
+      },
+      {
+        type: 'user',
+        uuid: 'task-update-result',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'update-1',
+              content: 'updated'
+            }
+          ]
+        }
+      }
+    ])
+    const result = await readNativeChatTranscript('claude', 'sess', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected messages')
+    }
+
+    expect(deriveNativeChatTasks(result.messages)).toEqual([
+      {
+        id: '1',
+        subject: 'Implement task list',
+        activeForm: 'Implementing task list',
+        status: 'in_progress'
+      }
+    ])
   })
 })
 

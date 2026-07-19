@@ -13303,6 +13303,12 @@
         "running": "Ejecutando…",
         "result": "Resultado"
       },
+      "tasks": {
+        "summaryOne": "1 tarea ({{value1}} completada, {{value2}} en curso, {{value3}} pendiente)",
+        "summary": "{{value0}} tareas ({{value1}} completadas, {{value2}} en curso, {{value3}} pendientes)",
+        "moreCompleted": "+{{value0}} completadas",
+        "more": "+{{value0}} más"
+      },
       "status": {
         "responding": "El agente está respondiendo"
       },

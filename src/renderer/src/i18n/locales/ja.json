@@ -13303,6 +13303,12 @@
         "running": "実行中…",
         "result": "結果"
       },
+      "tasks": {
+        "summaryOne": "タスク1件（完了{{value1}}件、進行中{{value2}}件、未着手{{value3}}件）",
+        "summary": "タスク{{value0}}件（完了{{value1}}件、進行中{{value2}}件、未着手{{value3}}件）",
+        "moreCompleted": "+{{value0}}件完了",
+        "more": "+{{value0}}件"
+      },
       "status": {
         "responding": "Agent が応答中です"
       },

@@ -50,6 +50,11 @@ describe('native chat locale copy', () => {
       for (const key of ['on', 'off'] as const) {
         expect(composer.optionValue[key].trim()).not.toBe('')
       }
+      const tasks = catalog.components['native-chat'].tasks
+      for (const key of ['summaryOne', 'summary', 'moreCompleted', 'more'] as const) {
+        expect(tasks[key].trim()).not.toBe('')
+        expect(tasks[key]).not.toBe(en.components['native-chat'].tasks[key])
+      }
     }
   )
 })

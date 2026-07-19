@@ -20,6 +20,12 @@ import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import {
+  deriveNativeChatTasks,
+  withoutNativeChatTaskToolBlocks
+} from '../../../../shared/native-chat-task-list'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat-agent-support'
+import { NativeChatTaskList } from './NativeChatTaskList'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -125,6 +131,7 @@ function TypingIndicatorRow(): React.JSX.Element {
 function MessageRow({
   message,
   expandSignal,
+  hideTaskTools,
   onScrollMessageToTop,
   onLinkClick,
   allowFileUriLinks = false,
@@ -132,6 +139,7 @@ function MessageRow({
 }: {
   message: NativeChatMessage
   expandSignal: boolean
+  hideTaskTools: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   onLinkClick?: CommentMarkdownLinkClickHandler
@@ -139,7 +147,11 @@ function MessageRow({
   deliveryFailed?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
+  const renderBlocks = useMemo(
+    () => (hideTaskTools ? withoutNativeChatTaskToolBlocks(message.blocks) : message.blocks),
+    [hideTaskTools, message.blocks]
+  )
+  const { prose, tools } = useMemo(() => splitNativeChatBlocks(renderBlocks), [renderBlocks])
   const markdown = proseToMarkdown(prose)
   const hasImages = prose.some((block) => block.type === 'image-ref')
   const isUser = message.role === 'user'
@@ -274,6 +286,11 @@ export function NativeChatMessageList({
     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
     [session.messages]
   )
+  const rendersClaudeTasks = resolveNativeChatTranscriptAgent(session.agent) === 'claude'
+  const tasks = useMemo(
+    () => (rendersClaudeTasks ? deriveNativeChatTasks(messages) : []),
+    [messages, rendersClaudeTasks]
+  )
   const showTypingIndicator =
     isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
 
@@ -404,12 +421,14 @@ export function NativeChatMessageList({
               key={message.id}
               message={message}
               expandSignal={expandSignal}
+              hideTaskTools={tasks.length > 0}
               onScrollMessageToTop={scrollMessageToTop}
               onLinkClick={onLinkClick}
               allowFileUriLinks={allowFileUriLinks}
               deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
             />
           ))}
+          <NativeChatTaskList tasks={tasks} />
           {showTypingIndicator ? <TypingIndicatorRow /> : null}
         </div>
       </div>
