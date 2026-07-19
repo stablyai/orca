@@ -6936,6 +6936,26 @@ export class OrcaRuntimeService {
     return retainedChanged
   }
 
+  /** Latest hook-server status for a pane, reshaped to the AgentStatusEntry the
+   *  session-tabs snapshot carries. Headless-only fallback: a renderer-published
+   *  tab.agentStatus stays authoritative when present. */
+  private findHookAgentStatusEntryForPaneKey(paneKey: string): AgentStatusEntry | null {
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      if (entry.paneKey !== paneKey) {
+        continue
+      }
+      const {
+        receivedAt,
+        connectionId: _connectionId,
+        launchToken: _launchToken,
+        providerSessionOnly: _providerSessionOnly,
+        ...statusFields
+      } = entry
+      return { ...statusFields, updatedAt: receivedAt, stateHistory: [] }
+    }
+    return null
+  }
+
   private retainAgentRowSnapshot(
     ptyId: string,
     paneKey: string,
@@ -22342,8 +22362,16 @@ export class OrcaRuntimeService {
       )
       const liveTitleEvidence = leafTitle ?? ptyTitle
       const liveTitleEvidenceClassification = classifyAgentTitle(liveTitleEvidence)
-      const normalizedTabAgentStatus = tab.agentStatus
-        ? normalizeCompatibleAgentStatusEntryForOwner(tab.agentStatus, ownerAgent)
+      // Why: headless serve has no renderer publishing tab.agentStatus, so
+      // hook-captured identity (providerSession) would never reach paired
+      // clients and native chat could not resolve a session id (#9452).
+      const sourceAgentStatus =
+        tab.agentStatus ??
+        (this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch)
+          ? this.findHookAgentStatusEntryForPaneKey(paneKey)
+          : null)
+      const normalizedTabAgentStatus = sourceAgentStatus
+        ? normalizeCompatibleAgentStatusEntryForOwner(sourceAgentStatus, ownerAgent)
         : null
       // Why: keep the rich hook-driven status when the agent has a live
       // interactive prompt or an active tool — those are authoritative agent

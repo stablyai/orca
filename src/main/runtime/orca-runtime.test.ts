@@ -16944,6 +16944,69 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).not.toHaveProperty('launchAgent')
   })
 
+  it('attaches hook-captured providerSession to headless mobile session tabs', async () => {
+    // Why: a headless Remote Orca Server has no renderer graph publishing
+    // tab.agentStatus, so paired web clients only get title-derived status.
+    // Without the hook-captured providerSession the native chat view resolves
+    // sessionId null and shows the empty new-chat state (#9452).
+    const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: 'persisted-pty',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Persisted Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              launchAgent: 'codex'
+            }
+          ]
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          state: 'done',
+          prompt: 'fix the bug',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          providerSession: {
+            key: 'session_id',
+            id: 'codex-session-1',
+            transcriptPath: '/tmp/rollout.jsonl'
+          }
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    const terminalTab = result.tabs.find((tab) => tab.type === 'terminal')
+    expect(terminalTab).toEqual(
+      expect.objectContaining({
+        agentStatus: expect.objectContaining({
+          agentType: 'codex',
+          providerSession: {
+            key: 'session_id',
+            id: 'codex-session-1',
+            transcriptPath: '/tmp/rollout.jsonl'
+          }
+        })
+      })
+    )
+  })
+
   it('keeps renderer-vetted mobile agent status for custom-titled terminals', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '11111111-1111-4111-8111-111111111111'
