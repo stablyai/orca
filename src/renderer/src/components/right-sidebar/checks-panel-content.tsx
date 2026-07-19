@@ -28,6 +28,8 @@ import {
   X
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
+import AgentCombobox from '@/components/agent/AgentCombobox'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -85,7 +87,8 @@ import type {
   PRCheckRunDetails,
   PRComment,
   PRConflictSummary,
-  PRMergeableState
+  PRMergeableState,
+  TuiAgent
 } from '../../../../shared/types'
 import { useCheckDetailsResize } from './check-details-resize'
 import {
@@ -2213,6 +2216,9 @@ export function PRCommentsList({
   selectionClearRequest,
   resolveCommentsWithAIDisabled,
   resolveCommentsWithAIDisabledReason,
+  resolveCommentsAgentOptions,
+  resolveCommentsAgent,
+  onResolveCommentsAgentChange,
   onAddComment,
   onResolveSelectedCommentsWithAI,
   onReply,
@@ -2229,6 +2235,9 @@ export function PRCommentsList({
   selectionClearRequest?: PRCommentsListSelectionClearRequest | null
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
+  resolveCommentsAgentOptions?: AgentCatalogEntry[]
+  resolveCommentsAgent?: TuiAgent | null
+  onResolveCommentsAgentChange?: (agent: TuiAgent | null) => void
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
@@ -2420,6 +2429,15 @@ export function PRCommentsList({
           <div className="-mr-1 ml-auto flex items-center gap-0.5">
             {canShowResolveWithAI && (
               <>
+                {resolveCommentsAgentOptions && resolveCommentsAgentOptions.length > 0 ? (
+                  <AgentCombobox
+                    agents={resolveCommentsAgentOptions}
+                    value={resolveCommentsAgent ?? null}
+                    onValueChange={(agent) => onResolveCommentsAgentChange?.(agent)}
+                    allowNarrowTrigger
+                    triggerClassName="h-6 w-[6.75rem] min-w-0 px-1.5 text-[11px]"
+                  />
+                ) : null}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

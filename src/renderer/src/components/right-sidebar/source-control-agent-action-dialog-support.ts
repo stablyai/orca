@@ -1,9 +1,11 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import type { SourceControlLaunchAgentScope } from '@/lib/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/types'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
+import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
 
 export function isSourceControlAgentDetectedAndEnabled(
   agent: TuiAgent | null,
@@ -72,6 +74,21 @@ export function resolveSourceControlAgentSaveTarget(
     return { type: 'global' }
   }
   return null
+}
+
+export function buildSourceControlAgentScopeNote(
+  launchAgentScope: SourceControlLaunchAgentScope
+): SourceControlAgentScopeNote | null {
+  if (!launchAgentScope.overridesGlobalAgent) {
+    return null
+  }
+  const catalog = getAgentCatalog()
+  const labelFor = (agentId: TuiAgent | null): string =>
+    catalog.find((entry) => entry.id === agentId)?.label ?? agentId ?? ''
+  return {
+    effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
+    globalAgentLabel: labelFor(launchAgentScope.globalAgentId)
+  }
 }
 
 export function buildSourceControlAgentStatusCopy(args: {

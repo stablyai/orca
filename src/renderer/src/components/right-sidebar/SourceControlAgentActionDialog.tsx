@@ -33,6 +33,10 @@ export type SourceControlAgentActionDialogProps = {
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
   savedAgentId?: TuiAgent | null
+  /** Overrides the saved recipe agent for this launch only (dialog pre-selection). */
+  preferredAgentId?: TuiAgent | null
+  /** When true, always show the dialog instead of auto-starting from a saved recipe. */
+  disableSavedRecipeAutoStart?: boolean
   onSaveAgentDefault?: (
     target: SourceControlAiWriteTarget,
     actionId: SourceControlLaunchActionId,

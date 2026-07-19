@@ -1,9 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import {
-  pickSourceControlLaunchAgent,
-  resolveSourceControlLaunchAgentScope
-} from '@/lib/source-control-launch-agent-selection'
+import { resolveSourceControlLaunchAgentScope } from '@/lib/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
@@ -14,9 +11,11 @@ import type { UseSourceControlAgentActionDialogResult } from './source-control-a
 import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
 import {
   buildSourceControlAgentSaveTargets,
+  buildSourceControlAgentScopeNote,
   buildSourceControlAgentStatusCopy,
   isSourceControlAgentDetectedAndEnabled
 } from './source-control-agent-action-dialog-support'
+import { useSourceControlAgentActionDialogOpenSync } from './useSourceControlAgentActionDialogOpenSync'
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
@@ -36,6 +35,8 @@ export function useSourceControlAgentActionDialog({
   launchPlatform,
   launchSource,
   savedAgentId,
+  preferredAgentId,
+  disableSavedRecipeAutoStart = false,
   onSaveAgentDefault,
   onLaunched,
   onStart
@@ -57,13 +58,11 @@ export function useSourceControlAgentActionDialog({
     savedCommandInputTemplate ?? '{basePrompt}'
   )
   const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
-  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
+  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(
+    preferredAgentId ?? savedAgentId ?? null
+  )
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
   const [detecting, setDetecting] = useState(false)
-  const openCycleRef = useRef(0)
-  const wasOpenRef = useRef(false)
-  const [openCycle, setOpenCycle] = useState(0)
-  const [detectedOpenCycle, setDetectedOpenCycle] = useState<number | null>(null)
   const saveTargets = useMemo(() => buildSourceControlAgentSaveTargets(repoId), [repoId])
   const [saveLaunchRecipe, setSaveLaunchRecipe] = useState(true)
   const [saveTargetValue, setSaveTargetValue] = useState(defaultSaveTargetValue)
@@ -90,54 +89,22 @@ export function useSourceControlAgentActionDialog({
     }
   }, [connectionId, connectionUnavailable, ensureDetectedAgents, ensureRemoteDetectedAgents])
 
-  useEffect(() => {
-    if (!open) {
-      wasOpenRef.current = false
-      return
-    }
-    const cycle = wasOpenRef.current ? openCycleRef.current : openCycleRef.current + 1
-    if (!wasOpenRef.current) {
-      openCycleRef.current = cycle
-      setOpenCycle(cycle)
-    }
-    wasOpenRef.current = true
-    setDetectedOpenCycle(null)
-    setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
-    setAgentArgs(savedAgentArgs ?? '')
-    setSelectedAgent(savedAgentId ?? null)
-    setSaveLaunchRecipe(true)
-    setSaveTargetValue(defaultSaveTargetValue)
-    let stale = false
-    void refreshDetectedAgents().then((nextAgents) => {
-      if (stale || openCycleRef.current !== cycle) {
-        return
-      }
-      setSelectedAgent(
-        (current) =>
-          current ??
-          pickSourceControlLaunchAgent({
-            savedAgent: savedAgentId,
-            defaultAgent: settings?.defaultTuiAgent,
-            detectedAgents: nextAgents,
-            disabledAgents
-          })
-      )
-      setDetectedOpenCycle(cycle)
-    })
-    return () => {
-      stale = true
-    }
-  }, [
-    defaultSaveTargetValue,
-    disabledAgents,
+  const { openCycle, detectedOpenCycle } = useSourceControlAgentActionDialogOpenSync({
     open,
-    refreshDetectedAgents,
+    preferredAgentId,
     savedAgentId,
     savedAgentArgs,
     savedCommandInputTemplate,
-    repoId,
-    settings?.defaultTuiAgent
-  ])
+    defaultSaveTargetValue,
+    disabledAgents,
+    settings,
+    refreshDetectedAgents,
+    setCommandTemplate,
+    setAgentArgs,
+    setSelectedAgent,
+    setSaveLaunchRecipe,
+    setSaveTargetValue
+  })
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
@@ -232,6 +199,7 @@ export function useSourceControlAgentActionDialog({
     isStarting,
     detectedAgents,
     disabledAgents,
+    disableSavedRecipeAutoStart,
     onAutoStart: ({ detectedAgents: agentsForLaunch, saveTargetValue: matchedTargetValue }) =>
       startWithDetectedAgents({
         detectedAgents: agentsForLaunch,
@@ -276,18 +244,10 @@ export function useSourceControlAgentActionDialog({
     [resetDeliveryPlan]
   )
 
-  const agentScopeNote = useMemo(() => {
-    if (!launchAgentScope.overridesGlobalAgent) {
-      return null
-    }
-    const catalog = getAgentCatalog()
-    const labelFor = (agentId: TuiAgent | null): string =>
-      catalog.find((entry) => entry.id === agentId)?.label ?? agentId ?? ''
-    return {
-      effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
-      globalAgentLabel: labelFor(launchAgentScope.globalAgentId)
-    }
-  }, [launchAgentScope])
+  const agentScopeNote = useMemo(
+    () => buildSourceControlAgentScopeNote(launchAgentScope),
+    [launchAgentScope]
+  )
 
   return {
     handleOpenChange,

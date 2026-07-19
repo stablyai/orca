@@ -32,6 +32,8 @@ type UseSavedSourceControlAgentActionAutoStartArgs = {
   isStarting: boolean
   detectedAgents: TuiAgent[]
   disabledAgents: TuiAgent[] | undefined
+  /** Why: per-PR comment resolution should always confirm agent choice in the dialog. */
+  disableSavedRecipeAutoStart?: boolean
   onAutoStart: (args: {
     detectedAgents: TuiAgent[]
     saveTargetValue: SavedSourceControlAgentActionTargetValue
@@ -146,6 +148,7 @@ export function useSavedSourceControlAgentActionAutoStart({
   isStarting,
   detectedAgents,
   disabledAgents,
+  disableSavedRecipeAutoStart = false,
   onAutoStart
 }: UseSavedSourceControlAgentActionAutoStartArgs): SavedSourceControlAgentActionAutoStartResult {
   const autoStartedOpenCycleRef = useRef(0)
@@ -203,6 +206,7 @@ export function useSavedSourceControlAgentActionAutoStart({
     currentReceiptState && receiptKey && currentReceiptState.receiptKey !== receiptKey
   )
   const autoLaunchPending = Boolean(
+    !disableSavedRecipeAutoStart &&
     open &&
     matchedSavedReceiptTargetValue &&
     receiptKey &&
@@ -223,7 +227,12 @@ export function useSavedSourceControlAgentActionAutoStart({
         revealed: !receiptKey
       })
     }
-    if (!matchedSavedReceiptTargetValue || !receiptKey || !savedAgentId) {
+    if (
+      disableSavedRecipeAutoStart ||
+      !matchedSavedReceiptTargetValue ||
+      !receiptKey ||
+      !savedAgentId
+    ) {
       return
     }
     if (receiptState?.openCycle === openCycle && receiptState.receiptKey !== receiptKey) {
@@ -268,6 +277,7 @@ export function useSavedSourceControlAgentActionAutoStart({
     detectedAgents,
     detectionReady,
     detecting,
+    disableSavedRecipeAutoStart,
     disabledAgents,
     isStarting,
     matchedSavedReceiptTargetValue,
