@@ -40,7 +40,6 @@ type BrowserOverlaySlotProps = {
   // `activeGroupIdByWorktree` stale. The overlay slot re-implements that
   // focus sync directly, targeting the owning group.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
-  isWorktreeActive: boolean
 }
 
 // Why: each overlay slot is memoized so its BrowserPane subtree only re-renders
@@ -51,8 +50,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   groupId,
   isActive,
-  onFocusOwningGroup,
-  isWorktreeActive
+  onFocusOwningGroup
 }: BrowserOverlaySlotProps): React.JSX.Element {
   // Why: persistent page viewports (webview guests) live under this root so they
   // survive BrowserPane chrome unmounts on worktree switch without reparenting.
@@ -70,9 +68,6 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   const automationVisible = useBrowserAutomationVisibilityForAny(browserPageIds)
   const mobileDriven = useBrowserMobileDriverForAny(browserPageIds)
   const isPaintable = isActive || automationVisible || mobileDriven
-  // Why: hidden worktrees keep lightweight overlay slots mounted, but their
-  // Electron webviews must park unless a remote controller needs the guest.
-  const shouldMountPane = isWorktreeActive || automationVisible || mobileDriven
   // Why: each overlay pins itself to the owning TabGroupPanel's body via CSS
   // anchor positioning. `anchor()` resolves top/left relative to the viewport,
   // and the overlay's own `position: absolute` inside a positioned ancestor
@@ -124,9 +119,11 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
     >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
       {/* Why: moving an Electron webview between DOM parents destroys the guest
-          document in some Electron builds. Visible worktree browsers stay in
-          stable overlay slots; hidden worktrees park the heavy pane subtree. */}
-      {shouldMountPane ? <BrowserPane browserTab={browserTab} isActive={isActive} /> : null}
+          document in some Electron builds, and unmounting it on a worktree
+          switch destroys the persistent webview guest — discarding typed form
+          text, scroll position, and SPA state. Keep every open browser mounted
+          in its stable overlay slot; CSS decides whether it is paintable. */}
+      <BrowserPane browserTab={browserTab} isActive={isActive} />
     </div>
   )
 })
@@ -208,7 +205,6 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
             groupId={assignment?.groupId}
             isActive={isActive}
             onFocusOwningGroup={focusOwningGroup}
-            isWorktreeActive={isWorktreeActive}
           />
         )
       })}

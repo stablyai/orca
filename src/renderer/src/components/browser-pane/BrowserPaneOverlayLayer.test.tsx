@@ -73,11 +73,15 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
-  it('parks browser panes when their worktree is hidden', () => {
+  it('keeps every browser pane mounted when its worktree is hidden', () => {
+    // Why: unmounting a hidden worktree's BrowserPane destroys the persistent
+    // webview guest, discarding typed form text, scroll, and SPA state when the
+    // user switches away and back. The pane stays mounted (inactive); CSS hides it.
     const markup = renderOverlay({ isWorktreeActive: false })
 
-    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
-    expect(markup).not.toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-active="false"')
   })
 
   it('keeps an automation-visible hidden browser pane mounted', () => {
@@ -85,7 +89,7 @@ describe('BrowserPaneOverlayLayer', () => {
 
     const markup = renderOverlay({ isWorktreeActive: false })
 
-    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
   })
@@ -95,7 +99,7 @@ describe('BrowserPaneOverlayLayer', () => {
 
     const markup = renderOverlay({ isWorktreeActive: false })
 
-    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-id="browser-b"')
     expect(markup).toContain('data-browser-pane-active="false"')
   })
