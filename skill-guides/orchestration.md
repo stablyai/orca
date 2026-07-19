@@ -20,6 +20,14 @@ Orchestration is Orca's structured coordination layer for agent messages, task o
 
 Use this skill when coordination state matters. For lightweight terminal prompts or basic worktree/terminal/built-in-browser control, use `orca-cli`.
 
+## Invocation Gate
+
+Before applying any other instruction in this skill, confirm that `ORCA_WORKTREE_ID` or `ORCA_TERMINAL_HANDLE` is non-empty in the current process environment. These Orca-issued identity variables are the required proof that the agent is running inside an Orca-managed terminal. `ORCA_TERMINAL_HANDLE` keeps the gate valid for SSH agent terminals where remote hook settings can omit worktree identity.
+
+If both variables are unset or empty, stop: do not invoke this skill or run any `orca` command. Say briefly that Orca orchestration is unavailable outside an Orca-managed terminal, then continue with the current harness's native coordination tools. This gate applies even when the user explicitly asks for Orca orchestration.
+
+Do not infer Orca context from the current repository, the presence of `orca` on `PATH`, or a reachable Orca runtime. Those can all exist outside an Orca-managed terminal.
+
 ## Tool Boundary
 
 If a task says to use Orca orchestration, the coordinator must create Orca runtime state with `orca orchestration task-create` and `orca orchestration dispatch --inject` or `orca orchestration run`.

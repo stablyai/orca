@@ -21,6 +21,26 @@ function getSection(markdown, heading) {
 }
 
 describe('orchestration skill guidance', () => {
+  it('hard-gates invocation to an Orca-managed terminal', () => {
+    const skill = readSkill()
+    const invocationGate = getSection(skill, 'Invocation Gate')
+    expect(invocationGate).toContain('Before applying any other instruction in this skill')
+    expect(invocationGate).toContain('`ORCA_WORKTREE_ID` or `ORCA_TERMINAL_HANDLE` is non-empty')
+    expect(invocationGate).toContain('SSH agent terminals')
+    expect(invocationGate).toContain('If both variables are unset or empty')
+    expect(invocationGate).toContain('do not invoke this skill')
+    expect(invocationGate).toContain('or run any `orca` command')
+    expect(invocationGate).toContain('Say briefly that Orca orchestration is unavailable')
+    expect(invocationGate).toContain(
+      "continue with the current harness's native coordination tools"
+    )
+    expect(invocationGate).toContain('even when the user explicitly asks')
+    expect(invocationGate).toContain('the current repository')
+    expect(invocationGate).toContain('the presence of `orca` on `PATH`')
+    expect(invocationGate).toContain('a reachable Orca runtime')
+    expect(skill.indexOf('## Invocation Gate')).toBeLessThan(skill.indexOf('## Tool Boundary'))
+  })
+
   it('requires Orca runtime state before claiming a worker was orchestrated', () => {
     const skill = readSkill()
     const toolBoundary = getSection(skill, 'Tool Boundary')
