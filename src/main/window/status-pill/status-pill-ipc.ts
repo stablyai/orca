@@ -25,6 +25,9 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
     // Why: V1 ships a minimal context menu; rich options (Pin to display,
     // Settings) land in a follow-up alongside the tray checkbox.
     try {
+      // Why: the pill BrowserWindow is `focusable: false`, so Menu.popup()
+      // without an explicit `window` would attach to the OS-focused window
+      // (almost always the wrong one). Pass the pill window explicitly.
       Menu.buildFromTemplate([
         { label: 'Orca status pill', enabled: false },
         { type: 'separator' },
@@ -40,7 +43,7 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
             }
           }
         }
-      ]).popup()
+      ]).popup({ window: args.window })
     } catch {
       // Best-effort; right-click never blocks the pill.
     }

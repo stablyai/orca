@@ -332,7 +332,7 @@ export function ExperimentalPane({
             'Floating status pill'
           )}
           description={translate(
-            'auto.components.settings.experimental.search.floatingStatusPill.description',
+            'auto.components.settings.ExperimentalPane.floatingStatusPill.description',
             'Always-on-top compact overlay that aggregates every running agent (working, waiting, done) and jumps to the active pane on click.'
           )}
           keywords={getExperimentalSearchEntry().floatingStatusPill.keywords}

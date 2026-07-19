@@ -1,5 +1,9 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-import type { StatusPillAgentRow, StatusPillSummary } from '../../../shared/status-pill-preload-api'
+import type {
+  StatusPillAgentRow,
+  StatusPillPendingQuestion,
+  StatusPillSummary
+} from '../../../shared/status-pill-preload-api'
 import { computeStatusPillAgentRows, computeStatusPillSummary } from './status-pill-summary'
 
 /** Coalesce window for status → pill forwarding. Bounds the IPC rate into the
@@ -138,7 +142,28 @@ function summariesEqual(a: StatusPillSummary, b: StatusPillSummary): boolean {
     a.activityLabel === b.activityLabel &&
     a.activityPaneKey === b.activityPaneKey &&
     a.activePaneKey === b.activePaneKey &&
-    a.activeTabId === b.activeTabId
+    a.activeTabId === b.activeTabId &&
+    // Why: include pendingQuestion so the broadcaster re-sends when a question
+    // arrives, changes content, or clears — without this, the renderer would
+    // keep showing a stale card if only the prompt envelope changed.
+    pendingQuestionsEqual(a.pendingQuestion, b.pendingQuestion)
+  )
+}
+
+function pendingQuestionsEqual(
+  a: StatusPillPendingQuestion | undefined,
+  b: StatusPillPendingQuestion | undefined
+): boolean {
+  if (!a || !b) {
+    return a === b
+  }
+  return (
+    a.paneKey === b.paneKey &&
+    a.terminalHandle === b.terminalHandle &&
+    a.agentLabel === b.agentLabel &&
+    a.interactivePrompt === b.interactivePrompt &&
+    a.toolName === b.toolName &&
+    a.tabId === b.tabId
   )
 }
 
@@ -152,6 +177,10 @@ function rowsEqual(a: StatusPillAgentRow, b: StatusPillAgentRow): boolean {
     a.terminalName === b.terminalName &&
     a.worktreeLabel === b.worktreeLabel &&
     a.receivedAt === b.receivedAt &&
-    a.tabId === b.tabId
+    a.tabId === b.tabId &&
+    // Why: interactivePrompt carries the full question envelope; a change
+    // (new question, different options, cleared prompt) must invalidate the
+    // row comparison or the renderer will display stale question content.
+    a.interactivePrompt === b.interactivePrompt
   )
 }

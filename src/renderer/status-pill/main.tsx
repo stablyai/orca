@@ -9,6 +9,7 @@ import type {
   StatusPillPreloadApi,
   StatusPillSummary
 } from '../../shared/status-pill-preload-api'
+import { EMPTY_STATUS_PILL_SUMMARY } from '../../shared/status-pill-preload-api'
 import { AgentRowView } from './agent-row'
 import { PendingQuestionCard } from './pending-question-card'
 import { buildPanelTitle, pickTone, type Tone } from './status-pill-formatters'
@@ -20,17 +21,7 @@ declare global {
   }
 }
 
-const EMPTY_SUMMARY: StatusPillSummary = {
-  working: 0,
-  blocked: 0,
-  waiting: 0,
-  recentDone: 0,
-  hasAnyActivity: false,
-  activityLabel: '',
-  activityPaneKey: null,
-  activePaneKey: null,
-  activeTabId: null
-}
+const EMPTY_SUMMARY = EMPTY_STATUS_PILL_SUMMARY
 
 function StatusPill(): React.JSX.Element {
   const api = window.api
@@ -208,12 +199,23 @@ function PillBody({
   onClick: () => void
   onContextMenu: (event: React.MouseEvent) => void
 }): React.JSX.Element {
+  // Why: keyboard activation (Enter / Space) so screen-reader and keyboard
+  // users can focus the pill via Tab and trigger the click handler. The pill
+  // div is `role="button"` so this matches the WAI-ARIA button pattern.
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onClick()
+    }
+  }
   return (
     <div
       role="button"
+      tabIndex={0}
       aria-label="Orca agent status"
       onClick={onClick}
       onContextMenu={onContextMenu}
+      onKeyDown={onKeyDown}
       className={`pill pill-${tone} ${pulse ? 'pill-pulse' : ''}`}
     >
       <span className="indicator" aria-hidden="true">

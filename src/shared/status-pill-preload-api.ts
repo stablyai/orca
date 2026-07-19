@@ -82,6 +82,45 @@ export type StatusPillAnswerResult = {
   error?: 'pane_not_found' | 'terminal_not_writable' | 'send_failed'
 }
 
+// Why: kept in the shared module so both the main-process summary builder
+// and the renderer import the same instance, avoiding drift in the empty
+// state shape (CodeRabbit nitpick: avoid duplicated constants across the
+// sandbox boundary).
+export const EMPTY_STATUS_PILL_SUMMARY: StatusPillSummary = {
+  working: 0,
+  blocked: 0,
+  waiting: 0,
+  recentDone: 0,
+  hasAnyActivity: false,
+  activityLabel: '',
+  activityPaneKey: null,
+  activePaneKey: null,
+  activeTabId: null
+}
+
+// Why: shared well-known-agent label map so main (`formatAgentType` for the
+// activity label) and renderer (`formatAgentLabel` for the avatar row) never
+// drift. Keys are lowercased agentType values; values are display labels.
+export const STATUS_PILL_AGENT_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  openclaude: 'Claude',
+  codex: 'Codex',
+  gemini: 'Gemini',
+  copilot: 'Copilot',
+  cursor: 'Cursor',
+  opencode: 'OpenCode',
+  aider: 'Aider',
+  droid: 'Droid',
+  amp: 'Amp',
+  grok: 'Grok'
+}
+
+/** Resolve a display label for an agent type, falling back to the raw type
+ *  when the agent is not in the well-known map (custom / user-defined agent). */
+export function formatStatusPillAgentLabel(agentType: string): string {
+  return STATUS_PILL_AGENT_LABELS[agentType.toLowerCase()] ?? agentType
+}
+
 export type StatusPillPreloadApi = {
   /** Subscribe to compact summary pushes from the main-process broadcaster.
    *  Returns an unsubscribe. */

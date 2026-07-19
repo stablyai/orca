@@ -1,4 +1,7 @@
-import type { StatusPillSummary } from '../../shared/status-pill-preload-api'
+import {
+  formatStatusPillAgentLabel,
+  type StatusPillSummary
+} from '../../shared/status-pill-preload-api'
 
 export type Tone = 'idle' | 'working' | 'blocked' | 'waiting' | 'done'
 
@@ -48,22 +51,10 @@ export function pickAvatarClass(agentType: string): string {
   return map[lower] ?? 'av-default'
 }
 
+// Why: delegate to the shared label map so the avatar row never drifts from
+// the main-process summary's capitalization.
 export function formatAgentLabel(agentType: string): string {
-  const lower = agentType.toLowerCase()
-  const map: Record<string, string> = {
-    claude: 'Claude',
-    openclaude: 'Claude',
-    codex: 'Codex',
-    gemini: 'Gemini',
-    copilot: 'Copilot',
-    cursor: 'Cursor',
-    opencode: 'OpenCode',
-    aider: 'Aider',
-    droid: 'Droid',
-    amp: 'Amp',
-    grok: 'Grok'
-  }
-  return map[lower] ?? agentType
+  return formatStatusPillAgentLabel(agentType)
 }
 
 export function formatRelativeTime(receivedAt: number): string {

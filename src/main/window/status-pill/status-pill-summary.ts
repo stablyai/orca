@@ -1,8 +1,10 @@
 import type { AgentStatusIpcPayload, AgentStatusState } from '../../../shared/agent-status-types'
-import type {
-  StatusPillAgentRow,
-  StatusPillPendingQuestion,
-  StatusPillSummary
+import {
+  EMPTY_STATUS_PILL_SUMMARY,
+  formatStatusPillAgentLabel,
+  type StatusPillAgentRow,
+  type StatusPillPendingQuestion,
+  type StatusPillSummary
 } from '../../../shared/status-pill-preload-api'
 
 export type { StatusPillSummary }
@@ -12,17 +14,7 @@ export type { StatusPillSummary }
  *  notion of "still relevant". */
 const STALE_AFTER_MS = 30 * 60 * 1000
 
-const EMPTY_SUMMARY: StatusPillSummary = {
-  working: 0,
-  blocked: 0,
-  waiting: 0,
-  recentDone: 0,
-  hasAnyActivity: false,
-  activityLabel: '',
-  activityPaneKey: null,
-  activePaneKey: null,
-  activeTabId: null
-}
+const EMPTY_SUMMARY = EMPTY_STATUS_PILL_SUMMARY
 
 export function computeStatusPillSummary(
   entries: AgentStatusIpcPayload[],
@@ -184,24 +176,9 @@ function buildActivityLabel(entry: AgentStatusIpcPayload): string {
 }
 
 function formatAgentType(agentType: string): string {
-  // Why: well-known internal ids like "claude" or "openclaude" read better
-  // capitalized in the pill; unknown agents pass through unchanged so custom
-  // agent names a user configured stay as they wrote them.
-  const lower = agentType.toLowerCase()
-  const wellKnown: Record<string, string> = {
-    claude: 'Claude',
-    openclaude: 'Claude',
-    codex: 'Codex',
-    gemini: 'Gemini',
-    copilot: 'Copilot',
-    cursor: 'Cursor',
-    opencode: 'OpenCode',
-    aider: 'Aider',
-    droid: 'Droid',
-    amp: 'Amp',
-    grok: 'Grok'
-  }
-  return wellKnown[lower] ?? agentType
+  // Why: delegate to the shared well-known-agent map so the pill summary
+  // (main) and the avatar row (renderer) always agree on capitalization.
+  return formatStatusPillAgentLabel(agentType)
 }
 
 function cleanString(value: string | undefined): string {

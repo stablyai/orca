@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 @font-face {
-  font-family: 'Geist';
+  font-family: Geist;
   src: url('../src/assets/fonts/Geist-Variable.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
@@ -55,7 +55,7 @@ body {
   background: transparent;
   color: var(--foreground);
   font-family:
-    'Geist',
+    Geist,
     -apple-system,
     BlinkMacSystemFont,
     'SF Pro Text',
@@ -492,7 +492,7 @@ body {
 }
 
 .perm-tool {
-  font-family: 'Geist', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 11px;
   opacity: 0.8;
 }
@@ -512,11 +512,11 @@ body {
   background: var(--diff-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-family: 'Geist', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 11px;
   color: var(--foreground);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   max-height: 120px;
   overflow-y: auto;
 }
@@ -617,7 +617,7 @@ body {
 }
 
 .kbd {
-  font-family: 'Geist', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: Geist, ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 10px;
   padding: 1px 5px;
   border-radius: 4px;

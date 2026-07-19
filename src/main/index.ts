@@ -1847,16 +1847,21 @@ app.whenReady().then(async () => {
   // as AgentAwakeService, but its lifecycle follows the
   // `experimentalFloatingStatusPill` setting (default off). Created here so it
   // can react to settings + hook events from the start; no-op until enabled.
+  // The runtime is passed as a live getter rather than a captured value so
+  // the pill keeps working even if `runtime` is reassigned later in startup.
   statusPillCoordinator = new StatusPillCoordinator({
     store,
     agentHookServer,
-    runtime: runtime
-      ? {
-          getAgentStatusTerminalHandleForPaneKey: (paneKey) =>
-            runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey),
-          sendTerminal: (handle, action, options) => runtime!.sendTerminal(handle, action, options)
+    runtime: {
+      getAgentStatusTerminalHandleForPaneKey: (paneKey) =>
+        runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey),
+      sendTerminal: (handle, action, options) => {
+        if (!runtime) {
+          return Promise.reject(new Error('runtime_not_ready'))
         }
-      : undefined,
+        return runtime.sendTerminal(handle, action, options)
+      }
+    },
     onFocusMainWindow: () => focusExistingWindow(),
     warn: console.warn
   })
