@@ -1,3 +1,4 @@
+import { resolveTerminalTabSurfaceStyle } from './terminal-tab-visibility-style'
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
@@ -176,6 +177,11 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
     }
   }, [anchorName, isVisible, measuredFallbackRect])
 
+  const tabSurfaceStyle = resolveTerminalTabSurfaceStyle({
+    isVisible,
+    isWorktreeActive,
+    shouldMeasureHiddenStartup
+  })
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName && shouldUseCssAnchorPositioning()
@@ -186,9 +192,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
             left: `anchor(${anchorName} left)`,
             width: `anchor-size(${anchorName} width)`,
             height: `anchor-size(${anchorName} height)`,
-            display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
-            opacity: isVisible ? 1 : 0,
-            pointerEvents: isVisible ? 'auto' : 'none'
+            ...tabSurfaceStyle
           }
         : anchorName
           ? {
@@ -200,9 +204,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
               left: measuredFallbackRect?.left ?? 0,
               width: measuredFallbackRect?.width ?? '100%',
               height: measuredFallbackRect?.height ?? 'calc(100% - 32px)',
-              display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
-              opacity: isVisible ? 1 : 0,
-              pointerEvents: isVisible ? 'auto' : 'none'
+              ...tabSurfaceStyle
             }
           : {
               position: 'absolute',
@@ -213,7 +215,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
               display: 'none',
               pointerEvents: 'none'
             },
-    [anchorName, isVisible, measuredFallbackRect, shouldMeasureHiddenStartup]
+    [anchorName, measuredFallbackRect, tabSurfaceStyle]
   )
   const focusGroup = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {

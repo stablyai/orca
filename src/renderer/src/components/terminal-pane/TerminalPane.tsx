@@ -23,6 +23,7 @@ import type {
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
+import { resolveTerminalTabSurfaceStyle } from './terminal-tab-visibility-style'
 import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
@@ -1908,8 +1909,8 @@ export default function TerminalPane({
     isActive,
     isVisible,
     isWorktreeActive,
-    // Why: hidden startup probes are opacity-hidden but measurable; ordinary
-    // hidden tabs are display:none and refit on visibility resume instead.
+    // Why: hidden startup probes and intra-worktree tab hides stay opacity-hidden
+    // but laid out; only inactive worktree surfaces use display:none.
     isSyncFitEnabled: isRendererVisible || shouldMeasureHiddenStartup,
     paneCount,
     managerRef,
@@ -2988,18 +2989,25 @@ export default function TerminalPane({
     }) ?? (titleUsesLightSurface ? '#ffffff' : '#000000')
 
   const terminalContentVisible = isVisible || shouldMeasureHiddenStartup
-  const hiddenStartupStyle: CSSProperties = shouldMeasureHiddenStartup
-    ? { opacity: 0, pointerEvents: 'none' }
-    : {}
+  const tabSurfaceStyle = resolveTerminalTabSurfaceStyle({
+    isVisible,
+    isWorktreeActive,
+    shouldMeasureHiddenStartup
+  })
+  const hiddenStartupStyle: CSSProperties =
+    tabSurfaceStyle.opacity === 0
+      ? { opacity: 0, pointerEvents: 'none' }
+      : {}
   const terminalContainerStyle: CSSProperties = {
     // Why: split groups can keep one terminal visible in an unfocused group so
     // users still see its output while typing elsewhere. Hiding on `isActive`
     // blanked the previously focused pane and exposed the white group body.
-    display: terminalContentVisible ? 'flex' : 'none',
+    // Why: intra-worktree tab hides keep flex layout (opacity 0) so xterm does
+    // not lose scroll position the way `display: none` does on tab return.
+    ...tabSurfaceStyle,
     // Why: split divider lines intentionally overdraw inside the pane tree.
     // `hidden` reliably clips that pseudo-element paint at the terminal body.
     overflow: 'hidden',
-    ...hiddenStartupStyle,
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(

@@ -2289,7 +2289,7 @@ function Terminal(): React.JSX.Element | null {
       ) : null}
 
       {!effectiveActiveLayout && !anyMountedWorktreeHasLayout && (
-        <>
+        <div className="relative flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
           {/* Why: split-group layouts render their own terminal/browser/editor
               surfaces through TabGroupPanel plus stable overlay layers.
               Keeping the legacy workspace-level panes mounted underneath
@@ -2308,20 +2308,28 @@ function Terminal(): React.JSX.Element | null {
               startFreshSpawn → new PTY. That respawn is exactly what flips
               getWorktreeStatus back to 'active' and re-lights the sidebar
               dot green moments after the user clicked Shutdown. */}
-          {/* Terminal panes container - hidden when editor tab active */}
+          {/* Terminal panes container — keep laid out under editor/browser so
+              xterm scroll position survives tab switches (display:none resets it). */}
           <div
-            className={`relative flex-1 min-h-0 overflow-hidden ${
-              // Why: only hide the terminal container when another tab type has
-              // content to display. Hiding unconditionally for non-terminal types
+            className={`absolute inset-0 min-h-0 overflow-hidden ${
+              // Why: only park the terminal container when another tab type has
+              // content to display. Parking unconditionally for non-terminal types
               // causes a blank screen when activeTabType is stale (e.g. 'editor'
               // with no files after session restore). The terminal stays visible
               // as a fallback until another surface is ready.
+              // Why opacity instead of `hidden`: display:none zeroes xterm's
+              // viewport before resume can restore scroll on tab return.
               (activeTabType === 'editor' && worktreeFiles.length > 0) ||
               (activeTabType === 'browser' && worktreeBrowserTabs.length > 0) ||
               activeTabType === 'simulator'
-                ? 'hidden'
+                ? 'opacity-0 pointer-events-none'
                 : ''
             }`}
+            aria-hidden={
+              (activeTabType === 'editor' && worktreeFiles.length > 0) ||
+              (activeTabType === 'browser' && worktreeBrowserTabs.length > 0) ||
+              activeTabType === 'simulator'
+            }
           >
             {workspaceSurfaces
               .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
@@ -2454,17 +2462,19 @@ function Terminal(): React.JSX.Element | null {
           </div>
 
           {renderedActiveWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
-            <Suspense
-              fallback={
-                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-                  {translate('auto.components.Terminal.5c1d2a32bb', 'Loading editor...')}
-                </div>
-              }
-            >
-              <EditorPanel />
-            </Suspense>
+            <div className="absolute inset-0">
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                    {translate('auto.components.Terminal.5c1d2a32bb', 'Loading editor...')}
+                  </div>
+                }
+              >
+                <EditorPanel />
+              </Suspense>
+            </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Save confirmation dialog */}
