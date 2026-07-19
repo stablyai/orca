@@ -75,6 +75,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'adal',
     label: translate('auto.lib.agent.catalog.ffd09bf891', 'AdaL'),
     cmd: 'adal',
+    faviconDomain: 'adalagent.ai',
     homepageUrl: 'https://docs.sylph.ai/getting-started/quickstart'
   },
   {
