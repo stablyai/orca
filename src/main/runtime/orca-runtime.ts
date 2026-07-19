@@ -12208,6 +12208,9 @@ export class OrcaRuntimeService {
         continue
       }
       const worktree = folderWorkspaceToWorktree(folderWorkspace)
+      if (repoId !== null && worktree.repoId !== repoId) {
+        continue
+      }
       summaries.set(worktree.id, {
         // Why: folder workspaces use the same mobile grouping/order contract as
         // git worktrees, but legacy records may be missing order metadata.

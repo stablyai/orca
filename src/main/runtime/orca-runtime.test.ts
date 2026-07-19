@@ -23984,6 +23984,25 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('excludes folder workspaces from repo-scoped compact worktree summaries', async () => {
+    const folderWorkspace = makeFolderWorkspace({
+      name: 'GG',
+      comment: 'dujiao-next-eval'
+    })
+    const projectGroup = makeFolderProjectGroup({ name: 'Store' })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
+
+    const listed = await runtime.getWorktreePs(`id:${TEST_REPO_ID}`)
+
+    expect(
+      listed.worktrees.find((worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY)
+    ).toBeUndefined()
+    expect(listed.worktrees.every((worktree) => worktree.repoId === TEST_REPO_ID)).toBe(true)
+    expect(listed).toMatchObject({ totalCount: 1, truncated: false })
+  })
+
   it('attaches inline agent rows from the latest OSC 9999 status', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '22222222-2222-4222-8222-222222222222'
