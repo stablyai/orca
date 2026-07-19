@@ -1095,6 +1095,20 @@ type RuntimePtyWorktreeRecord = {
   tailWaitState?: TerminalTailWaitState
 }
 
+type SurvivingSessionReconciliation = {
+  active: number
+  restorable: number
+  ambiguous: number
+  provenOrphan: number
+}
+
+const EMPTY_SURVIVING_SESSION_RECONCILIATION: SurvivingSessionReconciliation = {
+  active: 0,
+  restorable: 0,
+  ambiguous: 0,
+  provenOrphan: 0
+}
+
 type TerminalCreateOptions = {
   command?: string
   claudeAgentTeamsSourceCommand?: string
@@ -2338,6 +2352,7 @@ export class OrcaRuntimeService {
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
   private ptyController: RuntimePtyController | null = null
+  private survivingSessionReconciliation = EMPTY_SURVIVING_SESSION_RECONCILIATION
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
   private forkBackfillStarted = false
@@ -3255,6 +3270,7 @@ export class OrcaRuntimeService {
       desktopWindowStatus: hasRenderer ? 'available' : this.getDesktopWindowStatusFn(),
       liveTabCount: this.tabs.size,
       liveLeafCount: this.leaves.size,
+      survivingSessionReconciliation: this.survivingSessionReconciliation,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
       // Why: headless orca serve cannot create/stream BrowserViews, so clients
@@ -3645,7 +3661,6 @@ export class OrcaRuntimeService {
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
     }
-
     // Why: createTerminal waits for the renderer's graph sync to populate the
     // new leaf so it can return a handle. Drain callbacks after leaves update.
     for (const cb of [...this.graphSyncCallbacks]) {
@@ -21134,6 +21149,79 @@ export class OrcaRuntimeService {
     return { stopped }
   }
 
+  async classifySurvivingSessionsAgainstGeneration(
+    inventory?: PtyProcessInfo[]
+  ): Promise<SurvivingSessionReconciliation> {
+    const sessions = inventory ?? (await this.ptyController?.listProcesses?.()) ?? []
+    const terminalTabsByPtyId = new Map<string, RuntimeMobileSessionTerminalTab[]>()
+    for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
+      for (const tab of snapshot.tabs) {
+        if (tab.type !== 'terminal' || !tab.ptyId) {
+          continue
+        }
+        const tabs = terminalTabsByPtyId.get(tab.ptyId) ?? []
+        tabs.push(tab)
+        terminalTabsByPtyId.set(tab.ptyId, tabs)
+      }
+    }
+
+    const sleepingPaneKeysByWorktree = new Map<string, Set<string>>()
+    const sessionHosts = new Set<string>()
+    for (const repo of this.store?.getRepos?.() ?? []) {
+      sessionHosts.add(getRepoExecutionHostId(repo))
+    }
+    if (sessionHosts.size === 0) {
+      sessionHosts.add('local')
+    }
+    for (const host of sessionHosts) {
+      const records = this.store?.getWorkspaceSession?.(host).sleepingAgentSessionsByPaneKey
+      if (!records) {
+        continue
+      }
+      for (const record of Object.values(records)) {
+        const keys = sleepingPaneKeysByWorktree.get(record.worktreeId) ?? new Set<string>()
+        keys.add(record.paneKey)
+        sleepingPaneKeysByWorktree.set(record.worktreeId, keys)
+      }
+    }
+
+    const result: SurvivingSessionReconciliation = { ...EMPTY_SURVIVING_SESSION_RECONCILIATION }
+    for (const session of sessions) {
+      const record = this.ptysById.get(session.id)
+      const currentHandle =
+        this.handleByPtyId.get(session.id) ?? this.findHandleForPtyRecord(session.id)
+      const active = Boolean(
+        record?.connected ||
+        this.leafExistsForPty(session.id) ||
+        (currentHandle && this.handles.get(currentHandle)?.runtimeId === this.runtimeId)
+      )
+      if (active) {
+        result.active += 1
+        continue
+      }
+
+      const tabs = terminalTabsByPtyId.get(session.id) ?? []
+      const paneKeys = new Set(tabs.map((tab) => `${tab.parentTabId}:${tab.leafId}`))
+      const worktreeId = session.worktreeId ?? parsePtySessionId(session.id).worktreeId
+      const restorable =
+        tabs.some((tab) => this.hasServeOrSshOwnedBinding(tab)) ||
+        (worktreeId !== null &&
+          [...paneKeys].some((paneKey) => sleepingPaneKeysByWorktree.get(worktreeId)?.has(paneKey)))
+      if (restorable) {
+        result.restorable += 1
+        continue
+      }
+
+      // PtyProcessInfo has no owner PID, and runtime metadata identifies only
+      // the current runtime. Without positive external liveness proof, keep
+      // removed-worktree sessions ambiguous instead of claiming an orphan.
+      result.ambiguous += 1
+    }
+
+    this.survivingSessionReconciliation = result
+    return result
+  }
+
   async stopExactTerminalsForWorktree(
     worktreeSelector: string,
     expectedPtyIds: readonly string[],
@@ -22588,6 +22676,7 @@ export class OrcaRuntimeService {
       }
     }
     this.pruneDisconnectedPtyRecords()
+    void this.classifySurvivingSessionsAgainstGeneration(sessions).catch(() => undefined)
     return livePtyIds
   }
 

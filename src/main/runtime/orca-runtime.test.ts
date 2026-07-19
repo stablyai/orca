@@ -1705,6 +1705,90 @@ describe('OrcaRuntimeService', () => {
     expect(status.minCompatibleMobileVersion).toBeGreaterThanOrEqual(0)
   })
 
+  it('classifies surviving sessions and exposes the cached status summary', async () => {
+    const activePtyId = `${TEST_WORKTREE_ID}@@active`
+    const restorablePtyId = `${TEST_WORKTREE_ID}@@restorable`
+    const ambiguousPtyId = 'repo-1::/removed@@ambiguous'
+    const restorablePaneKey = makePaneKey('tab-1', HEADLESS_SECOND_LEAF_ID)
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        sleepingAgentSessionsByPaneKey: {
+          [restorablePaneKey]: {
+            paneKey: restorablePaneKey,
+            tabId: 'tab-1',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'session-1' },
+            prompt: 'resume',
+            state: 'done',
+            capturedAt: 1,
+            updatedAt: 1,
+            origin: 'worktree-sleep'
+          }
+        }
+      })
+    } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: activePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
+        { id: restorablePtyId, cwd: TEST_WORKTREE_PATH, title: '' },
+        { id: ambiguousPtyId, cwd: '/tmp/removed', title: '' }
+      ]
+    })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [],
+      leaves: [
+        {
+          tabId: 'tab-active',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: activePtyId
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:test',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'tab-1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1',
+              title: 'sleeping agent',
+              parentTabId: 'tab-1',
+              leafId: HEADLESS_SECOND_LEAF_ID,
+              ptyId: restorablePtyId,
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    await expect(runtime.classifySurvivingSessionsAgainstGeneration()).resolves.toEqual({
+      active: 1,
+      restorable: 1,
+      ambiguous: 1,
+      provenOrphan: 0
+    })
+    expect(runtime.getStatus().survivingSessionReconciliation).toEqual({
+      active: 1,
+      restorable: 1,
+      ambiguous: 1,
+      provenOrphan: 0
+    })
+  })
+
   it('reports the configured Windows terminal shell on status', () => {
     const runtime = new OrcaRuntimeService({
       ...store,

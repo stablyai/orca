@@ -69,6 +69,12 @@ export type RuntimeStatus = {
   desktopWindowStatus?: RuntimeDesktopWindowStatus
   liveTabCount: number
   liveLeafCount: number
+  survivingSessionReconciliation?: {
+    active: number
+    restorable: number
+    ambiguous: number
+    provenOrphan: number
+  }
   // Why: optional so clients can read both new and pre-contract runtimes.
   // Absence is treated as protocol 0 by the compat evaluator.
   runtimeProtocolVersion?: number
