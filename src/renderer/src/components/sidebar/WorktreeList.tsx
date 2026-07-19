@@ -4046,11 +4046,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     }
   )
 
+  // Why: size to content (flex-initial) so a short Projects list doesn't claim
+  // the whole sidebar as blank space; min-h-0 still lets flexbox compress it
+  // into a scroll region when the list outgrows the sidebar.
   return (
     <div
       data-worktree-sidebar-container
       data-contextual-tour-target="workspace-list"
-      className="relative min-h-0 flex-1"
+      className="relative min-h-0 flex-initial"
     >
       <div
         ref={setScrollRootRef}
@@ -6783,7 +6786,7 @@ const WorktreeList = React.memo(function WorktreeList({
       <div
         data-worktree-sidebar-container
         data-contextual-tour-target="workspace-list"
-        className="relative min-h-0 flex-1"
+        className="relative min-h-0 flex-initial"
       >
         <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek pt-px">
           <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
