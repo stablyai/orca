@@ -21,6 +21,11 @@ const MAX_PANEL_HOST_LENGTH = 128
  *  workspace, so panel tabs never attach to a real repo worktree. */
 export const PINNED_TERMINAL_PANELS_WORKTREE_ID = 'global-pinned-terminal-panels'
 
+/** Reserved fold key for the rail's root "Nodes" disclosure that wraps every
+ *  panel group. Lives in the same persisted collapsed-groups list; never a
+ *  valid user group label (leading/trailing whitespace is trimmed away). */
+export const PINNED_TERMINAL_PANELS_ROOT_FOLD = '\u0000nodes-root'
+
 const PANEL_WORKTREE_ID_PREFIX = `${PINNED_TERMINAL_PANELS_WORKTREE_ID}::`
 
 /** Per-panel tab host id. Panel identity rides the worktree id so host

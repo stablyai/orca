@@ -11,6 +11,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { PinnedTerminalPanel } from '../../../../shared/types'
+import { PINNED_TERMINAL_PANELS_ROOT_FOLD } from '../../../../shared/pinned-terminal-panels'
 import { cn } from '@/lib/utils'
 import type { GlobalSettings } from '../../../../shared/types'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
@@ -61,7 +62,7 @@ function PinnedTerminalPanelButton({
       aria-current={active ? 'page' : undefined}
       className={cn(
         'flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-[13px] font-medium tracking-tight transition-colors',
-        nested ? 'pl-6' : 'pl-2',
+        nested ? 'pl-8' : 'pl-2',
         active
           ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
           : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
@@ -278,9 +279,9 @@ const SidebarNav = React.memo(function SidebarNav() {
           </button>
         )
       })}
-      {groupedTerminalPanels.map((section) => {
-        const { group } = section
-        return group === null ? (
+      {groupedTerminalPanels
+        .filter((section) => section.group === null)
+        .flatMap((section) =>
           section.panels.map((panel) => (
             <PinnedTerminalPanelButton
               key={panel.id}
@@ -289,50 +290,79 @@ const SidebarNav = React.memo(function SidebarNav() {
               onOpen={openPinnedTerminalPanelPage}
             />
           ))
-        ) : (
-          <div key={`group:${group}`}>
-            <button
-              type="button"
-              onClick={() => toggleTerminalPanelGroup(group)}
-              aria-expanded={!collapsedTerminalPanelGroups.has(group)}
-              className={cn(
-                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
-                // Why: a collapsed group hiding the active panel keeps accent
-                // styling so the current location stays discoverable.
-                collapsedTerminalPanelGroups.has(group) &&
-                  section.panels.some(
-                    (panel) =>
-                      activeView === 'terminal-panel' && activePinnedTerminalPanelId === panel.id
-                  )
-                  ? 'text-worktree-sidebar-accent-foreground'
-                  : 'text-worktree-sidebar-foreground/40 hover:text-worktree-sidebar-foreground/70'
-              )}
-            >
-              <ChevronRight
-                className={cn(
-                  'size-3 shrink-0 transition-transform',
-                  !collapsedTerminalPanelGroups.has(group) && 'rotate-90'
-                )}
-                strokeWidth={2}
-              />
-              <span className="min-w-0 flex-1 truncate">{group}</span>
-            </button>
-            {!collapsedTerminalPanelGroups.has(group)
-              ? section.panels.map((panel) => (
-                  <PinnedTerminalPanelButton
-                    key={panel.id}
-                    panel={panel}
-                    nested
-                    active={
-                      activeView === 'terminal-panel' && activePinnedTerminalPanelId === panel.id
-                    }
-                    onOpen={openPinnedTerminalPanelPage}
+        )}
+      {groupedTerminalPanels.some((section) => section.group !== null) ? (
+        <button
+          type="button"
+          onClick={() => toggleTerminalPanelGroup(PINNED_TERMINAL_PANELS_ROOT_FOLD)}
+          aria-expanded={!collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD)}
+          className={cn(
+            'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
+            'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
+          )}
+        >
+          <ChevronRight
+            className={cn(
+              'size-3 shrink-0 transition-transform',
+              !collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD) && 'rotate-90'
+            )}
+            strokeWidth={2}
+          />
+          <span className="min-w-0 flex-1 truncate">
+            {translate('auto.components.sidebar.SidebarNav.pinnedPanelNodes', 'Nodes')}
+          </span>
+        </button>
+      ) : null}
+      {collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD)
+        ? null
+        : groupedTerminalPanels.map((section) => {
+            const { group } = section
+            return group === null ? null : (
+              <div key={`group:${group}`}>
+                <button
+                  type="button"
+                  onClick={() => toggleTerminalPanelGroup(group)}
+                  aria-expanded={!collapsedTerminalPanelGroups.has(group)}
+                  className={cn(
+                    'flex w-full items-center gap-1.5 rounded-md py-1 pr-2 pl-4 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
+                    // Why: a collapsed group hiding the active panel keeps accent
+                    // styling so the current location stays discoverable.
+                    collapsedTerminalPanelGroups.has(group) &&
+                      section.panels.some(
+                        (panel) =>
+                          activeView === 'terminal-panel' &&
+                          activePinnedTerminalPanelId === panel.id
+                      )
+                      ? 'text-worktree-sidebar-accent-foreground'
+                      : 'text-worktree-sidebar-foreground/40 hover:text-worktree-sidebar-foreground/70'
+                  )}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'size-3 shrink-0 transition-transform',
+                      !collapsedTerminalPanelGroups.has(group) && 'rotate-90'
+                    )}
+                    strokeWidth={2}
                   />
-                ))
-              : null}
-          </div>
-        )
-      })}
+                  <span className="min-w-0 flex-1 truncate">{group}</span>
+                </button>
+                {!collapsedTerminalPanelGroups.has(group)
+                  ? section.panels.map((panel) => (
+                      <PinnedTerminalPanelButton
+                        key={panel.id}
+                        panel={panel}
+                        nested
+                        active={
+                          activeView === 'terminal-panel' &&
+                          activePinnedTerminalPanelId === panel.id
+                        }
+                        onOpen={openPinnedTerminalPanelPage}
+                      />
+                    ))
+                  : null}
+              </div>
+            )
+          })}
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
