@@ -1,14 +1,20 @@
 import type { MarkdownToken } from '@tiptap/core'
 
-// Toggle summaries can render at heading scales 1–4, mirroring the plain
-// heading levels the slash menu / toolbar dropdown offer (h1–h4).
-export type ToggleHeadingVariant = 'heading-1' | 'heading-2' | 'heading-3' | 'heading-4'
+// Toggle summaries can render at heading scales 1–5, mirroring the plain
+// heading levels the slash menu / toolbar dropdown offer (h1–h5).
+export type ToggleHeadingVariant =
+  | 'heading-1'
+  | 'heading-2'
+  | 'heading-3'
+  | 'heading-4'
+  | 'heading-5'
 
 export const TOGGLE_HEADING_VARIANTS: readonly ToggleHeadingVariant[] = [
   'heading-1',
   'heading-2',
   'heading-3',
-  'heading-4'
+  'heading-4',
+  'heading-5'
 ]
 
 export function parseToggleHeadingVariant(value: unknown): ToggleHeadingVariant | null {
@@ -49,7 +55,7 @@ export function parseDetailsAttributes(rawAttributes: string): Record<string, un
   // Why: validation accepts normal HTML whitespace around `=`, so parsing
   // must accept it too or an editable toggle loses its heading variant.
   const variantMatch = rawAttributes.match(
-    /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-4])"|'(heading-[1-4])'|(heading-[1-4]))(?:\s|$)/i
+    /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-5])"|'(heading-[1-5])'|(heading-[1-5]))(?:\s|$)/i
   )
   return {
     open: /\sopen(?:\s|=|$)/i.test(rawAttributes),
@@ -180,7 +186,7 @@ function hasOnlySupportedDetailsAttributes(rawAttributes: string): boolean {
       .replace(/\s+open(?:\s*=\s*(?:""|"open"|''|'open'|open))?(?=\s|$)/giu, '')
       .replace(/\s+class\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/giu, '')
       .replace(
-        /\s+data-orca-toggle\s*=\s*(?:"heading-[1-4]"|'heading-[1-4]'|heading-[1-4])(?=\s|$)/giu,
+        /\s+data-orca-toggle\s*=\s*(?:"heading-[1-5]"|'heading-[1-5]'|heading-[1-5])(?=\s|$)/giu,
         ''
       )
       .trim() === ''

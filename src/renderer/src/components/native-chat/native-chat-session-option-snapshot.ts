@@ -14,6 +14,7 @@ import type {
   NativeChatSessionOptionRecord,
   TrackedNativeChatSessionOption
 } from './native-chat-session-option-cache'
+import { isFlipOnlyMidSession } from './native-chat-session-option-flip'
 import { translate } from '@/i18n/i18n'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
@@ -60,7 +61,9 @@ function actionForApply(
   if (apply.midSession?.kind === 'agent-picker') {
     return { type: 'agent-picker' }
   }
-  if (apply.midSession?.kind === 'toggle-command' && !tracked) {
+  // Why: only unknown flip-only options are actions; once we have a tracked
+  // baseline the UI can show absolute On/Off without inventing a start state.
+  if (isFlipOnlyMidSession(apply.midSession) && !tracked) {
     return { type: 'toggle-command' }
   }
   return undefined

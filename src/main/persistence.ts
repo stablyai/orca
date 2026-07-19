@@ -2637,7 +2637,7 @@ export class Store {
   private writesFrozen = false
   // Why: hash of the plaintext state as of the last successful write. Saves
   // triggered by mutations that net out to identical state skip the full
-  // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
+  // multi-MB serialize + tmp write + rename. Hashing plaintext (not the
   // written payload) because encrypt() uses a random IV per call, so the
   // on-disk bytes differ even for identical state.
   private lastWrittenStateHash: string | null = null
@@ -3544,7 +3544,10 @@ export class Store {
       this.loadNeedsSave = true
     }
 
-    const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+    const migrated = this.migrateTabSwitchKeybindings(
+      this.migrateTelemetry(result, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
 
     // githubCache lives in a sidecar file now (see getGithubCacheFile). A
     // legacy in-file cache (pre-sidecar build, or a downgrade round-trip) is
@@ -3580,6 +3583,34 @@ export class Store {
   //     the banner resolves (the consent resolver returns `pending_banner`
   //     until then, so nothing transmits).
   //   - `installId` — anonymous UUID v4. Stable across launches; not surfaced in the UI.
+  // One-shot cohort freeze for the tab-switch keybinding convention swap. Runs
+  // on every `load()` but is a no-op once `tabSwitchKeybindingSeed` is set. The
+  // decision must be frozen on the first post-swap launch: `fileExistedOnLoad`
+  // only distinguishes existing vs fresh on that first run (a fresh install's
+  // data file exists on every subsequent launch), so persist the verdict now.
+  private migrateTabSwitchKeybindings(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const existing = state.settings?.tabSwitchKeybindingSeed
+    if (existing === 'pending' || existing === 'done') {
+      return state
+    }
+    // Why: mark dirty so the frozen cohort survives the next restart even if no
+    // other setting changes this session; without this a fresh install could be
+    // re-read as "existing" once its data file lands on disk.
+    this.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        // Existing installs pin the old chords via a keybindings.json seed;
+        // fresh installs need nothing beyond the new registry defaults.
+        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+      }
+    }
+  }
+
   private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
     // Why: the one-shot is complete only when all three invariants hold.
@@ -3702,7 +3733,10 @@ export class Store {
         browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
-    return JSON.stringify(stateToSave, null, 2)
+    // Why compact: ~20-30% fewer bytes (state-shape dependent; measured 21% on
+    // real state) and less serialize time on the sync-flush path; all readers
+    // JSON.parse, so on-disk formatting is irrelevant.
+    return JSON.stringify(stateToSave)
   }
 
   // Why: async writes avoid blocking the main Electron thread on every

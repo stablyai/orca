@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
-import { getWorkspaceCardLayoutEntry } from './appearance-sidebar-search'
+import {
+  getShowPinnedWorktreesInGroupsEntry,
+  getWorkspaceCardLayoutEntry
+} from './appearance-sidebar-search'
 import { matchesSettingsSearch } from './settings-search'
 
 describe('getTerminalPaneSearchEntries', () => {
@@ -213,5 +216,13 @@ describe('getTerminalPaneSearchEntries', () => {
 
   it('matches the Appearance catalog for compact workspace card searches', () => {
     expect(matchesSettingsSearch('compact', getAppearancePaneSearchEntries())).toBe(true)
+  })
+
+  it('includes pinned worktree duplicate display in sidebar and Appearance search', () => {
+    const entry = getShowPinnedWorktreesInGroupsEntry()
+
+    expect(getSidebarEntries()).toContainEqual(entry)
+    expect(getAppearancePaneSearchEntries()).toContainEqual(entry)
+    expect(matchesSettingsSearch('duplicate', entry)).toBe(true)
   })
 })

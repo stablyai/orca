@@ -2,35 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
-const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
-
-function nativeChatTabIdsKey(hostId: string, worktreeId: string): string {
-  return `${NATIVE_CHAT_TABS_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
-}
-
-/** Tab ids currently showing native chat, scoped to the paired host and worktree
- *  so colliding remote ids cannot activate a transcript watcher on another host. */
-export async function loadNativeChatTabIds(hostId: string, worktreeId: string): Promise<string[]> {
-  try {
-    const raw = await AsyncStorage.getItem(nativeChatTabIdsKey(hostId, worktreeId))
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-export async function saveNativeChatTabIds(
-  hostId: string,
-  worktreeId: string,
-  ids: string[]
-): Promise<void> {
-  try {
-    await AsyncStorage.setItem(nativeChatTabIdsKey(hostId, worktreeId), JSON.stringify(ids))
-  } catch {
-    // Best-effort persistence; a failed write just forgets the view choice.
-  }
-}
 
 export type PushNotificationsPreference = {
   readonly value: boolean | null

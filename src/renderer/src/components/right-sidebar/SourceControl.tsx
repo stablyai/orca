@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownUp,
   AlertTriangle,
@@ -258,6 +258,7 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
+  isCreatePrIntentSyncConflictError,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
@@ -266,6 +267,10 @@ import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-i
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
   buildLoadingHostedReviewCreationEligibility,
+  buildLocalBlockerHostedReviewCreationEligibility,
+  resolveHostedReviewCreationProviderForTarget
+} from './source-control-hosted-review-creation-eligibility-snapshot'
+import {
   resolveCreatePrHeaderAction,
   resolveProvisionalHostedReviewProvider
 } from './source-control-primary-create-pr-intent-action'
@@ -282,6 +287,7 @@ import {
   resolveHostedReviewStateForActions
 } from './source-control-hosted-review-push-target'
 import { buildSourceControlManualReviewUrlFromContext } from './source-control-manual-review-url'
+import { parseRemoteRepo } from './source-control-remote-repo'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -822,6 +828,10 @@ function SourceControlInner(): React.JSX.Element {
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRepoId = activeRepo?.id ?? null
+  const activeRepoPath = activeRepo?.path ?? null
+  const activeRepoConnectionId = activeRepo?.connectionId ?? null
+  const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
@@ -890,9 +900,20 @@ function SourceControlInner(): React.JSX.Element {
   // Why: git/file mutations and repo metadata requests belong to the repo
   // OWNER host, not the currently focused host in the sidebar.
   const activeRepoSettings = useMemo(
-    () => getRepoOwnerRoutedSettings(settings, activeRepo ?? null),
-    [activeRepo, settings]
+    () =>
+      getRepoOwnerRoutedSettings(
+        settings,
+        activeRepoId
+          ? {
+              id: activeRepoId,
+              connectionId: activeRepoConnectionId,
+              executionHostId: activeRepoExecutionHostId
+            }
+          : null
+      ),
+    [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, settings]
   )
+  const activeRepoRuntimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId ?? null
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -1239,7 +1260,7 @@ function SourceControlInner(): React.JSX.Element {
   const generateError =
     activeCommitMessageGenerationRecord?.error ?? generateErrors[activeWorktreeId ?? ''] ?? null
   const activeConnectionId = activeWorktreeId
-    ? (getConnectionId(activeWorktreeId) ?? activeRepo?.connectionId ?? null)
+    ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
@@ -1416,7 +1437,7 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder) {
+    if (!isBranchVisible || !activeRepoId || isFolder) {
       return
     }
 
@@ -1428,7 +1449,10 @@ function SourceControlInner(): React.JSX.Element {
     setDefaultBaseRef(null)
 
     let stale = false
-    void getRuntimeRepoBaseRefDefault(activeRepoSettings, activeRepo.id)
+    void getRuntimeRepoBaseRefDefault(
+      { activeRuntimeEnvironmentId: activeRepoRuntimeEnvironmentId },
+      activeRepoId
+    )
       .then((result) => {
         if (!stale) {
           // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
@@ -1450,7 +1474,16 @@ function SourceControlInner(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [activeRepo, activeRepoSettings, isBranchVisible, isFolder])
+  }, [
+    // Why: only repo/host ownership changes should reset the base; unrelated
+    // repo metadata churn must not indirectly restart eligibility's timeout.
+    activeRepoConnectionId,
+    activeRepoExecutionHostId,
+    activeRepoId,
+    activeRepoRuntimeEnvironmentId,
+    isBranchVisible,
+    isFolder
+  ])
 
   const normalizedWorktreeBaseRef = activeWorktree?.baseRef?.trim() || null
   const normalizedRepoBaseRef = activeRepo?.worktreeBaseRef?.trim() || null
@@ -1565,6 +1598,13 @@ function SourceControlInner(): React.JSX.Element {
     hostedReviewCreationRequestMatchesCurrent &&
     hostedReviewCreationRequestState.status === 'loading' &&
     hostedReview === null
+  // Why: without a linked review or probe result the provider is unknown; infer
+  // it from the remote host so a GitLab (etc.) repo shows its own review copy
+  // instead of the GitHub default during loading and after a probe failure.
+  const remoteInferredHostedReviewProvider = useMemo(
+    () => parseRemoteRepo(activeRepo?.gitRemoteIdentity?.remoteUrl ?? '')?.provider ?? null,
+    [activeRepo?.gitRemoteIdentity?.remoteUrl]
+  )
   const provisionalHostedReviewProvider = useMemo(
     () =>
       resolveProvisionalHostedReviewProvider({
@@ -1581,7 +1621,8 @@ function SourceControlInner(): React.JSX.Element {
         linkedGitLabMR,
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
-        linkedGiteaPR
+        linkedGiteaPR,
+        remoteInferredProvider: remoteInferredHostedReviewProvider
       }),
     [
       activeRepo?.id,
@@ -1592,8 +1633,16 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedGitHubPR,
       linkedGitLabMR,
-      linkedGiteaPR
+      linkedGiteaPR,
+      remoteInferredHostedReviewProvider
     ]
+  )
+  const resolveCurrentHostedReviewCreationProvider = useEffectEvent(() =>
+    resolveHostedReviewCreationProviderForTarget(
+      hostedReviewCreationProviderHintRef.current,
+      { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+      provisionalHostedReviewProvider
+    )
   )
   useEffect(() => {
     const hasConcreteProviderHint =
@@ -1633,18 +1682,16 @@ function SourceControlInner(): React.JSX.Element {
     // upstream/dirty/base state is reconciling after commit or push, while
     // preserving provider copy from the previous safe snapshot.
     if (isHostedReviewCreationLoading) {
-      const providerHint = hostedReviewCreationProviderHintRef.current
-      const provider =
-        providerHint.repoId === (activeRepo?.id ?? null) &&
-        providerHint.worktreeId === (activeWorktreeId ?? null) &&
-        providerHint.branch === branchName
-          ? providerHint.provider
-          : provisionalHostedReviewProvider
+      const provider = resolveHostedReviewCreationProviderForTarget(
+        hostedReviewCreationProviderHintRef.current,
+        { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+        provisionalHostedReviewProvider
+      )
       return buildLoadingHostedReviewCreationEligibility(provider)
     }
     return hostedReviewCreation
   }, [
-    activeRepo?.id,
+    activeRepoId,
     activeWorktreeId,
     branchName,
     hostedReviewCreation,
@@ -2483,7 +2530,10 @@ function SourceControlInner(): React.JSX.Element {
         target?: SourceControlOperationTarget
         baseRef?: string | null
       }
-    ): Promise<boolean> => {
+      // Why: return the failure inline (null error = success or superseded) so
+      // callers like the Create PR intent flow can classify it without a
+      // stale-prone mirror of remoteActionErrors.
+    ): Promise<{ ok: boolean; error: SourceControlActionError | null }> => {
       const target =
         options?.target ??
         (activeWorktreeId && worktreePath
@@ -2496,7 +2546,7 @@ function SourceControlInner(): React.JSX.Element {
             }
           : null)
       if (!target) {
-        return false
+        return { ok: false, error: null }
       }
       const sequence = (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] ?? 0) + 1
       remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] = sequence
@@ -2522,7 +2572,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'push') {
           // Why: kind 'push' must stay a regular push. Force-with-lease is only
@@ -2537,7 +2587,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'force_push') {
           await pushBranch(
@@ -2548,7 +2598,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { forceWithLease: true, runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'pull') {
           await pullBranch(
@@ -2560,7 +2610,7 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'fast_forward') {
           await fastForwardBranch(
@@ -2570,7 +2620,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'fetch') {
           await fetchBranch(
@@ -2582,12 +2632,12 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return true
+          return { ok: true, error: null }
         }
         if (kind === 'rebase') {
           const baseRef = options?.baseRef ?? effectiveBaseRef
           if (!baseRef) {
-            return false
+            return { ok: false, error: null }
           }
           await rebaseFromBase(
             target.worktreeId,
@@ -2597,7 +2647,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { ok: true, error: null }
         }
         await syncBranch(
           target.worktreeId,
@@ -2611,30 +2661,28 @@ function SourceControlInner(): React.JSX.Element {
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
           setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
         }
-        return true
+        return { ok: true, error: null }
       } catch (error) {
         // Why: remote action failures are surfaced by editor-slice actions to keep
         // one consistent toast path and avoid duplicate notifications in the UI.
         // Keep the latest failure inline too: dropdown-only actions like Fetch can
         // otherwise look like nothing happened once the menu closes.
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
-          return false
+          return { ok: false, error: null }
         }
-        setRemoteActionErrors((prev) => ({
-          ...prev,
-          [target.worktreeId]: {
-            kind,
-            message: resolveRemoteActionError(kind, error),
-            rawError: error instanceof Error ? error.message : String(error),
-            syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
-            branchName: failureBranchName,
-            worktreePath: target.worktreePath,
-            entriesSnapshot: recoveryEntrySnapshot.entries,
-            entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
-            sequence
-          }
-        }))
-        return false
+        const actionError: SourceControlActionError = {
+          kind,
+          message: resolveRemoteActionError(kind, error),
+          rawError: error instanceof Error ? error.message : String(error),
+          syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
+          branchName: failureBranchName,
+          worktreePath: target.worktreePath,
+          entriesSnapshot: recoveryEntrySnapshot.entries,
+          entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
+          sequence
+        }
+        setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: actionError }))
+        return { ok: false, error: actionError }
       } finally {
         if (!options?.target) {
           refreshSourceControlAfterRemoteAction({
@@ -3222,7 +3270,14 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder || !branchName || !activeWorktreeId) {
+    if (
+      !isBranchVisible ||
+      !activeRepoId ||
+      !activeRepoPath ||
+      isFolder ||
+      !branchName ||
+      !activeWorktreeId
+    ) {
       setHostedReviewCreationState(null)
       setHostedReviewCreationRequestState(null)
       return
@@ -3237,7 +3292,7 @@ function SourceControlInner(): React.JSX.Element {
     }
     let stale = false
     setHostedReviewCreationRequestState({
-      repoId: activeRepo.id,
+      repoId: activeRepoId,
       worktreeId: activeWorktreeId,
       branch: branchName,
       status: 'loading'
@@ -3246,8 +3301,8 @@ function SourceControlInner(): React.JSX.Element {
     // to click while the new preflight is still resolving.
     setHostedReviewCreationState(null)
     void getHostedReviewCreationEligibility({
-      repoPath: activeRepo.path,
-      repoId: activeRepo.id,
+      repoPath: activeRepoPath,
+      repoId: activeRepoId,
       ...(worktreePath ? { worktreePath } : {}),
       branch: branchName,
       base: effectiveBaseRef ?? null,
@@ -3265,7 +3320,7 @@ function SourceControlInner(): React.JSX.Element {
       .then((result) => {
         if (!stale) {
           setHostedReviewCreationState({
-            repoId: activeRepo.id,
+            repoId: activeRepoId,
             worktreeId: activeWorktreeId,
             branch: branchName,
             data: result
@@ -3275,21 +3330,51 @@ function SourceControlInner(): React.JSX.Element {
       })
       .catch((error) => {
         console.warn('[SourceControl] hosted review creation eligibility failed', error)
-        if (!stale) {
-          setHostedReviewCreationState(null)
-          setHostedReviewCreationRequestState({
-            repoId: activeRepo.id,
+        if (stale) {
+          return
+        }
+        // Why: a failed/timed-out remote probe must not leave an inert disabled
+        // button. When the local git status determines a blocker (dirty, no
+        // upstream, needs push/sync), surface the actionable preparation intent;
+        // otherwise fall back to the retryable failed state.
+        const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
+          resolveCurrentHostedReviewCreationProvider(),
+          {
+            branch: branchName,
+            baseRef: effectiveBaseRef,
+            hasUncommittedChanges: hasUncommittedEntries,
+            hasUpstream: remoteStatus?.hasUpstream,
+            ahead: remoteStatus?.ahead,
+            behind: remoteStatus?.behind
+          }
+        )
+        if (localBlocker) {
+          setHostedReviewCreationState({
+            repoId: activeRepoId,
             worktreeId: activeWorktreeId,
             branch: branchName,
-            status: 'failed'
+            data: localBlocker
           })
+          setHostedReviewCreationRequestState(null)
+          return
         }
+        setHostedReviewCreationState(null)
+        setHostedReviewCreationRequestState({
+          repoId: activeRepoId,
+          worktreeId: activeWorktreeId,
+          branch: branchName,
+          status: 'failed'
+        })
       })
     return () => {
       stale = true
     }
   }, [
-    activeRepo,
+    // Why: unrelated repo metadata replacement must not restart a hung probe's timeout.
+    activeRepoConnectionId,
+    activeRepoExecutionHostId,
+    activeRepoId,
+    activeRepoPath,
     branchName,
     effectiveBaseRef,
     getHostedReviewCreationEligibility,
@@ -4015,47 +4100,68 @@ function SourceControlInner(): React.JSX.Element {
       if (remoteStep === 'blocked' || remoteStep === 'none') {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'muted',
-          message: translate(
+          // Why: a diverged branch is deliberately not auto-synced (that would
+          // merge without consent), so keep the explicit sync-first guidance.
+          message:
             eligibility.blockedReason === 'needs_sync'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentNeedsSync'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
-            eligibility.blockedReason === 'needs_sync'
-              ? 'Sync this branch before creating a review.'
-              : 'Branch is not ready to create a review yet.'
-          )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentNeedsSync',
+                  'Sync this branch before creating a review.'
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
+                  'Branch is not ready to create a review yet.'
+                )
         })
         return
       }
 
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: 'muted',
-        message: translate(
+        // Why: keep each translate() call on a string-literal key so the
+        // localization-catalog verifier can statically detect every key.
+        message:
           remoteStep === 'publish'
-            ? 'auto.components.right.sidebar.SourceControl.createPrIntentPublishing'
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentPublishing',
+                'Publishing branch…'
+              )
             : remoteStep === 'force_push'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
-          remoteStep === 'publish'
-            ? 'Publishing branch…'
-            : remoteStep === 'force_push'
-              ? 'Force pushing with lease…'
-              : 'Pushing commits…'
-        )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing',
+                  'Force pushing with lease…'
+                )
+              : remoteStep === 'sync'
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentSyncing',
+                    'Syncing branch…'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
+                    'Pushing commits…'
+                  )
       })
-      const remoteOk = await runRemoteAction(remoteStep, {
+      const remoteResult = await runRemoteAction(remoteStep, {
         target: operationTarget,
         baseRef: token.baseRef
       })
       if (abortIfStale()) {
         return
       }
-      if (!remoteOk) {
+      if (!remoteResult.ok) {
+        // A sync push-stage rejection is not a conflict — it falls to the generic
+        // copy so the push-recovery panel drives the fix.
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
-          message: translate(
-            'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
-            'Could not update the remote branch. Retry Create PR.'
-          )
+          message: isCreatePrIntentSyncConflictError(remoteResult.error)
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentSyncConflicts',
+                'Sync hit conflicts. Resolve them, then retry Create PR.'
+              )
+            : translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
+                'Could not update the remote branch. Retry Create PR.'
+              )
         })
         return
       }

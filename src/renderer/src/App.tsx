@@ -1371,7 +1371,7 @@ function App(): React.JSX.Element {
       // which is in-memory. Capture them into the persisted sleeping-session
       // map so a daemon/session death while the app is closed can still
       // cold-restore via the agent's resume command (#5232).
-      useAppStore.getState().captureAllSleepingAgentSessions()
+      useAppStore.getState().captureAllSleepingAgentSessions('quit')
       // Why: re-read state after capture() calls populated scrollback buffers
       // into the store via Zustand setters. The earlier read is only for the
       // gating flags and would miss those updates.
@@ -1398,7 +1398,7 @@ function App(): React.JSX.Element {
       if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
         return
       }
-      useAppStore.getState().captureAllSleepingAgentSessions()
+      useAppStore.getState().captureAllSleepingAgentSessions('periodic')
     }, SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [])

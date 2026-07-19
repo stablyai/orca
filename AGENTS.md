@@ -10,6 +10,19 @@ When writing or modifying code driven by a design doc or non-obvious constraint,
 
 Keep comments short — one or two lines. Capture only the non-obvious reason (safety constraint, compatibility shim, design-doc rule). Don't restate what the code does, narrate the mechanism, cite design-doc sections verbatim, or explain adjacent API choices unless they're the point.
 
+The comment's audience is the next person reading that line, not a PR description. If a comment lists call sites, recounts the crash/history, or re-describes the code below it, cut it to the one non-obvious fact:
+
+```ts
+// 🚫 Over-explained — narrates the crash, the mechanism, where the helper lives, and every caller:
+// Why: Worktree.displayName is typed non-optional, but persisted/discovered worktrees have reached
+// the UI with an undefined name (crash 99657ab1), which made a bare displayName.localeCompare(...)
+// throw a TypeError and take down whatever was sorting them. Lives in lib so every worktree sort
+// site (sidebar board, Cmd+J switcher, right-sidebar, add-repo telemetry) shares one guard.
+
+// ✅ Just the non-obvious constraint:
+// Why: displayName is typed non-optional but arrives undefined at runtime (crash 99657ab1); coalesce so it can't throw.
+```
+
 ## Lint Rules: Do Not Disable Max Lines
 
 Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants), and never add a per-file `max-lines` bump in `mobile/.oxlintrc.json`.

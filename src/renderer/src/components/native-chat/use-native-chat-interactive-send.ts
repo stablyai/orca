@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
@@ -15,16 +16,20 @@ import {
   sendNativeChatMessage,
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
+import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-question-answered-inference'
 
 // ESC is the agent-TUI interrupt/cancel key over the PTY (matches how the
 // composer forwards Escape). Used to cancel a question or deny an approval.
 const ESC = '\x1b'
 
 export type NativeChatInteractiveSend = {
-  /** Deliver the answer to an AskUserQuestion prompt. Returns the ms after which
-   *  every scheduled write has fired (0 if nothing was sent) so the caller can
-   *  keep the card up until the send settles. */
-  sendAnswer: (prompt: AskPrompt, selections: AskAnswerSelection[]) => number
+  /** Deliver the answer to an AskUserQuestion prompt. Claude-format selectors
+   *  verify every runtime write before reporting settlement. */
+  sendAnswer: (
+    prompt: AskPrompt,
+    selections: AskAnswerSelection[],
+    onDeliverySettled?: (delivered: boolean) => void
+  ) => { settleAfterMs: number; waitsForVerifiedDelivery: boolean }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
   /** Stop delayed writes without interrupting the agent. */
@@ -44,6 +49,7 @@ export type NativeChatInteractiveSend = {
  */
 export function useNativeChatInteractiveSend(
   terminalTabId: string,
+  paneKey: string,
   targetPtyId: string | null,
   agent: AgentType
 ): NativeChatInteractiveSend {
@@ -57,7 +63,10 @@ export function useNativeChatInteractiveSend(
   }, [])
   // Why: a split can be rebound without unmounting this view. Cancel during
   // commit so no delayed answer write can race the replacement PTY.
-  useLayoutEffect(() => cancelInFlight, [cancelInFlight, targetPtyId, terminalTabId])
+  useLayoutEffect(
+    () => cancelInFlight,
+    [agent, cancelInFlight, paneKey, targetPtyId, terminalTabId]
+  )
 
   const sendRaw = useCallback(
     (raw: string) => {
@@ -70,9 +79,13 @@ export function useNativeChatInteractiveSend(
   )
 
   const sendAnswer = useCallback(
-    (prompt: AskPrompt, selections: AskAnswerSelection[]): number => {
+    (
+      prompt: AskPrompt,
+      selections: AskAnswerSelection[],
+      onDeliverySettled?: (delivered: boolean) => void
+    ): { settleAfterMs: number; waitsForVerifiedDelivery: boolean } => {
       if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
-        return 0
+        return { settleAfterMs: 0, waitsForVerifiedDelivery: false }
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
@@ -83,13 +96,57 @@ export function useNativeChatInteractiveSend(
       // Other agents' question tools commit a pasted answer, so send label text.
       // Gate on the transcript agent (not `=== 'claude'`) so OpenClaude — which
       // runs the same selector — takes the keystroke path too.
-      const handle: NativeChatSendHandle = shouldStepNativeChatAskAnswer(agent)
-        ? sendNativeChatAskAnswer(settings, targetPtyId, buildAskAnswerKeys(prompt, selections))
+      const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
+      // Why: pin the answered question's baseline BEFORE delivery. A late settle
+      // callback (paced writes + remote acceptance can span seconds on SSH) must
+      // not read the live status and mint a fresh baseline for a replacement
+      // question that became current meanwhile — that would clear the new
+      // question's wait. The server re-validates this captured baseline and
+      // rejects a changed status, matching the terminal keystroke path.
+      const questionStatusBaseline = stepsAnswer
+        ? useAppStore.getState().agentStatusByPaneKey[paneKey]
+        : undefined
+      let settledHandle: NativeChatSendHandle | null = null
+      const onSettled = stepsAnswer
+        ? (delivered: boolean): void => {
+            if (settledHandle && inFlightRef.current === settledHandle) {
+              // Why: a completed verified send otherwise retains its timers,
+              // promises, and prompt callback until the next send or unmount.
+              inFlightRef.current = null
+            }
+            if (delivered) {
+              inferQuestionAnsweredFromCurrentStatus({
+                paneKey,
+                getStatusEntry: () => questionStatusBaseline,
+                inferQuestionAnswered: (request) =>
+                  window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
+                    console.warn('[agent-question] native-chat inference failed:', err)
+                    return false
+                  })
+              })
+            }
+            onDeliverySettled?.(delivered)
+          }
+        : undefined
+      const handle: NativeChatSendHandle = stepsAnswer
+        ? sendNativeChatAskAnswer(
+            settings,
+            targetPtyId,
+            buildAskAnswerKeys(prompt, selections),
+            onSettled
+          )
         : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
+      // Why: native-chat answer writes bypass xterm.onData. Infer only after
+      // every paced selector write has fired, so an early digit in a multi-step
+      // answer cannot dismiss the wait or cancel the remaining writes.
+      settledHandle = handle
       inFlightRef.current = handle
-      return handle.settleAfterMs
+      return {
+        settleAfterMs: handle.settleAfterMs,
+        waitsForVerifiedDelivery: onSettled !== undefined
+      }
     },
-    [terminalTabId, targetPtyId, agent, cancelInFlight]
+    [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]
   )
 
   // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.

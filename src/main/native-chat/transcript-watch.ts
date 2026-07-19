@@ -1,19 +1,19 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath } from './session-file-resolver'
-import {
-  installTranscriptWatcher,
-  type NativeChatTranscriptSubscription,
-  type SubscribeNativeChatTranscriptArgs
-} from './transcript-watch-engine'
+import { installTranscriptWatcher } from './transcript-watch-engine'
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
-export {
-  getActiveNativeChatWatcherCount,
-  type NativeChatTranscriptSubscription,
-  type SubscribeNativeChatTranscriptArgs
-} from './transcript-watch-engine'
+export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
+export type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-contract'
 
 /** One resolve+install attempt. Returns null when the file isn't resolvable
  *  yet, or vanished between resolve and `watch()` — either case is retried by

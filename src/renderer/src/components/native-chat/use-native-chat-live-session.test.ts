@@ -99,9 +99,19 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('working')
   })
 
-  it("self-heals a stale 'working' once this turn's assistant reply lands", () => {
-    // Trailing assistant reply (ts 2) post-dates the working turn's start (ts 1),
-    // so a dropped/late Stop hook must not strand 'working' on a visible reply.
+  it('does not treat assistant prose as turn completion while lifecycle is mid-generation', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 1,
+      transcriptLifecycle: { state: 'working', turnId: 'u-1', timestamp: 1 }
+    })
+    expect(session.status).toBe('working')
+  })
+
+  it('recovers via assistant prose when capable host has no in-progress lifecycle', () => {
     const session = mergeNativeChatLiveSession({
       sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'done')] },
       sessionId: 'sess',
@@ -112,17 +122,118 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('ready')
   })
 
-  it("keeps 'working' when the trailing assistant reply predates the working turn", () => {
-    // Trailing reply (ts 2) is older than the new working turn (started at ts 5),
-    // so the agent is working again — the stale reply must not suppress 'working'.
+  it('settles a dropped working hook from an explicit completion marker', () => {
     const session = mergeNativeChatLiveSession({
-      sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'prior')] },
+      sources: { transcript: [user('u-1', 'go'), assistant('a-1', 'done')] },
       sessionId: 'sess',
       agent: 'claude',
       hookState: 'working',
-      stateStartedAt: 5
+      stateStartedAt: 1,
+      transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
+    })
+    expect(session.status).toBe('ready')
+  })
+
+  it('settles a dropped working hook from an explicit interruption marker', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [user('u-1', 'go')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 1,
+      transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 }
+    })
+    expect(session.status).toBe('ready')
+  })
+
+  it('does not apply an older completion marker to a newer working turn', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'prior')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 5,
+      transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
     })
     expect(session.status).toBe('working')
+  })
+
+  it('does not apply an older interruption marker to a newer working turn', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'prior')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 5,
+      transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 }
+    })
+    expect(session.status).toBe('working')
+  })
+
+  it('settles an unorderable (null-timestamp) completion marker for live work', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'prior')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 5,
+      transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: null }
+    })
+    expect(session.status).toBe('ready')
+  })
+
+  it('settles a completion slightly before hook receipt within clock-skew slack', () => {
+    const hookStartedAt = 1_700_000_000_000
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: hookStartedAt,
+      transcriptLifecycle: {
+        state: 'completed',
+        turnId: 'turn-1',
+        timestamp: hookStartedAt - 500
+      }
+    })
+    expect(session.status).toBe('ready')
+  })
+
+  it('preserves the assistant fallback when the serving host lacks explicit boundaries', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'done')] },
+      sessionId: 'sess',
+      agent: 'grok',
+      hookState: 'working',
+      stateStartedAt: 1
+    })
+    expect(session.status).toBe('ready')
+  })
+
+  it('keeps working while the hook reports a live background child', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'lead done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 1,
+      transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 },
+      hookHasWorkingSubagents: true
+    })
+    expect(session.status).toBe('working')
+  })
+
+  it('settles on an interruption even while the hook reports a live background child', () => {
+    const session = mergeNativeChatLiveSession({
+      sources: { transcript: [assistant('a-1', 'lead done')] },
+      sessionId: 'sess',
+      agent: 'claude',
+      hookState: 'working',
+      stateStartedAt: 1,
+      transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 },
+      hookHasWorkingSubagents: true
+    })
+    expect(session.status).toBe('ready')
   })
 
   it('leaves completed states (done/waiting/blocked) on the derived status', () => {
@@ -135,7 +246,7 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('ready')
   })
 
-  it('honors loading and error overrides outright', () => {
+  it('surfaces live work while the transcript loads and honors errors outright', () => {
     expect(
       mergeNativeChatLiveSession({
         sources: { transcript: [] },
@@ -144,7 +255,7 @@ describe('mergeNativeChatLiveSession', () => {
         hookState: 'working',
         loading: true
       }).status
-    ).toBe('loading')
+    ).toBe('working')
 
     const errored = mergeNativeChatLiveSession({
       sources: { transcript: [] },
@@ -475,9 +586,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.messages.map((message) => message.id)).toEqual(['u-live'])
   })
 
-  it("self-heals a stale 'working' hook once this turn's reply has landed", async () => {
-    // The hook must read stateStartedAt from the store and thread it into the
-    // merge, so a dropped Stop hook doesn't strand 'Agent is working'.
+  it("self-heals a stale 'working' hook once the turn-complete marker lands", async () => {
     useAppStore.setState({
       agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }
     })
@@ -487,11 +596,167 @@ describe('useNativeChatLiveSession — transport routing', () => {
       transport.emit({
         type: 'snapshot',
         messages: [user('u-1', 'go'), assistant('a-1', 'done')],
-        hasMore: false
+        hasMore: false,
+        lifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
       })
     )
 
-    // The reply (ts 2) post-dates stateStartedAt (1): the stuck 'working' heals.
+    expect(latest?.status).toBe('ready')
+  })
+
+  it('applies a lifecycle-only append after the final message frame', async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }
+    })
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go'), assistant('a-1', 'done')],
+        hasMore: false,
+        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 1 }
+      })
+    )
+    expect(latest?.status).toBe('working')
+
+    await act(async () =>
+      transport.emit({
+        type: 'appended',
+        messages: [],
+        lifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
+      })
+    )
+
+    expect(latest?.status).toBe('ready')
+  })
+
+  it('applies a terminal-side interruption frame without a local Stop action', async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }
+    })
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go')],
+        hasMore: false,
+        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 1 }
+      })
+    )
+    expect(latest?.status).toBe('working')
+
+    await act(async () =>
+      transport.emit({
+        type: 'appended',
+        messages: [],
+        lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 }
+      })
+    )
+
+    expect(latest?.status).toBe('ready')
+  })
+
+  it('does not let an older pagination read rewind a live completion', async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }
+    })
+    const transport = getMockTransport('env-1')
+    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, index) =>
+      assistant(`m-${index}`, 'working')
+    )
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: many,
+        hasMore: true,
+        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 1 }
+      })
+    )
+
+    let resolveEarlier: (result: {
+      messages: NativeChatMessage[]
+      lifecycle: { state: 'working'; turnId: string; timestamp: number }
+    }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
+    await act(async () => latest?.loadEarlier())
+    await act(async () =>
+      transport.emit({
+        type: 'appended',
+        messages: [],
+        lifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
+      })
+    )
+    expect(latest?.status).toBe('ready')
+
+    await act(async () => {
+      resolveEarlier({
+        messages: many,
+        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 1 }
+      })
+      await Promise.resolve()
+    })
+
+    expect(latest?.status).toBe('ready')
+  })
+
+  it('reconciles completion from a reconnect snapshot', async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 10 } as never }
+    })
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go')],
+        hasMore: false,
+        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 10 }
+      })
+    )
+    expect(latest?.status).toBe('working')
+
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go'), assistant('a-1', 'done')],
+        hasMore: false,
+        lifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 20 }
+      })
+    )
+
+    expect(latest?.status).toBe('ready')
+  })
+
+  it('reconciles interruption from a reconnect snapshot', async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 10 } as never }
+    })
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go')],
+        hasMore: false,
+        lifecycle: { state: 'working', turnId: 'turn-1', timestamp: 10 }
+      })
+    )
+    expect(latest?.status).toBe('working')
+
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'go')],
+        hasMore: false,
+        lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 20 }
+      })
+    )
+
     expect(latest?.status).toBe('ready')
   })
 })

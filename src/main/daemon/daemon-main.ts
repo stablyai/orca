@@ -5,6 +5,7 @@ export type DaemonStartOptions = {
   socketPath: string
   tokenPath: string
   spawnSubprocess: DaemonServerOptions['spawnSubprocess']
+  preparePtySpawn?: DaemonServerOptions['preparePtySpawn']
   log?: DaemonFileLog
 }
 
@@ -17,6 +18,7 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
     socketPath: opts.socketPath,
     tokenPath: opts.tokenPath,
     spawnSubprocess: opts.spawnSubprocess,
+    ...(opts.preparePtySpawn ? { preparePtySpawn: opts.preparePtySpawn } : {}),
     ...(opts.log ? { log: opts.log } : {})
   })
 

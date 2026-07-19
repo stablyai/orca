@@ -69,9 +69,10 @@ import {
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
 import {
-  getMarkdownAnnotationBlockKeyForSelection,
-  isMarkdownPreviewAddReviewNoteShortcut
+  previewHasAnnotationBlockKey,
+  resolveMarkdownPreviewAddReviewNoteKey
 } from './markdown-preview-annotation-shortcut'
+import { installOpenDraftAddReviewNoteGuard } from './editor-shortcuts'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -314,7 +315,7 @@ const markdownPreviewSanitizeSchema = {
       ...(defaultSchema.attributes?.details ?? []),
       'open',
       ['className', 'orca-details'],
-      ['dataOrcaToggle', 'heading-1', 'heading-2', 'heading-3', 'heading-4']
+      ['dataOrcaToggle', 'heading-1', 'heading-2', 'heading-3', 'heading-4', 'heading-5']
     ],
     h1: [...(defaultSchema.attributes?.h1 ?? []), 'id'],
     h2: [...(defaultSchema.attributes?.h2 ?? []), 'id'],
@@ -636,6 +637,28 @@ export default function MarkdownPreview({
     ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? true)
     : true
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
+  const activeAnnotationBlockKeyRef = useRef(activeAnnotationBlockKey)
+  // Why: mirrored in an effect (not the render body) so a discarded render
+  // pass cannot leak into the ref; keydown paths still write it eagerly.
+  useEffect(() => {
+    activeAnnotationBlockKeyRef.current = activeAnnotationBlockKey
+  }, [activeAnnotationBlockKey])
+  // Why: line-derived block keys can go stale after content renumbers; drop them
+  // when the block no longer mounts so the shortcut cannot lock out forever.
+  useEffect(() => {
+    if (!activeAnnotationBlockKey) {
+      return
+    }
+    const root = rootRef.current
+    if (!root || previewHasAnnotationBlockKey(root, activeAnnotationBlockKey)) {
+      return
+    }
+    // Why: the mirror effect above re-syncs the ref once this setState commits;
+    // only the same-tick keydown paths need an eager manual write.
+    setActiveAnnotationBlockKey(null)
+    // Why: keyed on renderedContent (not content) — the DOM the block keys live
+    // in derives from it and can lag content during external-edit preservation.
+  }, [activeAnnotationBlockKey, renderedContent])
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
   const [copiedReviewNoteId, setCopiedReviewNoteId] = useState<string | null>(null)
   const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
@@ -920,17 +943,33 @@ export default function MarkdownPreview({
         return
       }
 
-      if (
-        isMarkdownPreviewAddReviewNoteShortcut(event, getShortcutPlatform(), keybindings) &&
-        targetInsidePreview &&
-        markdownAnnotationsEnabled
-      ) {
-        const blockKey = getMarkdownAnnotationBlockKeyForSelection(root, window.getSelection())
-        if (blockKey) {
-          event.preventDefault()
-          event.stopPropagation()
-          setActiveAnnotationBlockKey(blockKey)
-        }
+      const reviewNoteKey = resolveMarkdownPreviewAddReviewNoteKey({
+        event,
+        platform: getShortcutPlatform(),
+        keybindings,
+        targetInsidePreview,
+        markdownAnnotationsEnabled,
+        activeAnnotationBlockKey: activeAnnotationBlockKeyRef.current,
+        root,
+        selection: window.getSelection()
+      })
+      if (reviewNoteKey.action === 'consume') {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      if (reviewNoteKey.action === 'clear-stale-and-ignore') {
+        // Why: drop a line-derived key that no longer mounts a composer so the
+        // shortcut cannot stay permanently consumed after content renumbers.
+        activeAnnotationBlockKeyRef.current = null
+        setActiveAnnotationBlockKey(null)
+        return
+      }
+      if (reviewNoteKey.action === 'open') {
+        event.preventDefault()
+        event.stopPropagation()
+        activeAnnotationBlockKeyRef.current = reviewNoteKey.blockKey
+        setActiveAnnotationBlockKey(reviewNoteKey.blockKey)
         return
       }
 
@@ -2052,6 +2091,18 @@ function MarkdownAnnotationComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
+  const composerRef = useRef<HTMLDivElement | null>(null)
+
+  // Why: product B — composer focus is in the textarea, so consume the bindable
+  // add-review-note chord on the composer subtree (same guard as
+  // DiffCommentPopover) rather than window, so other surfaces keep their chord.
+  useEffect(() => {
+    const composer = composerRef.current
+    if (!composer) {
+      return
+    }
+    return installOpenDraftAddReviewNoteGuard(composer)
+  }, [])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
     // Why: opening an annotation composer should focus the draft field on the
@@ -2082,7 +2133,11 @@ function MarkdownAnnotationComposer({
   }
 
   return (
-    <div className="markdown-annotation-composer" onClick={(event) => event.stopPropagation()}>
+    <div
+      ref={composerRef}
+      className="markdown-annotation-composer"
+      onClick={(event) => event.stopPropagation()}
+    >
       <div className="orca-diff-comment-popover-label">
         {translate('auto.components.editor.MarkdownPreview.b1bfc04034', 'Selected text')}
       </div>

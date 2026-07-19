@@ -238,7 +238,7 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **WeChat:** First WeChat group is full, now you can join the second one.
+- **WeChat:** Groups 1 and 2 are both full — now you can join the third one.
 
   <img src="docs/assets/wechat-qr.jpg" alt="WeChat QR code for the Orca community" width="160" />
 

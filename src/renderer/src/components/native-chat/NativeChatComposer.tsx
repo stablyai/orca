@@ -1,6 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import type { AgentType } from '../../../../shared/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import {
@@ -40,60 +39,21 @@ import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import { useNativeChatDictationActions } from './use-native-chat-dictation-actions'
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
+import type {
+  NativeChatComposerHandle,
+  NativeChatComposerProps
+} from './native-chat-composer-types'
+
+export type {
+  NativeChatComposerHandle,
+  NativeChatComposerProps
+} from './native-chat-composer-types'
 
 // Why: a plain ESC byte is what the agent TUIs read as the interrupt key over a
 // PTY (matching how xterm forwards Escape). The richer interrupt-intent
 // inference (agent-interrupt-intent.ts) is driven by the existing PTY input
 // observers, so writing ESC through the same send path feeds that machinery.
 const ESC = '\x1b'
-
-export type NativeChatComposerProps = {
-  /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
-  terminalTabId: string
-  /** Specific split-pane PTY this chat view owns. */
-  targetPtyId: string | null
-  agent: AgentType
-  /**
-   * Mobile presence-lock seam (R8): when a mobile client holds the pty, desktop
-   * sends must be guarded rather than silently dropped. U9 wires the real lock
-   * state in; until then this defaults to `true` (sendable) and the composer
-   * already renders the guarded/disabled affordance when it is `false`.
-   */
-  canSend?: boolean
-  /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
-  isWorking?: boolean
-  /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
-  onStop?: () => void
-  /** Optional optimistic-send hook: called with the sent text so the view can
-   *  render a "queued" echo until the real transcript turn lands (mobile parity). */
-  onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
-  /** Remove an optimistic echo when its delayed submit is canceled. */
-  onOptimisticSendCanceled?: (pendingId: string) => void
-  /** Called with a dispatched slash command (e.g. `/clear`) so the view can show
-   *  a small "Ran /clear" system line — slash commands aren't chat turns and
-   *  otherwise leave no visible trace that anything happened. */
-  onSlashCommand?: (command: string) => void
-  /** Picker-only agent commands continue in the hosted TUI after dispatch. */
-  onSwitchToTerminal?: () => void
-  /** Reads the hosted TUI's current rendered screen when chat is entered. */
-  readTerminalScreen?: () => string | null
-}
-
-export type NativeChatComposerHandle = {
-  focus: () => boolean
-  insertTypedText: (text: string) => boolean
-  /** Handle a paste event captured at the pane root (the OS frequently
-   *  retargets the paste off the focused textarea, so its own onPaste can't be
-   *  relied on). An image is intercepted and attached; text falls through. */
-  handlePasteEvent: (event: {
-    clipboardData: DataTransfer | null
-    preventDefault: () => void
-    defaultPrevented: boolean
-  }) => void
-  /** Paste the clipboard into the composer with no event in hand (menu paste):
-   *  an image becomes an attachment, otherwise text is inserted at the caret. */
-  pasteFromClipboard: () => void
-}
 
 /**
  * Rich native input for the chat view. Sends prompts into the running agent
@@ -107,6 +67,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
   function NativeChatComposer(
     {
       terminalTabId,
+      paneKey,
       targetPtyId,
       agent,
       canSend = true,
@@ -121,8 +82,10 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     ref
   ): React.JSX.Element {
     // Scope key shared with image attachments so an unsent draft + its attached
-    // images survive the composer unmounting on a TUI/GUI toggle.
-    const draftScopeKey = targetPtyId ?? terminalTabId
+    // images survive both TUI/GUI toggles and PTY replacement on reconnect.
+    // Why: local, SSH, and runtime reconnects can replace or temporarily clear
+    // the PTY id. Pane identity is the stable ownership key for unsent input.
+    const draftScopeKey = paneKey
     const { draft, setDraft } = useNativeChatDraft(draftScopeKey)
     const [caret, setCaret] = useState(draft.length)
     const [history, setHistory] = useState<HistoryState>(EMPTY_HISTORY)
@@ -180,7 +143,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
 
     const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       useNativeChatComposerAttachments({
-        attachmentScopeKey: targetPtyId ?? terminalTabId,
+        attachmentScopeKey: paneKey,
         caret,
         resolveTarget,
         textareaRef,

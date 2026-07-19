@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 
 const { handlers, listeners, subscribeTranscript } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
@@ -111,7 +112,8 @@ type InitialSnapshotCallback = (
   messages: unknown[],
   hasMore: boolean,
   beforeOffset: number,
-  error?: string
+  error?: string,
+  lifecycle?: NativeChatTurnLifecycle
 ) => void
 
 // The onInitialSnapshot callback the handler passed into the Nth subscribeTranscript
@@ -275,7 +277,31 @@ describe('nativeChat subscribe lifecycle', () => {
 
     expect(renderer.sender.send).toHaveBeenCalledWith('nativeChat:appended', {
       subscriptionId: 'drain-clean',
-      frame: { type: 'snapshot', messages: [], hasMore: false }
+      frame: {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false
+      }
+    })
+  })
+
+  it('forwards replayable lifecycle on the initial snapshot', () => {
+    const pending = deferredSubscription()
+    subscribeTranscript.mockReturnValueOnce(pending.promise)
+    const renderer = createSender(7)
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+
+    subscribe(renderer.sender, 'lifecycle')
+    initialSnapshot(0)([], false, 0, undefined, lifecycle)
+
+    expect(renderer.sender.send).toHaveBeenCalledWith('nativeChat:appended', {
+      subscriptionId: 'lifecycle',
+      frame: {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        lifecycle
+      }
     })
   })
 })

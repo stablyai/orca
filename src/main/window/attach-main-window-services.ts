@@ -75,6 +75,7 @@ export function attachMainWindowServices(
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
+    awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
     // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
@@ -97,6 +98,7 @@ export function attachMainWindowServices(
     store,
     {
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
+      awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
     }
   )

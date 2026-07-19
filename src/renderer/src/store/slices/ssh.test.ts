@@ -190,6 +190,30 @@ describe('createSshSlice', () => {
     expect(store.getState().sshConnectedGeneration).toBe(1)
   })
 
+  it('publishes a connected-state folder capability change', () => {
+    const store = createTestStore()
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      supportsFolderDownload: false
+    })
+    const previousState = store.getState()
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      supportsFolderDownload: true
+    })
+
+    expect(store.getState()).not.toBe(previousState)
+    expect(store.getState().sshConnectionStates.get('ssh-1')?.supportsFolderDownload).toBe(true)
+    expect(store.getState().sshConnectedGeneration).toBe(1)
+  })
+
   it('does not publish state when cleanup finds no removed SSH target state', () => {
     const store = createTestStore()
     const previousState = store.getState()

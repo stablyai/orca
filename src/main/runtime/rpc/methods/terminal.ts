@@ -37,6 +37,7 @@ import {
   MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../scrollback-limits'
+import { assertTerminalAgentSendable } from '../terminal-agent-send-guard'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
@@ -404,16 +405,6 @@ function getTerminalSendGuardRefusedReason(error: unknown): 'no-agent' | 'permis
 function isTerminalSendGuardNotWritable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_guard_not_writable')
-}
-
-function isTerminalAgentStatusNotWritable(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return [
-    'terminal_not_writable',
-    'terminal_handle_stale',
-    'terminal_gone',
-    'terminal_exited'
-  ].some((code) => message.includes(code))
 }
 
 function assertTerminalSendExactPtyBinding(
@@ -1270,28 +1261,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
           ? async (ptyId?: string): Promise<void> => {
-              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
-              if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
-                throw new Error('terminal_guard_not_writable')
-              }
-              let agentStatus
-              try {
-                agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
-              } catch (error) {
-                if (isTerminalAgentStatusNotWritable(error)) {
-                  throw new Error('terminal_guard_not_writable')
+              await assertTerminalAgentSendable({
+                runtime,
+                handle: params.terminal,
+                assertWritable: () => {
+                  assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
+                  if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+                    throw new Error('terminal_guard_not_writable')
+                  }
                 }
-                throw error
-              }
-              // Why: a send callback can race a pane reconnect; status evidence
-              // must never authorize the callback's replacement PTY.
-              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
-              if (!agentStatus.isRunningAgent) {
-                throw new Error('terminal_guard_no_agent')
-              }
-              if (agentStatus.status === 'permission') {
-                throw new Error('terminal_guard_permission')
-              }
+              })
             }
           : undefined
       if (params.requireAgentStatus === 'sendable') {
@@ -1601,6 +1580,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let closed = false
       let cursor = 0
       const streams = new Map<number, TerminalMultiplexStream>()
+      const pendingPtyWaitControllers = new Map<number, Set<AbortController>>()
       let ackTotalInFlightBytes = 0
       let resolveMultiplex = (): void => {}
       const multiplexClosed = new Promise<void>((resolve) => {
@@ -1820,11 +1800,28 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           emit({ type: 'end', streamId })
         }
       }
+      const cancelPendingPtyWaits = (streamId: number): void => {
+        const controllers = pendingPtyWaitControllers.get(streamId)
+        if (!controllers) {
+          return
+        }
+        pendingPtyWaitControllers.delete(streamId)
+        for (const controller of controllers) {
+          controller.abort()
+        }
+      }
+      const cancelAllPendingPtyWaits = (): void => {
+        for (const streamId of Array.from(pendingPtyWaitControllers.keys())) {
+          cancelPendingPtyWaits(streamId)
+        }
+      }
       const closeMultiplex = (): void => {
         if (closed) {
           return
         }
         closed = true
+        signal?.removeEventListener('abort', cancelAllPendingPtyWaits)
+        cancelAllPendingPtyWaits()
         const remoteDesktopKeysByPty = new Map<string, string[]>()
         for (const streamId of Array.from(streams.keys())) {
           const stream = streams.get(streamId)
@@ -1851,6 +1848,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
+          cancelPendingPtyWaits(stream.streamId)
           detachStream(stream.streamId, false)
           return
         }
@@ -2102,15 +2100,47 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           emit({ type: 'end', streamId: request.streamId })
           return
         }
-        if (!leaf?.ptyId && isMobile) {
+        if (!leaf?.ptyId && request.client) {
+          // Why: a never-mounted tab has no graph leaf to await; mounting the
+          // exact tab lets its PTY attach without activating the worktree.
+          runtime.requestRendererTerminalTabMount(request.terminal)
+          const waitController = new AbortController()
+          const pendingControllers = pendingPtyWaitControllers.get(request.streamId) ?? new Set()
+          pendingControllers.add(waitController)
+          pendingPtyWaitControllers.set(request.streamId, pendingControllers)
+          if (signal?.aborted) {
+            waitController.abort()
+          }
+          // Why: the live slot handler does not exist until the PTY attaches;
+          // retain cancellation ownership while the pane is still pending.
+          const unregisterPendingHandler = registerBinaryStreamHandler(
+            request.streamId,
+            (frame) => {
+              if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
+                cancelPendingPtyWaits(request.streamId)
+                detachStream(request.streamId, false)
+              }
+            }
+          )
           try {
-            const ptyId = await runtime.waitForLeafPtyId(request.terminal, 10_000, signal)
+            const ptyId = await runtime.waitForLeafPtyId(
+              request.terminal,
+              10_000,
+              waitController.signal
+            )
             leaf = { ptyId }
           } catch {
-            if (closed || signal?.aborted) {
+            if (closed || signal?.aborted || waitController.signal.aborted) {
               return
             }
             // Fall through to the explicit no_connected_pty error below.
+          } finally {
+            const currentControllers = pendingPtyWaitControllers.get(request.streamId)
+            currentControllers?.delete(waitController)
+            if (currentControllers?.size === 0) {
+              pendingPtyWaitControllers.delete(request.streamId)
+            }
+            unregisterPendingHandler()
           }
         }
         if (!leaf?.ptyId) {
@@ -2234,30 +2264,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
 
-          if (!isMobile) {
-            stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
-              const mode =
-                event.mode === 'mobile-fit'
-                  ? event.mode
-                  : (runtime.getRemoteDesktopFitHold?.(ptyId, stream.remoteDesktopSubscriptionKey)
-                      .mode ?? 'desktop-fit')
-              emit({
-                type: 'fit-override-changed',
-                streamId: request.streamId,
-                mode,
-                cols: event.cols,
-                rows: event.rows
-              })
-            })
-            stream.unsubscribeDriver = runtime.subscribeToDriverChanges(ptyId, (driver) => {
-              emit({
-                type: 'driver-changed',
-                streamId: request.streamId,
-                driver
-              })
-            })
-          }
-
           let read = await runtime.readTerminal(request.terminal)
           let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
           if (closed || streams.get(request.streamId) !== stream) {
@@ -2285,25 +2291,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const layoutSeq = runtime.getLayout(ptyId)?.seq
           const snapshotFrameSeq = serialized?.seq ?? layoutSeq
           const snapshotOutputSeq = serialized?.seq
-          if (!isMobile) {
-            const fitOverride = runtime.getTerminalFitOverride(ptyId)
-            const desktopHold = runtime.getRemoteDesktopFitHold?.(
-              ptyId,
-              stream.remoteDesktopSubscriptionKey
-            ) ?? { mode: 'desktop-fit' as const, cols: size?.cols ?? 0, rows: size?.rows ?? 0 }
-            emit({
-              type: 'fit-override-changed',
-              streamId: request.streamId,
-              mode: fitOverride?.mode ?? desktopHold.mode,
-              cols: fitOverride?.cols ?? desktopHold.cols,
-              rows: fitOverride?.rows ?? desktopHold.rows
-            })
-            emit({
-              type: 'driver-changed',
-              streamId: request.streamId,
-              driver: runtime.getDriver(ptyId)
-            })
-          }
           emit({
             type: 'subscribed',
             streamId: request.streamId,
@@ -2348,6 +2335,46 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           stream.pendingOutputBytes = 0
           stream.pendingOutputOverflowed = false
           stream.outputBatcher.flush()
+          if (!isMobile) {
+            stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+              const mode =
+                event.mode === 'mobile-fit'
+                  ? event.mode
+                  : (runtime.getRemoteDesktopFitHold?.(ptyId, stream.remoteDesktopSubscriptionKey)
+                      .mode ?? 'desktop-fit')
+              emit({
+                type: 'fit-override-changed',
+                streamId: request.streamId,
+                mode,
+                cols: event.cols,
+                rows: event.rows
+              })
+            })
+            stream.unsubscribeDriver = runtime.subscribeToDriverChanges(ptyId, (driver) => {
+              emit({
+                type: 'driver-changed',
+                streamId: request.streamId,
+                driver
+              })
+            })
+            const fitOverride = runtime.getTerminalFitOverride(ptyId)
+            const desktopHold = runtime.getRemoteDesktopFitHold?.(
+              ptyId,
+              stream.remoteDesktopSubscriptionKey
+            ) ?? { mode: 'desktop-fit' as const, cols: size?.cols ?? 0, rows: size?.rows ?? 0 }
+            emit({
+              type: 'fit-override-changed',
+              streamId: request.streamId,
+              mode: fitOverride?.mode ?? desktopHold.mode,
+              cols: fitOverride?.cols ?? desktopHold.cols,
+              rows: fitOverride?.rows ?? desktopHold.rows
+            })
+            emit({
+              type: 'driver-changed',
+              streamId: request.streamId,
+              driver: runtime.getDriver(ptyId)
+            })
+          }
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
             stream.outputBatcher.flush()
             const resizeGeneration = stream.resizeGeneration + 1
@@ -2451,6 +2478,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
       })
 
+      signal?.addEventListener('abort', cancelAllPendingPtyWaits, { once: true })
+
       runtime.registerSubscriptionCleanup(
         `terminal-multiplex:${connectionId}`,
         closeMultiplex,
@@ -2485,10 +2514,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
 
       // Why: the left pane's PTY spawns asynchronously after the tab is created.
-      // Mobile clients that subscribe before the PTY is ready would get a bare
+      // Clients that subscribe before the PTY is ready would get a bare
       // scrollback+end with no live stream or phone-fit. Wait for the PTY so
       // the subscribe can proceed normally.
-      if (!leaf?.ptyId && isMobile) {
+      if (!leaf?.ptyId && params.client) {
         // Why: a never-mounted tab has no graph leaf to await; mounting the
         // exact tab lets its PTY attach without activating the worktree.
         rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(params.terminal)

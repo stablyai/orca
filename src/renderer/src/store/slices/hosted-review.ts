@@ -32,6 +32,40 @@ type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string 
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
+// Why: the runtime path is bounded by callRuntimeRpc's own timeout; the local
+// Electron path had none, so a hung git/gh subprocess (e.g. a stalled Windows
+// credential probe) could leave the Create PR header stuck in its "Checking…"
+// loading state forever. Mirror the runtime bound so a never-settling probe
+// rejects and the UI can fall back to an actionable/retryable state.
+const CREATION_ELIGIBILITY_TIMEOUT_MS = 30_000
+
+export class HostedReviewCreationEligibilityTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Timed out checking pull request creation eligibility after ${timeoutMs}ms`)
+    this.name = 'HostedReviewCreationEligibilityTimeoutError'
+  }
+}
+
+function withCreationEligibilityTimeout(
+  promise: Promise<HostedReviewCreationEligibility>,
+  timeoutMs = CREATION_ELIGIBILITY_TIMEOUT_MS
+): Promise<HostedReviewCreationEligibility> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new HostedReviewCreationEligibilityTimeoutError(timeoutMs))
+    }, timeoutMs)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+}
 
 const inflightHostedReviewRequests = new Map<
   string,
@@ -259,11 +293,13 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
         { timeoutMs: 30_000 }
       )
     }
-    return window.api.hostedReview.getCreationEligibility({
-      ...args,
-      repoId: repo?.id ?? args.repoId,
-      connectionId: repo?.connectionId ?? null
-    })
+    return withCreationEligibilityTimeout(
+      window.api.hostedReview.getCreationEligibility({
+        ...args,
+        repoId: repo?.id ?? args.repoId,
+        connectionId: repo?.connectionId ?? null
+      })
+    )
   },
 
   createHostedReview: async (repoPath, input) => {

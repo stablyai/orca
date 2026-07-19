@@ -209,17 +209,17 @@ function LoudRestartOverlay({
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
           {translate(
-            'auto.components.CodexRestartChip.e9b2c7d1a5',
-            'Restart this session to use {{value0}}. Collapse to keep working with the current account.',
+            'auto.components.CodexRestartChip.9375620cc3',
+            'Restart this session to use {{value0}}. It stays on the previous account until you do.',
             { value0: restartNotice.nextAccountLabel }
           )}
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
-            {translate('auto.components.CodexRestartChip.9132779820', 'Dismiss')}
+            {translate('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onCollapse}>
-            {translate('auto.components.CodexRestartChip.f1a6c8e3b4', 'Collapse')}
+            {translate('auto.components.CodexRestartChip.b9000fe511', 'Not now')}
           </Button>
           <Button ref={restartRef} type="button" variant="default" size="sm" onClick={onRestart}>
             <RefreshCw />

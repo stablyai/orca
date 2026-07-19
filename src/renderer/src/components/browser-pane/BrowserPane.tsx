@@ -61,6 +61,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../../shared/orca-profiles'
 import type {
   BrowserCertificateProceedResult,
@@ -151,6 +152,7 @@ import {
 } from '@/runtime/runtime-file-client'
 import {
   callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability,
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
@@ -946,6 +948,38 @@ function RemoteBrowserPagePane({
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const keybindings = useAppStore((state) => state.keybindings)
+
+  // Why: a remote runtime that predates browser.certificate-trust.v1 cannot
+  // honor a proceed request, so the "Proceed Anyway (Unsafe)" affordance stays
+  // hidden until the connected runtime positively advertises support (design
+  // doc: older runtimes never show an enabled proceed action).
+  const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
+  const remoteCertificateEnvironmentId = remotePageHandle?.environmentId ?? null
+  const certificateChallengeId = certificateFailure?.challengeId ?? null
+  useEffect(() => {
+    if (!remoteCertificateEnvironmentId || !certificateChallengeId) {
+      setRemoteCertificateTrustSupported(false)
+      return
+    }
+    let cancelled = false
+    void runtimeEnvironmentSupportsCapability(
+      remoteCertificateEnvironmentId,
+      BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
+    )
+      .then((supported) => {
+        if (!cancelled) {
+          setRemoteCertificateTrustSupported(supported)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRemoteCertificateTrustSupported(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [remoteCertificateEnvironmentId, certificateChallengeId])
 
   currentBrowserTabIdRef.current = browserTab.id
   currentBrowserTabUrlRef.current = browserTab.url
@@ -2696,7 +2730,7 @@ function RemoteBrowserPagePane({
             onTryHttps={(url) => void runRemoteNavigation('browser.goto', url)}
             onCopy={(url) => void window.api.ui.writeClipboardText(url)}
             onOpenExternal={(url) => void window.api.shell.openUrl(url)}
-            certificateFailure={certificateFailure}
+            certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
             expectedBrowserPageId={
               remotePageHandle?.environmentId === activeRuntimeEnvironmentId
                 ? remotePageHandle.remotePageId

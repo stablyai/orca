@@ -3,6 +3,9 @@ import type { Terminal } from '@xterm/xterm'
 type LinkifierHoverCache = {
   _lastBufferCell?: unknown
   _activeLine?: number
+  // Set while xterm is showing a hovered link; cleared on mouseleave / when the
+  // pointer moves off the link (Linkifier `_clearCurrentLink`).
+  _currentLink?: unknown
 }
 
 type TerminalCoreWithLinkifier = {
@@ -42,5 +45,24 @@ export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
     }
   } catch {
     /* linkifier internals unavailable — link recovers on the next cell change */
+  }
+}
+
+/**
+ * True while xterm is actively showing a hovered link.
+ *
+ * Why: callers that invalidate the hover cache on a timer (streamed output)
+ * must skip while a link is hovered — clearing the cache makes the next
+ * mousemove clear and (for async providers like file paths) re-query the active
+ * link, flickering its underline/tooltip. Guarded like {@link
+ * resetTerminalLinkifierHoverState} so a renamed field degrades to "not
+ * hovering" rather than throwing.
+ */
+export function isTerminalLinkifierHoverActive(terminal: Terminal): boolean {
+  try {
+    const linkifier = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier
+    return Boolean(linkifier && '_currentLink' in linkifier && linkifier._currentLink)
+  } catch {
+    return false
   }
 }

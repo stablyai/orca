@@ -2,7 +2,7 @@ import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import {
   getActiveNativeChatWatcherCount,
   readNativeChatTranscriptTail,
@@ -42,6 +42,30 @@ function claudeLine(uuid: string, role: 'user' | 'assistant', text: string): str
     uuid,
     timestamp: '2026-06-01T10:00:00.000Z',
     message: { role, content: role === 'user' ? text : [{ type: 'text', text }] }
+  })}\n`
+}
+
+function claudeEndTurnLine(uuid: string, text: string): string {
+  return `${JSON.stringify({
+    type: 'assistant',
+    uuid,
+    timestamp: '2026-06-01T10:00:01.000Z',
+    message: {
+      role: 'assistant',
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text }]
+    }
+  })}\n`
+}
+
+function codexLifecycleLine(
+  state: 'task_started' | 'task_complete' | 'turn_aborted',
+  turnId = 'turn-1'
+): string {
+  return `${JSON.stringify({
+    type: 'event_msg',
+    timestamp: state === 'task_started' ? '2026-06-01T10:00:00.000Z' : '2026-06-01T10:00:01.000Z',
+    payload: { type: state, turn_id: turnId }
   })}\n`
 }
 
@@ -97,6 +121,144 @@ describe('subscribeNativeChatTranscript', () => {
     await waitFor(() => snapshots.length === 1)
     sub.unsubscribe()
     expect(snapshots).toEqual([[]])
+  })
+
+  it('replays and appends provider-authored turn lifecycle markers', async () => {
+    const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
+    const lifecycles: NativeChatTurnLifecycle[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onInitialSnapshot: (_messages, _hasMore, _beforeOffset, _error, lifecycle) => {
+        if (lifecycle) {
+          lifecycles.push(lifecycle)
+        }
+      },
+      onAppend: (_messages, lifecycle) => {
+        if (lifecycle) {
+          lifecycles.push(lifecycle)
+        }
+      },
+      debounceMs: 5
+    })
+
+    await waitFor(() => lifecycles.length === 1)
+    await appendFile(filePath, claudeEndTurnLine('a-1', 'done'))
+    await waitFor(() => lifecycles.length === 2)
+    sub.unsubscribe()
+
+    expect(lifecycles.map((lifecycle) => lifecycle.state)).toEqual(['working', 'completed'])
+    expect(lifecycles.map((lifecycle) => lifecycle.turnId)).toEqual(['u-1', 'a-1'])
+  })
+
+  it('emits Codex task_complete even when the frame has no visible messages', async () => {
+    const filePath = await tempFile(codexLifecycleLine('task_started'))
+    const lifecycles: NativeChatTurnLifecycle[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'codex',
+      sessionId: 'ignored',
+      filePath,
+      onInitialSnapshot: (_messages, _hasMore, _beforeOffset, _error, lifecycle) => {
+        if (lifecycle) {
+          lifecycles.push(lifecycle)
+        }
+      },
+      onAppend: (messages, lifecycle) => {
+        expect(messages).toEqual([])
+        if (lifecycle) {
+          lifecycles.push(lifecycle)
+        }
+      },
+      debounceMs: 5
+    })
+
+    await waitFor(() => lifecycles.length === 1)
+    await appendFile(filePath, codexLifecycleLine('task_complete'))
+    await waitFor(() => lifecycles.length === 2)
+    sub.unsubscribe()
+
+    expect(lifecycles).toMatchObject([
+      { state: 'working', turnId: 'turn-1' },
+      { state: 'completed', turnId: 'turn-1' }
+    ])
+  })
+
+  it('replays Codex interruption as a terminal lifecycle and visible status row', async () => {
+    const filePath = await tempFile(
+      codexLifecycleLine('task_started') + codexLifecycleLine('turn_aborted')
+    )
+    let snapshot:
+      | { messages: NativeChatMessage[]; lifecycle: NativeChatTurnLifecycle | undefined }
+      | undefined
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'codex',
+      sessionId: 'ignored',
+      filePath,
+      initialLimit: 40,
+      onInitialSnapshot: (messages, _hasMore, _beforeOffset, _error, lifecycle) => {
+        snapshot = { messages, lifecycle }
+      },
+      onAppend: () => {},
+      debounceMs: 5
+    })
+
+    await waitFor(() => snapshot !== undefined)
+    sub.unsubscribe()
+
+    expect(snapshot?.lifecycle).toMatchObject({ state: 'interrupted', turnId: 'turn-1' })
+    expect(snapshot?.messages).toMatchObject([
+      { role: 'system', blocks: [{ type: 'text', text: 'Conversation interrupted' }] }
+    ])
+  })
+
+  it('does not replay an older interruption over a newer working turn', async () => {
+    const filePath = await tempFile(
+      codexLifecycleLine('task_started', 'turn-1') +
+        codexLifecycleLine('turn_aborted', 'turn-1') +
+        codexLifecycleLine('task_started', 'turn-2')
+    )
+    const result = await readNativeChatTranscriptTail({
+      agent: 'codex',
+      sessionId: 'ignored',
+      filePath,
+      limit: 40
+    })
+
+    expect(result).toMatchObject({ lifecycle: { state: 'working', turnId: 'turn-2' } })
+  })
+
+  it('recovers a completion marker even when trailing non-boundary rows follow it', async () => {
+    // The lifecycle scan walks newest-first; rows that decode to no boundary
+    // (tool-results, harness noise) must not hide an earlier real completion
+    // within the window, or a reconnect snapshot would fail to settle.
+    const toolResult = `${JSON.stringify({
+      type: 'user',
+      uuid: 'tool-result-1',
+      timestamp: '2026-06-01T10:00:02.000Z',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }]
+      }
+    })}\n`
+    const noise = `${JSON.stringify({
+      type: 'user',
+      uuid: 'note-1',
+      timestamp: '2026-06-01T10:00:03.000Z',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: '<system-reminder>continue</system-reminder>' }]
+      }
+    })}\n`
+    const filePath = await tempFile(claudeEndTurnLine('a-1', 'done') + toolResult + noise)
+    const result = await readNativeChatTranscriptTail({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      limit: 40
+    })
+
+    expect(result).toMatchObject({ lifecycle: { state: 'completed', turnId: 'a-1' } })
   })
 
   it('emits a bulk append in bounded ordered batches', async () => {

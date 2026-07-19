@@ -72,7 +72,8 @@
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
     },
-    "activityWaiting": "Orca: actividad en espera"
+    "activityWaiting": "Orca: actividad en espera",
+    "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -588,6 +589,27 @@
             "de50bef680": "macOS está bloqueando las notificaciones de Orca"
           }
         }
+      },
+      "linear": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked ticket",
+            "postUpdate": "Post a progress update",
+            "moveState": "Move the ticket forward",
+            "attachPr": "Attach the PR link",
+            "triageFollowups": "Triage and create follow-ups",
+            "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
+            "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
+            "postUpdateSummary": "Comment progress or a completion summary back to the Linear issue.",
+            "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
+            "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
+            "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
+            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
+            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
+            "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
+          }
+        }
       }
     },
     "hooks": {
@@ -705,7 +727,9 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "projectHostsSummary": "{{value0}} hosts"
+        "projectHostsSummary": "{{value0}} hosts",
+        "linearTitle": "Linear",
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -716,13 +740,13 @@
     },
     "components": {
       "CodexRestartChip": {
-        "9132779820": "Descartar",
         "c72a5fb234": "Reiniciar",
         "9263e75f49": "Codex está usando la cuenta anterior.",
         "a4c8e1b2f7": "Codex sigue conectado como {{value0}}",
         "d3e8a1f4b2": "Cuenta cambiada",
-        "e9b2c7d1a5": "Reinicia esta sesión para usar {{value0}}. Contrae para seguir trabajando con la cuenta actual.",
-        "f1a6c8e3b4": "Contraer"
+        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
@@ -1758,7 +1782,8 @@
         "jiraSortAscending": "ascendente",
         "jiraSortDescending": "descendente",
         "jiraSortBy": "Ordenar por",
-        "jiraToggleSortDirection": "Ordenar de forma {{value0}}"
+        "jiraToggleSortDirection": "Ordenar de forma {{value0}}",
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -1820,7 +1845,14 @@
         "a726967bd3": "Descartar",
         "d5253b54af": "error",
         "7ffc08506e": "check",
-        "522df222b9": "spinner"
+        "522df222b9": "spinner",
+        "e944c2de43": "Update Verification Blocked",
+        "5b309b19f3": "Update Wasn't Installed",
+        "092f09fc14": "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version.",
+        "c9ff9b9ec2": "Check official releases",
+        "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
+        "5194358929": "Hide details",
+        "8bc9e17d8f": "Show details"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Mover",
@@ -3915,10 +3947,9 @@
         "RemoveFolderDialog": {
           "4dc5b5065b": "Quitar",
           "d36883e046": "Cancelar",
-          "8c097ef04e": "de Orca. Sigue estando en tu disco.",
-          "e62415c3d0": "Esto solo quita",
           "b79b39d865": "Quitar proyecto",
-          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
+          "removeDescriptionSsh": "Esto solo elimina {{name}} de Orca. Sus archivos permanecen en {{host}}; vuelve a añadir ese host SSH para recuperarlo.",
+          "removeDescriptionLocal": "Esto solo elimina {{name}} de Orca. Sigue estando en tu disco."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Mostrar espacio de trabajo activo"
@@ -5080,7 +5111,11 @@
           "windowSidebarSummary": "Barra lateral, barra de estado y explorador de archivos",
           "statusBarCount": "{{value0}} indicadores visibles.",
           "gitIgnoredGlossary": "Archivos que coinciden con .gitignore.",
-          "statusBarDescription": "Elige qué indicadores aparecen en la barra de estado."
+          "statusBarDescription": "Elige qué indicadores aparecen en la barra de estado.",
+          "showPinnedWorktreesInGroups": {
+            "title": "Mostrar también los worktrees fijados en sus listas originales",
+            "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -5940,13 +5975,6 @@
           "3743ed080c": "Establecer comando",
           "f79084947b": "Nueva aplicación"
         },
-        "OrchestrationExamplesDialog": {
-          "3d1aa105e3": "Copiar prompt",
-          "9b4c004998": "Hecho",
-          "969cec9739": "Copiar prompt de ejemplo {{value0}}",
-          "4e46da1889": "No se pudo copiar el prompt.",
-          "80c6f2feb8": "Prompt de ejemplo copiado."
-        },
         "OrchestrationPane": {
           "52e0634e2c": "Pídele a un agente coordinador que use la orquestación para handoffs, handoffs de worktree y agentes secundarios secuenciales o paralelos.",
           "ae79504732": "Cómo usarlo",
@@ -6458,7 +6486,9 @@
           "2309068a6f": "destructivo",
           "65358016ea": "Desechar",
           "dev": "Herramientas de desarrollo",
-          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI."
+          "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
+          "linearTitle": "Linear",
+          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -7293,6 +7323,10 @@
             },
             "9a115966d3": "Minimizar a la bandeja al cerrar",
             "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
+            "showPinnedWorktreesInGroups": {
+              "title": "Mostrar también los worktrees fijados en sus listas originales",
+              "description": "Los worktrees fijados permanecen en Fijados y también aparecen en Todos, Proyecto, Estado y PR."
+            },
             "antigravityUsageTitle": "Uso de Antigravity",
             "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
             "antigravityKeyword": "antigravity",
@@ -9080,6 +9114,10 @@
                   "description": "Permite que tus agentes lean y editen tareas de Linear.",
                   "copyCommand": "Copiar comando"
                 }
+              },
+              "search": {
+                "title": "Linear",
+                "description": "Give agents the skill to read and update your linked Linear tickets."
               }
             }
           }
@@ -9160,6 +9198,23 @@
           "availability": "Disponible en",
           "testFlight": "TestFlight",
           "androidApk": "APK de Android"
+        },
+        "SkillUsageExampleDialog": {
+          "copiedPrompt": "Prompt de ejemplo copiado.",
+          "copyFailed": "No se pudo copiar el prompt.",
+          "copyExampleAria": "Copiar prompt de ejemplo {{value0}}",
+          "done": "Hecho",
+          "copyPrompt": "Copiar prompt"
+        },
+        "LinearAgentSkillPane": {
+          "title": "Linear",
+          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "skillTitle": "Linear skill",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
+          "howToUse": "How to use it",
+          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
+          "terminalTitle": "Linear skill setup",
+          "terminalAriaLabel": "Linear skill install terminal"
         }
       },
       "right": {
@@ -9260,14 +9315,17 @@
             "d6a25618aa": "Contraer carpeta",
             "d87a4c42e1": "Abrir vista previa de Markdown",
             "c2112579f6": "Descargar",
+            "7ac885bd2f": "Descargar carpeta",
             "dd112c81d2": "Abrir en Orca Browser",
             "1bb9be455c": "Agregar como proyecto…",
             "0fec99bfd7": "Duplicar",
             "f61af83316": "Nueva carpeta",
             "37c875d827": "Nuevo archivo",
             "b3e288bf41": "No se pudo descargar '{{value0}}'.",
+            "f729bcd97d": "No se pudo descargar la carpeta '{{value0}}'.",
             "1a3df04ae1": "Abrir",
             "bce4d4e44f": "Se descargó '{{value0}}'",
+            "a4029c996b": "Se descargó la carpeta '{{value0}}'",
             "e26010014a": "Ignorado por .gitignore",
             "a06551beee": "Intro",
             "128a99ed5e": "No asignado",
@@ -9644,7 +9702,9 @@
               "a9bf7c171a": "Push fallido",
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
-            }
+            },
+            "createPrIntentSyncConflicts": "La sincronización encontró conflictos. Resuélvelos y vuelve a intentar Crear PR.",
+            "createPrIntentSyncing": "Sincronizando rama…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -10015,6 +10075,13 @@
                   "cfafa92509": "No hay conflictos sin resolver para enviar."
                 }
               }
+            },
+            "hosted": {
+              "review": {
+                "actions": {
+                  "e475c29b17": "This will merge the {{value0}}."
+                }
+              }
             }
           },
           "fileExplorerOperationOwner": {
@@ -10267,6 +10334,24 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "github": {
+            "refresh": {
+              "error": {
+                "copy": {
+                  "580025e7b7": "GitHub is unavailable",
+                  "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
+                  "d1a9f2b165": "Can't reach GitHub",
+                  "7d01d42a3a": "GitHub is unreachable right now. Check your connection, then try again shortly.",
+                  "e9d681894a": "GitHub rate limit reached",
+                  "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
+                  "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
+                  "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
+                  "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                }
+              }
+            }
           }
         }
       },
@@ -10593,7 +10678,8 @@
           },
           "ProjectCombobox": {
             "search": "Buscar proyectos...",
-            "empty": "Ningún proyecto coincide con tu búsqueda."
+            "empty": "Ningún proyecto coincide con tu búsqueda.",
+            "addProject": "Add a new project"
           }
         }
       },
@@ -11928,7 +12014,9 @@
                 "2f9d6b4e10": "Alternar título 3",
                 "8c1a3e7d52": "Cree una sección plegable con un resumen de encabezado pequeño.",
                 "5e0b9c2a71": "Alternar título 4",
-                "d4f16a8b39": "Cree una sección plegable con un resumen de encabezado anidado."
+                "d4f16a8b39": "Cree una sección plegable con un resumen de encabezado anidado.",
+                "21d8c463e5": "Alternar título 5",
+                "dc239b41ad": "Cree una sección plegable con un resumen de encabezado profundo."
               }
             }
           }
@@ -13186,15 +13274,15 @@
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
         "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…",
         "model": "Modelo",
-        "modelWithValue": "Modelo: {{value0}}",
         "effort": "Esfuerzo",
-        "effortWithValue": "Esfuerzo: {{value0}}",
         "fastMode": "Modo rápido",
         "thinking": "Razonamiento",
         "options": "Opciones",
         "sessionOptions": "Opciones de sesión",
         "chooseInAgentPicker": "Elegir en el selector del agente…",
         "toggleOption": "Alternar {{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
         "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -13206,7 +13294,9 @@
           "medium": "Medio",
           "high": "Alto",
           "xhigh": "Muy alto",
-          "max": "Máximo"
+          "max": "Máximo",
+          "on": "Activado",
+          "off": "Desactivado"
         }
       },
       "tool": {

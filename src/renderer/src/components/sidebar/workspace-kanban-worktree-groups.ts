@@ -1,21 +1,17 @@
 import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
 import type { SortBy } from './smart-sort'
 import { getWorkspaceStatus } from './workspace-status'
-
-// Why: displayName is typed non-optional, but persisted/discovered worktrees
-// have reached the sidebar with an undefined name (crash 99657ab1), which made
-// `displayName.localeCompare(...)` throw and took down the sidebar. Compare on a
-// safe string so a missing name only affects tie-break order, never crashes.
-function compareDisplayName(a: Worktree, b: Worktree): number {
-  return (a.displayName ?? '').localeCompare(b.displayName ?? '')
-}
+import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 
 function sortBoardWorktrees(a: Worktree, b: Worktree): number {
-  return b.lastActivityAt - a.lastActivityAt || compareDisplayName(a, b)
+  return b.lastActivityAt - a.lastActivityAt || compareWorktreeDisplayName(a, b)
 }
 
 function sortManualBoardWorktrees(a: Worktree, b: Worktree): number {
-  return (b.manualOrder ?? b.sortOrder) - (a.manualOrder ?? a.sortOrder) || compareDisplayName(a, b)
+  return (
+    (b.manualOrder ?? b.sortOrder) - (a.manualOrder ?? a.sortOrder) ||
+    compareWorktreeDisplayName(a, b)
+  )
 }
 
 export function groupWorkspaceKanbanWorktrees(params: {

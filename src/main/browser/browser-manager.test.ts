@@ -2357,6 +2357,15 @@ describe('browserManager', () => {
       },
       {
         type: 'keyDown',
+        code: 'BracketRight',
+        key: ']',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: true,
+        shift: false
+      },
+      {
+        type: 'keyDown',
         code: 'PageDown',
         key: 'PageDown',
         meta: false,
@@ -2411,12 +2420,13 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:newBrowserTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:newTerminalTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTab', 1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTerminalTab', 1)
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:openQuickOpen')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:focusBrowserAddressBar')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:reloadBrowserPage')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:hardReloadBrowserPage')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTabAcrossAllTypes', 1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:switchTab', 1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:switchTerminalTab', 1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:openQuickOpen')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:focusBrowserAddressBar')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:reloadBrowserPage')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(10, 'ui:hardReloadBrowserPage')
   })
 
   it('uses customized keybindings when forwarding browser guest shortcuts', () => {

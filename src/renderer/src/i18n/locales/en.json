@@ -95,7 +95,8 @@
     "minimizeNotice": {
       "body": "Orca is still running in the system tray"
     },
-    "activityWaiting": "Orca - activity waiting"
+    "activityWaiting": "Orca - activity waiting",
+    "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -611,6 +612,27 @@
             "de50bef680": "macOS is blocking Orca notifications"
           }
         }
+      },
+      "linear": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked ticket",
+            "postUpdate": "Post a progress update",
+            "moveState": "Move the ticket forward",
+            "attachPr": "Attach the PR link",
+            "triageFollowups": "Triage and create follow-ups",
+            "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
+            "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
+            "postUpdateSummary": "Comment progress or a completion summary back to the Linear issue.",
+            "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
+            "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
+            "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
+            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
+            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
+            "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
+          }
+        }
       }
     },
     "hooks": {
@@ -728,7 +750,9 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "projectHostsSummary": "{{value0}} hosts"
+        "projectHostsSummary": "{{value0}} hosts",
+        "linearTitle": "Linear",
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -739,13 +763,13 @@
     },
     "components": {
       "CodexRestartChip": {
-        "9132779820": "Dismiss",
         "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
         "c72a5fb234": "Restart",
         "9263e75f49": "Codex is using the previous account",
         "d3e8a1f4b2": "Account switched",
-        "e9b2c7d1a5": "Restart this session to use {{value0}}. Collapse to keep working with the current account.",
-        "f1a6c8e3b4": "Collapse"
+        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Dismiss notice",
@@ -1781,7 +1805,8 @@
         "jiraSortAscending": "ascending",
         "jiraSortDescending": "descending",
         "jiraSortBy": "Sort by",
-        "jiraToggleSortDirection": "Sort {{value0}}"
+        "jiraToggleSortDirection": "Sort {{value0}}",
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -1843,7 +1868,14 @@
         "a726967bd3": "Dismiss",
         "d5253b54af": "error",
         "7ffc08506e": "check",
-        "522df222b9": "spinner"
+        "522df222b9": "spinner",
+        "e944c2de43": "Update Verification Blocked",
+        "5b309b19f3": "Update Wasn't Installed",
+        "092f09fc14": "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version.",
+        "c9ff9b9ec2": "Check official releases",
+        "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
+        "5194358929": "Hide details",
+        "8bc9e17d8f": "Show details"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Move",
@@ -3953,10 +3985,9 @@
         "RemoveFolderDialog": {
           "4dc5b5065b": "Remove",
           "d36883e046": "Cancel",
-          "8c097ef04e": "from Orca. It is still on your disk.",
-          "e62415c3d0": "This only removes",
           "b79b39d865": "Remove Project",
-          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
+          "removeDescriptionSsh": "This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.",
+          "removeDescriptionLocal": "This only removes {{name}} from Orca. It is still on your disk."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Reveal active workspace"
@@ -5103,7 +5134,11 @@
           "windowSidebarSummary": "Sidebar, status bar, and file explorer",
           "statusBarCount": "{{value0}} indicators visible.",
           "gitIgnoredGlossary": "Files matched by .gitignore.",
-          "statusBarDescription": "Choose which indicators appear in the status bar."
+          "statusBarDescription": "Choose which indicators appear in the status bar.",
+          "showPinnedWorktreesInGroups": {
+            "title": "Also show pinned worktrees in their original lists",
+            "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -6000,13 +6035,6 @@
           "3743ed080c": "Set command",
           "f79084947b": "New app"
         },
-        "OrchestrationExamplesDialog": {
-          "3d1aa105e3": "Copy prompt",
-          "9b4c004998": "Done",
-          "969cec9739": "Copy {{value0}} example prompt",
-          "4e46da1889": "Failed to copy prompt.",
-          "80c6f2feb8": "Copied example prompt."
-        },
         "OrchestrationPane": {
           "52e0634e2c": "Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and sequential or parallel child agents.",
           "ae79504732": "How to use it",
@@ -6518,7 +6546,9 @@
           "2309068a6f": "destructive",
           "65358016ea": "Discard",
           "dev": "Dev Tools",
-          "devDescription": "Dev-only tools for exercising UI states."
+          "devDescription": "Dev-only tools for exercising UI states.",
+          "linearTitle": "Linear",
+          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -7352,6 +7382,10 @@
               "cardLayout": "card layout",
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
+            },
+            "showPinnedWorktreesInGroups": {
+              "title": "Also show pinned worktrees in their original lists",
+              "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
             },
             "antigravityUsageTitle": "Antigravity Usage",
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
@@ -9103,6 +9137,10 @@
                   "description": "Let your agents read and edit Linear tasks.",
                   "copyCommand": "Copy command"
                 }
+              },
+              "search": {
+                "title": "Linear",
+                "description": "Give agents the skill to read and update your linked Linear tickets."
               }
             }
           }
@@ -9183,6 +9221,23 @@
           "availability": "Available on",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "SkillUsageExampleDialog": {
+          "copiedPrompt": "Copied example prompt.",
+          "copyFailed": "Failed to copy prompt.",
+          "copyExampleAria": "Copy {{value0}} example prompt",
+          "done": "Done",
+          "copyPrompt": "Copy prompt"
+        },
+        "LinearAgentSkillPane": {
+          "title": "Linear",
+          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "skillTitle": "Linear skill",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
+          "howToUse": "How to use it",
+          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
+          "terminalTitle": "Linear skill setup",
+          "terminalAriaLabel": "Linear skill install terminal"
         }
       },
       "right": {
@@ -9283,14 +9338,17 @@
             "d6a25618aa": "Collapse Folder",
             "d87a4c42e1": "Open Markdown Preview",
             "c2112579f6": "Download",
+            "7ac885bd2f": "Download Folder",
             "dd112c81d2": "Open in Orca Browser",
             "1bb9be455c": "Add as Project...",
             "0fec99bfd7": "Duplicate",
             "f61af83316": "New Folder",
             "37c875d827": "New File",
             "b3e288bf41": "Failed to download '{{value0}}'.",
+            "f729bcd97d": "Failed to download folder '{{value0}}'.",
             "1a3df04ae1": "Open",
             "bce4d4e44f": "Downloaded '{{value0}}'",
+            "a4029c996b": "Downloaded folder '{{value0}}'",
             "e26010014a": "Ignored by .gitignore",
             "a06551beee": "Enter",
             "128a99ed5e": "Unassigned",
@@ -9667,7 +9725,9 @@
               "a9bf7c171a": "Push Failed",
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
-            }
+            },
+            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
+            "createPrIntentSyncing": "Syncing branch…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -10038,6 +10098,13 @@
                   "cfafa92509": "No unresolved conflicts to send."
                 }
               }
+            },
+            "hosted": {
+              "review": {
+                "actions": {
+                  "e475c29b17": "This will merge the {{value0}}."
+                }
+              }
             }
           },
           "fileExplorerOperationOwner": {
@@ -10290,6 +10357,24 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "github": {
+            "refresh": {
+              "error": {
+                "copy": {
+                  "580025e7b7": "GitHub is unavailable",
+                  "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
+                  "d1a9f2b165": "Can't reach GitHub",
+                  "7d01d42a3a": "GitHub is unreachable right now. Check your connection, then try again shortly.",
+                  "e9d681894a": "GitHub rate limit reached",
+                  "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
+                  "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
+                  "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
+                  "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                }
+              }
+            }
           }
         }
       },
@@ -10616,7 +10701,8 @@
           },
           "ProjectCombobox": {
             "search": "Search projects...",
-            "empty": "No projects match your search."
+            "empty": "No projects match your search.",
+            "addProject": "Add a new project"
           }
         }
       },
@@ -10721,7 +10807,7 @@
             "0bad5b07c8": "GitHub and Linear",
             "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Tasks",
-            "d33d7a9c29": "orca&nbsp;&nbsp;·&nbsp;&nbsp;feat/mobile-page",
+            "d33d7a9c29": "orca  ·  feat/mobile-page",
             "25d6e8a491": "feat/mobile-page",
             "c791677f2f": "Resume",
             "cf3f98fa3f": "Disconnected",
@@ -11951,7 +12037,9 @@
                 "2f9d6b4e10": "Toggle H3",
                 "8c1a3e7d52": "Create a collapsible section with a small heading summary.",
                 "5e0b9c2a71": "Toggle H4",
-                "d4f16a8b39": "Create a collapsible section with a nested heading summary."
+                "d4f16a8b39": "Create a collapsible section with a nested heading summary.",
+                "21d8c463e5": "Toggle H5",
+                "dc239b41ad": "Create a collapsible section with a deep heading summary."
               }
             }
           }
@@ -13209,15 +13297,15 @@
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
         "uploadingAttachments": "Uploading {{value0}} file(s) to remote…",
         "model": "Model",
-        "modelWithValue": "Model: {{value0}}",
         "effort": "Effort",
-        "effortWithValue": "Effort: {{value0}}",
         "fastMode": "Fast mode",
         "thinking": "Thinking",
         "options": "Options",
         "sessionOptions": "Session options",
         "chooseInAgentPicker": "Choose in agent picker…",
         "toggleOption": "Toggle {{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "Current value unknown — pick On or Off",
         "sentNotConfirmed": "Sent to the agent — not confirmed",
         "setWhenSessionStarts": "Set when the session starts.",
         "availableAfterSessionStarts": "Available after the session starts.",
@@ -13229,7 +13317,9 @@
           "medium": "Medium",
           "high": "High",
           "xhigh": "Extra high",
-          "max": "Max"
+          "max": "Max",
+          "on": "On",
+          "off": "Off"
         }
       },
       "tool": {

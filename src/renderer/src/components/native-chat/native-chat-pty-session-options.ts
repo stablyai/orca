@@ -1,10 +1,6 @@
 import {
-  findCatalogModel,
-  findCatalogOption,
   getAgentSessionOptionCatalog,
-  type CatalogMidSessionApply,
-  type CatalogModel,
-  type CatalogOptionApply
+  type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type {
@@ -17,16 +13,12 @@ import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from './native-chat-session-option-cache'
+import { createSessionOptionAppliers } from './native-chat-session-option-apply'
 import {
   buildNativeChatSessionOptionSnapshot,
-  flattenNativeChatSessionOptionRecord,
   type NativeChatSessionOptionMode
 } from './native-chat-session-option-snapshot'
-import { buildNativeChatSessionOptionCommand } from './native-chat-session-option-command-builder'
-import type {
-  NativeChatSessionOptionDispatchCommand,
-  NativeChatSessionOptionDispatchResult
-} from './native-chat-session-option-command-dispatch'
+import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
 import { applyNativeChatReportedSessionOptions } from './native-chat-session-option-reporting'
 import { recordNativeChatSessionOptionCommand } from './native-chat-session-option-command-recording'
 
@@ -129,121 +121,24 @@ export function createNativeChatPtySessionOptions(
     }
   }
 
-  const currentApply = (
-    optionId: string
-  ): { apply: CatalogOptionApply; modelId: string | null } | null => {
-    const modelId = typeof record.model?.value === 'string' ? record.model.value : null
-    if (optionId === 'model') {
-      return { apply: catalog.modelApply, modelId }
-    }
-    const model = modelId ? findCatalogModel({ ...catalog, models }, modelId) : undefined
-    const option = findCatalogOption(model, optionId)
-    return option ? { apply: option.apply, modelId } : null
-  }
-
-  const handleAgentPicker = async (midSession: CatalogMidSessionApply): Promise<void> => {
-    if (midSession.kind !== 'agent-picker') {
-      return
-    }
-    await args.dispatchCommand(midSession.command)
-    clearModelTruth()
-    publish()
-    args.onAgentPicker?.()
-  }
-
-  const setOption = async (id: string, value: SessionOptionValue) => {
-    const resolved = currentApply(id)
-    if (!resolved) {
-      throw new Error(`Unknown session option: ${id}`)
-    }
-    const { apply, modelId: previousModelId } = resolved
-    if (args.mode === 'live' && apply.midSession?.kind === 'agent-picker') {
-      await handleAgentPicker(apply.midSession)
-      return { snapshot }
-    }
-    const source = args.mode === 'live' ? 'dispatched' : 'applied'
-    let dispatchResult: NativeChatSessionOptionDispatchResult | void = undefined
-    const toggleWasKnown =
-      apply.midSession?.kind === 'toggle-command' && previousModelId
-        ? record.valuesByModel[previousModelId]?.[id] !== undefined
-        : false
-    if (args.mode === 'live') {
-      const command = buildNativeChatSessionOptionCommand({
-        optionId: id,
-        value,
-        apply,
-        modelId: previousModelId,
-        catalog,
-        models,
-        record
-      })
-      if (!command) {
-        throw new Error('This option can only be set when the session starts.')
-      }
-      const detectAgentInteraction =
-        apply.midSession?.kind === 'command'
-          ? apply.midSession.detectAgentInteraction
-          : apply.composedIntoModel && catalog.modelApply.midSession?.kind === 'command'
-            ? catalog.modelApply.midSession.detectAgentInteraction
-            : undefined
-      const expectedChoiceLabel =
-        id === 'model' && typeof value === 'string'
-          ? (findCatalogModel({ ...catalog, models }, value)?.label ?? value)
-          : undefined
-      dispatchResult = detectAgentInteraction
-        ? await args.dispatchCommand(command, {
-            detectAgentInteraction,
-            expectedChoiceLabel
-          })
-        : await args.dispatchCommand(command)
-    } else if (!apply.launchArgs && !apply.composedIntoModel) {
-      throw new Error('This option is only available after the session starts.')
-    }
-
-    if (dispatchResult?.outcome === 'rejected') {
-      throw new Error('Claude kept the current model.')
-    }
-    if (dispatchResult?.outcome === 'unknown') {
-      clearModelTruth()
-      publish()
-      throw new Error('Could not verify the model change; open the terminal to check.')
-    }
-    if (dispatchResult?.outcome === 'interaction-required') {
-      clearModelTruth()
-      publish()
-      args.onAgentPicker?.()
-      return { snapshot }
-    }
-
-    if (apply.midSession?.kind === 'toggle-command' && !toggleWasKnown) {
-      return { snapshot: publish() }
-    }
-    if (id === 'model' && previousModelId !== value) {
-      record.model = undefined
-      if (args.mode === 'live' && typeof value === 'string') {
-        // Why: switching models can reset its effort/toggles. A value cached
-        // from an earlier visit to that model is no longer live evidence.
-        delete record.valuesByModel[value]
-      }
-    }
-    const modelId = setTrackedValue(id, value, source)
-    if (apply.midSession?.kind === 'toggle-command' && previousModelId && source === 'dispatched') {
-      record.valuesByModel[previousModelId] = {
-        ...record.valuesByModel[previousModelId],
-        [id]: { value, source }
-      }
-    }
-    persist(modelId ?? previousModelId, id, value)
-    const next = publish()
-    if (args.mode === 'draft' && typeof record.model?.value === 'string') {
-      args.onDraftValuesChanged?.(flattenNativeChatSessionOptionRecord(record, record.model.value))
-    }
-    return { snapshot: next }
-  }
+  const appliers = createSessionOptionAppliers({
+    mode: args.mode,
+    catalog,
+    getModels: () => models,
+    getRecord: () => record,
+    dispatchCommand: args.dispatchCommand,
+    onAgentPicker: args.onAgentPicker,
+    persistSelection: args.persistSelection,
+    onDraftValuesChanged: args.onDraftValuesChanged,
+    publish,
+    clearModelTruth,
+    setTrackedValue
+  })
 
   return {
     getSnapshot: () => snapshot,
-    setOption,
+    setOption: appliers.setOption,
+    invokeAction: appliers.invokeAction,
     subscribe: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)

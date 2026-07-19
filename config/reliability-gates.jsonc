@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-13",
+  "updatedAt": "2026-07-19",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -1694,6 +1694,98 @@
       "demotionRule": "Cannot promote without deterministic user-visible oracle, failure artifacts, and stable runtime history."
     },
     {
+      "id": "terminal-session.windows-main-crash-survival",
+      "title": "A Windows main-process crash preserves and reattaches daemon terminals",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-platform",
+      "layer": "windows-packaged-electron-daemon",
+      "surfaces": [
+        "Electron main-process crash",
+        "detached terminal daemon",
+        "ConPTY shell survival",
+        "packaged relaunch reattach"
+      ],
+      "platforms": ["windows"],
+      "providers": ["daemon"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "A packaged Windows CI run force-kills the launched instance's real Electron main without tree-killing, then proves the same scoped daemon and interactive PowerShell survive, no FailFast event is observed, and relaunch input reaches the same shell. Focused cross-platform unit tests fail closed on unavailable event-log or PID-liveness evidence, stale or ambiguous daemon identity, and incomplete reattach assertions.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7742",
+        "https://github.com/stablyai/orca/pull/9311"
+      ],
+      "invariant": "On packaged Windows, abrupt death of Orca's Electron main process must not terminate or replace the userData-scoped terminal daemon or its live ConPTY shell, and a relaunch must adopt that exact daemon and route terminal input to that exact surviving shell without a PowerShell 0xE9 FailFast.",
+      "oracle": "Resolve the launched instance's real main PID from inside Electron, force-kill only that PID, require it to die, require one command-line-scoped daemon PID and the stamped interactive shell PID to remain live, relaunch with persisted state, require the daemon PID to remain identical, read the exact shell PID and a per-shell environment sentinel back through the exact restored tab, then require a successful Windows Application event-log query with zero matching pwsh FailFast events across the full crash-to-input window.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/win-crash-survival-e2e.test.mjs",
+        "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8"
+      ],
+      "testFiles": [
+        "config/scripts/win-crash-survival-e2e.test.mjs",
+        "tools/win-crash-survival-e2e/run.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/win-crash-survival-e2e.test.mjs",
+          "assertions": [
+            "survival requires the crash antecedent, daemon and shell liveness, unchanged daemon identity, zero FailFast events, and same-shell reattach",
+            "event-log query failure cannot be converted into zero FailFast events",
+            "malformed event-log and PID-liveness evidence fails closed",
+            "stale, missing, or ambiguous userData-scoped daemon identity fails closed",
+            "the packaged survival proof remains wired to targeted pull requests without a duplicate branch-push run"
+          ]
+        },
+        {
+          "file": "tools/win-crash-survival-e2e/run.mjs",
+          "assertions": [
+            "force-killing only the real Electron main leaves the exact scoped daemon and stamped interactive shell alive",
+            "packaged relaunch adopts the unchanged daemon and reads the survivor shell's environment sentinel through the restored terminal"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-18",
+          "runner": "ci",
+          "platform": "windows",
+          "command": "node tools/win-crash-survival-e2e/run.mjs --expect survival --exe-path \"$env:ORCA_EXE\" --soak-seconds 8",
+          "result": "passed",
+          "durationSeconds": 61,
+          "summary": "The packaged branch build's real main died; the same daemon and shell PIDs survived; the event-log scan found zero FailFast events; relaunch adopted the unchanged daemon; and terminal input read the survivor shell sentinel back."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "installed-app crash/relaunch harness, excluding installer build and dependency setup"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One green packaged Windows CI run is recorded; the durable pull-request trigger must accumulate repeated history before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The inverse orphaned profile failed against the fixed packaged build because the daemon stayed live and no FailFast occurred. A genuinely pre-relocation packaged build has not yet been retained as a CI red fixture."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Production code is unchanged. The harness has bounded 500ms liveness polls, one 8-second crash soak, two scoped daemon identity scans plus teardown rediscovery, a 60-second cap on every synchronous PowerShell probe, a 5-second cap on Electron main-PID resolution, cleared and unreferenced close deadlines, a 50-minute job timeout, concurrency cancellation, and targeted production-path filtering that excludes source tests and benchmarks. The installer cache is keyed by every production build input; the job also restores the pnpm store and restores Electron/NSIS downloads only when an installer rebuild is required. The measured packaged harness completed in 61 seconds."
+      },
+      "promotionCriteria": [
+        "Collect at least 100 consecutive targeted Windows PR or soak passes over 14 days with zero unexplained flakes.",
+        "Retain a pre-relocation packaged red fixture or equivalent fault injection that makes the survival profile fail for daemon death and shell loss.",
+        "Keep the live oracle fail-closed for crash delivery, event-log access, daemon identity, and same-shell reattach."
+      ],
+      "knownGaps": [
+        "The packaged journey proves one terminal end to end; concurrent restoration across the user's multi-terminal, multi-worktree layout is not exercised live.",
+        "The gate covers a Windows local daemon-backed PowerShell terminal; WSL-backed shells are not exercised.",
+        "SSH, remote-runtime, relay, mobile, macOS, and Linux paths are unaffected by the Windows relocated ConPTY host contract and are not exercised here.",
+        "The Application event-log query is machine-wide, so an unrelated PowerShell crash on a non-isolated runner can false-fail the gate.",
+        "Standalone daemon self-crash and renderer-only crash containment remain separate invariants."
+      ],
+      "demotionRule": "Keep experimental or quarantine with a linked harness defect if the Windows job flakes; never weaken the crash, identity, event-log, or same-shell reattach oracle to obtain a pass."
+    },
+    {
       "id": "terminal-platform.windows-conpty-liveness",
       "title": "Windows ConPTY terminals stay input-live, render-live, and geometry-live",
       "maturity": "experimental",
@@ -2149,6 +2241,116 @@
       "demotionRule": "Cannot promote while restored daemon ids or routing operations can silently route to local fallback."
     },
     {
+      "id": "terminal-provider.startup-shutdown-authority",
+      "title": "Cold-start terminal shutdown targets the installed daemon provider",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-provider",
+      "layer": "main-provider-contract",
+      "surfaces": [
+        "daemon startup",
+        "renderer terminal close",
+        "runtime terminal stop",
+        "restored terminal teardown"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "A real daemon server over a local socket proves a fresh adapter can kill a live session before any prior client operation. Main-process tests prove renderer IPC, runtime kill, and runtime exact-stop wait for the provider swap and issue zero shutdowns to the fallback provider, while SSH spawn and kill bypass the local barrier. The same shared logic runs on Linux and Windows; live platform runs remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/7742",
+        "https://github.com/stablyai/orca/pull/7836"
+      ],
+      "invariant": "A local PTY shutdown requested during desktop cold start must resolve its provider only after daemon startup settles, and a fresh daemon adapter must connect before issuing the destructive request; a fallback provider must never falsely acknowledge shutdown while the restored daemon session remains live, and SSH shutdown must not wait on local startup.",
+      "oracle": "Hold the desktop provider-startup promise unresolved, request shutdown through renderer IPC and both runtime-controller entry points, install the daemon provider, and assert the fallback receives zero shutdowns while the daemon receives exactly the requested kill; prove the provider gate opens as soon as daemon authority settles even while optional hook startup remains unresolved, and prove an SSH spawn and kill complete without touching either local barrier. Separately, spawn a session through one adapter, kill it through a fresh unconnected adapter, and assert the daemon no longer lists it.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/pty.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/startup/first-window-startup-services.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "renderer local kills issue zero fallback shutdowns before startup and target the installed daemon afterward",
+            "runtime fire-and-forget local kills issue zero fallback shutdowns before startup and target the installed daemon afterward",
+            "runtime exact local stops issue zero fallback shutdowns before startup and verify the installed daemon target stopped",
+            "SSH spawns and kills bypass the unresolved local startup barrier and target the SSH provider"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "a fresh unconnected adapter kills a session hosted by the live daemon and the session disappears from daemon inventory",
+            "concurrent shutdowns through a fresh adapter perform exactly one control-plus-stream handshake and remove both daemon sessions"
+          ]
+        },
+        {
+          "file": "src/main/startup/first-window-startup-services.test.ts",
+          "assertions": [
+            "daemon provider authority opens before an unresolved optional hook startup while the broader local spawn gate remains closed",
+            "the provider authority gate shares the bounded 60-second fail-open when daemon startup hangs"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/startup/first-window-startup-services.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.27,
+          "summary": "3 files and 406 tests passed, including single and concurrent real-socket fresh-adapter shutdown, one control-plus-stream handshake for burst shutdown, three deferred local provider-selection teardown paths, hook-independent provider authority, and SSH barrier bypass."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused main-process provider and IPC contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused deterministic gate passed locally once and needs CI soak history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Removing the adapter connection reproduces DaemonProtocolError: Not connected, and removing the renderer startup barrier routes shutdown to the fallback. The new runtime-controller barrier assertions also fail against the prior provider-before-startup shape; saved CI red artifacts remain uncollected."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The provider-authority barrier and connection guard add no polling, timers, subprocesses, session inventories, or provider fanout; runtime exact-stop's existing post-stop verification inventory is unchanged. Shutdown does not wait for optional hook startup once daemon authority settles. Each path awaits one bounded provider promise; DaemonClient.ensureConnected is an O(1) no-op when connected and deduplicates concurrent connection attempts when disconnected. Tests deterministically count zero fallback shutdowns, exactly one target shutdown per entry point, and exactly one control-plus-stream handshake for concurrent fresh-adapter shutdowns."
+      },
+      "promotionCriteria": [
+        "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Collect a Windows cold-start close or exact-stop run against a preserved daemon PTY.",
+        "Attach saved red/green artifacts for all three provider-selection entry points."
+      ],
+      "knownGaps": [
+        "No live Electron restart-to-close journey is included; provider and IPC contracts cover the race deterministically.",
+        "The bounded daemon-startup fail-open to LocalPtyProvider remains an accepted boot-over-persistence tradeoff tracked by issue #5232.",
+        "Daemon process death and the resulting Windows ConPTY PowerShell FailFast are separate from provider-selection shutdown authority."
+      ],
+      "demotionRule": "Keep experimental or demote if the gate flakes without a product or harness bug, if any local shutdown reaches fallback before startup settles, or if shutdown adds inventory scans or retry loops."
+    },
+    {
       "id": "terminal-provider.ssh-remote-reattach-contract",
       "title": "SSH and remote terminal restore never turn unknown liveness into destructive cleanup",
       "maturity": "experimental",
@@ -2176,9 +2378,10 @@
         "macos"
       ],
       "coveredProviders": [
-        "ssh"
+        "ssh",
+        "remote-runtime"
       ],
-      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, remote or unresolved hosts cannot enter local-daemon cold activation deferral, and stale cleanup cannot unregister a replacement runtime terminal. A macOS Electron journey connects to a real Linux SSH relay in Docker, persists six terminals, reloads the renderer, and verifies all six original relay PTYs remount eagerly and still execute remote input. Linux and Windows desktop clients, WSL, and remote-runtime restore remain gaps.",
+      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, remote or unresolved hosts cannot enter local-daemon cold activation deferral, stale cleanup cannot unregister a replacement runtime terminal, and a mounted remote-runtime web mirror replaces a stale handle without retiring its pane or accumulating obsolete PTY identities. Bounded polling falls back to accepted host snapshots without a global store subscription, and concurrent panes share each in-flight inventory request. A macOS Electron journey connects to a real Linux SSH relay in Docker, persists six terminals, reloads the renderer, and verifies all six original relay PTYs remount eagerly and still execute remote input. Linux and Windows desktop clients, WSL, and live remote-runtime restore remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
@@ -2186,10 +2389,10 @@
         "https://github.com/stablyai/orca/pull/7009",
         "https://github.com/stablyai/orca/pull/8597"
       ],
-      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once. Snapshot-backed cold activation deferral is local-daemon-only; every restored remote terminal must mount a manager eagerly and preserve its provider PTY identity.",
-      "oracle": "Deterministic tests assert startup publishes ssh.connect's authoritative state before terminal reconnect, only an explicit local execution host can defer cold activation, host ownership changes clear old restrictions, and replacement runtime registrations survive stale cleanup. The live Docker SSH journey commits six terminal records to the relay, reloads Electron, requires the exact six manager ids with no parked tabs, compares all restored PTY ids to their pre-reload identities, and sends a marker through the restored terminal to a proof file on the Linux host.",
+      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once. Snapshot-backed cold activation deferral is local-daemon-only; every restored remote terminal must mount a manager eagerly and preserve its provider PTY identity. A stale remote-runtime mirror handle must keep its pane mounted until a replacement or explicit terminal-removal fact arrives, and each replacement must atomically supersede rather than accumulate PTY identity.",
+      "oracle": "Deterministic tests assert startup publishes ssh.connect's authoritative state before terminal reconnect, only an explicit local execution host can defer cold activation, host ownership changes clear old restrictions, replacement runtime registrations survive stale cleanup, stale mirror polling is bounded, and replacement handles resubscribe without exit/disconnect callbacks or stale PTY index growth. Count tests prove concurrent panes share one in-flight inventory request per runtime/worktree and accepted-snapshot listeners are identity-scoped and released after rebind. The live Docker SSH journey commits six terminal records to the relay, reloads Electron, requires the exact six manager ids with no parked tabs, compares all restored PTY ids to their pre-reload identities, and sends a marker through the restored terminal to a proof file on the Linux host.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -2201,6 +2404,10 @@
         "src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
+        "src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts",
+        "src/renderer/src/runtime/web-session-terminal-handle-events.test.ts",
+        "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "tests/e2e/terminal-cold-activation-deferral.spec.ts",
         "tests/e2e/ssh-cold-activation-restore.spec.ts"
       ],
@@ -2216,6 +2423,34 @@
           "assertions": [
             "only an explicit local execution host can defer cold activation",
             "SSH, remote-runtime, and unresolved owners remain eager"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
+          "assertions": [
+            "a stale web-mirror handle polls until a different ready handle is published without resubscribing the stale handle",
+            "replacement does not emit pane exit or disconnect callbacks and explicit terminal exit still retires the mirror",
+            "replacement polling and each in-flight request share a 15-second deadline, then accepted snapshots own recovery without input re-arming polling"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts",
+          "assertions": [
+            "concurrent panes share one in-flight inventory request within a runtime/worktree and do not share across ownership boundaries"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-terminal-handle-events.test.ts",
+          "assertions": [
+            "accepted host snapshot listeners are scoped by runtime, worktree, and pane and distinguish pending handles from removed surfaces",
+            "listeners are released after the waiting transport settles"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
+          "assertions": [
+            "repeated handle rotations retain exactly one live PTY identity and update the tab fallback atomically",
+            "snapshot-first replacement still migrates stale PTY-indexed state"
           ]
         },
         {
@@ -2236,6 +2471,15 @@
           "result": "passed",
           "durationSeconds": 128,
           "summary": "Six focused files and 475 tests passed; the local cold-activation journey passed; the Docker/Linux SSH journey restored six of six original relay PTYs, mounted six of six managers without parking, and executed remote input through the restored terminal."
+        },
+        {
+          "date": "2026-07-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
+          "result": "passed",
+          "durationSeconds": 15,
+          "summary": "Ten provider-contract files and 566 tests passed, including a shared 15-second polling/RPC deadline, no input-triggered re-polling after the bound, post-timeout snapshot recovery, listener cleanup, in-flight inventory deduplication, and replacement-state migration."
         }
       ],
       "runtimeBudget": {
@@ -2248,11 +2492,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert SSH attach uses relay pty.attach for saved sessions, expired relay attach does not fresh-spawn in the provider, a failed SSH listProcesses observation does not clear previously learned ownership, a rejected SSH hasPty probe resolves as unknown liveness, deferred SSH passphrase cancellation does not auto-reconnect, deferred attach uses saved leaf/tab session ids once connected, transient deferred reattach failure preserves the saved session id without clearing pane/tab bindings or fresh-spawning, deferred SSH no-result cleanup clears the pending serializer without clearing pane/tab bindings or consuming the saved restore id, disconnected SSH relay ids are retained as deferred reconnect metadata and sidebar wake hints rather than attached PTY proof, and expired deferred relay state clears stale pane/tab bindings before one fresh replacement spawn. Needs WSL, remote-runtime mirror polling, live SSH, and saved intentional-break artifacts before promotion."
+        "evidence": "Tests assert SSH attach uses relay pty.attach for saved sessions, expired relay attach does not fresh-spawn in the provider, a failed SSH listProcesses observation does not clear previously learned ownership, a rejected SSH hasPty probe resolves as unknown liveness, deferred SSH passphrase cancellation does not auto-reconnect, deferred attach uses saved leaf/tab session ids once connected, transient deferred reattach failure preserves the saved session id without clearing pane/tab bindings or fresh-spawning, deferred SSH no-result cleanup clears the pending serializer without clearing pane/tab bindings or consuming the saved restore id, disconnected SSH relay ids are retained as deferred reconnect metadata and sidebar wake hints rather than attached PTY proof, expired deferred relay state clears stale pane/tab bindings before one fresh replacement spawn, and remote-runtime stale handles rotate in place without stale resubscription, pane retirement, or PTY index growth. Needs WSL, live remote-runtime/SSH, and saved intentional-break artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Host eligibility is resolved from existing store metadata during activation and adds no provider listing or polling. The local journey preserves cold deferral, while SSH eagerly mounts six managers as required; no work is added to typing or terminal-output hot paths."
+        "evidence": "Host eligibility is resolved from existing store metadata during activation. Remote-runtime resubscribe polling runs only after a transport close, reserves replacement-only matching for typed stale-handle evidence, backs off from 150 ms to 1 s, caps each request to the remaining 15-second reconnect deadline, and shares each in-flight inventory request across panes in the same runtime/worktree. Accepted host snapshots use an identity-scoped listener only while recovery is pending; after the bound there is no timer or global store subscriber, and stale input cannot re-arm polling. The listener is released on rebind, removal, detach, or destroy, and PTY state is atomically replaced instead of growing. The local journey preserves cold deferral, while SSH eagerly mounts six managers as required; no work is added to typing or terminal-output hot paths."
       },
       "promotionCriteria": [
         "Use deterministic fake providers for failure and unknown-liveness cases.",
@@ -2262,8 +2506,8 @@
       "knownGaps": [
         "Current command covers store wake-hint metadata, main-process SSH provider failure semantics, provider attach/expired-attach behavior, and renderer deferred SSH reconnect/transient-failure/expired-relay fallback with mocked transports.",
         "The live SSH journey is environment-dependent and currently runs from a macOS Electron client against a Linux Docker host.",
-        "WSL and remote-runtime mirror polling contracts are not wired yet.",
-        "Linux and Windows desktop-client journeys are not yet collected."
+        "WSL restore remains inferred rather than directly covered.",
+        "Linux and Windows desktop-client journeys and a live remote-runtime reconnect soak are not yet collected."
       ],
       "demotionRule": "Cannot promote if provider failure can close panes or if the oracle is screenshot-only."
     },
@@ -4162,6 +4406,74 @@
         "Renderer-vs-mirror comparison cannot see corruption upstream of the mirror itself (#7192's stale-width mirror); mirror-vs-PTY truth is owned by terminal-geometry.visible-convergence."
       ],
       "demotionRule": "Disable the probe if it exceeds its per-reveal budget or produces false-positive anomaly noise."
+    },
+    {
+      "id": "terminal-render.atlas-identity-invalidation",
+      "title": "A WebGL atlas identity change rebuilds cached glyph vertices",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "electron-visual-golden",
+      "surfaces": ["WebGL rendering", "shared glyph atlas", "render model"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "A deterministic macOS Electron test uses two real WebGL terminals with distinct atlas populations, attaches one renderer to the other's atlas, and compares its pixels before and after rendering. Provider paths are unaffected because atlas ownership is renderer-local; Linux and Windows GPU evidence remains pending.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/8899"],
+      "invariant": "Whenever GlyphRenderer attaches a different shared atlas, every cached glyph vertex is rebuilt before the next draw even if the old and new atlases have the same clear-model generation.",
+      "oracle": "Render terminal A and capture its non-empty canvas, populate terminal B with a distinct atlas, attach A's glyph renderer to B's atlas without changing A's buffer, render A again, and require byte-equivalent visible pixels. Also require the atlas identities to differ so the test cannot pass without exercising the transition.",
+      "commands": [
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-webgl-atlas-budget.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": ["tests/e2e/terminal-webgl-atlas-budget.spec.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-webgl-atlas-budget.spec.ts",
+          "assertions": [
+            "the replacement scenario uses distinct atlas identities and renders a non-empty baseline",
+            "attaching the replacement atlas leaves zero pixels different from the same terminal buffer's baseline"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-webgl-atlas-budget.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 44,
+          "summary": "Both real-WebGL scenarios passed. The atlas-replacement case changed 327,165 pixels with the old generation adoption and zero pixels after identity invalidation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "fresh E2E build plus two real-WebGL atlas tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused local macOS run and the PR's macOS golden experiment job passed. The Linux golden job skipped both WebGL atlas tests because WebGL was unavailable; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The old setAtlas behavior deterministically changed 327,165 pixels after replacement; setting the last-seen generation to an invalid value on identity change produced zero changed pixels."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The added work is one existing full-model rebuild only when atlas object identity changes; ordinary frames and repeated setAtlas calls with the same object take the existing path. The field sentinel remains off by default, samples only a modifier-clicked pane in a bounded ten-second burst, reuses and releases one readback canvas, and caps renderer and disk evidence."
+      },
+      "promotionCriteria": [
+        "Accumulate stable macOS and Linux GPU runs across the release golden suite.",
+        "Add Windows GPU evidence or retain the platform gap explicitly.",
+        "Remove the flag-gated field sentinel after the confirmation window while keeping this pixel regression."
+      ],
+      "knownGaps": [
+        "The historical field capture predates renderer-internal atlas identity diagnostics, so it cannot prove this exact transition retrospectively.",
+        "The deterministic test drives the renderer transition directly rather than reproducing the original Cmd/Ctrl-click lifecycle trigger.",
+        "Windows GPU evidence is not yet recorded."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if GPU skips hide the transition, the pixel oracle flakes across stable runners, or the test no longer fails with generation adoption restored."
     },
     {
       "id": "terminal-render.pixel-refresh-repair",

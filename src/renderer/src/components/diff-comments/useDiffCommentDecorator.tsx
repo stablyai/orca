@@ -36,6 +36,9 @@ export type DecoratedDiffComment = DiffComment & {
 
 type DecoratorArgs = {
   editor: monacoEditor.ICodeEditor | null
+  // Why: Monaco destroys model-scoped view zones when a retained editor swaps
+  // models, so the decorator must rebuild even though the editor object is stable.
+  monacoModelIdentity?: string
   filePath: string
   worktreeId: string
   comments: readonly DecoratedDiffComment[]
@@ -119,6 +122,7 @@ function getSingleCommentSendScopes(
 
 export function useDiffCommentDecorator({
   editor,
+  monacoModelIdentity,
   filePath,
   worktreeId,
   comments,
@@ -424,7 +428,7 @@ export function useDiffCommentDecorator({
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [addButtonLabel, cancelScrollToZoneFrame, commentableLineSet, editor])
+  }, [addButtonLabel, cancelScrollToZoneFrame, commentableLineSet, editor, monacoModelIdentity])
 
   useEffect(() => {
     if (!editor) {
@@ -686,6 +690,7 @@ export function useDiffCommentDecorator({
     editor,
     filePath,
     formatCommentPrompt,
+    monacoModelIdentity,
     worktreeId,
     comments
   ])
@@ -729,5 +734,13 @@ export function useDiffCommentDecorator({
     }
     // If !laidOut we wait — onDomNodeTop on the zone will pick the request
     // up and call scrollToZone once Monaco's render pass places the zone.
-  }, [cancelScrollToZoneFrame, editor, comments, pendingScrollCommentId, filePath, worktreeId])
+  }, [
+    cancelScrollToZoneFrame,
+    editor,
+    comments,
+    pendingScrollCommentId,
+    filePath,
+    monacoModelIdentity,
+    worktreeId
+  ])
 }

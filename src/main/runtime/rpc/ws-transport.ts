@@ -14,6 +14,11 @@ const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 // streams (session tabs, terminals, file watches, browser streams). Keep the
 // cap high enough that leaked/stale streams do not starve short control RPCs.
 const MAX_WS_CONNECTIONS = 128
+// Why: hard-bound this listener's descriptor use above the WS-upgrade cap.
+// Node accepts then drops sockets beyond maxConnections, so raw/pre-upgrade
+// clients cannot grow without bound while the existing WS budget remains
+// available to legitimate long-lived streams.
+const MAX_TCP_CONNECTIONS = MAX_WS_CONNECTIONS * 2
 const PRE_AUTH_TIMEOUT_MS = 10_000
 type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
 type WebSocketMessageHandler = {
@@ -224,6 +229,10 @@ export class WebSocketTransport implements RpcTransport {
       })
     })
 
+    // Why: the WS cap applies only after upgrade. A separate TCP cap prevents
+    // raw and pre-upgrade sockets from consuming an unbounded descriptor budget.
+    httpServer.maxConnections = MAX_TCP_CONNECTIONS
+
     const wss = new WebSocketServer({
       server: httpServer,
       maxPayload: MAX_WS_MESSAGE_BYTES
@@ -231,7 +240,7 @@ export class WebSocketTransport implements RpcTransport {
 
     wss.on('connection', (ws) => {
       if (wss.clients.size > MAX_WS_CONNECTIONS) {
-        ws.close(1013, 'Maximum connections reached')
+        this.rejectOverCapacity(ws)
         return
       }
       this.handleConnection(ws)
@@ -240,6 +249,22 @@ export class WebSocketTransport implements RpcTransport {
     this.httpServer = httpServer
     this.wss = wss
     this.startHeartbeat()
+  }
+
+  // Why: over the WS-upgrade cap, request a graceful 1013 close but force the
+  // socket down shortly after. A backgrounded/half-open phone may never ack the
+  // close frame, so a bare ws.close() can retain the descriptor until the next
+  // heartbeat. Under a reconnect flood, shortening that window bounds the
+  // number of rejected sockets that can accumulate behind the WS cap. The
+  // 'error' listener prevents a reset while closing from becoming unhandled.
+  private rejectOverCapacity(ws: WebSocket): void {
+    ws.on('error', () => {})
+    ws.close(1013, 'Maximum connections reached')
+    // Why: give the 1013 close a brief window, then hard-terminate so the
+    // descriptor is freed even if the client never acks the close frame.
+    const terminateTimer = setTimeout(() => ws.terminate(), 1_000)
+    terminateTimer.unref?.()
+    ws.once('close', () => clearTimeout(terminateTimer))
   }
 
   // Why: ping every live socket on a fixed cadence and terminate any that
@@ -255,12 +280,14 @@ export class WebSocketTransport implements RpcTransport {
       if (!wss) {
         return
       }
+      let reaped = 0
       for (const ws of wss.clients) {
         if (!this.wsAlive.has(ws)) {
           // Why: terminate() (vs close()) skips the close handshake and
           // immediately fires the 'close' event, freeing the slot. close()
           // on an already-dead socket can hang for the OS-level TCP timeout.
           ws.terminate()
+          reaped++
           continue
         }
         this.wsAlive.delete(ws)
@@ -270,6 +297,13 @@ export class WebSocketTransport implements RpcTransport {
           // Why: ping() can throw on a socket that's mid-tear-down; the
           // close handler will run regardless, so swallow the throw.
         }
+      }
+      // Why: steady reaping or a client count riding the cap are early overload
+      // signals; surface them without logging on healthy heartbeat ticks.
+      if (reaped > 0 || wss.clients.size >= MAX_WS_CONNECTIONS) {
+        console.warn(
+          `[ws-transport] heartbeat reaped ${reaped}; ${wss.clients.size} tracked sockets`
+        )
       }
     }, this.heartbeatIntervalMs)
     if (typeof this.heartbeatTimer.unref === 'function') {

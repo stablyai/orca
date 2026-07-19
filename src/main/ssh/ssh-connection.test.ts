@@ -305,6 +305,7 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(conn.getState().status).toBe('connected')
+    expect(conn.getState().supportsFolderDownload).toBe(true)
     expect(callbacks.onStateChange).toHaveBeenCalledWith(
       'target-1',
       expect.objectContaining({ status: 'connected' })
@@ -972,6 +973,55 @@ describe('SshConnection', () => {
     }
   })
 
+  it('cancels a pending SFTP channel open and ends the late channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = { end: vi.fn() }
+
+    const outcomePromise = conn
+      .sftp({ signal: controller.signal })
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    await Promise.resolve()
+    controller.abort()
+    pendingSftpCallback?.(undefined, lateSftp)
+
+    await expect(outcomePromise).resolves.toBe('AbortError')
+    expect(lateSftp.end).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the late SFTP close listener when the bounded grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp({ signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      await Promise.resolve()
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+      expect(lateSftp.end).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -980,6 +1030,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getState().supportsFolderDownload).toBe(false)
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),

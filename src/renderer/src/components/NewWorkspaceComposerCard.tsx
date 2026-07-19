@@ -2,6 +2,7 @@
 composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -154,6 +155,9 @@ type NewWorkspaceComposerCardProps = {
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
   sparseControlsEnabled?: boolean
+  /** When set, "Add project" opens a host-provided flow (e.g. a nested dialog
+   *  over the composer modal) instead of swapping the store's active modal. */
+  onAddProjectOverride?: () => void
 }
 
 const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
@@ -228,6 +232,87 @@ type WorkspaceRunTargetComboboxProps = {
   recipes: EphemeralVmRecipeOption[]
   recipeValue: string | null
   onRecipeChange?: (recipeId: string | null) => void
+}
+
+type HostPathTooltipPosition = {
+  left: number
+  top: number
+  maxWidth: number
+}
+
+const HOST_PATH_TOOLTIP_DELAY_MS = 400
+const HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX = 8
+const HOST_PATH_TOOLTIP_TRIGGER_GAP_PX = 4
+
+function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
+  const tooltipId = React.useId()
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pointerInsideRef = React.useRef(false)
+  const [position, setPosition] = React.useState<HostPathTooltipPosition | null>(null)
+
+  const hideTooltip = React.useCallback((): void => {
+    pointerInsideRef.current = false
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    setPosition(null)
+  }, [])
+
+  React.useEffect(() => hideTooltip, [hideTooltip])
+
+  const handlePointerEnter = React.useCallback((event: React.PointerEvent<HTMLElement>): void => {
+    pointerInsideRef.current = true
+    const trigger = event.currentTarget
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+    }
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      if (!pointerInsideRef.current || !trigger.isConnected) {
+        return
+      }
+      const rect = trigger.getBoundingClientRect()
+      // Why: anchor directly under the hovered path line (left-aligned to it), and cap the width to
+      // the space remaining to the viewport edge so a long path wraps instead of flying off-screen.
+      const left = Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left)
+      setPosition({
+        left,
+        top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX,
+        maxWidth: window.innerWidth - left - HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX
+      })
+    }, HOST_PATH_TOOLTIP_DELAY_MS)
+  }, [])
+
+  return (
+    <>
+      {/* Trigger is the truncated path line itself, so the tooltip only appears when hovering it. */}
+      <div
+        className="mt-0.5 truncate text-[11px] text-muted-foreground"
+        aria-describedby={position ? tooltipId : undefined}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={hideTooltip}
+        onPointerDown={hideTooltip}
+      >
+        {path}
+      </div>
+      {/* Why: a fixed, pointer-transparent portal cannot reflow cmdk or become the hover target. */}
+      {position
+        ? createPortal(
+            <div
+              id={tooltipId}
+              role="tooltip"
+              data-slot="host-path-tooltip"
+              className="pointer-events-none fixed z-[100] w-max break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
+              style={{ left: position.left, top: position.top, maxWidth: position.maxWidth }}
+            >
+              {path}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  )
 }
 
 function WorkspaceRunTargetCombobox({
@@ -338,9 +423,7 @@ function WorkspaceRunTargetCombobox({
                 <Server className="size-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{option.label}</div>
-                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {option.path}
-                  </div>
+                  <HostPathTooltip path={option.path} />
                 </div>
               </CommandItem>
             ))}
@@ -615,7 +698,8 @@ export default function NewWorkspaceComposerCard({
   sparsePresets,
   sparseSelectedPresetId,
   onSparseSelectPreset,
-  sparseControlsEnabled = true
+  sparseControlsEnabled = true,
+  onAddProjectOverride
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   // Why: this form uses the lightweight translate() helper directly; subscribe
   // so an already-open create dialog repaints when the UI language changes.
@@ -728,8 +812,14 @@ export default function NewWorkspaceComposerCard({
   }, [detectedAgentIds, disabledTuiAgents])
 
   const handleAddRepo = React.useCallback((): void => {
+    // Why: inside the composer modal, swapping activeModal would abruptly
+    // unmount the composer; the override layers Add Project on top instead.
+    if (onAddProjectOverride) {
+      onAddProjectOverride()
+      return
+    }
     openModal('add-repo')
-  }, [openModal])
+  }, [onAddProjectOverride, openModal])
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
@@ -836,6 +926,7 @@ export default function NewWorkspaceComposerCard({
             value={selectedProjectId}
             onValueChange={onProjectChange}
             onValueSelected={focusNameInput}
+            onAddProject={handleAddRepo}
             placeholder={
               projectPlaceholder ??
               translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')

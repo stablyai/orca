@@ -31,6 +31,10 @@ import {
   type ClosedTerminalTabSnapshot
 } from './recently-closed-tabs'
 import { findRepoForHost } from './repo-host-identity'
+import {
+  dropWorktreeRowsForRemovedRuntimeEnvironments,
+  isRemovedRuntimeHostId
+} from './stale-runtime-host-rows'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -4971,6 +4975,79 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     set((s) => buildWorktreePurgeState(s, purgeableWorktreeIds))
+  },
+
+  purgeStaleRuntimeHostState: (removedEnvironmentIds) => {
+    const removed = new Set(removedEnvironmentIds)
+    if (removed.size === 0) {
+      return
+    }
+    set((s) => {
+      const survivingRepos = s.repos.filter(
+        (repo) => !isRemovedRuntimeHostId(getRepoExecutionHostId(repo), removed)
+      )
+      const reposChanged = survivingRepos.length !== s.repos.length
+
+      // Why: broader than filterSetupsForPrunedRepoRows — a repoId-less setup on
+      // the removed host can still flip projectIdsRequiringSetupGroups and split a
+      // surviving project group, so drop every setup owned by the removed host.
+      const survivingSetups = s.projectHostSetups.filter(
+        (setup) => !isRemovedRuntimeHostId(setup.hostId, removed)
+      )
+      const setupsChanged = survivingSetups.length !== s.projectHostSetups.length
+
+      const worktreeDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(s.worktreesByRepo, removed)
+      const detectedRows: Record<string, DetectedWorktreeListResult['worktrees']> =
+        Object.fromEntries(
+          Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
+            repoId,
+            result.worktrees
+          ])
+        )
+      const detectedDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(detectedRows, removed)
+
+      const worktreesChanged = worktreeDrop.rowsByRepo !== s.worktreesByRepo
+      const detectedChanged = detectedDrop.rowsByRepo !== detectedRows
+      if (!reposChanged && !setupsChanged && !worktreesChanged && !detectedChanged) {
+        return s
+      }
+
+      const removedWorktreeIds = new Set([
+        ...worktreeDrop.removedWorktreeIds,
+        ...detectedDrop.removedWorktreeIds
+      ])
+      const purgeState =
+        removedWorktreeIds.size > 0 ? buildWorktreePurgeState(s, [...removedWorktreeIds]) : {}
+
+      const detectedWorktreesByRepo = detectedChanged
+        ? Object.fromEntries(
+            Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
+              repoId,
+              { ...result, worktrees: detectedDrop.rowsByRepo[repoId] }
+            ])
+          )
+        : s.detectedWorktreesByRepo
+
+      const rowsChanged = worktreesChanged || detectedChanged
+      const survivingRepoIds = new Set(survivingRepos.map((repo) => repo.id))
+      return {
+        ...purgeState,
+        ...(reposChanged ? { repos: survivingRepos } : {}),
+        ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
+        ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
+        ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
+        ...(rowsChanged ? { sortEpoch: s.sortEpoch + 1 } : {}),
+        // Why: mirror validateRepoScopedUi's repo-scoped UI subset so a filtered or
+        // active sidebar can't be left referencing a purged repo id.
+        ...(reposChanged
+          ? {
+              activeRepoId:
+                s.activeRepoId && survivingRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+              filterRepoIds: s.filterRepoIds.filter((repoId) => survivingRepoIds.has(repoId))
+            }
+          : {})
+      }
+    })
   },
 
   migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => {

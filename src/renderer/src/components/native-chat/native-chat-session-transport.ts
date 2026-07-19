@@ -1,8 +1,4 @@
-import type {
-  NativeChatApi,
-  NativeChatAppendedMessages,
-  NativeChatReadSessionResult
-} from '../../../../preload/api-types'
+import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   callRuntimeRpc,
@@ -10,6 +6,11 @@ import {
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import {
+  parseRuntimeNativeChatReadSessionResult,
+  parseRuntimeNativeChatTurnLifecycle,
+  RUNTIME_NATIVE_CHAT_READ_ERROR
+} from './native-chat-runtime-contract'
 
 /** The read/subscribe surface the live-session hook needs, decoupled from where
  *  the transcript actually lives. Same shape as `window.api.nativeChat`, so the
@@ -34,7 +35,7 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
   if (isRuntimeCompatBlockError(err)) {
     return RUNTIME_TOO_OLD
   }
-  return "Couldn't read agent chat from the remote runtime."
+  return RUNTIME_NATIVE_CHAT_READ_ERROR
 }
 
 /** Delegates straight to the local Electron IPC bridge. On the web client
@@ -53,12 +54,13 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   return {
     readSession: async (agent, sessionId, limit, transcriptPath) => {
       try {
-        return await callRuntimeRpc<NativeChatReadSessionResult>(
+        const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
           { agent, sessionId, limit, transcriptPath },
           { timeoutMs: 15_000 }
         )
+        return parseRuntimeNativeChatReadSessionResult(result)
       } catch (err) {
         return { error: toRuntimeNativeChatErrorMessage(err) }
       }
@@ -131,7 +133,9 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   messages?: NativeChatAppendedMessages
                   hasMore?: boolean
                   error?: string
+                  lifecycle?: unknown
                 }
+                const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
                 if (
                   (frame?.type === 'appended' ||
                     frame?.type === 'snapshot' ||
@@ -144,14 +148,16 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                       type: 'snapshot',
                       messages: frame.messages,
                       hasMore: frame.hasMore ?? frame.messages.length >= (limit ?? 300),
-                      ...(frame.error ? { error: frame.error } : {})
+                      ...(frame.error ? { error: frame.error } : {}),
+                      ...(lifecycle ? { lifecycle } : {})
                     })
                   } else if (frame.type === 'snapshot') {
                     onFrame({
                       type: 'snapshot',
                       messages: frame.messages,
                       hasMore: frame.hasMore ?? false,
-                      ...(frame.error ? { error: frame.error } : {})
+                      ...(frame.error ? { error: frame.error } : {}),
+                      ...(lifecycle ? { lifecycle } : {})
                     })
                   } else {
                     onFrame(
@@ -159,9 +165,14 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                         ? {
                             type: 'replacement',
                             messages: frame.messages,
-                            hasMore: frame.hasMore ?? false
+                            hasMore: frame.hasMore ?? false,
+                            ...(lifecycle ? { lifecycle } : {})
                           }
-                        : { type: 'appended', messages: frame.messages }
+                        : {
+                            type: 'appended',
+                            messages: frame.messages,
+                            ...(lifecycle ? { lifecycle } : {})
+                          }
                     )
                   }
                 } else if (!receivedInitial) {

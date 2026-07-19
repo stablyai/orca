@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
-import type { TuiAgent } from '../../../../shared/types'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import { useNativeChatLiveSession } from './use-native-chat-live-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
@@ -52,24 +51,9 @@ import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import type { NativeChatViewProps } from './native-chat-view-types'
 
-export type NativeChatViewProps = {
-  /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
-  terminalTabId: string
-  /** Specific split leaf this chat surface replaces. */
-  paneKey?: string
-  /** PTY bound to `paneKey`, used for composer and interactive-card sends. */
-  targetPtyId?: string | null
-  /** Launch-time agent hint from the TerminalTab, when Orca started one. */
-  launchAgent?: TuiAgent | null
-  /** Trusted title/foreground fallback for manually-started agents. */
-  resolvedAgent?: TuiAgent | null
-  /** Return this pane to the hosted terminal surface. */
-  onSwitchToTerminal?: () => void
-  /** Current xterm screen reader used to recover agent-reported session state. */
-  readTerminalScreen?: () => string | null
-  contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
-}
+export type { NativeChatViewProps } from './native-chat-view-types'
 
 /** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView({
@@ -156,18 +140,23 @@ function NativeChatResolvedView({
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
-  // Live hook state for this pane, selected directly so the working indicator
-  // flips the instant the agent reports 'working' — even when switching to chat
-  // mid-turn before the transcript merge has caught up.
-  const hookWorking = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state === 'working')
+  // The live-session merge reconciles hooks with replayable transcript turn
+  // boundaries; all working consumers must use that one lifecycle decision.
+  const liveWorking = session.status === 'working'
   // The agent's in-progress reply preview (hook), shown as a live streaming
   // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  // Why: Stop suppression must clear on a newer working epoch even when status
+  // never leaves 'working' (interrupt + immediate next turn coalesced).
+  const hookWorkingEpoch = useAppStore(
+    (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
+  )
   const canSend = useNativeChatCanSend(targetPtyId)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
-  const interactiveSend = useNativeChatInteractiveSend(terminalTabId, targetPtyId, agent)
+  const interactiveSend = useNativeChatInteractiveSend(terminalTabId, paneKey, targetPtyId, agent)
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
+  const previousWorkingEpochRef = useRef<number | null>(null)
   // True while a question card owns the input region, so the composer is hidden.
   const [questionActive, setQuestionActive] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -308,9 +297,9 @@ function NativeChatResolvedView({
           ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
           : sessionAfterCommandBoundaries.messages,
       previewText: hookPreview,
-      working: hookWorking
+      working: liveWorking
     })
-  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, hookWorking])
+  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, liveWorking])
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
@@ -331,26 +320,38 @@ function NativeChatResolvedView({
   const viewState = selectNativeChatViewState(sessionWithPending)
 
   const isConversation = viewState.kind === 'ready'
-  // Drive "working" from the live hook state too: when toggling to chat while the
-  // agent is mid-turn, the merged transcript may not yet reflect the in-flight
-  // turn, but the hook already says 'working' — show the indicator immediately.
-  const viewWorking = viewState.kind === 'ready' && viewState.isWorking
   useEffect(() => {
-    if (shouldClearNativeChatWorkingSuppression({ viewWorking, hookWorking })) {
+    if (
+      shouldClearNativeChatWorkingSuppression({
+        working: liveWorking,
+        interrupted: workingInterrupted,
+        workingEpoch: hookWorkingEpoch,
+        previousWorkingEpoch: previousWorkingEpochRef.current
+      })
+    ) {
       setWorkingInterrupted(false)
     }
-  }, [viewWorking, hookWorking])
+    if (liveWorking && hookWorkingEpoch != null) {
+      previousWorkingEpochRef.current = hookWorkingEpoch
+    }
+    if (!liveWorking) {
+      previousWorkingEpochRef.current = null
+    }
+  }, [liveWorking, workingInterrupted, hookWorkingEpoch])
   const isWorking = shouldShowNativeChatWorking({
     isConversation,
-    viewWorking,
-    hookWorking,
+    working: liveWorking,
     interrupted: workingInterrupted
   })
 
   const stopAgent = useCallback(() => {
     setWorkingInterrupted(true)
+    // Why: Stop after a submitted turn drops the delayed-write handle once it
+    // settles, so cancelPendingSends no longer sees the optimistic id. Clear
+    // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
+    setPending(writePendingSendCache(pendingScope, []))
     interactiveSend.cancel()
-  }, [interactiveSend])
+  }, [interactiveSend, pendingScope])
   const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
@@ -430,6 +431,7 @@ function NativeChatResolvedView({
         <NativeChatComposer
           ref={composerRef}
           terminalTabId={terminalTabId}
+          paneKey={paneKey}
           targetPtyId={targetPtyId}
           agent={agent}
           canSend={canSend}

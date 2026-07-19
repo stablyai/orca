@@ -5,6 +5,7 @@ import {
 } from '../../shared/crash-reporting'
 import { flushActiveSink, startSpan } from '../observability/tracer'
 import { recordCrashBreadcrumb } from './crash-breadcrumb-store'
+import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
 
 export function recordDurableCrashBreadcrumb(
   name: string,
@@ -12,14 +13,20 @@ export function recordDurableCrashBreadcrumb(
   failureCause?: string
 ): void {
   const sanitizedName = sanitizeCrashReportString(name)
-  const sanitizedData = data ? sanitizeCrashReportDetails(data) : undefined
-  recordCrashBreadcrumb(sanitizedName, sanitizedData)
+  const sanitizedData = data ? sanitizeCrashReportDetails(data) : {}
+  // Why: durable events survive renderer replacement, so carrying the main
+  // identity here distinguishes renderer recovery from a true app relaunch.
+  const lifecycleData = {
+    ...sanitizedData,
+    ...getMainProcessLifecycleIdentity()
+  }
+  recordCrashBreadcrumb(sanitizedName, lifecycleData)
 
   const span = startSpan('crash.breadcrumb', {
     attributes: {
       kind: 'crash-breadcrumb',
       'breadcrumb.name': sanitizedName,
-      ...(sanitizedData ? { 'breadcrumb.data': sanitizedData } : {})
+      'breadcrumb.data': lifecycleData
     }
   })
   if (failureCause) {

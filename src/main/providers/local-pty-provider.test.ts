@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
+import type * as MacosTccLoginShell from './macos-tcc-login-shell'
 
 const {
   existsSyncMock,
@@ -9,6 +10,7 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
+  prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
   captureDescendantSnapshotMock,
   terminateDescendantSnapshotMock
@@ -19,6 +21,7 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
+  prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   captureDescendantSnapshotMock: vi.fn(),
   terminateDescendantSnapshotMock: vi.fn()
@@ -44,6 +47,11 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
+  ...(await importOriginal<typeof MacosTccLoginShell>()),
+  prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
+}))
+
 vi.mock('../pty-descendant-termination', () => ({
   captureDescendantSnapshot: captureDescendantSnapshotMock,
   terminateDescendantSnapshot: terminateDescendantSnapshotMock
@@ -67,10 +75,8 @@ vi.mock('./windows-powershell-executable', () => ({
 }))
 
 vi.mock('./agent-foreground-process', () => ({
-  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => ({
-    available: true,
-    processName: await resolveAgentForegroundProcessMock(...args)
-  })
+  resolveAgentForegroundProcessWithAvailability: (...args: unknown[]) =>
+    resolveAgentForegroundProcessMock(...args)
 }))
 
 vi.mock('../wsl', () => ({
@@ -141,9 +147,14 @@ describe('LocalPtyProvider', () => {
     captureDescendantSnapshotMock.mockReset()
     captureDescendantSnapshotMock.mockResolvedValue(null)
     terminateDescendantSnapshotMock.mockReset()
+    prepareMacosTccLoginShellMock.mockReset()
+    prepareMacosTccLoginShellMock.mockResolvedValue(undefined)
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
-      async (_pid: number, fallbackProcess: string | null) => fallbackProcess
+      async (_pid: number, fallbackProcess: string | null) => ({
+        available: true,
+        processName: fallbackProcess
+      })
     )
 
     exitCb = undefined
@@ -274,6 +285,37 @@ describe('LocalPtyProvider', () => {
 
       expect(second.id).not.toBe(first.id)
       expect(second.isReattach).toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
+    it('does not spawn after shutdown cancels a pending stable session id', async () => {
+      let finishPreparation!: () => void
+      spawnMock.mockClear()
+      prepareMacosTccLoginShellMock.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPreparation = resolve
+          })
+      )
+
+      const spawn = provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'pending-local-session'
+      })
+      const canceledSpawn = expect(spawn).rejects.toThrow(
+        'PTY spawn canceled: pending-local-session'
+      )
+      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledOnce())
+
+      await provider.shutdown('pending-local-session', { immediate: true })
+      finishPreparation()
+      await canceledSpawn
+      expect(spawnMock).not.toHaveBeenCalled()
+
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, sessionId: 'pending-local-session' })
+      ).resolves.toMatchObject({ id: 'pending-local-session' })
       expect(spawnMock).toHaveBeenCalledOnce()
     })
 
@@ -1410,13 +1452,40 @@ describe('LocalPtyProvider', () => {
     it('returns null for unknown PTY ids', async () => {
       expect(await provider.getForegroundProcess('nonexistent')).toBeNull()
     })
+
+    it('keeps a recognized agent across an unavailable scan without adding probes', async () => {
+      resolveAgentForegroundProcessMock
+        .mockResolvedValueOnce({ available: true, processName: 'claude' })
+        .mockResolvedValueOnce({ available: false, processName: 'powershell.exe' })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      await expect(provider.getForegroundProcess(id)).resolves.toBe('claude')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('drops a delayed scan result after the PTY exits', async () => {
+      let resolveScan!: (resolution: { available: boolean; processName: string }) => void
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveScan = resolve
+        })
+      )
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const foreground = provider.getForegroundProcess(id)
+      exitCb?.({ exitCode: 0 })
+      resolveScan({ available: true, processName: 'droid' })
+
+      await expect(foreground).resolves.toBeNull()
+    })
   })
 
   describe('confirmForegroundProcess', () => {
     it('drops a delayed result after the PTY exits', async () => {
-      let resolveScan!: (processName: string) => void
+      let resolveScan!: (resolution: { available: boolean; processName: string }) => void
       resolveAgentForegroundProcessMock.mockReturnValue(
-        new Promise<string>((resolve) => {
+        new Promise((resolve) => {
           resolveScan = resolve
         })
       )
@@ -1424,7 +1493,7 @@ describe('LocalPtyProvider', () => {
 
       const confirmation = provider.confirmForegroundProcess(id)
       exitCb?.({ exitCode: 0 })
-      resolveScan('droid')
+      resolveScan({ available: true, processName: 'droid' })
 
       await expect(confirmation).resolves.toBeNull()
     })

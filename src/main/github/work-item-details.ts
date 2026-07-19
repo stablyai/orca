@@ -822,9 +822,9 @@ async function getWorkItemParticipants(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
-  // Why: issues in a fork live on the upstream remote, so participants must be
-  // resolved via getIssueOwnerRepo to stay consistent with getIssueBodyAndComments.
-  // PRs remain tied to origin via getOwnerRepo.
+  // Why: work items in a fork live on the upstream remote, so participants must
+  // be resolved via the same upstream-first resolvers the body/comment fetches
+  // use (getIssueOwnerRepo for issues, getOwnerRepo for PRs; see #7331).
   const ownerRepo =
     item.type === 'issue'
       ? await getIssueOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))

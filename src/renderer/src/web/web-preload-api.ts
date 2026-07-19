@@ -6,7 +6,6 @@ import type {
   PreflightStatus,
   RefreshAgentsResult,
   NativeChatApi,
-  NativeChatReadSessionResult,
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -127,6 +126,10 @@ import {
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 import { translate } from '@/i18n/i18n'
 import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
+import {
+  parseRuntimeNativeChatReadSessionResult,
+  parseRuntimeNativeChatTurnLifecycle
+} from '@/components/native-chat/native-chat-runtime-contract'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -499,7 +502,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
-      pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
+      pickFloatingWorkspaceDirectory: () => Promise.resolve(null),
+      // Browser fallback has no app-owned userData directory; rejecting keeps
+      // the sentinel from claiming that sensitive evidence was persisted.
+      writeTerminalRenderDesyncEvidence: () =>
+        Promise.reject(
+          new Error('Terminal render evidence is unavailable in the browser fallback.')
+        )
     },
     starNag: {
       onShow: () => noopUnsubscribe,
@@ -745,6 +754,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onClear: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
       inferInterrupt: () => Promise.resolve(false),
+      inferQuestionAnswered: () => Promise.resolve(false),
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
@@ -1084,13 +1094,15 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
 // undefined on web and the chat view showed no messages.
 function createNativeChatApi(): NativeChatApi {
   return {
-    readSession: (agent, sessionId, limit, transcriptPath) =>
-      callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
-        agent,
-        sessionId,
-        limit,
-        transcriptPath
-      }),
+    readSession: async (agent, sessionId, limit, transcriptPath) =>
+      parseRuntimeNativeChatReadSessionResult(
+        await callRuntimeResult<unknown>('nativeChat.readSession', {
+          agent,
+          sessionId,
+          limit,
+          transcriptPath
+        })
+      ),
     subscribe: (args, onFrame) => {
       // No paired runtime yet: nothing to subscribe to, and
       // requireActiveEnvironment() would throw. Return a no-op teardown so the
@@ -1144,7 +1156,9 @@ function createNativeChatApi(): NativeChatApi {
                 messages?: NativeChatAppendedMessages
                 hasMore?: boolean
                 error?: string
+                lifecycle?: unknown
               }
+              const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
               if (
                 (result?.type === 'appended' ||
                   result?.type === 'snapshot' ||
@@ -1157,14 +1171,16 @@ function createNativeChatApi(): NativeChatApi {
                     type: 'snapshot',
                     messages: result.messages,
                     hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
-                    ...(result.error ? { error: result.error } : {})
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {})
                   })
                 } else if (result.type === 'snapshot') {
                   onFrame({
                     type: 'snapshot',
                     messages: result.messages,
                     hasMore: result.hasMore ?? false,
-                    ...(result.error ? { error: result.error } : {})
+                    ...(result.error ? { error: result.error } : {}),
+                    ...(lifecycle ? { lifecycle } : {})
                   })
                 } else {
                   onFrame(
@@ -1172,9 +1188,14 @@ function createNativeChatApi(): NativeChatApi {
                       ? {
                           type: 'replacement',
                           messages: result.messages,
-                          hasMore: result.hasMore ?? false
+                          hasMore: result.hasMore ?? false,
+                          ...(lifecycle ? { lifecycle } : {})
                         }
-                      : { type: 'appended', messages: result.messages }
+                      : {
+                          type: 'appended',
+                          messages: result.messages,
+                          ...(lifecycle ? { lifecycle } : {})
+                        }
                   )
                 }
               } else if (!receivedInitial) {
@@ -1599,6 +1620,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     onLocalLogTailChanged: () => noopUnsubscribe,
     downloadFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
+    },
+    downloadFolder: async () => {
+      throw new Error('Remote folder download is unavailable in paired web clients.')
     },
     saveDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')

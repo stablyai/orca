@@ -5573,6 +5573,22 @@ describe('Store', () => {
     }
   })
 
+  it('writes compact JSON (no pretty-print indentation) that round-trips via JSON.parse', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'compact-repo', path: '/compact/repo' }))
+    store.updateUI({ sidebarWidth: 321 })
+    store.flush()
+
+    const raw = readFileSync(dataFile(), 'utf-8')
+    // Compact payload: no newline-plus-indentation from JSON.stringify(_, null, 2).
+    expect(raw).not.toMatch(/\n\s+"/)
+    const parsed = JSON.parse(raw) as PersistedState
+    expect(parsed.repos).toContainEqual(
+      expect.objectContaining({ id: 'compact-repo', path: '/compact/repo' })
+    )
+    expect(parsed.ui.sidebarWidth).toBe(321)
+  })
+
   it('migrates missing rightSidebarOpen from the legacy default setting', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -9794,6 +9810,63 @@ describe('Store', () => {
       installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       existedBeforeTelemetryRelease: false
     })
+  })
+})
+
+describe('Store.migrateTabSwitchKeybindings', () => {
+  // Freezes the install cohort for the tab-switch convention swap on first load.
+  // Keys on `fileExistedOnLoad` (not field presence) so the verdict is stable
+  // even after a fresh install writes its own data file on later launches.
+
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('marks a truly fresh install done so it adopts the new defaults', async () => {
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
+  })
+
+  it('marks a pre-existing install pending so the legacy chords get seeded', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {},
+      settings: { theme: 'dark' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+    expect(store.getSettings().theme).toBe('dark')
+  })
+
+  it('treats a corrupt data file as a pre-existing install', async () => {
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+  })
+
+  it('preserves an already-frozen cohort on subsequent launches', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { tabSwitchKeybindingSeed: 'done' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    // Existing file but cohort already resolved to 'done' — must not flip to
+    // 'pending' just because the data file happens to exist.
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
   })
 })
 

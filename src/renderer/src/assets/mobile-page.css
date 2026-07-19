@@ -1300,6 +1300,9 @@
   color: var(--m-text-primary);
   font-size: 13px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-page-root .mp-resume-sub {
@@ -1309,6 +1312,15 @@
   margin-top: 2px;
   color: var(--m-text-secondary);
   font-size: 11px;
+  min-width: 0;
+}
+
+/* Why: keep long repo/branch labels inside the phone frame (matches RN numberOfLines={1}). */
+.mobile-page-root .mp-resume-sub > span:not(.mp-repo-dot) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .mobile-page-root .mp-repo-dot {

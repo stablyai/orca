@@ -30,7 +30,8 @@ const mocks = vi.hoisted(() => ({
   sendNativeChatMessage: vi.fn(),
   sendNativeChatMessageVerified: vi.fn(),
   trackPendingSend: vi.fn(),
-  setDraft: vi.fn()
+  setDraft: vi.fn(),
+  draftScopeKeys: [] as string[]
 }))
 
 vi.mock('../../store', () => {
@@ -69,7 +70,10 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn()
 }))
 vi.mock('./use-native-chat-draft', () => ({
-  useNativeChatDraft: () => ({ draft: 'hello', setDraft: mocks.setDraft })
+  useNativeChatDraft: (scopeKey: string) => {
+    mocks.draftScopeKeys.push(scopeKey)
+    return { draft: 'hello', setDraft: mocks.setDraft }
+  }
 }))
 vi.mock('./native-chat-draft-cache', () => ({
   readNativeChatDraftCache: () => ''
@@ -122,6 +126,7 @@ describe('NativeChatComposer', () => {
     clearNativeChatSessionOptionCacheForTests()
     mocks.fieldProps = null
     mocks.modelSwitchOutcome = 'applied'
+    mocks.draftScopeKeys.length = 0
     mocks.confirmationObserver = null
     mocks.createClaudeModelSwitchConfirmationObserver.mockImplementation(() => {
       const observer = {
@@ -154,6 +159,7 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="codex"
         isWorking
@@ -175,6 +181,7 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="codex"
         onOptimisticSend={onOptimisticSend}
@@ -187,6 +194,36 @@ describe('NativeChatComposer', () => {
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
   })
 
+  it('keeps the draft scope anchored to the pane while the PTY reconnects', () => {
+    const view = render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-before"
+        agent="codex"
+      />
+    )
+
+    view.rerender(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId={null}
+        agent="codex"
+      />
+    )
+    view.rerender(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-after"
+        agent="codex"
+      />
+    )
+
+    expect(new Set(mocks.draftScopeKeys)).toEqual(new Set(['tab-1:leaf-1']))
+  })
+
   it('shows the model already selected in the Claude TUI when chat opens', async () => {
     mocks.getMainBufferSnapshot.mockResolvedValue({
       data: 'Claude Code v2.1.211\r\nOpus 4.8 with medium effort · API Usage Billing',
@@ -196,6 +233,7 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="claude"
         readTerminalScreen={() => null}
@@ -231,6 +269,7 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="claude"
         readTerminalScreen={() =>
@@ -266,6 +305,7 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="claude"
         onSlashCommand={onSlashCommand}
@@ -300,6 +340,7 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="claude"
         onSwitchToTerminal={onSwitchToTerminal}
@@ -340,6 +381,7 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="claude"
         onSwitchToTerminal={onSwitchToTerminal}
@@ -365,14 +407,16 @@ describe('NativeChatComposer', () => {
     render(
       <NativeChatComposer
         terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
         targetPtyId="pty-1"
         agent="codex"
         onSwitchToTerminal={onSwitchToTerminal}
       />
     )
 
+    // Why: Codex model is agent-picker mid-session — setOption rejects; UI uses invokeAction.
     await act(async () => {
-      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', '')
+      await mocks.fieldProps?.sessionOptionsSurface?.invokeAction('model')
     })
 
     expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(

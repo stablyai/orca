@@ -44,6 +44,10 @@ export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+// Why: older hosts strip worktree.create's clientMutationId, so mobile must only
+// replay ambiguous cutovers when the host advertises idempotent create support.
+export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'worktree.create-idempotency.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -60,7 +64,8 @@ export const RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
-  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

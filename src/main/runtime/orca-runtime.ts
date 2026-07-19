@@ -345,6 +345,7 @@ import type {
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
+import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import {
   buildHeadlessTabGroupMove,
   buildHeadlessTabGroupSplit
@@ -764,7 +765,11 @@ import {
   getFolderWorkspacePathStatusForPath,
   inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
-import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  getSshGitProvider,
+  getSshGitProviderGeneration,
+  requireSshGitProvider
+} from '../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { githubAvatarIcon } from '../../shared/repo-icon'
@@ -971,6 +976,8 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   lastOutputAt: number | null
   lastExitCode: number | null
   tailBuffer: string[]
+  tailTranscriptBuffer: string[]
+  tailTranscriptChars: number
   tailPartialLine: string
   tailPendingAnsi: string
   tailRedrawCursor: RetainedTailRedrawCursor | null
@@ -1028,6 +1035,8 @@ type RuntimePtyWorktreeRecord = {
   titleUpdatedAt: number | null
   lastOutputAt: number | null
   tailBuffer: string[]
+  tailTranscriptBuffer: string[]
+  tailTranscriptChars: number
   tailPartialLine: string
   tailPendingAnsi: string
   tailRedrawCursor: RetainedTailRedrawCursor | null
@@ -1195,6 +1204,19 @@ type RuntimeHeadlessTerminal = {
   writeChain: Promise<void>
 }
 
+type RuntimeVisibleTerminalState = {
+  lines: string[]
+  isAlternateScreen: boolean
+  sequence: number
+  generation: number
+}
+
+type ProviderBufferAcquisition = {
+  generation: number
+  scrollbackRows: number
+  promise: Promise<PtyProviderBufferSnapshot | null>
+}
+
 type HeadlessSeedMetadata = {
   cwd?: string | null
   oscLinks?: TerminalOscLinkRange[]
@@ -1288,6 +1310,10 @@ function getAgentLaunchPlatformForRepo(
 // Why: long enough for a phone to reconnect and retry a create whose response
 // was lost, short enough that an intentional later re-resume forks fresh.
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
+// Why: same idempotency window for worktree.create — a phone whose create was
+// interrupted by a connection migration retries with the same clientMutationId
+// and reuses the just-created worktree instead of spawning a duplicate.
+const WORKTREE_CREATE_RESULT_TTL_MS = 60_000
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
 const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
@@ -1296,7 +1322,6 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 const DRAFT_PASTE_READY_TIMEOUT_MS = 8000
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 const MOBILE_TERMINAL_READY_FALLBACK_MS = 1000
-const RECENT_PTY_OUTPUT_LIMIT = 64 * 1024
 const RECENT_PTY_PATH_CANDIDATE_LIMIT = 1024
 const RECENT_PTY_PATH_CANDIDATE_MAX_BYTES = 4 * 1024
 const RECENT_PTY_PATH_CANDIDATE_TOTAL_BYTES = 64 * 1024
@@ -2032,6 +2057,19 @@ type RuntimeWorktreeScanResult =
   | { ok: true; worktrees: GitWorktreeInfo[] }
   | { ok: false; worktrees: GitWorktreeInfo[] }
 
+type RuntimeWorktreeScanCache = {
+  generation: number
+  runtimeKey: string
+  result: Extract<RuntimeWorktreeScanResult, { ok: true }>
+  expiresAt: number
+}
+
+type RuntimeWorktreeScanInFlight = {
+  generation: number
+  runtimeKey: string
+  promise: Promise<RuntimeWorktreeScanResult>
+}
+
 type WorktreeLineageCandidate = {
   source: 'env-workspace' | 'cwd-context' | 'terminal-context' | 'orchestration-context'
   parent: ResolvedWorkspaceParent
@@ -2183,6 +2221,10 @@ export class OrcaRuntimeService {
     string,
     Promise<RuntimeMobileSessionCreateTerminalResult>
   >()
+  // Why: idempotency map for worktree.create — a create interrupted by a mobile
+  // connection migration is retried with the same clientMutationId and returns
+  // the in-flight (or just-finished) operation instead of a duplicate worktree.
+  private worktreeCreateByMutationId = new Map<string, Promise<unknown>>()
   // Why: a mobile create waits for the renderer to publish the new tab's surface
   // via graph-sync, but a throttled/hidden renderer can park that past the surface
   // timeout and the create would then destroy the live PTY (#7587). This lets the
@@ -2224,6 +2266,9 @@ export class OrcaRuntimeService {
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
   private resolvedWorktreeGeneration = 0
+  private worktreeScanGenerations = new Map<string, number>()
+  private worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
+  private worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
@@ -2239,7 +2284,7 @@ export class OrcaRuntimeService {
   >()
   // Why: startup draft paste can subscribe after the agent already emitted its
   // ready marker. Keep a bounded raw buffer so fast startup output is replayed.
-  private recentPtyOutputById = new Map<string, string>()
+  private recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
   // Why: mobile clients need to know when the desktop restores a terminal
   // from mobile-fit so they can update their UI. These listeners are
   // invoked from resizeForClient and onClientDisconnected/onPtyExit.
@@ -2291,6 +2336,12 @@ export class OrcaRuntimeService {
     string,
     Set<TerminalKittyKeyboardModeTracker>
   >()
+  private providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
+  private providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
+  private providerVisibleRetryAtByPtyId = new Map<string, number>()
+  private providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+  private ptyLifecycleGenerationById = new Map<string, number>()
+  private nextPtyLifecycleGeneration = 1
   private recentPtyPathCandidatesById = new Map<string, string[]>()
   // Why: OSC 9999 status can span PTY chunks. Keeping parser state in the
   // runtime lets hidden/model-owned terminals observe agent state without a
@@ -3140,7 +3191,12 @@ export class OrcaRuntimeService {
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
   // methods, so they need a public entry point onto the client-event stream.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
+    this.invalidateSshWorktreeScanCache(targetId)
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state })
+  }
+
+  invalidateSshWorktreeScanCache(targetId: string): void {
+    this.invalidateSshWorktreeScanCacheInternal(targetId)
   }
 
   // Why: renderer-initiated meta updates intentionally skip the renderer
@@ -3301,6 +3357,8 @@ export class OrcaRuntimeService {
         lastOutputAt: tailSource?.lastOutputAt ?? null,
         lastExitCode: tailSource?.lastExitCode ?? null,
         tailBuffer: tailSource?.tailBuffer ?? [],
+        tailTranscriptBuffer: tailSource?.tailTranscriptBuffer ?? [],
+        tailTranscriptChars: tailSource?.tailTranscriptChars ?? 0,
         tailPartialLine: tailSource?.tailPartialLine ?? '',
         tailPendingAnsi: tailSource?.tailPendingAnsi ?? '',
         tailRedrawCursor: tailSource?.tailRedrawCursor ?? null,
@@ -6048,6 +6106,7 @@ export class OrcaRuntimeService {
     const ptyTailBefore = pty
       ? {
           lines: pty.tailBuffer,
+          transcriptLines: pty.tailTranscriptBuffer,
           partialLine: pty.tailPartialLine,
           pendingAnsi: pty.tailPendingAnsi,
           redrawCursor: pty.tailRedrawCursor,
@@ -6069,10 +6128,18 @@ export class OrcaRuntimeService {
         pty.tailRedrawCursor
       )
       ptyTailAfter = nextTail
+      const nextTranscript = appendCompletedTerminalTranscript(
+        pty.tailTranscriptBuffer,
+        pty.tailTranscriptChars,
+        nextTail.newlyCompletedLines,
+        nextTail.newCompleteLines
+      )
       pty.tailBuffer = nextTail.lines
+      pty.tailTranscriptBuffer = nextTranscript.lines
+      pty.tailTranscriptChars = nextTranscript.characters
       pty.tailPartialLine = nextTail.partialLine
       pty.tailRedrawCursor = nextTail.redrawCursor
-      pty.tailTruncated = pty.tailTruncated || nextTail.truncated
+      pty.tailTruncated = pty.tailTruncated || nextTail.truncated || nextTranscript.truncated
       pty.tailLinesTotal += nextTail.newCompleteLines
       pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
       this.scheduleWaitBlockedCheck(ptyId, normalized.text, at)
@@ -6095,6 +6162,7 @@ export class OrcaRuntimeService {
         ptyTailAfter &&
         tailStateMatches(
           leaf.tailBuffer,
+          leaf.tailTranscriptBuffer,
           leaf.tailPartialLine,
           leaf.tailPendingAnsi,
           leaf.tailRedrawCursor,
@@ -6106,6 +6174,8 @@ export class OrcaRuntimeService {
         // Why: the leaf and PTY record usually mirror the same terminal. Reuse
         // the PTY tail update instead of splitting large output twice.
         leaf.tailBuffer = pty.tailBuffer
+        leaf.tailTranscriptBuffer = pty.tailTranscriptBuffer
+        leaf.tailTranscriptChars = pty.tailTranscriptChars
         leaf.tailPartialLine = pty.tailPartialLine
         leaf.tailPendingAnsi = pty.tailPendingAnsi
         leaf.tailRedrawCursor = pty.tailRedrawCursor
@@ -6131,6 +6201,12 @@ export class OrcaRuntimeService {
           normalized.text,
           leaf.tailRedrawCursor
         )
+        const nextTranscript = appendCompletedTerminalTranscript(
+          leaf.tailTranscriptBuffer,
+          leaf.tailTranscriptChars,
+          nextTail.newlyCompletedLines,
+          nextTail.newCompleteLines
+        )
         const nextWaitState = computeTerminalTailWaitState(
           nextTail.lines,
           nextTail.partialLine,
@@ -6141,9 +6217,11 @@ export class OrcaRuntimeService {
         }
         leaf.tailWaitState = nextWaitState
         leaf.tailBuffer = nextTail.lines
+        leaf.tailTranscriptBuffer = nextTranscript.lines
+        leaf.tailTranscriptChars = nextTranscript.characters
         leaf.tailPartialLine = nextTail.partialLine
         leaf.tailRedrawCursor = nextTail.redrawCursor
-        leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated
+        leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated || nextTranscript.truncated
         leaf.tailLinesTotal += nextTail.newCompleteLines
         leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
       }
@@ -6950,6 +7028,25 @@ export class OrcaRuntimeService {
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
+  private getPtyLifecycleGeneration(ptyId: string): number {
+    const existing = this.ptyLifecycleGenerationById.get(ptyId)
+    if (existing !== undefined) {
+      return existing
+    }
+    const generation = this.nextPtyLifecycleGeneration++
+    this.ptyLifecycleGenerationById.set(ptyId, generation)
+    return generation
+  }
+
+  private advancePtyLifecycleGeneration(ptyId: string): void {
+    this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    // Why: a provider response belongs to the process generation that issued
+    // it; a respawn must neither reuse its frame nor join its in-flight call.
+    this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+  }
+
   synchronizePtyOutputSequenceFromProvider(
     ptyId: string,
     providerSequence: { value: number; generation: 'continued' | 'reset' },
@@ -6976,6 +7073,7 @@ export class OrcaRuntimeService {
     const providerBaseline = providerOffset + baseline
 
     if (providerSequence.generation === 'reset') {
+      this.advancePtyLifecycleGeneration(ptyId)
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {
@@ -7698,7 +7796,35 @@ export class OrcaRuntimeService {
 
   private async serializeProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number } = {},
+    wait: { timeoutMs?: number } = {}
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
+    let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
+    if (
+      !acquisition ||
+      acquisition.generation !== generation ||
+      acquisition.scrollbackRows < scrollbackRows
+    ) {
+      const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
+      acquisition = { generation, scrollbackRows, promise }
+      this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
+      void promise.finally(() => {
+        if (this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisition) {
+          this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+        }
+      })
+    }
+    return typeof wait.timeoutMs === 'number'
+      ? withTimeout(acquisition.promise, wait.timeoutMs, null)
+      : acquisition.promise
+  }
+
+  private async captureProviderTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number },
+    generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
@@ -7711,24 +7837,44 @@ export class OrcaRuntimeService {
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
       const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
-      if (typeof snapshot?.alternateScreen === 'boolean') {
+      if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+        return null
+      }
+      const snapshotModeTracker = new TerminalKittyKeyboardModeTracker()
+      if (typeof snapshot.alternateScreen === 'boolean') {
+        snapshotModeTracker.scan(snapshot.alternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
+      } else {
+        // Why: older providers omit mode metadata, but their ANSI snapshot
+        // still carries the DECSET/DECRST needed to classify the active screen.
+        snapshotModeTracker.scanReplay(snapshot.data)
+      }
+      const observedSnapshotMode = snapshotModeTracker.hasObservedAlternateScreenSwitch
+      let effectiveAlternateScreen: boolean | undefined
+      if (observedSnapshotMode || liveModeTracker.hasObservedAlternateScreenSwitch) {
         const modeTracker = new TerminalKittyKeyboardModeTracker()
-        if (snapshot.alternateScreen) {
-          modeTracker.scan('\x1b[?1049h')
+        if (observedSnapshotMode) {
+          modeTracker.scan(snapshotModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
+        // Why: stream bytes received after the request began can be newer
+        // than snapshot metadata, so an observed live transition wins.
         if (liveModeTracker.hasObservedAlternateScreenSwitch) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
         this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
-      }
-      if (!snapshot) {
-        return null
+        effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
       const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
-      return this.preferTrackedLastTitle(ptyId, {
+      const reconciledSnapshot = this.preferTrackedLastTitle(ptyId, {
         ...snapshot,
-        seq: providerOffset + snapshot.seq
+        seq: providerOffset + snapshot.seq,
+        ...(effectiveAlternateScreen !== undefined
+          ? { alternateScreen: effectiveAlternateScreen }
+          : {})
       })
+      if (liveModeTracker.hasObservedAlternateScreenSwitch) {
+        this.providerSnapshotsWithLiveModeTransition.add(reconciledSnapshot)
+      }
+      return reconciledSnapshot
     } catch {
       return null
     } finally {
@@ -7744,14 +7890,162 @@ export class OrcaRuntimeService {
     read: RuntimeTerminalRead,
     opts: { cursor?: number; limit?: number } = {}
   ): Promise<RuntimeTerminalRead> {
-    if (!shouldFallbackToVisibleTerminalSnapshot(read, opts)) {
+    if (typeof opts.cursor === 'number') {
       return read
     }
-    const lines = await this.readRendererVisibleSnapshotLines(ptyId)
+    const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
+    const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
+    const providerModeUnknown =
+      this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
+    if (
+      !blankFallback &&
+      !providerModeUnknown &&
+      !knownAlternateScreen &&
+      !this.headlessTerminals.has(ptyId)
+    ) {
+      return read
+    }
+    const visibleState = await this.readVisibleTerminalState(ptyId)
+    if (!blankFallback && !knownAlternateScreen && !visibleState?.isAlternateScreen) {
+      return read
+    }
+    let lines = visibleState?.lines ?? []
+    if (lines.length === 0) {
+      lines = await this.readRendererVisibleSnapshotLines(ptyId)
+    }
     if (lines.length === 0) {
       return read
     }
     return buildVisibleSnapshotReadFallback(read, lines, opts.limit)
+  }
+
+  private async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
+    const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
+    const providerModeUnknown =
+      this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
+    if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
+      return preview
+    }
+    const visibleState = await this.readVisibleTerminalState(ptyId)
+    if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
+      return preview
+    }
+    let lines = visibleState?.lines ?? []
+    if (lines.length === 0) {
+      lines = await this.readRendererVisibleSnapshotLines(ptyId)
+    }
+    return lines.length > 0 ? buildPreview(lines, '') : preview
+  }
+
+  private async readVisibleTerminalState(
+    ptyId: string
+  ): Promise<RuntimeVisibleTerminalState | null> {
+    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return this.readHeadlessVisibleTerminalState(ptyId)
+    }
+
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const outputSequence = this.getPtyOutputSequence(ptyId)
+    const cached = this.providerVisibleStateByPtyId.get(ptyId)
+    const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
+    if (
+      cached?.generation === generation &&
+      outputSequence <= cached.sequence &&
+      (!trackedMode || trackedMode.isAlternateScreen === cached.isAlternateScreen)
+    ) {
+      return cached
+    }
+    if (trackedMode && !trackedMode.isAlternateScreen) {
+      const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
+      return headlessState
+        ? { ...headlessState, isAlternateScreen: false }
+        : {
+            lines: [],
+            isAlternateScreen: false,
+            sequence: outputSequence,
+            generation
+          }
+    }
+    if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
+      return null
+    }
+
+    const snapshot = await this.serializeProviderTerminalBuffer(
+      ptyId,
+      { scrollbackRows: 0 },
+      { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
+    )
+    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
+      return null
+    }
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    if (this.providerSnapshotsWithLiveModeTransition.has(snapshot)) {
+      // Why: the provider frame can predate a mode switch observed while its
+      // RPC was pending; the ordered live emulator owns the post-switch grid.
+      const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
+      if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
+        return liveState
+      }
+    }
+    const lines = await this.parseVisibleSnapshotLines(snapshot)
+    if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      return null
+    }
+    const visibleState: RuntimeVisibleTerminalState = {
+      lines,
+      isAlternateScreen: snapshot.alternateScreen ?? false,
+      sequence: snapshot.seq,
+      generation
+    }
+    if (this.getPtyOutputSequence(ptyId) <= snapshot.seq) {
+      this.providerVisibleStateByPtyId.set(ptyId, visibleState)
+    }
+    return visibleState
+  }
+
+  private async readHeadlessVisibleTerminalState(
+    ptyId: string
+  ): Promise<RuntimeVisibleTerminalState | null> {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return null
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    await state.writeChain
+    if (
+      this.headlessTerminals.get(ptyId) !== state ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation
+    ) {
+      return null
+    }
+    return {
+      lines: visibleNonBlankTerminalLines(state.emulator.getVisibleLines()),
+      isAlternateScreen: state.emulator.isAlternateScreen,
+      sequence: state.outputSequence,
+      generation
+    }
+  }
+
+  private async parseVisibleSnapshotLines(snapshot: {
+    data: string
+    cols: number
+    rows: number
+  }): Promise<string[]> {
+    if (snapshot.data.length === 0) {
+      return []
+    }
+    const emulator = new HeadlessEmulator({
+      cols: snapshot.cols,
+      rows: snapshot.rows,
+      scrollback: 0
+    })
+    try {
+      await emulator.write(`\x1b[2J\x1b[3J\x1b[H${snapshot.data}`)
+      return visibleNonBlankTerminalLines(emulator.getVisibleLines())
+    } finally {
+      emulator.dispose()
+    }
   }
 
   private async readRendererVisibleSnapshotLines(ptyId: string): Promise<string[]> {
@@ -7766,27 +8060,18 @@ export class OrcaRuntimeService {
       // Why: raw PTY tails can be whitespace-only while a full-screen TUI is
       // visibly nonblank in renderer xterm. Ask the renderer for the active
       // screen instead of reusing the headless transcript path.
-      const snapshot = await controller.serializeBuffer(ptyId, {
-        scrollbackRows: 0,
-        altScreenForcesZeroRows: false
-      })
+      const snapshot = await withTimeout(
+        controller.serializeBuffer(ptyId, {
+          scrollbackRows: 0,
+          altScreenForcesZeroRows: false
+        }),
+        VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        null
+      )
       if (!snapshot || snapshot.data.length === 0) {
         return []
       }
-      const emulator = new HeadlessEmulator({
-        cols: snapshot.cols,
-        rows: snapshot.rows,
-        scrollback: 0
-      })
-      try {
-        await emulator.write(snapshot.data)
-        return emulator
-          .getVisibleLines()
-          .map((line) => line.trimEnd())
-          .filter((line) => line.trim().length > 0)
-      } finally {
-        emulator.dispose()
-      }
+      return this.parseVisibleSnapshotLines(snapshot)
     } catch {
       return []
     }
@@ -7926,10 +8211,12 @@ export class OrcaRuntimeService {
   }
 
   private recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void {
-    this.recentPtyOutputById.set(
-      ptyId,
-      appendRecentPtyOutput(this.recentPtyOutputById.get(ptyId), data)
-    )
+    let recentOutputBuffer = this.recentPtyOutputById.get(ptyId)
+    if (!recentOutputBuffer) {
+      recentOutputBuffer = new RecentPtyOutputBuffer()
+      this.recentPtyOutputById.set(ptyId, recentOutputBuffer)
+    }
+    recentOutputBuffer.append(data)
     this.recentPtyPathCandidatesById.set(
       ptyId,
       appendRecentPtyPathCandidates(this.recentPtyPathCandidatesById.get(ptyId), data)
@@ -7967,7 +8254,7 @@ export class OrcaRuntimeService {
 
   hasRecentTerminalOutputPath(handle: string, pathText: string, absolutePath: string): boolean {
     const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    const recentOutput = ptyId ? this.recentPtyOutputById.get(ptyId) : null
+    const recentOutput = ptyId ? this.recentPtyOutputById.get(ptyId)?.read() : null
     if (recentOutput && recentTerminalOutputIncludesPath(recentOutput, pathText, absolutePath)) {
       return true
     }
@@ -8895,6 +9182,7 @@ export class OrcaRuntimeService {
   }
 
   onPtyExit(ptyId: string, exitCode: number): void {
+    this.advancePtyLifecycleGeneration(ptyId)
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
@@ -8911,6 +9199,9 @@ export class OrcaRuntimeService {
     this.providerSnapshotPreferredPtys.delete(ptyId)
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
+    this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -11061,8 +11352,12 @@ export class OrcaRuntimeService {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
+      const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
+      const preview = await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview)
+      this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       return {
-        ...this.buildPtyTerminalSummary(pty.pty, worktreesById),
+        ...summary,
+        preview,
         tabId: pty.pty.tabId ?? pty.record.tabId,
         leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
         paneRuntimeId: -1,
@@ -11075,8 +11370,16 @@ export class OrcaRuntimeService {
     this.assertStableReadyGraph(graphEpoch)
     const { leaf } = this.getLiveLeafForHandle(handle)
     const summary = this.buildTerminalSummary(leaf, worktreesById)
+    const preview = leaf.ptyId
+      ? await this.visibleSnapshotPreview(leaf.ptyId, summary.preview)
+      : summary.preview
+    this.assertStableReadyGraph(graphEpoch)
+    if (leaf.ptyId) {
+      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
+    }
     return {
       ...summary,
+      preview,
       paneRuntimeId: leaf.paneRuntimeId,
       ptyId: leaf.ptyId,
       rendererGraphEpoch: this.rendererGraphEpoch
@@ -11090,21 +11393,29 @@ export class OrcaRuntimeService {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
-      return this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
+      const visibleRead = await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
+      this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
+      return visibleRead
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
     const read = readTerminalTail({
       handle,
       status: getTerminalState(leaf),
-      completedLines: leaf.tailBuffer,
+      previewLines: leaf.tailBuffer,
+      completedLines: leaf.tailTranscriptBuffer,
       partialLine: leaf.tailPartialLine,
       completedLineCount: leaf.tailLinesTotal,
       bufferTruncated: leaf.tailTruncated,
       cursor: opts.cursor,
       limit: opts.limit
     })
-    return leaf.ptyId ? this.withVisibleSnapshotFallback(leaf.ptyId, read, opts) : read
+    if (!leaf.ptyId) {
+      return read
+    }
+    const visibleRead = await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
+    this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
+    return visibleRead
   }
 
   async sendTerminal(
@@ -12770,6 +13081,11 @@ export class OrcaRuntimeService {
       }
     }
     this.invalidateResolvedWorktreeCache()
+    for (const project of results) {
+      if (project.projectId) {
+        this.invalidateWorktreeScanCacheForRepo(project.projectId)
+      }
+    }
     this.notifyReposChanged()
     const rootGroup = groupResolver.getRootGroup()
     return {
@@ -12850,6 +13166,7 @@ export class OrcaRuntimeService {
           this.store.updateRepo(existing.id, { executionHostId }) ??
           ({ ...existing, executionHostId } as Repo)
         this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCacheForRepo(existing.id)
         this.notifyReposChanged()
         return adopted
       }
@@ -12876,6 +13193,7 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
@@ -12997,6 +13315,7 @@ export class OrcaRuntimeService {
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyReposChanged()
     return { repo: this.store.getRepo(repo.id) ?? repo }
   }
@@ -13140,6 +13459,7 @@ export class OrcaRuntimeService {
           await prepareLocalWorktreeRootForRepo(this.store, updated)
           invalidateAuthorizedRootsCache()
           this.invalidateResolvedWorktreeCache()
+          this.invalidateWorktreeScanCacheForRepo(updated.id)
           this.notifyReposChanged()
           return updated
         }
@@ -13164,6 +13484,7 @@ export class OrcaRuntimeService {
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
@@ -13242,6 +13563,9 @@ export class OrcaRuntimeService {
       invalidateAuthorizedRootsCache()
     }
     this.invalidateResolvedWorktreeCache()
+    if ('worktreeBasePath' in updates) {
+      this.invalidateWorktreeScanCacheForRepo(repo.id)
+    }
     this.notifyReposChanged()
     return updated
   }
@@ -13253,6 +13577,7 @@ export class OrcaRuntimeService {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.store.removeProject(repo.id)
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     invalidateAuthorizedRootsCache()
     this.notifyReposChanged()
     return { removed: true }
@@ -15555,7 +15880,7 @@ export class OrcaRuntimeService {
       }
 
       unsubscribe = this.subscribeToTerminalData(ptyId, observeData)
-      const replay = this.recentPtyOutputById.get(ptyId)
+      const replay = this.recentPtyOutputById.get(ptyId)?.read()
       if (replay) {
         observeData(replay)
       }
@@ -16349,6 +16674,7 @@ export class OrcaRuntimeService {
     }
 
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     // Why: the filesystem-auth layer maintains a separate cache of registered
     // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
     // to authorize paths. Without invalidating it here, CLI-created worktrees
@@ -16662,6 +16988,7 @@ export class OrcaRuntimeService {
     }
 
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyWorktreesChanged(repo.id)
 
     let warning = result.warning
@@ -17352,6 +17679,10 @@ export class OrcaRuntimeService {
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const { lineage, ...metaUpdates } = updates
+    if (lineage?.parentWorktree) {
+      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(worktree.repoId)
+    }
     const shouldClearPushTarget =
       Object.prototype.hasOwnProperty.call(metaUpdates, 'pushTarget') &&
       metaUpdates.pushTarget === null
@@ -18070,6 +18401,7 @@ export class OrcaRuntimeService {
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
+          this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
           invalidateAuthorizedRootsCache()
           this.notifyWorktreesChanged(repo.id)
           return {}
@@ -18115,6 +18447,7 @@ export class OrcaRuntimeService {
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
             this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
             this.invalidateResolvedWorktreeCache()
+            this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
             invalidateAuthorizedRootsCache()
             this.notifyWorktreesChanged(repo.id)
             return {}
@@ -18148,6 +18481,7 @@ export class OrcaRuntimeService {
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
+          this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
           invalidateAuthorizedRootsCache()
           this.notifyWorktreesChanged(repo.id)
           return {}
@@ -18198,6 +18532,7 @@ export class OrcaRuntimeService {
         this.clearOptimisticReconcileToken(removalTarget.id)
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
         this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
         invalidateAuthorizedRootsCache()
         this.notifyWorktreesChanged(repo.id)
         return removalResult ?? {}
@@ -18239,6 +18574,7 @@ export class OrcaRuntimeService {
         this.clearOptimisticReconcileToken(removalTarget.id)
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
         this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
         invalidateAuthorizedRootsCache()
         this.notifyWorktreesChanged(repo.id)
         return removalResult ?? {}
@@ -18387,6 +18723,7 @@ export class OrcaRuntimeService {
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
             this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
             this.invalidateResolvedWorktreeCache()
+            this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
             invalidateAuthorizedRootsCache()
             this.notifyWorktreesChanged(repo.id)
             removalCompleted = true
@@ -18418,6 +18755,7 @@ export class OrcaRuntimeService {
       this.clearOptimisticReconcileToken(removalTarget.id)
       this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
       this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
       invalidateAuthorizedRootsCache()
       this.notifyWorktreesChanged(repo.id)
       return {
@@ -18846,6 +19184,38 @@ export class OrcaRuntimeService {
       telemetry: startup.startup.telemetry,
       title: opts.title
     })
+  }
+
+  // Why: dedupes a worktree.create whose response was lost when a mobile
+  // connection migration (relay/direct hand-off on shoddy cellular) rejected the
+  // in-flight request. A retry with the same clientMutationId returns the
+  // in-flight or just-finished create instead of a duplicate worktree; failures
+  // drop immediately so a genuine retry starts fresh, and successes linger
+  // briefly so a retry whose response was lost in the cutover still reconciles.
+  dedupeWorktreeCreate<T>(
+    repoSelector: string,
+    clientMutationId: string | undefined,
+    run: () => Promise<T>
+  ): Promise<T> {
+    if (!clientMutationId) {
+      return run()
+    }
+    const key = `${repoSelector}\0${clientMutationId}`
+    const inflight = this.worktreeCreateByMutationId.get(key)
+    if (inflight) {
+      return inflight as Promise<T>
+    }
+    const created = run()
+    this.worktreeCreateByMutationId.set(key, created)
+    const drop = (): void => {
+      if (this.worktreeCreateByMutationId.get(key) === created) {
+        this.worktreeCreateByMutationId.delete(key)
+      }
+    }
+    void created.then(() => {
+      setTimeout(drop, WORKTREE_CREATE_RESULT_TTL_MS).unref?.()
+    }, drop)
+    return created
   }
 
   async createMobileSessionTerminal(
@@ -21137,10 +21507,61 @@ export class OrcaRuntimeService {
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
+    const now = Date.now()
+    const generation = this.worktreeScanGenerations.get(repo.id) ?? 0
+    const projectRuntime = projectRuntimeByRepoId
+      ? projectRuntimeByRepoId.get(repo.id)
+      : !repo.connectionId
+        ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+        : undefined
+    const runtimeKey = projectRuntime
+      ? projectRuntime.status === 'resolved'
+        ? projectRuntime.runtime.cacheKey
+        : projectRuntime.repair.cacheKey
+      : repo.connectionId
+        ? `ssh:${repo.connectionId}:${getSshGitProviderGeneration(repo.connectionId)}`
+        : 'local:default'
+    const cached = this.worktreeScanCache.get(repo.id)
+    if (
+      cached?.generation === generation &&
+      cached.runtimeKey === runtimeKey &&
+      cached.expiresAt > now
+    ) {
+      return cached.result
+    }
+    const inFlight = this.worktreeScanInFlight.get(repo.id)
+    if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
+      return inFlight.promise
+    }
+    const promise = this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+    this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
+    try {
+      const result = await promise
+      if (
+        result.ok &&
+        generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
+        this.worktreeScanInFlight.get(repo.id)?.promise === promise
+      ) {
+        this.worktreeScanCache.set(repo.id, {
+          generation,
+          runtimeKey,
+          result,
+          expiresAt: Date.now() + WORKTREE_SCAN_CACHE_TTL_MS
+        })
+      }
+      return result
+    } finally {
+      if (this.worktreeScanInFlight.get(repo.id)?.promise === promise) {
+        this.worktreeScanInFlight.delete(repo.id)
+      }
+    }
+  }
+
+  private async listRepoWorktreesForResolutionUncached(
+    repo: Repo,
+    projectRuntime: ProjectExecutionRuntimeResolution | undefined
+  ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
-      const projectRuntime = projectRuntimeByRepoId
-        ? projectRuntimeByRepoId.get(repo.id)
-        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
       return {
         ok: true,
         worktrees: await listRepoWorktrees(
@@ -21199,11 +21620,34 @@ export class OrcaRuntimeService {
     this.resolvedWorktreeCache = null
   }
 
+  private invalidateWorktreeScanCacheForRepo(repoId: string): void {
+    this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
+    this.worktreeScanCache.delete(repoId)
+    this.worktreeScanInFlight.delete(repoId)
+  }
+
+  private invalidateSshWorktreeScanCacheInternal(targetId: string): void {
+    const repos = this.store?.getRepos() ?? []
+    const affectedRepoIds = new Set(
+      repos.filter((repo) => repo.connectionId === targetId).map((repo) => repo.id)
+    )
+    for (const repoId of affectedRepoIds) {
+      this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
+      this.worktreeScanCache.delete(repoId)
+      this.worktreeScanInFlight.delete(repoId)
+    }
+    if (affectedRepoIds.size > 0) {
+      this.resolvedWorktreeGeneration += 1
+      this.resolvedWorktreeCache = null
+    }
+  }
+
   /** Invalidate the worktree cache and tell the renderer to re-list, after an
    *  out-of-band branch change (e.g. auto-rename-from-work) so the new branch
    *  name surfaces without waiting for the next ambient refresh. */
   notifyBranchRenamed(repoId: string): void {
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repoId)
     this.notifyWorktreesChanged(repoId)
   }
 
@@ -21212,6 +21656,7 @@ export class OrcaRuntimeService {
    *  (from a folder rename) as a deletion. Same channel = guaranteed ordering. */
   notifyWorktreeFolderRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void {
     this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repoId)
     this.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
     // Mirror notifyBranchRenamed so in-process onClientEvent listeners also see the rename.
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
@@ -21277,6 +21722,8 @@ export class OrcaRuntimeService {
         titleUpdatedAt: titleObservedAt,
         lastOutputAt: state.lastOutputAt ?? null,
         tailBuffer: [],
+        tailTranscriptBuffer: [],
+        tailTranscriptChars: 0,
         tailPartialLine: '',
         tailPendingAnsi: '',
         tailRedrawCursor: null,
@@ -21433,6 +21880,8 @@ export class OrcaRuntimeService {
     // Why: disconnected PTY records can stay addressable for status/exit reads,
     // but their retained transcripts must not accumulate after the process dies.
     pty.tailBuffer = []
+    pty.tailTranscriptBuffer = []
+    pty.tailTranscriptChars = 0
     pty.tailPartialLine = ''
     pty.tailPendingAnsi = ''
     pty.tailRedrawCursor = null
@@ -21458,6 +21907,8 @@ export class OrcaRuntimeService {
   }
 
   private dropDisconnectedPtyRecord(ptyId: string): void {
+    // Why: pruning can remove a PTY without the normal exit callback.
+    this.advancePtyLifecycleGeneration(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
@@ -21468,6 +21919,9 @@ export class OrcaRuntimeService {
     this.providerSnapshotPreferredPtys.delete(ptyId)
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
+    this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -22859,6 +23313,20 @@ export class OrcaRuntimeService {
     return { record, pty }
   }
 
+  private assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void {
+    const runtimePty = this.getLivePtyForHandle(handle)
+    if (runtimePty) {
+      if (runtimePty.pty.ptyId !== expectedPtyId) {
+        throw new Error('terminal_handle_stale')
+      }
+      return
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    if (leaf.ptyId !== expectedPtyId) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
+
   private readPtyTerminal(
     handle: string,
     pty: RuntimePtyWorktreeRecord,
@@ -22867,7 +23335,8 @@ export class OrcaRuntimeService {
     return readTerminalTail({
       handle,
       status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-      completedLines: pty.tailBuffer,
+      previewLines: pty.tailBuffer,
+      completedLines: pty.tailTranscriptBuffer,
       partialLine: pty.tailPartialLine,
       completedLineCount: pty.tailLinesTotal,
       bufferTruncated: pty.tailTruncated,
@@ -25998,6 +26467,8 @@ const MAX_TAIL_PENDING_ANSI_CHARS = 4096
 const DEFAULT_TERMINAL_READ_LIMIT = 120
 const MAX_TERMINAL_READ_LIMIT = 2000
 const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
+const VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 750
+const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
@@ -26013,6 +26484,7 @@ const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 const DISCONNECTED_PTY_RECORD_MAX = 128
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
+const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
 // Why (§3.3): 30s freshness window. A second worktree-create or dispatch-probe
@@ -26076,13 +26548,6 @@ function withTimeoutResult<T>(
       ok: false
     }
   )
-}
-
-export function appendRecentPtyOutput(previous: string | undefined, data: string): string {
-  if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
-    return data.slice(-RECENT_PTY_OUTPUT_LIMIT)
-  }
-  return `${previous ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
 }
 
 export function appendRecentPtyPathCandidates(
@@ -26495,6 +26960,7 @@ export function appendNormalizedToTailBuffer(
   redrawCursor: RetainedTailRedrawCursor | null
   truncated: boolean
   newCompleteLines: number
+  newlyCompletedLines: string[]
 } {
   if (normalizedChunk.length === 0) {
     return {
@@ -26502,7 +26968,8 @@ export function appendNormalizedToTailBuffer(
       partialLine: previousPartialLine,
       redrawCursor: previousRedrawCursor,
       truncated: false,
-      newCompleteLines: 0
+      newCompleteLines: 0,
+      newlyCompletedLines: []
     }
   }
 
@@ -26526,6 +26993,7 @@ export function appendNormalizedToTailBuffer(
   // visible redraw segment instead of appending every spinner frame.
   const segments = splitRetainedTerminalTailSegments(combinedChunk)
   const pieces = processTerminalTailCompleteSegments(segments.completeSegments)
+  const newlyCompletedLines = pieces.map((line) => trimTerminalLineRight(line))
   const partialResult = applyTerminalLineControls(segments.partialSegment)
   const nextPartialLine = trimTerminalLineRight(partialResult.text)
   const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
@@ -26533,10 +27001,7 @@ export function appendNormalizedToTailBuffer(
   const omittedNewCompleteLines = newCompleteLines - pieces.length
   let nextLines =
     newCompleteLines > 0
-      ? [
-          ...(omittedNewCompleteLines > 0 ? [] : previousLines),
-          ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))
-        ]
+      ? [...(omittedNewCompleteLines > 0 ? [] : previousLines), ...newlyCompletedLines]
       : previousLines
   let truncated =
     previousPartialWasCapped ||
@@ -26578,7 +27043,8 @@ export function appendNormalizedToTailBuffer(
     partialLine: retainedPartialLine,
     redrawCursor,
     truncated,
-    newCompleteLines
+    newCompleteLines,
+    newlyCompletedLines
   }
 }
 
@@ -26630,6 +27096,7 @@ function appendNormalizedToMultilineTailBuffer(
   redrawCursor: RetainedTailRedrawCursor | null
   truncated: boolean
   newCompleteLines: number
+  newlyCompletedLines: string[]
 } {
   const windowRows =
     maxUpwardCursorReach(normalizedChunk, previousRedrawCursor) + REDRAW_WINDOW_SAFETY_ROWS
@@ -26687,7 +27154,8 @@ function appendNormalizedToMultilineTailBuffer(
     partialLine: windowed.partialLine,
     redrawCursor: windowed.redrawCursor,
     truncated,
-    newCompleteLines: windowed.newCompleteLines
+    newCompleteLines: windowed.newCompleteLines,
+    newlyCompletedLines: windowed.newlyCompletedLines
   }
 }
 
@@ -26703,6 +27171,7 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
   redrawCursor: RetainedTailRedrawCursor | null
   truncated: boolean
   newCompleteLines: number
+  newlyCompletedLines: string[]
 } {
   const rows: RetainedTerminalRow[] = [
     ...previousLines.map((line) => ({ text: line, completed: true })),
@@ -26713,7 +27182,28 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     : rows.length - 1
   let cursorColumn = previousRedrawCursor?.column ?? boundedPreviousPartialLine.length
   let newCompleteLines = 0
+  const newlyCompletedLines: string[] = []
+  let newlyCompletedLineCharacters = 0
+  let newlyCompletedLineStart = 0
   let truncated = previousPartialWasCapped
+
+  const retainNewlyCompletedLine = (line: string): void => {
+    newlyCompletedLines.push(line)
+    newlyCompletedLineCharacters += line.length
+    while (
+      newlyCompletedLines.length - newlyCompletedLineStart > MAX_TAIL_LINES ||
+      newlyCompletedLineCharacters > MAX_TAIL_CHARS
+    ) {
+      newlyCompletedLineCharacters -= newlyCompletedLines[newlyCompletedLineStart]!.length
+      newlyCompletedLineStart += 1
+    }
+    // Why: a single PTY chunk can contain unbounded newlines; compact in batches
+    // while retaining the suffix needed for stable transcript pagination.
+    if (newlyCompletedLineStart >= MAX_TAIL_LINES) {
+      newlyCompletedLines.splice(0, newlyCompletedLineStart)
+      newlyCompletedLineStart = 0
+    }
+  }
 
   const ensureCursorRow = (): void => {
     while (cursorRow >= rows.length) {
@@ -26770,6 +27260,7 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
       ensureCursorRow()
       rows[cursorRow]!.completed = true
       newCompleteLines += 1
+      retainNewlyCompletedLine(trimTerminalLineRight(rows[cursorRow]!.text))
       cursorRow += 1
       cursorColumn = 0
       ensureCursorRow()
@@ -26811,7 +27302,16 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     writeChar(char)
   }
 
-  return finalizeRetainedTerminalRows(rows, cursorRow, cursorColumn, truncated, newCompleteLines)
+  return finalizeRetainedTerminalRows(
+    rows,
+    cursorRow,
+    cursorColumn,
+    truncated,
+    newCompleteLines,
+    newlyCompletedLineStart > 0
+      ? newlyCompletedLines.slice(newlyCompletedLineStart)
+      : newlyCompletedLines
+  )
 }
 
 type RetainedTailRedrawCursor = {
@@ -26829,13 +27329,15 @@ function finalizeRetainedTerminalRows(
   cursorRow: number,
   cursorColumn: number,
   initialTruncated: boolean,
-  newCompleteLines: number
+  newCompleteLines: number,
+  newlyCompletedLines: string[]
 ): {
   lines: string[]
   partialLine: string
   redrawCursor: RetainedTailRedrawCursor | null
   truncated: boolean
   newCompleteLines: number
+  newlyCompletedLines: string[]
 } {
   let truncated = initialTruncated
   let retainedRows = rows.map((row) => ({ ...row, text: row.text.replace(/[ \t]+$/g, '') }))
@@ -26897,7 +27399,8 @@ function finalizeRetainedTerminalRows(
     partialLine,
     redrawCursor,
     truncated,
-    newCompleteLines
+    newCompleteLines,
+    newlyCompletedLines
   }
 }
 
@@ -27124,8 +27627,43 @@ function containsTerminalVerticalLineControl(value: string): boolean {
   return false
 }
 
+function appendCompletedTerminalTranscript(
+  previousLines: string[],
+  previousCharacters: number,
+  newlyCompletedLines: string[],
+  newCompleteLineCount: number
+): { lines: string[]; characters: number; truncated: boolean } {
+  if (newCompleteLineCount === 0) {
+    return { lines: previousLines, characters: previousCharacters, truncated: false }
+  }
+
+  const omittedNewLineCount = Math.max(0, newCompleteLineCount - newlyCompletedLines.length)
+  const lines = omittedNewLineCount > 0 ? [] : [...previousLines]
+  let characters = omittedNewLineCount > 0 ? 0 : previousCharacters
+  for (const line of newlyCompletedLines) {
+    lines.push(line)
+    characters += line.length
+  }
+
+  let dropCount = Math.max(0, lines.length - MAX_TAIL_LINES)
+  for (let index = 0; index < dropCount; index += 1) {
+    characters -= lines[index]!.length
+  }
+  while (dropCount < lines.length && characters > MAX_TAIL_CHARS) {
+    characters -= lines[dropCount]!.length
+    dropCount += 1
+  }
+
+  return {
+    lines: dropCount > 0 ? lines.slice(dropCount) : lines,
+    characters,
+    truncated: omittedNewLineCount > 0 || dropCount > 0
+  }
+}
+
 function tailStateMatches(
   lines: string[],
+  transcriptLines: string[],
   partialLine: string,
   pendingAnsi: string,
   redrawCursor: RetainedTailRedrawCursor | null,
@@ -27133,6 +27671,7 @@ function tailStateMatches(
   linesTotal: number,
   snapshot: {
     lines: string[]
+    transcriptLines: string[]
     partialLine: string
     pendingAnsi: string
     redrawCursor: RetainedTailRedrawCursor | null
@@ -27146,7 +27685,8 @@ function tailStateMatches(
     !tailRedrawCursorsMatch(redrawCursor, snapshot.redrawCursor) ||
     truncated !== snapshot.truncated ||
     linesTotal !== snapshot.linesTotal ||
-    lines.length !== snapshot.lines.length
+    lines.length !== snapshot.lines.length ||
+    transcriptLines.length !== snapshot.transcriptLines.length
   ) {
     return false
   }
@@ -27156,6 +27696,13 @@ function tailStateMatches(
   for (let index = 0; index < lines.length; index++) {
     if (lines[index] !== snapshot.lines[index]) {
       return false
+    }
+  }
+  if (transcriptLines !== snapshot.transcriptLines) {
+    for (let index = 0; index < transcriptLines.length; index++) {
+      if (transcriptLines[index] !== snapshot.transcriptLines[index]) {
+        return false
+      }
     }
   }
   return true
@@ -27216,6 +27763,7 @@ function trimTerminalPreviewToCharacterBudget(
 function readTerminalTail(args: {
   handle: string
   status: RuntimeTerminalState
+  previewLines: string[]
   completedLines: string[]
   partialLine: string
   completedLineCount: number
@@ -27266,7 +27814,7 @@ function readTerminalTail(args: {
   // latest bounded view, while the larger retained buffer remains available
   // through cursor reads plus --limit.
   const limit = terminalReadLimit(args.limit, DEFAULT_TERMINAL_READ_LIMIT)
-  const allLines = buildTailLines(args.completedLines, args.partialLine)
+  const allLines = buildTailLines(args.previewLines, args.partialLine)
   const lineBoundedTail = allLines.slice(-limit)
   const charBoundedTail = trimTerminalPreviewToCharacterBudget(
     lineBoundedTail,
@@ -27307,6 +27855,10 @@ function shouldFallbackToVisibleTerminalSnapshot(
   const hasSubstantialBlankTail =
     read.limited === true || read.truncated || read.tail.length >= DEFAULT_TERMINAL_READ_LIMIT
   return hasSubstantialBlankTail && read.tail.every((line) => line.trim().length === 0)
+}
+
+function visibleNonBlankTerminalLines(lines: string[]): string[] {
+  return lines.map((line) => line.trimEnd()).filter((line) => line.trim().length > 0)
 }
 
 function buildVisibleSnapshotReadFallback(

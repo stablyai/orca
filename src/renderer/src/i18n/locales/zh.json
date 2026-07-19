@@ -72,7 +72,8 @@
     "minimizeNotice": {
       "body": "Orca 仍在系统托盘中运行"
     },
-    "activityWaiting": "Orca - 活动等待中"
+    "activityWaiting": "Orca - 活动等待中",
+    "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -588,6 +589,27 @@
             "de50bef680": "macOS 正在阻止 Orca 通知"
           }
         }
+      },
+      "linear": {
+        "usage": {
+          "examples": {
+            "readTicket": "Read the linked ticket",
+            "postUpdate": "Post a progress update",
+            "moveState": "Move the ticket forward",
+            "attachPr": "Attach the PR link",
+            "triageFollowups": "Triage and create follow-ups",
+            "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
+            "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
+            "postUpdateSummary": "Comment progress or a completion summary back to the Linear issue.",
+            "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
+            "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
+            "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
+            "attachPrSummary": "Link the pull request to the Linear issue when you open it.",
+            "attachPrPrompt": "Use {{value0}} to attach this PR to the linked Linear issue with a PR link.",
+            "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
+            "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
+          }
+        }
       }
     },
     "hooks": {
@@ -705,7 +727,9 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "projectHostsSummary": "{{value0}} 个主机"
+        "projectHostsSummary": "{{value0}} 个主机",
+        "linearTitle": "Linear",
+        "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -716,13 +740,13 @@
     },
     "components": {
       "CodexRestartChip": {
-        "9132779820": "关闭",
         "c72a5fb234": "重新启动",
         "9263e75f49": "Codex 正在使用之前的账户",
         "a4c8e1b2f7": "Codex 仍以 {{value0}} 身份登录",
         "d3e8a1f4b2": "账户已切换",
-        "e9b2c7d1a5": "重启此会话以使用 {{value0}}。折叠以继续使用当前账户。",
-        "f1a6c8e3b4": "折叠"
+        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
+        "6133594b12": "Keep old account",
+        "b9000fe511": "Not now"
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "关闭通知",
@@ -1758,7 +1782,8 @@
         "jiraSortAscending": "升序",
         "jiraSortDescending": "降序",
         "jiraSortBy": "排序方式",
-        "jiraToggleSortDirection": "按{{value0}}排序"
+        "jiraToggleSortDirection": "按{{value0}}排序",
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -1820,7 +1845,14 @@
         "a726967bd3": "关闭",
         "d5253b54af": "错误",
         "7ffc08506e": "查看",
-        "522df222b9": "旋转器"
+        "522df222b9": "旋转器",
+        "e944c2de43": "Update Verification Blocked",
+        "5b309b19f3": "Update Wasn't Installed",
+        "092f09fc14": "The installer's publisher doesn't match Orca, so we stopped the update. Don't install this download; check official releases for a corrected version.",
+        "c9ff9b9ec2": "Check official releases",
+        "a05992a26b": "The signature check couldn't run — usually because antivirus software blocked it. Retry the download, or get the installer from our official releases.",
+        "5194358929": "Hide details",
+        "8bc9e17d8f": "Show details"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "手机",
@@ -2723,7 +2755,7 @@
             "7e8106899f": "向左拆分",
             "2186a8407c": "向下拆分",
             "96354ed249": "向上拆分",
-            "911542656f": "引脚标签",
+            "911542656f": "固定标签",
             "c5aaee8c39": "取消固定标签"
           },
           "EditorFileTab": {
@@ -2741,7 +2773,7 @@
             "e3ff145b98": "向左拆分",
             "1d04b1630b": "向下拆分",
             "6b3efb106e": "向上拆分",
-            "fdd29eb669": "引脚标签",
+            "fdd29eb669": "固定标签",
             "8e9d603a09": "取消固定标签"
           },
           "QuickLaunchButton": {
@@ -2781,7 +2813,7 @@
             "c2d8b0991f": "紫色的",
             "cb3eadefd2": "蓝色",
             "20baa43c05": "没有任何",
-            "60f958ec75": "引脚标签",
+            "60f958ec75": "固定标签",
             "417722e9c2": "取消固定标签",
             "splitTerminalRight": "向右拆分终端",
             "splitTerminalDown": "向下拆分终端"
@@ -3896,10 +3928,9 @@
         "RemoveFolderDialog": {
           "4dc5b5065b": "移除",
           "d36883e046": "取消",
-          "8c097ef04e": "来自 Orca。它仍保留在您的磁盘上。",
-          "e62415c3d0": "这仅删除",
           "b79b39d865": "删除项目",
-          "fromOrcaSsh": "从 Orca 中移除。其文件保留在 {{value0}} 上 — 重新添加该 SSH 主机即可恢复。"
+          "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复。",
+          "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在您的磁盘上。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "显示活动工作区"
@@ -4434,7 +4465,7 @@
           }
         },
         "useAddRepoCloneFlow": {
-          "4d0013cc93": "克隆存储库",
+          "4d0013cc93": "仓库已克隆",
           "0dc4d1b657": "输入克隆目标的服务器路径。"
         },
         "useAddRepoLocalFolderFlow": {
@@ -5065,7 +5096,11 @@
           "windowSidebarSummary": "侧边栏、状态栏和文件浏览器",
           "statusBarCount": "显示 {{value0}} 个指示器。",
           "gitIgnoredGlossary": "与 .gitignore 匹配的文件。",
-          "statusBarDescription": "选择状态栏中显示哪些指示器。"
+          "statusBarDescription": "选择状态栏中显示哪些指示器。",
+          "showPinnedWorktreesInGroups": {
+            "title": "也在原来的列表中显示已固定的工作树",
+            "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
+          }
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -5925,13 +5960,6 @@
           "3743ed080c": "设置命令",
           "f79084947b": "新应用程序"
         },
-        "OrchestrationExamplesDialog": {
-          "3d1aa105e3": "复制提示",
-          "9b4c004998": "完成",
-          "969cec9739": "复制 {{value0}} 示例提示",
-          "4e46da1889": "复制提示失败。",
-          "80c6f2feb8": "复制示例提示。"
-        },
         "OrchestrationPane": {
           "52e0634e2c": "要求协调智能体使用编排进行切换、工作树切换以及顺序或并行子智能体。",
           "ae79504732": "如何使用",
@@ -6120,7 +6148,7 @@
           "39da8a10bf": "使用 GitHub 头像",
           "c490787d24": "表情符号",
           "b2d7fd2116": "图标",
-          "2d8bd302fa": "阿凡达",
+          "2d8bd302fa": "头像",
           "913c55833d": "自定义仓库颜色 {{value0}}",
           "0e5f0693c1": "选择自定义仓库颜色",
           "642dc29c6d": "颜色",
@@ -6443,7 +6471,9 @@
           "2309068a6f": "destructive",
           "65358016ea": "放弃",
           "dev": "开发工具",
-          "devDescription": "仅用于调试 UI 状态的开发工具。"
+          "devDescription": "仅用于调试 UI 状态的开发工具。",
+          "linearTitle": "Linear",
+          "linearDescription": "Give agents the skill to read and update your linked Linear tickets."
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -6578,8 +6608,8 @@
           "f8050f6307": "已同步 {{value0}} 服务器{{value1}}",
           "68c13b4589": "测试失败",
           "81d08bcddf": "连接成功",
-          "2c4ee7332b": "远程继电器复位失败",
-          "db2e48975e": "远程继电器复位",
+          "2c4ee7332b": "无法重置远程中继",
+          "db2e48975e": "远程中继已重置",
           "025e107643": "无法结束远程终端",
           "90e308c98b": "远程终端结束",
           "a43de1d3ee": "断开连接失败",
@@ -6597,17 +6627,17 @@
         },
         "SshPassphraseDialog": {
           "d5a234456f": "取消",
-          "c3ce71aad6": "输入密码",
+          "c3ce71aad6": "输入密钥口令",
           "abaa0dc653": "输入密码",
-          "ce4fdf7914": "输入密码",
+          "ce4fdf7914": "请输入以下密钥的口令：",
           "dbf9b6f2d0": "输入密码",
           "c55f105262": "无法取消 SSH 凭据请求",
           "b8e88fd0de": "无法提交 SSH 凭据",
-          "405066423c": "开锁",
+          "405066423c": "解锁",
           "bec2c1318f": "连接",
-          "8a349e3fac": "{{value0}} 的密码",
+          "8a349e3fac": "{{value0}} 的密钥口令",
           "cab3d5f5a5": "{{value0}} 的密码",
-          "1f3dde805d": "SSH 密钥密码",
+          "1f3dde805d": "SSH 密钥口令",
           "106bd57f4a": "SSH 密码"
         },
         "SshTargetCard": {
@@ -6618,8 +6648,8 @@
           "7f7b3d7ab4": "删除目标",
           "3d21a22d0e": "移除目标",
           "3d8af2949f": "编辑目标",
-          "762a48c662": "重置远程继电器",
-          "97dea4e8cf": "重置远程继电器",
+          "762a48c662": "重置远程中继",
+          "97dea4e8cf": "正在重置远程中继",
           "da16e108e6": "结束远程终端",
           "c77f1abfe3": "结束远程终端",
           "18968ede9e": "错误",
@@ -6632,7 +6662,7 @@
           "7e66942808": "这将停止此 SSH 目标上的活动终端会话。重新连接不会恢复它们。",
           "accf177a03": "结束远程终端？",
           "26be00392d": "这将强制停止此 SSH 目标的远程中继。该目标的活动远程终端和端口转发将结束。",
-          "570a7a0574": "重置远程继电器？",
+          "570a7a0574": "重置远程中继？",
           "3bb0cf0ee4": "这将删除目标并结束任何活动的远程终端。",
           "4808966c41": "删除 SSH 目标"
         },
@@ -7278,6 +7308,10 @@
             },
             "9a115966d3": "关闭时最小化到托盘",
             "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+            "showPinnedWorktreesInGroups": {
+              "title": "也在原来的列表中显示已固定的工作树",
+              "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
+            },
             "antigravityUsageTitle": "Antigravity 使用量",
             "antigravityUsageDescription": "在状态栏中显示 Antigravity 订阅使用量。",
             "antigravityKeyword": "antigravity",
@@ -7956,7 +7990,7 @@
               "d0c89bc4a9": "覆盖",
               "87711f4b8f": "VPN",
               "16bff559a0": "尾网",
-              "c690e3ee38": "尾鳞",
+              "c690e3ee38": "tailscale",
               "a023683767": "界面",
               "7b37c2e557": "网络",
               "3190ef67a4": "选择用于手机配对的网络地址。",
@@ -9080,6 +9114,10 @@
                   "description": "让您的智能体读取和编辑 Linear 任务。",
                   "copyCommand": "复制命令"
                 }
+              },
+              "search": {
+                "title": "Linear",
+                "description": "Give agents the skill to read and update your linked Linear tickets."
               }
             }
           }
@@ -9160,6 +9198,23 @@
           "availability": "可用平台：",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "SkillUsageExampleDialog": {
+          "copiedPrompt": "复制示例提示。",
+          "copyFailed": "复制提示失败。",
+          "copyExampleAria": "复制 {{value0}} 示例提示",
+          "done": "完成",
+          "copyPrompt": "复制提示"
+        },
+        "LinearAgentSkillPane": {
+          "title": "Linear",
+          "description": "Give agents the skill to read and update your linked Linear tickets.",
+          "skillTitle": "Linear skill",
+          "skillDescription": "Enables agents to read linked tickets and post updates to Linear through Orca.",
+          "howToUse": "How to use it",
+          "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
+          "terminalTitle": "Linear skill setup",
+          "terminalAriaLabel": "Linear skill install terminal"
         }
       },
       "right": {
@@ -9260,14 +9315,17 @@
             "d6a25618aa": "折叠文件夹",
             "d87a4c42e1": "打开 Markdown 预览",
             "c2112579f6": "下载",
+            "7ac885bd2f": "下载文件夹",
             "dd112c81d2": "在 Orca 浏览器中打开",
             "1bb9be455c": "添加为项目...",
             "0fec99bfd7": "复制",
             "f61af83316": "新建文件夹",
             "37c875d827": "新文件",
             "b3e288bf41": "无法下载“{{value0}}”。",
+            "f729bcd97d": "无法下载文件夹“{{value0}}”。",
             "1a3df04ae1": "开放",
             "bce4d4e44f": "下载“{{value0}}”",
+            "a4029c996b": "已下载文件夹“{{value0}}”",
             "e26010014a": "被 .gitignore 忽略",
             "a06551beee": "进入",
             "128a99ed5e": "未分配",
@@ -9644,7 +9702,9 @@
               "a9bf7c171a": "推送失败",
               "834cb3f23d": "使用 AI 修复",
               "783a808870": "关闭"
-            }
+            },
+            "createPrIntentSyncConflicts": "同步遇到冲突。请解决后重试创建 PR。",
+            "createPrIntentSyncing": "正在同步分支…"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -10015,6 +10075,13 @@
                   "cfafa92509": "没有未解决的冲突需要发送。"
                 }
               }
+            },
+            "hosted": {
+              "review": {
+                "actions": {
+                  "e475c29b17": "This will merge the {{value0}}."
+                }
+              }
             }
           },
           "fileExplorerOperationOwner": {
@@ -10267,6 +10334,24 @@
             "workspaceGone": "无法打开日志 — 工作区已不可用。",
             "notAuthorized": "无法打开日志 — 路径未授权。",
             "alreadyEditable": "日志已处于编辑状态。"
+          },
+          "github": {
+            "refresh": {
+              "error": {
+                "copy": {
+                  "580025e7b7": "GitHub is unavailable",
+                  "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
+                  "d1a9f2b165": "Can't reach GitHub",
+                  "7d01d42a3a": "GitHub is unreachable right now. Check your connection, then try again shortly.",
+                  "e9d681894a": "GitHub rate limit reached",
+                  "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
+                  "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
+                  "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
+                  "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
+                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
+                }
+              }
+            }
           }
         }
       },
@@ -10593,7 +10678,8 @@
           },
           "ProjectCombobox": {
             "search": "搜索项目...",
-            "empty": "没有匹配搜索的项目。"
+            "empty": "没有匹配搜索的项目。",
+            "addProject": "Add a new project"
           }
         }
       },
@@ -11928,7 +12014,9 @@
                 "2f9d6b4e10": "切换标题 3",
                 "8c1a3e7d52": "创建一个带有小标题摘要的可折叠部分。",
                 "5e0b9c2a71": "切换标题 4",
-                "d4f16a8b39": "创建一个带有嵌套标题摘要的可折叠部分。"
+                "d4f16a8b39": "创建一个带有嵌套标题摘要的可折叠部分。",
+                "21d8c463e5": "切换标题 5",
+                "dc239b41ad": "创建一个带有深层标题摘要的可折叠部分。"
               }
             }
           }
@@ -13186,15 +13274,15 @@
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
         "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…",
         "model": "模型",
-        "modelWithValue": "模型：{{value0}}",
         "effort": "推理强度",
-        "effortWithValue": "推理强度：{{value0}}",
         "fastMode": "快速模式",
         "thinking": "思考",
         "options": "选项",
         "sessionOptions": "会话选项",
         "chooseInAgentPicker": "在代理选择器中选择…",
         "toggleOption": "切换{{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "当前值未知 — 请选择开或关",
         "sentNotConfirmed": "已发送给代理 — 尚未确认",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
@@ -13206,7 +13294,9 @@
           "medium": "中",
           "high": "高",
           "xhigh": "极高",
-          "max": "最大"
+          "max": "最大",
+          "on": "开",
+          "off": "关"
         }
       },
       "tool": {

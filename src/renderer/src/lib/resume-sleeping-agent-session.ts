@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentSessionRecord
+import {
+  agentProviderSessionsEqual,
+  type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import {
@@ -68,13 +68,6 @@ function getNewestActiveRecordsByClaimKey(
   return newestRecords
 }
 
-function providerSessionsMatch(
-  left: AgentProviderSessionMetadata | undefined,
-  right: AgentProviderSessionMetadata
-): boolean {
-  return Boolean(left && left.key === right.key && left.id === right.id)
-}
-
 function getAgentStatusTabId(entry: {
   paneKey: string
   tabId?: string | undefined
@@ -99,7 +92,7 @@ function activeOrQueuedResumeClaimsProviderSession(
       entry.worktreeId === record.worktreeId &&
       entry.agentType === record.agent &&
       entry.state !== 'done' &&
-      providerSessionsMatch(entry.providerSession, record.providerSession)
+      agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
     ) {
       return true
     }
@@ -109,7 +102,11 @@ function activeOrQueuedResumeClaimsProviderSession(
     if (
       worktreeTabIds.has(tabId) &&
       startup.launchAgent === record.agent &&
-      providerSessionsMatch(startup.resumeProviderSession, record.providerSession)
+      agentProviderSessionsEqual(
+        record.agent,
+        startup.resumeProviderSession,
+        record.providerSession
+      )
     ) {
       return true
     }
@@ -120,7 +117,7 @@ function activeOrQueuedResumeClaimsProviderSession(
       worktreeTabIds.has(tabId) &&
       claim.worktreeId === record.worktreeId &&
       claim.launchAgent === record.agent &&
-      providerSessionsMatch(claim.providerSession, record.providerSession)
+      agentProviderSessionsEqual(record.agent, claim.providerSession, record.providerSession)
     ) {
       return true
     }

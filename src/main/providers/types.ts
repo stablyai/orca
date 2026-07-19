@@ -149,6 +149,9 @@ export type PtySpawnResult = {
   coldRestore?: {
     scrollback: string
     cwd: string
+    /** Optional for compatibility with restore payloads from older app code. */
+    cols?: number
+    rows?: number
     oscLinks?: TerminalOscLinkRange[]
   }
 }
@@ -265,6 +268,7 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
+  downloadFolder?: (src: string, dest: string, options?: { signal?: AbortSignal }) => Promise<void>
   openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>

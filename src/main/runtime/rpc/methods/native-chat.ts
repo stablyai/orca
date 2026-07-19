@@ -194,7 +194,8 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         ? {
             messages: windowForClient(result.messages, clientKind, limit),
             hasMore: result.hasMore,
-            beforeOffset: result.beforeOffset
+            beforeOffset: result.beforeOffset,
+            ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
           }
         : result
     }
@@ -232,7 +233,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
         initialLimit: limit,
-        onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+        onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
             return
           }
@@ -243,10 +244,11 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
             beforeOffset,
-            ...(error ? { error } : {})
+            ...(error ? { error } : {}),
+            ...(lifecycle ? { lifecycle } : {})
           })
         },
-        onReplace: (messages, hasMore, beforeOffset) => {
+        onReplace: (messages, hasMore, beforeOffset, lifecycle) => {
           if (closed) {
             return
           }
@@ -254,14 +256,19 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
             type: 'replacement',
             messages: windowForClient(messages, clientKind, limit),
             hasMore,
-            beforeOffset
+            beforeOffset,
+            ...(lifecycle ? { lifecycle } : {})
           })
         },
-        onAppend: (messages) => {
+        onAppend: (messages, lifecycle) => {
           if (closed) {
             return
           }
-          emit({ type: 'appended', messages: sanitizeAppendForClient(messages, clientKind) })
+          emit({
+            type: 'appended',
+            messages: sanitizeAppendForClient(messages, clientKind),
+            ...(lifecycle ? { lifecycle } : {})
+          })
         }
       })
       // The connection may have closed while the file was being resolved.
@@ -270,7 +277,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         return
       }
       if (!subscription.watching) {
-        emit({ type: 'snapshot', messages: [], hasMore: false, error: 'Transcript unavailable' })
+        emit({
+          type: 'snapshot',
+          messages: [],
+          hasMore: false,
+          error: 'Transcript unavailable'
+        })
       }
       unsubscribe = subscription.unsubscribe
     }

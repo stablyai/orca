@@ -29,6 +29,7 @@ import {
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
 import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
+import { classifyGitHubUnavailable } from '../../shared/github-api-availability'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
@@ -184,18 +185,15 @@ function classifyPRRefreshError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType'] {
   const message = err instanceof Error ? err.message : String(err)
+  // Why: GitHub-unreachable buckets (5xx outage / network / rate limit) share
+  // one detector with the Tasks work-item path so both surfaces attribute an
+  // outage to GitHub identically. Rate-limit responses also carry "HTTP 403",
+  // so this must run before the permission check below.
+  const unavailable = classifyGitHubUnavailable(message)
+  if (unavailable) {
+    return unavailable
+  }
   const lower = message.toLowerCase()
-  if (lower.includes('rate limit')) {
-    return 'rate_limited'
-  }
-  if (
-    lower.includes('timeout') ||
-    lower.includes('no such host') ||
-    lower.includes('network') ||
-    lower.includes('could not resolve host')
-  ) {
-    return 'network'
-  }
   if (lower.includes('http 403') || lower.includes('resource not accessible')) {
     return 'permission'
   }
@@ -215,6 +213,8 @@ function safePRRefreshErrorMessage(
       return 'GitHub authentication is unavailable. Check your gh login.'
     case 'network':
       return 'GitHub is unreachable right now. Check your network and try again.'
+    case 'server_error':
+      return "GitHub's API is temporarily unavailable (server error). This is a GitHub-side issue."
     case 'permission':
       return 'GitHub did not allow access to this pull request.'
     case 'repo_unavailable':
@@ -1093,7 +1093,9 @@ async function resolvePrWorkItemSource(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedPrWorkItemSource> {
   const [originCandidate, upstreamCandidate] = await Promise.all([
-    getOwnerRepo(repoPath, connectionId, localGitOptions),
+    // Why: this caller combines both remotes itself, so it needs origin
+    // specifically (getOwnerRepo is upstream-first since #7331).
+    getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions),
     getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
   ])
   const source =
@@ -1270,6 +1272,9 @@ async function listQueriedWorkItems(
     query.reviewedBy !== null
   const issueScope = query.scope !== 'pr' && !hasPrOnlyFilter
   const prScope = query.scope !== 'issue'
+  let successfulRequestCount = 0
+  let nonAvailabilityFailureCount = 0
+  let availabilityError: unknown
 
   // Why: run the issue and PR fetches in parallel but surface the
   // issue-side error separately so the IPC envelope can carry it up. PR-side
@@ -1292,13 +1297,18 @@ async function listQueriedWorkItems(
       const { stdout } = issueOwnerRepo
         ? await ghExecFileAsync(request.args, ghOptions)
         : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
-      return {
-        items: (JSON.parse(stdout) as Record<string, unknown>[])
-          .filter((item) => !('pull_request' in item))
-          .map(mapIssueWorkItem)
-      }
+      const items = (JSON.parse(stdout) as Record<string, unknown>[])
+        .filter((item) => !('pull_request' in item))
+        .map(mapIssueWorkItem)
+      successfulRequestCount += 1
+      return { items }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
+      }
       return { items: [], issuesError: classifyListIssuesError(stderr) }
     }
   })()
@@ -1325,17 +1335,30 @@ async function listQueriedWorkItems(
         .slice(request.offset, request.offset + limit)
         .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       const hydrated = await hydrateWorkItemRepositoryMergeMetadata(mapped, prOwnerRepo, ghOptions)
+      successfulRequestCount += 1
       if (query.state === 'closed') {
         return hydrated.filter((item) => item.state !== 'merged')
       }
       return hydrated
     } catch (err) {
       console.warn('listQueriedWorkItems PRs partial failure:', err)
+      const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGitHubUnavailable(stderr)) {
+        availabilityError ??= err
+      } else {
+        nonAvailabilityFailureCount += 1
+      }
       return []
     }
   })()
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
+  if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
+    // Why: combined queries normally preserve either successful half. When
+    // every attempted half hit the same availability class, propagate one of
+    // those existing failures so Tasks can distinguish an outage from no data.
+    throw availabilityError
+  }
   return {
     items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
     issuesError: issueResult.issuesError
@@ -1626,7 +1649,15 @@ export async function getRepoSlug(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<{ owner: string; repo: string } | null> {
-  return getOwnerRepo(repoPath, connectionId, ...hostedReviewLocalGitOptionArgs(options))
+  // Why: the slug is the checkout's own identity (renderer display, icon
+  // autodetect), so it must stay origin-based — getOwnerRepo became
+  // upstream-first for PR reads in #7331.
+  return getOwnerRepoForRemote(
+    repoPath,
+    'origin',
+    connectionId,
+    ...hostedReviewLocalGitOptionArgs(options)
+  )
 }
 
 /**
@@ -1644,7 +1675,9 @@ export async function getRepoUpstream(
 ): Promise<OwnerRepo | null> {
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
-  const origin = await getOwnerRepo(repoPath, connectionId, ...localGitArgs)
+  // Why: must be origin specifically — the fork-parent fast-path below compares
+  // it against the upstream remote (getOwnerRepo is upstream-first since #7331).
+  const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, ...localGitArgs)
   if (!origin) {
     return null
   }
@@ -1856,9 +1889,16 @@ export async function createGitHubPullRequest(
 
   // Why: github.com-only slug parsing returns null for GHES, so fall back to the
   // enterprise resolver (gh-authenticated custom host) before giving up (#8312).
+  // Creation targets origin: the head branch is unqualified, so `gh pr create`
+  // must run against the repo the branch was pushed to, not the fork parent
+  // (getOwnerRepo became upstream-first for PR reads in #7331).
   const ownerRepo =
-    (await getOwnerRepo(repoPath, connectionId, ...hostedReviewLocalGitOptionArgs(options))) ??
-    (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options))
+    (await getOwnerRepoForRemote(
+      repoPath,
+      'origin',
+      connectionId,
+      ...hostedReviewLocalGitOptionArgs(options)
+    )) ?? (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options))
   if (!ownerRepo) {
     return {
       ok: false,
@@ -2016,9 +2056,8 @@ export async function getWorkItem(
         return issue
       }
     } catch (err) {
-      // Why: the issue lookup now targets `upstream` while the PR lookup targets `origin`,
-      // so a transient upstream failure (5xx, rate limit, network flake) on issue #N would
-      // silently fall through to origin's PR #N — potentially a completely unrelated item.
+      // Why: a transient failure (5xx, rate limit, network flake) on issue #N would
+      // silently fall through to PR #N — potentially a completely unrelated item.
       // Only fall through when the issue genuinely doesn't exist (404); re-throw everything
       // else so the outer catch returns null and the caller sees a real failure instead of
       // a wrong item. classifyGhError centralizes the 404/"not found" pattern-matching.

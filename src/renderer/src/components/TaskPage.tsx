@@ -3788,6 +3788,10 @@ export default function TaskPage(): React.JSX.Element {
   // rejections populate tasksError instead — the two are mutually exclusive so
   // a successful-with-partial-failure read and a hard-reject don't double-show.
   const [failedCount, setFailedCount] = useState(0)
+  // Why: when every selected refresh fails because GitHub is unreachable
+  // (outage / network / rate limit), attribute it to GitHub instead of making
+  // an empty or stale cached list look current.
+  const [githubUnavailable, setGithubUnavailable] = useState(false)
   const [taskRefreshNonce, setTaskRefreshNonce] = useState(0)
   // Why: the fetch effect uses this to detect when a nonce bump is from the
   // user clicking the refresh button (force=true) vs. re-running for any
@@ -6414,6 +6418,7 @@ export default function TaskPage(): React.JSX.Element {
     setCountedTotalPages(null)
     setTasksError(null)
     setFailedCount(0) // reset so a prior failure banner doesn't linger
+    setGithubUnavailable(false)
     setTasksLoading(anyUncached)
 
     // Preserve the existing nonce-gated force behavior.
@@ -6456,7 +6461,7 @@ export default function TaskPage(): React.JSX.Element {
     void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
       ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding)
     })
-      .then(({ items, failedCount: failed }) => {
+      .then(({ items, failedCount: failed, githubUnavailable: unavailable }) => {
         // Why: clear only the sources this effect was responsible for
         // retrying (the snapshot captured at dispatch time). Overlapping
         // retries — a second click while a prior fetch is still in flight
@@ -6488,6 +6493,7 @@ export default function TaskPage(): React.JSX.Element {
           setCurrentPage(0)
         }
         setFailedCount(failed)
+        setGithubUnavailable(unavailable)
         setTasksLoading(false)
         setTasksRefreshing(false)
         setTasksFiltering(false)
@@ -6516,6 +6522,7 @@ export default function TaskPage(): React.JSX.Element {
         }
         setTasksError(err instanceof Error ? err.message : 'Failed to load GitHub work.')
         setFailedCount(0) // the per-repo banner would be misleading next to tasksError
+        setGithubUnavailable(false)
         setTasksLoading(false)
         setTasksRefreshing(false)
         setTasksFiltering(false)
@@ -9297,7 +9304,22 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
-                {!tasksError && failedCount > 0 ? (
+                {!tasksError && githubUnavailable ? (
+                  // Why: attribute a GitHub availability failure explicitly so
+                  // an empty list doesn't read as an Orca bug. Takes priority
+                  // over the generic count banner below.
+                  <div
+                    role="alert"
+                    className="border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                  >
+                    {translate(
+                      'auto.components.TaskPage.75a38d7df8',
+                      'GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.'
+                    )}
+                  </div>
+                ) : null}
+
+                {!tasksError && !githubUnavailable && failedCount > 0 ? (
                   // Why: per-repo partial-failure signal — distinct from a hard
                   // IPC reject (tasksError). The two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
@@ -9406,14 +9428,15 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 {/* Why: suppress the generic empty state when any error banner is
-                    visible (IPC reject via tasksError, cross-repo partial failure
-                    via failedCount, or per-repo issue-side error). Showing
-                    "No matching GitHub work" next to "Couldn't load issues from X/Y"
-                    is contradictory and misleads the user into thinking they
-                    typed the wrong query. */}
+                    visible (IPC reject via tasksError, GitHub-unavailable outage,
+                    cross-repo partial failure via failedCount, or per-repo
+                    issue-side error). Showing "No matching GitHub work" next to
+                    "Couldn't load issues from X/Y" is contradictory and misleads
+                    the user into thinking they typed the wrong query. */}
                 {!showGitHubTaskSkeletons &&
                 filteredWorkItems.length === 0 &&
                 !tasksError &&
+                !githubUnavailable &&
                 failedCount === 0 &&
                 perRepoSourceState.every((s) => !s.error) ? (
                   <div className="px-4 py-10 text-center">

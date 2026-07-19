@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import type { AzureDevOpsRepoRef } from './repository-ref'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
 
@@ -84,6 +85,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      await cancelUnreadResponseBody(response)
       return null
     }
     return (await response.json()) as T

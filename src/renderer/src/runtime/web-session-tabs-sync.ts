@@ -69,6 +69,7 @@ import {
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from './web-runtime-wake-terminal-respawn'
 import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
+import { queueAcceptedWebSessionTerminalSnapshot } from './web-session-terminal-handle-events'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -199,6 +200,7 @@ export function shouldApplyWebSessionTabsSnapshot(
     // freshness/mapping entries need explicit cleanup instead of waiting for
     // a later replacement snapshot that may never arrive.
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
+    queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
     return true
   }
   if (snapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID) {
@@ -230,6 +232,9 @@ export function shouldApplyWebSessionTabsSnapshot(
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
   })
+  // Why: a mounted mirror that exhausted bounded polling needs fresh host
+  // evidence without subscribing to every application-store write.
+  queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return true
 }
 

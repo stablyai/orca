@@ -27,7 +27,10 @@ export type SessionOptionDescriptor = {
         currentValue?: string
         choices: SessionOptionSelectChoice[]
       }
-    | { type: 'boolean'; currentValue?: boolean }
+    | {
+        type: 'boolean'
+        currentValue?: boolean
+      }
   valueSource: SessionOptionValueSource
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
@@ -52,6 +55,9 @@ export type PersistedNativeChatSessionOptions = Partial<
 
 export type SessionOptionsSurface = {
   getSnapshot(): SessionOptionDescriptor[]
+  /** Apply an absolute target; known flip-only options use their tracked baseline. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>
+  /** Invoke the value-less action exposed by the current descriptor. */
+  invokeAction(id: string): Promise<SessionOptionSetResult>
   subscribe(listener: (snapshot: SessionOptionDescriptor[]) => void): () => void
 }

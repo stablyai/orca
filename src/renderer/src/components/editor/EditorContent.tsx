@@ -963,7 +963,9 @@ export function EditorContent({
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
   const diffViewer = (
     <DiffViewer
-      key={`${viewStateScopeId}:${diffReloadNonce}:${getDiffContentSignature(dc.modifiedContent)}`}
+      // Why: content already refreshes in place via modifiedModelKey below, so
+      // keying the component off content too remounts Monaco and flashes on every save.
+      key={`${viewStateScopeId}:${diffReloadNonce}`}
       modelKey={diffViewStateKey}
       originalModelKey={originalModelKey}
       modifiedModelKey={modifiedModelKey}

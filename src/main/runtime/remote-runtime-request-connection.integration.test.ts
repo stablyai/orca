@@ -19,6 +19,11 @@ import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
 
+// worktree.create routes through the runtime's clientMutationId idempotency
+// wrapper; these stubs run the create straight through (no dedupe).
+const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
+  run()
+
 describe('remote runtime request connection integration', () => {
   it(
     'fetches repos through the real E2EE WebSocket runtime',
@@ -145,6 +150,7 @@ describe('remote runtime request connection integration', () => {
           source: 'git',
           worktrees
         }),
+        dedupeWorktreeCreate: passthroughDedupe,
         createManagedWorktree: ({ name }: { name?: string }) => {
           const worktree = {
             id: `repo-1::${name || 'created'}`,
@@ -370,6 +376,7 @@ describe('remote runtime request connection integration', () => {
           source: 'git',
           worktrees
         }),
+        dedupeWorktreeCreate: passthroughDedupe,
         createManagedWorktree: ({ name }: { name?: string }) => {
           const worktree = {
             id: `repo-1::${name || 'created'}`,
