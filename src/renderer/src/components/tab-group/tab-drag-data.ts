@@ -14,6 +14,9 @@ export type TabDragItemData = {
   iconPath?: string
   color?: string | null
   agent?: TuiAgent | null
+  /** Raw process name of an unrecognized live (fork) agent, so the drag ghost
+   *  shows the same neutral glyph as the resting tab. */
+  unknownLiveProcess?: string | null
 }
 
 export type TabPaneDropData = {

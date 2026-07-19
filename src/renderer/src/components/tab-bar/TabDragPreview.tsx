@@ -4,7 +4,8 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 // Why: a terminal tab running an agent leads with the provider glyph so the
-// ghost matches the resting tab; plain terminals keep the generic icon.
+// ghost matches the resting tab; an unrecognized live (fork) agent and plain
+// terminals both keep the generic terminal glyph.
 function LeadingIcon({ drag }: { drag: TabDragItemData }): React.JSX.Element {
   if (drag.tabType === 'browser') {
     return <Globe className="h-3.5 w-3.5 shrink-0" />
@@ -15,6 +16,9 @@ function LeadingIcon({ drag }: { drag: TabDragItemData }): React.JSX.Element {
   }
   if (drag.agent) {
     return <AgentIcon agent={drag.agent} size={14} />
+  }
+  if (drag.unknownLiveProcess) {
+    return <TerminalIcon className="h-3.5 w-3.5 shrink-0" aria-label={drag.unknownLiveProcess} />
   }
   return <TerminalIcon className="h-3.5 w-3.5 shrink-0" />
 }

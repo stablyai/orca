@@ -6,17 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/types'
 import {
   resolveLaunchedAgentExitEvidence,
   resolveTabAgentFromSignals,
-  useTabAgent
+  useTabAgent,
+  type TabAgentIdentity
 } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
-let latestHookAgent: TuiAgent | null | undefined
+let latestHookAgent: TabAgentIdentity | undefined
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
@@ -128,6 +129,47 @@ describe('resolveTabAgentFromSignals process identity', () => {
   })
 })
 
+describe('resolveTabAgentFromSignals unknown-live identity', () => {
+  it('returns a neutral unknown-live identity for a live fork process with a working title', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠸ my-fork building',
+        hookAgent: null,
+        processAgent: null,
+        unknownLiveProcessName: 'my-fork'
+      })
+    ).toEqual({ kind: 'unknown-live', label: 'my-fork' })
+  })
+
+  it('stays null for the same fork process without title activity (the vim/htop case)', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'my-fork ~/README.md',
+        hookAgent: null,
+        processAgent: null,
+        unknownLiveProcessName: 'my-fork'
+      })
+    ).toBeNull()
+  })
+
+  it('lets any recognized engine layer outrank the unknown-live fallback', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠸ my-fork building',
+        hookAgent: 'claude',
+        processAgent: null,
+        unknownLiveProcessName: 'my-fork'
+      })
+    ).toBe('claude')
+  })
+})
+
 describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
   const baseArgs = {
     title: '✳ Claude Code',
@@ -224,5 +266,64 @@ describe('useTabAgent process signals', () => {
 
     expect(latestHookAgent).toBe('aider')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a neutral unknown-live identity for a live fork process with a working title', async () => {
+    const forkTab = { ...baseTab, title: '⠸ my-fork building' }
+    await renderHookProbe(forkTab)
+
+    await setPaneForeground({
+      agent: null,
+      rawProcessName: 'my-fork',
+      shellForeground: false,
+      ptyId: 'pty-1'
+    })
+
+    expect(latestHookAgent).toEqual({ kind: 'unknown-live', label: 'my-fork' })
+  })
+
+  it('stays null for a full-screen TUI (vim) that reports a static, activity-free title', async () => {
+    const editorTab = { ...baseTab, title: 'vim README.md' }
+    await renderHookProbe(editorTab)
+
+    await setPaneForeground({
+      agent: null,
+      rawProcessName: 'vim',
+      shellForeground: false,
+      ptyId: 'pty-1'
+    })
+
+    expect(latestHookAgent).toBeNull()
+  })
+
+  it('ignores a shell raw process name even with a working title', async () => {
+    const forkTab = { ...baseTab, title: '⠸ working' }
+    await renderHookProbe(forkTab)
+
+    await setPaneForeground({
+      agent: null,
+      rawProcessName: 'zsh',
+      shellForeground: false,
+      ptyId: 'pty-1'
+    })
+
+    expect(latestHookAgent).toBeNull()
+  })
+
+  it('drops the unknown-live identity once its evidence is stale', async () => {
+    const forkTab = { ...baseTab, title: '⠸ my-fork building' }
+    await renderHookProbe(forkTab)
+
+    // Why: observedAt is preserved by the slice, so an ancient timestamp
+    // simulates evidence that fell outside the freshness TTL.
+    await setPaneForeground({
+      agent: null,
+      rawProcessName: 'my-fork',
+      shellForeground: false,
+      ptyId: 'pty-1',
+      observedAt: 1
+    })
+
+    expect(latestHookAgent).toBeNull()
   })
 })

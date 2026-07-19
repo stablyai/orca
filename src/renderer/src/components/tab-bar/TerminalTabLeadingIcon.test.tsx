@@ -67,6 +67,43 @@ describe('TerminalTabLeadingIcon', () => {
     expect(markup).not.toContain('data-testid="tab-agent-activity-indicator"')
   })
 
+  it('renders a neutral process glyph with the raw name for an unknown-live agent', () => {
+    const markup = renderToStaticMarkup(
+      <TerminalTabLeadingIcon
+        agent={null}
+        unknownLiveProcess="my-fork"
+        activityStatus="working"
+        shell={undefined}
+        showUnreadActivity={false}
+        isActive={false}
+      />
+    )
+
+    // Neutral glyph beside the working dot, labeled by the raw process name —
+    // never a provider logo, never the colored shell tile.
+    expect(markup).toContain('data-unknown-live-process="my-fork"')
+    expect(markup).toContain('title="my-fork"')
+    expect(markup).toContain('lucide-terminal')
+    expect(markup).not.toContain('data-agent-icon')
+    expect(markup).not.toContain('data-shell-icon')
+  })
+
+  it('prefers a recognized provider glyph over the unknown-live fallback', () => {
+    const markup = renderToStaticMarkup(
+      <TerminalTabLeadingIcon
+        agent="codex"
+        unknownLiveProcess="my-fork"
+        activityStatus="active"
+        shell={undefined}
+        showUnreadActivity={false}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('data-agent-icon="codex"')
+    expect(markup).not.toContain('data-unknown-live-process')
+  })
+
   it('keeps the unread bell in the icon slot after an unvisited completion', () => {
     const markup = renderToStaticMarkup(
       <TerminalTabLeadingIcon

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { isShellProcess } from '../../../shared/agent-detection'
+import { detectAgentStatusFromTitle, isShellProcess } from '../../../shared/agent-detection'
+import { resolveFreshPaneForegroundRawProcess } from '@/store/slices/pane-foreground-agent'
 import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
@@ -18,10 +19,30 @@ import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab, TuiAgent } from '../../../shared/types'
 
-// A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
+/** Neutral live identity for an unrecognized (renamed/fork) foreground agent —
+ *  never a fake TuiAgent, never a vendor name; the label is the raw process name. */
+export type UnknownLiveTabAgent = { kind: 'unknown-live'; label: string }
+/** A tab's resolved leading-icon identity. */
+export type TabAgentIdentity = TuiAgent | UnknownLiveTabAgent | null
+
+export function isUnknownLiveTabAgent(identity: TabAgentIdentity): identity is UnknownLiveTabAgent {
+  return typeof identity === 'object' && identity !== null && identity.kind === 'unknown-live'
+}
+
+// A shell name, or the tab's neutral default title — where Orca's
+// inferred-interrupt reset parks it. Blank titles are no evidence either way.
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
   const trimmed = title.trim()
   return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
+}
+
+// Why: a live spinner/working (or needs-input) title is what separates a fork
+// coding-agent from a plain full-screen TUI — vim and htop set static titles
+// that classify to no activity, so requiring it keeps text editors from ever
+// gaining agent presence.
+function titleShowsAgentActivity(title: string): boolean {
+  const status = detectAgentStatusFromTitle(title)
+  return status === 'working' || status === 'permission'
 }
 
 /**
@@ -79,7 +100,11 @@ export function resolveTabAgentFromSignals(args: {
   processShellForeground?: boolean
   sleepingSessionAgent?: TuiAgent | null
   launchAgent?: TuiAgent
-}): TuiAgent | null {
+  /** Fresh, non-shell raw foreground-process name with no recognized engine —
+   *  already TTL/PTY-gated by the caller. Only becomes the unknown-live identity
+   *  when the pane also shows title activity. */
+  unknownLiveProcessName?: string | null
+}): TabAgentIdentity {
   const launchAgent = args.launchAgent ?? null
   // Durable focused-pane owner (launch intent → hook → session); focused-pane-scoped so a sibling can't re-own the focused title (would mislabel a Pi pane as OMP).
   const owner = resolvePaneAgentOwner({
@@ -147,7 +172,15 @@ export function resolveTabAgentFromSignals(args: {
   const activeLaunchAgent = launchedAgentExited ? null : launchAgent
   // Why: re-own the foreground process within its title-identity group so OMP's nested pi (shell → omp → pi) can't flip an OMP-owned tab's icon.
   const processAgent = resolveSignalAgentForLaunchOwner(args.processAgent, owner)
-  // Identity-first precedence (see JSDoc): live hook > process > title > completed > sleeping > launch > sibling.
+  // Why: last-resort neutral identity — an unrecognized but live non-shell
+  // foreground (a renamed/fork agent) that is also actively working. It sits
+  // below every recognized layer, so any recognized engine still wins; the
+  // title-activity gate is what keeps a plain editor (vim/htop) from qualifying.
+  const unknownLiveIdentity: UnknownLiveTabAgent | null =
+    args.unknownLiveProcessName && titleShowsAgentActivity(args.title)
+      ? { kind: 'unknown-live', label: args.unknownLiveProcessName }
+      : null
+  // Identity-first precedence (see JSDoc): live hook > process > title > completed > sleeping > launch > sibling > unknown-live.
   return (
     liveFocusedIdentity ??
     processAgent ??
@@ -156,7 +189,8 @@ export function resolveTabAgentFromSignals(args: {
     sleepingSessionAgent ??
     activeLaunchAgent ??
     liveSiblingIdentity ??
-    idleSiblingIdentity
+    idleSiblingIdentity ??
+    unknownLiveIdentity
   )
 }
 
@@ -173,8 +207,11 @@ export function resolveTabAgentFromSignals(args: {
  * 5. Sleeping session identity — current provider-session ownership.
  * 6. launchAgent — bootstrap before any hook/process signal; cleared once exit evidence shows it left.
  * 7. Sibling-pane identity (live, then completed/retained) — split-tab fallback.
+ * 8. Unknown-live identity — a neutral, process-named live identity for an
+ *    unrecognized non-shell foreground that is actively working. Last resort,
+ *    below every recognized layer; runtime-only, never persisted.
  */
-export function useTabAgent(tab: TerminalTab): TuiAgent | null {
+export function useTabAgent(tab: TerminalTab): TabAgentIdentity {
   const focusedHookAgent = useAppStore((s) =>
     resolveFocusedTabAgent(s.agentStatusByPaneKey, s.terminalLayoutsByTabId[tab.id], tab.id)
   )
@@ -221,7 +258,14 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
       ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
       : false
   )
-  // Why: a hibernated pane's session record is the freshest identity once PTY, hook, and process signals are all gone.
+  // Why: the whole entry is needed to TTL/PTY-gate the unknown-live raw name;
+  // the reference is stable between publishes so it does not add churn.
+  const foregroundEvidence = useAppStore((s) =>
+    focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey] ?? null) : null
+  )
+  // Why: a hibernated pane's persisted session record is pane-scoped evidence of
+  // which agent actually ran here — the freshest identity once the PTY, hook,
+  // and process signals are all gone, and proof a stale launchAgent was reused.
   const sleepingSessionAgent = useAppStore((s) =>
     focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
   )
@@ -324,6 +368,16 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     tab.title
   ])
 
+  // Why: gate the unknown-live raw name through the same TTL/PTY freshness as the
+  // recognized agent read. Local only — remote panes produce no foreground
+  // process evidence — so the gate short-circuits there.
+  const unknownLiveProcessName = isRemoteLike
+    ? null
+    : resolveFreshPaneForegroundRawProcess(foregroundEvidence ?? undefined, {
+        now: Date.now(),
+        paneBoundPtyId: ptyId ?? undefined
+      })
+
   return resolveTabAgentFromSignals({
     hasObservedAgentSignal,
     isRemote: isRemoteLike,
@@ -336,6 +390,7 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
     processAgent,
     processShellForeground,
     sleepingSessionAgent,
-    launchAgent: tab.launchAgent
+    launchAgent: tab.launchAgent,
+    unknownLiveProcessName
   })
 }

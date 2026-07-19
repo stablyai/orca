@@ -1,3 +1,4 @@
+import { Terminal } from 'lucide-react'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -9,6 +10,9 @@ import { translate } from '@/i18n/i18n'
 
 type TerminalTabLeadingIconProps = {
   agent: TuiAgent | null
+  /** Raw process name of an unrecognized live (fork) agent, rendered with a
+   *  neutral glyph when no recognized `agent` is present. */
+  unknownLiveProcess?: string | null
   activityStatus: TerminalTabActivityStatus
   shell: TerminalTab['shellOverride']
   showUnreadActivity: boolean
@@ -59,14 +63,57 @@ function TerminalTabAgentIdentityIcon({
   )
 }
 
+/**
+ * Neutral identity for an unrecognized live (renamed/fork) agent: a generic
+ * lucide terminal/process glyph — never a vendor logo. The raw process name is
+ * the tooltip so the tab still names what is running.
+ */
+function UnknownLiveTabIcon({
+  label,
+  isActive,
+  className
+}: {
+  label: string
+  isActive: boolean
+  className?: string
+}): React.JSX.Element {
+  return (
+    <span
+      className={cn('inline-flex', !isActive && 'opacity-70', className)}
+      data-unknown-live-process={label}
+      title={label}
+    >
+      <Terminal className="size-3" aria-hidden />
+    </span>
+  )
+}
+
 /** Render a terminal tab's current state without hiding its agent or shell identity. */
 export function TerminalTabLeadingIcon({
   agent,
+  unknownLiveProcess,
   activityStatus,
   shell,
   showUnreadActivity,
   isActive
 }: TerminalTabLeadingIconProps): React.JSX.Element {
+  // The pane's identity glyph: recognized provider logo, else the neutral
+  // process glyph for an unrecognized live agent, else nothing (shell handled
+  // by the fallback below).
+  const identityGlyph = (className?: string): React.JSX.Element | null => {
+    if (agent) {
+      return (
+        <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} className={className} />
+      )
+    }
+    if (unknownLiveProcess) {
+      return (
+        <UnknownLiveTabIcon label={unknownLiveProcess} isActive={isActive} className={className} />
+      )
+    }
+    return null
+  }
+
   if (showUnreadActivity) {
     return (
       <span
@@ -78,7 +125,7 @@ export function TerminalTabLeadingIcon({
         className="mr-1 inline-flex shrink-0 items-center gap-1"
       >
         <FilledBellIcon className="size-3 text-amber-500 drop-shadow-sm" />
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {identityGlyph()}
       </span>
     )
   }
@@ -94,15 +141,14 @@ export function TerminalTabLeadingIcon({
         <AgentStateDot state={dotState} size="md" />
         {/* Why: status and identity answer different questions. Keep the agent
             logo beside the state glyph so parallel tabs remain scannable. */}
-        {agent ? <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} /> : null}
+        {identityGlyph()}
       </span>
     )
   }
 
-  if (agent) {
-    return (
-      <TerminalTabAgentIdentityIcon agent={agent} isActive={isActive} className="mr-1 shrink-0" />
-    )
+  const standaloneIdentity = identityGlyph('mr-1 shrink-0')
+  if (standaloneIdentity) {
+    return standaloneIdentity
   }
 
   // Why: ShellIcon renders a colored brand-style tile for PowerShell, CMD,

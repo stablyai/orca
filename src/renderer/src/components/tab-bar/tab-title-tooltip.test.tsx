@@ -91,7 +91,11 @@ vi.mock('../../../../shared/agent-title-decoration', () => ({
 }))
 
 vi.mock('@/lib/use-tab-agent', () => ({
-  useTabAgent: () => mockTabAgent
+  useTabAgent: () => mockTabAgent,
+  isUnknownLiveTabAgent: (identity: unknown) =>
+    typeof identity === 'object' &&
+    identity !== null &&
+    (identity as { kind?: string }).kind === 'unknown-live'
 }))
 
 vi.mock('../../store', () => ({

@@ -9,12 +9,12 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
-import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
+import type { TerminalTab } from '../../../shared/types'
+import { resolveTabAgentFromSignals, useTabAgent, type TabAgentIdentity } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-let latestHookAgent: TuiAgent | null | undefined
+let latestHookAgent: TabAgentIdentity | undefined
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {

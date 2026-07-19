@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
-import { useTabAgent } from '@/lib/use-tab-agent'
+import { isUnknownLiveTabAgent, useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -110,17 +110,24 @@ export default function SortableTab({
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
 
-  // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
-  const tabAgent = useTabAgent(tab)
+  // Why: hook status and title evidence make the tab icon reflect the
+  // coding harness currently running in the pane, not just the launch command.
+  const tabIdentity = useTabAgent(tab)
+  // Split the identity: a recognized provider vs an unrecognized live (fork)
+  // agent rendered with a neutral glyph and named by its raw process name.
+  const tabAgent = isUnknownLiveTabAgent(tabIdentity) ? null : tabIdentity
+  const unknownLiveProcess = isUnknownLiveTabAgent(tabIdentity) ? tabIdentity.label : null
 
-  // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
+  // Why: when an identity icon is already shown, stripping the agent's own
+  // leading status glyph keeps the tab from presenting two icons for one agent.
   const displayTitle =
-    tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
+    tab.customTitle ?? (tabIdentity ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
-    // Why: carry the resolved agent into the drag overlay so dragged tabs keep the same glyph without another store lookup.
-    data: { ...dragData, agent: tabAgent }
+    // Why: carry the resolved identity into the drag overlay so dragged tabs keep
+    // the same glyph as the tab strip without another store lookup.
+    data: { ...dragData, agent: tabAgent, unknownLiveProcess }
   })
 
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
@@ -266,6 +273,7 @@ export default function SortableTab({
       )}
       <TerminalTabLeadingIcon
         agent={tabAgent}
+        unknownLiveProcess={unknownLiveProcess}
         activityStatus={activityStatus}
         shell={shellForIcon}
         showUnreadActivity={showUnreadActivity}
