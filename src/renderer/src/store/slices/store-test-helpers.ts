@@ -46,6 +46,7 @@ import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
+import { createWorkspaceSplitViewSlice } from './workspace-split-view'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -95,7 +96,8 @@ export function createTestStore() {
     ...createPinnedTabCloseConfirmSlice(...a),
     ...createRecentlyClosedTabsSlice(...a),
     ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a)
+    ...createNewIssueDraftSlice(...a),
+    ...createWorkspaceSplitViewSlice(...a)
   }))
 }
 

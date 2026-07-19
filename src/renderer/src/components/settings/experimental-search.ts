@@ -5,6 +5,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 import { getNativeChatExperimentalSearchEntry } from './native-chat-experimental-search-entry'
 import { getEphemeralVmsSearchEntry } from './ephemeral-vms-search'
+import { getSideBySideWorkspacesSearchEntry } from './side-by-side-workspaces-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -185,7 +186,8 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
-    getEphemeralVmsSearchEntry()
+    getEphemeralVmsSearchEntry(),
+    getSideBySideWorkspacesSearchEntry()
   ]
 )
 
@@ -226,6 +228,12 @@ export function getExperimentalSearchEntry() {
     ),
     ephemeralVms: findEntry(
       translate('auto.components.settings.ephemeralVms.search.title', 'Per-Workspace Environments')
+    ),
+    sideBySideWorkspaces: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.sideBySideWorkspaces.title',
+        'Side-by-side workspaces'
+      )
     )
   } as const
 }

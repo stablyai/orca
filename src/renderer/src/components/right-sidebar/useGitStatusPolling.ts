@@ -27,7 +27,8 @@ const STATUS_ACTIVITY_DEBOUNCE_MS = 125
 const STATUS_ACTIVITY_MIN_GAP_MS = 3000
 // Why: status scans and remote conflict probes can take longer than their
 // timers; duration-aware spacing prevents a slow task from running nonstop.
-const SLOW_GIT_POLL_BACKOFF = {
+// Exported for the side-by-side pane backstop poll, which shares the pacing.
+export const SLOW_GIT_POLL_BACKOFF = {
   idleMultiplier: 5,
   changeSignalMultiplier: 1,
   maxIntervalMs: 5 * 60_000

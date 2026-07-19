@@ -56,6 +56,13 @@ import {
 } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
+import WorkspaceSplitDividers from './workspace-split/WorkspaceSplitDividers'
+import WorkspaceSplitDropOverlay from './workspace-split/WorkspaceSplitDropOverlay'
+import {
+  computeWorkspaceSplitGeometry,
+  type WorkspacePaneFrame
+} from './workspace-split/workspace-split-frames'
+import { collectPaneIds, workspaceSplitContainsPane } from '../store/slices/workspace-split-view'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { resolveRepairedActiveTerminalTabId } from './terminal/active-terminal-repair'
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
@@ -263,6 +270,39 @@ function Terminal(): React.JSX.Element | null {
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
+  const workspaceSplitLayout = useAppStore((s) => s.workspaceSplitLayout)
+  const workspaceSplitMaximizedPaneId = useAppStore((s) => s.workspaceSplitMaximizedPaneId)
+  // Why: a maximized pane borrows the classic single-view rendering (full
+  // frame, no dividers) while the split stays active underneath.
+  const effectiveMaximizedPaneId =
+    workspaceSplitLayout &&
+    workspaceSplitMaximizedPaneId &&
+    workspaceSplitContainsPane(workspaceSplitLayout, workspaceSplitMaximizedPaneId)
+      ? workspaceSplitMaximizedPaneId
+      : null
+  const workspaceSplitGeometry = useMemo(
+    () =>
+      workspaceSplitLayout && !effectiveMaximizedPaneId
+        ? computeWorkspaceSplitGeometry(workspaceSplitLayout)
+        : null,
+    [workspaceSplitLayout, effectiveMaximizedPaneId]
+  )
+  // Why: visibility is derived — the split tree's leaves when side-by-side
+  // panes are open (just the maximized one while maximized), else the
+  // focused worktree (classic single view).
+  const visiblePaneIdSet = useMemo(() => {
+    if (effectiveMaximizedPaneId) {
+      return new Set([effectiveMaximizedPaneId])
+    }
+    if (workspaceSplitGeometry) {
+      return new Set(workspaceSplitGeometry.frameByWorktreeId.keys())
+    }
+    return new Set(renderedActiveWorktreeId ? [renderedActiveWorktreeId] : [])
+  }, [effectiveMaximizedPaneId, workspaceSplitGeometry, renderedActiveWorktreeId])
+  const workspaceSplitContainerRef = useRef<HTMLDivElement | null>(null)
+  const sideBySideWorkspacesEnabled = useAppStore(
+    (s) => s.settings?.experimentalSideBySideWorkspaces === true
+  )
   const activeWorktreeDeferralHostId = useAppStore((s) =>
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
   )
@@ -342,8 +382,34 @@ function Terminal(): React.JSX.Element | null {
     for (const portal of activityTerminalPortals) {
       ids.add(portal.tabId)
     }
+    // Why: with side-by-side panes every VISIBLE pane's group-active terminals
+    // are on screen; hibernation must not treat them as background. Members
+    // hidden by a maximize are deliberately excluded — they background
+    // normally until restored.
+    if (workspaceSplitLayout && activeView === 'terminal') {
+      const unifiedTabsByWorktree = useAppStore.getState().unifiedTabsByWorktree
+      for (const paneId of visiblePaneIdSet) {
+        const unifiedTabById = new Map(
+          (unifiedTabsByWorktree[paneId] ?? []).map((unifiedTab) => [unifiedTab.id, unifiedTab])
+        )
+        for (const group of groupsByWorktree[paneId] ?? []) {
+          const activeUnifiedTab = group.activeTabId ? unifiedTabById.get(group.activeTabId) : null
+          if (activeUnifiedTab?.contentType === 'terminal') {
+            ids.add(activeUnifiedTab.entityId)
+          }
+        }
+      }
+    }
     return Array.from(ids)
-  }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
+  }, [
+    activeTabId,
+    activeTabType,
+    activeView,
+    activityTerminalPortals,
+    groupsByWorktree,
+    visiblePaneIdSet,
+    workspaceSplitLayout
+  ])
 
   useEffect(() => {
     // Why: hibernation must treat terminals portaled into foreground surfaces
@@ -371,6 +437,17 @@ function Terminal(): React.JSX.Element | null {
     // fresh tabs to a concrete owner even before any explicit split exists.
     ensureWorktreeRootGroup(activeWorktreeId)
   }, [activeWorktreeId, ensureWorktreeRootGroup])
+
+  useEffect(() => {
+    if (!workspaceSplitLayout) {
+      return
+    }
+    // Why: every visible side pane needs a root group so the split-group path
+    // renders its inline tab strip instead of the legacy titlebar fallback.
+    for (const paneId of collectPaneIds(workspaceSplitLayout)) {
+      ensureWorktreeRootGroup(paneId)
+    }
+  }, [workspaceSplitLayout, ensureWorktreeRootGroup])
 
   // Filter editor files to only show those belonging to the active worktree
   const worktreeFiles = renderedActiveWorktreeId
@@ -799,7 +876,9 @@ function Terminal(): React.JSX.Element | null {
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   // Why: the cold-activation deferral decision must run once per activation
   // transition, not on every re-render of an already-active worktree.
-  const lastActivationWorktreeIdRef = useRef<string | null>(null)
+  // Why a set: with side-by-side panes several worktrees are visible at once;
+  // membership = "deferral already planned while continuously visible".
+  const plannedActivationWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
     const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
@@ -906,7 +985,7 @@ function Terminal(): React.JSX.Element | null {
         terminalWorktreeHiddenSinceRef.current.delete(worktreeId)
         continue
       }
-      const isVisible = activeView === 'terminal' && renderedActiveWorktreeId === worktreeId
+      const isVisible = activeView === 'terminal' && visiblePaneIdSet.has(worktreeId)
       const shouldMeasureHiddenWorktree =
         !isVisible && measurableBackgroundWorktreeIdsRef.current.has(worktreeId)
       const hasActivityTerminalPortal = portalWorktreeIds.has(worktreeId)
@@ -939,7 +1018,15 @@ function Terminal(): React.JSX.Element | null {
     // the first parking attempt.
     for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
       const tabs = tabsByWorktree[worktreeId] ?? []
-      if (!tabs.every((tab) => canWatcherCoverParkedTerminalTab(worktreeId, tab))) {
+      if (
+        !tabs.every((tab) =>
+          canWatcherCoverParkedTerminalTab(
+            worktreeId,
+            tab,
+            terminalProviderHasAuthoritativeSnapshot
+          )
+        )
+      ) {
         nextParkedTerminalWorktreeIds.delete(worktreeId)
       }
     }
@@ -982,6 +1069,7 @@ function Terminal(): React.JSX.Element | null {
     tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,
+    visiblePaneIdSet,
     workspaceSurfaces
   ])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
@@ -995,120 +1083,137 @@ function Terminal(): React.JSX.Element | null {
     // mount replays scrollback through xterm, attaches a WebGL renderer, and
     // issues a sync-IPC snapshot read, so a whole-worktree stampede freezes
     // the renderer for the entire activation. Hidden tabs defer like
-    // cold-parked tabs from birth and mount on first reveal.
-    const worktreeTabs = tabsByWorktree[renderedActiveWorktreeId] ?? []
+    // cold-parked tabs from birth and mount on first reveal. With side-by-side
+    // panes the same planning runs once per visible pane.
     const coldActivationDeferralEnabled =
       terminalParkingEnabled && terminalTitleSnapshotAuthorityEnabled
-    const immediateTabIds = new Set<string>()
-    if (activeTabId) {
-      immediateTabIds.add(activeTabId)
+    // Why: a pane that leaves the visible set must re-run the deferral
+    // decision on its next reveal, mirroring the old single-active reset.
+    for (const plannedId of Array.from(plannedActivationWorktreeIdsRef.current)) {
+      if (!visiblePaneIdSet.has(plannedId)) {
+        plannedActivationWorktreeIdsRef.current.delete(plannedId)
+      }
     }
-    // Why: on a fresh switch the global activeTabId can still point at the
-    // previous worktree for one pass; the remembered per-worktree tab is the
-    // one about to become visible.
-    const rememberedActiveTabId = activeTabIdByWorktree[renderedActiveWorktreeId]
-    if (rememberedActiveTabId) {
-      immediateTabIds.add(rememberedActiveTabId)
-    }
-    // Why groups: split mode shows one tab per group at once, so every
-    // group's active tab is user-visible and must not defer. group.activeTabId
-    // is a unified-tab id — map it to the terminal tab's entity id, keeping
-    // the raw id too in case older persisted groups stored entity ids.
-    const unifiedTabById = new Map(
-      (useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId] ?? []).map(
-        (unifiedTab) => [unifiedTab.id, unifiedTab]
+    for (const paneWorktreeId of visiblePaneIdSet) {
+      const worktreeTabs = tabsByWorktree[paneWorktreeId] ?? []
+      const immediateTabIds = new Set<string>()
+      // Why: the global activeTabId belongs to the focused pane only.
+      if (paneWorktreeId === renderedActiveWorktreeId && activeTabId) {
+        immediateTabIds.add(activeTabId)
+      }
+      // Why: on a fresh switch the global activeTabId can still point at the
+      // previous worktree for one pass; the remembered per-worktree tab is the
+      // one about to become visible.
+      const rememberedActiveTabId = activeTabIdByWorktree[paneWorktreeId]
+      if (rememberedActiveTabId) {
+        immediateTabIds.add(rememberedActiveTabId)
+      }
+      // Why groups: split mode shows one tab per group at once, so every
+      // group's active tab is user-visible and must not defer. group.activeTabId
+      // is a unified-tab id — map it to the terminal tab's entity id, keeping
+      // the raw id too in case older persisted groups stored entity ids.
+      const unifiedTabById = new Map(
+        (useAppStore.getState().unifiedTabsByWorktree[paneWorktreeId] ?? []).map((unifiedTab) => [
+          unifiedTab.id,
+          unifiedTab
+        ])
       )
-    )
-    for (const group of groupsByWorktree[renderedActiveWorktreeId] ?? []) {
-      if (!group.activeTabId) {
-        continue
+      for (const group of groupsByWorktree[paneWorktreeId] ?? []) {
+        if (!group.activeTabId) {
+          continue
+        }
+        immediateTabIds.add(group.activeTabId)
+        const activeUnifiedTab = unifiedTabById.get(group.activeTabId)
+        if (activeUnifiedTab?.contentType === 'terminal') {
+          immediateTabIds.add(activeUnifiedTab.entityId)
+        }
       }
-      immediateTabIds.add(group.activeTabId)
-      const activeUnifiedTab = unifiedTabById.get(group.activeTabId)
-      if (activeUnifiedTab?.contentType === 'terminal') {
-        immediateTabIds.add(activeUnifiedTab.entityId)
+      for (const portal of activityTerminalPortals) {
+        if (portal.worktreeId === paneWorktreeId) {
+          immediateTabIds.add(portal.tabId)
+        }
       }
-    }
-    for (const portal of activityTerminalPortals) {
-      if (portal.worktreeId === renderedActiveWorktreeId) {
-        immediateTabIds.add(portal.tabId)
-      }
-    }
-    // Why: a queued startup needs a mounted pane to run its command.
-    // pendingActivationSpawn is deliberately NOT immediate: session hydration
-    // blanket-marks every persisted tab with it, and a deferred tab's reveal
-    // consumes it exactly like an activation mount would — just later.
-    for (const tab of worktreeTabs) {
-      if (pendingStartupByTabId[tab.id] !== undefined) {
-        immediateTabIds.add(tab.id)
-      }
-    }
-    const activationHostSupportsDeferral = canDeferColdActivationTabsForHost({
-      executionHostId: activeWorktreeDeferralHostId
-    })
-    if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
-      lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
-      const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
-      planColdActivationTabDeferral({
-        restrictions: backgroundMountTabIdsByWorktreeRef.current,
-        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
-        worktreeId: renderedActiveWorktreeId,
-        allTabIds: worktreeTabs.map((tab) => tab.id),
-        isTabLive: hasRegisteredRuntimeTerminalTab,
-        // Why the coverage gate: an unmounted tab's bells/titles/completions
-        // are owned by parked byte watchers; a tab they cannot cover must
-        // mount immediately, mirroring the cold-park eligibility rule.
-        isTabDeferrable: (tabId) => {
-          const tab = tabById.get(tabId)
-          return (
-            // Why: byte-mode watchers cannot reconstruct output emitted before
-            // registration. Remote or unresolved ownership also mounts eagerly
-            // because only a confirmed local daemon can provide snapshots.
-            coldActivationDeferralEnabled &&
-            activationHostSupportsDeferral &&
-            tab !== undefined &&
-            canWatcherCoverParkedTerminalTab(
-              renderedActiveWorktreeId,
-              tab,
-              terminalProviderHasAuthoritativeSnapshot
-            )
-          )
-        },
-        immediateTabIds
-      })
-    } else if (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) {
-      // Why: kill-switch or host-ownership changes while active must restore
-      // eager mounting immediately, not strand an old local-only restriction.
-      backgroundMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
-      activationDeferredMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
-    } else {
-      // Why: tabs added after activation never passed the original coverage
-      // gate. Uncoverable/no-PTY tabs must mount now so they can spawn or keep
-      // their non-snapshot-backed live transport.
+      // Why: a queued startup needs a mounted pane to run its command.
+      // pendingActivationSpawn is deliberately NOT immediate: session hydration
+      // blanket-marks every persisted tab with it, and a deferred tab's reveal
+      // consumes it exactly like an activation mount would — just later.
       for (const tab of worktreeTabs) {
-        if (
-          !canWatcherCoverParkedTerminalTab(
-            renderedActiveWorktreeId,
-            tab,
-            terminalProviderHasAuthoritativeSnapshot
-          )
-        ) {
+        if (pendingStartupByTabId[tab.id] !== undefined) {
           immediateTabIds.add(tab.id)
         }
       }
-      revealActivationDeferredTabs({
-        restrictions: backgroundMountTabIdsByWorktreeRef.current,
-        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
-        worktreeId: renderedActiveWorktreeId,
-        allTabIds: worktreeTabs.map((tab) => tab.id),
-        immediateTabIds
+      const activationHostSupportsDeferral = canDeferColdActivationTabsForHost({
+        // Why getState for side panes: only the focused worktree's host id has
+        // a live subscription; pane membership changes re-render anyway.
+        executionHostId:
+          paneWorktreeId === renderedActiveWorktreeId
+            ? activeWorktreeDeferralHostId
+            : getResolvedExecutionHostIdForWorktree(useAppStore.getState(), paneWorktreeId)
       })
+      if (!plannedActivationWorktreeIdsRef.current.has(paneWorktreeId)) {
+        plannedActivationWorktreeIdsRef.current.add(paneWorktreeId)
+        const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
+        planColdActivationTabDeferral({
+          restrictions: backgroundMountTabIdsByWorktreeRef.current,
+          deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+          worktreeId: paneWorktreeId,
+          allTabIds: worktreeTabs.map((tab) => tab.id),
+          isTabLive: hasRegisteredRuntimeTerminalTab,
+          // Why the coverage gate: an unmounted tab's bells/titles/completions
+          // are owned by parked byte watchers; a tab they cannot cover must
+          // mount immediately, mirroring the cold-park eligibility rule.
+          isTabDeferrable: (tabId) => {
+            const tab = tabById.get(tabId)
+            return (
+              // Why: byte-mode watchers cannot reconstruct output emitted before
+              // registration. Remote or unresolved ownership also mounts eagerly
+              // because only a confirmed local daemon can provide snapshots.
+              coldActivationDeferralEnabled &&
+              activationHostSupportsDeferral &&
+              tab !== undefined &&
+              canWatcherCoverParkedTerminalTab(
+                paneWorktreeId,
+                tab,
+                terminalProviderHasAuthoritativeSnapshot
+              )
+            )
+          },
+          immediateTabIds
+        })
+      } else if (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) {
+        // Why: kill-switch or host-ownership changes while active must restore
+        // eager mounting immediately, not strand an old local-only restriction.
+        backgroundMountTabIdsByWorktreeRef.current.delete(paneWorktreeId)
+        activationDeferredMountTabIdsByWorktreeRef.current.delete(paneWorktreeId)
+      } else {
+        // Why: tabs added after activation never passed the original coverage
+        // gate. Uncoverable/no-PTY tabs must mount now so they can spawn or keep
+        // their non-snapshot-backed live transport.
+        for (const tab of worktreeTabs) {
+          if (
+            !canWatcherCoverParkedTerminalTab(
+              paneWorktreeId,
+              tab,
+              terminalProviderHasAuthoritativeSnapshot
+            )
+          ) {
+            immediateTabIds.add(tab.id)
+          }
+        }
+        revealActivationDeferredTabs({
+          restrictions: backgroundMountTabIdsByWorktreeRef.current,
+          deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+          worktreeId: paneWorktreeId,
+          allTabIds: worktreeTabs.map((tab) => tab.id),
+          immediateTabIds
+        })
+      }
+      mountedWorktreeIdsRef.current.add(paneWorktreeId)
     }
-    mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
   } else {
     // Why: the next ready activation must re-run the deferral decision even
     // if it re-activates the same worktree the session started on.
-    lastActivationWorktreeIdRef.current = null
+    plannedActivationWorktreeIdsRef.current.clear()
   }
   pruneClosedBackgroundMountTabs(
     backgroundMountTabIdsByWorktreeRef.current,
@@ -1151,7 +1256,7 @@ function Terminal(): React.JSX.Element | null {
       const parkedTabIds = new Set<string>()
       let deferredTabIds: ReadonlySet<string> | null = null
       if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspace.id)) {
-        const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+        const isVisible = activeView === 'terminal' && visiblePaneIdSet.has(workspace.id)
         const shouldMeasureHiddenWorktree =
           !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
         const parked =
@@ -1176,7 +1281,11 @@ function Terminal(): React.JSX.Element | null {
           if (
             deferredTabIds?.has(tab.id) &&
             !parkedTabIds.has(tab.id) &&
-            canWatcherCoverParkedTerminalTab(workspace.id, tab) &&
+            canWatcherCoverParkedTerminalTab(
+              workspace.id,
+              tab,
+              terminalProviderHasAuthoritativeSnapshot
+            ) &&
             !findActivityTerminalPortal(activityTerminalPortals, {
               worktreeId: workspace.id,
               tabId: tab.id
@@ -1213,6 +1322,7 @@ function Terminal(): React.JSX.Element | null {
     tabsByWorktree,
     terminalParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
+    visiblePaneIdSet,
     workspaceSessionReady,
     workspaceSurfaces
   ])
@@ -2242,6 +2352,8 @@ function Terminal(): React.JSX.Element | null {
 
       {anyMountedWorktreeHasLayout ? (
         <div
+          ref={workspaceSplitContainerRef}
+          data-workspace-split-drop-root=""
           className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${effectiveActiveLayout ? '' : ' hidden'}`}
         >
           {/* Why: each mounted worktree surface is absolutely positioned so we
@@ -2257,8 +2369,7 @@ function Terminal(): React.JSX.Element | null {
               }
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so the terminal/browser surface hides on the tasks page too.
-              const isVisible =
-                activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+              const isVisible = activeView === 'terminal' && visiblePaneIdSet.has(workspace.id)
               const shouldMeasureHiddenWorktree =
                 !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
               const shouldColdParkTerminalPanes =
@@ -2273,6 +2384,18 @@ function Terminal(): React.JSX.Element | null {
                   layout={layout}
                   focusedGroupId={activeGroupIdByWorktree[workspace.id]}
                   isVisible={isVisible}
+                  splitFrame={
+                    isVisible
+                      ? (workspaceSplitGeometry?.frameByWorktreeId.get(workspace.id) ?? null)
+                      : null
+                  }
+                  workspacePaneControls={
+                    isVisible && workspaceSplitLayout
+                      ? effectiveMaximizedPaneId
+                        ? 'maximized'
+                        : 'grid'
+                      : null
+                  }
                   shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
                   shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
                   activityTerminalPortals={activityTerminalPortals}
@@ -2285,6 +2408,13 @@ function Terminal(): React.JSX.Element | null {
                 />
               )
             })}
+          {workspaceSplitGeometry && activeView === 'terminal' ? (
+            <WorkspaceSplitDividers
+              dividers={workspaceSplitGeometry.dividers}
+              containerRef={workspaceSplitContainerRef}
+            />
+          ) : null}
+          {sideBySideWorkspacesEnabled ? <WorkspaceSplitDropOverlay /> : null}
         </div>
       ) : null}
 
@@ -2328,8 +2458,7 @@ function Terminal(): React.JSX.Element | null {
               .map((workspace) => {
                 // Why: use strict equality with 'terminal' instead of !== 'settings'
                 // so the terminal/browser surface hides on the tasks page too.
-                const isVisible =
-                  activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+                const isVisible = activeView === 'terminal' && visiblePaneIdSet.has(workspace.id)
                 const shouldMeasureHiddenWorktree =
                   !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
                 const shouldColdParkTerminalPanes =
@@ -2422,7 +2551,7 @@ function Terminal(): React.JSX.Element | null {
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so browser panes also hide on the tasks page.
               const isVisibleWorktree =
-                activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+                activeView === 'terminal' && visiblePaneIdSet.has(workspace.id)
               if (browserTabs.length === 0) {
                 return null
               }
@@ -2576,6 +2705,8 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout,
   focusedGroupId,
   isVisible,
+  splitFrame,
+  workspacePaneControls,
   shouldMeasureHiddenWorktree,
   shouldColdParkTerminalPanes,
   activityTerminalPortals,
@@ -2587,6 +2718,8 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout: TabGroupLayoutNode
   focusedGroupId?: string
   isVisible: boolean
+  splitFrame?: WorkspacePaneFrame | null
+  workspacePaneControls?: 'grid' | 'maximized' | null
   shouldMeasureHiddenWorktree: boolean
   shouldColdParkTerminalPanes: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -2605,15 +2738,57 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const shouldKeepPaintable =
     shouldMeasureHiddenWorktree || hasAutomationVisibleBrowser || hasMobileDrivenBrowser
 
+  // Why: with side-by-side panes, focus lives on the pane the user last
+  // touched. Capture-phase so promotion lands before TabGroupPanel.focusGroup,
+  // keeping every existing activeWorktreeId guard correct.
+  const promoteSplitPaneFocus = (event: React.SyntheticEvent): void => {
+    if (!isVisible || !workspacePaneControls) {
+      return
+    }
+    // Why: clicking a pane-control button (close/maximize) must not first
+    // promote this pane — closing an unfocused pane would otherwise bounce
+    // focus to an arbitrary survivor instead of leaving it where it was.
+    const target = event.target
+    if (
+      target instanceof HTMLElement &&
+      target.closest(
+        '[data-workspace-pane-close], [data-workspace-pane-maximize], [data-workspace-pane-restore]'
+      )
+    ) {
+      return
+    }
+    const state = useAppStore.getState()
+    if (state.activeWorktreeId !== worktreeId) {
+      state.setActiveWorktree(worktreeId)
+    }
+  }
+
   return (
     <div
+      // Why: sidebar project drags hit-test visible panes by this attribute;
+      // hidden surfaces must not participate.
+      data-workspace-pane-id={isVisible ? worktreeId : undefined}
       className={
         isVisible
-          ? 'absolute inset-0 flex'
+          ? splitFrame
+            ? 'absolute flex'
+            : 'absolute inset-0 flex'
           : shouldKeepPaintable
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
+      style={
+        isVisible && splitFrame
+          ? {
+              left: `${splitFrame.left}%`,
+              top: `${splitFrame.top}%`,
+              width: `${splitFrame.width}%`,
+              height: `${splitFrame.height}%`
+            }
+          : undefined
+      }
+      onPointerDownCapture={promoteSplitPaneFocus}
+      onFocusCapture={promoteSplitPaneFocus}
       // Why: automation and mobile control need paintable webviews, but hidden
       // worktree controls cannot remain reachable by Tab or assistive tech.
       inert={!isVisible}
@@ -2625,6 +2800,11 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         worktreeId={worktreeId}
         focusedGroupId={focusedGroupId}
         isWorktreeActive={isVisible}
+        workspacePaneControls={isVisible ? (workspacePaneControls ?? null) : null}
+        // Why: chrome overlays live at the WINDOW edges — only the outermost
+        // panes of a split reserve strip space for them.
+        reserveWindowLeftChrome={!splitFrame || splitFrame.left <= 0.1}
+        reserveWindowRightChrome={!splitFrame || splitFrame.left + splitFrame.width >= 99.9}
       />
       <TerminalPaneOverlayLayer
         worktreeId={worktreeId}

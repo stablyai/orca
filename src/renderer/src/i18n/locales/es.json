@@ -2729,7 +2729,13 @@
             "1ff1c77616": "navegador",
             "586d2ac445": "terminal",
             "addSplitPane": "Agregar panel dividido",
-            "closePaneColumn": "Cerrar panel dividido"
+            "closePaneColumn": "Cerrar panel dividido",
+            "restoreSplit": "Restore split",
+            "maximizePane": "Maximize pane",
+            "restoreSplitTip": "Back to the split grid",
+            "maximizePaneTip": "Show this project full width — the split stays underneath",
+            "removeFromSplit": "Remove from split",
+            "removeFromSplitTip": "Remove from split — keeps the project and its terminals"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "Suelta sobre un panel de terminal para reanudar esta sesión.",
@@ -4308,7 +4314,9 @@
           "setParentWorkspace": "Establecer worktree padre...",
           "workspaceSection": "Espacio de trabajo",
           "primaryDeleteDisabled": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",
-          "deleteWorktree": "Eliminar worktree"
+          "deleteWorktree": "Eliminar worktree",
+          "removeFromSplit": "Remove from Split",
+          "openToTheSide": "Open to the Side"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -5453,6 +5461,12 @@
             "defaultViewLabel": "Vista predeterminada de chat nativo",
             "defaultViewTerminal": "Chat en terminal",
             "defaultViewNative": "Chat nativo"
+          },
+          "sideBySideWorkspaces": {
+            "title": "Side-by-side workspaces",
+            "description": "Show terminals from several projects at once by splitting the main area into per-project panes.",
+            "copy": "Open a project to the side from the sidebar to tile its terminals next to the current one. Drag between panes to resize.",
+            "toggleLabel": "Toggle side-by-side workspaces"
           }
         },
         "FloatingWorkspacePane": {
@@ -7622,6 +7636,10 @@
               "title": "Chat nativo",
               "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
               "grok": "grok"
+            },
+            "sideBySideWorkspaces": {
+              "title": "Side-by-side workspaces",
+              "description": "Show terminals from several projects at once by splitting the main area into per-project panes."
             }
           }
         },

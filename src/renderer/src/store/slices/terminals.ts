@@ -10,6 +10,7 @@ import type {
   TuiAgent,
   Worktree,
   WorkspaceKey,
+  WorkspacePaneNode,
   WorkspaceSessionState
 } from '../../../../shared/types'
 import type {
@@ -34,6 +35,13 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import {
+  collectPaneIds,
+  enforceExclusiveWorkspaceSplitMembership,
+  normalizeWorkspaceSplitAnchorKeys,
+  pruneWorkspaceSplitLayout,
+  workspaceSplitContainsPane
+} from './workspace-split-view'
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
@@ -3417,10 +3425,94 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         nextEverActivated.add(activeWorktreeId)
       }
 
+      // Why: restore saved split associations only when the flag is on; stale
+      // leaves are pruned, entries below 2 leaves dissolve, and the on-screen
+      // split is restored only if the focused worktree is one of its members.
+      // Legacy single-layout sessions become a one-entry map.
+      const restoredSplitState = (() => {
+        const empty = {
+          workspaceSplitLayout: null as WorkspacePaneNode | null,
+          workspaceSplitLayoutsByAnchor: {} as Record<string, WorkspacePaneNode>,
+          activeWorkspaceSplitAnchorId: null as string | null,
+          workspaceSplitAnchorMru: [] as string[],
+          workspaceSplitMaximizedPaneId: null as string | null
+        }
+        if (s.settings?.experimentalSideBySideWorkspaces !== true) {
+          return empty
+        }
+        const legacyLayout = session.workspaceSplitLayoutOnShutdown
+        const persistedMap =
+          session.workspaceSplitLayoutsByAnchorOnShutdown ??
+          (legacyLayout ? { [collectPaneIds(legacyLayout)[0]]: legacyLayout } : {})
+        // Why: SSH worktrees are synthesized as placeholders above and never
+        // reach validWorktreeIds; a split leaf is restorable when either side
+        // knows it, otherwise every SSH pairing would dissolve on restart.
+        const splitRestorableWorktreeIds = new Set(validWorktreeIds)
+        for (const repoWorktrees of Object.values(worktreesByRepo)) {
+          for (const worktree of repoWorktrees) {
+            splitRestorableWorktreeIds.add(worktree.id)
+          }
+        }
+        const byAnchor: Record<string, WorkspacePaneNode> = {}
+        for (const [anchorId, layout] of Object.entries(persistedMap)) {
+          const staleLeafIds = new Set(
+            collectPaneIds(layout).filter((paneId) => !splitRestorableWorktreeIds.has(paneId))
+          )
+          const pruned = pruneWorkspaceSplitLayout(layout, staleLeafIds)
+          // Why: require a real split — a degenerate single-pane entry from a
+          // corrupted session would otherwise claim its worktree in the
+          // exclusivity sweep and dissolve a legitimate pairing behind it.
+          if (pruned && pruned.type === 'split') {
+            byAnchor[anchorId] = pruned
+          }
+        }
+        const rawMru = (session.workspaceSplitAnchorMruOnShutdown ?? Object.keys(byAnchor)).filter(
+          (anchorId) => byAnchor[anchorId]
+        )
+        // Why: sessions written before exclusive membership can hold the same
+        // project in several splits; keep its most recent pairing only. Older
+        // sessions can also carry stale anchor keys — re-key them so a future
+        // split can never clobber a surviving association.
+        const swept = enforceExclusiveWorkspaceSplitMembership(byAnchor, rawMru)
+        const normalizedKeys = normalizeWorkspaceSplitAnchorKeys({
+          byAnchor: swept.byAnchor,
+          mru: swept.mru,
+          activeAnchorId: session.activeWorkspaceSplitAnchorOnShutdown ?? swept.mru[0] ?? null
+        })
+        const exclusiveByAnchor = normalizedKeys.byAnchor
+        const mru = normalizedKeys.mru
+        const persistedActiveAnchor = normalizedKeys.activeAnchorId
+        const activeLayout = persistedActiveAnchor
+          ? (exclusiveByAnchor[persistedActiveAnchor] ?? null)
+          : null
+        const activeUsable = Boolean(
+          activeLayout &&
+          activeWorktreeId &&
+          workspaceSplitContainsPane(activeLayout, activeWorktreeId)
+        )
+        // Why: a maximized pane only makes sense on the restored active split
+        // and when it still is one of its members.
+        const persistedMaximized = session.workspaceSplitMaximizedPaneOnShutdown ?? null
+        const maximizedUsable = Boolean(
+          activeUsable &&
+          persistedMaximized &&
+          activeLayout &&
+          workspaceSplitContainsPane(activeLayout, persistedMaximized)
+        )
+        return {
+          workspaceSplitLayout: activeUsable ? activeLayout : null,
+          workspaceSplitLayoutsByAnchor: exclusiveByAnchor,
+          activeWorkspaceSplitAnchorId: activeUsable ? persistedActiveAnchor : null,
+          workspaceSplitAnchorMru: mru,
+          workspaceSplitMaximizedPaneId: maximizedUsable ? persistedMaximized : null
+        }
+      })()
+
       return {
         activeRepoId,
         activeWorktreeId,
         activeWorkspaceKey,
+        ...restoredSplitState,
         activeTabId,
         activeTabIdByWorktree,
         restoredRuntimeHostIdByWorkspaceSessionKey:

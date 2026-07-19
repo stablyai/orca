@@ -29,6 +29,7 @@ import {
   updateGroup
 } from './tab-group-state'
 import { isPaneColumnSplitDropNoOp } from './pane-column-split-drop-no-op'
+import { collectPaneIds, workspaceSplitContainsPane } from './workspace-split-view'
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -1037,6 +1038,27 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           : {})
       }
     })
+
+    // Why: an emptied side-by-side pane closes (focused or not) instead of
+    // lingering blank; when it was the focused one, focus lands on a survivor
+    // rather than the landing screen.
+    const afterClose = get()
+    if (workspaceSplitContainsPane(afterClose.workspaceSplitLayout, worktreeId)) {
+      const paneEmptied =
+        (afterClose.unifiedTabsByWorktree[worktreeId] ?? []).length === 0 &&
+        (afterClose.tabsByWorktree[worktreeId] ?? []).length === 0 &&
+        (afterClose.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
+        !afterClose.openFiles.some((file) => file.worktreeId === worktreeId)
+      if (paneEmptied) {
+        const survivor = collectPaneIds(afterClose.workspaceSplitLayout!).find(
+          (paneId) => paneId !== worktreeId
+        )
+        afterClose.closeWorkspacePane(worktreeId)
+        if (get().activeWorktreeId === null && survivor) {
+          get().setActiveWorktree(survivor)
+        }
+      }
+    }
 
     if (opts?.recordInteraction !== false) {
       get().recordFeatureInteraction?.('terminal-tabs')

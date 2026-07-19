@@ -683,6 +683,12 @@
   background: var(--tab-group-split-divider-strong);
 }
 
+/* Side-by-side workspaces: a visible-but-unfocused pane keeps a subdued
+   left-edge marker in the sidebar so the on-screen set stays legible. */
+[data-workspace-split-pane-visible='true'] {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
 /* ── Titlebar ────────────────────────────────────────── */
 
 /* Why: Radix portals (dropdowns, popovers, dialogs, sheets) render at the

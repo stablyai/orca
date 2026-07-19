@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { collectPaneIds } from '@/store/slices/workspace-split-view'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo, Worktree } from '../../../../shared/types'
 
@@ -64,7 +65,8 @@ function pickNextWorktreeIdAfterDelete(
 function focusNextWorktreeAfterActiveDelete(
   deletedWorktreeId: string,
   repoId: string | null,
-  wasViewingBeforeDelete: boolean
+  wasViewingBeforeDelete: boolean,
+  visiblePaneIdsBeforeDelete: readonly string[]
 ): void {
   if (!wasViewingBeforeDelete || !repoId) {
     return
@@ -77,6 +79,20 @@ function focusNextWorktreeAfterActiveDelete(
     state.activePendingCreationId !== null ||
     state.activeWorktreeId !== null
   ) {
+    return
+  }
+  // Why: with side-by-side panes, hand focus to a surviving visible pane first
+  // — it is already on screen — before falling back to repo siblings. Captured
+  // pre-delete because a two-pane split collapses to null during the purge.
+  const worktreeById = getWorktreeMapFromState(state)
+  const survivingPaneId = visiblePaneIdsBeforeDelete.find(
+    (paneId) =>
+      paneId !== deletedWorktreeId &&
+      worktreeById.has(paneId) &&
+      !state.deleteStateByWorktreeId[paneId]?.isDeleting
+  )
+  if (survivingPaneId) {
+    activateAndRevealWorktree(survivingPaneId)
     return
   }
   const nextWorktreeId = pickNextWorktreeIdAfterDelete(state, repoId, deletedWorktreeId)
@@ -101,5 +117,8 @@ export function prepareActiveWorktreeFocusAfterDelete(worktreeId: string): () =>
     state.activePendingCreationId === null &&
     state.activeWorktreeId === worktreeId
   const repoId = getWorktreeMapFromState(state).get(worktreeId)?.repoId ?? null
-  return () => focusNextWorktreeAfterActiveDelete(worktreeId, repoId, wasViewing)
+  const visiblePaneIds = state.workspaceSplitLayout
+    ? collectPaneIds(state.workspaceSplitLayout)
+    : []
+  return () => focusNextWorktreeAfterActiveDelete(worktreeId, repoId, wasViewing, visiblePaneIds)
 }

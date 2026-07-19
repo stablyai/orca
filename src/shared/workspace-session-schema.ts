@@ -15,6 +15,7 @@ import type {
   TerminalPaneLayoutNode,
   TuiAgent,
   WorkspaceKey,
+  WorkspacePaneNode,
   WorkspaceSessionState
 } from './types'
 import { isValidTerminalTabId } from './terminal-tab-id'
@@ -152,6 +153,24 @@ const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
   ])
 )
 
+// Side-by-side workspace pane tree: same shape as tab-group splits with
+// worktree-id leaves (experimentalSideBySideWorkspaces).
+const workspacePaneNodeSchema: z.ZodType<WorkspacePaneNode> = z.lazy(() =>
+  z.union([
+    z.object({
+      type: z.literal('pane'),
+      worktreeId: z.string()
+    }),
+    z.object({
+      type: z.literal('split'),
+      direction: tabGroupSplitDirectionSchema,
+      first: workspacePaneNodeSchema,
+      second: workspacePaneNodeSchema,
+      ratio: z.number().optional()
+    })
+  ])
+)
+
 // ─── Editor ─────────────────────────────────────────────────────────
 
 const persistedOpenFileSchema = z.object({
@@ -254,6 +273,11 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),
   terminalLayoutsByTabId: z.record(terminalTabIdSchema, terminalLayoutSnapshotSchema),
   activeWorktreeIdsOnShutdown: z.array(z.string()).optional(),
+  workspaceSplitLayoutOnShutdown: workspacePaneNodeSchema.optional(),
+  workspaceSplitLayoutsByAnchorOnShutdown: z.record(z.string(), workspacePaneNodeSchema).optional(),
+  activeWorkspaceSplitAnchorOnShutdown: z.string().nullable().optional(),
+  workspaceSplitAnchorMruOnShutdown: z.array(z.string()).optional(),
+  workspaceSplitMaximizedPaneOnShutdown: z.string().nullable().optional(),
   openFilesByWorktree: z.record(z.string(), z.array(persistedOpenFileSchema)).optional(),
   activeFileIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
   markdownFrontmatterVisible: z.record(z.string(), z.boolean()).optional(),

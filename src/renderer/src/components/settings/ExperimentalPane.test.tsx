@@ -134,6 +134,20 @@ describe('ExperimentalPane', () => {
     )
   })
 
+  it('renders side-by-side workspaces as an off-by-default searchable experimental switch', () => {
+    const settings = getDefaultSettings('/tmp')
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
+    )
+
+    expect(settings.experimentalSideBySideWorkspaces).toBe(false)
+    expect(markup).toContain('Side-by-side workspaces')
+    expect(markup).toContain('aria-checked="false"')
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
+      'Side-by-side workspaces'
+    )
+  })
+
   it('renders per-workspace environments as an off-by-default experimental subsection', () => {
     const settings = getDefaultSettings('/tmp')
     const markup = renderToStaticMarkup(

@@ -89,6 +89,7 @@ import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
+import { useSideWorkspacePaneGitStatusPoll } from './components/right-sidebar/side-pane-git-status-poll'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
@@ -748,6 +749,9 @@ function App(): React.JSX.Element {
   // workspace session has hydrated so git status work cannot compete with the
   // first window becoming usable.
   useGitStatusPolling({ enabled: workspaceSessionReady })
+  // Why: visible side-by-side panes need their own status backstop; the hook
+  // no-ops (empty pane list) unless a split is open.
+  useSideWorkspacePaneGitStatusPoll({ enabled: workspaceSessionReady })
   // Why: the editor must hear external filesystem changes regardless of
   // which right-sidebar panel is visible (Explorer unmounts when the user
   // switches to Source Control or Checks). Wiring this at App level mirrors

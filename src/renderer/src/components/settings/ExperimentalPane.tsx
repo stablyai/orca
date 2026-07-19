@@ -51,6 +51,10 @@ export function ExperimentalPane({
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const showSideBySideWorkspaces = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().sideBySideWorkspaces
+  ])
+  const sideBySideWorkspacesEnabled = settings.experimentalSideBySideWorkspaces === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -320,6 +324,51 @@ export function ExperimentalPane({
       ) : null}
 
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+      {showSideBySideWorkspaces ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.sideBySideWorkspaces.title',
+            'Side-by-side workspaces'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.sideBySideWorkspaces.description',
+            'Show terminals from several projects at once by splitting the main area into per-project panes.'
+          )}
+          keywords={getExperimentalSearchEntry().sideBySideWorkspaces.keywords}
+          className="space-y-3 py-2"
+          id="experimental-side-by-side-workspaces"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.sideBySideWorkspaces.title',
+                  'Side-by-side workspaces'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.sideBySideWorkspaces.copy',
+                  'Open a project to the side from the sidebar to tile its terminals next to the current one. Drag between panes to resize.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={sideBySideWorkspacesEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.sideBySideWorkspaces.toggleLabel',
+                'Toggle side-by-side workspaces'
+              )}
+              onChange={() =>
+                updateSettings({
+                  experimentalSideBySideWorkspaces: !sideBySideWorkspacesEnabled
+                })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}
     </div>

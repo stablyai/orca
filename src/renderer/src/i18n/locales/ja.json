@@ -2729,7 +2729,13 @@
             "1ff1c77616": "ブラウザ",
             "586d2ac445": "ターミナル",
             "addSplitPane": "分割ペインを追加",
-            "closePaneColumn": "分割ペインを閉じる"
+            "closePaneColumn": "分割ペインを閉じる",
+            "restoreSplit": "Restore split",
+            "maximizePane": "Maximize pane",
+            "restoreSplitTip": "Back to the split grid",
+            "maximizePaneTip": "Show this project full width — the split stays underneath",
+            "removeFromSplit": "Remove from split",
+            "removeFromSplitTip": "Remove from split — keeps the project and its terminals"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "このセッションを再開するにはターミナルペインにドロップしてください。",
@@ -4289,7 +4295,9 @@
           "setParentWorkspace": "親ワークツリーを設定...",
           "workspaceSection": "ワークスペース",
           "primaryDeleteDisabled": "プライマリワークツリーは削除できません。代わりにプロジェクトを削除してください。",
-          "deleteWorktree": "ワークツリーを削除"
+          "deleteWorktree": "ワークツリーを削除",
+          "removeFromSplit": "Remove from Split",
+          "openToTheSide": "Open to the Side"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -5438,6 +5446,12 @@
             "defaultViewLabel": "デフォルトのネイティブ チャット ビュー",
             "defaultViewTerminal": "Terminal チャット",
             "defaultViewNative": "ネイティブチャット"
+          },
+          "sideBySideWorkspaces": {
+            "title": "Side-by-side workspaces",
+            "description": "Show terminals from several projects at once by splitting the main area into per-project panes.",
+            "copy": "Open a project to the side from the sidebar to tile its terminals next to the current one. Drag between panes to resize.",
+            "toggleLabel": "Toggle side-by-side workspaces"
           }
         },
         "FloatingWorkspacePane": {
@@ -7644,6 +7658,10 @@
               "title": "ネイティブチャット",
               "description": "対応エージェントのターミナルセッション用デスクトップチャット画面をプレビューします。",
               "grok": "grok"
+            },
+            "sideBySideWorkspaces": {
+              "title": "Side-by-side workspaces",
+              "description": "Show terminals from several projects at once by splitting the main area into per-project panes."
             }
           }
         },

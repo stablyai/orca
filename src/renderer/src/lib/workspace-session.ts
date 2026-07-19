@@ -1,14 +1,8 @@
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  PersistedOpenFile,
-  WorkspaceSessionState,
-  WorkspaceVisibleTabType
-} from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace, WorkspaceSessionState } from '../../../shared/types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import type { AppState } from '../store'
-import type { OpenFile } from '../store/slices/editor'
+import { buildEditorSessionData } from './workspace-session-editor-files'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
@@ -64,6 +58,11 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'defaultTerminalTabsAppliedByWorktreeId'
 > & {
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
+  workspaceSplitLayout?: AppState['workspaceSplitLayout']
+  workspaceSplitLayoutsByAnchor?: AppState['workspaceSplitLayoutsByAnchor']
+  activeWorkspaceSplitAnchorId?: AppState['activeWorkspaceSplitAnchorId']
+  workspaceSplitAnchorMru?: AppState['workspaceSplitAnchorMru']
+  workspaceSplitMaximizedPaneId?: AppState['workspaceSplitMaximizedPaneId']
 }
 
 // Why: the App-level Zustand subscriber that debounces session writes uses
@@ -100,7 +99,12 @@ export const SESSION_RELEVANT_FIELDS = [
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
-  'sleepingAgentSessionsByPaneKey'
+  'sleepingAgentSessionsByPaneKey',
+  'workspaceSplitLayout',
+  'workspaceSplitLayoutsByAnchor',
+  'activeWorkspaceSplitAnchorId',
+  'workspaceSplitAnchorMru',
+  'workspaceSplitMaximizedPaneId'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<
@@ -109,103 +113,6 @@ type _MissingSessionField = Exclude<
 >
 const _exhaustive: [_MissingSessionField] extends [never] ? true : never = true
 void _exhaustive
-
-/** Build the editor-file portion of the workspace session for persistence.
- *  Only edit-mode files are saved — diffs and conflict views are transient. */
-export function buildEditorSessionData(
-  openFiles: OpenFile[],
-  editorDrafts: Record<string, string>,
-  markdownFrontmatterVisible: Record<string, boolean>,
-  activeFileIdByWorktree: Record<string, string | null>,
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
-): Pick<
-  WorkspaceSessionState,
-  | 'openFilesByWorktree'
-  | 'activeFileIdByWorktree'
-  | 'activeTabTypeByWorktree'
-  | 'markdownFrontmatterVisible'
-> {
-  const editFiles = openFiles.filter((f) => f.mode === 'edit')
-  const byWorktree: Record<string, PersistedOpenFile[]> = {}
-  const editFileIdsByWorktree: Record<string, Set<string>> = {}
-  for (const f of editFiles) {
-    const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    // Why: read-only tabs never persist a dirty draft even if isDirty is
-    // somehow set — restoring a draft would reintroduce writable/hot-exit state
-    // for an agent-owned transcript.
-    const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
-    arr.push({
-      filePath: f.filePath,
-      relativePath: f.relativePath,
-      worktreeId: f.worktreeId,
-      language: f.language,
-      isPreview: f.isPreview || undefined,
-      runtimeEnvironmentId: f.runtimeEnvironmentId,
-      // Why: persist read-only only when true so pre-existing writable sessions
-      // stay writable on restore (absence is the writable default).
-      ...(f.readOnly === true ? { readOnly: true } : {}),
-      ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),
-      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {}),
-      // Why: the edit baseline travels with the dirty draft so a restore can
-      // re-derive a changed-on-disk conflict before autosave may overwrite an
-      // agent write that landed while the app was closed.
-      ...(dirtyDraftContent !== undefined && f.lastKnownDiskSignature
-        ? { lastKnownDiskSignature: f.lastKnownDiskSignature }
-        : {})
-    })
-    const ids =
-      editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
-    ids.add(f.id)
-  }
-
-  const activeFileEntries: [string, string][] = []
-  for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
-    if (!fileId) {
-      continue
-    }
-    if (editFileIdsByWorktree[worktreeId]?.has(fileId)) {
-      activeFileEntries.push([worktreeId, fileId])
-    }
-  }
-  const persistedActiveFileIdByWorktree = Object.fromEntries(activeFileEntries) as Record<
-    string,
-    string
-  >
-
-  const activeTabTypeEntries: [string, WorkspaceVisibleTabType][] = []
-  for (const [worktreeId, tabType] of Object.entries(activeTabTypeByWorktree)) {
-    if (tabType !== 'editor') {
-      activeTabTypeEntries.push([worktreeId, tabType])
-      continue
-    }
-    // Why: restart only restores edit-mode files. Persisting "editor" with a
-    // transient diff/conflict file ID creates a session payload that cannot be
-    // satisfied on startup and leaves the UI with no real editor tab to select.
-    // Only keep the editor marker when it points at a restored file.
-    if (persistedActiveFileIdByWorktree[worktreeId]) {
-      activeTabTypeEntries.push([worktreeId, tabType])
-    }
-  }
-  const persistedActiveTabTypeByWorktree = Object.fromEntries(activeTabTypeEntries) as Record<
-    string,
-    WorkspaceVisibleTabType
-  >
-  const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
-  // Why: preserve the actual value so per-file hide overrides survive restart;
-  // the map only ever carries `false` entries (visible is the default).
-  const persistedMarkdownFrontmatterVisible = Object.fromEntries(
-    Object.entries(markdownFrontmatterVisible ?? {}).filter(([fileId]) =>
-      allEditFileIds.has(fileId)
-    )
-  )
-
-  return {
-    openFilesByWorktree: byWorktree,
-    activeFileIdByWorktree: persistedActiveFileIdByWorktree,
-    activeTabTypeByWorktree: persistedActiveTabTypeByWorktree,
-    markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible
-  }
-}
 
 export function buildBrowserSessionData(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
@@ -350,6 +257,11 @@ export function buildWorkspaceSessionPayload(
     // must carry forward which worktrees still had live PTYs. Dropping this
     // field silently disables eager terminal reconnect on the next restart.
     activeWorktreeIdsOnShutdown: terminalSessionData.activeWorktreeIdsOnShutdown,
+    workspaceSplitLayoutOnShutdown: snapshot.workspaceSplitLayout ?? undefined,
+    workspaceSplitLayoutsByAnchorOnShutdown: snapshot.workspaceSplitLayoutsByAnchor,
+    activeWorkspaceSplitAnchorOnShutdown: snapshot.activeWorkspaceSplitAnchorId,
+    workspaceSplitAnchorMruOnShutdown: snapshot.workspaceSplitAnchorMru,
+    workspaceSplitMaximizedPaneOnShutdown: snapshot.workspaceSplitMaximizedPaneId,
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
     ...buildEditorSessionData(
       snapshot.openFiles,

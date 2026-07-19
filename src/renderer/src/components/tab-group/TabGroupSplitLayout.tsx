@@ -126,7 +126,10 @@ function SplitNode({
   suppressRightBorder,
   suppressBottomBorder,
   isTabDragActive,
-  hoveredTabInsertion
+  hoveredTabInsertion,
+  workspacePaneControls,
+  reserveWindowLeftChrome,
+  reserveWindowRightChrome
 }: {
   node: TabGroupLayoutNode
   nodePath: string
@@ -143,6 +146,9 @@ function SplitNode({
   suppressBottomBorder: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
+  workspacePaneControls: 'grid' | 'maximized' | null
+  reserveWindowLeftChrome: boolean
+  reserveWindowRightChrome: boolean
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
@@ -164,12 +170,22 @@ function SplitNode({
         suppressLeftBorder={suppressLeftBorder}
         suppressRightBorder={suppressRightBorder}
         suppressBottomBorder={suppressBottomBorder}
-        reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
-        reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
+        // Why: the floating sidebar/window-control overlays sit at the WINDOW
+        // edges; a side-by-side pane whose layout edge is an inner divider
+        // must not reserve dead strip space for them.
+        reserveClosedExplorerToggleSpace={
+          touchesTopEdge && touchesRightEdge && reserveWindowRightChrome
+        }
+        reserveCollapsedSidebarHeaderSpace={
+          touchesTopEdge && touchesLeftEdge && reserveWindowLeftChrome
+        }
         isTabDragActive={isTabDragActive}
         hoveredTabInsertion={
           hoveredTabInsertion?.groupId === node.groupId ? hoveredTabInsertion : null
         }
+        // Why: the workspace-pane controls live once per pane, in its
+        // top-right group's strip next to the native pane controls.
+        workspacePaneControls={touchesTopEdge && touchesRightEdge ? workspacePaneControls : null}
       />
     )
   }
@@ -201,6 +217,9 @@ function SplitNode({
           suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
+          workspacePaneControls={workspacePaneControls}
+          reserveWindowLeftChrome={reserveWindowLeftChrome}
+          reserveWindowRightChrome={reserveWindowRightChrome}
         />
       </div>
       <ResizeHandle
@@ -225,6 +244,9 @@ function SplitNode({
           suppressBottomBorder={suppressBottomBorder}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
+          workspacePaneControls={workspacePaneControls}
+          reserveWindowLeftChrome={reserveWindowLeftChrome}
+          reserveWindowRightChrome={reserveWindowRightChrome}
         />
       </div>
     </div>
@@ -235,12 +257,18 @@ export default function TabGroupSplitLayout({
   layout,
   worktreeId,
   focusedGroupId,
-  isWorktreeActive
+  isWorktreeActive,
+  workspacePaneControls = null,
+  reserveWindowLeftChrome = true,
+  reserveWindowRightChrome = true
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
+  workspacePaneControls?: 'grid' | 'maximized' | null
+  reserveWindowLeftChrome?: boolean
+  reserveWindowRightChrome?: boolean
 }): React.JSX.Element {
   const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
   const hasSplits = layout.type === 'split'
@@ -294,6 +322,9 @@ export default function TabGroupSplitLayout({
               focusedGroupId={focusedGroupId}
               isWorktreeActive={isWorktreeActive}
               hasSplitGroups={hasSplits}
+              workspacePaneControls={workspacePaneControls}
+              reserveWindowLeftChrome={reserveWindowLeftChrome}
+              reserveWindowRightChrome={reserveWindowRightChrome}
               touchesTopEdge={true}
               touchesRightEdge={true}
               touchesLeftEdge={true}

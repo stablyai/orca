@@ -307,6 +307,11 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
     .toBe(true)
 }
 
+/** Get the side-by-side workspace split layout (null = classic single view). */
+export async function getWorkspaceSplitLayout(page: Page): Promise<unknown> {
+  return getStoreState<unknown>(page, 'workspaceSplitLayout')
+}
+
 /** Check if a worktree exists in the store. */
 export async function worktreeExists(page: Page, name: string): Promise<boolean> {
   return page.evaluate((name) => {

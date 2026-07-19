@@ -171,6 +171,14 @@ import {
   type WorkspaceKanbanCardTrackedDropTarget
 } from './workspace-kanban-card-pointer-drag-dom'
 import {
+  getWorkspaceSplitDropTargetFromPoint,
+  isPointInsideWorkspaceSplitDropRoot,
+  type WorkspaceSplitDropZone
+} from '../workspace-split/split-pane-drop-target'
+import { updateWorkspaceSplitDropHighlight } from '../workspace-split/workspace-split-drop-visual'
+import { openWorktreeToTheSide } from '@/lib/open-worktree-to-the-side'
+import { collectPaneIds } from '@/store/slices/workspace-split-view'
+import {
   getFullDropIndexForWorktreeDragUnit,
   getWorktreeDragUnitGroups
 } from './worktree-drag-units'
@@ -275,7 +283,11 @@ import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey, getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  getActiveSidebarWorkspaceId,
+  parseWorkspaceKey
+} from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isConfirmedStaleFolderPathStatus,
@@ -955,6 +967,7 @@ type WorktreePointerDrag = {
   frameId: number | null
   latestBoardDropTarget: WorkspaceKanbanCardTrackedDropTarget | null
   latestStatusDropTarget: WorktreeSidebarTrackedStatusDropTarget | null
+  latestSplitPaneDropTarget: WorkspaceSplitDropZone | null
 }
 
 function areWorktreeDragPreviewOffsetsEqual(
@@ -1404,6 +1417,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  const workspaceSplitLayout = useAppStore((s) => s.workspaceSplitLayout)
+  // Why: visible-but-unfocused side panes keep a subdued marker in the sidebar
+  // so users can tell what is on screen without stealing the active treatment.
+  const visibleSplitPaneIds = useMemo(
+    () => new Set(workspaceSplitLayout ? collectPaneIds(workspaceSplitLayout) : []),
+    [workspaceSplitLayout]
+  )
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -2701,6 +2721,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const clearWorktreeDrag = useCallback(() => {
     cleanupWorktreePointerDrag()
     cancelWorktreeNativeAutoscroll()
+    updateWorkspaceSplitDropHighlight(null)
     worktreeDragSessionRef.current = null
     setWorktreeDragState(WORKTREE_ROW_DRAG_INITIAL_STATE)
   }, [cancelWorktreeNativeAutoscroll, cleanupWorktreePointerDrag])
@@ -2828,17 +2849,34 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       clearWorktreeDrag()
       return
     }
+    // Why: dragging a single project over the workspace body offers split
+    // zones (side-by-side workspaces). The board preview sheet would cover
+    // that same area, so it stays closed for split-eligible drags; points
+    // inside an already-open board still always belong to the board.
+    const splitDropEligible =
+      drag.draggedIds.length === 1 &&
+      // Why: folder workspaces cannot become split panes; showing the drop
+      // highlight for them would be a lying affordance.
+      parseWorkspaceKey(drag.draggedIds[0])?.type !== 'folder' &&
+      useAppStore.getState().settings?.experimentalSideBySideWorkspaces === true
     // Why: reveal the companion board preview the moment a card drag begins so the
     // user sees the drop target on the right and can choose whether to aim for it,
     // rather than discovering it only after dragging into the sidebar edge.
     if (
       !drag.workspaceBoardDragPreviewRequested &&
       !workspaceBoardOpen &&
-      !hasWorkspaceKanbanSidebarDropBoard()
+      !hasWorkspaceKanbanSidebarDropBoard() &&
+      !splitDropEligible
     ) {
       drag.workspaceBoardDragPreviewRequested = true
       onWorkspaceBoardDragPreviewStart()
     }
+    const splitPaneZone =
+      splitDropEligible && !isWorkspaceKanbanSidebarDropPointInBoard(drag.currentX, drag.currentY)
+        ? getWorkspaceSplitDropTargetFromPoint(drag.currentX, drag.currentY)
+        : null
+    updateWorkspaceSplitDropHighlight(splitPaneZone)
+    drag.latestSplitPaneDropTarget = splitPaneZone
     const boardTarget = updateWorkspaceKanbanSidebarDropTargetVisual({
       x: drag.currentX,
       y: drag.currentY,
@@ -3156,7 +3194,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       if (
         rects.length <= 1 &&
         !hasWorkspaceKanbanSidebarDropBoard() &&
-        !canPreviewWorkspaceBoardOnDrag
+        !canPreviewWorkspaceBoardOnDrag &&
+        // Why: with side-by-side workspaces even a single-row repo can drag
+        // its card into the workspace body to open it as a pane.
+        useAppStore.getState().settings?.experimentalSideBySideWorkspaces !== true
       ) {
         return
       }
@@ -3186,7 +3227,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         workspaceBoardDragPreviewRequested: false,
         frameId: null,
         latestBoardDropTarget: null,
-        latestStatusDropTarget: null
+        latestStatusDropTarget: null,
+        latestSplitPaneDropTarget: null
       }
     },
     [
@@ -3262,6 +3304,24 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           status: boardDropTarget.status,
           dropIndex: boardDropTarget.dropIndex,
           groups: getWorkspaceKanbanSidebarDropGroups()
+        })
+      } else if (
+        drag.latestSplitPaneDropTarget &&
+        drag.draggedIds.length === 1 &&
+        !isWorkspaceKanbanSidebarDropPointInBoard(event.clientX, event.clientY) &&
+        // Why: the frame-tracked zone only backstops a release that landed
+        // between panes INSIDE the workspace body; a release back over the
+        // sidebar must fall through to the sidebar drop branches.
+        isPointInsideWorkspaceSplitDropRoot(event.clientX, event.clientY)
+      ) {
+        // Why: prefer the release point; the frame-tracked zone covers a
+        // pointer-up that landed a few px outside the last hit-tested rect.
+        const splitZone =
+          getWorkspaceSplitDropTargetFromPoint(event.clientX, event.clientY) ??
+          drag.latestSplitPaneDropTarget
+        openWorktreeToTheSide(drag.draggedIds[0], {
+          targetWorktreeId: splitZone.targetWorktreeId,
+          edge: splitZone.edge
         })
       } else {
         const preferredStatusTarget = getEligibleLineageDropTarget(
@@ -4862,6 +4922,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-id={itemRow.worktree.id}
                   data-worktree-row-key={itemRow.rowKey}
                   data-worktree-section-key={itemRow.sectionKey}
+                  data-workspace-split-pane-visible={
+                    !isActiveWorktree && visibleSplitPaneIds.has(itemRow.worktree.id)
+                      ? 'true'
+                      : undefined
+                  }
                   data-worktree-drag-id={worktreeDragGroupKey ? itemRow.worktree.id : undefined}
                   data-worktree-drag-group-key={worktreeDragGroupKey}
                   data-worktree-drag-group-index={worktreeDragGroupIndex}

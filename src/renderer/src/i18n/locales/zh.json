@@ -2729,7 +2729,13 @@
             "1ff1c77616": "浏览器",
             "586d2ac445": "终端",
             "addSplitPane": "添加拆分窗格",
-            "closePaneColumn": "关闭拆分窗格"
+            "closePaneColumn": "关闭拆分窗格",
+            "restoreSplit": "Restore split",
+            "maximizePane": "Maximize pane",
+            "restoreSplitTip": "Back to the split grid",
+            "maximizePaneTip": "Show this project full width — the split stays underneath",
+            "removeFromSplit": "Remove from split",
+            "removeFromSplitTip": "Remove from split — keeps the project and its terminals"
           },
           "AiVaultSessionDropLayer": {
             "dropOntoTerminalPane": "拖放到终端面板以恢复此会话。",
@@ -4289,7 +4295,9 @@
           "setParentWorkspace": "设置父工作树...",
           "workspaceSection": "工作区",
           "primaryDeleteDisabled": "主工作树不能删除。请改为移除项目。",
-          "deleteWorktree": "删除工作树"
+          "deleteWorktree": "删除工作树",
+          "removeFromSplit": "Remove from Split",
+          "openToTheSide": "Open to the Side"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -5438,6 +5446,12 @@
             "defaultViewLabel": "默认原生聊天视图",
             "defaultViewTerminal": "终端聊天",
             "defaultViewNative": "原生聊天"
+          },
+          "sideBySideWorkspaces": {
+            "title": "Side-by-side workspaces",
+            "description": "Show terminals from several projects at once by splitting the main area into per-project panes.",
+            "copy": "Open a project to the side from the sidebar to tile its terminals next to the current one. Drag between panes to resize.",
+            "toggleLabel": "Toggle side-by-side workspaces"
           }
         },
         "FloatingWorkspacePane": {
@@ -7607,6 +7621,10 @@
               "title": "原生聊天",
               "description": "预览受支持的智能体终端会话的桌面聊天界面。",
               "grok": "grok"
+            },
+            "sideBySideWorkspaces": {
+              "title": "Side-by-side workspaces",
+              "description": "Show terminals from several projects at once by splitting the main area into per-project panes."
             }
           }
         },

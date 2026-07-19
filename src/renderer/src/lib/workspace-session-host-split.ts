@@ -64,6 +64,13 @@ const FIELD_OWNERSHIP = {
   lastVisitedAtByWorktreeId: 'worktreeKeyed',
   defaultTerminalTabsAppliedByWorktreeId: 'worktreeKeyed',
   activeWorkspaceKey: 'global',
+  // Why: the side-by-side pane trees are client-wide view state (leaves may
+  // span hosts); they ride in the local slice like the active pointers.
+  workspaceSplitLayoutOnShutdown: 'global',
+  workspaceSplitLayoutsByAnchorOnShutdown: 'global',
+  activeWorkspaceSplitAnchorOnShutdown: 'global',
+  workspaceSplitAnchorMruOnShutdown: 'global',
+  workspaceSplitMaximizedPaneOnShutdown: 'global',
   activeWorktreeIdsOnShutdown: 'worktreeArray',
   terminalLayoutsByTabId: 'tabKeyed',
   remoteSessionIdsByTabId: 'tabKeyed',
