@@ -49,8 +49,12 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showFloatingStatusPill = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().floatingStatusPill
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const floatingStatusPillEnabled = settings.experimentalFloatingStatusPill === true
   // Why: the planner owns ms-based bounds/defaults; the UI edits minutes
   // while displaying the same effective clamped value the planner will use.
   const agentHibernationIdleMinutes = Math.round(
@@ -320,6 +324,51 @@ export function ExperimentalPane({
       ) : null}
 
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+      {showFloatingStatusPill ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.floatingStatusPill.title',
+            'Floating status pill'
+          )}
+          description={translate(
+            'auto.components.settings.experimental.search.floatingStatusPill.description',
+            'Always-on-top compact overlay that aggregates every running agent (working, waiting, done) and jumps to the active pane on click.'
+          )}
+          keywords={getExperimentalSearchEntry().floatingStatusPill.keywords}
+          className="space-y-3 py-2"
+          id="experimental-floating-status-pill"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.floatingStatusPill.title',
+                  'Floating status pill'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.floatingStatusPill.copy',
+                  'Shows a small always-on-top capsule at the top of the screen with a live roll-up of every running agent (working, waiting, recently done). Click it to jump back to the most recent active pane. Sits under the notch on macOS, top-center on Linux and Windows. On some Linux Wayland compositors the pill may not stay above full-screen apps.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={floatingStatusPillEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.floatingStatusPill.toggleLabel',
+                'Toggle floating status pill'
+              )}
+              onChange={() =>
+                updateSettings({
+                  experimentalFloatingStatusPill: !floatingStatusPillEnabled
+                })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}
     </div>
