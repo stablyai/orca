@@ -127,7 +127,17 @@ async function main(): Promise<void> {
     socketPath,
     tokenPath,
     log: daemonLog,
-    preparePtySpawn: prepareMacosTccLoginShell,
+    preparePtySpawn: () =>
+      prepareMacosTccLoginShell((result) => {
+        // Why: detached daemon stderr is unavailable after startup; record only
+        // capability metadata so PAM output and account details never reach logs.
+        daemonLog.log('macos-login-preflight', {
+          enabled: result.enabled,
+          reason: result.reason,
+          retryable: result.retryable,
+          ...(result.retryAfterMs !== undefined ? { retryAfterMs: result.retryAfterMs } : {})
+        })
+      }),
     spawnSubprocess: (opts) => createPtySubprocess(opts)
   })
 

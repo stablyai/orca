@@ -267,6 +267,69 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).toHaveBeenCalledOnce()
     })
 
+    it('dedupes concurrent creation of the same stable session id', async () => {
+      spawnMock.mockClear()
+      let finishPreparation!: () => void
+      prepareMacosTccLoginShellMock.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPreparation = resolve
+          })
+      )
+
+      const first = provider.spawn({ cols: 80, rows: 24, sessionId: 'shared-session' })
+      const second = provider.spawn({ cols: 132, rows: 44, sessionId: 'shared-session' })
+      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledOnce())
+      expect(spawnMock).not.toHaveBeenCalled()
+
+      finishPreparation()
+      await expect(Promise.all([first, second])).resolves.toEqual([
+        { id: 'shared-session', pid: 12345 },
+        { id: 'shared-session', pid: 12345, isReattach: true }
+      ])
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(mockProc.resize).toHaveBeenCalledWith(132, 44)
+    })
+
+    it('cancels a pending spawn owned by an older renderer generation', async () => {
+      spawnMock.mockClear()
+      let finishPreparation!: () => void
+      prepareMacosTccLoginShellMock.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPreparation = resolve
+          })
+      )
+
+      const spawn = provider.spawn({ cols: 80, rows: 24, sessionId: 'reload-pending' })
+      const canceledSpawn = expect(spawn).rejects.toThrow('PTY spawn canceled: reload-pending')
+      await vi.waitFor(() => expect(prepareMacosTccLoginShellMock).toHaveBeenCalledOnce())
+
+      const generation = provider.advanceGeneration()
+      expect(provider.killOrphanedPtys(generation)).toEqual([{ id: 'reload-pending' }])
+      finishPreparation()
+      await canceledSpawn
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('cancels a stale replacement waiting for the previous PTY to exit', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'reload-replacement' })
+      spawnMock.mockClear()
+      mockProc.kill = vi.fn()
+      const shutdown = provider.shutdown(first.id, { immediate: true })
+      const replacement = provider.spawn({ cols: 100, rows: 30, sessionId: first.id })
+      const canceledReplacement = expect(replacement).rejects.toThrow(
+        'PTY spawn canceled: reload-replacement'
+      )
+
+      const generation = provider.advanceGeneration()
+      expect(provider.killOrphanedPtys(generation)).toEqual([{ id: first.id }])
+      exitCb?.({ exitCode: 137 })
+      await shutdown
+      await canceledReplacement
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
     it('calls node-pty spawn with correct args', async () => {
       await provider.spawn({ cols: 120, rows: 40, cwd: '/tmp' })
       expect(spawnMock).toHaveBeenCalledWith(

@@ -93,8 +93,10 @@ type PtyShutdownOperation = {
 const ptyShutdownOperations = new Map<string, PtyShutdownOperation>()
 type PendingLocalPtySpawn = {
   canceled: boolean
+  generation: number
 }
 const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
+const pendingStableLocalPtySpawnResults = new Map<string, Promise<PtySpawnResult>>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remembers the last positively-recognized agent foreground per PTY so a
@@ -318,8 +320,8 @@ function allocatePtyId(sessionId: string | undefined): string {
   return id
 }
 
-async function prepareLocalPtySpawn(id: string): Promise<void> {
-  const pendingSpawn: PendingLocalPtySpawn = { canceled: false }
+async function prepareLocalPtySpawn(id: string, generation: number): Promise<void> {
+  const pendingSpawn: PendingLocalPtySpawn = { canceled: false, generation }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
@@ -509,11 +511,46 @@ export class LocalPtyProvider implements IPtyProvider {
    * method preserves that state so the stdin fallback only runs when needed.
    */
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
+    const stableId = normalizeLocalCallerSessionId(args.sessionId)
+    if (!stableId) {
+      return this.spawnOnce(args)
+    }
+
+    const pending = pendingStableLocalPtySpawnResults.get(stableId)
+    if (pending) {
+      const result = await pending
+      const existing = ptyProcesses.get(stableId)
+      try {
+        existing?.resize(args.cols, args.rows)
+      } catch {
+        /* Existing PTY may reject resize during teardown; preserve reattach semantics. */
+      }
+      return { id: stableId, pid: existing?.pid ?? result.pid, isReattach: true }
+    }
+
+    const spawnResult = this.spawnOnce(args)
+    pendingStableLocalPtySpawnResults.set(stableId, spawnResult)
+    try {
+      return await spawnResult
+    } finally {
+      if (pendingStableLocalPtySpawnResults.get(stableId) === spawnResult) {
+        pendingStableLocalPtySpawnResults.delete(stableId)
+      }
+    }
+  }
+
+  private async spawnOnce(args: PtySpawnOptions): Promise<PtySpawnResult> {
+    const spawnGeneration = loadGeneration
     const reattachId = normalizeLocalCallerSessionId(args.sessionId)
     if (reattachId) {
       const pendingShutdown = ptyShutdownOperations.get(reattachId)
       if (pendingShutdown) {
         await pendingShutdown.promise
+        // Why: orphan cleanup can run while this spawn waits for an older PTY
+        // owner; do not register the replacement under a stale page load.
+        if (spawnGeneration < loadGeneration) {
+          throw new Error(`PTY spawn canceled: ${reattachId}`)
+        }
       }
       const existing = ptyProcesses.get(reattachId)
       if (existing) {
@@ -836,7 +873,7 @@ export class LocalPtyProvider implements IPtyProvider {
       logHistoryInjection(worktreeId, historyResult)
     }
 
-    await prepareLocalPtySpawn(id)
+    await prepareLocalPtySpawn(id, spawnGeneration)
     const spawnResult = spawnShellWithFallback({
       shellPath,
       shellArgs,
@@ -887,7 +924,7 @@ export class LocalPtyProvider implements IPtyProvider {
       id,
       getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
     )
-    ptyLoadGeneration.set(id, loadGeneration)
+    ptyLoadGeneration.set(id, spawnGeneration)
     this.opts.onSpawned?.(id)
 
     // Shell-ready startup command support
@@ -1364,10 +1401,24 @@ export class LocalPtyProvider implements IPtyProvider {
   /** Kill orphaned PTYs from previous page loads. */
   killOrphanedPtys(currentGeneration: number): { id: string }[] {
     const killed: { id: string }[] = []
+    const killedIds = new Set<string>()
+    for (const [id, pendingSpawns] of pendingLocalPtySpawns) {
+      for (const pendingSpawn of pendingSpawns) {
+        if (pendingSpawn.generation < currentGeneration) {
+          pendingSpawn.canceled = true
+          killedIds.add(id)
+        }
+      }
+    }
+    for (const id of killedIds) {
+      killed.push({ id })
+    }
     for (const [id, proc] of ptyProcesses) {
       if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration) {
         requestPtyTermination(id, proc)
-        killed.push({ id })
+        if (!killedIds.has(id)) {
+          killed.push({ id })
+        }
       }
     }
     return killed
@@ -1411,6 +1462,7 @@ export class LocalPtyProvider implements IPtyProvider {
 export function _resetLocalPtyProviderStateForTest(): void {
   cancelAllPendingLocalPtySpawns()
   pendingLocalPtySpawns.clear()
+  pendingStableLocalPtySpawnResults.clear()
   for (const id of ptyProcesses.keys()) {
     clearPtyState(id)
   }

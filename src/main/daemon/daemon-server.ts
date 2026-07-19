@@ -57,6 +57,7 @@ type ConnectedClient = {
 
 type PendingPtySpawnPreparation = {
   canceled: boolean
+  clientId: string
 }
 
 export class DaemonServer {
@@ -249,6 +250,7 @@ export class DaemonServer {
       this.clients.set(hello.clientId, client)
       this.setupControlSocket(socket, hello.clientId)
       if (previous) {
+        this.cancelPendingPtySpawnPreparationsForClient(hello.clientId)
         // Why: a reconnect can reuse a clientId before the old sockets notice
         // their close. Tear them down after installing the new owner so stale
         // close events cannot delete the replacement client entry.
@@ -286,6 +288,7 @@ export class DaemonServer {
         return
       }
       this.streamDataBatcher.clear(clientId)
+      this.cancelPendingPtySpawnPreparationsForClient(clientId)
       client.streamSocket?.destroy()
       this.clients.delete(clientId)
     })
@@ -345,8 +348,8 @@ export class DaemonServer {
     }
   }
 
-  private async preparePtySpawnUnlessCanceled(sessionId: string): Promise<void> {
-    const preparation: PendingPtySpawnPreparation = { canceled: false }
+  private async preparePtySpawnUnlessCanceled(sessionId: string, clientId: string): Promise<void> {
+    const preparation: PendingPtySpawnPreparation = { canceled: false, clientId }
     const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
     pending.add(preparation)
     this.pendingPtySpawnPreparations.set(sessionId, pending)
@@ -382,13 +385,23 @@ export class DaemonServer {
     }
   }
 
+  private cancelPendingPtySpawnPreparationsForClient(clientId: string): void {
+    for (const pending of this.pendingPtySpawnPreparations.values()) {
+      for (const preparation of pending) {
+        if (preparation.clientId === clientId) {
+          preparation.canceled = true
+        }
+      }
+    }
+  }
+
   private async routeRequest(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.clients.get(clientId)
 
     switch (request.type) {
       case 'createOrAttach': {
         const p = request.payload
-        await this.preparePtySpawnUnlessCanceled(p.sessionId)
+        await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
         const result = await this.host.createOrAttach({
           sessionId: p.sessionId,
           cols: p.cols,

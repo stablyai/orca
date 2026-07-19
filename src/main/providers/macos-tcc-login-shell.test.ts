@@ -17,7 +17,11 @@ import {
   wrapShellSpawnForMacosTccAttribution
 } from './macos-tcc-login-shell'
 
-type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) => void
+type ExecFileCallback = (
+  error: (Error & { code?: string; killed?: boolean }) | null,
+  stdout: string,
+  stderr: string
+) => void
 
 describe('wrapShellSpawnForMacosTccAttribution', () => {
   let origPlatform: PropertyDescriptor | undefined
@@ -51,6 +55,7 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     } else {
       process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = origDisable
     }
+    vi.restoreAllMocks()
     vi.clearAllMocks()
   })
 
@@ -92,15 +97,27 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
       args: ['-l']
     })
     expect(console.warn).toHaveBeenCalledWith(
-      '[pty] macOS login(1) preflight failed; spawning shells directly'
+      '[pty] macOS login(1) preflight pam-rejected; spawning shells directly'
     )
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledOnce()
   })
 
-  it('caches a failed login preflight for later terminal spawns', async () => {
+  it('retries a timeout after backoff instead of caching the fallback permanently', async () => {
     setPlatform('darwin')
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
-        callback(new Error('timed out'), '', '')
+        if (execFileMock.mock.calls.length === 1) {
+          callback(
+            Object.assign(new Error('timed out'), { code: 'ETIMEDOUT', killed: true }),
+            '',
+            ''
+          )
+        } else {
+          callback(null, 'ORCA_LOGIN_PREFLIGHT_OK', '')
+        }
         return { stdin: { end: stdinEndMock } }
       }
     )
@@ -109,9 +126,13 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     await prepareMacosTccLoginShell()
     await prepareMacosTccLoginShell()
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/bin/zsh')
-    expect(wrapShellSpawnForMacosTccAttribution('/bin/bash', ['-l']).file).toBe('/bin/bash')
     expect(execFileMock).toHaveBeenCalledTimes(1)
     expect(console.warn).toHaveBeenCalledTimes(1)
+
+    now += 5_000
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l']).file).toBe('/usr/bin/login')
   })
 
   it('rejects a marker emitted by a preflight that does not exit cleanly', async () => {
@@ -132,6 +153,62 @@ describe('wrapShellSpawnForMacosTccAttribution', () => {
     expect(wrapShellSpawnForMacosTccAttribution('/bin/zsh', ['-l'])).toEqual({
       file: '/bin/zsh',
       args: ['-l']
+    })
+
+    await prepareMacosTccLoginShell()
+    expect(execFileMock).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    [
+      Object.assign(new Error('too much output'), { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }),
+      '',
+      'output-limit'
+    ],
+    [null, 'unexpected clean output', 'unexpected-output'],
+    [Object.assign(new Error('spawn failed'), { code: 'EAGAIN' }), '', 'exec-error']
+  ] as const)('treats %s as a transient %s failure', async (error, stdout, reason) => {
+    setPlatform('darwin')
+    let now = 10_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const report = vi.fn()
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
+        callback(error, stdout, '')
+        return { stdin: { end: stdinEndMock } }
+      }
+    )
+
+    await prepareMacosTccLoginShell(report)
+    await prepareMacosTccLoginShell(report)
+    expect(execFileMock).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledWith({
+      enabled: false,
+      reason,
+      retryable: true,
+      retryAfterMs: 5_000
+    })
+
+    now += 5_000
+    await prepareMacosTccLoginShell(report)
+    expect(execFileMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports one safe result per actual attempt and ignores reporter failures', async () => {
+    setPlatform('darwin')
+    const report = vi.fn(() => {
+      throw new Error('log unavailable')
+    })
+
+    await expect(
+      Promise.all([prepareMacosTccLoginShell(report), prepareMacosTccLoginShell(report)])
+    ).resolves.toEqual([undefined, undefined])
+    expect(execFileMock).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledWith({
+      enabled: true,
+      reason: 'supported',
+      retryable: false
     })
   })
 
