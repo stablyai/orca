@@ -80,7 +80,8 @@ function claudeMessageRole(
 }
 
 // The decoded blocks are plain text either way, so the raw content array is the
-// only place the thinking origin survives.
+// only place the thinking origin survives. redacted_thinking decodes to no
+// block, but tolerating it keeps a mixed thinking+redacted turn on reasoning.
 function isThinkingOnlyContent(content: unknown): boolean {
   if (!Array.isArray(content)) {
     return false

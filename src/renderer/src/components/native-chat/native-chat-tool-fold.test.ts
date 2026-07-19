@@ -46,6 +46,18 @@ describe('foldToolMessages', () => {
     expect(folded.map((m) => m.id)).toEqual(['u', 't'])
   })
 
+  it('keeps a tool run separate from a preceding reasoning turn', () => {
+    // Claude emits thinking and tool_use as separate records; reasoning is not
+    // the turn's prose, so the tool run must not fold under it.
+    const folded = foldToolMessages([
+      msg({ id: 'r', role: 'reasoning', blocks: [{ type: 'text', text: 'pondering' }] }),
+      msg({ id: 'c', role: 'assistant', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }] }),
+      msg({ id: 't', role: 'tool', blocks: [{ type: 'tool-result', output: 'ok' }] })
+    ])
+    expect(folded.map((m) => m.id)).toEqual(['r', 'c'])
+    expect(folded[1]?.blocks).toHaveLength(2)
+  })
+
   it('does not fold a message carrying prose alongside a tool block', () => {
     const folded = foldToolMessages([
       msg({ id: 'a', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] }),
