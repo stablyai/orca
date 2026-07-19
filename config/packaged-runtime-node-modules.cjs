@@ -8,7 +8,7 @@ const {
   rmSync
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
-const { builtinModules, createRequire } = require('node:module')
+const { createRequire, isBuiltin } = require('node:module')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -46,11 +46,6 @@ const PARCEL_WATCHER_PLATFORM_PREFIX_BY_PLATFORM = {
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
 const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
-const NODE_BUILTINS = new Set([
-  ...builtinModules,
-  ...builtinModules.map((moduleName) => `node:${moduleName}`)
-])
-
 function packageNameFromSpecifier(specifier) {
   if (specifier.startsWith('@')) {
     const [scope, name] = specifier.split('/')
@@ -64,7 +59,10 @@ function isPackagedExternalSpecifier(specifier) {
     !specifier.startsWith('.') &&
     !specifier.startsWith('/') &&
     specifier !== 'electron' &&
-    !NODE_BUILTINS.has(specifier)
+    // isBuiltin, not a builtinModules-derived set: prefix-only builtins
+    // (node:sqlite, node:test, node:sea) never appear in builtinModules,
+    // so a set built from it misclassifies them as packaged externals.
+    !isBuiltin(specifier)
   )
 }
 
