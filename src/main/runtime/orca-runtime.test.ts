@@ -11667,7 +11667,6 @@ describe('OrcaRuntimeService', () => {
 
   it.each([
     ['shell', async () => 'pwsh.exe'],
-    ['non-agent', async () => 'vim'],
     ['unavailable', async () => null],
     [
       'failure',
@@ -11686,6 +11685,23 @@ describe('OrcaRuntimeService', () => {
       handle,
       isRunningAgent: false,
       status: null
+    })
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+  })
+
+  // Why: a wrapper/fork agent binary is unrecognized but is NOT a shell; the
+  // hook-status gate must treat that confirmed foreground as busy, not idle.
+  it('keeps hook state running when confirmation reports an unrecognized non-shell foreground', async () => {
+    const confirmForegroundProcess = vi.fn(async () => 'my-agent-fork')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zsh',
+      confirmForegroundProcess
+    })
+
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
+      isRunningAgent: true,
+      status: 'working'
     })
     expect(confirmForegroundProcess).toHaveBeenCalledOnce()
   })

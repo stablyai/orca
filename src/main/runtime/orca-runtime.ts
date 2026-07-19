@@ -16641,9 +16641,11 @@ export class OrcaRuntimeService {
       return true
     }
     this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
-    // Why: hook identity is generic; strong provider evidence only needs to
-    // prove that some recognized agent still owns this exact PTY.
-    return recognizeAgentProcess(confirmedProcess) === null
+    // Why: only a confirmed real shell proves the agent left. An unrecognized
+    // NON-shell foreground (wrapper/fork agent binary) must keep fresh hook
+    // state alive instead of counting as idle; an unavailable confirmation
+    // stays fail-closed like the catch path above.
+    return confirmedProcess === null || isShellProcess(confirmedProcess)
   }
 
   private shouldDelayPtyBackedMobileSnapshotForForegroundAgent(
