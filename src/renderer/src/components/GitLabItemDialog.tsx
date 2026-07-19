@@ -1022,7 +1022,7 @@ export default function GitLabItemDialog({
 
         {item ? (
           <>
-            <header className="flex-none border-b border-border/40 px-5 py-4">
+            <header className="flex-none border-b border-border/40 py-4 pl-5 pr-10">
               <div className="flex items-start gap-3">
                 <Icon className="mt-0.5 size-5 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
@@ -1061,7 +1061,7 @@ export default function GitLabItemDialog({
                   aria-label={translate('auto.components.GitLabItemDialog.b3c156dd51', 'Refresh')}
                   disabled={loading}
                   onClick={handleRefresh}
-                  className="size-7"
+                  className="-mt-1.5 size-7"
                 >
                   {loading ? (
                     <LoaderCircle className="size-3.5 animate-spin" />
