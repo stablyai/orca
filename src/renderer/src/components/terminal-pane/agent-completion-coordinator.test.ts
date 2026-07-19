@@ -98,6 +98,40 @@ describe('agent completion coordinator', () => {
     expect(inspectProcess).toHaveBeenCalledTimes(1)
   })
 
+  // Why: consumers keep TTL-gated attribution fresh from these existing
+  // inspections; only recognized agents may be reported.
+  it('notifies onForegroundAgentInspected only for recognized inspections', async () => {
+    let foregroundProcess = 'codex'
+    const inspectProcess = vi.fn(async () => processResult(foregroundProcess))
+    const onForegroundAgentInspected = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion: vi.fn(),
+      isLive: () => true,
+      onForegroundAgentInspected
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    expect(onForegroundAgentInspected).toHaveBeenCalledWith({
+      agent: 'codex',
+      processName: 'codex'
+    })
+
+    onForegroundAgentInspected.mockClear()
+    foregroundProcess = 'vim'
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    expect(onForegroundAgentInspected).not.toHaveBeenCalled()
+    coordinator.dispose()
+  })
+
   // Why: regression guard for the hidden-pane throttle (follow-up to #6288 /
   // PR #6667). A hidden pane with a live agent kept polling the OS process
   // table at full 750ms cadence purely as a backstop, wasting idle CPU on

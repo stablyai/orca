@@ -1,8 +1,12 @@
-import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
+import {
+  freshProcessAgentForLeaf,
+  resolveAgentTypeFromTerminalTitle
+} from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
 import { containsBrailleSpinner } from '../../../shared/agent-title-core'
+import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -18,6 +22,8 @@ type WorktreeStatusHeuristicOptions = {
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
+  now?: number
 }
 
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
@@ -40,7 +46,9 @@ export function getWorktreeStatus(
 
   // Why: tab.title tracks only the most-recently-focused pane (onActivePaneChange in use-terminal-pane-lifecycle.ts); consult per-pane titles so the spinner reflects aggregate tab state.
   const hasStatus = (status: 'permission' | 'working'): boolean =>
-    liveTabs.some((tab) => tabHasStatus(tab, runtimePaneTitlesByTabId, status, options))
+    liveTabs.some((tab) =>
+      tabHasStatus(tab, runtimePaneTitlesByTabId, status, options, ptyIdsByTabId)
+    )
 
   if (options.liveAgentStatus === 'permission' || hasStatus('permission')) {
     return 'permission'
@@ -59,9 +67,21 @@ function tabHasStatus(
   tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   status: 'permission' | 'working',
-  options: WorktreeStatusHeuristicOptions
+  options: WorktreeStatusHeuristicOptions,
+  ptyIdsByTabId: Record<string, string[]>
 ): boolean {
   const agentStatusPaneIds = options.agentStatusPaneIdsByTabId?.[tab.id]
+  const processAgentForLeaf = (leafId: string | null): TuiAgent | null =>
+    leafId === null
+      ? null
+      : freshProcessAgentForLeaf({
+          tabId: tab.id,
+          leafId,
+          layout: options.terminalLayoutsByTabId?.[tab.id],
+          livePtyIds: ptyIdsByTabId[tab.id],
+          paneForegroundAgentByPaneKey: options.paneForegroundAgentByPaneKey,
+          now: options.now ?? Date.now()
+        })
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     const tabLayoutRoot =
@@ -81,7 +101,7 @@ function tabHasStatus(
       }
       if (
         classifyTitleActivity(title) === status &&
-        titleStatusIsAgentAttributable(title, tab.launchAgent)
+        titleStatusIsAgentAttributable(title, processAgentForLeaf(leafId), tab.launchAgent)
       ) {
         return true
       }
@@ -94,13 +114,33 @@ function tabHasStatus(
   }
   return (
     classifyTitleActivity(tab.title) === status &&
-    titleStatusIsAgentAttributable(tab.title, tab.launchAgent)
+    // Why: a tab-level title can only borrow pane process identity when the
+    // layout proves the tab has exactly one pane.
+    titleStatusIsAgentAttributable(
+      tab.title,
+      processAgentForLeaf(resolveSoleLeafId(tab.id, options)),
+      tab.launchAgent
+    )
   )
 }
 
+function resolveSoleLeafId(tabId: string, options: WorktreeStatusHeuristicOptions): string | null {
+  const root =
+    options.terminalLayoutRootsByTabId?.[tabId] ?? options.terminalLayoutsByTabId?.[tabId]?.root
+  return root ? soleLeafIdOfNode(root) : null
+}
+
+function soleLeafIdOfNode(node: TerminalPaneLayoutNode): string | null {
+  return node.type === 'leaf' ? node.leafId : null
+}
+
 // Why: require agent attribution so a bare never-cleared spinner title can't spin the dot "0 agents" forever with no matching sidebar row.
-function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | null): boolean {
-  if (resolveAgentTypeFromTerminalTitle(title) !== null) {
+function titleStatusIsAgentAttributable(
+  title: string,
+  processAgent?: TuiAgent | null,
+  launchAgent?: TuiAgent | null
+): boolean {
+  if (resolveAgentTypeFromTerminalTitle(title, undefined, processAgent) !== null) {
     return true
   }
   // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
@@ -121,6 +161,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
  * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId.
+ * Process evidence only attributes title-derived state; it never invents one.
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
@@ -130,6 +171,8 @@ export function resolveWorktreeStatus(args: {
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+  paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
+  now?: number
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveDone: boolean
@@ -143,7 +186,9 @@ export function resolveWorktreeStatus(args: {
     {
       agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
-      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
+      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId,
+      paneForegroundAgentByPaneKey: args.paneForegroundAgentByPaneKey,
+      now: args.now
     }
   )
   if (args.hasPermission) {

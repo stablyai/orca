@@ -481,6 +481,7 @@ export function createAgentCompletionCoordinator(
     consecutiveInspectionErrors = 0
     const recognized = recognizeAgentProcess(result.foregroundProcess)
     if (recognized) {
+      options.onForegroundAgentInspected?.(recognized)
       handleRecognizedProcess(recognized)
       return true
     }

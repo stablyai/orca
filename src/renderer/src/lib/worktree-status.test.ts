@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS } from '@/store/slices/pane-foreground-agent'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
 import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from './worktree-status'
 
@@ -137,6 +139,97 @@ describe('getWorktreeStatus', () => {
     )
 
     expect(status).toBe('working')
+  })
+
+  // Why: wrapper-launched claude emits activity titles without the "claude"
+  // token; fresh process-table identity supplies the attribution the token
+  // gate would otherwise demand — state still comes from the title.
+  describe('process-identity attribution', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const soleLeafRoot = { type: 'leaf', leafId: LEAF_ID_1 } as const
+    const freshEntry = {
+      agent: 'claude',
+      shellForeground: false,
+      observedAt: 9_500,
+      ptyId: 'pty-claude'
+    } as const
+
+    it('spins on an unattributable working tab title when fresh process identity names claude', () => {
+      const status = getWorktreeStatus(
+        [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+        [],
+        { 'tab-1': ['pty-claude'] },
+        {},
+        {
+          terminalLayoutRootsByTabId: { 'tab-1': soleLeafRoot },
+          paneForegroundAgentByPaneKey: { [paneKey]: freshEntry },
+          now: 10_000
+        }
+      )
+
+      expect(status).toBe('working')
+    })
+
+    it('spins on an unattributable working pane title when fresh process identity names claude', () => {
+      const status = getWorktreeStatus(
+        [{ id: 'tab-1', title: 'bash' }],
+        [],
+        { 'tab-1': ['pty-claude'] },
+        { 'tab-1': { 1: '⠐ Review branch for regressions' } },
+        {
+          terminalLayoutRootsByTabId: { 'tab-1': soleLeafRoot },
+          paneForegroundAgentByPaneKey: { [paneKey]: freshEntry },
+          now: 10_000
+        }
+      )
+
+      expect(status).toBe('working')
+    })
+
+    it('does not spin on stale (past-TTL) process evidence', () => {
+      const now = 10_000 + PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS
+      const status = getWorktreeStatus(
+        [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+        [],
+        { 'tab-1': ['pty-claude'] },
+        {},
+        {
+          terminalLayoutRootsByTabId: { 'tab-1': soleLeafRoot },
+          paneForegroundAgentByPaneKey: {
+            [paneKey]: {
+              ...freshEntry,
+              observedAt: now - PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS - 1
+            }
+          },
+          now
+        }
+      )
+
+      expect(status).toBe('active')
+    })
+
+    it('does not spin when the pane is bound to a different live PTY than the evidence', () => {
+      const status = getWorktreeStatus(
+        [{ id: 'tab-1', title: '⠐ Review branch for regressions' }],
+        [],
+        { 'tab-1': ['pty-respawned'] },
+        {},
+        {
+          terminalLayoutsByTabId: {
+            'tab-1': {
+              root: soleLeafRoot,
+              activeLeafId: LEAF_ID_1,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [LEAF_ID_1]: 'pty-respawned' }
+            }
+          },
+          paneForegroundAgentByPaneKey: { [paneKey]: freshEntry },
+          now: 10_000
+        }
+      )
+
+      expect(status).toBe('active')
+    })
   })
 })
 

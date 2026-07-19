@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
+import { PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS } from '@/store/slices/pane-foreground-agent'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
@@ -255,6 +257,118 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 
+  // Why: wrapper-launched claude (zsh function exec'ing the real binary) emits
+  // Claude activity titles without the literal "claude" token; fresh process
+  // identity must attribute the row instead.
+  it('builds a Claude row for a token-less Claude activity title with fresh claude process identity', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'orca-wrapper' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠐ refactor split-pane status' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-claude'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: {
+          agent: 'claude',
+          shellForeground: false,
+          observedAt: 1_900,
+          ptyId: 'pty-claude'
+        }
+      },
+      now: 2_000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['claude', 'working']])
+    expect(rows[0].paneKey).toBe(paneKey)
+  })
+
+  it('does not attribute Claude from stale (past-TTL) process evidence', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const now = 100_000
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'orca-wrapper' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠐ refactor split-pane status' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-claude'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: {
+          agent: 'claude',
+          shellForeground: false,
+          observedAt: now - PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS - 1,
+          ptyId: 'pty-claude'
+        }
+      },
+      now
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not attribute Claude from evidence whose PTY is no longer live', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'orca-wrapper' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠐ refactor split-pane status' }
+      },
+      // The pane respawned onto a different PTY; the old evidence must not bind.
+      ptyIdsByTabId: { 'tab-1': ['pty-respawned'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'claude', shellForeground: false, observedAt: 1_900, ptyId: 'pty-dead' }
+      },
+      now: 2_000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('keeps the hook row (not a duplicate title-derived row) when both exist for a pane', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID_1)
+    const hookEntry: AgentStatusEntry = {
+      paneKey,
+      state: 'working',
+      prompt: '',
+      updatedAt: 1_900,
+      stateStartedAt: 1_900,
+      stateHistory: [],
+      agentType: 'codex'
+    }
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: 'orca-wrapper' })],
+      entries: [hookEntry],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠐ refactor split-pane status' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-claude'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: {
+          agent: 'claude',
+          shellForeground: false,
+          observedAt: 1_900,
+          ptyId: 'pty-claude'
+        }
+      },
+      now: 2_000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.rowSource])).toEqual([['codex', 'live']])
+  })
+
+  // Why: non-braille Claude activity markers without a Claude token must not
+  // invent a Claude row from launchAgent alone (split-pane residual risk).
   it('does not turn generic Codex-launched task titles into Claude Code rows', () => {
     const launchAgent: TuiAgent = 'codex'
     const rows = buildWorktreeAgentRows({

@@ -35,6 +35,10 @@ export type AgentCompletionCoordinatorOptions = {
     replacement: RecognizedAgentProcess
   ) => boolean
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
+  // Why: each inspection that recognizes a foreground agent is fresh identity
+  // evidence; callers use it to keep TTL-gated attribution alive without
+  // adding scans of their own.
+  onForegroundAgentInspected?: (process: RecognizedAgentProcess) => void
   isLive: () => boolean
   shouldPollProcessCadence?: () => boolean
   // Why: on hosts where one inspection forks a whole-process-table scan (local

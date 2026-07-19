@@ -32,6 +32,7 @@ export type WorktreeSectionActivityState = Pick<
   tabsByWorktree: Record<string, readonly Pick<TerminalTab, 'id' | 'title'>[]>
   browserTabsByWorktree: Record<string, readonly BrowserActivityTab[]>
   terminalLayoutRootsByTabId: Record<string, TerminalPaneLayoutNode | null | undefined>
+  paneForegroundAgentByPaneKey?: AppState['paneForegroundAgentByPaneKey']
 }
 
 export type WorktreeSectionActivitySummary = {
@@ -107,6 +108,7 @@ function getSectionWorktreeStatus(
     ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
     runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
     agentStatusPaneIdsByTabId: agentSummary.agentStatusPaneIdsByTabId,
+    paneForegroundAgentByPaneKey: agentSummary.paneForegroundAgentByPaneKey,
     terminalLayoutRootsByTabId: state.terminalLayoutRootsByTabId,
     hasPermission: agentSummary.hasPermission,
     hasLiveWorking: agentSummary.hasLiveWorking,

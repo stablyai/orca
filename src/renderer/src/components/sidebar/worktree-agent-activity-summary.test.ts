@@ -91,6 +91,41 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(nowSpy).toHaveBeenCalledTimes(1)
   })
 
+  it('narrows process-identity entries to their worktree and skips agent-less entries', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
+    const secondPaneKey = makePaneKey('tab-2', LEAF_ID)
+    const claudeEntry = {
+      agent: 'claude',
+      shellForeground: false,
+      observedAt: 1_900,
+      ptyId: 'pty-claude'
+    } as const
+    const state: AgentActivityInput = {
+      tabsByWorktree: {
+        'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')],
+        'repo::/wt-2': [makeTab('tab-2', 'repo::/wt-2')]
+      },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {},
+      paneForegroundAgentByPaneKey: {
+        [firstPaneKey]: claudeEntry,
+        // Shell-foreground (agent gone) entries carry no attribution value.
+        [secondPaneKey]: { agent: null, shellForeground: true, observedAt: 1_900 }
+      }
+    }
+
+    expect(
+      selectWorktreeAgentActivitySummary(state, 'repo::/wt-1').paneForegroundAgentByPaneKey
+    ).toEqual({ [firstPaneKey]: claudeEntry })
+    expect(
+      selectWorktreeAgentActivitySummary(state, 'repo::/wt-2').paneForegroundAgentByPaneKey
+    ).toEqual({})
+  })
+
   it('reuses the cached summary when same-state agent pings only clone the status map', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)

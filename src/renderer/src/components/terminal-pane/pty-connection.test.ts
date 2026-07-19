@@ -250,6 +250,7 @@ type StoreState = {
   dropAgentStatus: ReturnType<typeof vi.fn>
   retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   setPaneForegroundAgent: ReturnType<typeof vi.fn>
+  refreshPaneForegroundAgentObservation: ReturnType<typeof vi.fn>
   clearPaneForegroundAgent: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
@@ -979,6 +980,9 @@ describe('connectPanePty', () => {
       setPaneForegroundAgent: vi.fn((paneKey: string, entry: PaneForegroundAgentEntry) => {
         mockStoreState.paneForegroundAgentByPaneKey[paneKey] = entry
       }),
+      // Why: observation bumps only touch observedAt; keeping this a no-op keeps
+      // the exact entry assertions below about publish payloads, not freshness.
+      refreshPaneForegroundAgentObservation: vi.fn(),
       clearPaneForegroundAgent: vi.fn((paneKey: string) => {
         delete mockStoreState.paneForegroundAgentByPaneKey[paneKey]
       }),
@@ -7007,6 +7011,7 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
     await vi.advanceTimersByTimeAsync(1200)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: 'droid',
       routingTrusted: true,
       shellForeground: false
@@ -7038,6 +7043,7 @@ describe('connectPanePty', () => {
 
     expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: 'droid',
       routingTrusted: true,
       shellForeground: false
@@ -7078,6 +7084,7 @@ describe('connectPanePty', () => {
 
     expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: 'droid',
       routingTrusted: true,
       shellForeground: false
@@ -7114,6 +7121,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: 'droid',
       routingTrusted: true,
       shellForeground: false
@@ -7148,6 +7156,7 @@ describe('connectPanePty', () => {
 
     // Benign miss: shell never latched as foreground; encoding still safe fallback.
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: null,
       shellForeground: false
     })
@@ -7160,6 +7169,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: 'droid',
       routingTrusted: true,
       shellForeground: false
@@ -7190,6 +7200,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: 'droid',
       routingRevoked: true,
       shellForeground: false
@@ -7199,6 +7210,7 @@ describe('connectPanePty', () => {
     await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: null,
       shellForeground: true
     })
@@ -7339,6 +7351,7 @@ describe('connectPanePty', () => {
       dataCallbackRef.current?.('\x1b]133;C\x07')
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+        ptyId,
         agent: null,
         shellForeground: false
       })
@@ -7427,6 +7440,7 @@ describe('connectPanePty', () => {
     expect(getForegroundProcess).toHaveBeenCalledTimes(readsBeforeFinish + 1)
     expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: 'droid',
       routingTrusted: true,
       shellForeground: false
@@ -7467,6 +7481,7 @@ describe('connectPanePty', () => {
     await vi.advanceTimersByTimeAsync(350)
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: null,
       shellForeground: true
     })
@@ -7590,6 +7605,7 @@ describe('connectPanePty', () => {
 
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
     expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      ptyId,
       agent: null,
       shellForeground: false
     })
@@ -19841,6 +19857,12 @@ describe('connectPanePty', () => {
       paneKey: makePaneKey('tab-1', LEAF_1)
     })
     expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
+    // Why: recognized inspections must also keep the pane's process-identity
+    // observation fresh for TTL-gated sidebar attribution (no new scans).
+    expect(mockStoreState.refreshPaneForegroundAgentObservation).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      'codex'
+    )
   })
 
   it('does not dispatch generic spinner completions when process inspection finds no agent', async () => {
@@ -23460,6 +23482,7 @@ describe('connectPanePty', () => {
 
       expect(foregroundReadCallsFor(ptyId)).toEqual([[ptyId]])
       expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(cacheKey, {
+        ptyId,
         agent: 'codex',
         shellForeground: false
       })
@@ -23544,6 +23567,7 @@ describe('connectPanePty', () => {
 
       await vi.advanceTimersByTimeAsync(1)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: 'droid',
         routingRevoked: true,
         shellForeground: false
@@ -23553,6 +23577,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
       expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: 'droid',
         routingTrusted: true,
         shellForeground: false
@@ -23562,6 +23587,7 @@ describe('connectPanePty', () => {
       await vi.advanceTimersByTimeAsync(700)
       await flushAsyncTicks()
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: 'droid',
         routingTrusted: true,
         shellForeground: false
@@ -23634,6 +23660,7 @@ describe('connectPanePty', () => {
       })
       expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: 'droid',
         shellForeground: false
       })
@@ -23642,6 +23669,7 @@ describe('connectPanePty', () => {
       await advanceVisibleForegroundRead()
 
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: 'droid',
         routingTrusted: true,
         shellForeground: false
@@ -23673,6 +23701,7 @@ describe('connectPanePty', () => {
         vi.mocked(window.api.pty.confirmForegroundProcess).mock.calls.length
       ).toBeGreaterThanOrEqual(3)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: null,
         shellForeground: true
       })
@@ -23761,6 +23790,7 @@ describe('connectPanePty', () => {
 
       expect(foregroundReadCallsFor(ptyId).length).toBeGreaterThanOrEqual(3)
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        ptyId,
         agent: null,
         shellForeground: true
       })
@@ -23889,6 +23919,7 @@ describe('connectPanePty', () => {
       await advanceVisibleForegroundRead()
 
       expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(cacheKey, {
+        ptyId,
         agent: null,
         shellForeground: true
       })
@@ -23934,10 +23965,12 @@ describe('connectPanePty', () => {
 
       expect(foregroundReadCallsFor(ptyId)).toEqual([[ptyId]])
       expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalledWith(cacheKey, {
+        ptyId,
         agent: null,
         shellForeground: true
       })
       expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(cacheKey, {
+        ptyId,
         agent: 'droid',
         routingTrusted: true,
         shellForeground: false
