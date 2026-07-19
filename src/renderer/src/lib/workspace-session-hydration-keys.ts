@@ -1,5 +1,8 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceKey, WorkspaceSessionState } from '../../../shared/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 
 export type WorkspaceSessionHydrationOptions = {
   additionalValidWorkspaceKeys?: readonly WorkspaceKey[]
@@ -69,6 +72,59 @@ export function collectFolderWorkspaceKeysFromSession(
   }
 
   return [...keys]
+}
+
+export function collectWorktreeRecoveryRepoIdsFromSession(
+  session: WorkspaceSessionState,
+  runtimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
+): string[] {
+  const worktreeIds = new Set<string>()
+  const addWorktreeId = (value: unknown): void => {
+    if (typeof value !== 'string' || parseWorkspaceKey(value)?.type === 'folder') {
+      return
+    }
+    const scope = parseWorkspaceKey(value)
+    const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : value
+    if (
+      parseExecutionHostId(runtimeHostIdByWorkspaceSessionKey?.[worktreeId])?.kind === 'runtime'
+    ) {
+      return
+    }
+    worktreeIds.add(worktreeId)
+  }
+
+  const remoteTabIds = new Set(Object.keys(session.remoteSessionIdsByTabId ?? {}))
+  const tabsByWorktree = session.tabsByWorktree ?? {}
+  const shutdownIds = session.activeWorktreeIdsOnShutdown
+  const candidateWorktreeIds = shutdownIds
+    ? new Set(shutdownIds)
+    : new Set(Object.keys(tabsByWorktree))
+  const terminalLayoutsByTabId = session.terminalLayoutsByTabId ?? {}
+
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    if (!candidateWorktreeIds.has(worktreeId)) {
+      continue
+    }
+    const hasPersistedSession = tabs.some((tab) => {
+      if (tab.ptyId || remoteTabIds.has(tab.id)) {
+        return true
+      }
+      const layout = terminalLayoutsByTabId[tab.id]
+      return Object.values(layout?.ptyIdsByLeafId ?? {}).some(Boolean)
+    })
+    if (hasPersistedSession) {
+      addWorktreeId(worktreeId)
+    }
+  }
+
+  const repoIds = new Set<string>()
+  for (const worktreeId of worktreeIds) {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    if (repoId) {
+      repoIds.add(repoId)
+    }
+  }
+  return [...repoIds]
 }
 
 export function addAdditionalValidWorkspaceKeys(

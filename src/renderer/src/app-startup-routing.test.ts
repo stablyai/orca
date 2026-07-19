@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { collectWorktreeRecoveryRepoIdsFromSession } from './lib/workspace-session-hydration-keys'
 
 describe('renderer startup runtime routing', () => {
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
@@ -23,9 +25,11 @@ describe('renderer startup runtime routing', () => {
     const localFoldersIndex = startupBlock.indexOf(
       "actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })"
     )
-    const localWorktreesIndex = startupBlock.indexOf(
-      "actions.fetchAllWorktrees({ hydrationPurge: 'defer' })"
+    const sessionIndex = source.indexOf("timeRendererStartupStep('session-get'")
+    const recoveryWorktreesIndex = source.indexOf(
+      "timeRendererStartupStep('fetch-recovery-worktrees'"
     )
+    const fullWorktreesIndex = source.indexOf('await actions.fetchAllWorktrees()')
     const lineageIndex = startupBlock.indexOf('actions.fetchWorktreeLineage()')
 
     expect(settingsIndex).toBeGreaterThanOrEqual(0)
@@ -35,8 +39,25 @@ describe('renderer startup runtime routing', () => {
     expect(hydrateUiIndex).toBeLessThan(localReposIndex)
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
-    expect(localFoldersIndex).toBeLessThan(localWorktreesIndex)
+    expect(localFoldersIndex).toBeLessThan(sessionIndex)
+    expect(sessionIndex).toBeLessThan(recoveryWorktreesIndex)
+    expect(fullWorktreesIndex).toBeGreaterThan(
+      source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
+    )
     expect(lineageIndex).toBe(-1)
+  })
+
+  it('extracts only worktrees with persisted terminal sessions', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeIdsOnShutdown: ['repo-a::/worktree-a', 'repo-b::/worktree-b'],
+      tabsByWorktree: {
+        'repo-a::/worktree-a': [{ ptyId: 'pty-a' }],
+        'repo-b::/worktree-b': [{ ptyId: null }]
+      }
+    } as never
+
+    expect(collectWorktreeRecoveryRepoIdsFromSession(session)).toEqual(['repo-a'])
   })
 
   it('refreshes remote catalogs after startup hydration succeeds', () => {
