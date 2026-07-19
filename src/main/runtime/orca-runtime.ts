@@ -291,6 +291,8 @@ import type {
   RuntimeGraphStatus,
   RuntimeRepoSearchRefs,
   RuntimeTerminalRead,
+  RuntimeTerminalReadSource,
+  RuntimeTerminalResolvedReadSource,
   RuntimeTerminalRename,
   RuntimeTerminalAgentStatus,
   RuntimeTerminalSend,
@@ -1208,6 +1210,17 @@ type RuntimeVisibleTerminalState = {
   isAlternateScreen: boolean
   sequence: number
   generation: number
+}
+
+type RuntimeTerminalReadOptions = {
+  cursor?: number
+  limit?: number
+  source?: RuntimeTerminalReadSource
+}
+
+type RuntimeTerminalPreviewResult = {
+  preview: string
+  source: RuntimeTerminalResolvedReadSource
 }
 
 type ProviderBufferAcquisition = {
@@ -7796,53 +7809,79 @@ export class OrcaRuntimeService {
   private async withVisibleSnapshotFallback(
     ptyId: string,
     read: RuntimeTerminalRead,
-    opts: { cursor?: number; limit?: number } = {}
+    opts: RuntimeTerminalReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
-    if (typeof opts.cursor === 'number') {
-      return read
+    const requestedSource = opts.source ?? 'auto'
+    if (typeof opts.cursor === 'number' || requestedSource === 'transcript') {
+      return { ...read, source: 'transcript' }
     }
+    const forceVisible = requestedSource === 'visible'
     const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
     if (
+      !forceVisible &&
       !blankFallback &&
       !providerModeUnknown &&
       !knownAlternateScreen &&
       !this.headlessTerminals.has(ptyId)
     ) {
-      return read
+      return { ...read, source: 'transcript' }
     }
     const visibleState = await this.readVisibleTerminalState(ptyId)
-    if (!blankFallback && !knownAlternateScreen && !visibleState?.isAlternateScreen) {
-      return read
+    if (
+      !forceVisible &&
+      !blankFallback &&
+      !knownAlternateScreen &&
+      !visibleState?.isAlternateScreen
+    ) {
+      return { ...read, source: 'transcript' }
     }
     let lines = visibleState?.lines ?? []
     if (lines.length === 0) {
       lines = await this.readRendererVisibleSnapshotLines(ptyId)
     }
     if (lines.length === 0) {
-      return read
+      return forceVisible
+        ? buildVisibleSnapshotReadFallback(read, [], opts.limit)
+        : { ...read, source: 'transcript' }
     }
     return buildVisibleSnapshotReadFallback(read, lines, opts.limit)
   }
 
-  private async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
+  private async terminalSnapshotPreview(
+    ptyId: string,
+    preview: string,
+    requestedSource: RuntimeTerminalReadSource = 'auto'
+  ): Promise<RuntimeTerminalPreviewResult> {
+    if (requestedSource === 'transcript') {
+      return { preview, source: 'transcript' }
+    }
+    const forceVisible = requestedSource === 'visible'
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
-    if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
-      return preview
+    if (
+      !forceVisible &&
+      !providerModeUnknown &&
+      !knownAlternateScreen &&
+      !this.headlessTerminals.has(ptyId)
+    ) {
+      return { preview, source: 'transcript' }
     }
     const visibleState = await this.readVisibleTerminalState(ptyId)
-    if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
-      return preview
+    if (!forceVisible && !knownAlternateScreen && !visibleState?.isAlternateScreen) {
+      return { preview, source: 'transcript' }
     }
     let lines = visibleState?.lines ?? []
     if (lines.length === 0) {
       lines = await this.readRendererVisibleSnapshotLines(ptyId)
     }
-    return lines.length > 0 ? buildPreview(lines, '') : preview
+    if (lines.length > 0 || forceVisible) {
+      return { preview: buildPreview(lines, ''), source: 'visible' }
+    }
+    return { preview, source: 'transcript' }
   }
 
   private async readVisibleTerminalState(
@@ -11255,16 +11294,24 @@ export class OrcaRuntimeService {
     }
   }
 
-  async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
+  async showTerminal(
+    handle: string,
+    opts: { source?: RuntimeTerminalReadSource } = {}
+  ): Promise<RuntimeTerminalShow> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
       const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
-      const preview = await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview)
+      const preview = await this.terminalSnapshotPreview(
+        pty.pty.ptyId,
+        summary.preview,
+        opts.source
+      )
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       return {
         ...summary,
-        preview,
+        preview: preview.preview,
+        previewSource: preview.source,
         tabId: pty.pty.tabId ?? pty.record.tabId,
         leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
         paneRuntimeId: -1,
@@ -11278,15 +11325,19 @@ export class OrcaRuntimeService {
     const { leaf } = this.getLiveLeafForHandle(handle)
     const summary = this.buildTerminalSummary(leaf, worktreesById)
     const preview = leaf.ptyId
-      ? await this.visibleSnapshotPreview(leaf.ptyId, summary.preview)
-      : summary.preview
+      ? await this.terminalSnapshotPreview(leaf.ptyId, summary.preview, opts.source)
+      : {
+          preview: opts.source === 'visible' ? '' : summary.preview,
+          source: opts.source === 'visible' ? ('visible' as const) : ('transcript' as const)
+        }
     this.assertStableReadyGraph(graphEpoch)
     if (leaf.ptyId) {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
     }
     return {
       ...summary,
-      preview,
+      preview: preview.preview,
+      previewSource: preview.source,
       paneRuntimeId: leaf.paneRuntimeId,
       ptyId: leaf.ptyId,
       rendererGraphEpoch: this.rendererGraphEpoch
@@ -11295,8 +11346,11 @@ export class OrcaRuntimeService {
 
   async readTerminal(
     handle: string,
-    opts: { cursor?: number; limit?: number } = {}
+    opts: RuntimeTerminalReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
+    if (opts.source === 'visible' && typeof opts.cursor === 'number') {
+      throw new Error('terminal_visible_source_not_pageable')
+    }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
@@ -11318,7 +11372,9 @@ export class OrcaRuntimeService {
       limit: opts.limit
     })
     if (!leaf.ptyId) {
-      return read
+      return opts.source === 'visible'
+        ? buildVisibleSnapshotReadFallback(read, [], opts.limit)
+        : { ...read, source: 'transcript' }
     }
     const visibleRead = await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
@@ -27743,6 +27799,7 @@ function buildVisibleSnapshotReadFallback(
   )
   return {
     ...read,
+    source: 'visible',
     tail: charBoundedTail.tail,
     limited:
       read.limited || lineBoundedTail.length < visibleLines.length || charBoundedTail.limited,

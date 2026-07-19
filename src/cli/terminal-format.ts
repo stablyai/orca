@@ -97,6 +97,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `ptyId: ${terminal.ptyId ?? 'none'}`,
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
+    ...(terminal.previewSource ? [`preview source: ${terminal.previewSource}`] : []),
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
 }
@@ -111,6 +112,7 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
+    ...(terminal.source ? [`source: ${terminal.source}`] : []),
     ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
     ...oldestCursor,
     ...latestCursor,

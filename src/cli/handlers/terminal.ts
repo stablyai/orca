@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
+  RuntimeTerminalReadSource,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
   RuntimeTerminalShow,
@@ -43,6 +44,17 @@ import {
 // long waits instead of failing at the generic 15s transport cap.
 const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
 
+function getTerminalReadSource(flags: Map<string, string | boolean>): RuntimeTerminalReadSource {
+  const source = getOptionalStringFlag(flags, 'source') ?? 'auto'
+  if (source === 'auto' || source === 'visible' || source === 'transcript') {
+    return source
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    '--source must be one of: auto, visible, transcript'
+  )
+}
+
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
     terminal: await getTerminalHandle(flags, cwd, client)
@@ -60,7 +72,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ terminal: RuntimeTerminalShow }>('terminal.show', {
-      terminal: await getTerminalHandle(flags, cwd, client)
+      terminal: await getTerminalHandle(flags, cwd, client),
+      source: getTerminalReadSource(flags)
     })
     printResult(result, json, formatTerminalShow)
   },
@@ -73,10 +86,18 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     if (cursorFlag !== undefined && cursor === undefined) {
       throw new RuntimeClientError('invalid_argument', '--cursor must be a non-negative integer')
     }
+    const source = getTerminalReadSource(flags)
+    if (cursor !== undefined && source === 'visible') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--cursor cannot be combined with --source visible'
+      )
+    }
     const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
       terminal: await getTerminalHandle(flags, cwd, client),
       ...(cursor !== undefined ? { cursor } : {}),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+      source
     })
     printResult(result, json, formatTerminalRead)
   },

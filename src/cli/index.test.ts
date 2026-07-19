@@ -3037,7 +3037,8 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledWith('terminal.read', {
       terminal: 'term_worker',
-      limit: 120
+      limit: 120,
+      source: 'auto'
     })
     const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
     expect(printed.result.terminal.tail).toEqual([

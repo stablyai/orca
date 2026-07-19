@@ -2,6 +2,7 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalFocus,
   RuntimeTerminalRead,
+  RuntimeTerminalReadSource,
   RuntimeTerminalSend,
   RuntimeTerminalShow,
   RuntimeTerminalSplit
@@ -40,7 +41,10 @@ export type AgentTeamsTerminalApi = {
       activate?: boolean
     }
   ): Promise<RuntimeTerminalSplit>
-  readTerminal(handle: string, opts?: { limit?: number }): Promise<RuntimeTerminalRead>
+  readTerminal(
+    handle: string,
+    opts?: { limit?: number; source?: RuntimeTerminalReadSource }
+  ): Promise<RuntimeTerminalRead>
   sendTerminal(
     handle: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean }

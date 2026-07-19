@@ -173,8 +173,10 @@ Common commands:
 
 ```text
 ORCA terminal list --worktree id:<repoId>::<worktreePath> --json
-ORCA terminal show --terminal <handle> --json
-ORCA terminal read --terminal <handle> --json
+ORCA terminal show --terminal <handle> --source auto --json
+ORCA terminal read --terminal <handle> --source auto --json
+ORCA terminal read --terminal <handle> --source visible --json
+ORCA terminal read --terminal <handle> --source transcript --json
 ORCA terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
 ORCA terminal read --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --json
@@ -196,6 +198,7 @@ Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
+- `--source auto` returns the active rendered TUI screen and otherwise the retained PTY transcript. Use `visible` for the rendered screen or `transcript` for retained pageable output; `visible` cannot be combined with `--cursor`.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
 - Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).

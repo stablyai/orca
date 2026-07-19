@@ -234,7 +234,18 @@ export class ClaudeAgentTeamsTmuxDispatcher {
   ): Promise<string> {
     const parsed = parseTmuxArgs(args, ['-E', '-S', '-t'], ['-J', '-N', '-p'])
     const pane = this.resolvePane(team, tmuxValue(parsed, '-t') ?? envPane)
-    const read = await api.readTerminal(pane.handle, { limit: 1000 })
+    const start = tmuxValue(parsed, '-S')
+    const parsedStart = start === undefined ? undefined : Number.parseInt(start, 10)
+    const limit =
+      parsedStart !== undefined && Number.isFinite(parsedStart) && parsedStart < 0
+        ? Math.abs(parsedStart)
+        : 1000
+    // Why: tmux captures the pane screen by default; -S explicitly asks for
+    // retained history, where Orca's auto source preserves active TUI frames.
+    const read = await api.readTerminal(pane.handle, {
+      limit,
+      source: start === undefined ? 'visible' : 'auto'
+    })
     const text = read.tail.join('\n')
     return parsed.flags.has('-p') ? `${text}\n` : ''
   }

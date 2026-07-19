@@ -450,6 +450,7 @@ export type RuntimeTerminalListResult = {
 }
 
 export type RuntimeTerminalShow = RuntimeTerminalSummary & {
+  previewSource?: RuntimeTerminalResolvedReadSource
   paneRuntimeId: number
   ptyId: string | null
   rendererGraphEpoch: number
@@ -457,9 +458,13 @@ export type RuntimeTerminalShow = RuntimeTerminalSummary & {
 
 export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 
+export type RuntimeTerminalReadSource = 'auto' | 'visible' | 'transcript'
+export type RuntimeTerminalResolvedReadSource = Exclude<RuntimeTerminalReadSource, 'auto'>
+
 export type RuntimeTerminalRead = {
   handle: string
   status: RuntimeTerminalState
+  source?: RuntimeTerminalResolvedReadSource
   tail: string[]
   truncated: boolean
   limited?: boolean

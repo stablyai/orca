@@ -12935,6 +12935,68 @@ describe('OrcaRuntimeService', () => {
     expect(serializeProviderBuffer).not.toHaveBeenCalled()
   })
 
+  it('lets callers choose visible TUI state or retained transcript explicitly', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData(
+      'pty-1',
+      'shell history\r\n\x1b[?1049h\x1b[2J\x1b[HClaude Code\r\nWorking on fix\r\n',
+      100
+    )
+
+    const visible = await runtime.readTerminal(terminal.handle, { source: 'visible' })
+    const transcript = await runtime.readTerminal(terminal.handle, { source: 'transcript' })
+    const visibleShow = await runtime.showTerminal(terminal.handle, { source: 'visible' })
+    const transcriptShow = await runtime.showTerminal(terminal.handle, { source: 'transcript' })
+
+    expect(visible).toMatchObject({
+      source: 'visible',
+      tail: ['Claude Code', 'Working on fix']
+    })
+    expect(transcript.source).toBe('transcript')
+    expect(transcript.tail).toContain('shell history')
+    expect(visibleShow).toMatchObject({
+      previewSource: 'visible',
+      preview: 'Claude Code\nWorking on fix'
+    })
+    expect(transcriptShow.previewSource).toBe('transcript')
+    expect(transcriptShow.preview).toContain('shell history')
+  })
+
+  it('forces the current rendered screen for a normal shell when requested', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData(
+      'pty-1',
+      `${Array.from({ length: 40 }, (_, index) => `line-${index}`).join('\r\n')}\r\n`,
+      100
+    )
+
+    const visible = await runtime.readTerminal(terminal.handle, { source: 'visible' })
+    const transcript = await runtime.readTerminal(terminal.handle, { source: 'transcript' })
+
+    expect(visible.source).toBe('visible')
+    expect(visible.tail).not.toContain('line-0')
+    expect(visible.tail).toContain('line-39')
+    expect(transcript.source).toBe('transcript')
+    expect(transcript.tail).toContain('line-0')
+  })
+
+  it('rejects cursor pagination for a visible screen source', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.readTerminal(terminal.handle, { cursor: 0, source: 'visible' })
+    ).rejects.toThrow('terminal_visible_source_not_pageable')
+  })
+
   it('classifies older provider alternate-screen snapshots from ANSI', async () => {
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: '\x1b[?1049h\x1b[2J\x1b[HRemote Vim\r\nediting README.md\r\n',
@@ -13165,6 +13227,65 @@ describe('OrcaRuntimeService', () => {
     expect(read.tail).toEqual(['shell history'])
     expect(shown.preview).toBe('shell history')
     expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to a mounted renderer for an explicit visible provider read', async () => {
+    const serializeProviderBuffer = vi.fn().mockRejectedValue(new Error('provider unavailable'))
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'Remote shell screen\r\ncurrent prompt\r\n',
+      cols: 80,
+      rows: 24
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => true
+    })
+    syncSinglePty(runtime)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const read = await runtime.readTerminal(terminal.handle, { source: 'visible' })
+
+    expect(read).toMatchObject({
+      source: 'visible',
+      tail: ['Remote shell screen', 'current prompt']
+    })
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    expect(serializeBuffer).toHaveBeenCalledOnce()
+  })
+
+  it('keeps explicit transcript reads provider-free without requiring a cursor', async () => {
+    const serializeProviderBuffer = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', 'retained transcript\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const read = await runtime.readTerminal(terminal.handle, { source: 'transcript' })
+
+    expect(read).toMatchObject({ source: 'transcript', tail: ['retained transcript'] })
+    expect(serializeProviderBuffer).not.toHaveBeenCalled()
   })
 
   it('falls back once to a mounted renderer when a known alternate provider fails', async () => {
@@ -13418,7 +13539,7 @@ describe('OrcaRuntimeService', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRpcRequest('terminal.read', { terminal: terminal.handle })
+      makeRpcRequest('terminal.read', { terminal: terminal.handle, source: 'visible' })
     )
 
     expect(response.ok).toBe(true)
@@ -13429,8 +13550,29 @@ describe('OrcaRuntimeService', () => {
       terminal: {
         handle: terminal.handle,
         status: 'running',
+        source: 'visible',
         tail: ['Claude Code', 'Checking files', 'Waiting for input']
       }
+    })
+  })
+
+  it('rejects visible terminal RPC reads that also request a cursor', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRpcRequest('terminal.read', {
+        terminal: terminal.handle,
+        cursor: 0,
+        source: 'visible'
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
     })
   })
 

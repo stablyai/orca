@@ -99,6 +99,27 @@ describe('ClaudeAgentTeamsService', () => {
     ])
   })
 
+  it('maps capture-pane screen and history requests to explicit terminal sources', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+
+    await expect(request(['capture-pane', '-p', '-t', leaderPane])).resolves.toMatchObject({
+      stdout: 'line one\nline two\n',
+      exitCode: 0
+    })
+    expect(api.readTerminal).toHaveBeenLastCalledWith('leader-handle', {
+      limit: 1000,
+      source: 'visible'
+    })
+
+    await request(['capture-pane', '-p', '-S', '-25', '-t', leaderPane])
+    expect(api.readTerminal).toHaveBeenLastCalledWith('leader-handle', {
+      limit: 25,
+      source: 'auto'
+    })
+  })
+
   it('puts the first teammate on the right, then stacks repeated main-vertical teammates downward', async () => {
     const { service, teamId, token, leaderPane, api, splitCalls } = createServiceWithLeader()
     const request = (argv: string[]) =>

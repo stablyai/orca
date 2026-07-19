@@ -822,6 +822,8 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalReadSource = z.enum(['auto', 'visible', 'transcript']).optional()
+
 const TerminalListParams = z.object({
   worktree: OptionalString,
   limit: OptionalFiniteNumber,
@@ -857,7 +859,15 @@ const TerminalRead = TerminalHandle.extend({
         })
     )
     .optional(),
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  source: TerminalReadSource
+}).refine((params) => !(params.source === 'visible' && params.cursor !== undefined), {
+  message: 'Cursor cannot be combined with visible terminal source',
+  path: ['source']
+})
+
+const TerminalShow = TerminalHandle.extend({
+  source: TerminalReadSource
 })
 
 // Why: the legacy handler allowed `title: string | null` and rejected every
@@ -1119,9 +1129,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.show',
-    params: TerminalHandle,
+    params: TerminalShow,
     handler: async (params, { runtime }) => ({
-      terminal: await runtime.showTerminal(params.terminal)
+      terminal: await runtime.showTerminal(params.terminal, { source: params.source })
     })
   }),
   defineMethod({
@@ -1130,7 +1140,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.readTerminal(params.terminal, {
         cursor: params.cursor,
-        limit: params.limit
+        limit: params.limit,
+        source: params.source
       })
     })
   }),
