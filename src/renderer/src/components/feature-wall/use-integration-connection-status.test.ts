@@ -395,6 +395,40 @@ describe('deriveCliProviderCardState', () => {
       })
     ).toBe('unavailable')
   })
+
+  it('does not turn a failed auth probe into login instructions', () => {
+    expect(
+      deriveCliProviderCardState({
+        cliStatus: {
+          installed: true,
+          authenticated: false,
+          authState: 'unreachable'
+        },
+        preflightStatusAvailable: true,
+        preflightStatusChecked: true,
+        preflightStatusCurrent: true,
+        preflightStatusError: null,
+        preflightStatusLoading: false
+      })
+    ).toBe('connection-error')
+  })
+
+  it('keeps an unexpected CLI error separate from a connection failure', () => {
+    expect(
+      deriveCliProviderCardState({
+        cliStatus: {
+          installed: true,
+          authenticated: false,
+          authState: 'error'
+        },
+        preflightStatusAvailable: true,
+        preflightStatusChecked: true,
+        preflightStatusCurrent: true,
+        preflightStatusError: null,
+        preflightStatusLoading: false
+      })
+    ).toBe('check-error')
+  })
 })
 
 describe('deriveIntegrationFlowState', () => {

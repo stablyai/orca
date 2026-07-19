@@ -26,15 +26,22 @@ import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
 } from './tui-agent-detection-commands'
+import type { CliAuthStatus } from '../../shared/cli-auth-status'
+import {
+  probeGhAuthentication,
+  probeGlabAuthentication,
+  type CliAuthCommandRunner,
+  type CliAuthProbeResult
+} from './preflight-cli-auth'
 
 export type PreflightStatus = {
   git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
+  gh: CliAuthStatus
   // Why: optional so existing renderer call sites that only render git/gh
   // status keep typechecking. Consumers that surface GitLab-specific
   // affordances (the GitLab tab in the source picker, MR list, etc.)
   // gate on `glab?.authenticated`.
-  glab?: { installed: boolean; authenticated: boolean }
+  glab?: CliAuthStatus
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
     configured: boolean
@@ -58,10 +65,12 @@ export type { RemoteWindowsTerminalCapabilities }
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
+let cacheGeneration = 0
 
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  cacheGeneration += 1
 }
 
 function uniqueAgentIds(ids: Iterable<string>): string[] {
@@ -189,49 +198,37 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   return uniqueAgentIds(result.agents)
 }
 
-async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote('gh')} auth status`)
-      : execLocalPreflightCommand('gh', ['auth', 'status']))
-    // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
-    // authentication issues for the checked hosts/accounts.
-    return true
-  } catch (error) {
-    // Why: some environments may surface partial command output on the thrown
-    // error object. Keep a compatibility fallback so we avoid a false auth
-    // warning if success markers are present despite a non-zero result.
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in') || output.includes('Active account: true')
+/**
+ * Build an auth command runner for either the local host or selected WSL distro.
+ *
+ * @param command CLI executable name.
+ * @param wslTarget Optional WSL runtime selected by preflight context.
+ * @returns Runner that preserves the CLI argument boundary on both runtimes.
+ */
+function createAuthCommandRunner(
+  command: 'gh' | 'glab',
+  wslTarget?: WslPreflightTarget
+): CliAuthCommandRunner {
+  if (!wslTarget) {
+    return (args) => execLocalPreflightCommand(command, args)
   }
-}
-
-// Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
-// status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote('glab')} auth status`)
-      : execLocalPreflightCommand('glab', ['auth', 'status']))
-    return true
-  } catch (error) {
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in')
-  }
+  return (args) =>
+    execCommandInWsl(
+      wslTarget,
+      [shellQuote(command), ...args.map((argument) => shellQuote(argument))].join(' ')
+    )
 }
 
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
-  const cacheable = !getPreflightWslTarget(context)
+  const wslTarget = getPreflightWslTarget(context)
+  const cacheable = !wslTarget
   if (cacheable && cached && !force) {
     return cached
   }
+  const requestGeneration = cacheable ? ++cacheGeneration : 0
 
   if (force) {
     // Why: the GitLab known-hosts cache (gl-utils) is populated lazily on the
@@ -243,15 +240,28 @@ export async function runPreflightCheck(
     _resetKnownHostsCache()
   }
 
+  if (force && !wslTarget && process.platform !== 'win32') {
+    // Why: a manual re-check must observe proxy and PATH edits made in shell rc
+    // files since startup. Refresh once here so parallel CLI probes share it.
+    const shellHydration = await hydrateShellPath({ force: true })
+    if (shellHydration.segments.length > 0) {
+      mergePathSegments(shellHydration.segments)
+    }
+  }
+
   const [gitProbe, ghProbe, glabProbe] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
     detectCommandRuntime('glab', context)
   ])
 
-  const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghProbe.installed ? isGhAuthenticated(ghProbe.wslTarget) : Promise.resolve(false),
-    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslTarget) : Promise.resolve(false),
+  const [ghAuth, glabAuth, bitbucket, azureDevOps, gitea] = await Promise.all([
+    ghProbe.installed
+      ? probeGhAuthentication(createAuthCommandRunner('gh', ghProbe.wslTarget))
+      : Promise.resolve<CliAuthProbeResult | null>(null),
+    glabProbe.installed
+      ? probeGlabAuthentication(createAuthCommandRunner('glab', glabProbe.wslTarget))
+      : Promise.resolve<CliAuthProbeResult | null>(null),
     getBitbucketAuthStatus(),
     getAzureDevOpsAuthStatus(),
     getGiteaAuthStatus()
@@ -259,14 +269,22 @@ export async function runPreflightCheck(
 
   const result = {
     git: { installed: gitProbe.installed },
-    gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
-    glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
+    gh: {
+      installed: ghProbe.installed,
+      authenticated: ghAuth?.authenticated ?? false,
+      ...(ghAuth ? { authState: ghAuth.authState } : {})
+    },
+    glab: {
+      installed: glabProbe.installed,
+      authenticated: glabAuth?.authenticated ?? false,
+      ...(glabAuth ? { authState: glabAuth.authState } : {})
+    },
     bitbucket,
     azureDevOps,
     gitea
   }
 
-  if (cacheable) {
+  if (cacheable && requestGeneration === cacheGeneration) {
     cached = result
   }
 

@@ -22,6 +22,7 @@ import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-s
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { setLocalCliProxySettings } from '../network/local-cli-environment'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -165,6 +166,7 @@ export function registerSettingsHandlers(
       rebuildAppMenu()
     }
     if ('httpProxyUrl' in sanitizedArgs || 'httpProxyBypassRules' in sanitizedArgs) {
+      setLocalCliProxySettings(result)
       try {
         await applyElectronProxySettings(result)
       } catch {

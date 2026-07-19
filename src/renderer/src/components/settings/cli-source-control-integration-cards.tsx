@@ -72,7 +72,17 @@ export function GitHubIntegrationCard(): React.JSX.Element {
             ? 'Unavailable'
             : status === 'not-installed'
               ? 'Not installed'
-              : 'Not authenticated'
+              : status === 'connection-error'
+                ? translate(
+                    'auto.components.settings.cli.source.control.integration.cards.connection_error',
+                    'Connection error'
+                  )
+                : status === 'check-error'
+                  ? translate(
+                      'auto.components.settings.cli.source.control.integration.cards.cli_error',
+                      'CLI error'
+                    )
+                  : 'Not authenticated'
       }
     >
       <ProviderAccountScopeDetails>
@@ -119,6 +129,36 @@ export function GitHubIntegrationCard(): React.JSX.Element {
                   )}
                 </Button>
               </div>
+            </>
+          ) : status === 'check-error' ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.github_auth_check_error',
+                  'GitHub CLI returned an unexpected error. Run "gh auth status" in a terminal, then re-check.'
+                )}
+              </p>
+              <Button variant="ghost" size="sm" onClick={refresh}>
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
+                  'Re-check'
+                )}
+              </Button>
+            </>
+          ) : status === 'connection-error' ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.github_auth_check_failed',
+                  'Orca could not verify GitHub CLI authentication. Check your network or proxy settings, then re-check.'
+                )}
+              </p>
+              <Button variant="ghost" size="sm" onClick={refresh}>
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
+                  'Re-check'
+                )}
+              </Button>
             </>
           ) : (
             <>
@@ -201,7 +241,17 @@ export function GitLabIntegrationCard(): React.JSX.Element {
             ? 'Unavailable'
             : status === 'not-installed'
               ? 'Not installed'
-              : 'Not authenticated'
+              : status === 'connection-error'
+                ? translate(
+                    'auto.components.settings.cli.source.control.integration.cards.connection_error',
+                    'Connection error'
+                  )
+                : status === 'check-error'
+                  ? translate(
+                      'auto.components.settings.cli.source.control.integration.cards.cli_error',
+                      'CLI error'
+                    )
+                  : 'Not authenticated'
       }
     >
       <ProviderAccountScopeDetails>
@@ -250,6 +300,36 @@ export function GitLabIntegrationCard(): React.JSX.Element {
                   )}
                 </Button>
               </div>
+            </>
+          ) : status === 'check-error' ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.gitlab_auth_check_error',
+                  'GitLab CLI returned an unexpected error. Run "glab auth status" in a terminal, then re-check.'
+                )}
+              </p>
+              <Button variant="ghost" size="sm" onClick={refresh}>
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
+                  'Re-check'
+                )}
+              </Button>
+            </>
+          ) : status === 'connection-error' ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.gitlab_auth_check_failed',
+                  'Orca could not verify GitLab CLI authentication. Check your network or proxy settings, then re-check.'
+                )}
+              </p>
+              <Button variant="ghost" size="sm" onClick={refresh}>
+                {translate(
+                  'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
+                  'Re-check'
+                )}
+              </Button>
             </>
           ) : (
             <>

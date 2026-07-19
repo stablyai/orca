@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { delimiter } from 'node:path'
 import type { ShellHydrationFailureReason } from '../../shared/types'
+import { NETWORK_PROXY_ENV_KEYS } from '../../shared/network-proxy'
 
 // Why: GUI-launched Electron on macOS/Linux inherits a minimal PATH from launchd
 // that does not include dirs appended by the user's shell rc files (~/.zshrc,
@@ -15,6 +16,7 @@ import type { ShellHydrationFailureReason } from '../../shared/types'
 // we implement it inline to avoid adding a dependency.
 
 const DELIMITER = '__ORCA_SHELL_PATH__'
+const PROXY_DELIMITER_PREFIX = '__ORCA_SHELL_PROXY_'
 const SPAWN_TIMEOUT_MS = 5000
 
 // ANSI escape sequences can leak into the captured output when the user's rc
@@ -26,20 +28,37 @@ const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g // eslint-disable-line no-control-rege
 // with the right reason. The shared alias keeps the enum in lockstep with the
 // telemetry schema (compile-time guard in telemetry-events.ts).
 export type HydrationResult =
-  | { ok: true; segments: string[]; failureReason: 'none' }
+  | {
+      ok: true
+      segments: string[]
+      proxyEnv: Record<string, string>
+      failureReason: 'none'
+    }
   | {
       ok: false
       segments: []
+      proxyEnv: Record<string, string>
       failureReason: Exclude<ShellHydrationFailureReason, 'none'>
     }
 
 let cached: Promise<HydrationResult> | null = null
+let inFlight: Promise<HydrationResult> | null = null
+let inFlightForced = false
+let queuedForced: Promise<HydrationResult> | null = null
 
 /** @internal - tests need a clean hydration cache between cases. */
 export function _resetHydrateShellPathCache(): void {
   cached = null
+  inFlight = null
+  inFlightForced = false
+  queuedForced = null
 }
 
+/**
+ * Select the user's login shell used for environment hydration.
+ *
+ * @returns Configured shell, a platform default, or null on Windows.
+ */
 function pickShell(): string | null {
   if (process.platform === 'win32') {
     return null
@@ -51,6 +70,12 @@ function pickShell(): string | null {
   return process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
 }
 
+/**
+ * Parse the delimited PATH value emitted by the login shell.
+ *
+ * @param stdout Captured shell output, including possible startup banners.
+ * @returns De-duplicated PATH segments in shell resolution order.
+ */
 function parseCapturedPath(stdout: string): string[] {
   const cleaned = stdout.replace(ANSI_RE, '')
   const first = cleaned.indexOf(DELIMITER)
@@ -77,13 +102,69 @@ function parseCapturedPath(stdout: string): string[] {
   ]
 }
 
+/**
+ * Return the marker that brackets one captured shell proxy variable.
+ *
+ * @param key Standard proxy environment variable name.
+ * @returns A delimiter unique to that variable.
+ */
+function proxyDelimiter(key: string): string {
+  return `${PROXY_DELIMITER_PREFIX}${key}__`
+}
+
+/**
+ * Parse only the allowlisted proxy variables from shell output.
+ *
+ * @param stdout Captured login-shell output, including possible startup banners.
+ * @returns Proxy environment values discovered in the shell.
+ */
+function parseCapturedProxyEnvironment(stdout: string): Record<string, string> {
+  const cleaned = stdout.replace(ANSI_RE, '')
+  const result: Record<string, string> = {}
+  for (const key of NETWORK_PROXY_ENV_KEYS) {
+    const marker = proxyDelimiter(key)
+    const first = cleaned.indexOf(marker)
+    const second = first < 0 ? -1 : cleaned.indexOf(marker, first + marker.length)
+    if (first < 0 || second < 0) {
+      continue
+    }
+    const value = cleaned.slice(first + marker.length, second).trim()
+    if (value) {
+      result[key] = value
+    }
+  }
+  return result
+}
+
+/**
+ * Build a cross-shell command that captures PATH and proxy allowlist values.
+ *
+ * @returns Shell command suitable for a login/interactive shell.
+ */
+function buildShellCaptureCommand(): string {
+  const pathCapture = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
+  const proxyCapture = NETWORK_PROXY_ENV_KEYS.map((key) => {
+    const marker = proxyDelimiter(key)
+    // Why: printenv avoids shell-specific indirect expansion; missing variables
+    // simply contribute an empty delimited value in zsh, bash, and fish.
+    return `printf '%s' '${marker}'; printenv '${key}'; printf '%s' '${marker}'`
+  }).join('; ')
+  return `${pathCapture}; ${proxyCapture}`
+}
+
+/**
+ * Spawn one login shell and capture its PATH and proxy environment.
+ *
+ * @param shell Login shell executable selected for hydration.
+ * @returns Hydration result classified by success or failure reason.
+ */
 function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
   return new Promise((resolve) => {
     // Why: printing $PATH between delimiters is resilient to rc-file banners,
     // MOTDs, and `echo` invocations that shells like fish print unprompted.
     // `-ilc` runs the shell as a login+interactive so both .profile/.zprofile
     // and .bashrc/.zshrc are sourced — matches what `which` in Terminal sees.
-    const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
+    const command = buildShellCaptureCommand()
     let finished = false
     let stdout = ''
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -125,7 +206,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       } catch {
         // ignore
       }
-      finish({ segments: [], ok: false, failureReason: 'timeout' })
+      finish({ segments: [], proxyEnv: {}, ok: false, failureReason: 'timeout' })
     }, SPAWN_TIMEOUT_MS)
 
     const onStdoutData = (chunk: Buffer): void => {
@@ -133,16 +214,17 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     }
 
     const onError = (): void => {
-      finish({ segments: [], ok: false, failureReason: 'spawn_error' })
+      finish({ segments: [], proxyEnv: {}, ok: false, failureReason: 'spawn_error' })
     }
 
     const onClose = (): void => {
       const segments = parseCapturedPath(stdout)
+      const proxyEnv = parseCapturedProxyEnvironment(stdout)
       if (segments.length === 0) {
-        finish({ segments: [], ok: false, failureReason: 'empty_path' })
+        finish({ segments: [], proxyEnv, ok: false, failureReason: 'empty_path' })
         return
       }
-      finish({ segments, ok: true, failureReason: 'none' })
+      finish({ segments, proxyEnv, ok: true, failureReason: 'none' })
     }
 
     child.stdout.on('data', onStdoutData)
@@ -160,24 +242,68 @@ type HydrateOptions = {
 }
 
 /**
+ * Start one shell hydration and expose it as the shared in-flight result.
+ *
+ * @param options Shell selection and test overrides for this hydration.
+ * @returns The newly started hydration promise.
+ */
+function startShellHydration(options: HydrateOptions): Promise<HydrationResult> {
+  const shell = options.shellOverride !== undefined ? options.shellOverride : pickShell()
+  if (!shell) {
+    // Windows uses cmd/PowerShell rather than a POSIX login shell — the
+    // `patchPackagedProcessPath` static list is sufficient there.
+    cached = Promise.resolve({ segments: [], proxyEnv: {}, ok: false, failureReason: 'no_shell' })
+    return cached
+  }
+
+  const started = (options.spawner ?? spawnShellAndReadPath)(shell)
+  inFlight = started
+  inFlightForced = options.force === true
+  cached = started
+  const clearInFlight = (): void => {
+    if (inFlight === started) {
+      inFlight = null
+      inFlightForced = false
+    }
+  }
+  void started.then(clearInFlight, clearInFlight)
+  return started
+}
+
+/**
  * Spawn the user's login shell once and return the PATH it would export.
  * Caches the promise for the lifetime of the process — call
  * `_resetHydrateShellPathCache()` in tests or `hydrateShellPath({ force: true })`
  * when the user asks to re-probe (e.g. after installing a new CLI).
  */
 export function hydrateShellPath(options: HydrateOptions = {}): Promise<HydrationResult> {
-  if (cached && !options.force) {
-    return cached
+  if (!options.force) {
+    return cached ?? startShellHydration(options)
   }
-  const shell = options.shellOverride !== undefined ? options.shellOverride : pickShell()
-  if (!shell) {
-    // Windows uses cmd/PowerShell rather than a POSIX login shell — the
-    // `patchPackagedProcessPath` static list is sufficient there.
-    cached = Promise.resolve({ segments: [], ok: false, failureReason: 'no_shell' })
-    return cached
+
+  if (!inFlight) {
+    return startShellHydration(options)
   }
-  cached = (options.spawner ?? spawnShellAndReadPath)(shell)
-  return cached
+  if (queuedForced) {
+    return queuedForced
+  }
+  if (inFlightForced) {
+    return inFlight
+  }
+
+  // Why: startup and user-triggered refreshes can overlap. Queue one fresh
+  // capture behind the active shell and coalesce later force callers onto it.
+  const startForcedHydration = (): Promise<HydrationResult> => startShellHydration(options)
+  const queued = inFlight.then(startForcedHydration, startForcedHydration)
+  queuedForced = queued
+  cached = queued
+  const clearQueuedForced = (): void => {
+    if (queuedForced === queued) {
+      queuedForced = null
+    }
+  }
+  void queued.then(clearQueuedForced, clearQueuedForced)
+  return queued
 }
 
 /**

@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import type { CliAuthStatus } from '../../../shared/cli-auth-status'
 import type { Repo } from '../../../shared/types'
 
 export type PreflightIssue = {
@@ -15,18 +16,31 @@ export type PreflightIssue = {
 
 export type LandingPreflightStatus = {
   git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
+  gh: CliAuthStatus
 }
 
 export type LandingPreflightIssueOptions = {
   hasGitHubBackedProject: boolean
 }
 
+/**
+ * Determine whether the landing page represents at least one GitHub-backed project.
+ *
+ * @param repos Repositories visible to the landing page.
+ * @returns True when any projected project uses GitHub.
+ */
 export function hasGitHubBackedProject(repos: readonly Repo[]): boolean {
   const projection = projectHostSetupProjectionFromRepos(repos)
   return projection.projects.some((project) => project.providerIdentity?.provider === 'github')
 }
 
+/**
+ * Build actionable landing-page issues for Git and GitHub CLI readiness.
+ *
+ * @param status Current local preflight result.
+ * @param options Provider context used to suppress irrelevant GitHub guidance.
+ * @returns Ordered setup and connectivity issues for display.
+ */
 export function getLandingPreflightIssues(
   status: LandingPreflightStatus,
   options: LandingPreflightIssueOptions
@@ -62,6 +76,43 @@ export function getLandingPreflightIssues(
       ),
       fixLabel: 'Install GitHub CLI',
       fixUrl: 'https://cli.github.com',
+      dismissible: true
+    })
+  } else if (!status.gh.authenticated && status.gh.authState === 'error') {
+    issues.push({
+      id: 'gh-check-error',
+      title: translate(
+        'auto.components.Landing.github_cli_auth_check_error',
+        'GitHub CLI returned an unexpected error'
+      ),
+      description: translate(
+        'auto.components.Landing.github_cli_auth_check_error_description',
+        'Run "gh auth status" in a terminal, resolve the reported CLI error, then re-check.'
+      ),
+      fixLabel: translate(
+        'auto.components.Landing.github_cli_auth_check_error_fix_label',
+        'Review status'
+      ),
+      fixUrl: 'https://cli.github.com/manual/gh_auth_status',
+      dismissible: true
+    })
+  } else if (
+    !status.gh.authenticated &&
+    (status.gh.authState === 'timeout' || status.gh.authState === 'unreachable')
+  ) {
+    issues.push({
+      id: 'gh-connectivity',
+      title: translate(
+        'auto.components.Landing.github_cli_auth_check_failed',
+        'GitHub CLI authentication could not be verified'
+      ),
+      description: translate(
+        'auto.components.Landing.github_cli_auth_check_failed_description',
+        'Check your network or proxy settings, then re-check the GitHub CLI connection.'
+      ),
+      fixLabel: 'Troubleshoot',
+      fixUrl:
+        'https://docs.github.com/en/get-started/using-github/troubleshooting-connectivity-problems',
       dismissible: true
     })
   } else if (!status.gh.authenticated) {

@@ -1075,7 +1075,12 @@
         "0d0ace8861": "在 GitHub 上加星标",
         "ec43b38ba7": "已在 GitHub 上加星标",
         "157bb5ecbb": "打开 GitHub",
-        "preflightDismiss": "关闭"
+        "preflightDismiss": "关闭",
+        "github_cli_auth_check_failed": "无法验证 GitHub CLI 身份",
+        "github_cli_auth_check_failed_description": "请检查网络或代理设置，然后重新检查 GitHub CLI 连接。",
+        "github_cli_auth_check_error": "GitHub CLI 返回了意外错误",
+        "github_cli_auth_check_error_description": "请在终端中运行“gh auth status”，解决报告的 CLI 错误后重新检查。",
+        "github_cli_auth_check_error_fix_label": "查看状态"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -8741,7 +8746,13 @@
                   "6f30fc4216": "此运行时暂不支持 GitHub CLI 状态。",
                   "6b2cfb52b4": "gh",
                   "b4d900e7f1": "通过",
-                  "account_scope_prefix": "账户范围"
+                  "account_scope_prefix": "账户范围",
+                  "connection_error": "连接错误",
+                  "cli_error": "CLI 错误",
+                  "github_auth_check_failed": "Orca 无法验证 GitHub CLI 身份。请检查网络或代理设置，然后重新检查。",
+                  "gitlab_auth_check_failed": "Orca 无法验证 GitLab CLI 身份。请检查网络或代理设置，然后重新检查。",
+                  "github_auth_check_error": "GitHub CLI 返回了意外错误。请在终端中运行“gh auth status”，然后重新检查。",
+                  "gitlab_auth_check_error": "GitLab CLI 返回了意外错误。请在终端中运行“glab auth status”，然后重新检查。"
                 }
               }
             }

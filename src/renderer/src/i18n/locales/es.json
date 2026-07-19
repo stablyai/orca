@@ -1075,7 +1075,12 @@
         "0d0ace8861": "Dar estrella en GitHub",
         "ec43b38ba7": "Con estrella en GitHub",
         "157bb5ecbb": "Abrir GitHub",
-        "preflightDismiss": "Descartar"
+        "preflightDismiss": "Descartar",
+        "github_cli_auth_check_failed": "No se pudo verificar la autenticación de GitHub CLI",
+        "github_cli_auth_check_failed_description": "Comprueba la configuración de red o proxy y vuelve a verificar la conexión de GitHub CLI.",
+        "github_cli_auth_check_error": "GitHub CLI devolvió un error inesperado",
+        "github_cli_auth_check_error_description": "Ejecuta \"gh auth status\" en una terminal, corrige el error de CLI indicado y vuelve a comprobarlo.",
+        "github_cli_auth_check_error_fix_label": "Revisar estado"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -8741,7 +8746,13 @@
                   "6f30fc4216": "El estado de la CLI de GitHub aún no está disponible en este runtime.",
                   "6b2cfb52b4": "gh",
                   "b4d900e7f1": "Pull requests, issues y checks mediante la",
-                  "account_scope_prefix": "Alcance de la cuenta"
+                  "account_scope_prefix": "Alcance de la cuenta",
+                  "connection_error": "Error de conexión",
+                  "cli_error": "Error de CLI",
+                  "github_auth_check_failed": "Orca no pudo verificar la autenticación de GitHub CLI. Comprueba la configuración de red o proxy y vuelve a intentarlo.",
+                  "gitlab_auth_check_failed": "Orca no pudo verificar la autenticación de GitLab CLI. Comprueba la configuración de red o proxy y vuelve a intentarlo.",
+                  "github_auth_check_error": "GitHub CLI devolvió un error inesperado. Ejecuta \"gh auth status\" en una terminal y vuelve a comprobarlo.",
+                  "gitlab_auth_check_error": "GitLab CLI devolvió un error inesperado. Ejecuta \"glab auth status\" en una terminal y vuelve a comprobarlo."
                 }
               }
             }

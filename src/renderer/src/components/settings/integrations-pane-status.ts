@@ -1,8 +1,14 @@
 import type { PreflightStatus } from '../../../../preload/api-types'
 
-export type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
+export type GhStatus =
+  | 'checking'
+  | 'connected'
+  | 'not-installed'
+  | 'not-authenticated'
+  | 'connection-error'
+  | 'check-error'
 // Why: parallel to GhStatus — GitLab uses glab and the same three failure
-// modes (probe in-flight / installed-but-unauth / missing entirely).
+// modes plus a distinct failed-auth-probe state.
 export type GlabStatus = GhStatus
 export type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
 export type AzureDevOpsStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
@@ -67,14 +73,26 @@ function ghStatusFromPreflight(status: PreflightStatus['gh']): GhStatus {
   if (!status.installed) {
     return 'not-installed'
   }
-  return status.authenticated ? 'connected' : 'not-authenticated'
+  if (status.authenticated) {
+    return 'connected'
+  }
+  if (status.authState === undefined || status.authState === 'unauthenticated') {
+    return 'not-authenticated'
+  }
+  return status.authState === 'error' ? 'check-error' : 'connection-error'
 }
 
 function glabStatusFromPreflight(status: PreflightStatus['glab']): GlabStatus {
   if (!status?.installed) {
     return 'not-installed'
   }
-  return status.authenticated ? 'connected' : 'not-authenticated'
+  if (status.authenticated) {
+    return 'connected'
+  }
+  if (status.authState === undefined || status.authState === 'unauthenticated') {
+    return 'not-authenticated'
+  }
+  return status.authState === 'error' ? 'check-error' : 'connection-error'
 }
 
 function bitbucketStatusFromPreflight(status: PreflightStatus['bitbucket']): BitbucketStatus {

@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from '../wsl'
 
-const { execFileMock, execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
+const {
+  execFileMock,
+  execFileSyncMock,
+  spawnMock,
+  getDefaultWslDistroMock,
+  buildLocalCliEnvironmentMock
+} = vi.hoisted(() => ({
   execFileMock: vi.fn(),
   execFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
-  getDefaultWslDistroMock: vi.fn()
+  getDefaultWslDistroMock: vi.fn(),
+  buildLocalCliEnvironmentMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
@@ -19,6 +26,10 @@ vi.mock('../wsl', async (importOriginal) => ({
   getDefaultWslDistro: getDefaultWslDistroMock
 }))
 
+vi.mock('../network/local-cli-environment', () => ({
+  buildLocalCliEnvironment: buildLocalCliEnvironmentMock
+}))
+
 import { ghExecFileAsync, glabExecFileAsync } from './runner'
 
 describe('ghExecFileAsync WSL fallback', () => {
@@ -28,6 +39,11 @@ describe('ghExecFileAsync WSL fallback', () => {
     execFileMock.mockReset()
     getDefaultWslDistroMock.mockReset()
     getDefaultWslDistroMock.mockReturnValue(null)
+    buildLocalCliEnvironmentMock.mockReset()
+    buildLocalCliEnvironmentMock.mockImplementation(async (env: NodeJS.ProcessEnv | undefined) => ({
+      ...env,
+      HTTPS_PROXY: 'http://host-proxy.example:8080'
+    }))
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -39,6 +55,72 @@ describe('ghExecFileAsync WSL fallback', () => {
       configurable: true,
       value: originalPlatform
     })
+  })
+
+  it('injects the local CLI proxy environment into host gh and glab calls', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    execFileMock.mockImplementation((_binary, _args, _options, callback) => {
+      callback(null, { stdout: '[]', stderr: '' })
+    })
+
+    await ghExecFileAsync(['api', 'rate_limit'], { env: { GH_HOST: 'github.example' } })
+    await glabExecFileAsync(['api', 'projects'], { env: { GITLAB_HOST: 'gitlab.example' } })
+
+    expect(buildLocalCliEnvironmentMock).toHaveBeenNthCalledWith(1, {
+      GH_HOST: 'github.example'
+    })
+    expect(buildLocalCliEnvironmentMock).toHaveBeenNthCalledWith(2, {
+      GITLAB_HOST: 'gitlab.example'
+    })
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      1,
+      'gh',
+      ['api', 'rate_limit'],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GH_HOST: 'github.example',
+          HTTPS_PROXY: 'http://host-proxy.example:8080'
+        })
+      }),
+      expect.any(Function)
+    )
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'glab',
+      ['api', 'projects'],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GITLAB_HOST: 'gitlab.example',
+          HTTPS_PROXY: 'http://host-proxy.example:8080'
+        })
+      }),
+      expect.any(Function)
+    )
+  })
+
+  it('does not inject host proxy variables into commands executed inside WSL', async () => {
+    execFileMock.mockImplementation((_binary, _args, _options, callback) => {
+      callback(null, { stdout: '[]', stderr: '' })
+    })
+
+    await ghExecFileAsync(['issue', 'list'], {
+      cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
+    })
+
+    expect(buildLocalCliEnvironmentMock).not.toHaveBeenCalled()
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      expect.any(Array),
+      expect.not.objectContaining({
+        env: expect.objectContaining({
+          HTTPS_PROXY: 'http://host-proxy.example:8080'
+        })
+      }),
+      expect.any(Function)
+    )
   })
 
   it('falls back to host gh for explicit-repo WSL calls when gh is missing in the distro', async () => {

@@ -1075,7 +1075,12 @@
         "0d0ace8861": "GitHub でスターを付ける",
         "ec43b38ba7": "GitHub でスター済み",
         "157bb5ecbb": "GitHub を開く",
-        "preflightDismiss": "閉じる"
+        "preflightDismiss": "閉じる",
+        "github_cli_auth_check_failed": "GitHub CLI の認証を確認できませんでした",
+        "github_cli_auth_check_failed_description": "ネットワークまたはプロキシ設定を確認してから、GitHub CLI の接続を再確認してください。",
+        "github_cli_auth_check_error": "GitHub CLI が予期しないエラーを返しました",
+        "github_cli_auth_check_error_description": "ターミナルで「gh auth status」を実行し、報告された CLI エラーを解決してから再確認してください。",
+        "github_cli_auth_check_error_fix_label": "状態を確認"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -8741,7 +8746,13 @@
                   "6f30fc4216": "GitHub CLI status is not available in this runtime yet.",
                   "6b2cfb52b4": "gh",
                   "b4d900e7f1": "PR、Issue、チェックは",
-                  "account_scope_prefix": "Account scope"
+                  "account_scope_prefix": "Account scope",
+                  "connection_error": "接続エラー",
+                  "cli_error": "CLI エラー",
+                  "github_auth_check_failed": "Orca は GitHub CLI の認証を確認できませんでした。ネットワークまたはプロキシ設定を確認してから、再確認してください。",
+                  "gitlab_auth_check_failed": "Orca は GitLab CLI の認証を確認できませんでした。ネットワークまたはプロキシ設定を確認してから、再確認してください。",
+                  "github_auth_check_error": "GitHub CLI が予期しないエラーを返しました。ターミナルで「gh auth status」を実行してから再確認してください。",
+                  "gitlab_auth_check_error": "GitLab CLI が予期しないエラーを返しました。ターミナルで「glab auth status」を実行してから再確認してください。"
                 }
               }
             }
