@@ -9,6 +9,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getFolderWorkspaceOwnerEnv } from '../../../../shared/missions'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
@@ -3118,7 +3119,7 @@ export function connectPanePty(
       : null
   const workspaceEnv: Record<string, string> = { ORCA_WORKSPACE_ID: deps.worktreeId }
   if (folderWorkspace) {
-    workspaceEnv.ORCA_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
+    Object.assign(workspaceEnv, getFolderWorkspaceOwnerEnv(folderWorkspace))
     workspaceEnv.ORCA_WORKSPACE_ROOT = folderWorkspace.folderPath
   }
   const paneIdentityEnv = {

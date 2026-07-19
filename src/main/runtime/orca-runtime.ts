@@ -10,6 +10,7 @@ import {
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { getFolderWorkspaceOwnerEnv } from '../../shared/missions'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -20615,7 +20616,7 @@ export class OrcaRuntimeService {
     return {
       ...env,
       ORCA_WORKSPACE_ID: scope.id,
-      ORCA_PROJECT_GROUP_ID: scope.folderWorkspace.projectGroupId,
+      ...getFolderWorkspaceOwnerEnv(scope.folderWorkspace),
       ORCA_WORKSPACE_ROOT: scope.folderWorkspace.folderPath
     }
   }

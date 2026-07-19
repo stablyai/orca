@@ -36,6 +36,7 @@ import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
+import { isMissionOwnedFolderWorkspace } from '../../../../shared/missions'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -181,6 +182,29 @@ function isContextWorktreeDeletable(
   repo: Pick<Repo, 'kind'> | null | undefined
 ): boolean {
   return repo != null && !worktree.isMainWorktree
+}
+
+type SingleContextDeleteRestriction = 'mission-session' | 'project-missing' | null
+
+// Why: mission sessions are owned by their mission (deleting one here would
+// orphan the mission record and the sidebar would respawn an empty session),
+// and a primary checkout without a resolvable project has nothing to remove.
+function getSingleContextDeleteRestriction(args: {
+  isMultiContext: boolean
+  isMissionSessionWorkspace: boolean
+  isMainWorktree: boolean
+  removesProject: boolean
+}): SingleContextDeleteRestriction {
+  if (args.isMultiContext) {
+    return null
+  }
+  if (args.isMissionSessionWorkspace) {
+    return 'mission-session'
+  }
+  if (args.isMainWorktree && !args.removesProject) {
+    return 'project-missing'
+  }
+  return null
 }
 
 function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
@@ -338,6 +362,17 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  // Why: a mission session workspace is owned by its mission — deleting it here
+  // would leave the mission record behind and the sidebar would immediately
+  // respawn an empty session. Deletion routes through the mission row menu.
+  const isMissionSessionWorkspace = useAppStore(
+    (s) =>
+      folderWorkspaceId != null &&
+      s.folderWorkspaces.some(
+        (workspace) =>
+          workspace.id === folderWorkspaceId && isMissionOwnedFolderWorkspace(workspace)
+      )
+  )
   const sleepableWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) =>
@@ -368,6 +403,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     [activeContextWorktrees, repoMap]
   )
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
+  const singleContextDeleteRestriction = getSingleContextDeleteRestriction({
+    isMultiContext,
+    isMissionSessionWorkspace,
+    isMainWorktree: worktree.isMainWorktree,
+    removesProject
+  })
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
       ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
@@ -907,16 +948,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             onSelect={handleDelete}
             disabled={
               deletingContext ||
-              (!isMultiContext && worktree.isMainWorktree && !removesProject) ||
+              singleContextDeleteRestriction !== null ||
               (isMultiContext && batchDeleteWorktrees.length === 0)
             }
             title={
-              !isMultiContext && worktree.isMainWorktree && !removesProject
+              singleContextDeleteRestriction === 'mission-session'
                 ? translate(
-                    'auto.components.sidebar.WorktreeContextMenu.e091caab15',
-                    'The project could not be found'
+                    'auto.components.sidebar.WorktreeContextMenu.80a3c0efc8',
+                    'Mission session — delete the mission instead.'
                   )
-                : undefined
+                : singleContextDeleteRestriction === 'project-missing'
+                  ? translate(
+                      'auto.components.sidebar.WorktreeContextMenu.e091caab15',
+                      'The project could not be found'
+                    )
+                  : undefined
             }
           >
             <Trash2 className="size-3.5" />
@@ -974,6 +1020,7 @@ export {
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
+  getSingleContextDeleteRestriction,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled,

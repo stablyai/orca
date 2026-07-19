@@ -380,6 +380,7 @@ function setFolderWorkspaceFixtureState(
   const folderWorkspace = makeFolderWorkspace(group.id)
 
   mockStore.state = {
+    missions: [],
     ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
@@ -455,6 +456,7 @@ function setPinnedFixtureState(): void {
   })
 
   mockStore.state = {
+    missions: [],
     ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
@@ -581,6 +583,7 @@ function setLineageFixtureState(
   grandchild.isUnread = unreadWorktreeIds.has(grandchild.id)
 
   mockStore.state = {
+    missions: [],
     ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
@@ -668,6 +671,7 @@ function setProjectGroupWithoutWorktreeRowsState(
   }
 
   mockStore.state = {
+    missions: [],
     ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
@@ -730,6 +734,7 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
   }
 
   mockStore.state = {
+    missions: [],
     ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',

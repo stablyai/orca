@@ -39,6 +39,7 @@ import type {
   IssueInfo,
   LinearIssue
 } from '../../../../shared/types'
+import { isMissionOwnedFolderWorkspace } from '../../../../shared/missions'
 import { CONFLICT_OPERATION_LABELS } from './WorktreeCardHelpers'
 import {
   WorktreeCardDetailsHover,
@@ -103,6 +104,9 @@ type WorktreeCardProps = {
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  /** Mission session cards suppress the folder-name meta label (it repeats
+   *  the card title, since the mission root is named after the mission). */
+  hideFolderPathLabel?: boolean
   hostContextLabel?: string
   inPinnedSection?: boolean
   activationRowKey?: string
@@ -210,6 +214,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onCardDragEnd,
   nativeDragEnabled = true,
   hideRepoBadge,
+  hideFolderPathLabel,
   hostContextLabel,
   inPinnedSection = false,
   activationRowKey,
@@ -381,19 +386,31 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
+  // Why: mission sessions are deleted with their mission (row menu), so the
+  // generic Option/Alt quick-delete must not offer them.
+  const isMissionSessionWorkspace = useAppStore(
+    (s) =>
+      folderWorkspaceId != null &&
+      s.folderWorkspaces.some(
+        (workspace) =>
+          workspace.id === folderWorkspaceId && isMissionOwnedFolderWorkspace(workspace)
+      )
+  )
   const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
   // Why: project groups are the product gate for folder workspaces, so folder
   // paths stay hidden from identity surfaces until that capability exists.
   const hasProjectGroups = projectGroups.length > 0
   const branchIdentityDisplay = !isFolder && branch.length > 0 ? branch : undefined
   const folderPathIdentityDisplay =
-    isFolder && hasProjectGroups && worktree.path.trim().length > 0 ? worktree.path : undefined
+    isFolder && !hideFolderPathLabel && hasProjectGroups && worktree.path.trim().length > 0
+      ? worktree.path
+      : undefined
   const identityDisplay = branchIdentityDisplay ?? folderPathIdentityDisplay
   const hasPathIdentityEnabled = cardProps.includes('branch')
   const showIdentityInNewCard = newCardStyle && hasPathIdentityEnabled && Boolean(identityDisplay)
   const folderMetaRowContent = newCardStyle
     ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
-    : isFolder
+    : isFolder && !hideFolderPathLabel
   const hostedReviewCacheKey =
     repo && branch
       ? getHostedReviewCacheKey(
@@ -936,7 +953,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     canShowWorkspaceDeleteQuickAction({
       deleteModifierPressed,
       isDeleting,
-      isMainWorktree: worktree.isMainWorktree
+      isMainWorktree: worktree.isMainWorktree,
+      isMissionSessionWorkspace
     })
   const handleWorkspaceQuickAction = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1665,7 +1683,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   className="text-[11px] text-muted-foreground leading-none"
                   tooltipEnabled={!hasHoverDetails}
                 />
-              ) : isFolder && !newCardStyle ? (
+              ) : isFolder && !newCardStyle && !hideFolderPathLabel ? (
                 <span
                   className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
                   title={worktree.path}
