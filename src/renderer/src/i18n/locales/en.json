@@ -7475,7 +7475,8 @@
             "a942905148": "URL opened when creating a new browser tab. Leave empty to open a blank tab.",
             "c3903322d2": "Default Home Page",
             "19ea5607cf": "Localhost Worktree Labels",
-            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.",
+            "904ce58440": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{value0}} always uses your system browser."
           },
           "use": {
             "search": {
