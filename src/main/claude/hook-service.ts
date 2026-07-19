@@ -332,3 +332,14 @@ export class ClaudeHookService {
 }
 
 export const claudeHookService = new ClaudeHookService()
+
+/** Service for a discovered `~/.claude-<name>` / `~/.claude.<name>` config
+ *  dir. Same agent id and shared claude-hook script — these dirs run genuine
+ *  claude posting to /hook/claude; only the settings.json location differs. */
+export function createClaudeConfigDirHookService(configDirName: string): ClaudeHookService {
+  return new ClaudeHookService({
+    agent: 'claude',
+    displayName: 'Claude',
+    settings: { configDirName, scriptBaseName: 'claude-hook' }
+  })
+}
