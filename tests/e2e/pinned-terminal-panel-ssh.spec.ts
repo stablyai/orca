@@ -49,10 +49,21 @@ test('pinned terminal panel runs its command on the configured SSH host', async 
     await window.api.ssh.addTarget({
       target: { label: host, configHost: host, host, port: 22, username: '' }
     })
+    // Why: label hydration normally rides the targets-changed push; refresh
+    // explicitly so the panel's host guard sees the new target immediately.
+    const targets = await window.api.ssh.listTargets()
+    window.__store?.getState().setSshTargetsMetadata(targets)
     window.__store?.getState().updateSettings({
       pinnedTerminalPanels: [{ id: 'e2e-ssh-panel', title: 'SSH Panel', command: 'hostname', host }]
     })
   }, SSH_HOST)
+
+  await expect
+    .poll(
+      async () => orcaPage.evaluate(() => window.__store?.getState().sshTargetLabels.size ?? 0),
+      { timeout: 10_000 }
+    )
+    .toBeGreaterThan(0)
 
   await expect
     .poll(
