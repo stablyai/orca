@@ -2641,6 +2641,10 @@ export type GlobalSettings = {
   /** One-shot guard that distinguishes the old global true default from a
    *  choice made after the setting became available on every platform. */
   terminalRightClickToPasteDefaultedForPlatform?: boolean
+  /** Why: macOS/Linux users may prefer a shell different from the process
+   *  login shell Orca inherited. Null/undefined preserves the system default.
+   *  Windows keeps its own shell-family setting below. */
+  terminalDefaultShellPath?: string | null
   /** Why: COMSPEC always points to cmd.exe on stock Windows, so without an
    *  explicit setting the terminal would always open CMD instead of the
    *  user's preferred shell. Defaults to 'powershell.exe' which is the

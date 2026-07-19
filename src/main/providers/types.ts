@@ -84,9 +84,8 @@ export type PtySpawnOptions = {
    *  replace the daemon out from under a still-live PTY. */
   isNewSession?: boolean
   /** Why: allows the renderer to request a specific shell for a single new
-   *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
-   *  changing the user's persistent default shell setting. Only consulted on
-   *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
+   *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu, or a
+   *  configured POSIX default shell) without changing process-global env. */
   shellOverride?: string
   /** Preferred WSL distro for generic `wsl.exe` launches. Worktree/session
    *  distro still wins when the cwd already identifies a WSL distro. */

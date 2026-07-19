@@ -596,6 +596,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           disconnectActiveRuntimeEnvironment()
         }
         const sanitizedUpdates = { ...updates }
+        if ('terminalDefaultShellPath' in sanitizedUpdates) {
+          // Why: browser clients cannot validate or launch desktop-local shells.
+          sanitizedUpdates.terminalDefaultShellPath = null
+        }
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
         }
@@ -606,6 +610,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         return syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
       updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
+      validateTerminalDefaultShellPath: () =>
+        Promise.resolve({
+          ok: false,
+          code: 'unsupported-platform',
+          message: 'Custom POSIX default shells are only supported on macOS and Linux.'
+        }),
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
@@ -3244,6 +3254,8 @@ function getStoredSettings(): GlobalSettings {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
+    // Why: this desktop-local shell preference is not portable to browser clients.
+    terminalDefaultShellPath: null,
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     uiLanguage: normalizeUiLanguage(stored.uiLanguage)
   }
@@ -3255,6 +3267,7 @@ function getStoredSettings(): GlobalSettings {
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
         migratedStored.terminalCursorStyleDefaultedToBlock ||
+      stored.terminalDefaultShellPath != null ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
       stored.uiLanguage !== migratedStored.uiLanguage)
   ) {

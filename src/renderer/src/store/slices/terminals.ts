@@ -43,6 +43,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import { getTerminalDefaultShellOverride } from '../../../../shared/terminal-default-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
@@ -312,6 +313,7 @@ function isAllowedRemoteWindowsTerminalShell(shell: string | undefined): boolean
 function resolveCreatedTabShellOverride(
   explicitShellOverride: string | undefined,
   defaultWindowsShell: string | undefined,
+  defaultTerminalShellPath: string | null | undefined,
   isRemoteWorktree: boolean,
   remotePlatform: NodeJS.Platform | null,
   isWslWorktree: boolean,
@@ -334,7 +336,7 @@ function resolveCreatedTabShellOverride(
   if (explicitShellOverride !== undefined) {
     return explicitShellOverride
   }
-  return undefined
+  return getTerminalDefaultShellOverride(defaultTerminalShellPath)
 }
 
 function worktreeUsesWslPath(
@@ -993,10 +995,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const startupCwd = options?.startupCwd
       const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
       const isRemoteWorktree = Boolean(remoteConnectionId)
+      const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)
       const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
       const createdShellOverride = resolveCreatedTabShellOverride(
         shellOverride,
         s.settings?.terminalWindowsShell,
+        // Why: a POSIX shell path is a local filesystem preference. Runtime
+        // hosts keep their own login-shell defaults until host-scoped shell
+        // overrides exist.
+        runtimeEnvironmentId ? undefined : s.settings?.terminalDefaultShellPath,
         // Why: SSH PTYs ignore local Windows shell selection; persisting a
         // local shell icon would mislabel a remote terminal.
         isRemoteWorktree,

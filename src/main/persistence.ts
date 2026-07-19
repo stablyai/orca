@@ -151,6 +151,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
+import { validateTerminalDefaultShellPath } from './terminal-default-shell-validation'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
@@ -3190,6 +3191,12 @@ export class Store {
             floatingTerminalTrustedCwds: migratedFloatingTerminalTrustedCwds,
             floatingTerminalCwdMigratedToAppWorkspace: true,
             terminalScrollbackRows: migratedTerminalScrollback.rows,
+            terminalDefaultShellPath: (() => {
+              const validation = validateTerminalDefaultShellPath(
+                parsed.settings?.terminalDefaultShellPath
+              )
+              return validation.ok ? validation.shellPath : null
+            })(),
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),

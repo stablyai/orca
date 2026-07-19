@@ -6876,6 +6876,22 @@
             "tuiDescription": "Eventos discretos de rueda para apps de terminal de pantalla completa."
           }
         },
+        "TerminalDefaultShellSection": {
+          "ee7cb911e8": "Shell local",
+          "67a5341565": "Shell predeterminada para nuevos paneles de terminal locales en macOS y Linux.",
+          "e52e156b21": "Shell predeterminada",
+          "771784d945": "Elige la shell que Orca abre para nuevos paneles de terminal locales en macOS y Linux.",
+          "80099ab61e": "Se aplica a nuevos terminales locales. Los paneles existentes conservan la shell con la que ya se iniciaron.",
+          "d884efa6ee": "Sistema",
+          "981c472a7d": "Personalizada",
+          "d2ad34c1f6": "Usa una ruta absoluta POSIX, como /bin/zsh o /usr/bin/fish.",
+          "95cca730e4": "La shell \"{{value0}}\" no existe.",
+          "d96c7331bb": "La shell \"{{value0}}\" no es un archivo.",
+          "6334403ed7": "La shell \"{{value0}}\" no es ejecutable.",
+          "ffcf81d40f": "La shell \"{{value0}}\" no se reconoce. Elige bash, zsh, fish, sh, ksh, dash, tcsh, csh o una ruta listada en /etc/shells.",
+          "26d742c733": "Las shells POSIX personalizadas predeterminadas solo son compatibles con macOS y Linux.",
+          "28b50d850b": "La shell \"{{value0}}\" no es válida."
+        },
         "TerminalSettingsPreview": {
           "a63953a48a": "Vista previa del tema {{value0}}",
           "2c248fcc27": "Vista previa del tema",
@@ -8389,6 +8405,10 @@
             }
           },
           "search": {
+            "defaultShell": {
+              "title": "Shell predeterminada",
+              "description": "Elige la shell que Orca abre para nuevos paneles de terminal locales en macOS y Linux."
+            },
             "c047f398cc": "iniciar",
             "b872de3926": "ubicación",
             "fd6c24313d": "nuevo",

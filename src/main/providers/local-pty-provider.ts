@@ -52,6 +52,7 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { getLaunchablePosixShellOverrideForSpawn } from '../terminal-default-shell-validation'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
@@ -641,7 +642,10 @@ export class LocalPtyProvider implements IPtyProvider {
         startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
       }
     } else {
-      shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
+      // Why: persisted tabs can carry Windows values or stale POSIX paths;
+      // ignore them so new local terminals still fall back to the host shell.
+      const configuredShell = getLaunchablePosixShellOverrideForSpawn(args.shellOverride)
+      shellPath = configuredShell || args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
       effectiveCwd = cwd
       validationCwd = cwd
@@ -717,6 +721,11 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     if (args.env?.TERM) {
       finalEnv.TERM = args.env.TERM
+    }
+    if (process.platform !== 'win32') {
+      // Why: custom POSIX shells should see themselves as the login shell in
+      // startup files and inherited child processes, not Orca's old parent shell.
+      finalEnv.SHELL = shellPath
     }
     if (process.platform === 'win32') {
       const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
@@ -864,10 +873,6 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     if (args.command && getFallbackShellReadyConfig) {
       shellReadyLaunch = getFallbackShellReadyConfig(shellPath)
-    }
-
-    if (process.platform !== 'win32') {
-      finalEnv.SHELL = shellPath
     }
 
     const proc = spawnResult.process

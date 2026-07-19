@@ -6898,6 +6898,22 @@
             "tuiDescription": "全画面ターミナルアプリ向けの離散的なホイール通知。"
           }
         },
+        "TerminalDefaultShellSection": {
+          "ee7cb911e8": "ローカル Shell",
+          "67a5341565": "新しいローカル macOS / Linux ターミナルペインの既定 shell。",
+          "e52e156b21": "既定の Shell",
+          "771784d945": "Orca が新しいローカル macOS / Linux ターミナルペインで開く shell を選びます。",
+          "80099ab61e": "新しいローカルターミナルに適用されます。既存ペインは起動済みの shell を保持します。",
+          "d884efa6ee": "システム",
+          "981c472a7d": "カスタム",
+          "d2ad34c1f6": "/bin/zsh や /usr/bin/fish などの POSIX 絶対パスを使ってください。",
+          "95cca730e4": "Shell “{{value0}}” が存在しません。",
+          "d96c7331bb": "Shell “{{value0}}” はファイルではありません。",
+          "6334403ed7": "Shell “{{value0}}” は実行できません。",
+          "ffcf81d40f": "Shell “{{value0}}” は認識できる shell ではありません。bash、zsh、fish、sh、ksh、dash、tcsh、csh、または /etc/shells に listed されたパスを選んでください。",
+          "26d742c733": "カスタム POSIX 既定 shell は macOS と Linux でのみサポートされています。",
+          "28b50d850b": "Shell “{{value0}}” は無効です。"
+        },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
           "2c248fcc27": "プレビューテーマ",
@@ -8411,6 +8427,10 @@
             }
           },
           "search": {
+            "defaultShell": {
+              "title": "既定の Shell",
+              "description": "Orca が新しいローカル macOS / Linux ターミナルペインで開く shell を選びます。"
+            },
             "c047f398cc": "起動",
             "b872de3926": "場所",
             "fd6c24313d": "新規",

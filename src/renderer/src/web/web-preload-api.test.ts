@@ -305,6 +305,24 @@ describe('web settings preload API', () => {
     expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
+  it('clears stored custom local shell settings on web', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ terminalDefaultShellPath: '/bin/zsh' })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalDefaultShellPath?: string | null
+    }
+
+    expect(settings.terminalDefaultShellPath).toBeNull()
+    expect(stored.terminalDefaultShellPath).toBeNull()
+  })
+
   it('preserves first-work branch auto-rename web opt-outs after migration', async () => {
     const globals = installBrowserGlobals('Linux')
     globals.storage.setItem(
@@ -342,6 +360,29 @@ describe('web settings preload API', () => {
     expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
     expect(stored.autoRenameBranchFromWork).toBe(false)
     expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+
+  it('reports custom local shell validation as unsupported on web', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(api.settings.validateTerminalDefaultShellPath('/bin/zsh')).resolves.toMatchObject(
+      {
+        ok: false,
+        code: 'unsupported-platform'
+      }
+    )
+  })
+
+  it('drops custom local shell updates on web', async () => {
+    const { api, storage } = await installApi('Linux')
+
+    const settings = await api.settings.set({ terminalDefaultShellPath: '/bin/zsh' })
+    const stored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalDefaultShellPath?: string | null
+    }
+
+    expect(settings.terminalDefaultShellPath).toBeNull()
+    expect(stored.terminalDefaultShellPath).toBeNull()
   })
 
   it('hydrates compact worktree cards from paired runtime settings', async () => {

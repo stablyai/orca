@@ -48,6 +48,17 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(false)
   })
 
+  it('omits the local default shell setting when unsupported', () => {
+    const entries = getTerminalPaneSearchEntries({
+      isWindows: false,
+      isMac: false,
+      supportsTerminalDefaultShell: false
+    })
+
+    expect(entries.some((entry) => entry.title === 'Default Shell')).toBe(false)
+    expect(entries.some((entry) => (entry.keywords ?? []).includes('fish'))).toBe(false)
+  })
+
   it('includes the Option as Alt setting on macOS', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
     expect(entries.some((entry) => entry.title === 'Option as Alt')).toBe(true)

@@ -235,7 +235,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     let effectiveCols = restoreInfo?.cols ?? opts.cols
     let effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    const shellReadySupported = opts.command
+      ? supportsPtyStartupBarrier(opts.env ?? {}, opts.shellOverride)
+      : false
     const isCodexStartupCommand =
       recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
     const shouldWaitForShellReady =

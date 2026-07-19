@@ -135,6 +135,18 @@ describe('registerSettingsHandlers', () => {
     expect(channels).toContain('settings:previewWarpThemeImport')
   })
 
+  it('registers default shell validation handler', async () => {
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:validateTerminalDefaultShellPath'
+    )?.[1] as (_event: unknown, value: unknown) => unknown
+
+    expect(handler(null, 'fish')).toMatchObject({
+      ok: false,
+      code: 'not-posix-absolute'
+    })
+  })
+
   it('settings:previewGhosttyImport returns preview result', async () => {
     const expected = { found: false, diff: {}, unsupportedKeys: [] }
     previewGhosttyImportMock.mockResolvedValue(expected)
@@ -362,6 +374,22 @@ describe('registerSettingsHandlers', () => {
       { terminalLineHeight: 1 },
       { notifyListeners: true, originWebContentsId: 1 }
     )
+  })
+
+  it('rejects invalid default shell paths from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ terminalDefaultShellPath: null })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await expect(
+      handler(settingsInvokeEvent, { terminalDefaultShellPath: 'fish' })
+    ).rejects.toThrow('POSIX absolute shell path')
+
+    expect(store.updateSettings).not.toHaveBeenCalled()
   })
 
   it('normalizes custom terminal themes from renderer settings IPC', async () => {
