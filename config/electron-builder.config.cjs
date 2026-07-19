@@ -45,6 +45,10 @@ const linuxSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-linux-${arch}',
   to: 'node_modules/sherpa-onnx-linux-${arch}'
 }
+const herdrSidecarResource = (platform) => ({
+  from: `resources/herdr/${platform}-\${arch}`,
+  to: `herdr/${platform}-\${arch}`
+})
 const winSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-win-x64',
   to: 'node_modules/sherpa-onnx-win-x64'
@@ -201,6 +205,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('win32'),
+      herdrSidecarResource('win32'),
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
@@ -265,6 +270,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
+      herdrSidecarResource('darwin'),
       macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
@@ -329,6 +335,7 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('linux'),
+      herdrSidecarResource('linux'),
       linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',

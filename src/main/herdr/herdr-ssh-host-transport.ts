@@ -16,9 +16,12 @@ import {
 } from './herdr-event-subscription'
 
 export class HerdrSshHostTransport implements HerdrHostTransport {
+  private executablePromise: Promise<string> | null = null
+
   constructor(
     private readonly connection: SshConnection,
-    private readonly timeoutMs = 15_000
+    private readonly timeoutMs = 15_000,
+    private readonly resolveExecutable: () => Promise<string> = async () => 'herdr'
   ) {}
 
   async ensureSession(sessionName: string): Promise<void> {
@@ -56,10 +59,14 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
           stdout += chunk.toString('utf8')
           for (;;) {
             const newline = stdout.indexOf('\n')
-            if (newline === -1) break
+            if (newline === -1) {
+              break
+            }
             const line = stdout.slice(0, newline).trim()
             stdout = stdout.slice(newline + 1)
-            if (!line) continue
+            if (!line) {
+              continue
+            }
             try {
               subscription.acceptLine(line)
             } catch (error) {
@@ -109,8 +116,13 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
     ]
 
     const emitClosed = (event: HerdrTerminalClosed): void => {
-      if (closedListeners.size === 0) pendingClosed = event
-      else for (const listener of closedListeners) listener(event)
+      if (closedListeners.size === 0) {
+        pendingClosed = event
+      } else {
+        for (const listener of closedListeners) {
+          listener(event)
+        }
+      }
     }
     void this.open(args)
       .then((opened) => {
@@ -123,14 +135,23 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
           stdout += chunk.toString('utf8')
           for (;;) {
             const newline = stdout.indexOf('\n')
-            if (newline === -1) break
+            if (newline === -1) {
+              break
+            }
             const line = stdout.slice(0, newline).trim()
             stdout = stdout.slice(newline + 1)
-            if (!line) continue
+            if (!line) {
+              continue
+            }
             const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
             if (event.type === 'terminal.frame') {
-              if (frameListeners.size === 0) pendingFrames.push(event)
-              else for (const listener of frameListeners) listener(event)
+              if (frameListeners.size === 0) {
+                pendingFrames.push(event)
+              } else {
+                for (const listener of frameListeners) {
+                  listener(event)
+                }
+              }
             } else {
               emitClosed(event)
             }
@@ -156,20 +177,26 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
       )
 
     const send = (message: unknown): void => {
-      if (!released && channel?.writable) channel.write(`${JSON.stringify(message)}\n`)
+      if (!released && channel?.writable) {
+        channel.write(`${JSON.stringify(message)}\n`)
+      }
     }
     return {
       write: (data) => send({ type: 'terminal.input', text: data }),
       resize: (cols, rows) => send({ type: 'terminal.resize', cols, rows }),
       release: () => {
-        if (released) return
+        if (released) {
+          return
+        }
         send({ type: 'terminal.release' })
         released = true
         channel?.end()
       },
       onFrame: (listener) => {
         frameListeners.add(listener)
-        for (const frame of pendingFrames.splice(0)) listener(frame)
+        for (const frame of pendingFrames.splice(0)) {
+          listener(frame)
+        }
         return () => frameListeners.delete(listener)
       },
       onClosed: (listener) => {
@@ -183,12 +210,14 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
     }
   }
 
-  private command(args: string[]): string {
-    return ['herdr', ...args].map(shellEscape).join(' ')
+  private async command(args: string[]): Promise<string> {
+    this.executablePromise ??= this.resolveExecutable()
+    const executable = await this.executablePromise
+    return [executable, ...args].map(shellEscape).join(' ')
   }
 
   private async open(args: string[]): Promise<ClientChannel> {
-    return await this.connection.exec(this.command(args))
+    return await this.connection.exec(await this.command(args))
   }
 
   private async run(args: string[]): Promise<string> {
@@ -208,8 +237,11 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
       })
       channel.once('close', (code: number) => {
         clearTimeout(timeout)
-        if (code === 0) resolve(stdout)
-        else reject(new Error(stderr.trim() || `Remote Herdr exited with code ${code}`))
+        if (code === 0) {
+          resolve(stdout)
+        } else {
+          reject(new Error(stderr.trim() || `Remote Herdr exited with code ${code}`))
+        }
       })
       channel.end()
     })
@@ -222,12 +254,17 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
       let stderr = ''
       let settled = false
       const finish = (error: Error | null, line?: string): void => {
-        if (settled) return
+        if (settled) {
+          return
+        }
         settled = true
         clearTimeout(timeout)
         channel.close()
-        if (error) reject(error)
-        else resolve(line as string)
+        if (error) {
+          reject(error)
+        } else {
+          resolve(line as string)
+        }
       }
       const timeout = setTimeout(
         () => finish(new Error(`Remote Herdr command timed out after ${this.timeoutMs}ms`)),
@@ -236,9 +273,13 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
       channel.on('data', (chunk: Buffer) => {
         stdout += chunk.toString('utf8')
         const newline = stdout.indexOf('\n')
-        if (newline === -1) return
+        if (newline === -1) {
+          return
+        }
         const line = stdout.slice(0, newline).trim()
-        if (line) finish(null, line)
+        if (line) {
+          finish(null, line)
+        }
       })
       channel.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')))
       channel.once('error', (error: Error) => finish(error))

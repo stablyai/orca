@@ -173,6 +173,8 @@ function createSettings(overrides: TestSettingsOverrides = {}): GlobalSettings {
     ...overrides,
     diffWordWrap: overrides.diffWordWrap ?? false,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
+    terminalBackendDefault: overrides.terminalBackendDefault ?? 'orca',
+    herdrBinarySource: overrides.herdrBinarySource ?? { kind: 'managed' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,

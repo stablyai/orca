@@ -1,6 +1,10 @@
 import type { Project, TerminalPaneLayoutNode, Worktree } from './types'
 
-export type HerdrExternalRef = { owner: 'orca'; id: string }
+export type HerdrExternalRef = { owner: string; id: string }
+
+export function herdrExternalRefKey(ref: HerdrExternalRef): string {
+  return JSON.stringify([ref.owner, ref.id])
+}
 
 function normalizeSessionSegment(value: string): string {
   const normalized = value
@@ -35,7 +39,9 @@ export function herdrPaneRef(projectId: string, leafId: string): HerdrExternalRe
 }
 
 export function firstTerminalLeafId(root: TerminalPaneLayoutNode | null): string | null {
-  if (!root) return null
+  if (!root) {
+    return null
+  }
   return root.type === 'leaf' ? root.leafId : firstTerminalLeafId(root.first)
 }
 

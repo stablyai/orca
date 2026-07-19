@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   herdrPaneRef,
+  herdrExternalRefKey,
   herdrSessionNameForProject,
   herdrSplitDirection,
   herdrTabRef,
@@ -32,5 +33,11 @@ describe('Herdr session identity', () => {
   it('translates Orca split axes exactly', () => {
     expect(herdrSplitDirection('vertical')).toBe('right')
     expect(herdrSplitDirection('horizontal')).toBe('down')
+  })
+
+  it('keeps identical external IDs from different owners distinct', () => {
+    expect(herdrExternalRefKey({ owner: 'orca', id: 'pane-1' })).not.toBe(
+      herdrExternalRefKey({ owner: 'another-client', id: 'pane-1' })
+    )
   })
 })

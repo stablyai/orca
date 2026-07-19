@@ -43,6 +43,12 @@ import type {
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
+import type {
+  HerdrBinarySource,
+  TerminalBackend,
+  TerminalBackendActivation,
+  TerminalBackendPreference
+} from './terminal-backend'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -119,6 +125,10 @@ export type Project = {
   localWindowsRuntimePreference?: LocalWindowsRuntimePreference
   /** Stable named Herdr session. Undefined derives a deterministic name from the project id. */
   herdrSessionName?: string
+  /** Desired backend for project hosts that have not been activated yet. */
+  terminalBackendPreference?: TerminalBackendPreference
+  /** Active backend is durable per host so changing defaults cannot switch live terminals. */
+  terminalBackendByHost?: Partial<Record<ExecutionHostId, TerminalBackendActivation>>
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
@@ -126,7 +136,15 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<Pick<Project, 'localWindowsRuntimePreference' | 'herdrSessionName'>>
+  updates: Partial<
+    Pick<
+      Project,
+      | 'localWindowsRuntimePreference'
+      | 'herdrSessionName'
+      | 'terminalBackendPreference'
+      | 'terminalBackendByHost'
+    >
+  >
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
@@ -2594,6 +2612,7 @@ export type FloatingTerminalCwdRequest = {
 export type HostSettingOverrides = {
   displayLabel?: string
   defaultWorktreeLocation?: string
+  herdrBinarySource?: HerdrBinarySource
 }
 
 export type GlobalSettings = {
@@ -2601,6 +2620,11 @@ export type GlobalSettings = {
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
+  /** Default for newly activated project hosts. Existing activations remain durable. */
+  terminalBackendDefault: TerminalBackend
+  herdrBinarySource: HerdrBinarySource
+  /** One-shot guard keeping pre-Herdr projects on Orca. */
+  terminalBackendActivationDefaultedToOrca?: boolean
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean

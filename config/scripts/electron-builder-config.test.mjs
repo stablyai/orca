@@ -40,6 +40,21 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('packages the target-specific managed Herdr sidecar for every desktop target', () => {
+    expect(electronBuilderConfig.mac.extraResources).toContainEqual({
+      from: 'resources/herdr/darwin-${arch}',
+      to: 'herdr/darwin-${arch}'
+    })
+    expect(electronBuilderConfig.linux.extraResources).toContainEqual({
+      from: 'resources/herdr/linux-${arch}',
+      to: 'herdr/linux-${arch}'
+    })
+    expect(electronBuilderConfig.win.extraResources).toContainEqual({
+      from: 'resources/herdr/win32-${arch}',
+      to: 'herdr/win32-${arch}'
+    })
+  })
+
   it('keeps runtime resources available through extraResources', () => {
     for (const platform of ['mac', 'linux', 'win']) {
       expect(electronBuilderConfig[platform].extraResources).toContainEqual({

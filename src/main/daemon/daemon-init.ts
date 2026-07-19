@@ -636,7 +636,9 @@ function createOutOfProcessLauncher(
 }
 
 function routeLocalProviderThroughHerdr(provider: IPtyProvider): IPtyProvider {
-  if (!herdrStore) return provider
+  if (!herdrStore) {
+    return provider
+  }
   if (herdrProvider) {
     herdrProvider.replaceFallback(provider)
     return herdrProvider

@@ -547,6 +547,67 @@ describe('Store', () => {
     expect(reloaded.getProjects()[0]?.herdrSessionName).toBe('orca-repo-session')
   })
 
+  it('persists the desired and active terminal backend per execution host', async () => {
+    const project = makeProject({ id: 'project-1', sourceRepoIds: ['r1'] })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [project],
+      projectHostSetups: [makeProjectHostSetup({ id: 'setup-1', projectId: project.id, repoId: '' })]
+    })
+
+    const store = await createStore()
+    store.updateProject(project.id, {
+      terminalBackendPreference: 'herdr',
+      terminalBackendByHost: { local: { backend: 'herdr', state: 'ready' } }
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getProjects()[0]?.terminalBackendPreference).toBe('herdr')
+    expect(reloaded.getProjects()[0]?.terminalBackendByHost).toEqual({
+      local: { backend: 'herdr', state: 'ready' }
+    })
+  })
+
+  it('falls back safely when persisted terminal backend settings are malformed', async () => {
+    const state = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...state,
+      settings: {
+        ...state.settings,
+        terminalBackendDefault: 'unknown',
+        herdrBinarySource: { kind: 'custom', path: '   ' }
+      }
+    } as unknown as Parameters<typeof writeDataFile>[0])
+
+    const store = await createStore()
+    expect(store.getSettings().terminalBackendDefault).toBe('orca')
+    expect(store.getSettings().herdrBinarySource).toEqual({ kind: 'managed' })
+  })
+
+  it('keeps projects from older profiles activated on Orca', async () => {
+    const project = makeProject({ id: 'project-1', sourceRepoIds: ['r1'] })
+    const legacyState = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...legacyState,
+      settings: {
+        ...legacyState.settings,
+        terminalBackendActivationDefaultedToOrca: undefined
+      },
+      projects: [project],
+      projectHostSetups: [
+        makeProjectHostSetup({ id: 'local-setup', projectId: project.id, hostId: 'local' }),
+        makeProjectHostSetup({ id: 'ssh-setup', projectId: project.id, hostId: 'ssh:server-1' })
+      ]
+    })
+
+    const store = await createStore()
+    expect(store.getProjects()[0]?.terminalBackendByHost).toEqual({
+      local: { backend: 'orca', state: 'ready' },
+      'ssh:server-1': { backend: 'orca', state: 'ready' }
+    })
+  })
+
   it('migrates legacy WSL agent settings into the global Windows runtime default', async () => {
     writeDataFile({
       schemaVersion: 1,

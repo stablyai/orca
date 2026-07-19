@@ -36,7 +36,7 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
     method: string,
     params: unknown
   ): Promise<HerdrResponse<T>> {
-    const request = JSON.stringify({ id: randomUUID(), method, params }) + '\n'
+    const request = `${JSON.stringify({ id: randomUUID(), method, params })}\n`
     const line = await this.runRequest(['--session', sessionName, 'api', 'bridge'], request, method)
     return JSON.parse(line) as HerdrResponse<T>
   }
@@ -59,10 +59,14 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
       stdout += chunk
       for (;;) {
         const newline = stdout.indexOf('\n')
-        if (newline === -1) break
+        if (newline === -1) {
+          break
+        }
         const line = stdout.slice(0, newline).trim()
         stdout = stdout.slice(newline + 1)
-        if (!line) continue
+        if (!line) {
+          continue
+        }
         try {
           subscription.acceptLine(line)
         } catch (error) {
@@ -102,7 +106,9 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
       '--rows',
       String(options.rows)
     ]
-    if (options.takeover) args.push('--takeover')
+    if (options.takeover) {
+      args.push('--takeover')
+    }
     const command = this.options.commandFor(args)
     const child = spawn(command.file, command.args, {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -120,48 +126,74 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
       stdout += chunk
       for (;;) {
         const newline = stdout.indexOf('\n')
-        if (newline === -1) break
+        if (newline === -1) {
+          break
+        }
         const line = stdout.slice(0, newline).trim()
         stdout = stdout.slice(newline + 1)
-        if (!line) continue
+        if (!line) {
+          continue
+        }
         const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
         if (event.type === 'terminal.frame') {
-          if (frameListeners.size === 0) pendingFrames.push(event)
-          else for (const listener of frameListeners) listener(event)
+          if (frameListeners.size === 0) {
+            pendingFrames.push(event)
+          } else {
+            for (const listener of frameListeners) {
+              listener(event)
+            }
+          }
         } else if (event.type === 'terminal.closed') {
-          if (closedListeners.size === 0) pendingClosed = event
-          else for (const listener of closedListeners) listener(event)
+          if (closedListeners.size === 0) {
+            pendingClosed = event
+          } else {
+            for (const listener of closedListeners) {
+              listener(event)
+            }
+          }
         }
       }
     })
     child.once('error', (error) => {
       const event: HerdrTerminalClosed = { type: 'terminal.closed', reason: error.message }
-      for (const listener of closedListeners) listener(event)
+      for (const listener of closedListeners) {
+        listener(event)
+      }
     })
     child.once('close', (code) => {
-      if (released) return
+      if (released) {
+        return
+      }
       const event: HerdrTerminalClosed = {
         type: 'terminal.closed',
         reason: `Herdr terminal controller exited with code ${code ?? 'unknown'}`
       }
-      for (const listener of closedListeners) listener(event)
+      for (const listener of closedListeners) {
+        listener(event)
+      }
     })
 
     const send = (message: unknown): void => {
-      if (!released && child.stdin.writable) child.stdin.write(`${JSON.stringify(message)}\n`)
+      if (!released && child.stdin.writable) {
+        child.stdin.write(`${JSON.stringify(message)}\n`)
+      }
     }
     return {
       write: (data) => send({ type: 'terminal.input', text: data }),
       resize: (cols, rows) => send({ type: 'terminal.resize', cols, rows }),
       release: () => {
-        if (released) return
+        if (released) {
+          return
+        }
         send({ type: 'terminal.release' })
         released = true
         child.stdin.end()
       },
       onFrame: (listener) => {
         frameListeners.add(listener)
-        for (const frame of pendingFrames.splice(0)) listener(frame)
+        for (const frame of pendingFrames.splice(0)) {
+          listener(frame)
+        }
         return () => frameListeners.delete(listener)
       },
       onClosed: (listener) => {
@@ -198,8 +230,11 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
       })
       child.once('close', (code) => {
         clearTimeout(timeout)
-        if (code === 0) resolve(stdout)
-        else reject(new Error(stderr.trim() || `Herdr exited with code ${code ?? 'unknown'}`))
+        if (code === 0) {
+          resolve(stdout)
+        } else {
+          reject(new Error(stderr.trim() || `Herdr exited with code ${code ?? 'unknown'}`))
+        }
       })
       child.stdin.end(input)
     })
@@ -216,12 +251,17 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
       let stderr = ''
       let settled = false
       const finish = (error: Error | null, line?: string): void => {
-        if (settled) return
+        if (settled) {
+          return
+        }
         settled = true
         clearTimeout(timeout)
         child.kill()
-        if (error) reject(error)
-        else resolve(line as string)
+        if (error) {
+          reject(error)
+        } else {
+          resolve(line as string)
+        }
       }
       const timeout = setTimeout(
         () => finish(new Error(`Herdr command timed out after ${this.timeoutMs}ms`)),
@@ -232,9 +272,13 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
       child.stdout.on('data', (chunk: string) => {
         stdout += chunk
         const newline = stdout.indexOf('\n')
-        if (newline === -1) return
+        if (newline === -1) {
+          return
+        }
         const line = stdout.slice(0, newline).trim()
-        if (line) finish(null, line)
+        if (line) {
+          finish(null, line)
+        }
       })
       child.stderr.on('data', (chunk: string) => (stderr += chunk))
       child.once('error', (error) => finish(error))

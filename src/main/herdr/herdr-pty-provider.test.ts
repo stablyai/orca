@@ -8,7 +8,11 @@ import type {
   HerdrTerminalController,
   HerdrTerminalFrame
 } from './herdr-runtime-contract'
-import { decodeHerdrPtyId, HerdrPtyProvider } from './herdr-pty-provider'
+import {
+  decodeHerdrPtyId,
+  findLegacyMigrationBlockers,
+  HerdrPtyProvider
+} from './herdr-pty-provider'
 
 function fallback(): IPtyProvider {
   const empty = () => () => undefined
@@ -59,7 +63,16 @@ function transport() {
         id: 'snapshot',
         result: {
           snapshot: {
-            protocol: 18,
+            protocol: 17,
+            capabilities: {
+              external_refs: true,
+              resumable_events: true,
+              portable_layouts: true,
+              terminal_control_v2: true,
+              terminal_history: true,
+              controller_takeover: true,
+              pane_restart: false
+            },
             graph_revision: created ? 1 : 0,
             workspaces: created
               ? [
@@ -115,7 +128,18 @@ function transport() {
         }
       } as HerdrResponse<unknown>
     }
-    if (method === 'pane.close') return { id: 'close', result: {} } as HerdrResponse<unknown>
+    if (method === 'pane.close') {
+      return { id: 'close', result: {} } as HerdrResponse<unknown>
+    }
+    if (method === 'pane.send_keys') {
+      return { id: 'keys', result: {} } as HerdrResponse<unknown>
+    }
+    if (method === 'pane.read') {
+      return {
+        id: 'read',
+        result: { read: { text: 'history\nprompt$ ', revision: 7, truncated: false } }
+      } as HerdrResponse<unknown>
+    }
     if (method === 'pane.get') {
       return {
         id: 'pane',
@@ -150,10 +174,25 @@ function transport() {
 }
 
 describe('HerdrPtyProvider', () => {
+  it('reports every live legacy PTY in the project worktrees as a migration blocker', () => {
+    expect(
+      findLegacyMigrationBlockers(
+        [
+          { id: 'terminal-1', worktreeId: 'worktree-1' },
+          { id: 'setup-1', worktreeId: 'worktree-1' },
+          { id: 'other-project', worktreeId: 'worktree-2' }
+        ] as never,
+        ['worktree-1']
+      )
+    ).toEqual(['terminal-1', 'setup-1'])
+  })
+
   it('mounts a reconciled pane, returns its full frame, and closes it explicitly', async () => {
     const host = transport()
     const legacy = fallback()
+    const activateHerdr = vi.fn()
     const provider = new HerdrPtyProvider(legacy, host.value, async () => ({
+      activateHerdr,
       project: {
         id: 'project-1',
         displayName: 'Project',
@@ -214,14 +253,27 @@ describe('HerdrPtyProvider', () => {
       paneKey: 'tab-1:leaf-1'
     })
     expect(decodeHerdrPtyId(spawned.id)).toMatchObject({ leafId: 'leaf-1' })
+    expect(activateHerdr).toHaveBeenCalledOnce()
     expect(spawned.snapshot).toBe('prompt$ ')
 
     provider.write(spawned.id, 'echo hi\r')
     provider.resize(spawned.id, 90, 30)
     expect(host.controller.write).toHaveBeenCalledWith('echo hi\r')
     expect(host.controller.resize).toHaveBeenCalledWith(90, 30)
-    expect(provider.canProvideAuthoritativeBufferSnapshot(spawned.id)).toBe(false)
-    expect(await provider.getBufferSnapshot(spawned.id)).toBeNull()
+    expect(provider.canProvideAuthoritativeBufferSnapshot(spawned.id)).toBe(true)
+    expect(await provider.getBufferSnapshot(spawned.id, { scrollbackRows: 500 })).toEqual({
+      data: 'history\nprompt$ ',
+      cols: 90,
+      rows: 30,
+      cwd: '/repo',
+      seq: 7,
+      source: 'headless'
+    })
+    await provider.clearBuffer(spawned.id)
+    expect(host.request).toHaveBeenCalledWith('orca-project-1', 'pane.send_keys', {
+      pane_id: 'p1',
+      keys: ['ctrl+l']
+    })
 
     const replacementLegacy = fallback()
     provider.replaceFallback(replacementLegacy)

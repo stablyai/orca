@@ -5,21 +5,72 @@ import {
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/types'
 import type { Project } from '../../shared/types'
+import { resolveDesiredTerminalBackend } from '../../shared/terminal-backend'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../shared/ephemeral-setup-terminal-worktree-id'
 import type { Store } from '../persistence'
 import type { HerdrPtyIdentity, HerdrPtyTargetResolver } from './herdr-pty-provider'
 
+function projectHerdrActivation(
+  store: Store,
+  project: Project,
+  hostId: string
+): { useHerdr: boolean; activateHerdr?: () => void } {
+  const settings = store.getSettings()
+  const activation = project.terminalBackendByHost?.[hostId]
+  const desired = resolveDesiredTerminalBackend({
+    globalDefault: settings.terminalBackendDefault ?? 'orca',
+    preference: project.terminalBackendPreference ?? 'inherit',
+    activation
+  })
+  if (desired !== 'herdr') {
+    if (
+      activation?.backend === 'herdr' &&
+      store.getProjects().some((entry) => entry.id === project.id)
+    ) {
+      store.updateProject(project.id, {
+        terminalBackendByHost: {
+          ...project.terminalBackendByHost,
+          [hostId]: { backend: 'orca', state: 'ready' }
+        }
+      })
+    }
+    return { useHerdr: false }
+  }
+  if (
+    activation?.backend === 'herdr' ||
+    !store.getProjects().some((entry) => entry.id === project.id)
+  ) {
+    return { useHerdr: true }
+  }
+  return {
+    useHerdr: true,
+    activateHerdr: () => {
+      const current = store.getProjects().find((entry) => entry.id === project.id) ?? project
+      store.updateProject(project.id, {
+        terminalBackendByHost: {
+          ...current.terminalBackendByHost,
+          [hostId]: { backend: 'herdr', state: 'ready' }
+        }
+      })
+    }
+  }
+}
+
 function resolveIdentity(
   opts: Parameters<HerdrPtyTargetResolver>[0],
   persisted: HerdrPtyIdentity | null
 ): Omit<HerdrPtyIdentity, 'projectId' | 'hostId'> | null {
-  if (persisted) return persisted
+  if (persisted) {
+    return persisted
+  }
   const pane = opts.paneKey ? parsePaneKey(opts.paneKey) : null
   const worktreeId = opts.worktreeId
   const tabId = opts.tabId ?? pane?.tabId
   const leafId = pane?.leafId
-  if (!worktreeId || !tabId || !leafId) return null
+  if (!worktreeId || !tabId || !leafId) {
+    return null
+  }
   return { worktreeId, tabId, leafId }
 }
 
@@ -55,7 +106,9 @@ export function createLocalHerdrPtyTargetResolver(store: Store): HerdrPtyTargetR
 export function createHerdrPtyTargetResolver(store: Store, hostId: string): HerdrPtyTargetResolver {
   return async (opts, persistedIdentity) => {
     const partial = resolveIdentity(opts, persistedIdentity)
-    if (!partial) return null
+    if (!partial) {
+      return null
+    }
     const globalSurface =
       partial.worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
       isEphemeralSetupTerminalWorktreeId(partial.worktreeId)
@@ -68,6 +121,9 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
         herdrSessionName: 'orca-global',
         createdAt: 0,
         updatedAt: 0
+      }
+      if (!projectHerdrActivation(store, project, hostId).useHerdr) {
+        return null
       }
       const session = store.getWorkspaceSession(hostId)
       const existingTabs = session.tabsByWorktree[partial.worktreeId] ?? []
@@ -102,9 +158,13 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
       }
     }
     const parsed = splitWorktreeIdForFilesystem(partial.worktreeId)
-    if (!parsed) return null
+    if (!parsed) {
+      return null
+    }
     const meta = store.getWorktreeMeta(partial.worktreeId)
-    if (meta?.hostId && meta.hostId !== hostId) return null
+    if (meta?.hostId && meta.hostId !== hostId) {
+      return null
+    }
     const project = store
       .getProjects()
       .find(
@@ -113,7 +173,13 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
           candidate.id === meta?.projectId ||
           candidate.sourceRepoIds.includes(parsed.repoId)
       )
-    if (!project) return null
+    if (!project) {
+      return null
+    }
+    const herdrActivation = projectHerdrActivation(store, project, hostId)
+    if (!herdrActivation.useHerdr) {
+      return null
+    }
 
     const session = store.getWorkspaceSession(hostId)
     const existingTabs = session.tabsByWorktree[partial.worktreeId] ?? []
@@ -131,6 +197,12 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
     }
 
     return {
+      ...(herdrActivation.activateHerdr
+        ? {
+            activateHerdr: herdrActivation.activateHerdr,
+            legacyMigrationWorktreeIds: [partial.worktreeId]
+          }
+        : {}),
       project,
       identity,
       graph: {

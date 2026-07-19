@@ -70,6 +70,7 @@ import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
+import { normalizeHerdrBinarySource, normalizeTerminalBackend } from '../shared/terminal-backend'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
@@ -2250,6 +2251,28 @@ function projectHostSetupCompatibilityStateEqual(
   )
 }
 
+function backfillLegacyTerminalBackendActivations(
+  state: Pick<PersistedState, 'projects' | 'projectHostSetups'>
+): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
+  const hostIdsByProject = new Map<string, Set<ExecutionHostId>>()
+  for (const setup of state.projectHostSetups) {
+    const hostIds = hostIdsByProject.get(setup.projectId) ?? new Set<ExecutionHostId>()
+    hostIds.add(setup.hostId)
+    hostIdsByProject.set(setup.projectId, hostIds)
+  }
+  return {
+    ...state,
+    projects: state.projects.map((project) => {
+      const hostIds = hostIdsByProject.get(project.id) ?? new Set<ExecutionHostId>(['local'])
+      const terminalBackendByHost = { ...project.terminalBackendByHost }
+      for (const hostId of hostIds) {
+        terminalBackendByHost[hostId] ??= { backend: 'orca', state: 'ready' }
+      }
+      return { ...project, terminalBackendByHost }
+    })
+  }
+}
+
 function isRepoBackedProjectHostSetup(
   setup: ProjectHostSetup,
   currentRepoIds: ReadonlySet<string>
@@ -2287,7 +2310,9 @@ function mergeProjectHostSetupCompatibilityState(
     }))
   const projectedProjects = projection.projects.map((project) => {
     const existingProject = existingProjectsById.get(project.id)
-    if (!existingProject) return project
+    if (!existingProject) {
+      return project
+    }
     return {
       ...project,
       ...(existingProject.localWindowsRuntimePreference
@@ -2295,6 +2320,12 @@ function mergeProjectHostSetupCompatibilityState(
         : {}),
       ...(existingProject.herdrSessionName
         ? { herdrSessionName: existingProject.herdrSessionName }
+        : {}),
+      ...(existingProject.terminalBackendPreference
+        ? { terminalBackendPreference: existingProject.terminalBackendPreference }
+        : {}),
+      ...(existingProject.terminalBackendByHost
+        ? { terminalBackendByHost: existingProject.terminalBackendByHost }
         : {}),
       updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
     }
@@ -2790,6 +2821,7 @@ export class Store {
     })
 
     let result: PersistedState | null = null
+    let backfillLegacyTerminalBackends = false
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -2800,6 +2832,8 @@ export class Store {
         })
         logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        backfillLegacyTerminalBackends =
+          parsed.settings?.terminalBackendActivationDefaultedToOrca !== true
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
@@ -3088,6 +3122,11 @@ export class Store {
             localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             localAccountRuntime: migratedLocalAccountRuntime,
             localAccountRuntimeDefaultedToAutoForAllUsers: true,
+            terminalBackendDefault: normalizeTerminalBackend(
+              parsed.settings?.terminalBackendDefault
+            ),
+            herdrBinarySource: normalizeHerdrBinarySource(parsed.settings?.herdrBinarySource),
+            terminalBackendActivationDefaultedToOrca: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -3379,7 +3418,13 @@ export class Store {
     }
 
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
-    const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
+    let projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
+    if (backfillLegacyTerminalBackends) {
+      projectHostSetupCompatibility = backfillLegacyTerminalBackendActivations(
+        projectHostSetupCompatibility
+      )
+      this.loadNeedsSave = true
+    }
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.loadNeedsSave = true
     }
@@ -3729,6 +3774,21 @@ export class Store {
         delete project.herdrSessionName
       } else {
         project.herdrSessionName = sessionName
+      }
+    }
+    if ('terminalBackendPreference' in updates) {
+      const preference = updates.terminalBackendPreference
+      if (!preference) {
+        delete project.terminalBackendPreference
+      } else {
+        project.terminalBackendPreference = preference
+      }
+    }
+    if ('terminalBackendByHost' in updates) {
+      if (!updates.terminalBackendByHost) {
+        delete project.terminalBackendByHost
+      } else {
+        project.terminalBackendByHost = structuredClone(updates.terminalBackendByHost)
       }
     }
     project.updatedAt = Date.now()

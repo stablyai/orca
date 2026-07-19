@@ -1,15 +1,29 @@
 import type { HerdrExternalRef } from '../../shared/herdr-session-identity'
 
-export const HERDR_PROTOCOL_VERSION = 18
+export const HERDR_MINIMUM_PROTOCOL_VERSION = 17
+
+export type HerdrServerCapabilities = {
+  protocol: number
+  external_refs: boolean
+  resumable_events: boolean
+  portable_layouts: boolean
+  terminal_control_v2: boolean
+  terminal_history: boolean
+  controller_takeover: boolean
+  pane_restart: boolean
+}
 
 export type HerdrWorkspace = {
   workspace_id: string
+  label?: string
+  worktree?: { checkout_path: string }
   external_ref?: HerdrExternalRef
 }
 
 export type HerdrTab = {
   tab_id: string
   workspace_id: string
+  label?: string
   external_ref?: HerdrExternalRef
 }
 
@@ -22,6 +36,7 @@ export type HerdrPane = {
 
 export type HerdrSessionSnapshot = {
   protocol: number
+  capabilities: Omit<HerdrServerCapabilities, 'protocol'>
   graph_revision: number
   workspaces: HerdrWorkspace[]
   tabs: HerdrTab[]
@@ -47,7 +62,7 @@ export type HerdrTerminalClosed = {
   reason: string
 }
 
-export interface HerdrTerminalController {
+export type HerdrTerminalController = {
   write(data: string): void
   resize(cols: number, rows: number): void
   release(): void
@@ -67,13 +82,13 @@ export type HerdrSequencedEvent = {
   data: unknown
 }
 
-export interface HerdrEventSubscription {
+export type HerdrEventSubscription = {
   release(): void
   onEvent(listener: (event: HerdrSequencedEvent) => void): () => void
   onError(listener: (error: HerdrRuntimeError) => void): () => void
 }
 
-export interface HerdrHostTransport {
+export type HerdrHostTransport = {
   ensureSession(sessionName: string): Promise<void>
   request<T>(sessionName: string, method: string, params: unknown): Promise<HerdrResponse<T>>
   subscribeEvents?(sessionName: string, afterSequence: number): HerdrEventSubscription
@@ -91,6 +106,31 @@ export class HerdrRuntimeError extends Error {
     super(message)
     this.name = 'HerdrRuntimeError'
     this.code = code
+  }
+}
+
+const REQUIRED_HERDR_CAPABILITIES = [
+  'external_refs',
+  'resumable_events',
+  'portable_layouts',
+  'terminal_control_v2',
+  'terminal_history',
+  'controller_takeover'
+] as const
+
+export function assertHerdrRuntimeCompatible(capabilities: HerdrServerCapabilities): void {
+  if (capabilities.protocol < HERDR_MINIMUM_PROTOCOL_VERSION) {
+    throw new HerdrRuntimeError(
+      'herdr_incompatible',
+      `Orca requires Herdr protocol ${HERDR_MINIMUM_PROTOCOL_VERSION} or newer; received ${capabilities.protocol}`
+    )
+  }
+  const missing = REQUIRED_HERDR_CAPABILITIES.filter((name) => !capabilities[name])
+  if (missing.length > 0) {
+    throw new HerdrRuntimeError(
+      'herdr_incompatible',
+      `Herdr is missing required capabilities: ${missing.join(', ')}`
+    )
   }
 }
 

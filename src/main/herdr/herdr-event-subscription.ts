@@ -53,7 +53,9 @@ export class HerdrEventSubscriptionBuffer implements HerdrEventSubscription {
   constructor(private readonly releaseTransport: () => void) {}
 
   acceptLine(line: string): void {
-    if (this.released) return
+    if (this.released) {
+      return
+    }
     const value = JSON.parse(line) as
       | HerdrResponse<{ type: 'subscription_started'; sequence: number }>
       | HerdrSequencedEvent
@@ -61,17 +63,26 @@ export class HerdrEventSubscriptionBuffer implements HerdrEventSubscription {
       this.fail(new HerdrRuntimeError(value.error.code, value.error.message))
       return
     }
-    if ('result' in value) return
+    if ('result' in value) {
+      return
+    }
     if (typeof value.sequence !== 'number' || typeof value.event !== 'string') {
       this.fail(new HerdrRuntimeError('invalid_event', 'Herdr returned an invalid event envelope'))
       return
     }
-    if (this.eventListeners.size === 0) this.pendingEvents.push(value)
-    else for (const listener of this.eventListeners) listener(value)
+    if (this.eventListeners.size === 0) {
+      this.pendingEvents.push(value)
+    } else {
+      for (const listener of this.eventListeners) {
+        listener(value)
+      }
+    }
   }
 
   fail(error: unknown): void {
-    if (this.released) return
+    if (this.released) {
+      return
+    }
     const runtimeError =
       error instanceof HerdrRuntimeError
         ? error
@@ -79,12 +90,19 @@ export class HerdrEventSubscriptionBuffer implements HerdrEventSubscription {
             'transport_error',
             error instanceof Error ? error.message : String(error)
           )
-    if (this.errorListeners.size === 0) this.pendingError = runtimeError
-    else for (const listener of this.errorListeners) listener(runtimeError)
+    if (this.errorListeners.size === 0) {
+      this.pendingError = runtimeError
+    } else {
+      for (const listener of this.errorListeners) {
+        listener(runtimeError)
+      }
+    }
   }
 
   release(): void {
-    if (this.released) return
+    if (this.released) {
+      return
+    }
     this.released = true
     this.releaseTransport()
     this.pendingEvents.length = 0
@@ -95,7 +113,9 @@ export class HerdrEventSubscriptionBuffer implements HerdrEventSubscription {
 
   onEvent(listener: (event: HerdrSequencedEvent) => void): () => void {
     this.eventListeners.add(listener)
-    for (const event of this.pendingEvents.splice(0)) listener(event)
+    for (const event of this.pendingEvents.splice(0)) {
+      listener(event)
+    }
     return () => this.eventListeners.delete(listener)
   }
 

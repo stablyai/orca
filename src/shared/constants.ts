@@ -235,6 +235,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     localAccountWslDistro: null,
     localWindowsRuntimeDefault: { kind: 'windows-host' },
+    terminalBackendDefault: 'orca',
+    herdrBinarySource: { kind: 'managed' },
+    terminalBackendActivationDefaultedToOrca: true,
     // Why: prefer modern PowerShell when installed, falling back to inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,

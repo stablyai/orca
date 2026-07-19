@@ -72,7 +72,16 @@ describe('HerdrRuntimeManager', () => {
           id: 'snapshot',
           result: {
             snapshot: {
-              protocol: 18,
+              protocol: 17,
+              capabilities: {
+                external_refs: true,
+                resumable_events: true,
+                portable_layouts: true,
+                terminal_control_v2: true,
+                terminal_history: true,
+                controller_takeover: true,
+                pane_restart: false
+              },
               graph_revision: snapshotCalls,
               workspaces: reconciled
                 ? [
@@ -204,5 +213,117 @@ describe('HerdrRuntimeManager', () => {
       rows: 40,
       takeover: true
     })
+  })
+
+  it('adopts a uniquely matching unclaimed Herdr hierarchy', async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = []
+    const request = async <T>(
+      _session: string,
+      method: string,
+      params: unknown
+    ): Promise<HerdrResponse<T>> => {
+      const requestParams = params as Record<string, unknown>
+      calls.push({ method, params: requestParams })
+      if (method === 'session.snapshot') {
+        return {
+          id: 'snapshot',
+          result: {
+            snapshot: {
+              protocol: 17,
+              capabilities: {
+                external_refs: true,
+                resumable_events: true,
+                portable_layouts: true,
+                terminal_control_v2: true,
+                terminal_history: true,
+                controller_takeover: true,
+                pane_restart: false
+              },
+              graph_revision: 1,
+              workspaces: [
+                {
+                  workspace_id: 'w-existing',
+                  label: 'main',
+                  worktree: { checkout_path: '/repo' }
+                }
+              ],
+              tabs: [{ tab_id: 't-existing', workspace_id: 'w-existing', label: 'Terminal 1' }],
+              panes: [
+                {
+                  pane_id: 'p-existing',
+                  tab_id: 't-existing',
+                  workspace_id: 'w-existing'
+                }
+              ]
+            }
+          }
+        } as HerdrResponse<T>
+      }
+      if (method === 'workspace.bind') {
+        return {
+          id: 'workspace',
+          result: {
+            workspace: {
+              workspace_id: 'w-existing',
+              worktree: { checkout_path: '/repo' },
+              external_ref: requestParams.external_ref
+            }
+          }
+        } as HerdrResponse<T>
+      }
+      if (method === 'tab.bind') {
+        return {
+          id: 'tab',
+          result: {
+            tab: {
+              tab_id: 't-existing',
+              workspace_id: 'w-existing',
+              label: 'Terminal 1',
+              external_ref: requestParams.external_ref
+            }
+          }
+        } as HerdrResponse<T>
+      }
+      if (method === 'pane.bind') {
+        return {
+          id: 'pane',
+          result: {
+            pane: {
+              pane_id: 'p-existing',
+              tab_id: 't-existing',
+              workspace_id: 'w-existing',
+              external_ref: requestParams.external_ref
+            }
+          }
+        } as HerdrResponse<T>
+      }
+      throw new Error(`unexpected method ${method}`)
+    }
+    const manager = new HerdrRuntimeManager({
+      ensureSession: vi.fn(async () => undefined),
+      request
+    })
+
+    await manager.reconcileProjectHost({
+      project: project(),
+      worktrees: [worktree()],
+      tabsByWorktreeId: { [worktree().id]: [tab()] },
+      layoutsByTabId: {
+        [tab().id]: {
+          root: { type: 'leaf', leafId: 'leaf-a' },
+          activeLeafId: 'leaf-a',
+          expandedLeafId: null
+        }
+      }
+    })
+
+    expect(calls.map((call) => call.method)).toEqual([
+      'session.snapshot',
+      'workspace.bind',
+      'tab.bind',
+      'pane.bind',
+      'session.snapshot'
+    ])
+    expect(calls.some((call) => call.method.endsWith('.create'))).toBe(false)
   })
 })

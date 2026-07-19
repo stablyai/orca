@@ -33,6 +33,7 @@ import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSecti
 import { matchesRepositoryIdentitySearch } from './repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import { ProjectTerminalBackendSetting } from './ProjectTerminalBackendSetting'
 export { getRepositoryPaneSearchEntries }
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
@@ -317,6 +318,30 @@ export function RepositoryPane({
         >
           <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
         </SearchableSetting>
+
+        {settings && project && updateProject ? (
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.RepositoryPane.terminalBackend',
+              'Terminal backend'
+            )}
+            description={translate(
+              'auto.components.settings.RepositoryPane.terminalBackendDescription',
+              'Choose Orca or Herdr for this project.'
+            )}
+            keywords={[repo.displayName, 'terminal', 'backend', 'runtime', 'herdr', 'multiplexer']}
+            className="space-y-3"
+            forceVisible={forceFullPaneForRepoMatch}
+          >
+            <ProjectTerminalBackendSetting
+              project={project}
+              hostId={selectedHostId}
+              settings={settings}
+              runtimeSessionSummary={runtimeSessionSummary}
+              updateProject={updateProject}
+            />
+          </SearchableSetting>
+        ) : null}
 
         {!isFolder ? (
           <>

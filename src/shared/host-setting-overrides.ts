@@ -5,7 +5,7 @@ import type { GlobalSettings, HostSettingOverrides } from './types'
 // These pure helpers centralize that rule so the UI, registry, and tests share a
 // single implementation instead of re-deriving the fallback at each call site.
 
-export type HostSettingOverrideKey = keyof HostSettingOverrides
+export type HostSettingOverrideKey = Exclude<keyof HostSettingOverrides, 'herdrBinarySource'>
 
 type HostSettingsSlice = Pick<GlobalSettings, 'hostSettingOverrides'>
 

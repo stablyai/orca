@@ -1,24 +1,16 @@
-import type {
-  Project,
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TerminalTab,
-  Worktree
-} from '../../shared/types'
+import type { Project, TerminalPaneLayoutNode, TerminalTab } from '../../shared/types'
 import {
   firstTerminalLeafId,
+  herdrExternalRefKey,
   herdrPaneRef,
   herdrSessionNameForProject,
   herdrSplitDirection,
   herdrTabRef,
-  herdrWorktreeRef,
-  type HerdrExternalRef
+  herdrWorktreeRef
 } from '../../shared/herdr-session-identity'
 import {
-  HERDR_PROTOCOL_VERSION,
-  HerdrRuntimeError,
+  assertHerdrRuntimeCompatible,
   type HerdrHostTransport,
-  type HerdrEventSubscription,
   type HerdrPane,
   type HerdrSessionSnapshot,
   type HerdrTab,
@@ -27,69 +19,46 @@ import {
   type HerdrTerminalControlOptions,
   unwrapHerdrResponse
 } from './herdr-runtime-contract'
-
-export type HerdrProjectHostGraph = {
-  project: Project
-  worktrees: HerdrWorktreeDescriptor[]
-  tabsByWorktreeId: Record<string, TerminalTab[]>
-  layoutsByTabId: Record<string, TerminalLayoutSnapshot>
-}
-
-export type HerdrWorktreeDescriptor = Pick<Worktree, 'id' | 'instanceId' | 'path' | 'displayName'>
-
-type ReconcileIndex = {
-  workspaces: Map<string, HerdrWorkspace>
-  tabs: Map<string, HerdrTab>
-  panes: Map<string, HerdrPane>
-}
-
-function indexSnapshot(snapshot: HerdrSessionSnapshot): ReconcileIndex {
-  return {
-    workspaces: new Map(
-      snapshot.workspaces.flatMap((workspace) =>
-        workspace.external_ref ? [[workspace.external_ref.id, workspace] as const] : []
-      )
-    ),
-    tabs: new Map(
-      snapshot.tabs.flatMap((tab) =>
-        tab.external_ref ? [[tab.external_ref.id, tab] as const] : []
-      )
-    ),
-    panes: new Map(
-      snapshot.panes.flatMap((pane) =>
-        pane.external_ref ? [[pane.external_ref.id, pane] as const] : []
-      )
-    )
-  }
-}
-
-function externalRefId(ref: HerdrExternalRef): string {
-  return ref.id
-}
+import {
+  externalRefKey,
+  indexHerdrSnapshot,
+  takeUniqueMatch,
+  type HerdrReconcileIndex
+} from './herdr-reconcile-index'
+import { HerdrSessionWatcher } from './herdr-session-watcher'
+import type { HerdrProjectHostGraph } from './herdr-runtime-graph'
+export type { HerdrProjectHostGraph } from './herdr-runtime-graph'
+import type { HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
+export type { HerdrWorktreeDescriptor } from './herdr-worktree-descriptor'
 
 export class HerdrRuntimeManager {
   private readonly panesBySessionAndExternalRef = new Map<string, string>()
-  private readonly eventSubscriptions = new Map<
-    string,
-    { cursor: number; subscription: HerdrEventSubscription }
-  >()
-  private readonly refreshes = new Map<string, Promise<void>>()
-  private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  private disposed = false
+  private readonly watcher: HerdrSessionWatcher
 
-  constructor(private readonly transport: HerdrHostTransport) {}
+  constructor(private readonly transport: HerdrHostTransport) {
+    this.watcher = new HerdrSessionWatcher(
+      (sessionName, afterSequence) =>
+        this.transport.subscribeEvents?.(sessionName, afterSequence) ?? null,
+      (sessionName) => this.snapshot(sessionName),
+      (sessionName, snapshot) => this.rememberPaneBindings(sessionName, snapshot)
+    )
+  }
 
   getPaneId(sessionName: string, projectId: string, leafId: string): string | null {
     const externalRef = herdrPaneRef(projectId, leafId)
-    return this.panesBySessionAndExternalRef.get(`${sessionName}\0${externalRef.id}`) ?? null
+    return (
+      this.panesBySessionAndExternalRef.get(
+        `${sessionName}\0${herdrExternalRefKey(externalRef)}`
+      ) ?? null
+    )
   }
 
   async reconcileProjectHost(graph: HerdrProjectHostGraph): Promise<HerdrSessionSnapshot> {
     const sessionName = herdrSessionNameForProject(graph.project)
     await this.transport.ensureSession(sessionName)
     let snapshot = await this.snapshot(sessionName)
-    this.watchSession(sessionName, snapshot.graph_revision)
-    const index = indexSnapshot(snapshot)
+    this.watcher.watch(sessionName, snapshot.graph_revision)
+    const index = indexHerdrSnapshot(snapshot)
 
     for (const worktree of graph.worktrees) {
       const tabs = graph.tabsByWorktreeId[worktree.id] ?? []
@@ -104,7 +73,9 @@ export class HerdrRuntimeManager {
       )
       for (const tab of tabs) {
         const layout = graph.layoutsByTabId[tab.id]
-        if (!layout?.root) continue
+        if (!layout?.root) {
+          continue
+        }
         await this.ensureTabLayout(
           sessionName,
           graph.project.id,
@@ -122,11 +93,7 @@ export class HerdrRuntimeManager {
   }
 
   dispose(): void {
-    this.disposed = true
-    for (const watcher of this.eventSubscriptions.values()) watcher.subscription.release()
-    this.eventSubscriptions.clear()
-    for (const timer of this.retryTimers.values()) clearTimeout(timer)
-    this.retryTimers.clear()
+    this.watcher.dispose()
   }
 
   async controlProjectPane(
@@ -139,96 +106,46 @@ export class HerdrRuntimeManager {
     }
     const sessionName = herdrSessionNameForProject(project)
     const externalRef = herdrPaneRef(project.id, leafId)
-    let paneId = this.panesBySessionAndExternalRef.get(`${sessionName}\0${externalRef.id}`)
+    const bindingKey = `${sessionName}\0${herdrExternalRefKey(externalRef)}`
+    let paneId = this.panesBySessionAndExternalRef.get(bindingKey)
     if (!paneId) {
       await this.transport.ensureSession(sessionName)
       const snapshot = await this.snapshot(sessionName)
       this.rememberPaneBindings(sessionName, snapshot)
-      paneId = this.panesBySessionAndExternalRef.get(`${sessionName}\0${externalRef.id}`)
+      paneId = this.panesBySessionAndExternalRef.get(bindingKey)
     }
-    if (!paneId) throw new Error(`Herdr pane is not reconciled: ${externalRef.id}`)
+    if (!paneId) {
+      throw new Error(`Herdr pane is not reconciled: ${externalRef.id}`)
+    }
     return this.transport.controlTerminal(sessionName, paneId, options)
   }
 
   private rememberPaneBindings(sessionName: string, snapshot: HerdrSessionSnapshot): void {
     const prefix = `${sessionName}\0`
     for (const key of this.panesBySessionAndExternalRef.keys()) {
-      if (key.startsWith(prefix)) this.panesBySessionAndExternalRef.delete(key)
+      if (key.startsWith(prefix)) {
+        this.panesBySessionAndExternalRef.delete(key)
+      }
     }
     for (const pane of snapshot.panes) {
-      if (pane.external_ref?.owner !== 'orca') continue
-      this.panesBySessionAndExternalRef.set(`${sessionName}\0${pane.external_ref.id}`, pane.pane_id)
-    }
-  }
-
-  private watchSession(sessionName: string, afterSequence: number): void {
-    if (
-      this.disposed ||
-      !this.transport.subscribeEvents ||
-      this.eventSubscriptions.has(sessionName)
-    ) {
-      return
-    }
-    const subscription = this.transport.subscribeEvents(sessionName, afterSequence)
-    const watcher = { cursor: afterSequence, subscription }
-    this.eventSubscriptions.set(sessionName, watcher)
-    subscription.onEvent((event) => {
-      const current = this.eventSubscriptions.get(sessionName)
-      if (current !== watcher || event.sequence <= current.cursor) return
-      if (event.sequence !== current.cursor + 1) {
-        this.restartWatchFromSnapshot(sessionName)
-        return
+      if (pane.external_ref?.owner !== 'orca') {
+        continue
       }
-      current.cursor = event.sequence
-      this.refreshSnapshot(sessionName)
-    })
-    subscription.onError((error: HerdrRuntimeError) => {
-      if (this.eventSubscriptions.get(sessionName) !== watcher) return
-      if (error.code === 'stale_cursor' || error.code === 'transport_error') {
-        this.restartWatchFromSnapshot(sessionName)
-      }
-    })
-  }
-
-  private refreshSnapshot(sessionName: string): void {
-    if (this.refreshes.has(sessionName)) return
-    const refresh = this.snapshot(sessionName)
-      .then((snapshot) => this.rememberPaneBindings(sessionName, snapshot))
-      .catch(() => this.restartWatchFromSnapshot(sessionName))
-      .finally(() => this.refreshes.delete(sessionName))
-    this.refreshes.set(sessionName, refresh)
-  }
-
-  private restartWatchFromSnapshot(sessionName: string): void {
-    if (this.disposed) return
-    const current = this.eventSubscriptions.get(sessionName)
-    current?.subscription.release()
-    this.eventSubscriptions.delete(sessionName)
-    void this.snapshot(sessionName)
-      .then((snapshot) => {
-        this.rememberPaneBindings(sessionName, snapshot)
-        this.watchSession(sessionName, snapshot.graph_revision)
-      })
-      .catch(() => {
-        if (this.disposed || this.retryTimers.has(sessionName)) return
-        const timer = setTimeout(() => {
-          this.retryTimers.delete(sessionName)
-          this.restartWatchFromSnapshot(sessionName)
-        }, 1_000)
-        this.retryTimers.set(sessionName, timer)
-      })
+      this.panesBySessionAndExternalRef.set(
+        `${sessionName}\0${herdrExternalRefKey(pane.external_ref)}`,
+        pane.pane_id
+      )
+    }
   }
 
   private async snapshot(sessionName: string): Promise<HerdrSessionSnapshot> {
     const result = unwrapHerdrResponse<{ snapshot: HerdrSessionSnapshot }>(
       await this.transport.request(sessionName, 'session.snapshot', {})
     )
-    if (result.snapshot.protocol !== HERDR_PROTOCOL_VERSION) {
-      throw new HerdrRuntimeError(
-        'protocol_mismatch',
-        `Orca requires Herdr protocol ${HERDR_PROTOCOL_VERSION}, received ${result.snapshot.protocol}`
-      )
-    }
+    assertHerdrRuntimeCompatible({
+      protocol: result.snapshot.protocol,
+      ...result.snapshot.capabilities
+    })
     return result.snapshot
   }
 
@@ -238,11 +155,27 @@ export class HerdrRuntimeManager {
     worktree: HerdrWorktreeDescriptor,
     firstTab: TerminalTab | undefined,
     firstRoot: TerminalPaneLayoutNode | null,
-    index: ReconcileIndex
+    index: HerdrReconcileIndex
   ): Promise<HerdrWorkspace> {
     const externalRef = herdrWorktreeRef(projectId, worktree)
-    const existing = index.workspaces.get(externalRefId(externalRef))
-    if (existing) return existing
+    const existing = index.workspaces.get(externalRefKey(externalRef))
+    if (existing) {
+      return existing
+    }
+    const adoptable = takeUniqueMatch(
+      index.unclaimedWorkspaces,
+      (workspace) => workspace.worktree?.checkout_path === worktree.path
+    )
+    if (adoptable) {
+      const bound = unwrapHerdrResponse<{ workspace: HerdrWorkspace }>(
+        await this.transport.request(sessionName, 'workspace.bind', {
+          workspace_id: adoptable.workspace_id,
+          external_ref: externalRef
+        })
+      ).workspace
+      index.workspaces.set(externalRefKey(externalRef), bound)
+      return bound
+    }
     const firstLeafId = firstTerminalLeafId(firstRoot)
     const result = unwrapHerdrResponse<{
       workspace: HerdrWorkspace
@@ -258,10 +191,12 @@ export class HerdrRuntimeManager {
         root_pane_external_ref: firstLeafId ? herdrPaneRef(projectId, firstLeafId) : undefined
       })
     )
-    index.workspaces.set(externalRefId(externalRef), result.workspace)
-    if (result.tab.external_ref) index.tabs.set(result.tab.external_ref.id, result.tab)
+    index.workspaces.set(externalRefKey(externalRef), result.workspace)
+    if (result.tab.external_ref) {
+      index.tabs.set(externalRefKey(result.tab.external_ref), result.tab)
+    }
     if (result.root_pane.external_ref) {
-      index.panes.set(result.root_pane.external_ref.id, result.root_pane)
+      index.panes.set(externalRefKey(result.root_pane.external_ref), result.root_pane)
     }
     return result.workspace
   }
@@ -272,14 +207,49 @@ export class HerdrRuntimeManager {
     workspaceId: string,
     tab: TerminalTab,
     root: TerminalPaneLayoutNode,
-    index: ReconcileIndex
+    index: HerdrReconcileIndex
   ): Promise<void> {
     const tabExternalRef = herdrTabRef(projectId, tab.id)
     const rootLeafId = firstTerminalLeafId(root)
-    if (!rootLeafId) return
+    if (!rootLeafId) {
+      return
+    }
     const rootPaneExternalRef = herdrPaneRef(projectId, rootLeafId)
-    let herdrTab = index.tabs.get(externalRefId(tabExternalRef))
-    let rootPane = index.panes.get(externalRefId(rootPaneExternalRef))
+    let herdrTab = index.tabs.get(externalRefKey(tabExternalRef))
+    let rootPane = index.panes.get(externalRefKey(rootPaneExternalRef))
+
+    if (!herdrTab) {
+      const expectedLabel = tab.customTitle ?? tab.title
+      const adoptableTab = takeUniqueMatch(
+        index.unclaimedTabs,
+        (candidate) => candidate.workspace_id === workspaceId && candidate.label === expectedLabel
+      )
+      if (adoptableTab) {
+        herdrTab = unwrapHerdrResponse<{ tab: HerdrTab }>(
+          await this.transport.request(sessionName, 'tab.bind', {
+            tab_id: adoptableTab.tab_id,
+            external_ref: tabExternalRef
+          })
+        ).tab
+        index.tabs.set(externalRefKey(tabExternalRef), herdrTab)
+      }
+    }
+
+    if (herdrTab && !rootPane) {
+      const adoptablePane = takeUniqueMatch(
+        index.unclaimedPanes,
+        (candidate) => candidate.tab_id === herdrTab?.tab_id
+      )
+      if (adoptablePane) {
+        rootPane = unwrapHerdrResponse<{ pane: HerdrPane }>(
+          await this.transport.request(sessionName, 'pane.bind', {
+            pane_id: adoptablePane.pane_id,
+            external_ref: rootPaneExternalRef
+          })
+        ).pane
+        index.panes.set(externalRefKey(rootPaneExternalRef), rootPane)
+      }
+    }
 
     if (!herdrTab) {
       const created = unwrapHerdrResponse<{ tab: HerdrTab; root_pane: HerdrPane }>(
@@ -294,10 +264,12 @@ export class HerdrRuntimeManager {
       )
       herdrTab = created.tab
       rootPane = created.root_pane
-      index.tabs.set(externalRefId(tabExternalRef), created.tab)
-      index.panes.set(externalRefId(rootPaneExternalRef), created.root_pane)
+      index.tabs.set(externalRefKey(tabExternalRef), created.tab)
+      index.panes.set(externalRefKey(rootPaneExternalRef), created.root_pane)
     }
-    if (!rootPane) return
+    if (!rootPane) {
+      return
+    }
     await this.ensureSplits(sessionName, projectId, root, rootPane.pane_id, index)
   }
 
@@ -306,13 +278,17 @@ export class HerdrRuntimeManager {
     projectId: string,
     node: TerminalPaneLayoutNode,
     firstPaneId: string,
-    index: ReconcileIndex
+    index: HerdrReconcileIndex
   ): Promise<void> {
-    if (node.type === 'leaf') return
+    if (node.type === 'leaf') {
+      return
+    }
     const secondLeafId = firstTerminalLeafId(node.second)
-    if (!secondLeafId) return
+    if (!secondLeafId) {
+      return
+    }
     const secondRef = herdrPaneRef(projectId, secondLeafId)
-    let secondPane = index.panes.get(externalRefId(secondRef))
+    let secondPane = index.panes.get(externalRefKey(secondRef))
     if (!secondPane) {
       const result = unwrapHerdrResponse<{ pane: HerdrPane }>(
         await this.transport.request(sessionName, 'pane.split', {
@@ -324,7 +300,7 @@ export class HerdrRuntimeManager {
         })
       )
       secondPane = result.pane
-      index.panes.set(externalRefId(secondRef), secondPane)
+      index.panes.set(externalRefKey(secondRef), secondPane)
     }
     await this.ensureSplits(sessionName, projectId, node.first, firstPaneId, index)
     await this.ensureSplits(sessionName, projectId, node.second, secondPane.pane_id, index)
