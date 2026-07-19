@@ -7,9 +7,8 @@ const DEFAULT_COLLAPSED_SECTIONS: ReadonlySet<SourceControlCollapsibleSectionId>
   'history'
 ])
 
-// Why: Source Control unmounts when another right-sidebar tab is selected.
-// Keep disclosure choices in a bounded renderer-session cache so tab and
-// worktree round trips restore them without turning transient UI into settings.
+// Why: Source Control unmounts with its sidebar tab, so a bounded session cache restores
+// disclosure choices without promoting transient UI state to persistent settings.
 export const MAX_PERSISTED_SOURCE_CONTROL_SECTION_STATES = 512
 const collapsedSectionsByWorktreeId = new Map<
   string,

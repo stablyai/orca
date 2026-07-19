@@ -371,6 +371,7 @@ describe('SourceControl virtualized changed-files list', () => {
     const remountedChangesHeader = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Changes')
     )
+    expect(remountedChangesHeader).toBeTruthy()
     act(() => {
       remountedChangesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
