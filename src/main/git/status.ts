@@ -37,7 +37,7 @@ import {
   gitOptionalLocksDisabledEnv,
   gitStreamStdout
 } from './runner'
-import { StatusPorcelainParser } from './status-porcelain-parser'
+import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {

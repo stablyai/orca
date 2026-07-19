@@ -5781,7 +5781,7 @@ function SourceControlInner(): React.JSX.Element {
 
           {repositoryHuge && (
             <div className="px-3 pb-2">
-              <TooManyChangesBanner limit={repositoryHuge.limit} />
+              <TooManyChangesBanner limit={repositoryHuge.limit} onRetry={refreshActiveGitStatus} />
             </div>
           )}
 
@@ -7681,18 +7681,62 @@ export function OperationBanner({
   )
 }
 
-export function TooManyChangesBanner({ limit }: { limit: number }): React.JSX.Element {
+export function TooManyChangesBanner({
+  limit,
+  onRetry
+}: {
+  limit: number
+  onRetry: () => Promise<void>
+}): React.JSX.Element {
+  const [isRetrying, setIsRetrying] = useState(false)
+  const [showSpinner, setShowSpinner] = useState(false)
+  useEffect(() => {
+    if (!isRetrying) {
+      setShowSpinner(false)
+      return
+    }
+    const timer = window.setTimeout(() => setShowSpinner(true), 1_000)
+    return () => window.clearTimeout(timer)
+  }, [isRetrying])
+
+  const handleRetry = async (): Promise<void> => {
+    if (isRetrying) {
+      return
+    }
+    setIsRetrying(true)
+    try {
+      await onRetry()
+    } catch (error) {
+      // Why: a failed local/SSH retry must leave the capped warning usable
+      // instead of becoming an unhandled click rejection.
+      console.warn('[SourceControl] capped status retry failed', error)
+    } finally {
+      setIsRetrying(false)
+    }
+  }
+
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
       <div className="flex items-center gap-2">
         <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="text-xs text-foreground">
+        <span className="min-w-0 flex-1 text-xs text-foreground">
           {translate(
             'auto.components.right.sidebar.SourceControl.tooManyChanges',
             'Too many changes detected. Only the first {{value0}} are shown.',
             { value0: limit.toLocaleString() }
           )}
         </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="w-16 shrink-0 text-xs"
+          disabled={isRetrying}
+          onClick={() => void handleRetry()}
+        >
+          {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
+          {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+        </Button>
       </div>
     </div>
   )

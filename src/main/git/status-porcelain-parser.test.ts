@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { StatusPorcelainParser } from './status-porcelain-parser'
+import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
 
 describe('StatusPorcelainParser', () => {
   it('parses branch headers and changed/untracked/ignored records', () => {

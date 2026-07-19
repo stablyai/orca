@@ -79,6 +79,7 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { streamRelayGitStdout } from './git-stdout-stream'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -346,7 +347,9 @@ export class GitHandler {
 
   private async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.clear()
-    return getStatusOp(this.git.bind(this), params, { signal: context.signal })
+    return getStatusOp(this.git.bind(this), streamRelayGitStdout, params, {
+      signal: context.signal
+    })
   }
 
   // Why: the parent status only lists a single gitlink row per submodule. The
@@ -359,7 +362,7 @@ export class GitHandler {
     const area = resolveSubmoduleStatusArea(params)
     const staged = area === 'staged'
     const resolved = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
-    const workingResult = await getStatusOp(this.git.bind(this), {
+    const workingResult = await getStatusOp(this.git.bind(this), streamRelayGitStdout, {
       ...params,
       worktreePath: resolved
     })

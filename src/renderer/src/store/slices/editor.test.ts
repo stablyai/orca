@@ -2234,6 +2234,25 @@ describe('createEditorSlice conflict status reconciliation', () => {
     expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
   })
 
+  it('keeps the capped state sticky until an explicit non-capped result recovers', () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      didHitLimit: true,
+      statusLength: 2
+    })
+
+    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toEqual({ limit: 1 })
+
+    store.getState().setGitStatus('wt-huge', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'src/index.ts', status: 'modified', area: 'unstaged' }]
+    })
+
+    expect(store.getState().gitStatusHugeByWorktree['wt-huge']).toBeUndefined()
+  })
+
   it('treats a blank git status HEAD as unknown without invalidating branch compare', () => {
     const store = createEditorStore()
     const summary = {

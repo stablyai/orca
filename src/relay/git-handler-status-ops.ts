@@ -8,9 +8,10 @@ import * as path from 'node:path'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
-import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
+import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/types'
+import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
@@ -63,6 +64,7 @@ export async function detectConflictOperation(worktreePath: string): Promise<str
 
 export async function getStatusOp(
   git: GitExec,
+  streamGit: RelayGitStreamExec,
   params: Record<string, unknown>,
   options: { signal?: AbortSignal } = {}
 ): Promise<{
@@ -92,6 +94,7 @@ export async function getStatusOp(
   let branch: string | undefined
   let upstreamStatus: GitUpstreamStatus | undefined
   let ignoredPaths: string[] = []
+  let unmergedLines: readonly string[] = []
   let didHitLimit = false
   let statusLength = 0
 
@@ -111,32 +114,34 @@ export async function getStatusOp(
     if (includeIgnored) {
       statusArgs.push('--ignored=matching')
     }
-    const { stdout } = await git(statusArgs, worktreePath, {
+    const parser = new StatusPorcelainParser()
+    const { stoppedEarly } = await streamGit(statusArgs, worktreePath, {
       // Why: status polling is read-like; avoid refreshing the index and racing
       // terminal Git commands on `.git/worktrees/*/index.lock`.
       disableOptionalLocks: true,
-      signal: options.signal
+      signal: options.signal,
+      onStdout: (chunk) => parser.update(chunk, limit)
     })
-    const parsed = parseStatusOutput(stdout)
-    head = parsed.head
-    branch = parsed.branch
-    upstreamStatus = parsed.upstreamStatus
-    ignoredPaths = parsed.ignoredPaths
-    statusLength = parsed.entries.length
-    // Why: cap the entry count to match the local path. A repo with an enormous
-    // un-ignored folder would otherwise push tens of thousands of rows through
-    // every poll; truncating keeps the SCM view (and its "too many changes"
-    // state) consistent across local and SSH repos.
-    if (limit !== 0 && parsed.entries.length > limit) {
-      didHitLimit = true
-      for (let i = 0; i < limit; i++) {
-        entries.push(parsed.entries[i])
-      }
-    } else {
-      for (const entry of parsed.entries) {
-        entries.push(entry)
-      }
+    if (!stoppedEarly) {
+      parser.finish()
     }
+    const cappedEntries = stoppedEarly ? parser.entries.slice(0, limit) : parser.entries
+    entries.push(...(cappedEntries as Record<string, unknown>[]))
+    head = parser.branch.head
+    branch = parser.branch.branch
+    ignoredPaths = parser.ignoredPaths
+    unmergedLines = parser.unmergedLines
+    statusLength = parser.statusLength
+    didHitLimit = stoppedEarly
+    const { upstreamName, upstreamAheadBehind } = parser.branch
+    upstreamStatus = upstreamName
+      ? {
+          hasUpstream: true,
+          upstreamName,
+          ahead: upstreamAheadBehind?.ahead ?? 0,
+          behind: upstreamAheadBehind?.behind ?? 0
+        }
+      : { hasUpstream: false, ahead: 0, behind: 0 }
 
     if (!didHitLimit) {
       if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
@@ -160,7 +165,7 @@ export async function getStatusOp(
         }
       }
 
-      for (const uLine of parsed.unmergedLines) {
+      for (const uLine of unmergedLines) {
         const entry = parseUnmergedEntry(worktreePath, uLine)
         if (entry) {
           entries.push(entry)

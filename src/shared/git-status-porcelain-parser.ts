@@ -1,5 +1,5 @@
-import type { GitStatusEntry } from '../../shared/git-status-types'
-import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
+import type { GitStatusEntry } from './git-status-types'
+import { decodeGitCQuotedPath } from './git-cquoted-path'
 
 /**
  * Incremental parser for `git status --porcelain=v2 --branch` output.
