@@ -8,6 +8,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude-agent-teams',
   'openclaude',
   'codex',
+  'adal',
   'grok',
   'copilot',
   'opencode',

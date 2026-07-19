@@ -25,6 +25,20 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('/usr/local/bin/openclaude', 'claude')).toBe(false)
   })
 
+  it('recognizes the AdaL foreground process and rejects lookalike names', () => {
+    expect(recognizeAgentProcess('adal')).toEqual({
+      agent: 'adal',
+      processName: 'adal'
+    })
+    expect(recognizeAgentProcess('/usr/local/bin/adal')).toEqual({
+      agent: 'adal',
+      processName: 'adal'
+    })
+    expect(isExpectedAgentProcess('/usr/local/bin/adal', 'adal')).toBe(true)
+    expect(recognizeAgentProcess('adal-helper')).toBeNull()
+    expect(recognizeAgentProcess('adal-project')).toBeNull()
+  })
+
   it('recognizes the Droid foreground process on Windows', () => {
     expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\droid.cmd`)).toEqual({
       agent: 'droid',

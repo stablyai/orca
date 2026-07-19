@@ -58,6 +58,7 @@ export const AGENT_KIND_VALUES = [
   'claude-agent-teams',
   'openclaude',
   'codex',
+  'adal',
   'autohand',
   'opencode',
   'mimo-code',

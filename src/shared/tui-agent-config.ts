@@ -83,6 +83,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt'
   },
+  adal: {
+    detectCmd: 'adal',
+    launchCmd: 'adal',
+    expectedProcess: 'adal',
+    // AdaL's interactive mode is launched without -q; prompt delivery uses
+    // Orca's generic post-start path rather than unsupported positional args.
+    promptInjectionMode: 'stdin-after-start'
+  },
   autohand: {
     detectCmd: 'autohand',
     launchCmd: 'autohand',

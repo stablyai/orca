@@ -72,6 +72,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/openai/codex'
   },
   {
+    id: 'adal',
+    label: translate('auto.lib.agent.catalog.adal', 'AdaL'),
+    cmd: 'adal',
+    homepageUrl: 'https://github.com/SylphAI-Inc/adal'
+  },
+  {
     id: 'grok',
     label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
     cmd: 'grok',
