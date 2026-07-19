@@ -285,6 +285,7 @@ import {
   resolveHostedReviewStateForActions
 } from './source-control-hosted-review-push-target'
 import { buildSourceControlManualReviewUrlFromContext } from './source-control-manual-review-url'
+import { parseRemoteRepo } from './source-control-remote-repo'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -1568,6 +1569,13 @@ function SourceControlInner(): React.JSX.Element {
     hostedReviewCreationRequestMatchesCurrent &&
     hostedReviewCreationRequestState.status === 'loading' &&
     hostedReview === null
+  // Why: without a linked review or probe result the provider is unknown; infer
+  // it from the remote host so a GitLab (etc.) repo shows its own review copy
+  // instead of the GitHub default during loading and after a probe failure.
+  const remoteInferredHostedReviewProvider = useMemo(
+    () => parseRemoteRepo(activeRepo?.gitRemoteIdentity?.remoteUrl ?? '')?.provider ?? null,
+    [activeRepo?.gitRemoteIdentity?.remoteUrl]
+  )
   const provisionalHostedReviewProvider = useMemo(
     () =>
       resolveProvisionalHostedReviewProvider({
@@ -1584,7 +1592,8 @@ function SourceControlInner(): React.JSX.Element {
         linkedGitLabMR,
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
-        linkedGiteaPR
+        linkedGiteaPR,
+        remoteInferredProvider: remoteInferredHostedReviewProvider
       }),
     [
       activeRepo?.id,
@@ -1595,7 +1604,8 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedGitHubPR,
       linkedGitLabMR,
-      linkedGiteaPR
+      linkedGiteaPR,
+      remoteInferredHostedReviewProvider
     ]
   )
   // Why: the eligibility probe's failure fallback needs the current provider
@@ -3293,6 +3303,8 @@ function SourceControlInner(): React.JSX.Element {
         const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
           provisionalHostedReviewProviderRef.current,
           {
+            branch: branchName,
+            baseRef: effectiveBaseRef,
             hasUncommittedChanges: hasUncommittedEntries,
             hasUpstream: remoteStatus?.hasUpstream,
             ahead: remoteStatus?.ahead,

@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import {
   createHostedReviewSlice,
   getHostedReviewCacheKey,
+  HostedReviewCreationEligibilityTimeoutError,
   refreshHostedReviewCard
 } from './hosted-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
@@ -387,7 +388,9 @@ describe('hosted review slice', () => {
       branch: 'feature/create-pr',
       base: 'main'
     })
-    const assertion = expect(pending).rejects.toThrow(/Timed out checking pull request creation/)
+    const assertion = expect(pending).rejects.toBeInstanceOf(
+      HostedReviewCreationEligibilityTimeoutError
+    )
     await vi.advanceTimersByTimeAsync(30_000)
     await assertion
   })
