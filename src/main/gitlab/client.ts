@@ -248,13 +248,9 @@ export async function getProjectSlug(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<ProjectRef | null> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
-  return getProjectRef(
-    repoPath,
-    knownHosts,
-    connectionId,
-    ...hostedReviewLocalGitOptionArgs(options)
-  )
+  const localGitArgs = hostedReviewLocalGitOptionArgs(options)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitArgs[0])
+  return getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
 }
 
 /**
@@ -268,9 +264,9 @@ export async function getMergeRequest(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<MRInfo | null> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
   await acquire()
   try {
@@ -319,9 +315,9 @@ export async function getMergeRequestForBranch(
   if (!branchName && linkedMRIid == null) {
     return null
   }
-  const knownHosts = await getGlabKnownHosts(connectionId)
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
   if (!projectRef) {
     return null
@@ -403,7 +399,7 @@ export async function listMergeRequests(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListMergeRequestsResult> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   // Why: MRs sit on `origin` in the fork model (the user's fork is where
   // they push branches and submit MRs). Mirror github's `getOwnerRepo`
   // call site by going through the upstream/origin preference resolver
@@ -601,7 +597,7 @@ export async function listWorkItems(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabPagedResult<GitLabWorkItem>> {
   const issueState = mrStateToIssueState(state)
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -737,7 +733,7 @@ export async function listTodos(
 ): Promise<GitLabTodo[]> {
   const projectRef = await getProjectRef(
     repoPath,
-    await getGlabKnownHosts(connectionId),
+    await getGlabKnownHosts(connectionId, localGitOptions),
     connectionId,
     localGitOptions
   )
@@ -816,7 +812,7 @@ async function withProjectRef<T>(
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(connectionId),
+        await getGlabKnownHosts(connectionId, localGitOptions),
         connectionId,
         localGitOptions
       )

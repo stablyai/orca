@@ -319,24 +319,57 @@ function createAbortError(): Error {
   return error
 }
 
-function killSpawnedCommandTree(child: ChildProcess): void {
+const WINDOWS_TREE_KILL_WAIT_MS = 2_000
+
+function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
   const pid = child.pid
   if (!pid || process.platform !== 'win32') {
     child.kill()
-    return
+    return Promise.resolve()
   }
-  try {
-    // Why: Windows package-manager CLIs are often .cmd shims. Killing only
-    // cmd.exe leaves the underlying node/npm/pnpm child running.
-    const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    killer.on('error', () => child.kill())
+  return new Promise((resolve) => {
+    let killer: ChildProcess
+    try {
+      // Why: Windows shims and wsl.exe can own descendants; wait for /t tree
+      // cleanup before settling so a timed-out command cannot outlive its probe.
+      killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      if (!killer || typeof killer.unref !== 'function') {
+        child.kill()
+        resolve()
+        return
+      }
+    } catch {
+      child.kill()
+      resolve()
+      return
+    }
+    let settled = false
+    let timer: NodeJS.Timeout | null = null
+    const finish = (fallbackToChildKill: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      killer.removeAllListeners()
+      if (fallbackToChildKill) {
+        child.kill()
+      }
+      resolve()
+    }
+    killer.once('error', () => finish(true))
+    killer.once('close', (code) => finish(code !== 0))
+    timer = setTimeout(() => {
+      killer.kill()
+      finish(true)
+    }, WINDOWS_TREE_KILL_WAIT_MS)
     killer.unref()
-  } catch {
-    child.kill()
-  }
+  })
 }
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
@@ -372,6 +405,7 @@ function execFileCapture(
     }
 
     let settled = false
+    let terminating = false
     let child: ChildProcess | null = null
     let timer: NodeJS.Timeout | null = null
     const cleanup = (): void => {
@@ -401,14 +435,26 @@ function execFileCapture(
       resolve({ stdout, stderr })
     }
     const onAbort = (): void => {
-      if (child) {
-        killSpawnedCommandTree(child)
+      if (settled || terminating) {
+        return
       }
-      finish(createAbortError())
+      terminating = true
+      const abortError = createAbortError()
+      if (!child) {
+        terminating = false
+        finish(abortError)
+        return
+      }
+      void killSpawnedCommandTree(child).then(() => {
+        terminating = false
+        finish(abortError)
+      })
     }
 
     try {
       const spawnStartedAt = performance.now()
+      // Why: the abort listener below owns tree-aware cleanup. Node's
+      // signal handler could kill wsl.exe before taskkill sees its children.
       child = execFile(
         command,
         args,
@@ -416,10 +462,12 @@ function execFileCapture(
           cwd: options.cwd,
           encoding: options.encoding,
           maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
-          env: options.env,
-          signal: options.signal
+          env: options.env
         },
         (error, stdout, stderr) => {
+          if (terminating) {
+            return
+          }
           if (!error && stderr === undefined && isExecFileResultObject(stdout)) {
             finish(null, stdout.stdout, stdout.stderr)
             return
@@ -433,21 +481,34 @@ function execFileCapture(
       return
     }
 
-    child.once('error', (error) => finish(error))
+    child.once('error', (error) => {
+      if (!terminating) {
+        finish(error)
+      }
+    })
 
     if (options.stdin !== undefined) {
       endSubprocessStdin(child.stdin, options.stdin)
     }
 
-    // Why: Node's native execFile timeout waits for the child to exit after
-    // signaling it. Some CLIs ignore that signal, so reject the UI operation
-    // on our own timer and kill the child only as best effort.
+    // Why: Node's native timeout can wait forever for signal-ignoring CLIs;
+    // enforce our own deadline and settle after bounded process-tree cleanup.
     if (options.timeout && options.timeout > 0) {
       timer = setTimeout(() => {
-        if (child) {
-          killSpawnedCommandTree(child)
+        if (settled || terminating) {
+          return
         }
-        finish(new Error(`${command} timed out.`))
+        terminating = true
+        const timeoutError = new Error(`${command} timed out.`)
+        if (!child) {
+          terminating = false
+          finish(timeoutError)
+          return
+        }
+        void killSpawnedCommandTree(child).then(() => {
+          terminating = false
+          finish(timeoutError)
+        })
       }, options.timeout)
     }
     options.signal?.addEventListener('abort', onAbort, { once: true })
@@ -480,7 +541,7 @@ async function spawnCommandCapture(
     recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
     const onAbort = (): void => {
-      killSpawnedCommandTree(child)
+      void killSpawnedCommandTree(child)
       finish(createAbortError())
     }
     const cleanupListeners = (): void => {
@@ -508,7 +569,7 @@ async function spawnCommandCapture(
     }
     timer = options.timeout
       ? setTimeout(() => {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(new Error(`${command} timed out.`))
         }, options.timeout)
       : null
@@ -516,7 +577,7 @@ async function spawnCommandCapture(
     function onStdoutData(chunk: Buffer): void {
       stdoutBytes += chunk.byteLength
       if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(new Error(`${command} stdout exceeded maxBuffer.`))
         return
       }
@@ -525,7 +586,7 @@ async function spawnCommandCapture(
     function onStderrData(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
       if (options.maxBuffer && stderrBytes > options.maxBuffer) {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(new Error(`${command} stderr exceeded maxBuffer.`))
         return
       }
@@ -993,7 +1054,7 @@ export async function gitStreamStdout(
       function onStdoutData(chunk: Buffer): void {
         stdoutBytes += chunk.byteLength
         if (stdoutBytes > maxBuffer) {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(new Error('git stdout exceeded maxBuffer.'))
           return
         }
@@ -1008,7 +1069,7 @@ export async function gitStreamStdout(
         try {
           shouldStop = options.onStdout(decoded)
         } catch (error) {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(error instanceof Error ? error : new Error(String(error)))
           return
         }
@@ -1016,14 +1077,14 @@ export async function gitStreamStdout(
           // Why: parser hit its limit. Kill git and resolve cleanly — the
           // partial output we already parsed is the intended result.
           stoppedEarly = true
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(null)
         }
       }
       function onStderrData(chunk: Buffer): void {
         stderrBytes += chunk.byteLength
         if (stderrBytes > maxBuffer) {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(new Error('git stderr exceeded maxBuffer.'))
           return
         }
@@ -1040,7 +1101,7 @@ export async function gitStreamStdout(
         finish(new Error(`git exited with ${code}: ${stderr}`))
       }
       function onAbort(): void {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(createAbortError())
       }
 
@@ -1568,7 +1629,8 @@ export async function glabExecFileAsync(
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
         timeout: options.timeout,
-        env: options.env
+        env: options.env,
+        signal: options.signal
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
