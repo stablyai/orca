@@ -26,7 +26,6 @@ import type {
   Repo
 } from '../../../../shared/types'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
-import { translate } from '@/i18n/i18n'
 
 const EMPTY_REPOS: Repo[] = []
 
@@ -99,11 +98,4 @@ export function toGitLabLinkedWorkItem(item: GitLabWorkItem): LinkedWorkItemSumm
 
 export function toLinearLinkedWorkItem(issue: LinearIssue): LinkedWorkItemSummary {
   return buildLinearWorkspaceSource(issue)
-}
-
-export function getFolderWorkspacePrimaryActionLabel(): string {
-  return translate(
-    'auto.components.sidebar.FolderWorkspaceComposerDialog.create',
-    'Create workspace'
-  )
 }

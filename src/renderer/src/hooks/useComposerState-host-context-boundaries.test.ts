@@ -515,6 +515,7 @@ describe('useComposerState host-context boundaries', () => {
     expect(cardProps).toContain(
       'repoBackedSearchRepos: isProjectGroupTarget ? folderSourceRepos : undefined'
     )
+    expect(cardProps).toContain('showSharedFolderCheckoutNotice: isProjectGroupTarget')
   })
 
   it('surfaces folder submit smart-resolution failures through create error UI', () => {

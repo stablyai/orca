@@ -4694,8 +4694,9 @@
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "Failed to connect to project.",
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
-          "title": "Create Folder Workspace",
-          "create": "Create workspace",
+          "title": "Open Shared Folder Workspace",
+          "create": "Open shared workspace",
+          "sharedCheckoutNotice": "Uses the existing checkouts in this folder. Branches and file changes are shared with other workspaces; Orca does not create isolated worktrees for each repository.",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source",
           "createFailed": "Failed to create folder workspace."

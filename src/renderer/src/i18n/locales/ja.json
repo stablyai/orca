@@ -4606,8 +4606,9 @@
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "プロジェクトに接続できませんでした。",
           "noRepos": "GitHub または GitLab のタスクを関連付けるには、このフォルダー内に Git プロジェクトを追加。",
-          "title": "フォルダーワークスペースを作成",
-          "create": "ワークスペースを作成",
+          "title": "共有フォルダーワークスペースを開く",
+          "create": "共有ワークスペースを開く",
+          "sharedCheckoutNotice": "このフォルダーにある既存のチェックアウトを使用します。ブランチとファイルの変更は他のワークスペースと共有されます。Orca はリポジトリごとに分離された worktree を作成しません。",
           "sourceProject": "タスクソース",
           "chooseSourceProject": "タスクソースを選択",
           "createFailed": "フォルダーワークスペースを作成できませんでした。"

@@ -4606,8 +4606,9 @@
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "프로젝트에 연결하지 못했습니다.",
           "noRepos": "GitHub 또는 GitLab 작업을 연결하려면 이 폴더 아래에 Git 프로젝트를 추가하세요.",
-          "title": "폴더 워크스페이스 만들기",
-          "create": "워크스페이스 만들기",
+          "title": "공유 폴더 워크스페이스 열기",
+          "create": "공유 워크스페이스 열기",
+          "sharedCheckoutNotice": "이 폴더의 기존 checkout을 사용합니다. branch와 파일 변경 사항은 다른 워크스페이스와 공유되며, Orca는 저장소별로 격리된 worktree를 만들지 않습니다.",
           "sourceProject": "작업 소스",
           "chooseSourceProject": "작업 소스 선택",
           "createFailed": "폴더 워크스페이스를 만들지 못했습니다."

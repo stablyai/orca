@@ -4606,8 +4606,9 @@
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "无法连接到项目。",
           "noRepos": "在此文件夹下添加 Git 项目，以关联 GitHub 或 GitLab 任务。",
-          "title": "创建文件夹工作区",
-          "create": "创建工作区",
+          "title": "打开共享文件夹工作区",
+          "create": "打开共享工作区",
+          "sharedCheckoutNotice": "使用此文件夹中已有的检出。分支和文件更改会与其他工作区共享；Orca 不会为每个仓库创建隔离的 worktree。",
           "sourceProject": "任务来源",
           "chooseSourceProject": "选择任务来源",
           "createFailed": "文件夹工作区创建失败。"
