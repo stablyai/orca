@@ -234,26 +234,16 @@ type WorkspaceRunTargetComboboxProps = {
   onRecipeChange?: (recipeId: string | null) => void
 }
 
-type HostPathTooltipProps = {
-  path: string
-  children: (props: {
-    'aria-describedby'?: string
-    onPointerEnter: React.PointerEventHandler<HTMLElement>
-    onPointerLeave: React.PointerEventHandler<HTMLElement>
-    onPointerDown: React.PointerEventHandler<HTMLElement>
-  }) => React.ReactNode
-}
-
 type HostPathTooltipPosition = {
   horizontal: { left: number } | { right: number }
-  vertical: { top: number } | { bottom: number }
+  top: number
 }
 
 const HOST_PATH_TOOLTIP_DELAY_MS = 400
 const HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX = 8
 const HOST_PATH_TOOLTIP_TRIGGER_GAP_PX = 4
 
-function HostPathTooltip({ path, children }: HostPathTooltipProps): React.JSX.Element {
+function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
   const tooltipId = React.useId()
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const pointerInsideRef = React.useRef(false)
@@ -283,28 +273,28 @@ function HostPathTooltip({ path, children }: HostPathTooltipProps): React.JSX.El
       }
       const rect = trigger.getBoundingClientRect()
       const anchorRight = rect.left + rect.width / 2 > window.innerWidth / 2
-      const placeAbove = rect.top + rect.height / 2 > window.innerHeight / 2
+      // Why: always drop below the hovered path line for a consistent, predictable placement.
       setPosition({
         horizontal: anchorRight
           ? { right: HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX }
           : { left: Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left) },
-        vertical: placeAbove
-          ? { bottom: window.innerHeight - rect.top + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX }
-          : { top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX }
+        top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX
       })
     }, HOST_PATH_TOOLTIP_DELAY_MS)
   }, [])
 
-  const trigger = children({
-    'aria-describedby': position ? tooltipId : undefined,
-    onPointerEnter: handlePointerEnter,
-    onPointerLeave: hideTooltip,
-    onPointerDown: hideTooltip
-  })
-
   return (
     <>
-      {trigger}
+      {/* Trigger is the truncated path line itself, so the tooltip only appears when hovering it. */}
+      <div
+        className="mt-0.5 truncate text-[11px] text-muted-foreground"
+        aria-describedby={position ? tooltipId : undefined}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={hideTooltip}
+        onPointerDown={hideTooltip}
+      >
+        {path}
+      </div>
       {/* Why: a fixed, pointer-transparent portal cannot reflow cmdk or become the hover target. */}
       {position
         ? createPortal(
@@ -313,7 +303,7 @@ function HostPathTooltip({ path, children }: HostPathTooltipProps): React.JSX.El
               role="tooltip"
               data-slot="host-path-tooltip"
               className="pointer-events-none fixed z-[100] w-max max-w-[calc(100vw-1rem)] break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
-              style={{ ...position.horizontal, ...position.vertical }}
+              style={{ ...position.horizontal, top: position.top }}
             >
               {path}
             </div>,
@@ -417,32 +407,24 @@ function WorkspaceRunTargetCombobox({
               )}
             </CommandEmpty>
             {hostOptions.map((option) => (
-              <HostPathTooltip key={option.id} path={option.path}>
-                {(tooltipTriggerProps) => (
-                  <CommandItem
-                    value={`host:${option.id}`}
-                    onSelect={() => handleHostSelect(option.id)}
-                    className="items-center gap-2 px-3 py-2"
-                    {...tooltipTriggerProps}
-                  >
-                    <Check
-                      className={cn(
-                        'size-4 text-foreground',
-                        !selectedRecipe && option.id === selectedHost?.id
-                          ? 'opacity-100'
-                          : 'opacity-0'
-                      )}
-                    />
-                    <Server className="size-3.5 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{option.label}</div>
-                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                        {option.path}
-                      </div>
-                    </div>
-                  </CommandItem>
-                )}
-              </HostPathTooltip>
+              <CommandItem
+                key={option.id}
+                value={`host:${option.id}`}
+                onSelect={() => handleHostSelect(option.id)}
+                className="items-center gap-2 px-3 py-2"
+              >
+                <Check
+                  className={cn(
+                    'size-4 text-foreground',
+                    !selectedRecipe && option.id === selectedHost?.id ? 'opacity-100' : 'opacity-0'
+                  )}
+                />
+                <Server className="size-3.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{option.label}</div>
+                  <HostPathTooltip path={option.path} />
+                </div>
+              </CommandItem>
             ))}
             {recipes.length > 0 ? (
               <Popover open={vmRecipesOpen} onOpenChange={setVmRecipesOpen}>
