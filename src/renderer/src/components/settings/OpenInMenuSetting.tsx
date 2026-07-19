@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, ChevronDown, Pencil, Trash2 } from 'lucide-react'
 import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
 import { OPEN_IN_APPLICATIONS_MAX } from '../../../../shared/open-in-applications'
@@ -242,13 +242,21 @@ export function OpenInMenuSetting({
   )
   const [editingIds, setEditingIds] = useState<ReadonlySet<string>>(new Set())
 
-  const resolvedDraftState = resolveOpenInApplicationsDraftState(draftState, applications)
-  if (resolvedDraftState !== draftState) {
-    // Why: the Open menu rows are editable local drafts, but Settings can
-    // reload from persistence while this pane is mounted.
-    setDraftState(resolvedDraftState)
-  }
-  const draft = resolvedDraftState.draft
+  // Why: the Open menu rows are editable local drafts, but Settings can
+  // reload from persistence while this pane is mounted. Re-syncing in an
+  // effect (instead of during render) avoids the React "too many re-renders"
+  // crash when the upstream `applications` reference is unstable across
+  // renders — which happens when Zustand hands us a fresh settings object
+  // during hydration or after an unrelated settings write.
+  useEffect(() => {
+    setDraftState((current) =>
+      current.sourceApplications === applications
+        ? current
+        : createOpenInApplicationsDraftState(applications)
+    )
+  }, [applications])
+
+  const draft = draftState.draft
   const isAtLimit = draft.length >= OPEN_IN_APPLICATIONS_MAX
 
   const commit = (nextDraft: OpenInApplication[]): void => {
