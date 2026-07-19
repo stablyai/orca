@@ -35,6 +35,7 @@ export function NativeChatReasoningRow({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
         className="group flex w-full items-center gap-1.5 py-0.5 text-left"
       >
         <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover:text-foreground/80">
@@ -48,12 +49,14 @@ export function NativeChatReasoningRow({
             {preview}
           </span>
         ) : null}
-        {/* Chevron on the right, revealed on hover when collapsed and pointing
-            down when open — matches the tool-run disclosure. */}
+        {/* Chevron on the right, revealed on hover/keyboard focus when collapsed
+            and pointing down when open — matches the tool-run disclosure. */}
         <ChevronRight
           className={cn(
             'size-3.5 shrink-0 text-muted-foreground transition-all',
-            open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover:opacity-100'
+            open
+              ? 'rotate-90 opacity-100'
+              : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
           )}
         />
       </button>

@@ -59,7 +59,9 @@ describe('NativeChatMessageList reasoning rows', () => {
     renderList([reasoningMessage])
 
     const disclosure = screen.getByRole('button', { name: /Thinking/ })
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(disclosure)
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('pondering the fix quietly', { selector: 'p' })).toBeInTheDocument()
 
     fireEvent.click(disclosure)
