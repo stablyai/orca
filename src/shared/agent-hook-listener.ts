@@ -1902,7 +1902,8 @@ function extractCopilotToolFields(
 
 function extractPiToolFields(
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentKind?: 'pi' | 'omp'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -1910,9 +1911,16 @@ function extractPiToolFields(
     eventName === 'tool_execution_end'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
-    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
+    const rawToolInput = hookPayload.tool_input
+    const toolInput = deriveToolInputPreview(toolName, rawToolInput)
+    // Why: OMP shares this extractor. interactivePrompt derivation should
+    // only apply to Pi so OMP ask_user_question metadata stays unchanged.
+    const interactivePrompt =
+      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
+        ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
+        : undefined
     return toolUpdate(
-      { toolName, toolInput },
+      { toolName, toolInput, interactivePrompt },
       { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
     )
   }
@@ -2390,7 +2398,7 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
     case 'omp':
-      return extractPiToolFields(eventName, hookPayload)
+      return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
     case 'command-code':
@@ -3389,13 +3397,26 @@ function normalizePiCompatibleEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const stateName =
-    eventName === 'before_agent_start' ||
-    eventName === 'agent_start' ||
-    eventName === 'tool_call' ||
-    eventName === 'tool_execution_start' ||
-    eventName === 'tool_execution_end' ||
-    eventName === 'message_end'
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields(agentType, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
+  )
+
+  const isPiAskUserQuestion =
+    agentType === 'pi' &&
+    isAskUserQuestionTool(snapshot.toolName) &&
+    (eventName === 'tool_call' || eventName === 'tool_execution_start')
+
+  const stateName = isPiAskUserQuestion
+    ? 'blocked'
+    : eventName === 'before_agent_start' ||
+        eventName === 'agent_start' ||
+        eventName === 'tool_call' ||
+        eventName === 'tool_execution_start' ||
+        eventName === 'tool_execution_end' ||
+        eventName === 'message_end'
       ? 'working'
       : eventName === 'agent_end'
         ? 'done'
@@ -3404,13 +3425,6 @@ function normalizePiCompatibleEvent(
   if (!stateName) {
     return null
   }
-
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields(agentType, eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent(agentType, eventName) }
-  )
 
   return parseAgentStatusPayload(
     JSON.stringify({

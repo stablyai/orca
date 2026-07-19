@@ -371,6 +371,126 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
   })
 
+  it('maps Pi tool_call ask_user_question to blocked with interactivePrompt', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'What is your priority?',
+          options: ['A', 'B', 'C']
+        }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+  })
+
+  it('maps Pi tool_execution_start ask_user_question to blocked with interactivePrompt', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'Pick a path',
+          options: ['path-1', 'path-2']
+        }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+  })
+
+  it('keeps Pi regular tool_call notifications as working', () => {
+    const working = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'git status' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'pi',
+      toolName: 'bash',
+      toolInput: 'git status'
+    })
+    expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('keeps Pi ask_user_question blocked when tool_input is missing', () => {
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question'
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
     const event = normalizeHookPayload(
       state,
@@ -418,6 +538,40 @@ describe('shared agent-hook-listener', () => {
       toolName: 'bash',
       toolInput: 'pnpm test'
     })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('keeps OMP ask_user_question behavior on Pi-compatible events', () => {
+    const tool = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: {
+            questions: [
+              {
+                question: 'Choose',
+                options: ['x', 'y']
+              }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'omp',
+      toolName: 'ask_user_question'
+    })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {
