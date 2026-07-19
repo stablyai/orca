@@ -2,6 +2,7 @@
 composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -224,57 +225,6 @@ function getRecipeDestroyLabel(recipe: EphemeralVmRecipeOption): string {
   return translate('auto.components.NewWorkspaceComposerCard.noDestroyConfigured', 'no destroy')
 }
 
-// Why: worktree paths overflow the truncated row, so hovering reveals the full path. We drive the
-// tooltip's open state by hand instead of using Radix's hover detection: inside this cmdk list, the
-// uncontrolled tooltip could flash open then wedge shut (Radix's shared pointer-transit state getting
-// stuck), never reopening. Controlled hover-intent — open after a delay, close after a short grace —
-// can always re-open on re-entry and debounces transient enter/leave thrash into a stable state.
-const HOST_PATH_TOOLTIP_OPEN_DELAY_MS = 400
-const HOST_PATH_TOOLTIP_CLOSE_GRACE_MS = 120
-
-function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
-  const [open, setOpen] = React.useState(false)
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const schedule = React.useCallback((next: boolean, delayMs: number): void => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-    }
-    timerRef.current = setTimeout(() => setOpen(next), delayMs)
-  }, [])
-
-  React.useEffect(
-    () => () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current)
-      }
-    },
-    []
-  )
-
-  return (
-    <Tooltip open={open}>
-      <TooltipTrigger asChild>
-        <div
-          className="mt-0.5 truncate text-[11px] text-muted-foreground"
-          onPointerEnter={() => schedule(true, HOST_PATH_TOOLTIP_OPEN_DELAY_MS)}
-          onPointerLeave={() => schedule(false, HOST_PATH_TOOLTIP_CLOSE_GRACE_MS)}
-        >
-          {path}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent
-        side="bottom"
-        align="start"
-        sideOffset={4}
-        className="max-w-[min(520px,80vw)] px-2 py-1 text-[11px] font-normal break-all [&>span:has(svg)]:hidden"
-      >
-        {path}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 type WorkspaceRunTargetComboboxProps = {
   hostOptions: readonly ReadyProjectHostSetupOption[]
   hostValue: string | null
@@ -282,6 +232,96 @@ type WorkspaceRunTargetComboboxProps = {
   recipes: EphemeralVmRecipeOption[]
   recipeValue: string | null
   onRecipeChange?: (recipeId: string | null) => void
+}
+
+type HostPathTooltipProps = {
+  path: string
+  children: (props: {
+    'aria-describedby'?: string
+    onPointerEnter: React.PointerEventHandler<HTMLElement>
+    onPointerLeave: React.PointerEventHandler<HTMLElement>
+    onPointerDown: React.PointerEventHandler<HTMLElement>
+  }) => React.ReactNode
+}
+
+type HostPathTooltipPosition = {
+  horizontal: { left: number } | { right: number }
+  vertical: { top: number } | { bottom: number }
+}
+
+const HOST_PATH_TOOLTIP_DELAY_MS = 400
+const HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX = 8
+const HOST_PATH_TOOLTIP_TRIGGER_GAP_PX = 4
+
+function HostPathTooltip({ path, children }: HostPathTooltipProps): React.JSX.Element {
+  const tooltipId = React.useId()
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pointerInsideRef = React.useRef(false)
+  const [position, setPosition] = React.useState<HostPathTooltipPosition | null>(null)
+
+  const hideTooltip = React.useCallback((): void => {
+    pointerInsideRef.current = false
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    setPosition(null)
+  }, [])
+
+  React.useEffect(() => hideTooltip, [hideTooltip])
+
+  const handlePointerEnter = React.useCallback((event: React.PointerEvent<HTMLElement>): void => {
+    pointerInsideRef.current = true
+    const trigger = event.currentTarget
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+    }
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      if (!pointerInsideRef.current || !trigger.isConnected) {
+        return
+      }
+      const rect = trigger.getBoundingClientRect()
+      const anchorRight = rect.left + rect.width / 2 > window.innerWidth / 2
+      const placeAbove = rect.top + rect.height / 2 > window.innerHeight / 2
+      setPosition({
+        horizontal: anchorRight
+          ? { right: HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX }
+          : { left: Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left) },
+        vertical: placeAbove
+          ? { bottom: window.innerHeight - rect.top + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX }
+          : { top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX }
+      })
+    }, HOST_PATH_TOOLTIP_DELAY_MS)
+  }, [])
+
+  const trigger = children({
+    'aria-describedby': position ? tooltipId : undefined,
+    onPointerEnter: handlePointerEnter,
+    onPointerLeave: hideTooltip,
+    onPointerDown: hideTooltip
+  })
+
+  return (
+    <>
+      {trigger}
+      {/* Why: a fixed, pointer-transparent portal cannot reflow cmdk or become the hover target. */}
+      {position
+        ? createPortal(
+            <div
+              id={tooltipId}
+              role="tooltip"
+              data-slot="host-path-tooltip"
+              className="pointer-events-none fixed z-[100] w-max max-w-[calc(100vw-1rem)] break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
+              style={{ ...position.horizontal, ...position.vertical }}
+            >
+              {path}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  )
 }
 
 function WorkspaceRunTargetCombobox({
@@ -377,24 +417,32 @@ function WorkspaceRunTargetCombobox({
               )}
             </CommandEmpty>
             {hostOptions.map((option) => (
-              <CommandItem
-                key={option.id}
-                value={`host:${option.id}`}
-                onSelect={() => handleHostSelect(option.id)}
-                className="items-center gap-2 px-3 py-2"
-              >
-                <Check
-                  className={cn(
-                    'size-4 text-foreground',
-                    !selectedRecipe && option.id === selectedHost?.id ? 'opacity-100' : 'opacity-0'
-                  )}
-                />
-                <Server className="size-3.5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{option.label}</div>
-                  <HostPathTooltip path={option.path} />
-                </div>
-              </CommandItem>
+              <HostPathTooltip key={option.id} path={option.path}>
+                {(tooltipTriggerProps) => (
+                  <CommandItem
+                    value={`host:${option.id}`}
+                    onSelect={() => handleHostSelect(option.id)}
+                    className="items-center gap-2 px-3 py-2"
+                    {...tooltipTriggerProps}
+                  >
+                    <Check
+                      className={cn(
+                        'size-4 text-foreground',
+                        !selectedRecipe && option.id === selectedHost?.id
+                          ? 'opacity-100'
+                          : 'opacity-0'
+                      )}
+                    />
+                    <Server className="size-3.5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{option.label}</div>
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {option.path}
+                      </div>
+                    </div>
+                  </CommandItem>
+                )}
+              </HostPathTooltip>
             ))}
             {recipes.length > 0 ? (
               <Popover open={vmRecipesOpen} onOpenChange={setVmRecipesOpen}>
