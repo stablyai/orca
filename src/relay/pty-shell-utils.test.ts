@@ -516,6 +516,26 @@ describe('getForegroundProcessName', () => {
     })
   })
 
+  it('confirmation reads bypass the cached process table with a fresh scan', async () => {
+    await withProcessPlatform('linux', async () => {
+      let table = ['100 99 Ss   bash -l', '101 100 S+   node /home/dev/.local/bin/codex'].join('\n')
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: table }
+        }
+        return new Error('unexpected command')
+      })
+
+      // Prime the shared <=500ms snapshot cache with codex as the foreground.
+      await expect(getForegroundProcessName(100, 'bash')).resolves.toBe('codex')
+
+      // The foreground changed to grok; a cached read would still report codex,
+      // but a fresh confirmation scan must see the new identity.
+      table = ['100 99 Ss   bash -l', '101 100 S+   node /home/dev/.local/bin/grok'].join('\n')
+      await expect(getForegroundProcessName(100, 'bash', { fresh: true })).resolves.toBe('grok')
+    })
+  })
+
   it('falls back to the root process command when descendant inspection fails', async () => {
     mockExecFile((_command, args) => {
       if (args[0] === '-axo') {

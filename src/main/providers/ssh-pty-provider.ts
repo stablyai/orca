@@ -29,6 +29,15 @@ function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: numbe
   return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
 }
 
+// Why: the relay dispatcher rejects unknown methods with JSON-RPC code -32601;
+// the mux preserves the code and prefixes "Method not found". Detect either so
+// an old relay's missing method degrades gracefully instead of throwing.
+function isMethodNotFoundError(err: unknown): boolean {
+  const code = (err as { code?: number } | null)?.code
+  const message = err instanceof Error ? err.message : String(err)
+  return code === -32601 || /method not found/i.test(message)
+}
+
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
 export class SshPtyProvider implements IPtyProvider {
   private mux: SshChannelMultiplexer
@@ -38,6 +47,9 @@ export class SshPtyProvider implements IPtyProvider {
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly outputState: SshPtyProviderOutputState
+  // Why: latch once an old relay 404s pty.confirmForegroundProcess so later
+  // confirmations skip the failing round-trip and read foreground directly.
+  private confirmForegroundUnsupported = false
 
   constructor(
     connectionId: string,
@@ -271,6 +283,27 @@ export class SshPtyProvider implements IPtyProvider {
     return (await this.mux.request('pty.inspectProcess', {
       id: this.toRelayPtyId(id)
     })) as PtyProcessInspection
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    // Why: an older deployed relay does not implement this method. Feature-detect
+    // once and degrade to today's trusting getForegroundProcess read rather than
+    // erroring — the relay is a separately-versioned deployed binary.
+    if (this.confirmForegroundUnsupported) {
+      return this.getForegroundProcess(id)
+    }
+    try {
+      const result = await this.mux.request('pty.confirmForegroundProcess', {
+        id: this.toRelayPtyId(id)
+      })
+      return result as string | null
+    } catch (err) {
+      if (isMethodNotFoundError(err)) {
+        this.confirmForegroundUnsupported = true
+        return this.getForegroundProcess(id)
+      }
+      throw err
+    }
   }
 
   async serialize(ids: string[]): Promise<string> {

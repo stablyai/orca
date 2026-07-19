@@ -11,7 +11,11 @@ import {
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
 import { recognizeAgentFromExecutablePath } from '../shared/process-executable-recognition'
-import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import {
+  getFreshProcessTableSnapshot,
+  getProcessTableSnapshot,
+  type ProcessTableRow
+} from '../shared/process-table-snapshot'
 import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
@@ -234,10 +238,13 @@ function candidateMatchesFallbackWrapper(
 
 async function getRecognizedForegroundDescendant(
   pid: number,
-  fallbackProcess?: string | null
+  fallbackProcess?: string | null,
+  fresh = false
 ): Promise<string | null> {
   try {
-    const rows = await getProcessTableSnapshot()
+    // Why: a confirmation read (SSH parity with the daemon) must inspect a scan
+    // started after the caller's command boundary, not a <=500ms-stale cache.
+    const rows = fresh ? await getFreshProcessTableSnapshot() : await getProcessTableSnapshot()
     const root = rows.find((row) => row.pid === pid)
     const candidates = collectDescendants(rows, pid).sort(
       (a, b) => candidateScore(b) - candidateScore(a)
@@ -297,7 +304,8 @@ async function getRecognizedForegroundDescendant(
  */
 export async function getForegroundProcessName(
   pid: number,
-  fallbackProcess?: string | null
+  fallbackProcess?: string | null,
+  options: { fresh?: boolean } = {}
 ): Promise<string | null> {
   if (fallbackProcess) {
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
@@ -323,14 +331,20 @@ export async function getForegroundProcessName(
         return fallbackProcess
       }
       return (
-        (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
+        (await resolveWindowsAgentForegroundProcess(
+          pid,
+          fallbackProcess,
+          // Why: a confirmation forces a post-boundary CIM scan so a stale cached
+          // read cannot hide a live agent behind a recognized-fallback shortcut.
+          options.fresh ? { fresh: true, forceProcessScan: true } : {}
+        )) ?? fallbackProcess
       )
     }
     if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
       return fallbackProcess
     }
   }
-  const recognized = await getRecognizedForegroundDescendant(pid, fallbackProcess)
+  const recognized = await getRecognizedForegroundDescendant(pid, fallbackProcess, options.fresh)
   if (recognized) {
     return recognized
   }

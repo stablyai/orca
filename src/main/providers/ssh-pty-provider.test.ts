@@ -891,6 +891,44 @@ describe('SshPtyProvider', () => {
     expectRequest(mux.request, 'pty.inspectProcess', { id: 'pty-1' })
   })
 
+  it('confirmForegroundProcess requests a fresh relay read', async () => {
+    mux.request.mockResolvedValue('grok')
+    const result = await provider.confirmForegroundProcess(scopedPty1)
+    expect(result).toBe('grok')
+    expect(mux.request).toHaveBeenCalledWith('pty.confirmForegroundProcess', { id: 'pty-1' })
+  })
+
+  it('confirmForegroundProcess degrades to getForegroundProcess on an old relay', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: pty.confirmForegroundProcess'),
+      {
+        code: -32601
+      }
+    )
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.confirmForegroundProcess') {
+        throw methodNotFound
+      }
+      return 'zsh'
+    })
+
+    await expect(provider.confirmForegroundProcess(scopedPty1)).resolves.toBe('zsh')
+    expect(mux.request).toHaveBeenCalledWith('pty.getForegroundProcess', { id: 'pty-1' })
+
+    // Latched: a second confirm skips the failing round-trip entirely.
+    mux.request.mockClear()
+    await expect(provider.confirmForegroundProcess(scopedPty1)).resolves.toBe('zsh')
+    expect(mux.request).not.toHaveBeenCalledWith('pty.confirmForegroundProcess', { id: 'pty-1' })
+    expect(mux.request).toHaveBeenCalledWith('pty.getForegroundProcess', { id: 'pty-1' })
+  })
+
+  it('confirmForegroundProcess rethrows non-method-not-found relay errors', async () => {
+    mux.request.mockRejectedValue(new Error('SSH_SESSION_EXPIRED'))
+    await expect(provider.confirmForegroundProcess(scopedPty1)).rejects.toThrow(
+      'SSH_SESSION_EXPIRED'
+    )
+  })
+
   it('serializes scoped app ids using raw relay ids', async () => {
     mux.request.mockResolvedValue('serialized')
 

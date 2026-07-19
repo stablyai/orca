@@ -783,6 +783,9 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
     this.dispatcher.onRequest('pty.inspectProcess', (p) => this.inspectProcess(p))
+    this.dispatcher.onRequest('pty.confirmForegroundProcess', (p) =>
+      this.confirmForegroundProcess(p)
+    )
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
@@ -1889,6 +1892,20 @@ export class PtyHandler {
       foregroundProcess,
       hasChildProcesses: await processHasChildren(managed.pty.pid)
     }
+  }
+
+  // Why: SSH parity with the daemon's confirmForegroundProcess. A confirmation
+  // forces a fresh post-boundary scan so orca-runtime stops trusting a possibly
+  // stale relay read (an idle-looking shell that still fronts a live agent).
+  private async confirmForegroundProcess(params: Record<string, unknown>): Promise<string | null> {
+    const id = params.id as string
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed) {
+      return null
+    }
+    return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null, {
+      fresh: true
+    })
   }
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {

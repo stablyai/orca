@@ -170,6 +170,7 @@ describe('PtyHandler', () => {
     expect(methods).toContain('pty.hasChildProcesses')
     expect(methods).toContain('pty.getForegroundProcess')
     expect(methods).toContain('pty.inspectProcess')
+    expect(methods).toContain('pty.confirmForegroundProcess')
     expect(methods).toContain('pty.listProcesses')
     expect(methods).toContain('pty.getDefaultShell')
 
@@ -461,6 +462,28 @@ describe('PtyHandler', () => {
       expect(message).not.toContain('python3')
       expect(message).toMatch(/reconnect/i)
     }
+  })
+
+  it('confirmForegroundProcess forces a fresh post-boundary foreground read', async () => {
+    const foregroundSpy = vi
+      .spyOn(ptyShellUtils, 'getForegroundProcessName')
+      .mockResolvedValue('grok')
+    const { id } = (await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })) as {
+      id: string
+    }
+
+    await expect(dispatcher.callRequest('pty.confirmForegroundProcess', { id })).resolves.toBe(
+      'grok'
+    )
+    expect(foregroundSpy).toHaveBeenCalledWith(process.pid, null, { fresh: true })
+    foregroundSpy.mockRestore()
+  })
+
+  it('confirmForegroundProcess returns null for an unknown pty', async () => {
+    await expect(
+      dispatcher.callRequest('pty.confirmForegroundProcess', { id: 'missing' })
+    ).resolves.toBeNull()
+  })
   })
 
   it('normalizes a missing native binding as degraded node-pty availability', async () => {
