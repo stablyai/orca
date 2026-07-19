@@ -3337,6 +3337,9 @@ export type PinnedTerminalPanel = {
   command: string
   /** SSH target id to run the command on; absent means the local machine. */
   host?: string
+  /** Sidebar group label; panels sharing a group render under one
+   *  collapsible parent row. Absent panels render flat. */
+  group?: string
 }
 
 /** The active top-level section shown in the main content area. */

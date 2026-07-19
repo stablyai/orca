@@ -2,9 +2,10 @@ import type { PinnedTerminalPanel } from './types'
 import type { SshTarget } from './ssh-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 
-// Why: each panel owns a live PTY; a bound keeps a corrupted profile from
-// spawning an unbounded number of shells at startup.
-export const MAX_PINNED_TERMINAL_PANELS = 8
+// Why: each panel owns a live PTY, but PTYs spawn lazily on first visit, so
+// the bound only guards against a corrupted profile flooding the sidebar.
+// Sized for fleet setups: several hosts x a few observability views each.
+export const MAX_PINNED_TERMINAL_PANELS = 24
 
 const MAX_PANEL_TITLE_LENGTH = 60
 // Why: panel commands are one observability invocation (nvtop, btop, watch …),
@@ -116,7 +117,7 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
     if (typeof entry !== 'object' || entry === null) {
       continue
     }
-    const { id, title, command, host } = entry as Record<string, unknown>
+    const { id, title, command, host, group } = entry as Record<string, unknown>
     const normalizedCommand = normalizePinnedTerminalPanelCommand(command)
     if (
       typeof id !== 'string' ||
@@ -128,6 +129,8 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
     }
     const trimmedTitle =
       typeof title === 'string' ? title.trim().slice(0, MAX_PANEL_TITLE_LENGTH) : ''
+    const trimmedGroup =
+      typeof group === 'string' ? group.trim().slice(0, MAX_PANEL_TITLE_LENGTH) : ''
     const trimmedHost = typeof host === 'string' ? host.trim() : ''
     // Why: a present-but-malformed host drops the whole entry — silently
     // degrading to local would run the command on the wrong machine.
@@ -147,7 +150,8 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
       title:
         trimmedTitle.length > 0 ? trimmedTitle : normalizedCommand.slice(0, MAX_PANEL_TITLE_LENGTH),
       command: normalizedCommand,
-      ...(normalizedHost !== null ? { host: normalizedHost } : {})
+      ...(normalizedHost !== null ? { host: normalizedHost } : {}),
+      ...(trimmedGroup.length > 0 ? { group: trimmedGroup } : {})
     })
   }
   return panels

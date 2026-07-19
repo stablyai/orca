@@ -9222,7 +9222,8 @@
           "remove": "Remove panel",
           "titlePlaceholder": "Title",
           "add": "Add",
-          "hostPlaceholder": "SSH host (optional)"
+          "hostPlaceholder": "SSH host (optional)",
+          "groupPlaceholder": "Group"
         },
         "PinnedWebPanelsSetting": {
           "title": "Pinned web panels",

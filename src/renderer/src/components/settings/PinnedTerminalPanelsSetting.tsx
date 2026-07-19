@@ -57,6 +57,7 @@ export function PinnedTerminalPanelsSetting({
   const [draftTitle, setDraftTitle] = React.useState('')
   const [draftCommand, setDraftCommand] = React.useState('')
   const [draftHost, setDraftHost] = React.useState('')
+  const [draftGroup, setDraftGroup] = React.useState('')
 
   const draftCommandValid = draftCommand.trim().length > 0
 
@@ -69,12 +70,14 @@ export function PinnedTerminalPanelsSetting({
       id: crypto.randomUUID(),
       title: draftTitle.trim(),
       command: draftCommand.trim(),
-      ...(trimmedHost.length > 0 ? { host: trimmedHost } : {})
+      ...(trimmedHost.length > 0 ? { host: trimmedHost } : {}),
+      ...(draftGroup.trim().length > 0 ? { group: draftGroup.trim() } : {})
     }
     updateSettings({ pinnedTerminalPanels: [...panels, panel] })
     setDraftTitle('')
     setDraftCommand('')
     setDraftHost('')
+    setDraftGroup('')
   }
 
   const removePanel = (id: string): void => {
@@ -88,7 +91,10 @@ export function PinnedTerminalPanelsSetting({
           {panels.map((panel) => (
             <div key={panel.id} className="flex items-center gap-2 px-2 py-1.5">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium">{panel.title}</div>
+                <div className="truncate text-[13px] font-medium">
+                  {panel.group ? `${panel.group} / ` : ''}
+                  {panel.title}
+                </div>
                 <div className="truncate font-mono text-[11px] text-muted-foreground">
                   {panel.command}
                   {panel.host ? ` @ ${panel.host}` : ''}
@@ -131,6 +137,15 @@ export function PinnedTerminalPanelsSetting({
             }}
             placeholder="nvtop"
             className="h-7 flex-1 font-mono text-[12px]"
+          />
+          <Input
+            value={draftGroup}
+            onChange={(e) => setDraftGroup(e.target.value)}
+            placeholder={translate(
+              'auto.components.settings.PinnedTerminalPanelsSetting.groupPlaceholder',
+              'Group'
+            )}
+            className="h-7 w-24 text-[12px]"
           />
           <Input
             value={draftHost}
