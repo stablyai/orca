@@ -2,7 +2,6 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  statSync,
   writeFileSync,
   chmodSync,
   renameSync,
@@ -14,32 +13,22 @@ import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
-import { resolveHooksJsonWritePath } from './hook-config-write-path'
-import { writeRollingFileBackup } from '../rolling-file-backup'
-import { isPlainObject } from './hooks-json-read'
+import type { HookCommandConfig, HookDefinition } from './hooks-json-file'
 
-export type HookCommandConfig = {
-  type: 'command'
-  command: string
-  timeout?: number
-  async?: boolean
-  statusMessage?: string
-  [key: string]: unknown
-}
-
-export type HookDefinition = {
-  matcher?: string
-  command?: string
-  bash?: string
-  powershell?: string
-  hooks?: HookCommandConfig[]
-  [key: string]: unknown
-}
-
-export type HooksConfig = {
-  hooks?: Record<string, HookDefinition[]>
-  [key: string]: unknown
-}
+// Why: the hooks-JSON file contract lives in `hooks-json-file.ts`; re-export
+// it here so every installer keeps its single historical import surface.
+export {
+  isPlainObject,
+  readHooksJson,
+  readHooksJsonWithRaw,
+  readRawHooksFile,
+  updateHooksJsonWithRetry,
+  writeHooksJson,
+  type HooksJsonSnapshot,
+  type HookCommandConfig,
+  type HookDefinition,
+  type HooksConfig
+} from './hooks-json-file'
 
 // Why: host-level backstop timeout for status hooks, independent of the curl --max-time and Copilot's timeoutSec (#4633).
 export const MANAGED_HOOK_TIMEOUT_SECONDS = 10
@@ -58,14 +47,12 @@ export function buildManagedCommandDefinition(command: string): HookDefinition {
   return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
-export {
-  isPlainObject,
-  readHooksJson,
-  readHooksJsonWithRaw,
-  type HooksJsonSnapshot
-} from './hooks-json-read'
-
-// Why: match by script file name, not exact command, so a fresh install sweeps stale entries from old/parallel installs.
+// Why: callers in install/remove need to match not just the exact current
+// managed command, but also stale entries pointing at old script paths — e.g.
+// from a previous dev build with a different Electron userData dir, or a
+// parallel dev/prod install. Matching by the managed script's file name
+// (under any `agent-hooks/` directory) lets a fresh install sweep those
+// without touching unrelated user-authored hooks.
 export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
@@ -305,117 +292,4 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
     }
     throw error
   }
-}
-
-/** Raw settings file content, or null when absent/unreadable. Used as the
- *  compare-and-retry baseline for read-modify-write cycles. */
-export function readRawHooksFile(configPath: string): string | null {
-  const readPath = resolveHooksJsonWritePath(configPath)
-  if (!existsSync(readPath)) {
-    return null
-  }
-  try {
-    return readFileSync(readPath, 'utf-8')
-  } catch {
-    return null
-  }
-}
-
-/** Read-modify-write a hooks settings file with a stale check: if another
- *  writer (the agent CLI itself, a second Orca instance) changed the file
- *  between our read and our replace, the attempt is discarded and re-run
- *  against the fresh content so no concurrent keys are lost. The final
- *  attempt drops the guard so install still converges under a pathological
- *  writer. Returns the written config, or null when the file is unparseable. */
-export function updateHooksJsonWithRetry(
-  configPath: string,
-  mutate: (config: HooksConfig) => HooksConfig,
-  maxAttempts = 3
-): HooksConfig | null {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const baseline = readRawHooksFile(configPath)
-    let config: HooksConfig
-    if (baseline === null) {
-      config = {}
-    } else {
-      try {
-        const parsed = JSON.parse(baseline)
-        if (!isPlainObject(parsed)) {
-          return null
-        }
-        config = parsed
-      } catch {
-        return null
-      }
-    }
-    const next = mutate(config)
-    const options = attempt < maxAttempts ? { expectedDiskContent: baseline } : {}
-    if (writeHooksJson(configPath, next, options)) {
-      return next
-    }
-  }
-  return null
-}
-
-/** Returns false only when `expectedDiskContent` was provided and the on-disk
- *  content changed since it was read (stale write aborted; nothing written). */
-export function writeHooksJson(
-  configPath: string,
-  config: HooksConfig,
-  options: { expectedDiskContent?: string | null; preserveMode?: boolean } = {}
-): boolean {
-  const writePath = resolveHooksJsonWritePath(configPath)
-  const dir = dirname(writePath)
-  mkdirSync(dir, { recursive: true })
-
-  // Why: temp+rename leaves the original untouched on a crash/disk-full mid-write.
-  // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
-  const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
-  const existingMode =
-    options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
-
-  // Why: skip the write (and therefore the .bak rotation) when the on-disk
-  // content is already identical. Without this, every install() rewrites the
-  // file and rolls the backup forward, which can silently destroy the last
-  // recoverable copy if install() is called repeatedly (e.g. on app start).
-  if (existsSync(writePath)) {
-    try {
-      if (readFileSync(writePath, 'utf-8') === serialized) {
-        return true
-      }
-    } catch {
-      // Fall through to the normal write path; a read error isn't worth failing the install for.
-    }
-  }
-
-  try {
-    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode })
-    // Why: compare-and-retry guard for concurrent writers (the agent CLI
-    // rewrites its own settings.json). Re-read just before the replace; if
-    // the content diverged from what the caller read, abort so the caller
-    // can re-merge instead of clobbering the concurrent change.
-    if (options.expectedDiskContent !== undefined) {
-      if (readRawHooksFile(writePath) !== options.expectedDiskContent) {
-        return false
-      }
-    }
-    // Why: single rolling backup — one file, no accumulation in ~/.claude.
-    // Protects against a merge-logic bug producing bad JSON; the original is
-    // always recoverable from <configPath>.bak until the next write.
-    if (existsSync(writePath)) {
-      writeRollingFileBackup(writePath, `${writePath}.bak`)
-    }
-    renameSync(tmpPath, writePath)
-  } finally {
-    // Clean up temp file if rename failed (or the stale check aborted).
-    if (existsSync(tmpPath)) {
-      try {
-        unlinkSync(tmpPath)
-      } catch {
-        // best effort
-      }
-    }
-  }
-  return true
 }
