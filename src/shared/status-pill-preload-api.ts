@@ -118,7 +118,13 @@ export const STATUS_PILL_AGENT_LABELS: Record<string, string> = {
 /** Resolve a display label for an agent type, falling back to the raw type
  *  when the agent is not in the well-known map (custom / user-defined agent). */
 export function formatStatusPillAgentLabel(agentType: string): string {
-  return STATUS_PILL_AGENT_LABELS[agentType.toLowerCase()] ?? agentType
+  // Why: STATUS_PILL_AGENT_LABELS is a plain object, so a custom agent type
+  // named "__proto__" or "constructor" would resolve an inherited property
+  // instead of falling back to the raw agentType. Guard with hasOwnProperty.
+  const key = agentType.toLowerCase()
+  return Object.prototype.hasOwnProperty.call(STATUS_PILL_AGENT_LABELS, key)
+    ? (STATUS_PILL_AGENT_LABELS[key] as string)
+    : agentType
 }
 
 export type StatusPillPreloadApi = {

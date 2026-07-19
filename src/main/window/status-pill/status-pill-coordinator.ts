@@ -65,17 +65,20 @@ export class StatusPillCoordinator {
   }
 
   /** Whether the pill window is currently mounted. Exposed for diagnostics. */
+  /** True when the pill window is currently mounted. Exposed for diagnostics. */
   isPillOpen(): boolean {
     return this.handle !== null && !this.handle.window.isDestroyed()
   }
 
   /** Force the pill to recompute its summary from the current snapshot. Used
    *  by callers that mutate agent state outside the hook server. */
+  /** Force the pill to recompute its summary from the current snapshot. */
   refresh(): void {
     this.handle?.broadcastSnapshot()
   }
 
   /** Final teardown: destroys the window, detaches all listeners. */
+  /** Final teardown: destroys the window, detaches all listeners. Idempotent. */
   destroy(): void {
     if (this.destroyed) {
       return

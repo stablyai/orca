@@ -73,6 +73,7 @@ export function pickDisplayForCursor(
   return displays.find((d) => d.internal) ?? displays[0]
 }
 
+/** Compute the pill's screen rectangle for the chosen display + platform. */
 export function computeStatusPillPlacement(input: StatusPillPlacementInput): StatusPillPlacement {
   const { pillWidth, pillHeight, display, platform, pinnedXOffset } = input
   const workArea = display.workArea

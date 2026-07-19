@@ -16,6 +16,8 @@ const STALE_AFTER_MS = 30 * 60 * 1000
 
 const EMPTY_SUMMARY = EMPTY_STATUS_PILL_SUMMARY
 
+/** Roll all live agent entries into a compact summary (counts + lead activity
+ *  + optional pending question) the pill renderer can consume in O(1). */
 export function computeStatusPillSummary(
   entries: AgentStatusIpcPayload[],
   now: number = Date.now()
@@ -113,6 +115,8 @@ const STATE_PRIORITY: Record<AgentStatusState, number> = {
   done: 3
 }
 
+/** Pick the entry that should drive the pill's activity label, using
+ *  state-priority + most-recent-received as tie-breaker. */
 function isMoreRelevantLead(
   candidate: AgentStatusIpcPayload,
   current: AgentStatusIpcPayload | null
@@ -130,6 +134,8 @@ function isMoreRelevantLead(
   return (candidate.receivedAt ?? 0) >= (current.receivedAt ?? 0)
 }
 
+/** Same shape as isMoreRelevantLead, but for picking which pending question
+ *  surfaces when multiple panes are blocked/waiting simultaneously. */
 function isMoreRelevantPendingQuestion(
   candidate: AgentStatusIpcPayload,
   current: AgentStatusIpcPayload | null
@@ -159,6 +165,7 @@ function buildPendingQuestion(entry: AgentStatusIpcPayload): StatusPillPendingQu
   }
 }
 
+/** Compose the one-line text the pill renders next to the indicator dot. */
 function buildActivityLabel(entry: AgentStatusIpcPayload): string {
   const agentType = entry.agentType ? formatAgentType(entry.agentType) : 'agent'
   const prompt = truncate(cleanString(entry.prompt), 40)

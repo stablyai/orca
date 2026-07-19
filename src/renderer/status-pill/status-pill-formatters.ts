@@ -5,6 +5,7 @@ import {
 
 export type Tone = 'idle' | 'working' | 'blocked' | 'waiting' | 'done'
 
+/** Pick the pill's overall tone by priority: blocked > waiting > working > done. */
 export function pickTone(summary: StatusPillSummary): Tone {
   if (summary.blocked > 0) {
     return 'blocked'
@@ -21,6 +22,7 @@ export function pickTone(summary: StatusPillSummary): Tone {
   return 'idle'
 }
 
+/** Two-letter initials for the agent avatar (Claude → Cl, Codex → Co, …). */
 export function pickInitials(agentType: string): string {
   const lower = agentType.toLowerCase()
   const map: Record<string, string> = {
@@ -39,6 +41,7 @@ export function pickInitials(agentType: string): string {
   return map[lower] ?? agentType.slice(0, 2).toUpperCase()
 }
 
+/** CSS class for the agent's avatar color (av-claude / av-codex / av-default). */
 export function pickAvatarClass(agentType: string): string {
   const lower = agentType.toLowerCase()
   const map: Record<string, string> = {
@@ -57,6 +60,7 @@ export function formatAgentLabel(agentType: string): string {
   return formatStatusPillAgentLabel(agentType)
 }
 
+/** Format an age (ms since receivedAt) as a short relative string: 12s / 5m / 2h / 3d. */
 export function formatRelativeTime(receivedAt: number): string {
   if (!receivedAt) {
     return ''
@@ -77,6 +81,7 @@ export function formatRelativeTime(receivedAt: number): string {
   return `${days}d`
 }
 
+/** Compose the panel's title summary: "3 working · 1 waiting" etc. */
 export function buildPanelTitle(summary: StatusPillSummary): string {
   const parts: string[] = []
   if (summary.working > 0) {

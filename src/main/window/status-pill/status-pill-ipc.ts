@@ -17,6 +17,9 @@ export type StatusPillIpcArgs = {
   warn: (message: string, error?: unknown) => void
 }
 
+/** Register all `statusPill:*` IPC handlers (click, context menu, snapshot
+ *  pull, answer push). Returns a detach function that removes every listener
+ *  and handler — call on window destroy. */
 export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => void {
   const clickHandler = (): void => {
     args.onFocusMainWindow()
@@ -77,6 +80,9 @@ export function attachStatusPillIpcListeners(args: StatusPillIpcArgs): () => voi
   }
 }
 
+/** Validate and route an answer from the pill renderer to the agent PTY.
+ *  Returns accepted=false if the payload is malformed, the pane has no live
+ *  pending prompt, or the runtime write fails. */
 async function answerAgentFromPill(
   payload: unknown,
   args: StatusPillIpcArgs

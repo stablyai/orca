@@ -31,6 +31,9 @@ export type StatusPillBroadcasterOptions = {
   clearScheduler?: (handle: ReturnType<typeof setTimeout>) => void
 }
 
+/** Coalesced bridge between the live agent-status stream and the pill
+ *  renderer. De-dupes identical payloads so a no-op status ping doesn't
+ *  trigger a renderer re-render. */
 export class StatusPillBroadcaster {
   private readonly getSnapshot: () => AgentStatusIpcPayload[]
   private readonly send: (payload: StatusPillBroadcastPayload) => void
@@ -111,6 +114,9 @@ export class StatusPillBroadcaster {
   }
 }
 
+/** Top-level equality check used by flushNow to decide whether to skip the
+ *  next send. Compares summary + row vector; falls through to summariesEqual
+ *  and rowsEqual for field-level checks. */
 function payloadsEqual(
   a: StatusPillBroadcastPayload | null,
   b: StatusPillBroadcastPayload

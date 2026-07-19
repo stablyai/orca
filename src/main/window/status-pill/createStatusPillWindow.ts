@@ -66,6 +66,9 @@ export type StatusPillWindowHandle = {
   destroy: () => void
 }
 
+/** Construct the floating, non-activating pill BrowserWindow + its broadcaster
+ *  and wire display-metric + IPC listeners. Returns a handle whose `destroy()`
+ *  must be called on setting toggle-off / app shutdown. */
 export function createStatusPillWindow(
   options: CreateStatusPillWindowOptions
 ): StatusPillWindowHandle | null {
@@ -267,6 +270,8 @@ export function createStatusPillWindow(
   }
 }
 
+/** Load the pill HTML entry. Dev uses electron-vite's URL; prod uses the
+ *  packaged file with a single retry to absorb a fresh-build flush race. */
 async function loadPillEntry(
   window: BrowserWindow,
   warn: (m: string, e?: unknown) => void

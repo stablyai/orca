@@ -6,6 +6,8 @@ import {
   pickInitials
 } from './status-pill-formatters'
 
+/** One row in the expanded multi-agent list. Staggers fade-in by index so
+ *  the list cascades instead of popping in as a single block. */
 export function AgentRowView({
   row,
   index

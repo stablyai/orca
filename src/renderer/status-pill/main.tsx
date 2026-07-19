@@ -23,6 +23,8 @@ declare global {
 
 const EMPTY_SUMMARY = EMPTY_STATUS_PILL_SUMMARY
 
+/** Pill root: subscribes to main's snapshot/rows push channels, manages
+ *  expand/collapse state, routes answer clicks to preload.answerQuestion. */
 function StatusPill(): React.JSX.Element {
   const api = window.api
   const [summary, setSummary] = useState<StatusPillSummary>(EMPTY_SUMMARY)
@@ -186,6 +188,8 @@ function StatusPill(): React.JSX.Element {
   )
 }
 
+/** Resting capsule: indicator dot + counts + activity label. Keyboard-
+ *  operable (Enter / Space) per the WAI-ARIA button pattern. */
 function PillBody({
   tone,
   pulse,
@@ -259,6 +263,8 @@ function CountGroup({
   )
 }
 
+/** Expanded glass panel rendered below the pill on hover or pending question.
+ *  Hosts the question/approval card (when present) + the multi-agent list. */
 function AgentPanel({
   summary,
   rows,

@@ -49,6 +49,9 @@ export function parsePendingPrompt(
   return null
 }
 
+/** Top-level dispatcher for an interactive prompt envelope. Renders a
+ *  QuestionCardView or ApprovalCardView depending on the parsed shape, or a
+ *  fallback "Open Orca" button if the envelope is malformed. */
 export function PendingQuestionCard({
   pending,
   onAnswer,
@@ -102,6 +105,8 @@ export function PendingQuestionCard({
   )
 }
 
+/** Render the first question of an AskUserQuestion prompt as numbered buttons.
+ *  Sends the picked label + Enter via the answer IPC. */
 function QuestionCardView({
   paneKey,
   agentLabel,
@@ -165,6 +170,8 @@ function QuestionCardView({
   )
 }
 
+/** Render a PermissionRequest as a Deny/Allow card. Sends '1' (allow) or
+ *  ESC (deny) — the same keystrokes NativeChatApprovalCard uses. */
 function ApprovalCardView({
   paneKey,
   agentLabel,
