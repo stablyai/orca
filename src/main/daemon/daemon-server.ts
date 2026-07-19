@@ -23,6 +23,7 @@ import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import { unlinkOwnedDaemonPidFile, unlinkOwnedDaemonTokenFile } from './daemon-spawner'
+import { isShellProcess } from '../../shared/shell-process-detection'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
@@ -875,6 +876,19 @@ export class DaemonServer {
       }
 
       case 'kill': {
+        // Why: last-ditch guard — an automated kill must not take down a
+        // session whose foreground is a live non-shell process (an agent at
+        // work). getForegroundProcess already returns null for dead sessions.
+        if (request.payload.intent === 'auto') {
+          const foreground = this.host.getForegroundProcess(request.payload.sessionId)
+          if (foreground && !isShellProcess(foreground)) {
+            this.log.log('session-kill-refused', {
+              sessionId: request.payload.sessionId,
+              foreground
+            })
+            return { refused: true }
+          }
+        }
         const canceledPendingSpawn = this.cancelPendingPtySpawnPreparations(
           request.payload.sessionId
         )

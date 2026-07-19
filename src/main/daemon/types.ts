@@ -1,3 +1,4 @@
+import type { KillRequest } from './daemon-kill-request'
 import type {
   ConfirmForegroundProcessRequest,
   GetForegroundProcessRequest
@@ -151,14 +152,7 @@ export type SetSessionBackgroundRequest = {
   }
 }
 
-export type KillRequest = {
-  id: string
-  type: 'kill'
-  payload: {
-    sessionId: string
-    immediate?: boolean
-  }
-}
+export type { KillRequest } from './daemon-kill-request'
 
 export type SignalRequest = {
   id: string
