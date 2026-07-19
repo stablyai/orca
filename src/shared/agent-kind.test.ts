@@ -29,6 +29,11 @@ describe('tuiAgentToAgentKind', () => {
     expect(tuiAgentToAgentKind('claude')).toBe('claude-code')
     expect(tuiAgentToAgentKind('pi')).toBe('pi')
   })
+
+  it('maps AdaL to its concrete telemetry identity', () => {
+    expect(tuiAgentToAgentKind('adal')).toBe('adal')
+    expect(agentKindToTuiAgent('adal')).toBe('adal')
+  })
 })
 
 describe('agentKindToTuiAgent', () => {
