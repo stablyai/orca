@@ -133,6 +133,10 @@ export function registerSettingsHandlers(
     if ('pinnedTerminalPanels' in args) {
       sanitizedArgs.pinnedTerminalPanels = normalizePinnedTerminalPanels(args.pinnedTerminalPanels)
     }
+    if ('pinnedTerminalPanelsEnabled' in args) {
+      // Why: absent-means-enabled — anything but an explicit false is enabled.
+      sanitizedArgs.pinnedTerminalPanelsEnabled = args.pinnedTerminalPanelsEnabled !== false
+    }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }

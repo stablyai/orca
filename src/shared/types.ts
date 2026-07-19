@@ -2766,6 +2766,10 @@ export type GlobalSettings = {
    *  as sidebar entries hosting persistent PTYs. Optional for profiles saved
    *  before this setting existed; readers default to none. */
   pinnedTerminalPanels?: PinnedTerminalPanel[]
+  /** Master switch for the pinned-terminal-panels sidebar section. Absent
+   *  means enabled; an explicit false hides every panel entry without
+   *  touching the per-panel configuration. */
+  pinnedTerminalPanelsEnabled?: boolean
   /** Collapsed pinned-terminal-panel group labels — in settings (not
    *  per-window UI state) so rail folds survive relaunch and both windows
    *  of a profile agree. */
@@ -3331,8 +3335,8 @@ export type PinnedWebPanel = {
 }
 
 /** A user-configured observability command (nvtop, btop, watch …) pinned to
- *  the left sidebar as a persistent terminal. Remote hosts are expressed in
- *  the command itself (`ssh node-b nvtop`) — no separate host field. */
+ *  the left sidebar as a persistent terminal, running locally or on a
+ *  configured SSH target. */
 export type PinnedTerminalPanel = {
   id: string
   title: string
@@ -3344,6 +3348,9 @@ export type PinnedTerminalPanel = {
   /** Sidebar group label; panels sharing a group render under one
    *  collapsible parent row. Absent panels render flat. */
   group?: string
+  /** Absent means enabled — only an explicit false hides the panel from the
+   *  sidebar, so profiles saved before this field existed keep their panels. */
+  enabled?: boolean
 }
 
 /** The active top-level section shown in the main content area. */

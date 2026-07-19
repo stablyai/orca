@@ -9224,7 +9224,16 @@
           "titlePlaceholder": "Title",
           "add": "Add",
           "hostPlaceholder": "SSH host (optional)",
-          "groupPlaceholder": "Group"
+          "groupPlaceholder": "Group",
+          "sectionEnabled": "Show panels in the sidebar",
+          "reorder": "Reorder panel",
+          "panelEnabled": "Show this panel",
+          "unresolvedHostTitle": "No configured SSH target matches this host — the panel will refuse to start.",
+          "unresolvedHost": "unresolved host",
+          "edit": "Edit panel",
+          "duplicate": "Duplicate panel",
+          "saveEdit": "Save panel",
+          "cancelEdit": "Cancel edit"
         },
         "PinnedWebPanelsSetting": {
           "title": "Pinned web panels",

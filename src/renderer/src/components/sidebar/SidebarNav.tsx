@@ -11,7 +11,10 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { PinnedTerminalPanel } from '../../../../shared/types'
-import { PINNED_TERMINAL_PANELS_ROOT_FOLD } from '../../../../shared/pinned-terminal-panels'
+import {
+  PINNED_TERMINAL_PANELS_ROOT_FOLD,
+  visiblePinnedTerminalPanels
+} from '../../../../shared/pinned-terminal-panels'
 import { cn } from '@/lib/utils'
 import type { GlobalSettings } from '../../../../shared/types'
 import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
@@ -90,7 +93,20 @@ const SidebarNav = React.memo(function SidebarNav() {
   const pinnedWebPanels = useAppStore((s) => s.settings?.pinnedWebPanels)
   const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
   const activePinnedTerminalPanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
-  const pinnedTerminalPanels = useAppStore((s) => s.settings?.pinnedTerminalPanels)
+  const pinnedTerminalPanelsSetting = useAppStore((s) => s.settings?.pinnedTerminalPanels)
+  const pinnedTerminalPanelsEnabled = useAppStore(
+    (s) => s.settings?.pinnedTerminalPanelsEnabled !== false
+  )
+  // Why: filter in a memo, not the selector — a selector returning a fresh
+  // array every call would re-render on each store update.
+  const pinnedTerminalPanels = React.useMemo(
+    () =>
+      visiblePinnedTerminalPanels({
+        pinnedTerminalPanels: pinnedTerminalPanelsSetting,
+        pinnedTerminalPanelsEnabled
+      }),
+    [pinnedTerminalPanelsSetting, pinnedTerminalPanelsEnabled]
+  )
   const collapsedGroupsSetting = useAppStore((s) => s.settings?.collapsedPinnedTerminalPanelGroups)
   const collapsedTerminalPanelGroups = React.useMemo(
     () => new Set(collapsedGroupsSetting ?? []),
@@ -117,7 +133,7 @@ const SidebarNav = React.memo(function SidebarNav() {
       string,
       { group: string | null; panels: PinnedTerminalPanel[] }
     >()
-    for (const panel of pinnedTerminalPanels ?? []) {
+    for (const panel of pinnedTerminalPanels) {
       const group = panel.group ?? null
       if (group === null) {
         sections.push({ group: null, panels: [panel] })

@@ -143,7 +143,7 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
     if (typeof entry !== 'object' || entry === null) {
       continue
     }
-    const { id, title, command, host, group } = entry as Record<string, unknown>
+    const { id, title, command, host, group, enabled } = entry as Record<string, unknown>
     const normalizedCommand = normalizePinnedTerminalPanelCommand(command)
     if (
       typeof id !== 'string' ||
@@ -177,8 +177,46 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
         trimmedTitle.length > 0 ? trimmedTitle : normalizedCommand.slice(0, MAX_PANEL_TITLE_LENGTH),
       command: normalizedCommand,
       ...(normalizedHost !== null ? { host: normalizedHost } : {}),
-      ...(trimmedGroup.length > 0 ? { group: trimmedGroup } : {})
+      ...(trimmedGroup.length > 0 ? { group: trimmedGroup } : {}),
+      // Why: only an explicit false is persisted — enabled is the absent-field
+      // default, so profiles stay minimal and older builds ignore the flag.
+      ...(enabled === false ? { enabled: false } : {})
     })
   }
   return panels
+}
+
+/** The panels the sidebar should render: none when the master switch is off,
+ *  otherwise every panel not individually disabled. Disabling never touches
+ *  panel config or its parked PTY — re-enabling restores the entry as it was. */
+export function visiblePinnedTerminalPanels(
+  settings:
+    | { pinnedTerminalPanels?: PinnedTerminalPanel[]; pinnedTerminalPanelsEnabled?: boolean }
+    | null
+    | undefined
+): PinnedTerminalPanel[] {
+  if (!settings || settings.pinnedTerminalPanelsEnabled === false) {
+    return []
+  }
+  return (settings.pinnedTerminalPanels ?? []).filter((panel) => panel.enabled !== false)
+}
+
+/** Reorder for the settings list: move the dragged panel to the position of
+ *  the panel it was dropped on. Returns the input array unchanged (same
+ *  reference) when either id is unknown or the move is a no-op, so callers
+ *  can skip the settings write. */
+export function movePinnedTerminalPanel(
+  panels: readonly PinnedTerminalPanel[],
+  draggedId: string,
+  overId: string
+): readonly PinnedTerminalPanel[] {
+  const from = panels.findIndex((panel) => panel.id === draggedId)
+  const to = panels.findIndex((panel) => panel.id === overId)
+  if (from < 0 || to < 0 || from === to) {
+    return panels
+  }
+  const next = [...panels]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
 }
