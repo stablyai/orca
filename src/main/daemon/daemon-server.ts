@@ -37,6 +37,7 @@ import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
+import type { KillResponse } from './daemon-kill-request'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -886,7 +887,7 @@ export class DaemonServer {
               sessionId: request.payload.sessionId,
               foreground
             })
-            return { refused: true }
+            return { refused: true } satisfies KillResponse
           }
         }
         const canceledPendingSpawn = this.cancelPendingPtySpawnPreparations(

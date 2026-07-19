@@ -11,3 +11,11 @@ export type KillRequest = {
     intent?: 'auto' | 'user'
   }
 }
+
+/** Why: `refused` marks an intent:'auto' kill vetoed by a live non-shell
+ *  foreground. Old daemons never set it, so callers must treat absence as
+ *  "killed, or guard not enforced" until a protocol-version/capability bump
+ *  lets them tell the difference. */
+export type KillResponse = {
+  refused?: true
+}
