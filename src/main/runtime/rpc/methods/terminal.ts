@@ -824,6 +824,7 @@ const TerminalHandle = z.object({
 
 const TerminalListParams = z.object({
   worktree: OptionalString,
+  repo: OptionalString,
   limit: OptionalFiniteNumber,
   requireFreshPtyLiveness: z.boolean().optional()
 })
@@ -1100,6 +1101,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalListParams,
     handler: async (params, { runtime }) =>
       runtime.listTerminals(params.worktree, params.limit, {
+        repoSelector: params.repo,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness
       })
   }),

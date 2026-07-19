@@ -10835,7 +10835,7 @@ export class OrcaRuntimeService {
   async listTerminals(
     worktreeSelector?: string,
     limit = DEFAULT_TERMINAL_LIST_LIMIT,
-    opts: { requireFreshPtyLiveness?: boolean } = {}
+    opts: { requireFreshPtyLiveness?: boolean; repoSelector?: string } = {}
   ): Promise<RuntimeTerminalListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -10875,12 +10875,20 @@ export class OrcaRuntimeService {
         : targetWorktreeId && explicitTargetWorktreeId
           ? this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
           : null
+    const repoId =
+      !targetWorktreeId && opts.repoSelector
+        ? (await this.resolveRepoSelector(opts.repoSelector)).id
+        : null
     const worktreesById =
       targetWorktreeId && targetWorktree
         ? new Map([[targetWorktree.id, targetWorktree]])
         : targetWorktreeId
           ? new Map()
-          : await this.getResolvedWorktreeMap()
+          : new Map(
+              [...(await this.getResolvedWorktreeMap())].filter(
+                ([, worktree]) => repoId === null || worktree.repoId === repoId
+              )
+            )
     if (graphEpoch !== null) {
       this.assertStableReadyGraph(graphEpoch)
     }
@@ -10915,6 +10923,9 @@ export class OrcaRuntimeService {
         if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
           continue
         }
+        if (repoId !== null && !worktreesById.has(leaf.worktreeId)) {
+          continue
+        }
         if (opts.requireFreshPtyLiveness && leaf.ptyId && !refreshedPtyLiveness?.has(leaf.ptyId)) {
           continue
         }
@@ -10939,6 +10950,9 @@ export class OrcaRuntimeService {
         continue
       }
       if (targetWorktreeId && pty.worktreeId !== targetWorktreeId) {
+        continue
+      }
+      if (repoId !== null && !worktreesById.has(pty.worktreeId)) {
         continue
       }
       terminals.push(this.buildPtyTerminalSummary(pty, worktreesById))
@@ -12081,17 +12095,24 @@ export class OrcaRuntimeService {
     })
   }
 
-  async getWorktreePs(limit = DEFAULT_WORKTREE_PS_LIMIT): Promise<{
+  async getWorktreePs(
+    repoSelectorOrLimit?: string | number,
+    requestedLimit = DEFAULT_WORKTREE_PS_LIMIT
+  ): Promise<{
     worktrees: RuntimeWorktreePsSummary[]
     totalCount: number
     truncated: boolean
   }> {
+    const repoSelector = typeof repoSelectorOrLimit === 'string' ? repoSelectorOrLimit : undefined
+    const limit = typeof repoSelectorOrLimit === 'number' ? repoSelectorOrLimit : requestedLimit
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
     const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
-    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
-      this.isRuntimeWorktreeVisible(worktree)
+    const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
+    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter(
+      (worktree) =>
+        this.isRuntimeWorktreeVisible(worktree) && (repoId === null || worktree.repoId === repoId)
     )
     // Why: worktree.ps backs the mobile sidebar, so it must use the same
     // host-owned imported-worktree visibility gate as worktree.list/desktop.

@@ -17,8 +17,10 @@ import {
 } from '../flags'
 import {
   getOptionalWorktreeSelector,
+  getRepoSelectorFromWorktreeSelector,
   getRequiredWorktreeSelector,
-  resolveCurrentWorktreeSelector
+  resolveCurrentWorktreeSelector,
+  resolveRepoSelectorFlag
 } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
@@ -134,18 +136,6 @@ function getOptionalSetupDecision(
   return setup
 }
 
-function getRepoSelectorFromWorktreeSelector(selector: string | undefined): string | undefined {
-  if (!selector?.startsWith('id:')) {
-    return undefined
-  }
-  const worktreeId = selector.slice('id:'.length)
-  const separatorIndex = worktreeId.indexOf('::')
-  if (separatorIndex <= 0) {
-    return undefined
-  }
-  return `id:${worktreeId.slice(0, separatorIndex)}`
-}
-
 async function getCreateRepoSelector(
   flags: Map<string, string | boolean>,
   cwdParentWorktree: string | undefined,
@@ -170,8 +160,10 @@ async function getCreateRepoSelector(
 }
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
-  'worktree ps': async ({ flags, client, json }) => {
+  'worktree ps': async ({ flags, client, cwd, json }) => {
+    const repo = await resolveRepoSelectorFlag(flags, cwd, client)
     const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
+      ...(repo ? { repo } : {}),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
     printResult(result, json, formatWorktreePs)

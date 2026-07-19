@@ -19395,6 +19395,108 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('filters renderer and PTY-only terminals by repo selector before counting', async () => {
+    const repoB = {
+      id: 'repo-2',
+      path: '/tmp/repo-b',
+      displayName: 'repo-b',
+      badgeColor: 'green',
+      addedAt: 2
+    }
+    const repoBWorktreePath = '/tmp/worktree-b'
+    const repoBWorktreeId = `${repoB.id}::${repoBWorktreePath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ displayName: 'Repo A' }),
+      [repoBWorktreeId]: makeWorktreeMeta({ displayName: 'Repo B' })
+    }
+    const repos = [store.getRepos()[0]!, repoB]
+    const runtimeStore = {
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath: string) => {
+      if (repoPath === repoB.path) {
+        return [
+          {
+            path: repoBWorktreePath,
+            head: 'def',
+            branch: 'feature/bar',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]
+      }
+      return MOCK_GIT_WORKTREES
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-a',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Repo A graph',
+          activeLeafId: 'pane:1',
+          layout: null
+        },
+        {
+          tabId: 'tab-b',
+          worktreeId: repoBWorktreeId,
+          title: 'Repo B graph',
+          activeLeafId: 'pane:2',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-a',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-graph-a'
+        },
+        {
+          tabId: 'tab-b',
+          worktreeId: repoBWorktreeId,
+          leafId: 'pane:2',
+          paneRuntimeId: 1,
+          ptyId: 'pty-graph-b'
+        }
+      ]
+    })
+    runtime.registerPty('pty-fallback-a', TEST_WORKTREE_ID)
+    runtime.registerPty('pty-fallback-b', repoBWorktreeId)
+    runtime.onPtyData('pty-fallback-a', 'repo a fallback\r\n', 123)
+    runtime.onPtyData('pty-fallback-b', 'repo b fallback\r\n', 124)
+
+    const listed = await runtime.listTerminals(undefined, undefined, {
+      repoSelector: `id:${TEST_REPO_ID}`
+    })
+
+    expect(listed).toMatchObject({ totalCount: 2, truncated: false })
+    expect(listed.terminals).toHaveLength(2)
+    expect(listed.terminals.every((terminal) => terminal.worktreeId === TEST_WORKTREE_ID)).toBe(
+      true
+    )
+    expect(listed.terminals.map((terminal) => terminal.worktreePath)).toEqual([
+      TEST_WORKTREE_PATH,
+      TEST_WORKTREE_PATH
+    ])
+    expect(listed.terminals.map((terminal) => terminal.ptyId)).toEqual([
+      'pty-graph-a',
+      'pty-fallback-a'
+    ])
+    expect(listed.terminals.map((terminal) => terminal.preview)).toEqual(['', 'repo a fallback'])
+  })
+
   it('shows and resolves active PTY-backed mobile session terminals without a renderer graph', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)

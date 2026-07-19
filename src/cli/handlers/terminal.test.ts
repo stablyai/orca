@@ -61,3 +61,26 @@ describe('terminal close CLI', () => {
     expect(help).toContain('durable persistence')
   })
 })
+
+describe('terminal list handler', () => {
+  it('forwards repo scope while preserving an explicit worktree selector', async () => {
+    const call = vi.fn().mockResolvedValue({ result: { terminals: [] } })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal list']({
+      flags: new Map([
+        ['repo', 'id:repo-a'],
+        ['worktree', 'id:repo-a::/worktree']
+      ]),
+      client: { isRemote: false, call } as unknown as RuntimeClient,
+      cwd: '/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.list', {
+      worktree: 'id:repo-a::/worktree',
+      repo: 'id:repo-a',
+      limit: undefined
+    })
+  })
+})

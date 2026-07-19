@@ -98,6 +98,35 @@ export async function getOptionalWorktreeSelector(
   return normalizeWorktreeSelector(value, cwd)
 }
 
+export function getRepoSelectorFromWorktreeSelector(
+  selector: string | undefined
+): string | undefined {
+  if (!selector?.startsWith('id:')) {
+    return undefined
+  }
+  const worktreeId = selector.slice('id:'.length)
+  const separatorIndex = worktreeId.indexOf('::')
+  if (separatorIndex <= 0) {
+    return undefined
+  }
+  return `id:${worktreeId.slice(0, separatorIndex)}`
+}
+
+export async function resolveRepoSelectorFlag(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const value = getOptionalStringFlag(flags, 'repo')
+  if (!value) {
+    return undefined
+  }
+  if (value === 'active' || value === 'current') {
+    return getRepoSelectorFromWorktreeSelector(await resolveCurrentWorktreeSelector(cwd, client))
+  }
+  return value
+}
+
 export async function getRequiredWorktreeSelector(
   flags: Map<string, string | boolean>,
   name: string,
