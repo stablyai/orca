@@ -36,7 +36,10 @@ describe('process-executable-recognition', () => {
   it('recognizes a renamed binary from the Linux /proc exe link', async () => {
     const readLinuxExecutable = vi.fn(async () => '/home/dev/.local/bin/grok')
     await expect(
-      recognizeAgentFromExecutablePath(1234, { platform: 'linux', readLinuxExecutable })
+      recognizeAgentFromExecutablePath(1234, 'my-cli --serve', {
+        platform: 'linux',
+        readLinuxExecutable
+      })
     ).resolves.toEqual({ agent: 'grok', processName: 'grok' })
     expect(readLinuxExecutable).toHaveBeenCalledTimes(1)
   })
@@ -49,7 +52,9 @@ describe('process-executable-recognition', () => {
         '\n'
       )
     )
-    await expect(recognizeAgentFromExecutablePath(4321, { platform: 'darwin' })).resolves.toEqual({
+    await expect(
+      recognizeAgentFromExecutablePath(4321, 'my-cli', { platform: 'darwin' })
+    ).resolves.toEqual({
       agent: 'grok',
       processName: 'grok'
     })
@@ -57,6 +62,37 @@ describe('process-executable-recognition', () => {
     const [cmd, args] = execFileMock.mock.calls[0] as [string, string[]]
     expect(cmd).toBe('lsof')
     expect(args).toEqual(['-a', '-p', '4321', '-d', 'txt', '-Fn'])
+  })
+
+  it('does not label a renamed headless one-shot as an interactive agent', async () => {
+    // The real image is `claude`, but `--print` is a headless one-shot that the
+    // command-aware guard rejects — basename-only recognition would mislabel it.
+    await expect(
+      recognizeAgentFromExecutablePath(2468, 'my-cli --print "summarize"', {
+        platform: 'linux',
+        readLinuxExecutable: async () => '/usr/local/bin/claude'
+      })
+    ).resolves.toBeNull()
+  })
+
+  it('does not label a generic orca invocation as claude-agent-teams', async () => {
+    // Bare `orca` (no `claude-teams` subcommand) is not the agent TUI; the
+    // command-aware guard preserves that, unlike basename-only recognition.
+    await expect(
+      recognizeAgentFromExecutablePath(1357, 'my-cli render', {
+        platform: 'linux',
+        readLinuxExecutable: async () => '/usr/local/bin/orca'
+      })
+    ).resolves.toBeNull()
+  })
+
+  it('recognizes a genuine orca claude-teams launch via its executable image', async () => {
+    await expect(
+      recognizeAgentFromExecutablePath(2469, 'my-cli claude-teams', {
+        platform: 'linux',
+        readLinuxExecutable: async () => '/usr/local/bin/orca'
+      })
+    ).resolves.toEqual({ agent: 'claude-agent-teams', processName: 'orca' })
   })
 
   it('caches the executable path per PID so a second call skips the reader', async () => {
@@ -83,7 +119,7 @@ describe('process-executable-recognition', () => {
 
   it('does not fake an engine for an interpreter fork (node/python script)', async () => {
     await expect(
-      recognizeAgentFromExecutablePath(555, {
+      recognizeAgentFromExecutablePath(555, 'my-worker', {
         platform: 'linux',
         readLinuxExecutable: async () => '/usr/local/bin/node'
       })

@@ -153,7 +153,7 @@ async function resolveForegroundAgentFromExecutableEvidence(
     if (!candidate.stat.includes('+') || isShellProcess(getFirstCommandToken(candidate.command))) {
       continue
     }
-    const recognized = await recognizeAgentFromExecutablePath(candidate.pid)
+    const recognized = await recognizeAgentFromExecutablePath(candidate.pid, candidate.command)
     if (recognized) {
       return recognized.processName
     }

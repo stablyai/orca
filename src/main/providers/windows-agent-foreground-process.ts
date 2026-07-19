@@ -9,6 +9,7 @@ import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
 } from '../../shared/foreground-wrapper-agent'
+import { recognizeAgentFromExecutableImage } from '../../shared/process-executable-recognition'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import {
   queryWindowsProcessDescendants,
@@ -287,11 +288,15 @@ function recognizeWindowsCandidateAgent(
 ): RecognizedAgentProcess | null {
   // Why: a renamed/forked agent binary hides from its command line and node-pty
   // name, but the CIM scan already carries its real image path — recognize the
-  // executable basename with no extra probe (the ExecutablePath is free here).
+  // executable image with no extra probe (the ExecutablePath is free here).
+  // Pass the command so the image is recognized WITH its args, preserving the
+  // headless-one-shot and generic-`orca` guards instead of basename-only.
   return (
     recognizeAgentProcessFromCommandLine(candidate.command) ??
     recognizeAgentProcessFromCommandLine(candidate.name) ??
-    (candidate.executablePath ? recognizeAgentProcess(candidate.executablePath) : null)
+    (candidate.executablePath
+      ? recognizeAgentFromExecutableImage(candidate.executablePath, candidate.command)
+      : null)
   )
 }
 

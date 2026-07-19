@@ -428,6 +428,39 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('grok')
   })
 
+  it('does not mislabel a generic orca ExecutablePath without the claude-teams subcommand', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(null, {
+          stdout: windowsProcessJsonRows([
+            {
+              CommandLine: 'powershell.exe',
+              Name: 'powershell.exe',
+              ParentProcessId: 99,
+              ProcessId: 100
+            },
+            {
+              // Bare `orca render` is not the agent TUI; command-aware recognition
+              // on the ExecutablePath preserves that guard (not basename-only).
+              CommandLine: 'orca render',
+              Name: 'orca.exe',
+              ParentProcessId: 100,
+              ProcessId: 101,
+              ExecutablePath: 'C:\\Program Files\\Orca\\orca.exe'
+            }
+          ]),
+          stderr: ''
+        })
+      }
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe(
+      'powershell.exe'
+    )
+  })
+
   it('recognizes Windows Git Bash shell-rooted agent launches', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     execFileMock.mockImplementation(

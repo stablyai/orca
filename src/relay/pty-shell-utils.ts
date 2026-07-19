@@ -288,7 +288,7 @@ async function getRecognizedForegroundDescendant(
       if (!candidate.stat.includes('+') || isShellProcess(processCommandToken(candidate.command))) {
         continue
       }
-      const recognized = await recognizeAgentFromExecutablePath(candidate.pid)
+      const recognized = await recognizeAgentFromExecutablePath(candidate.pid, candidate.command)
       if (recognized) {
         return recognized.processName
       }

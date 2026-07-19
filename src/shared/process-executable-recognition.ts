@@ -1,16 +1,21 @@
 import { execFile as execFileCb } from 'node:child_process'
 import { promisify } from 'node:util'
-import { recognizeAgentProcess, type RecognizedAgentProcess } from './agent-process-recognition'
+import {
+  recognizeAgentProcessFromCommandLine,
+  type RecognizedAgentProcess
+} from './agent-process-recognition'
 
 const execFile = promisify(execFileCb)
 
 // Why: resolving a PID's real executable image forks lsof (macOS) or reads
 // /proc (Linux). Foreground scans on the completion cadence re-inspect the same
 // unrecognized pane, so cache the resolved path per PID behind a short TTL. No
-// process start-time in the key (not cheaply available cross-platform): a
-// recycled PID could serve a stale path for at most one TTL window, but the
-// caller re-runs pure agent recognition on it, so a mismatch merely fails to
-// recognize instead of mislabeling.
+// process start-time in the key (not cheaply available cross-platform), so a
+// recycled PID (or the same PID after exec) can serve a stale path for at most
+// one TTL window — and because recognition then runs on that stale path, a
+// recycled PID CAN be briefly mislabeled, not merely missed. The short TTL
+// bounds the window; keying by process generation is deferred (spec-accepted
+// PID-reuse risk).
 const EXECUTABLE_PATH_CACHE_TTL_MS = 5_000
 const EXECUTABLE_PATH_LOOKUP_TIMEOUT_MS = 3_000
 
@@ -58,10 +63,32 @@ export async function resolveProcessExecutablePath(
  */
 export async function recognizeAgentFromExecutablePath(
   pid: number,
+  command: string,
   deps: ProcessExecutablePathDeps = {}
 ): Promise<RecognizedAgentProcess | null> {
   const executablePath = await resolveProcessExecutablePath(pid, deps)
-  return executablePath ? recognizeAgentProcess(executablePath) : null
+  return executablePath ? recognizeAgentFromExecutableImage(executablePath, command) : null
+}
+
+/**
+ * Recognize an agent from a resolved executable image path while preserving the
+ * process's original arguments. Why not basename-only `recognizeAgentProcess`:
+ * it bypasses the command-aware guards in `recognizeAgentProcessFromCommandLine`
+ * (the headless one-shot filter and the generic `orca` vs `orca claude-teams`
+ * rule), so a renamed `claude --print` or a bare `orca` would be mislabeled as
+ * an interactive agent. Substitute the real executable as argv0, keep the args,
+ * and re-run command-line recognition so those guards still apply.
+ */
+export function recognizeAgentFromExecutableImage(
+  executablePath: string,
+  command: string | null | undefined
+): RecognizedAgentProcess | null {
+  const trimmed = (command ?? '').trim()
+  const firstWhitespace = trimmed.search(/\s/)
+  const args = firstWhitespace === -1 ? '' : trimmed.slice(firstWhitespace + 1).trim()
+  // Quote the path so a space inside it stays a single argv0 token.
+  const argv0 = `"${executablePath.replace(/"/g, '')}"`
+  return recognizeAgentProcessFromCommandLine(args ? `${argv0} ${args}` : argv0)
 }
 
 async function readLinuxProcExe(pid: number): Promise<string | null> {
