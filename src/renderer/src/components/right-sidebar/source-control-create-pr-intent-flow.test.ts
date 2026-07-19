@@ -7,6 +7,7 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
+  isCreatePrIntentSyncConflictError,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep
 } from './source-control-create-pr-intent-flow'
@@ -229,7 +230,9 @@ describe('source-control Create PR intent flow helpers', () => {
     ).toBe('force_push')
   })
 
-  it('blocks ordinary diverged branches and unpublished branches without commits', () => {
+  it('syncs behind-only branches, blocks diverged and unpublished-without-commits branches', () => {
+    // Genuinely diverged (local + non-equivalent remote commits): auto-syncing
+    // would merge without consent, so the intent flow keeps the explicit stop.
     expect(
       resolveCreatePrIntentRemoteStep({
         upstreamStatus: { hasUpstream: true, ahead: 1, behind: 1 },
@@ -243,6 +246,21 @@ describe('source-control Create PR intent flow helpers', () => {
         }
       })
     ).toBe('blocked')
+
+    // Behind with no local commits (pure fast-forward case) auto-syncs.
+    expect(
+      resolveCreatePrIntentRemoteStep({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
+        hasCurrentBranch: true,
+        hostedReviewCreation: {
+          provider: 'github',
+          review: null,
+          canCreate: false,
+          blockedReason: 'needs_sync',
+          nextAction: 'sync'
+        }
+      })
+    ).toBe('sync')
 
     expect(
       resolveCreatePrIntentRemoteStep({
@@ -277,5 +295,82 @@ describe('source-control Create PR intent flow helpers', () => {
         withSummary: (summary) => `localized ${summary}`
       })
     ).toBe('localized Pre-commit hook failed.')
+  })
+
+  it('treats only a genuine merge-conflict sync failure as a conflict for notice copy', () => {
+    // Pull/merge conflict from this sync: the user must resolve conflicts.
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        syncPushStage: false,
+        rawError: 'CONFLICT (content): Merge conflict in src/app.ts'
+      })
+    ).toBe(true)
+    // An unconcluded prior merge also counts as a conflict to resolve.
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        rawError: 'error: you have not concluded your merge (MERGE_HEAD exists).'
+      })
+    ).toBe(true)
+
+    // A fetch/network/auth failure during sync is NOT a conflict, even though it
+    // is not marked as the push stage — it must fall to the generic copy.
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        syncPushStage: false,
+        rawError: 'fatal: Authentication failed for remote'
+      })
+    ).toBe(false)
+    // No raw error at all is not a conflict.
+    expect(isCreatePrIntentSyncConflictError({ kind: 'sync' })).toBe(false)
+
+    // Push-stage rejection during sync is a push failure, not a conflict.
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        syncPushStage: true,
+        rawError: 'CONFLICT (content): Merge conflict in src/app.ts'
+      })
+    ).toBe(false)
+
+    // Non-sync remote failures never use the conflict copy.
+    expect(isCreatePrIntentSyncConflictError({ kind: 'push' })).toBe(false)
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'force_push',
+        syncPushStage: false,
+        rawError: 'CONFLICT (content): Merge conflict in src/app.ts'
+      })
+    ).toBe(false)
+    expect(isCreatePrIntentSyncConflictError(null)).toBe(false)
+    expect(isCreatePrIntentSyncConflictError(undefined)).toBe(false)
+  })
+
+  it('recognizes every merge-conflict wording git can emit during sync', () => {
+    // The fresh-conflict pattern's other alternatives: "Automatic merge failed"
+    // and "fix conflicts" are the most common real pull output.
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        syncPushStage: false,
+        rawError: 'Automatic merge failed; fix conflicts and then commit the result.'
+      })
+    ).toBe(true)
+    // The unconcluded-merge pattern's other alternatives: "unmerged files" and
+    // "needs merge".
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        rawError: 'error: Pulling is not possible because you have unmerged files.'
+      })
+    ).toBe(true)
+    expect(
+      isCreatePrIntentSyncConflictError({
+        kind: 'sync',
+        rawError: "error: path 'src/app.ts' needs merge"
+      })
+    ).toBe(true)
   })
 })

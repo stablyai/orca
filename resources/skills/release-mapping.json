@@ -1,0 +1,501 @@
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "appVersion": "1.0.81",
+      "skills": {
+        "orca-cli": 1
+      }
+    },
+    {
+      "appVersion": "1.0.86",
+      "skills": {
+        "orca-cli": 2
+      }
+    },
+    {
+      "appVersion": "1.0.94-rc.0",
+      "skills": {
+        "orca-cli": 3
+      }
+    },
+    {
+      "appVersion": "1.3.8-rc.1",
+      "skills": {
+        "orca-cli": 4
+      }
+    },
+    {
+      "appVersion": "1.3.12-rc.4",
+      "skills": {
+        "orca-cli": 5
+      }
+    },
+    {
+      "appVersion": "1.3.24-rc.2",
+      "skills": {
+        "orca-cli": 6,
+        "orchestration": 1
+      }
+    },
+    {
+      "appVersion": "1.3.33-rc.3",
+      "skills": {
+        "mobile-fit-debug": 1,
+        "orca-cli": 6,
+        "orchestration": 1
+      }
+    },
+    {
+      "appVersion": "0.0.1",
+      "skills": {
+        "orca-cli": 6,
+        "orchestration": 1
+      }
+    },
+    {
+      "appVersion": "1.3.35-rc.0",
+      "skills": {
+        "mobile-fit-debug": 1,
+        "orca-cli": 6,
+        "orchestration": 1
+      }
+    },
+    {
+      "appVersion": "1.3.38-rc.3",
+      "skills": {
+        "orca-cli": 6,
+        "orchestration": 1
+      }
+    },
+    {
+      "appVersion": "1.3.38",
+      "skills": {
+        "mobile-fit-debug": 1,
+        "orca-cli": 6,
+        "orchestration": 1
+      }
+    },
+    {
+      "appVersion": "1.3.39",
+      "skills": {
+        "orca-cli": 6,
+        "orchestration": 1
+      }
+    },
+    {
+      "appVersion": "1.3.46-rc.3",
+      "skills": {
+        "orca-cli": 7,
+        "orchestration": 2
+      }
+    },
+    {
+      "appVersion": "1.3.47-rc.0",
+      "skills": {
+        "orca-cli": 8,
+        "orchestration": 3
+      }
+    },
+    {
+      "appVersion": "1.3.49-rc.0",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 8,
+        "orchestration": 3
+      }
+    },
+    {
+      "appVersion": "1.4.2-rc.10",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 9,
+        "orchestration": 4
+      }
+    },
+    {
+      "appVersion": "1.4.2",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 10,
+        "orchestration": 5
+      }
+    },
+    {
+      "appVersion": "1.4.3-rc.0",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 11,
+        "orchestration": 6
+      }
+    },
+    {
+      "appVersion": "1.4.9-rc.1",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 12,
+        "orchestration": 6
+      }
+    },
+    {
+      "appVersion": "1.4.10-rc.3",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 13,
+        "orchestration": 6
+      }
+    },
+    {
+      "appVersion": "1.4.11-rc.0",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 14,
+        "orchestration": 6
+      }
+    },
+    {
+      "appVersion": "1.4.18-rc.2",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 15,
+        "orchestration": 6
+      }
+    },
+    {
+      "appVersion": "1.4.18-rc.3",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 16,
+        "orchestration": 6
+      }
+    },
+    {
+      "appVersion": "1.4.22",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 16,
+        "orchestration": 7
+      }
+    },
+    {
+      "appVersion": "1.4.36-rc.2",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 17,
+        "orchestration": 8
+      }
+    },
+    {
+      "appVersion": "1.4.36-rc.6",
+      "skills": {
+        "computer-use": 1,
+        "orca-cli": 18,
+        "orchestration": 9
+      }
+    },
+    {
+      "appVersion": "1.4.42-rc.8",
+      "skills": {
+        "computer-use": 2,
+        "orca-cli": 19,
+        "orchestration": 10
+      }
+    },
+    {
+      "appVersion": "1.4.46-rc.0",
+      "skills": {
+        "computer-use": 2,
+        "orca-cli": 19,
+        "orchestration": 11
+      }
+    },
+    {
+      "appVersion": "1.4.51-rc.8",
+      "skills": {
+        "computer-use": 3,
+        "orca-cli": 19,
+        "orchestration": 11
+      }
+    },
+    {
+      "appVersion": "1.4.51-rc.9",
+      "skills": {
+        "computer-use": 3,
+        "orca-cli": 20,
+        "orca-emulator": 1,
+        "orchestration": 12
+      }
+    },
+    {
+      "appVersion": "1.4.65-rc.3",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 1,
+        "orca-cli": 20,
+        "orca-emulator": 1,
+        "orchestration": 12
+      }
+    },
+    {
+      "appVersion": "1.4.65",
+      "skills": {
+        "computer-use": 3,
+        "orca-cli": 20,
+        "orca-emulator": 1,
+        "orchestration": 12
+      }
+    },
+    {
+      "appVersion": "1.4.66-rc.0",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 1,
+        "orca-cli": 20,
+        "orca-emulator": 1,
+        "orchestration": 12
+      }
+    },
+    {
+      "appVersion": "1.4.67-rc.0",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 20,
+        "orca-emulator": 1,
+        "orchestration": 12
+      }
+    },
+    {
+      "appVersion": "1.4.68",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 20,
+        "orca-emulator": 1,
+        "orchestration": 13
+      }
+    },
+    {
+      "appVersion": "1.4.74-rc.0",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 21,
+        "orca-emulator": 1,
+        "orchestration": 14
+      }
+    },
+    {
+      "appVersion": "1.4.78-rc.1",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 22,
+        "orca-emulator": 1,
+        "orchestration": 15
+      }
+    },
+    {
+      "appVersion": "1.4.78-rc.2",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 23,
+        "orca-emulator": 1,
+        "orchestration": 16
+      }
+    },
+    {
+      "appVersion": "1.4.81-rc.2",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 24,
+        "orca-emulator": 1,
+        "orchestration": 16
+      }
+    },
+    {
+      "appVersion": "1.4.81-rc.3",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 25,
+        "orca-emulator": 1,
+        "orchestration": 16
+      }
+    },
+    {
+      "appVersion": "1.4.88",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 2,
+        "orca-cli": 26,
+        "orca-emulator": 1,
+        "orchestration": 17
+      }
+    },
+    {
+      "appVersion": "1.4.90",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 3,
+        "orca-cli": 26,
+        "orca-emulator": 1,
+        "orca-linear": 1,
+        "orchestration": 17
+      }
+    },
+    {
+      "appVersion": "1.4.92-rc.1",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 3,
+        "orca-cli": 27,
+        "orca-emulator": 1,
+        "orca-linear": 1,
+        "orchestration": 17
+      }
+    },
+    {
+      "appVersion": "1.4.96-rc.1",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 3,
+        "orca-cli": 28,
+        "orca-emulator": 1,
+        "orca-linear": 1,
+        "orchestration": 17
+      }
+    },
+    {
+      "appVersion": "1.4.105-rc.2",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 3,
+        "orca-cli": 29,
+        "orca-emulator": 2,
+        "orca-emulator-android": 1,
+        "orca-linear": 1,
+        "orchestration": 18
+      }
+    },
+    {
+      "appVersion": "1.4.111-rc.0",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 3,
+        "orca-cli": 29,
+        "orca-emulator": 2,
+        "orca-emulator-android": 1,
+        "orca-linear": 1,
+        "orca-per-workspace-env": 1,
+        "orchestration": 18
+      }
+    },
+    {
+      "appVersion": "1.4.124-rc.6",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 3,
+        "orca-cli": 29,
+        "orca-emulator": 2,
+        "orca-emulator-android": 1,
+        "orca-linear": 1,
+        "orca-per-workspace-env": 2,
+        "orchestration": 18
+      }
+    },
+    {
+      "appVersion": "1.4.124-rc.9",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 3,
+        "orca-cli": 29,
+        "orca-emulator": 2,
+        "orca-emulator-android": 1,
+        "orca-linear": 1,
+        "orca-per-workspace-env": 2,
+        "orchestration": 19
+      }
+    },
+    {
+      "appVersion": "1.4.124",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 4,
+        "orca-cli": 29,
+        "orca-emulator": 2,
+        "orca-emulator-android": 1,
+        "orca-linear": 2,
+        "orca-per-workspace-env": 2,
+        "orchestration": 20
+      }
+    },
+    {
+      "appVersion": "1.4.137-rc.1",
+      "skills": {
+        "computer-use": 3,
+        "linear-tickets": 4,
+        "orca-cli": 30,
+        "orca-emulator": 2,
+        "orca-emulator-android": 1,
+        "orca-linear": 2,
+        "orca-per-workspace-env": 2,
+        "orchestration": 21
+      }
+    },
+    {
+      "appVersion": "1.4.138-rc.0",
+      "skills": {
+        "computer-use": 4,
+        "linear-tickets": 4,
+        "orca-cli": 31,
+        "orca-emulator": 3,
+        "orca-emulator-android": 1,
+        "orca-linear": 2,
+        "orca-per-workspace-env": 2,
+        "orchestration": 22
+      }
+    },
+    {
+      "appVersion": "1.4.138-rc.3",
+      "skills": {
+        "computer-use": 4,
+        "linear-tickets": 4,
+        "orca-cli": 31,
+        "orca-emulator": 3,
+        "orca-emulator-android": 1,
+        "orca-linear": 2,
+        "orca-per-workspace-env": 2,
+        "orchestration": 23
+      }
+    },
+    {
+      "appVersion": "1.4.138-rc.4",
+      "skills": {
+        "computer-use": 4,
+        "linear-tickets": 4,
+        "orca-cli": 31,
+        "orca-emulator": 3,
+        "orca-emulator-android": 1,
+        "orca-linear": 2,
+        "orca-per-workspace-env": 2,
+        "orchestration": 24
+      }
+    },
+    {
+      "appVersion": "1.4.141",
+      "skills": {
+        "computer-use": 5,
+        "linear-tickets": 4,
+        "orca-cli": 32,
+        "orca-emulator": 4,
+        "orca-emulator-android": 2,
+        "orca-linear": 2,
+        "orca-per-workspace-env": 2,
+        "orchestration": 24
+      }
+    }
+  ]
+}

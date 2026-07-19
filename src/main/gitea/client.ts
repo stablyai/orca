@@ -11,6 +11,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
@@ -89,6 +90,7 @@ async function requestJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      await cancelUnreadResponseBody(response)
       return null
     }
     return (await response.json()) as T

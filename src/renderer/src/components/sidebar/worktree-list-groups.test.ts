@@ -12,6 +12,7 @@ import {
   getLineageGroupKey,
   getLineageRenderInfo,
   getPRGroupKey,
+  PINNED_GROUP_KEY,
   type PendingCreationRef
 } from './worktree-list-groups'
 import {
@@ -216,8 +217,37 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned' })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
-    expect(rows[2]).toMatchObject({ type: 'header', key: 'all', label: 'All', count: 3 })
+    expect(rows[2]).toMatchObject({ type: 'header', key: 'all', label: 'All', count: 2 })
     expect(rows[2]).toMatchObject({ type: 'header', icon: ALL_GROUP_META.icon })
+  })
+
+  it('uses worktree host ownership for pinned header host counts', () => {
+    const runtimePinned = {
+      ...pinned,
+      hostId: 'runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3' as const
+    }
+
+    const rows = buildRows(
+      'none',
+      [runtimePinned, unpinned1],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [runtimePinned.id, runtimePinned],
+        [unpinned1.id, unpinned1]
+      ])
+    )
+    const pinnedHeader = rows[0]
+
+    expect(pinnedHeader).toMatchObject({ type: 'header', key: 'pinned' })
+    expect(pinnedHeader.type === 'header' ? pinnedHeader.hostWorktreeCounts : undefined).toEqual(
+      new Map([['runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3', 1]])
+    )
   })
 
   it('groups all worktrees under All in groupBy none', () => {
@@ -230,16 +260,41 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
-  it('keeps pinned worktrees above the All group', () => {
+  it('moves pinned worktrees out of the All group', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'pinned' },
       { type: 'item', worktree: { id: 'wt-pinned' } },
-      { type: 'header', key: 'all', count: 3 },
+      { type: 'header', key: 'all', count: 2 },
       { type: 'item', worktree: { id: 'wt-1' } },
-      { type: 'item', worktree: { id: 'wt-pinned' } },
       { type: 'item', worktree: { id: 'wt-2' } }
+    ])
+  })
+
+  it('duplicates pinned worktrees into All when the policy allows it', () => {
+    const rows = buildRows(
+      'none',
+      [unpinned1, pinned, unpinned2],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      undefined,
+      false,
+      { showPinnedWorktreesInGroups: true } as never
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'pinned' },
+      { type: 'item', sectionKey: PINNED_GROUP_KEY, worktree: { id: 'wt-pinned' } },
+      { type: 'header', key: 'all', count: 3 },
+      { type: 'item', sectionKey: 'all', worktree: { id: 'wt-1' } },
+      { type: 'item', sectionKey: 'all', worktree: { id: 'wt-pinned' } },
+      { type: 'item', sectionKey: 'all', worktree: { id: 'wt-2' } }
     ])
   })
 
@@ -249,11 +304,11 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows).toMatchObject([
       { type: 'header', key: 'pinned' },
       { type: 'item', worktree: { id: 'wt-pinned' } },
-      { type: 'header', key: 'all', count: 3 }
+      { type: 'header', key: 'all', count: 2 }
     ])
   })
 
-  it('emits status headers for all matching worktrees in groupBy workspace-status', () => {
+  it('emits status headers for unpinned matching worktrees in groupBy workspace-status', () => {
     const rows = buildRows(
       'workspace-status',
       [unpinned1, pinned, unpinned2],
@@ -265,21 +320,45 @@ describe('buildRows with pinned worktrees', () => {
       type: 'header',
       key: 'workspace-status:in-progress',
       label: 'In progress',
-      count: 3
+      count: 2
     })
     expect(rows[3]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
-    expect(rows[4]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
-    expect(rows[5]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
+    expect(rows[4]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
   })
 
-  it('keeps pinned items in regular groups in pr-status mode', () => {
+  it('duplicates pinned worktrees into status groups when the policy allows it', () => {
+    const rows = buildRows(
+      'workspace-status',
+      [unpinned1, pinned],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      undefined,
+      false,
+      { showPinnedWorktreesInGroups: true } as never
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'pinned', count: 1 },
+      { type: 'item', sectionKey: PINNED_GROUP_KEY, worktree: { id: 'wt-pinned' } },
+      { type: 'header', key: 'workspace-status:in-progress', count: 2 },
+      { type: 'item', sectionKey: 'workspace-status:in-progress', worktree: { id: 'wt-1' } },
+      { type: 'item', sectionKey: 'workspace-status:in-progress', worktree: { id: 'wt-pinned' } }
+    ])
+  })
+
+  it('moves pinned items out of regular groups in pr-status mode', () => {
     const rows = buildRows('pr-status', [unpinned1, pinned], repoMap, null, new Set())
     const pinnedHeader = rows.find((r) => r.type === 'header' && r.key === 'pinned')
     expect(pinnedHeader).toBeDefined()
     const prGroup = rows.filter((r) => r.type === 'header' && r.key.startsWith('pr:'))
     for (const header of prGroup) {
       if (header.type === 'header') {
-        expect(header.count).toBe(2)
+        expect(header.count).toBe(1)
       }
     }
   })
@@ -305,20 +384,14 @@ describe('buildRows with pinned worktrees', () => {
     )
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned' })
     expect(rows[1]).toMatchObject({ type: 'header', key: 'workspace-status:in-progress' })
-    expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
-    expect(rows[3]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
+    expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
   })
 
-  it('keeps status sections complete when all worktrees are pinned', () => {
+  it('omits status sections when all matching worktrees are pinned', () => {
     const allPinned = { ...unpinned1, isPinned: true }
     const rows = buildRows('workspace-status', [pinned, allPinned], repoMap, null, new Set())
-    expect(rows.filter((r) => r.type === 'header')).toHaveLength(2)
+    expect(rows.filter((r) => r.type === 'header')).toHaveLength(1)
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', count: 2 })
-    expect(rows[3]).toMatchObject({
-      type: 'header',
-      key: 'workspace-status:in-progress',
-      count: 2
-    })
   })
 
   it('preserves repo display casing in group labels', () => {
@@ -1291,6 +1364,123 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows.some((row) => row.type === 'imported-worktrees-card')).toBe(false)
   })
 
+  it('places non-repo imported fallbacks after each repo last pinned row when expanded', () => {
+    const repoTwo: Repo = { ...repo, id: 'repo-2', displayName: 'auth-service' }
+    const pinnedOneA = { ...worktree, id: 'repo-1-pinned-a', isPinned: true }
+    const pinnedTwo = {
+      ...worktree,
+      id: 'repo-2-pinned',
+      repoId: repoTwo.id,
+      isPinned: true,
+      displayName: 'auth-main'
+    }
+    const pinnedOneB = { ...worktree, id: 'repo-1-pinned-b', isPinned: true }
+
+    const rows = buildRows(
+      'none',
+      [pinnedOneA, pinnedTwo, pinnedOneB],
+      new Map([
+        [repo.id, repo],
+        [repoTwo.id, repoTwo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [pinnedOneA.id, pinnedOneA],
+        [pinnedTwo.id, pinnedTwo],
+        [pinnedOneB.id, pinnedOneB]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map([
+        [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }],
+        [
+          repoTwo.id,
+          {
+            repo: repoTwo,
+            hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })]
+          }
+        ]
+      ])
+    )
+
+    expect(
+      rows.map((row) =>
+        row.type === 'item'
+          ? row.worktree.id
+          : row.type === 'imported-worktrees-card'
+            ? `${row.placement}:${row.repo.id}`
+            : row.key
+      )
+    ).toEqual([
+      'pinned',
+      'repo-1-pinned-a',
+      'repo-2-pinned',
+      'pinned-fallback:repo-2',
+      'repo-1-pinned-b',
+      'pinned-fallback:repo-1'
+    ])
+  })
+
+  it('places collapsed non-repo imported fallbacks after Pinned in pinned repo order', () => {
+    const repoTwo: Repo = { ...repo, id: 'repo-2', displayName: 'auth-service' }
+    const pinnedOneA = { ...worktree, id: 'repo-1-pinned-a', isPinned: true }
+    const pinnedTwo = {
+      ...worktree,
+      id: 'repo-2-pinned',
+      repoId: repoTwo.id,
+      isPinned: true,
+      displayName: 'auth-main'
+    }
+    const pinnedOneB = { ...worktree, id: 'repo-1-pinned-b', isPinned: true }
+
+    const rows = buildRows(
+      'workspace-status',
+      [pinnedOneA, pinnedTwo, pinnedOneB],
+      new Map([
+        [repo.id, repo],
+        [repoTwo.id, repoTwo]
+      ]),
+      null,
+      new Set([PINNED_GROUP_KEY]),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [pinnedOneA.id, pinnedOneA],
+        [pinnedTwo.id, pinnedTwo],
+        [pinnedOneB.id, pinnedOneB]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map([
+        [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }],
+        [
+          repoTwo.id,
+          {
+            repo: repoTwo,
+            hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })]
+          }
+        ]
+      ])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: PINNED_GROUP_KEY, count: 3 },
+      { type: 'imported-worktrees-card', placement: 'pinned-fallback', repo: { id: repo.id } },
+      { type: 'imported-worktrees-card', placement: 'pinned-fallback', repo: { id: repoTwo.id } }
+    ])
+  })
+
   it('emits a new external worktrees inbox row before repo worktree rows', () => {
     const inboxWorktrees = [
       makeDetectedWorktree({ id: 'inbox-1', displayName: 'payments-refactor' }),
@@ -1379,6 +1569,51 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('keeps the inbox group when the repo only has a pinned worktree', () => {
+    const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+    const rows = buildRows(
+      'repo',
+      [pinnedWorktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[pinnedWorktree.id, pinnedWorktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map([[repo.id, { repo, inboxWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'item',
+          sectionKey: PINNED_GROUP_KEY,
+          worktree: expect.objectContaining({ id: pinnedWorktree.id })
+        }),
+        expect.objectContaining({ type: 'header', key: `repo:${repo.id}` }),
+        expect.objectContaining({
+          type: 'new-external-worktrees-inbox',
+          key: `new-external-worktrees-inbox:${repo.id}`
+        })
+      ])
+    )
+    expect(
+      rows.some(
+        (row) =>
+          row.type === 'item' &&
+          row.sectionKey === `repo:${repo.id}` &&
+          row.worktree.id === pinnedWorktree.id
+      )
+    ).toBe(false)
+  })
+
   it('does not emit new external worktrees inbox rows outside repo grouping', () => {
     const rows = buildRows(
       'workspace-status',
@@ -1457,20 +1692,108 @@ describe('buildRows with pinned worktrees', () => {
         placement: 'repo-group'
       }
     ])
+    expect(
+      rows.filter((row) => row.type === 'item' && row.sectionKey !== PINNED_GROUP_KEY)
+    ).toEqual([])
     expect(rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: 'item',
+          sectionKey: PINNED_GROUP_KEY,
           worktree: expect.objectContaining({ id: 'repo-1-pinned-a' })
         }),
         expect.objectContaining({
           type: 'item',
+          sectionKey: PINNED_GROUP_KEY,
           worktree: expect.objectContaining({ id: 'repo-1-pinned-b' })
         }),
         expect.objectContaining({
           type: 'item',
+          sectionKey: PINNED_GROUP_KEY,
           worktree: expect.objectContaining({ id: 'repo-2-pinned' })
         })
+      ])
+    )
+  })
+
+  it('duplicates pinned worktrees into repo groups when the policy allows it', () => {
+    const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+    const rows = buildRows(
+      'repo',
+      [pinnedWorktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[pinnedWorktree.id, pinnedWorktree]]),
+      false,
+      { showPinnedWorktreesInGroups: true } as never,
+      [],
+      new Set(),
+      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'item',
+          sectionKey: PINNED_GROUP_KEY,
+          worktree: expect.objectContaining({ id: 'wt-pinned' })
+        }),
+        expect.objectContaining({
+          type: 'item',
+          sectionKey: `repo:${repo.id}`,
+          worktree: expect.objectContaining({ id: 'wt-pinned' })
+        })
+      ])
+    )
+  })
+
+  it('suppresses duplicate-mode imported fallback only when a natural anchor renders', () => {
+    const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
+    const imported = new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+    const expanded = buildRows(
+      'none',
+      [pinnedWorktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[pinnedWorktree.id, pinnedWorktree]]),
+      false,
+      { showPinnedWorktreesInGroups: true } as never,
+      [],
+      new Set(),
+      imported
+    )
+    const collapsedAll = buildRows(
+      'none',
+      [pinnedWorktree],
+      repoMap,
+      null,
+      new Set(['all']),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[pinnedWorktree.id, pinnedWorktree]]),
+      false,
+      { showPinnedWorktreesInGroups: true } as never,
+      [],
+      new Set(),
+      imported
+    )
+
+    expect(expanded.some((row) => row.type === 'imported-worktrees-card')).toBe(false)
+    expect(collapsedAll).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'imported-worktrees-card', placement: 'pinned-fallback' })
       ])
     )
   })
@@ -1526,9 +1849,11 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows).toMatchObject([
       { type: 'header', key: 'pinned' },
       { type: 'header', key: 'repo:repo-1' },
-      { type: 'imported-worktrees-card', placement: 'repo-group' },
-      { type: 'item', worktree: { id: 'wt-pinned' } }
+      { type: 'imported-worktrees-card', placement: 'repo-group' }
     ])
+    expect(
+      rows.filter((row) => row.type === 'item' && row.sectionKey !== PINNED_GROUP_KEY)
+    ).toEqual([])
   })
 
   it('groups folder-mode workspaces under their folder name', () => {
@@ -1931,6 +2256,73 @@ describe('project groups', () => {
       'project-group:group-1'
     ])
     expect(rows[0]).toMatchObject({ label: 'Platform' })
+  })
+
+  it('keeps sleep-filtered Project Group members as empty project headers', () => {
+    // Why: #8865 — Hide sleeping removes workspace cards; membership placeholders
+    // must still project the grouped project header so the group count stays honest.
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const sleepingRepo: Repo = {
+      ...repo,
+      id: 'repo-sleeping',
+      displayName: 'sleeping-project',
+      projectGroupId: group.id
+    }
+    const awakeRepo: Repo = {
+      ...repo,
+      id: 'repo-awake',
+      displayName: 'awake-project',
+      projectGroupId: group.id
+    }
+    const awakeWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-awake',
+      repoId: awakeRepo.id,
+      path: '/tmp/awake'
+    }
+
+    const rows = buildRows(
+      'repo',
+      [awakeWorktree],
+      new Map([
+        [sleepingRepo.id, sleepingRepo],
+        [awakeRepo.id, awakeRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[awakeWorktree.id, awakeWorktree]]),
+      false,
+      undefined,
+      [group],
+      new Set([sleepingRepo.id])
+    )
+
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'project-group:group-1',
+      count: 2
+    })
+    // Why: empty/placeholder projects sort after projects with visible activity.
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      `repo:${awakeRepo.id}`,
+      `repo:${sleepingRepo.id}`
+    ])
   })
 
   it('renders ungrouped repos as top-level repo rows when Project Groups exist', () => {

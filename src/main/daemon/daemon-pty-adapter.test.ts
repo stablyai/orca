@@ -11,6 +11,7 @@ import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
 import type { HistoryReader } from './history-reader'
 import type { SubprocessHandle } from './session'
+import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
 
@@ -97,6 +98,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     command?: string
   } | null
   let subprocessDataOnSubscribe: string | undefined
+  let daemonLog: DaemonFileLog
+  let daemonLogEvents: string[]
 
   beforeEach(async () => {
     subprocessDataOnSubscribe = undefined
@@ -104,9 +107,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
 
+    daemonLogEvents = []
+    daemonLog = {
+      log: (event) => daemonLogEvents.push(event),
+      close() {}
+    }
     server = new DaemonServer({
       socketPath,
       tokenPath,
+      log: daemonLog,
       spawnSubprocess: (opts) => {
         lastSpawnOpts = opts
         lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
@@ -436,6 +445,42 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.shutdown(id, { immediate: true })
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    })
+
+    // Why: shutdown can be the first lazy-client operation after restart; it
+    // must connect before killing so a healthy session is not orphaned (#7742).
+    it('kills a live session from a fresh adapter that has not connected yet', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      try {
+        await freshAdapter.shutdown(id, { immediate: true })
+      } finally {
+        freshAdapter.dispose()
+      }
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      await expect(adapter.listProcesses()).resolves.not.toContainEqual(
+        expect.objectContaining({ id })
+      )
+    })
+
+    it('coalesces the lazy connection when a fresh adapter shuts down concurrent sessions', async () => {
+      const ids = await Promise.all(
+        ['concurrent-kill-a', 'concurrent-kill-b'].map(async (sessionId) =>
+          adapter.spawn({ cols: 80, rows: 24, sessionId }).then((result) => result.id)
+        )
+      )
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      daemonLogEvents.length = 0
+
+      try {
+        await Promise.all(ids.map((id) => freshAdapter.shutdown(id, { immediate: true })))
+      } finally {
+        freshAdapter.dispose()
+      }
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
+      expect(daemonLogEvents.filter((event) => event === 'client-hello-accepted')).toHaveLength(2)
     })
   })
 
@@ -1296,6 +1341,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Server running')
       expect(result.coldRestore!.cwd).toBe('/projects/myapp')
+      expect(result.coldRestore).toMatchObject({ cols: 120, rows: 40 })
       expect(lastSpawnOpts).toMatchObject({
         sessionId,
         cwd: '/projects/myapp',

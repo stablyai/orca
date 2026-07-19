@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import {
+  agentProviderSessionsEqual,
   getAgentResumeArgv,
   isResumableTuiAgent,
   type SleepingAgentSessionRecord
@@ -131,10 +132,21 @@ function getEligiblePane(args: {
     foregroundTerminalLastSeenAtByTabId,
     mobileLockedPtyIds
   } = args
+  const sleepingRecord = sleepingAgentSessionsByPaneKey[entry.paneKey]
+  // Why: Pi's done hook ends a turn, not its TUI. Its live recovery checkpoint
+  // must not make the still-running pane look already hibernated.
+  const hasOnlyLivePiRecoveryIdentity = Boolean(
+    entry.agentType === 'pi' &&
+    entry.providerSession &&
+    sleepingRecord?.agent === 'pi' &&
+    sleepingRecord.origin === 'live' &&
+    sleepingRecord.worktreeId === tab.worktreeId &&
+    agentProviderSessionsEqual('pi', entry.providerSession, sleepingRecord.providerSession)
+  )
   if (
     entry.state !== 'done' ||
     entry.interrupted === true ||
-    sleepingAgentSessionsByPaneKey[entry.paneKey]
+    (sleepingRecord && !hasOnlyLivePiRecoveryIdentity)
   ) {
     return null
   }

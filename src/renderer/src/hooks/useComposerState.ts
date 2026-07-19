@@ -23,6 +23,8 @@ import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agen
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -389,6 +391,9 @@ export type UseComposerStateResult = {
   submitQuick: (agent: TuiAgent | null) => Promise<void>
   /** Invoked by the Enter handler to re-check whether submission should fire. */
   createDisabled: boolean
+  /** Selects the repo a nested Add Project flow just added, clearing any
+   *  folder-group target so the composer lands on the new project. */
+  selectAddedProjectRepo: (repoId: string) => void
 }
 
 export type InitialWorkspaceRunSeedInput = {
@@ -2817,6 +2822,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       workspaceHostScope
     ]
   )
+  const selectAddedProjectRepo = useCallback(
+    (nextRepoId: string): void => {
+      // Why: the nested Add Project flow hands back a repo id. Selecting it
+      // must also clear a folder-group target, whose onRepoChange handler
+      // only accepts repos inside the selected group.
+      initialProjectGroupAppliedRef.current = true
+      setSelectedProjectGroupId(null)
+      setProjectError(null)
+      handleRepoChange(nextRepoId)
+    },
+    [handleRepoChange]
+  )
+
   const showProjectRequiredError = useCallback((): void => {
     setProjectError('Choose or add a project before creating a workspace.')
     requestAnimationFrame(() => {
@@ -3356,6 +3374,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
             : undefined,
           agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
+          sessionOptions: agent
+            ? resolveNativeChatSessionOptionDefaults(settings?.nativeChatSessionOptions, agent)
+            : undefined,
           terminalWindowsShell: settings?.terminalWindowsShell,
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
@@ -3412,6 +3433,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.nativeChatSessionOptions,
       settings?.terminalWindowsShell,
       telemetrySource
     ]
@@ -3611,6 +3633,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
+        sessionOptions: resolveNativeChatSessionOptionDefaults(
+          settings?.nativeChatSessionOptions,
+          tuiAgent
+        ),
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote
@@ -3731,6 +3757,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             }
           : {})
       })
+      if (startupPlan) {
+        const optionScopeKey =
+          (activation !== false ? activation.primaryTabId : null) ?? result.startupTerminal?.tabId
+        if (optionScopeKey) {
+          seedNativeChatAppliedSessionOptions(optionScopeKey, tuiAgent, startupPlan.sessionOptions)
+        }
+      }
       if (startupPlan && !backendSpawnedStartup) {
         void ensureAgentStartupInTerminal({
           worktreeId: worktree.id,
@@ -3792,6 +3825,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     settings?.agentDefaultArgs,
     settings?.agentDefaultEnv,
     settings?.autoRenameBranchFromWork,
+    settings?.nativeChatSessionOptions,
     smartNameMode,
     setSidebarOpen,
     setupDecision,
@@ -4030,6 +4064,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
                 agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
                 agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+                sessionOptions: resolveNativeChatSessionOptionDefaults(
+                  settings?.nativeChatSessionOptions,
+                  agent
+                ),
                 platform: selectedRepoAgentLaunchPlatform,
                 shell: selectedRepoStartupShell,
                 isRemote: selectedRepoIsRemote
@@ -4043,6 +4081,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             expectedProcess: draftLaunchPlan.expectedProcess,
             followupPrompt: null,
             launchConfig: draftLaunchPlan.launchConfig,
+            ...(draftLaunchPlan.sessionOptions
+              ? { sessionOptions: draftLaunchPlan.sessionOptions }
+              : {}),
             ...(draftLaunchPlan.startupCommandDelivery
               ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
               : {}),
@@ -4055,6 +4096,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             cmdOverrides: settings?.agentCmdOverrides ?? {},
             agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
             agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+            sessionOptions: resolveNativeChatSessionOptionDefaults(
+              settings?.nativeChatSessionOptions,
+              agent
+            ),
             platform: selectedRepoAgentLaunchPlatform,
             shell: selectedRepoStartupShell,
             isRemote: selectedRepoIsRemote,
@@ -4244,6 +4289,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.nativeChatSessionOptions,
       smartNameMode,
       disabledTuiAgents,
       setupDecision,
@@ -4410,6 +4456,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     nameInputRef,
     submit,
     submitQuick,
-    createDisabled
+    createDisabled,
+    selectAddedProjectRepo
   }
 }

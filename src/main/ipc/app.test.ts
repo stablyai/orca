@@ -8,6 +8,7 @@ const {
   appRelaunchMock,
   spawnMock,
   destroySystemTrayMock,
+  relaunchAppMock,
   showOpenDialogMock,
   grantFloatingWorkspaceDirectoryMock
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   appRelaunchMock: vi.fn(),
   spawnMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
+  relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
   grantFloatingWorkspaceDirectoryMock: vi.fn()
 }))
@@ -91,6 +93,10 @@ vi.mock('../tray/system-tray', () => ({
   destroySystemTray: destroySystemTrayMock
 }))
 
+vi.mock('../app-relaunch', () => ({
+  relaunchApp: relaunchAppMock
+}))
+
 vi.mock('./floating-workspace-directory', () => ({
   ensureDefaultFloatingWorkspacePath: vi.fn(),
   grantFloatingWorkspaceDirectory: grantFloatingWorkspaceDirectoryMock,
@@ -113,6 +119,8 @@ describe('registerAppHandlers', () => {
     appRelaunchMock.mockReset()
     spawnMock.mockReset()
     destroySystemTrayMock.mockReset()
+    relaunchAppMock.mockReset()
+    relaunchAppMock.mockImplementation(() => appRelaunchMock())
     showOpenDialogMock.mockReset()
     grantFloatingWorkspaceDirectoryMock.mockReset()
     processKillSpy = vi.spyOn(process, 'kill').mockReturnValue(true)
@@ -139,6 +147,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
+    expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request')
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
     expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -187,6 +196,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(relaunchAppMock).toHaveBeenCalledWith('admin-restart')
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).not.toHaveBeenCalled()
   })

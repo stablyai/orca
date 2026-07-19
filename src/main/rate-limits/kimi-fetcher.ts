@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { net } from 'electron'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow,
+  UsageRateLimitMetadata
+} from '../../shared/rate-limit-types'
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
@@ -208,8 +212,20 @@ function mapUsageResponse(data: KimiUsageResponse): ProviderRateLimits {
   }
 }
 
-function result(status: ProviderRateLimits['status'], error: string | null): ProviderRateLimits {
-  return { provider: 'kimi', session: null, weekly: null, updatedAt: Date.now(), error, status }
+function result(
+  status: ProviderRateLimits['status'],
+  error: string | null,
+  usageMetadata?: UsageRateLimitMetadata
+): ProviderRateLimits {
+  return {
+    provider: 'kimi',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error,
+    status,
+    ...(usageMetadata ? { usageMetadata } : {})
+  }
 }
 
 /**
@@ -239,7 +255,11 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     // Why: don't refresh — the CLI owns the token lifecycle. Report a transient
     // error so the rate-limit service keeps the last good snapshot (stale
     // policy) until the user next runs Kimi and the CLI refreshes the file.
-    return result('error', 'Kimi token expired — open Kimi to refresh')
+    return result(
+      'error',
+      'Kimi session expired — run kimi on the computer running Orca, then retry usage.',
+      { failureKind: 'delegated-refresh-required', source: 'oauth' }
+    )
   }
 
   try {

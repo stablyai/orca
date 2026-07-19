@@ -27,6 +27,11 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   // the terminal-output debounce (which a background stream could otherwise defer).
   scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
 }))
+const resetTerminalLinkifierHoverState = vi.fn()
+vi.mock('@/lib/pane-manager/terminal-linkifier-hover-reset', () => ({
+  resetTerminalLinkifierHoverState: (terminal: unknown) =>
+    resetTerminalLinkifierHoverState(terminal)
+}))
 
 type FakeManager = {
   getPanes: ReturnType<typeof vi.fn>
@@ -88,6 +93,18 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
       enforceTerminalCurrentScrollIntent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
+  })
+
+  it('resets each pane linkifier hover cache on reveal so links recover without a scroll', () => {
+    const first = { name: 'pane-a' }
+    const second = { name: 'pane-b' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: first }, { terminal: second }])
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(first)
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(second)
   })
 
   it('schedules the repaint after rendering resumes on a heavy reveal', () => {

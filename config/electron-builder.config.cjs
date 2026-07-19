@@ -18,6 +18,12 @@ const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
 }
+// Why: freshness detection needs immutable identity metadata from this exact
+// app build, but never needs the skill package bytes or a runtime network read.
+const skillFreshnessResources = {
+  from: 'resources/skills',
+  to: 'skills'
+}
 // Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
 // apps. Keeping relay assets as extraResources makes them real directories
 // instead of paths hidden inside app.asar.
@@ -31,7 +37,11 @@ const relayExtraResource = {
 // do not fall through to a developer checkout's node_modules.
 const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
 
-const commonExtraResources = [relayExtraResource, ...packagedRuntimeNodeModuleResources]
+const commonExtraResources = [
+  relayExtraResource,
+  ...packagedRuntimeNodeModuleResources,
+  skillFreshnessResources
+]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -79,7 +89,8 @@ module.exports = {
     '!tsconfig.json',
     // Why: feature-wall media is copied via extraResources so runtime can read
     // it from process.resourcesPath; exclude the source copy from app.asar.
-    '!resources/onboarding/feature-wall/**'
+    '!resources/onboarding/feature-wall/**',
+    '!resources/skills/**'
   ],
   // Why: the CLI entry-point lives in out/cli/ but imports shared modules
   // from out/shared/ and local hook mutators from out/main/. These paths must be

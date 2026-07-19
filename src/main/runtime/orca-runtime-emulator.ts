@@ -7,7 +7,6 @@ import {
 } from '../emulator/emulator-availability'
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
-import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
 import type { EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
@@ -148,7 +147,6 @@ export class RuntimeEmulatorCommands {
       if (reusable) {
         // Why: renderer remounts should reconnect to the existing stream, not
         // kill it and create the stream-disconnected reload loop users see.
-        serveSimStateWatcher.markOrcaManaged(reusable)
         this.notifyRendererEmulatorAutoAttach(worktreeId, reusable)
         if (params.focus) {
           this.notifyRendererEmulatorPaneFocus(worktreeId)
@@ -157,15 +155,11 @@ export class RuntimeEmulatorCommands {
       }
       // A different requested device is an explicit switch; the bridge keeps a
       // slow-to-boot Android emulator alive for instant switch-back.
-      const stoppedUdid = await bridge.stopActiveForSwitch(worktreeId)
-      if (stoppedUdid) {
-        serveSimStateWatcher.unmarkOrcaManaged(stoppedUdid)
-      }
+      await bridge.stopActiveForSwitch(worktreeId)
     }
     const info = await bridge.startHelperForDevice(device)
     if (worktreeId) {
       bridge.registerActiveEmulator(worktreeId, info, { managed: true })
-      serveSimStateWatcher.markOrcaManaged(info)
       this.notifyRendererEmulatorAutoAttach(worktreeId, info)
       if (params.focus) {
         this.notifyRendererEmulatorPaneFocus(worktreeId)
@@ -281,7 +275,6 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     const killedUdid = await bridge.kill(params.device ?? params.emulator, worktreeId)
-    serveSimStateWatcher.unmarkOrcaManaged(killedUdid)
     return { ok: true, deviceUdid: killedUdid }
   }
 
@@ -295,13 +288,9 @@ export class RuntimeEmulatorCommands {
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     if (params.managedOnly && worktreeId && !params.device && !params.emulator) {
       const shutdownUdid = await bridge.shutdownActiveManagedForWorktree(worktreeId)
-      if (shutdownUdid) {
-        serveSimStateWatcher.unmarkOrcaManaged(shutdownUdid)
-      }
       return { ok: true, deviceUdid: shutdownUdid ?? undefined }
     }
     const shutdownUdid = await bridge.shutdown(params.device ?? params.emulator, worktreeId)
-    serveSimStateWatcher.unmarkOrcaManaged(shutdownUdid)
     return { ok: true, deviceUdid: shutdownUdid }
   }
 

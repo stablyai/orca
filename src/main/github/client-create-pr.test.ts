@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 const {
   ghExecFileAsyncMock,
   getOwnerRepoMock,
+  getOwnerRepoForRemoteMock,
   getEnterpriseGitHubRepoSlugMock,
   extractExecErrorMock,
   acquireMock,
@@ -12,6 +13,7 @@ const {
 } = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
+  getOwnerRepoForRemoteMock: vi.fn(),
   getEnterpriseGitHubRepoSlugMock: vi.fn(),
   extractExecErrorMock: vi.fn((error: unknown) => {
     const value = error as { stderr?: string; stdout?: string; message?: string }
@@ -34,7 +36,7 @@ vi.mock('./gh-utils', () => ({
   ghExecFileAsync: ghExecFileAsyncMock,
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
-  getOwnerRepoForRemote: vi.fn(),
+  getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
   githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null) => ({
     repoPath,
     connectionId: connectionId ?? null
@@ -64,6 +66,14 @@ describe('createGitHubPullRequest', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
+    getOwnerRepoForRemoteMock.mockReset()
+    // Why: createGitHubPullRequest resolves its target via the explicit origin
+    // remote (getOwnerRepo became upstream-first in #7331). Delegate the origin
+    // probe to getOwnerRepoMock so existing tests keep defining it there.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     getEnterpriseGitHubRepoSlugMock.mockReset()
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
     extractExecErrorMock.mockClear()
@@ -121,6 +131,40 @@ describe('createGitHubPullRequest', () => {
     })
     expect(acquireMock).toHaveBeenCalledOnce()
     expect(releaseMock).toHaveBeenCalledOnce()
+  })
+
+  it('targets the origin fork (not the upstream parent) on a fork checkout (#7331)', async () => {
+    // Fork checkout: origin is the personal fork, upstream is the parent. The
+    // head branch is unqualified and lives on the fork, so `gh pr create` must
+    // run with --repo <fork> even though PR reads prefer upstream since #7331.
+    getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
+      remoteName === 'origin'
+        ? { owner: 'fsdwen', repo: 'orca' }
+        : { owner: 'stablyai', repo: 'orca' }
+    )
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 5,
+        url: 'https://github.com/fsdwen/orca/pull/5'
+      })
+    })
+
+    await expect(
+      createGitHubPullRequest('/repo-root', {
+        provider: 'github',
+        base: 'main',
+        head: 'my-branch',
+        title: 'Fork PR'
+      })
+    ).resolves.toEqual({
+      ok: true,
+      number: 5,
+      url: 'https://github.com/fsdwen/orca/pull/5'
+    })
+
+    const [args] = ghExecFileAsyncMock.mock.calls[0]
+    expect(args[args.indexOf('--repo') + 1]).toBe('fsdwen/orca')
+    expect(args[args.indexOf('--head') + 1]).toBe('my-branch')
   })
 
   it('host-qualifies --repo for a GHES remote so gh targets the Enterprise server (#8312)', async () => {
@@ -257,7 +301,7 @@ describe('createGitHubPullRequest', () => {
       url: 'https://github.com/acme/widgets/pull/45'
     })
 
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/remote/repo-root', 'ssh-1')
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/remote/repo-root', 'origin', 'ssh-1')
     const [args, options] = ghExecFileAsyncMock.mock.calls[0]
     expect(args).toEqual(
       expect.arrayContaining([

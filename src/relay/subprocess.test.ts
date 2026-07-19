@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
@@ -46,9 +54,14 @@ afterAll(async () => {
   }
 })
 
-function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
+function spawnRelayEntry(
+  entryPath: string,
+  args: string[] = [],
+  env?: NodeJS.ProcessEnv
+): RelayProcess {
   let relayArgs = args
   if (!args.includes('--sock-path')) {
+    // Why: Windows relays require a named pipe; filesystem socket paths fail with EACCES.
     const socketDir = mkdtempSync(path.join(tmpdir(), 'relay-sock-'))
     spawnedSocketDirs.push(socketDir)
     relayArgs = [
@@ -59,7 +72,11 @@ function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
       path.join(socketDir, 'agent-hooks')
     ]
   }
-  return spawnRelay(relayEntry, relayArgs, env ? { env } : undefined)
+  return spawnRelay(entryPath, relayArgs, env ? { env } : undefined)
+}
+
+function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
+  return spawnRelayEntry(relayEntry, args, env)
 }
 
 function waitForChildExit(
@@ -74,6 +91,22 @@ function waitForChildExit(
     })
   })
 }
+
+function writeMockNodePty(root: string, source: string, withPackageEntry = false): void {
+  const nodePtyDir = path.join(root, 'node_modules', 'node-pty')
+  const libDir = path.join(nodePtyDir, 'lib')
+  mkdirSync(libDir, { recursive: true })
+  if (withPackageEntry) {
+    writeFileSync(path.join(nodePtyDir, 'package.json'), '{"main":"lib/index.js"}\n')
+  }
+  writeFileSync(path.join(libDir, 'index.js'), source)
+}
+
+const WORKING_NODE_PTY_MODULE = `module.exports = { spawn() { return {
+  pid: process.pid,
+  process: 'mock-shell',
+  onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, clear() {}
+} } }\n`
 
 describe('Subprocess: Relay entry point', () => {
   let relay: RelayProcess | null = null
@@ -102,6 +135,50 @@ describe('Subprocess: Relay entry point', () => {
   it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
     expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
   })
+
+  it('loads node-pty after an in-place dependency repair without restarting', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-repair-'))
+    const repairedRelayEntry = path.join(tmpDir, 'relay.js')
+    copyFileSync(relayEntry, repairedRelayEntry)
+
+    relay = spawnRelayEntry(repairedRelayEntry)
+    await relay.sentinelReceived
+
+    const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const failed = await relay.waitForResponse(failedId)
+    expect(failed.error?.message).toContain('node-pty is not available')
+
+    writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE)
+
+    const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const repaired = await relay.waitForResponse(repairedId)
+    expect(repaired.error).toBeUndefined()
+    expect(repaired.result).toMatchObject({ id: 'pty-1' })
+  }, 10_000)
+
+  it('reloads node-pty after a late native binding failure without restarting', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-late-repair-'))
+    const repairedRelayEntry = path.join(tmpDir, 'relay.js')
+    copyFileSync(relayEntry, repairedRelayEntry)
+    writeMockNodePty(
+      tmpDir,
+      `module.exports = { spawn() { throw new Error('Failed to load native module: conpty.node, checked: prebuilds/win32-x64') } }\n`,
+      true
+    )
+
+    relay = spawnRelayEntry(repairedRelayEntry)
+    await relay.sentinelReceived
+
+    const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const failed = await relay.waitForResponse(failedId)
+    expect(failed.error?.message).toContain('node-pty is not available')
+
+    writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE, true)
+    const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const repaired = await relay.waitForResponse(repairedId)
+    expect(repaired.error).toBeUndefined()
+    expect(repaired.result).toMatchObject({ id: 'pty-2' })
+  }, 10_000)
 
   it('responds to fs.stat over stdin/stdout', async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))

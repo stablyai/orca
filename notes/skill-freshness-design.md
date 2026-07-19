@@ -126,6 +126,7 @@ Rules:
 ### C. Read-only detection (kept from Phase 1, slimmed)
 
 Kept as-is:
+
 - Bundled `skills/` packages + current manifest + released-snapshot registry + release
   mapping, with the generation script and merge-queue monotonicity gate (static data + CI,
   not runtime machinery).
@@ -135,9 +136,12 @@ Kept as-is:
   plugin caches and repo scopes excluded), and the launch / focus / post-install triggers.
 - The skills-CLI round-trip CI on macOS/Linux/Windows — extended from current-install tests
   to historical-fat-install → targeted global update → stub migration. The matrix covers
-  copy/symlink shapes, LF/CRLF, supported lock migrations, and post-update identity.
+  LF/CRLF and provider aliases as a positive convergence contract, plus independent-copy
+  observation that accepts only unchanged historical or exact-current bytes. Post-update
+  bytes, not exit status, decide.
 
 Slimmed:
+
 - Statuses collapse to: `current`, `outdated` (exact match of an older released snapshot),
   `newer-known`, `unrecognized`, and `inaccessible`. Without a ledger, Orca cannot honestly
   distinguish a locally modified official copy from unrelated same-named content;
@@ -151,32 +155,51 @@ Slimmed:
 
 ### D. Surfacing
 
-- **Settings rows** (read-only): name, status badge, one-line explanation. `newer-known`,
-  `unrecognized`, `inaccessible`, and unsupported-topology rows are informational.
-- **Name-scoped update eligibility:** the skills CLI reinstalls every placement of a selected
-  skill name, so eligibility is computed across all discovered placements of that name, not
-  per row. Offer a name only when at least one placement is `outdated` and every placement is
-  an exact `current` or `outdated` official snapshot in a supported global topology. One
-  `newer-known`, unrecognized, external, read-only, inaccessible, or otherwise unsupported
-  provider copy poisons the update offer for that name entirely.
+- **Surfaces (venue decision 2026-07-14):** a lingering toast, an update modal, and the
+  existing Settings setup rails for CLI, Orchestration, Computer Use, and Per-Workspace
+  Environments. Their installed pills carry safe freshness status, while their existing
+  Update and Re-check actions remain the per-skill path. The Skills page was
+  de-linked by #4535 (2026-06-02) — its only entry, the sidebar toolbox menu, was removed —
+  so it is no longer a venue; the freshness surface moved off it entirely. The behavior
+  contracts below (name-scoped eligibility, no auto-run, dismissal keys, re-inventory
+  triggers) are unchanged; only the venue moved.
+- **Per-placement rows** (read-only): name, status badge, one-line explanation. `newer-known`,
+  `unrecognized`, `inaccessible`, and unsupported-topology rows are informational. They live in
+  the modal's collapsed **Details** section (auto-expanded when a placement is blocked).
+- **Name-scoped update eligibility:** eligibility is computed across all discovered placements
+  of a name, not per row. Offer a name only when at least one placement is `outdated` and every
+  placement is an exact `current` or `outdated` official snapshot in a topology the validated
+  rail actually converges. With skills CLI 1.5.17 that means the canonical global copy and
+  provider aliases to it. Independent provider copies are informational and poison the offer:
+  empirical copy-mode testing produced both stale and converged provider copies in otherwise
+  equivalent 1.5.17 environments, so that topology is not deterministic enough to offer. One
+  `newer-known`, unrecognized, external, read-only,
+  inaccessible, repo/plugin, independent-copy, or otherwise unsupported placement poisons the
+  update offer for that name entirely.
 - The action combines only eligible outdated Orca names into
-  `npx skills update <names...> --global`, opens the existing run-command terminal with that
-  command pre-filled, and leaves execution to the user. Never use an unscoped bulk update and
-  never auto-submit the command. Re-inventory after terminal exit or focus; only observed
-  bytes, not the skills CLI exit status, determine success.
-- **One non-repeating nudge**: count only eligible outdated skill names and offer the same
-  targeted run-the-command action. An outdated name poisoned by another placement remains
-  visible in settings but never produces an unsafe nudge action. Dismissal is recorded per
-  (install, bundled revision), so a newly outdated official placement or genuinely newer
-  stub revision may prompt once more. No toggle — nothing automatic happens that would need
-  one.
+  `npx skills update <names...> --global` and opens the update modal's editable terminal with
+  that command pre-filled, leaving execution to the user. Never use an unscoped bulk update and
+  never auto-submit the command. Re-inventory after terminal exit, modal close, or focus; only
+  observed bytes, not the skills CLI exit status, determine success. When the eligible set
+  empties and every placement is `current`, the modal shows an up-to-date state; if placements
+  remain outdated-but-blocked or unrecognized, it says so honestly instead.
+- **One lingering, non-repeating nudge**: count only eligible outdated skill names and offer the
+  same targeted action, which opens the update modal. The toast lingers (no auto-close) until the
+  user opens the modal or explicitly dismisses it; ignoring it (app quit) records nothing, so a
+  still-outdated skill may prompt once more next launch. A later inventory that resolves or blocks
+  the offered tuple retracts the stale toast without recording a dismissal. An outdated name
+  poisoned by another placement remains visible in the modal's Details but never produces an
+  unsafe nudge action. Dismissal is recorded per (physical identity, name, bundled revision) only
+  on explicit dismissal, so a newly outdated official placement or genuinely newer stub revision
+  may prompt once more. No
+  toggle — nothing automatic happens that would need one.
 
 ### E. Migration (fat → stub)
 
 1. **Implemented, pending release:** from a fresh main-based PR, add authoritative guide
    sources, generated embedded data, `orca skills list/get`, aliases, generated-output checks,
    and local/SSH/WSL/dev tests. Keep distributed skills fat and ship this release first.
-2. From a separate PR, land slim read-only detection and settings/nudge UI, including the
+2. From a separate PR, land slim read-only detection and Skills-page/nudge UI, including the
    name-scoped targeted update action and the real migration-rail CI. Keep distributed
    skills fat.
 3. Run the pointer-compliance spike against the released guide-serving binary, not a checkout
@@ -211,15 +234,17 @@ not thin, until the relevant variant passes.
   global Windows failures, missing global lock tracking, lossy lock migration, and copy-mode
   topology changes. The historical-fat → targeted-global-update → stub CI is a release gate,
   not an early-warning job. Detection always re-checks bytes after the user updates, so a
-  failed or no-op update re-surfaces `outdated` instead of lying. Choose and document a
-  validated CLI-version policy before rollout; monitor and contribute upstream fixes.
+  failed or no-op update re-surfaces `outdated` instead of lying. Minimum validated version is
+  1.5.17: 1.5.16 failed the provider-alias convergence contract, while 1.5.17 copy convergence
+  still varies by environment. CI pins 1.5.17 and probes latest; monitor and contribute upstream
+  fixes before broadening eligibility.
 - **Trigger-copy iteration slows.** Improvements to stub descriptions reach existing
   installs only when users run the npx command. Acceptable at stub-change cadence; the
   compiled guides (the content that matters) are exempt by construction.
 - **Multi-file skills.** Current shipped packages are single-file. If a future skill needs
   scripts/assets, either the binary serves them (`--full` / `--script`) or that skill
   accepts the fat-file decay model. Decide when it happens.
-- **Remote hosts.** Detection ships local-host-only. Stubs make remote *content* a non-issue:
+- **Remote hosts.** Detection ships local-host-only. Stubs make remote _content_ a non-issue:
   SSH/WSL launchers forward to the host's bundled CLI, so the guide matches the command
   surface that will handle subsequent requests. Remote stub installs can lag on trigger
   copy, which is the accepted residual. The WSL/SSH reconciler phases of the old design are

@@ -22,10 +22,8 @@ describe('shared control keepalive timeout refresh semantics', () => {
   function startRequest(options: { refreshTimeoutOnKeepalive?: boolean } = {}): {
     pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
     promise: Promise<unknown>
-    onTimeout: ReturnType<typeof vi.fn>
   } {
     const pendingRequests = new Map<string, SharedControlPendingRequest<unknown>>()
-    const onTimeout = vi.fn()
     const promise = requestSharedControl({
       pendingRequests,
       method: 'git.status',
@@ -35,16 +33,15 @@ describe('shared control keepalive timeout refresh semantics', () => {
       // server never answers, modelling a genuinely stuck server-side call.
       ensureReady: () => Promise.resolve(),
       send: () => undefined,
-      onTimeout,
       refreshTimeoutOnKeepalive: options.refreshTimeoutOnKeepalive
     })
     // Swallow the eventual rejection so unhandled-rejection noise doesn't leak.
     promise.catch(() => undefined)
-    return { pendingRequests, promise, onTimeout }
+    return { pendingRequests, promise }
   }
 
   it('times out a stuck short RPC even while keepalive frames keep arriving', async () => {
-    const { pendingRequests, promise, onTimeout } = startRequest()
+    const { pendingRequests, promise } = startRequest()
 
     // Periodic keepalives arrive faster than the 1000ms deadline — as they
     // would while a long-poll subscription streams over the same socket.
@@ -55,13 +52,11 @@ describe('shared control keepalive timeout refresh semantics', () => {
     await vi.advanceTimersByTimeAsync(1)
 
     await expect(promise).rejects.toThrow()
-    // The stuck-request path tears the connection down so reconnect+replay runs.
-    expect(onTimeout).toHaveBeenCalledTimes(1)
     expect(pendingRequests.size).toBe(0)
   })
 
   it('keeps refreshing a long-poll request that opted into keepalive refresh', async () => {
-    const { pendingRequests, promise, onTimeout } = startRequest({
+    const { pendingRequests, promise } = startRequest({
       refreshTimeoutOnKeepalive: true
     })
 
@@ -72,7 +67,6 @@ describe('shared control keepalive timeout refresh semantics', () => {
       refreshSharedControlPendingRequestTimeouts(pendingRequests)
     }
 
-    expect(onTimeout).not.toHaveBeenCalled()
     expect(pendingRequests.size).toBe(1)
 
     // It still resolves normally once the server finally answers.
@@ -87,12 +81,11 @@ describe('shared control keepalive timeout refresh semantics', () => {
   })
 
   it('fires the deadline for a short RPC when no keepalives arrive', async () => {
-    const { pendingRequests, promise, onTimeout } = startRequest()
+    const { pendingRequests, promise } = startRequest()
 
     await vi.advanceTimersByTimeAsync(1001)
 
     await expect(promise).rejects.toThrow()
-    expect(onTimeout).toHaveBeenCalledTimes(1)
     expect(pendingRequests.size).toBe(0)
   })
 })

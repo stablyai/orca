@@ -80,6 +80,125 @@ export function advancedNativeChatUserContentCounts(
   return advanced
 }
 
+function nativeChatUserMessageNormalizedText(message: NativeChatMessage): string | null {
+  if (message.role !== 'user') {
+    return null
+  }
+  const text = normalizeNativeChatPendingText(
+    message.blocks
+      .filter(isTextBlock)
+      .map((block) => block.text)
+      .join(' ')
+  )
+  return text.length > 0 ? text : null
+}
+
+/** User texts that already have a later non-user turn (ready to prune echoes). */
+export function advancedNativeChatUserTexts(
+  messages: readonly NativeChatMessage[]
+): readonly string[] {
+  const advanced: string[] = []
+  const waiting: string[] = []
+  for (const message of messages) {
+    if (message.role === 'user') {
+      const text = nativeChatUserMessageNormalizedText(message)
+      if (text) {
+        waiting.push(text)
+      }
+      continue
+    }
+    advanced.push(...waiting)
+    waiting.length = 0
+  }
+  return advanced
+}
+
+/** All user texts (for hiding optimistic echoes once the turn exists). */
+export function matchingNativeChatUserTexts(
+  messages: readonly NativeChatMessage[]
+): readonly string[] {
+  const texts: string[] = []
+  for (const message of messages) {
+    const text = nativeChatUserMessageNormalizedText(message)
+    if (text) {
+      texts.push(text)
+    }
+  }
+  return texts
+}
+
+/**
+ * How many leading pending texts concatenate exactly to `userText`.
+ * Covers rapid-send glue ("joke"+"continue" → "jokecontinue") without matching
+ * unrelated prefixes ("hi" ↛ "history").
+ */
+export function countLeadingPendingTextsGluedToUserText(
+  pendingTexts: readonly string[],
+  userText: string
+): number {
+  if (pendingTexts.length === 0 || userText.length === 0) {
+    return 0
+  }
+  let combined = ''
+  for (let index = 0; index < pendingTexts.length; index += 1) {
+    const piece = pendingTexts[index]
+    if (!piece) {
+      return 0
+    }
+    combined += piece
+    if (combined === userText) {
+      return index + 1
+    }
+    if (!userText.startsWith(combined)) {
+      return 0
+    }
+  }
+  return 0
+}
+
+/**
+ * Mark pending entries represented only by multi-send glue (2+ consecutive
+ * optimistic texts concatenated into one transcript user row). Exact single
+ * matches stay in the content-key/occurrence path so repeated prompts and
+ * send boundaries keep their existing semantics.
+ */
+export function selectPendingIndicesRepresentedByUserTexts(
+  pending: readonly NativeChatPendingOccurrence[],
+  userTexts: readonly string[]
+): Set<number> {
+  const represented = new Set<number>()
+  if (pending.length < 2 || userTexts.length === 0) {
+    return represented
+  }
+  const remaining = pending.map((entry, index) => ({
+    index,
+    text: normalizeNativeChatPendingText(entry.text)
+  }))
+  for (const userText of userTexts) {
+    const open = remaining.filter((entry) => !represented.has(entry.index) && entry.text.length > 0)
+    const gluedCount = countLeadingPendingTextsGluedToUserText(
+      open.map((entry) => entry.text),
+      userText
+    )
+    // Why: gluedCount === 1 is an exact match — leave it to occurrence counting.
+    if (gluedCount < 2) {
+      continue
+    }
+    for (let i = 0; i < gluedCount; i += 1) {
+      const entry = open[i]
+      if (!entry) {
+        continue
+      }
+      represented.add(entry.index)
+      const at = remaining.findIndex((candidate) => candidate.index === entry.index)
+      if (at >= 0) {
+        remaining.splice(at, 1)
+      }
+    }
+  }
+  return represented
+}
+
 export function nativeChatPendingMatchKey(pending: NativeChatPendingOccurrence): string {
   return `${String(pending.afterMessageId)}\0${nativeChatPendingContentKey(pending)}`
 }

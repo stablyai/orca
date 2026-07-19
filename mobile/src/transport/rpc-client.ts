@@ -23,6 +23,7 @@ import {
   type BrowserScreencastFrame
 } from './browser-screencast-protocol'
 import {
+  buildStreamUnsubscribe,
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
@@ -1171,18 +1172,11 @@ export function connect(
               params: unsubscribeParams
             })
           }
-        } else if (
-          stream?.method === 'session.tabs.subscribe' &&
-          stream.params &&
-          typeof stream.params === 'object' &&
-          typeof (stream.params as { worktree?: unknown }).worktree === 'string'
-        ) {
-          sendEncrypted({
-            id: nextId(),
-            deviceToken,
-            method: 'session.tabs.unsubscribe',
-            params: { worktree: (stream.params as { worktree: string }).worktree }
-          })
+        } else {
+          const unsub = buildStreamUnsubscribe(stream?.method, stream?.params)
+          if (unsub) {
+            sendEncrypted({ id: nextId(), deviceToken, method: unsub.method, params: unsub.params })
+          }
         }
         removeStreamListener(id)
       }

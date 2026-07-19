@@ -12,6 +12,7 @@ import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pwsh'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
+import { prepareMacosTccLoginShell } from '../providers/macos-tcc-login-shell'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -126,6 +127,7 @@ async function main(): Promise<void> {
     socketPath,
     tokenPath,
     log: daemonLog,
+    preparePtySpawn: prepareMacosTccLoginShell,
     spawnSubprocess: (opts) => createPtySubprocess(opts)
   })
 

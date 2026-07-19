@@ -41,6 +41,7 @@ const {
   writeFileSyncMock,
   chmodSyncMock,
   getPathMock,
+  loginPreflightExecFileMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
@@ -72,6 +73,7 @@ const {
   writeFileSyncMock: vi.fn(),
   chmodSyncMock: vi.fn(),
   getPathMock: vi.fn(),
+  loginPreflightExecFileMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   mimoCodeBuildPtyEnvMock: vi.fn(),
@@ -127,6 +129,13 @@ vi.mock('fs', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+// Why: this suite forces darwin on non-macOS hosts; isolate the PAM probe
+// while preserving every other child_process API used by the IPC graph.
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  execFile: loginPreflightExecFileMock
 }))
 
 vi.mock('../opencode/hook-service', () => ({
@@ -206,6 +215,7 @@ import {
   getLocalPtyProvider
 } from './pty'
 import { _resetLocalPtyProviderStateForTest } from '../providers/local-pty-provider'
+import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   isHiddenRendererPty
@@ -326,6 +336,7 @@ describe('registerPtyHandlers', () => {
     writeFileSyncMock.mockReset()
     chmodSyncMock.mockReset()
     getPathMock.mockReset()
+    loginPreflightExecFileMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
@@ -587,6 +598,7 @@ describe('registerPtyHandlers', () => {
     const write = vi.fn()
     const pauseProducer = vi.fn()
     const resumeProducer = vi.fn()
+    const shutdown = vi.fn()
     let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
     let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
     let backgroundStreamHandler:
@@ -600,7 +612,7 @@ describe('registerPtyHandlers', () => {
       pauseProducer,
       resumeProducer,
       kill: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown,
       sendSignal: vi.fn(),
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),
@@ -637,6 +649,7 @@ describe('registerPtyHandlers', () => {
       write,
       pauseProducer,
       resumeProducer,
+      shutdown,
       getBufferSnapshot,
       emitData: (id: string, data: string) => dataHandler?.({ id, data }),
       emitExit: (id: string, code = 0) => exitHandler?.({ id, code }),
@@ -3595,6 +3608,115 @@ describe('registerPtyHandlers', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
+  // Why: cold-start teardown must select the daemon after startup; fallback
+  // shutdown can falsely succeed and orphan the restored daemon PTY (#7742).
+  it('waits for the desktop startup barrier before renderer local kills resolve the provider', async () => {
+    const barrier = makeDeferred()
+    const awaitLocalPtyStartup = vi.fn(() => new Promise<void>(() => {}))
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
+    const fallbackShutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyStartup,
+        awaitLocalPtyProviderStartup
+      }
+    )
+
+    const daemonSessionId = 'wt-1@@11111111-1111-1111-1111-111111111111'
+    const pendingKill = handlers.get('pty:kill')!(null, { id: daemonSessionId }) as Promise<void>
+
+    await Promise.resolve()
+    expect(awaitLocalPtyStartup).not.toHaveBeenCalled()
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
+    expect(fallbackShutdown).not.toHaveBeenCalled()
+    const daemon = installObservableDaemonTestProvider()
+    barrier.resolve()
+    await pendingKill
+
+    expect(daemon.spawn).not.toHaveBeenCalled()
+    expect(daemon.shutdown).toHaveBeenCalledWith(
+      daemonSessionId,
+      expect.objectContaining({ immediate: true })
+    )
+    expect(fallbackShutdown).not.toHaveBeenCalled()
+  })
+
+  it('waits for the desktop startup barrier before runtime local kills resolve the provider', async () => {
+    const barrier = makeDeferred()
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
+    const fallbackShutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
+    const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyProviderStartup
+      }
+    )
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      kill: (ptyId: string) => boolean
+    }
+
+    expect(controller.kill('daemon-session')).toBe(true)
+    await Promise.resolve()
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
+    expect(fallbackShutdown).not.toHaveBeenCalled()
+
+    const daemon = installObservableDaemonTestProvider()
+    barrier.resolve()
+    await vi.waitFor(() => expect(daemon.shutdown).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(runtime.onPtyExit).toHaveBeenCalledTimes(1))
+
+    expect(daemon.shutdown).toHaveBeenCalledWith('daemon-session', { immediate: false })
+    expect(fallbackShutdown).not.toHaveBeenCalled()
+  })
+
+  it('waits for the desktop startup barrier before runtime exact stops resolve the provider', async () => {
+    const barrier = makeDeferred()
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
+    const fallbackShutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
+    const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyProviderStartup
+      }
+    )
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      stopAndWait: (ptyId: string) => Promise<boolean>
+    }
+
+    const pendingStop = controller.stopAndWait('daemon-session')
+    await Promise.resolve()
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
+    expect(fallbackShutdown).not.toHaveBeenCalled()
+
+    const daemon = installObservableDaemonTestProvider()
+    barrier.resolve()
+    await expect(pendingStop).resolves.toBe(true)
+
+    expect(daemon.shutdown).toHaveBeenCalledWith('daemon-session', {
+      immediate: true,
+      keepHistory: false
+    })
+    expect(fallbackShutdown).not.toHaveBeenCalled()
+  })
+
   it('rebinds local data and exit listeners after a late daemon provider install', async () => {
     vi.useFakeTimers()
     const barrier = makeDeferred()
@@ -3750,15 +3872,16 @@ describe('registerPtyHandlers', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('does not wait on the desktop startup barrier for SSH spawns', async () => {
+  it('does not wait on the desktop startup barrier for SSH spawns or kills', async () => {
     const barrier = makeDeferred()
     const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
     const sshSpawn = vi.fn(async () => ({ id: 'remote-pty' }))
+    const sshShutdown = vi.fn()
     registerSshPtyProvider('ssh-1', {
       spawn: sshSpawn,
       write: vi.fn(),
       resize: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown: sshShutdown,
       sendSignal: vi.fn(),
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),
@@ -3794,9 +3917,14 @@ describe('registerPtyHandlers', () => {
         env: {}
       })
     ).resolves.toEqual(expect.objectContaining({ id: 'remote-pty' }))
+    await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
 
     expect(awaitLocalPtyStartup).not.toHaveBeenCalled()
     expect(sshSpawn).toHaveBeenCalledTimes(1)
+    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {
+      immediate: true,
+      keepHistory: false
+    })
   })
 
   it('lists sessions from both local and SSH providers', async () => {
@@ -6497,7 +6625,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
-        ['--login', '-i'],
+        ['-c', 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'],
         expect.objectContaining({
           env: expect.objectContaining({ CHERE_INVOKING: '1' })
         })
@@ -7086,6 +7214,18 @@ describe('registerPtyHandlers', () => {
     // Re-enable the TCC login wrapper the suite-level beforeEach disables.
     delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
     process.env.SHELL = '/bin/zsh'
+    loginPreflightExecFileMock.mockImplementation(
+      (
+        _file: string,
+        _args: string[],
+        _options: unknown,
+        callback: (error: Error | null, stdout: string, stderr: string) => void
+      ) => {
+        callback(null, 'ORCA_LOGIN_PREFLIGHT_OK', '')
+        return { stdin: { end: vi.fn() } }
+      }
+    )
+    resetMacosLoginShellPreflightForTests()
 
     try {
       const [file, args, options] = await spawnAndGetCall({ cwd: '/tmp' })
@@ -7101,6 +7241,7 @@ describe('registerPtyHandlers', () => {
       // The spawn env keeps the real shell so identity/name logic is intact.
       expect(options.env.SHELL).toBe('/bin/zsh')
     } finally {
+      resetMacosLoginShellPreflightForTests()
       process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
       if (originalShell === undefined) {
         delete process.env.SHELL
@@ -10765,15 +10906,24 @@ describe('registerPtyHandlers', () => {
     )
   })
 
-  it('seeds headless terminal state with cold-restore cwd metadata', async () => {
+  it('seeds cold restore at recovered dimensions with a legacy dimensionless fallback', async () => {
     const oscLinks = [{ row: 0, startCol: 0, endCol: 8, uri: 'https://example.com/restored' }]
     const coldRestore = {
       scrollback: 'restored history\r\n',
       cwd: '/projects/restored',
+      cols: 132,
+      rows: 43,
       oscLinks
     }
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-cold-restore', coldRestore })
+      .mockResolvedValueOnce({
+        id: 'pty-legacy-cold-restore',
+        coldRestore: { scrollback: 'legacy history\r\n', cwd: '/projects/legacy' }
+      })
     setLocalPtyProvider({
-      spawn: vi.fn(async () => ({ id: 'pty-cold-restore', coldRestore })),
+      spawn,
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(),
@@ -10798,11 +10948,22 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-    expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
+    expect(runtime.seedHeadlessTerminal).toHaveBeenNthCalledWith(
+      1,
       'pty-cold-restore',
       'restored history\r\n',
-      undefined,
+      { cols: 132, rows: 43 },
       { cwd: '/projects/restored', oscLinks, preferProviderIfExisting: true }
+    )
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    expect(runtime.seedHeadlessTerminal).toHaveBeenNthCalledWith(
+      2,
+      'pty-legacy-cold-restore',
+      'legacy history\r\n',
+      undefined,
+      { cwd: '/projects/legacy', oscLinks: undefined, preferProviderIfExisting: true }
     )
   })
 
