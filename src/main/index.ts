@@ -2108,7 +2108,11 @@ void app.whenReady().then(async () => {
     profileDirectory: activeOrcaProfile.profileDirectory
   })
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
-  agentAwakeService = new AgentAwakeService()
+  // Why: revalidation reads the runtime's cached foreground state (no process
+  // scan); `runtime` is assigned later in this init, hence the late-bound read.
+  agentAwakeService = new AgentAwakeService({
+    revalidateForegroundAgent: (ptyId) => runtime?.hasWakeEligibleForegroundAgent(ptyId) === true
+  })
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
@@ -2349,7 +2353,14 @@ void app.whenReady().then(async () => {
     getLocalProvider: () => getLocalPtyProvider(),
     // Why: SSH relay providers register after construction and may reconnect, so destructive cleanup must resolve the current generation.
     getSshProvider: (connectionId) => getSshPtyProvider(connectionId),
-    onPtyStopped: clearProviderPtyState,
+    onPtyStopped: (ptyId) => {
+      clearProviderPtyState(ptyId)
+      // Why: a dead PTY's foreground-agent evidence must stop holding wake now,
+      // not at TTL expiry.
+      agentAwakeService?.reportForegroundAgentEvidence(ptyId, null)
+    },
+    onPtyForegroundAgentEvidence: (ptyId, agent) =>
+      agentAwakeService?.reportForegroundAgentEvidence(ptyId, agent),
     onTerminalAgentStatus: (event) => {
       agentHookServer.ingestTerminalStatus(event)
     },

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AgentAwakeService, AGENT_AWAKE_STATUS_STALE_AFTER_MS } from './agent-awake-service'
+import {
+  AgentAwakeService,
+  AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS,
+  AGENT_AWAKE_STATUS_STALE_AFTER_MS
+} from './agent-awake-service'
 import type { AgentAwakeStatus } from './agent-awake-service'
 
 vi.mock('electron', () => ({
@@ -78,7 +82,8 @@ function createService(
   blocker = createBlocker(),
   macosAssertion = createMacosAssertion(),
   linuxAssertion = createLinuxAssertion(),
-  powerMonitor: ReturnType<typeof createPowerMonitor> | null = null
+  powerMonitor: ReturnType<typeof createPowerMonitor> | null = null,
+  revalidateForegroundAgent?: (ptyId: string) => boolean
 ): AgentAwakeService {
   return new AgentAwakeService({
     blocker,
@@ -86,6 +91,7 @@ function createService(
     macosAssertion,
     now,
     powerMonitor,
+    revalidateForegroundAgent,
     logger: {
       debug: vi.fn(),
       warn: vi.fn()
@@ -291,6 +297,71 @@ describe('AgentAwakeService', () => {
     expect(blocker.start).toHaveBeenCalledTimes(2)
     expect(macosAssertion.start).toHaveBeenCalledTimes(2)
     expect(linuxAssertion.start).toHaveBeenCalledTimes(2)
+  })
+
+  it('grants wake eligibility for reported recognized foreground-agent evidence', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setEnabled(true)
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('revokes wake eligibility when foreground-agent evidence is cleared', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setEnabled(true)
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+    service.reportForegroundAgentEvidence('pty-1', null)
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+  })
+
+  it('expires foreground-agent evidence at its TTL without a revalidator', () => {
+    vi.useFakeTimers()
+    let now = 1_000
+    const blocker = createBlocker()
+    const service = createService(() => now, blocker)
+
+    service.setEnabled(true)
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+    now = 1_000 + AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS + 1
+    vi.advanceTimersByTime(AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS)
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    service.dispose()
+  })
+
+  it('renews foreground-agent evidence at TTL expiry while revalidation confirms the agent', () => {
+    vi.useFakeTimers()
+    let now = 1_000
+    let stillForeground = true
+    const blocker = createBlocker()
+    const service = createService(
+      () => now,
+      blocker,
+      createMacosAssertion(),
+      createLinuxAssertion(),
+      null,
+      () => stillForeground
+    )
+
+    service.setEnabled(true)
+    service.reportForegroundAgentEvidence('pty-1', 'claude')
+    now = 1_000 + AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS + 1
+    vi.advanceTimersByTime(AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS)
+
+    expect(blocker.stop).not.toHaveBeenCalled()
+
+    stillForeground = false
+    now += AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS + 1
+    vi.advanceTimersByTime(AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS + 1_000)
+
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    service.dispose()
   })
 
   it('unsubscribes the resume listener on dispose', () => {

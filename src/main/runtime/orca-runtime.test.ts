@@ -23368,6 +23368,42 @@ describe('OrcaRuntimeService', () => {
     expect(getForegroundProcess).toHaveBeenCalledTimes(2)
   })
 
+  it('reports recognized foreground-agent evidence from the existing status-transition probe', async () => {
+    const onPtyForegroundAgentEvidence = vi.fn()
+    const runtime = new OrcaRuntimeService(store, undefined, { onPtyForegroundAgentEvidence })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'claude'
+    })
+    syncSinglePty(runtime, 'pty-wake')
+
+    runtime.onPtyData('pty-wake', '\x1b]0;⠋ compiling\x07alpha\n', 100)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(onPtyForegroundAgentEvidence).toHaveBeenCalledWith('pty-wake', 'claude')
+    expect(runtime.hasWakeEligibleForegroundAgent('pty-wake')).toBe(true)
+  })
+
+  // Why: keep-awake evidence is recognized-agent-only — an arbitrary non-shell
+  // process (vim, tail -f) must never hold the machine awake.
+  it('reports null foreground-agent evidence for an unrecognized foreground process', async () => {
+    const onPtyForegroundAgentEvidence = vi.fn()
+    const runtime = new OrcaRuntimeService(store, undefined, { onPtyForegroundAgentEvidence })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'vim'
+    })
+    syncSinglePty(runtime, 'pty-wake')
+
+    runtime.onPtyData('pty-wake', '\x1b]0;⠋ compiling\x07alpha\n', 100)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(onPtyForegroundAgentEvidence).toHaveBeenCalledWith('pty-wake', null)
+    expect(runtime.hasWakeEligibleForegroundAgent('pty-wake')).toBe(false)
+  })
+
   it('normalizes Pi-compatible mobile session status to OMP for an unknown-launch foreground omp PTY', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
     const getForegroundProcess = vi.fn(async () => 'omp')

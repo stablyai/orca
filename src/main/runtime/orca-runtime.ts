@@ -3259,6 +3259,9 @@ export class OrcaRuntimeService {
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
+  private readonly onPtyForegroundAgentEvidence:
+    | ((ptyId: string, agent: TuiAgent | null) => void)
+    | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
   private terminalSideEffectLocalConsumerAvailable = false
@@ -3331,6 +3334,9 @@ export class OrcaRuntimeService {
       getLocalProvider?: () => IPtyProvider
       getSshProvider?: (connectionId: string) => IPtyProvider | undefined
       onPtyStopped?: (ptyId: string) => void
+      // Why: keep-awake needs recognized-foreground-agent evidence (wrapper
+      // claude etc.) from the existing scans; fired per completed scan result.
+      onPtyForegroundAgentEvidence?: (ptyId: string, agent: TuiAgent | null) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
       // Why: agent status mostly arrives via hooks (agent-hooks/server), not OSC
@@ -3405,6 +3411,7 @@ export class OrcaRuntimeService {
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.getSshProviderFn = deps?.getSshProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
+    this.onPtyForegroundAgentEvidence = deps?.onPtyForegroundAgentEvidence ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
@@ -16866,12 +16873,22 @@ export class OrcaRuntimeService {
     const foregroundAgent = foregroundProcess
       ? (recognizeAgentProcess(foregroundProcess)?.agent ?? null)
       : null
+    // Why: report before the unchanged early-return so every completed scan
+    // renews the keep-awake TTL for a still-running recognized agent.
+    this.onPtyForegroundAgentEvidence?.(ptyId, foregroundAgent)
     if (pty.foregroundAgent === foregroundAgent) {
       return false
     }
     pty.foregroundAgent = foregroundAgent
     this.touchMobileSessionSnapshotsForPty(ptyId)
     return true
+  }
+
+  /** Cache-only keep-awake revalidation: is this PTY still connected with a
+   *  recognized foreground agent? Never triggers a process scan. */
+  hasWakeEligibleForegroundAgent(ptyId: string): boolean {
+    const pty = this.ptysById.get(ptyId)
+    return pty?.connected === true && pty.foregroundAgent !== null
   }
 
   private getFreshExplicitAgentStatusForHandle(handle: string): {

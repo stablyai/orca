@@ -1,9 +1,11 @@
 import { powerMonitor, powerSaveBlocker } from 'electron'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import { ForegroundAgentEvidenceLedger } from './agent-awake-foreground-evidence'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 
 export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
+export { AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS } from './agent-awake-foreground-evidence'
 
 export type AgentAwakeStatus = {
   state: AgentStatusState
@@ -37,11 +39,16 @@ type AgentAwakeServiceOptions = {
   macosAssertion?: PlatformAwakeAssertion
   now?: () => number
   powerMonitor?: PowerMonitorEventSource | null
+  /** Cache-only check (no process scan) that the PTY is still connected with a
+   *  recognized foreground agent; used to renew evidence at TTL expiry. */
+  revalidateForegroundAgent?: (ptyId: string) => boolean
 }
 
 export class AgentAwakeService {
   private enabled = false
   private statuses: AgentAwakeStatus[] = []
+  private readonly foregroundAgentEvidence: ForegroundAgentEvidenceLedger
+  private eligibleForegroundAgentCount = 0
   private blockerId: number | null = null
   private staleTimer: ReturnType<typeof setTimeout> | null = null
   private readonly blocker: PowerSaveBlocker
@@ -55,6 +62,10 @@ export class AgentAwakeService {
     this.blocker = options.blocker ?? powerSaveBlocker
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
+    this.foregroundAgentEvidence = new ForegroundAgentEvidenceLedger({
+      now: this.now,
+      revalidate: options.revalidateForegroundAgent
+    })
     // Windows lid close is intentionally not modeled as an assertion here:
     // keeping it awake requires mutating the user's global power plan.
     this.linuxAssertion =
@@ -94,6 +105,15 @@ export class AgentAwakeService {
     this.refresh('status-change')
   }
 
+  // Why: wrapper-launched/manual agents recognized by the foreground scan can
+  // run without hook statuses; their evidence holds wake eligibility too.
+  // Only recognized agents reach here — arbitrary processes never grant wake.
+  reportForegroundAgentEvidence(ptyId: string, agent: string | null): void {
+    if (this.foregroundAgentEvidence.report(ptyId, agent)) {
+      this.refresh('foreground-agent-evidence')
+    }
+  }
+
   dispose(): void {
     this.clearStaleTimer()
     this.unsubscribeResume?.()
@@ -103,8 +123,12 @@ export class AgentAwakeService {
   }
 
   private refresh(reason: string): void {
+    this.eligibleForegroundAgentCount = this.foregroundAgentEvidence.pruneAndCount(
+      AGENT_AWAKE_STATUS_STALE_AFTER_MS
+    )
     this.scheduleStaleTimer()
-    const runningStatusCount = this.getEligibleRunningStatusCount()
+    const runningStatusCount =
+      this.getEligibleRunningStatusCount() + this.eligibleForegroundAgentCount
     const shouldBlock = this.enabled && runningStatusCount > 0
     if (shouldBlock) {
       this.startBlocker(reason, runningStatusCount)
@@ -148,6 +172,13 @@ export class AgentAwakeService {
         continue
       }
       earliestExpiry = earliestExpiry === null ? expiry : Math.min(earliestExpiry, expiry)
+    }
+    const evidenceExpiry = this.foregroundAgentEvidence.nextExpiry(
+      AGENT_AWAKE_STATUS_STALE_AFTER_MS
+    )
+    if (evidenceExpiry !== null) {
+      earliestExpiry =
+        earliestExpiry === null ? evidenceExpiry : Math.min(earliestExpiry, evidenceExpiry)
     }
     if (earliestExpiry === null) {
       return
