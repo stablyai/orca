@@ -16,6 +16,34 @@ export type StatusPillAgentRow = {
   worktreeLabel: string | null
   receivedAt: number
   tabId: string | null
+  /** Raw JSON envelope of an AskUserQuestion / permission request, when the
+   *  pane is currently waiting on user input. Same shape as
+   *  AgentStatusEntry.interactivePrompt. The pill renderer parses this into
+   *  either an AskPrompt (`{ questions: [...] }`) or an approval envelope
+   *  (`{ approval: { tool, summary } }`). Undefined when no question is
+   *  pending. */
+  interactivePrompt?: string
+}
+
+export type StatusPillPendingQuestion = {
+  /** Pane the question belongs to. Required so the renderer can scope UI
+   *  interactions and the answer IPC knows where to write. */
+  paneKey: string
+  /** Terminal handle that main resolves via runtime.getAgentStatusTerminalHandleForPaneKey.
+   *  Cached here so the answer IPC does not need to call into runtime again
+   *  from the pill webContents (it is already known when the summary is
+   *  computed alongside the row). */
+  terminalHandle?: string
+  /** Display label for the agent that asked ("Claude", "Codex", …). */
+  agentLabel: string
+  /** Raw JSON envelope — see StatusPillAgentRow.interactivePrompt. */
+  interactivePrompt: string
+  /** Tool name associated with the prompt (e.g. "AskUserQuestion", "Edit",
+   *  "Bash"). Used by the parser to dispatch question vs approval. */
+  toolName?: string
+  /** Tab id of the pane, used to focus the main window on this pane after
+   *  answering. */
+  tabId?: string
 }
 
 export type StatusPillSummary = {
@@ -36,11 +64,22 @@ export type StatusPillSummary = {
    *  target the pane the user most likely wants to jump back to. */
   activePaneKey: string | null
   activeTabId: string | null
+  /** Set when a pane is currently asking the user a question or requesting
+   *  permission. The pill auto-expands and renders a question card. */
+  pendingQuestion?: StatusPillPendingQuestion
 }
 
 export type StatusPillPreferences = {
   shouldUseDarkColors: boolean
   prefersReducedMotion: boolean
+}
+
+export type StatusPillAnswerResult = {
+  /** True when the answer bytes reached a live PTY (local or remote). */
+  accepted: boolean
+  /** Set when accepted is false and main knows why (e.g. pane gone, terminal
+   *  not writable). Renderer surfaces it as a transient error. */
+  error?: 'pane_not_found' | 'terminal_not_writable' | 'send_failed'
 }
 
 export type StatusPillPreloadApi = {
@@ -62,4 +101,9 @@ export type StatusPillPreloadApi = {
   fireContextMenu: () => void
   /** Resolve the initial theme + reduced-motion preferences for first paint. */
   getInitialPreferences: () => Promise<StatusPillPreferences>
+  /** Send raw bytes (option number, label text, Escape, …) to the agent PTY
+   *  that asked the currently-pending question. Returns whether the write
+   *  reached a live terminal. Main resolves the paneKey → terminal handle →
+   *  runtime.sendTerminal path, so the pill renderer never needs ptyId. */
+  answerQuestion: (paneKey: string, raw: string) => Promise<StatusPillAnswerResult>
 }

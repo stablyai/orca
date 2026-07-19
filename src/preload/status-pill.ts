@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   StatusPillAgentRow,
+  StatusPillAnswerResult,
   StatusPillPreferences,
   StatusPillPreloadApi,
   StatusPillSummary
@@ -34,7 +35,9 @@ const api: StatusPillPreloadApi = {
     ipcRenderer.send('statusPill:contextMenu')
   },
   getInitialPreferences: (): Promise<StatusPillPreferences> =>
-    ipcRenderer.invoke('statusPill:getInitialPreferences')
+    ipcRenderer.invoke('statusPill:getInitialPreferences'),
+  answerQuestion: (paneKey: string, raw: string): Promise<StatusPillAnswerResult> =>
+    ipcRenderer.invoke('statusPill:answerAgent', { paneKey, raw })
 }
 
 // Why: the status-pill renderer is the only surface this preload bridges, so

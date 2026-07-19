@@ -1850,6 +1850,13 @@ app.whenReady().then(async () => {
   statusPillCoordinator = new StatusPillCoordinator({
     store,
     agentHookServer,
+    runtime: runtime
+      ? {
+          getAgentStatusTerminalHandleForPaneKey: (paneKey) =>
+            runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey),
+          sendTerminal: (handle, action, options) => runtime!.sendTerminal(handle, action, options)
+        }
+      : undefined,
     onFocusMainWindow: () => focusExistingWindow(),
     warn: console.warn
   })

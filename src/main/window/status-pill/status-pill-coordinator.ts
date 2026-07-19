@@ -1,6 +1,10 @@
 import type { Store } from '../../persistence'
 import type { AgentHookServer } from '../../agent-hooks/server'
-import { createStatusPillWindow, type StatusPillWindowHandle } from './createStatusPillWindow'
+import {
+  createStatusPillWindow,
+  type StatusPillRuntime,
+  type StatusPillWindowHandle
+} from './createStatusPillWindow'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 
 export type StatusPillCoordinatorOptions = {
@@ -9,6 +13,10 @@ export type StatusPillCoordinatorOptions = {
   /** Focus the Orca main window (reopening it if needed). Called when the user
    *  clicks the pill body. */
   onFocusMainWindow: () => void
+  /** Runtime, used to write agent answers from the pill. Optional so the pill
+   *  can mount in tests without a live runtime; answer attempts return
+   *  `send_failed` when absent. */
+  runtime?: StatusPillRuntime
   /** Optional logger; defaults to console.warn. */
   warn?: (message: string, error?: unknown) => void
 }
@@ -20,6 +28,7 @@ export class StatusPillCoordinator {
   private readonly store: Store
   private readonly agentHookServer: AgentHookServer
   private readonly onFocusMainWindow: () => void
+  private readonly runtime?: StatusPillRuntime
   private readonly warn: (message: string, error?: unknown) => void
   private handle: StatusPillWindowHandle | null = null
   private unsubscribeSettings: (() => void) | null = null
@@ -30,6 +39,7 @@ export class StatusPillCoordinator {
     this.store = options.store
     this.agentHookServer = options.agentHookServer
     this.onFocusMainWindow = options.onFocusMainWindow
+    this.runtime = options.runtime
     this.warn = options.warn ?? defaultWarn
 
     // Why: react to live toggles so the user sees the pill appear/disappear
@@ -108,6 +118,7 @@ export class StatusPillCoordinator {
     this.handle = createStatusPillWindow({
       getSnapshot,
       onFocusMainWindow: this.onFocusMainWindow,
+      runtime: this.runtime,
       warn: this.warn
     })
   }

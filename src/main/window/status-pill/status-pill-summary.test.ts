@@ -129,6 +129,86 @@ describe('computeStatusPillSummary', () => {
     expect(summary.hasAnyActivity).toBe(false)
     expect(summary.working).toBe(0)
   })
+
+  it('surfaces pendingQuestion when a pane is waiting with interactivePrompt', () => {
+    const entries = [
+      makeEntry({
+        state: 'waiting',
+        paneKey: 'tab:leaf',
+        agentType: 'opencode',
+        interactivePrompt: JSON.stringify({
+          questions: [{ question: 'Which deployment target?', options: ['prod', 'staging'] }]
+        }),
+        toolName: 'AskUserQuestion'
+      })
+    ]
+    const summary = computeStatusPillSummary(entries, NOW)
+    expect(summary.pendingQuestion).toBeDefined()
+    expect(summary.pendingQuestion?.paneKey).toBe('tab:leaf')
+    expect(summary.pendingQuestion?.agentLabel).toBe('OpenCode')
+    expect(summary.pendingQuestion?.toolName).toBe('AskUserQuestion')
+    expect(summary.pendingQuestion?.interactivePrompt).toContain('deployment target')
+  })
+
+  it('surfaces pendingQuestion for an approval envelope (blocked permission)', () => {
+    const entries = [
+      makeEntry({
+        state: 'blocked',
+        paneKey: 'tab:leaf',
+        agentType: 'copilot',
+        interactivePrompt: JSON.stringify({ approval: { tool: 'Edit', summary: 'middleware.ts' } }),
+        toolName: 'Edit'
+      })
+    ]
+    const summary = computeStatusPillSummary(entries, NOW)
+    expect(summary.pendingQuestion).toBeDefined()
+    expect(summary.pendingQuestion?.paneKey).toBe('tab:leaf')
+    expect(summary.pendingQuestion?.agentLabel).toBe('Copilot')
+  })
+
+  it('does not surface pendingQuestion when the pane is working (no prompt pending)', () => {
+    const entries = [
+      makeEntry({
+        state: 'working',
+        paneKey: 'tab:leaf',
+        interactivePrompt: JSON.stringify({ questions: [] })
+      })
+    ]
+    const summary = computeStatusPillSummary(entries, NOW)
+    expect(summary.pendingQuestion).toBeUndefined()
+  })
+
+  it('prefers blocked over waiting when both panes have prompts', () => {
+    const entries = [
+      makeEntry({
+        state: 'waiting',
+        paneKey: 'w',
+        agentType: 'claude',
+        interactivePrompt: JSON.stringify({ questions: [{ question: 'q1', options: ['a'] }] })
+      }),
+      makeEntry({
+        state: 'blocked',
+        paneKey: 'b',
+        agentType: 'copilot',
+        interactivePrompt: JSON.stringify({ approval: { tool: 'Edit' } })
+      })
+    ]
+    const summary = computeStatusPillSummary(entries, NOW)
+    expect(summary.pendingQuestion?.paneKey).toBe('b')
+  })
+
+  it('carries interactivePrompt on rows when a pane is asking', () => {
+    const entries = [
+      makeEntry({
+        state: 'waiting',
+        paneKey: 'a',
+        agentType: 'opencode',
+        interactivePrompt: JSON.stringify({ questions: [] })
+      })
+    ]
+    const rows = computeStatusPillAgentRows(entries, NOW)
+    expect(rows[0]?.interactivePrompt).toBeDefined()
+  })
 })
 
 describe('computeStatusPillAgentRows', () => {

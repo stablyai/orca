@@ -1,5 +1,9 @@
 import type { AgentStatusIpcPayload, AgentStatusState } from '../../../shared/agent-status-types'
-import type { StatusPillAgentRow, StatusPillSummary } from '../../../shared/status-pill-preload-api'
+import type {
+  StatusPillAgentRow,
+  StatusPillPendingQuestion,
+  StatusPillSummary
+} from '../../../shared/status-pill-preload-api'
 
 export type { StatusPillSummary }
 
@@ -33,6 +37,7 @@ export function computeStatusPillSummary(
   let waiting = 0
   let recentDone = 0
   let lead: AgentStatusIpcPayload | null = null
+  let pendingQuestion: AgentStatusIpcPayload | null = null
 
   for (const entry of entries) {
     if (!entry || entry.providerSessionOnly === true) {
@@ -60,6 +65,17 @@ export function computeStatusPillSummary(
         recentDone += 1
         break
     }
+    // Why: pick the pending question with the strongest state signal. A
+    // blocked pane (Copilot permission_prompt) outranks a generic waiting
+    // pane because it is more likely to need urgent attention.
+    if (
+      typeof entry.interactivePrompt === 'string' &&
+      entry.interactivePrompt.length > 0 &&
+      (entry.state === 'waiting' || entry.state === 'blocked') &&
+      isMoreRelevantPendingQuestion(entry, pendingQuestion)
+    ) {
+      pendingQuestion = entry
+    }
     // Why: pick the "most relevant" pane for the activity label. Working >
     // blocked > waiting > done (most recently received wins ties).
     if (isMoreRelevantLead(entry, lead)) {
@@ -68,35 +84,34 @@ export function computeStatusPillSummary(
   }
 
   const totalActive = working + blocked + waiting
-  if (totalActive === 0 && recentDone === 0) {
+  if (totalActive === 0 && recentDone === 0 && !pendingQuestion) {
     return EMPTY_SUMMARY
   }
 
-  if (!lead) {
-    return {
-      working,
-      blocked,
-      waiting,
-      recentDone,
-      hasAnyActivity: totalActive > 0,
-      activityLabel: '',
-      activityPaneKey: null,
-      activePaneKey: null,
-      activeTabId: null
-    }
-  }
-
-  return {
+  const base: StatusPillSummary = {
     working,
     blocked,
     waiting,
     recentDone,
     hasAnyActivity: totalActive > 0,
-    activityLabel: buildActivityLabel(lead),
-    activityPaneKey: lead.paneKey,
-    activePaneKey: lead.paneKey,
-    activeTabId: lead.tabId ?? null
+    activityLabel: '',
+    activityPaneKey: null,
+    activePaneKey: null,
+    activeTabId: null
   }
+
+  if (lead) {
+    base.activityLabel = buildActivityLabel(lead)
+    base.activityPaneKey = lead.paneKey
+    base.activePaneKey = lead.paneKey
+    base.activeTabId = lead.tabId ?? null
+  }
+
+  if (pendingQuestion) {
+    base.pendingQuestion = buildPendingQuestion(pendingQuestion)
+  }
+
+  return base
 }
 
 const STATE_PRIORITY: Record<AgentStatusState, number> = {
@@ -121,6 +136,35 @@ function isMoreRelevantLead(
   // Why: same priority → most recently received update wins so the label
   // tracks the latest pane to fire a hook event.
   return (candidate.receivedAt ?? 0) >= (current.receivedAt ?? 0)
+}
+
+function isMoreRelevantPendingQuestion(
+  candidate: AgentStatusIpcPayload,
+  current: AgentStatusIpcPayload | null
+): boolean {
+  if (!current) {
+    return true
+  }
+  // Why: a blocked permission prompt is more urgent than a generic waiting
+  // question; pick it first. Among same-priority pending questions, the most
+  // recently received one wins so the card does not flicker between agents.
+  const candPri = STATE_PRIORITY[candidate.state as AgentStatusState] ?? 99
+  const curPri = STATE_PRIORITY[current.state as AgentStatusState] ?? 99
+  if (candPri !== curPri) {
+    return candPri < curPri
+  }
+  return (candidate.receivedAt ?? 0) >= (current.receivedAt ?? 0)
+}
+
+function buildPendingQuestion(entry: AgentStatusIpcPayload): StatusPillPendingQuestion {
+  return {
+    paneKey: entry.paneKey,
+    terminalHandle: entry.terminalHandle,
+    agentLabel: formatAgentType(entry.agentType ?? 'agent'),
+    interactivePrompt: entry.interactivePrompt ?? '',
+    toolName: typeof entry.toolName === 'string' ? entry.toolName : undefined,
+    tabId: entry.tabId
+  }
 }
 
 function buildActivityLabel(entry: AgentStatusIpcPayload): string {
@@ -206,7 +250,14 @@ export function computeStatusPillAgentRows(
       terminalName: null,
       worktreeLabel: entry.worktreeId ?? null,
       receivedAt: entry.receivedAt ?? 0,
-      tabId: entry.tabId ?? null
+      tabId: entry.tabId ?? null,
+      // Why: carry the raw interactive prompt envelope so the expanded panel
+      // can render the live question card for this specific pane (the summary
+      // only carries the single most-urgent pending question across all panes).
+      interactivePrompt:
+        typeof entry.interactivePrompt === 'string' && entry.interactivePrompt.length > 0
+          ? entry.interactivePrompt
+          : undefined
     })
   }
   // Why: most-relevant-first ordering so the panel surfaces the pane the user

@@ -1,12 +1,4 @@
-import {
-  BrowserWindow,
-  Menu,
-  ipcMain,
-  nativeTheme,
-  screen,
-  type Display,
-  type Rectangle
-} from 'electron'
+import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import {
@@ -16,12 +8,30 @@ import {
 } from './placement'
 import { StatusPillBroadcaster, type StatusPillBroadcasterOptions } from './status-pill-broadcaster'
 import { computeStatusPillAgentRows, computeStatusPillSummary } from './status-pill-summary'
+import { attachStatusPillIpcListeners } from './status-pill-ipc'
 import type {
   StatusPillAgentRow,
+  StatusPillAnswerResult,
   StatusPillPreferences,
   StatusPillSummary
 } from '../../../shared/status-pill-preload-api'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+
+/** Minimal surface we use from OrcaRuntimeService. Keeps the pill decoupled
+ *  from the full runtime type so tests can substitute a stub. */
+export type StatusPillRuntime = {
+  getAgentStatusTerminalHandleForPaneKey: (paneKey: string) => string | undefined
+  sendTerminal: (
+    handle: string,
+    action: { text?: string; enter?: boolean; interrupt?: boolean },
+    options?: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+    }
+  ) => Promise<unknown>
+}
 
 /** Pill body dimensions in CSS pixels. Wide enough for "claude — fix-auth-bug ·
  *  Writing middleware.ts"; tall enough that hover and click targets stay
@@ -36,6 +46,9 @@ export type CreateStatusPillWindowOptions = {
   /** Focus the Orca main window (reopening it if needed). Called when the user
    *  clicks the pill body. */
   onFocusMainWindow: () => void
+  /** Runtime, used to resolve paneKey → terminal handle and to write the
+   *  answer bytes when the user answers a pending question from the pill. */
+  runtime?: StatusPillRuntime
   /** Optional logger; defaults to console.warn. */
   warn?: (message: string, error?: unknown) => void
   /** Scheduler overrides for tests. */
@@ -168,11 +181,13 @@ export function createStatusPillWindow(
   })
 
   const detachDisplayListeners = attachDisplayListeners(refreshPlacement)
-  const detachIpc = attachIpcListeners({
+  const detachIpc = attachStatusPillIpcListeners({
     window,
     onFocusMainWindow: options.onFocusMainWindow,
     getSummary,
-    getRows
+    getRows,
+    runtime: options.runtime,
+    warn
   })
 
   // Why: push the initial snapshot as soon as the renderer signals it is
@@ -271,67 +286,6 @@ async function loadPillEntry(
   }
 }
 
-type IpcListenerArgs = {
-  window: BrowserWindow
-  onFocusMainWindow: () => void
-  getSummary: () => StatusPillSummary
-  getRows: () => StatusPillAgentRow[]
-}
-
-function attachIpcListeners(args: IpcListenerArgs): () => void {
-  const clickHandler = (): void => {
-    args.onFocusMainWindow()
-  }
-  const contextMenuHandler = (): void => {
-    // Why: V1 ships a minimal context menu; rich options (Pin to display,
-    // Settings) land in a follow-up alongside the tray checkbox.
-    try {
-      const menu = Menu.buildFromTemplate([
-        { label: 'Orca status pill', enabled: false },
-        { type: 'separator' },
-        {
-          label: 'Hide pill',
-          click: () => {
-            // Why: send a self-message so the renderer can animate out before
-            // the window is destroyed by the settings change.
-            try {
-              args.window.webContents.send('statusPill:requestHide')
-            } catch {
-              // Best-effort.
-            }
-          }
-        }
-      ])
-      menu.popup()
-    } catch {
-      // Best-effort; right-click never blocks the pill.
-    }
-  }
-  const snapshotHandler = (): StatusPillSummary => args.getSummary()
-  const rowsHandler = (): StatusPillAgentRow[] => args.getRows()
-  const prefsHandler = (): StatusPillPreferences => ({
-    shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
-    // Why: main process cannot read the renderer's matchMedia. The pill
-    // renderer queries prefers-reduced-motion itself on mount and merges with
-    // this preference snapshot.
-    prefersReducedMotion: false
-  })
-
-  ipcMain.on('statusPill:click', clickHandler)
-  ipcMain.on('statusPill:contextMenu', contextMenuHandler)
-  ipcMain.handle('statusPill:getSnapshot', snapshotHandler)
-  ipcMain.handle('statusPill:getAgentRows', rowsHandler)
-  ipcMain.handle('statusPill:getInitialPreferences', prefsHandler)
-
-  return () => {
-    ipcMain.removeListener('statusPill:click', clickHandler)
-    ipcMain.removeListener('statusPill:contextMenu', contextMenuHandler)
-    ipcMain.removeHandler('statusPill:getSnapshot')
-    ipcMain.removeHandler('statusPill:getAgentRows')
-    ipcMain.removeHandler('statusPill:getInitialPreferences')
-  }
-}
-
 function attachDisplayListeners(refresh: () => void): () => void {
   const onMetrics = (): void => refresh()
   const onAdded = (): void => refresh()
@@ -367,4 +321,4 @@ function defaultWarn(message: string, error?: unknown): void {
 // Re-exported so the main index can keep a single import line for the
 // status-pill subsystem.
 export { StatusPillBroadcaster }
-export type { StatusPillAgentRow, StatusPillPreferences, StatusPillSummary }
+export type { StatusPillAgentRow, StatusPillAnswerResult, StatusPillPreferences, StatusPillSummary }
