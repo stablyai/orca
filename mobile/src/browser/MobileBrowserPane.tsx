@@ -32,10 +32,12 @@ import {
   type MobileBrowserViewMode
 } from './browser-screencast-request'
 import {
-  MobileBrowserPointerModifiers,
+  MobileAccessoryKeyBar
+} from '../components/keyboard-accessory/MobileAccessoryKeyBar'
+import {
+  buildBrowserKeyboardDescriptors,
   type BrowserPointerModifier
-} from './MobileBrowserPointerModifiers'
-import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
+} from './browser-keyboard-descriptors'
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
 import {
@@ -1264,14 +1266,14 @@ export function MobileBrowserPane({
           { paddingBottom: bottomInset, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        <MobileBrowserPointerModifiers
+        <MobileAccessoryKeyBar
           disabled={controlsDisabled}
-          selectedModifiers={pointerModifiers}
-          onToggle={togglePointerModifier}
-        />
-        <MobileBrowserKeyRow
-          disabled={controlsDisabled}
-          onKeypress={(key) => void sendKeypress(key)}
+          keys={buildBrowserKeyboardDescriptors({
+            selectedModifiers: pointerModifiers,
+            disabled: controlsDisabled,
+            onToggleModifier: togglePointerModifier,
+            onKeypress: (key) => void sendKeypress(key)
+          })}
         />
         <View style={styles.inputRow}>
           <TextInput
@@ -1623,8 +1625,9 @@ const styles = StyleSheet.create({
   },
   keyboardDock: {
     zIndex: 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
+    // Why: the shared accessory bar owns the top border now (matching the
+    // terminal, whose command dock has none), so the dock only carries the
+    // panel background for the unchanged input row below the bar.
     backgroundColor: colors.bgPanel
   },
   inputRow: {

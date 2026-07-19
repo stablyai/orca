@@ -67,55 +67,6 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   commandDock: {
     zIndex: 20
   },
-  accessoryBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  accessoryScroll: {
-    flex: 1,
-    minWidth: 0
-  },
-  accessoryContent: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    gap: spacing.xs
-  },
-  accessoryKey: {
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button,
-    minWidth: 36,
-    alignItems: 'center'
-  },
-  accessoryKeyPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  accessoryKeyActive: {
-    backgroundColor: colors.textPrimary
-  },
-  customAccessoryKey: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  accessoryKeyDisabled: {
-    opacity: 0.35
-  },
-  accessoryKeyText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: typography.monoFamily
-  },
-  accessoryKeyTextActive: {
-    color: colors.bgBase,
-    fontWeight: '700'
-  },
-  accessoryKeyTextDisabled: {
-    color: colors.textMuted
-  },
   keyboardDismissKey: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -127,6 +78,11 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     borderRadius: radii.button,
     minWidth: 36,
     height: 28
+  },
+  // Why: the dismiss key reuses the accessory-key pressed color, kept local
+  // since the shared accessory styles no longer live in this file.
+  keyboardDismissKeyPressed: {
+    backgroundColor: colors.borderSubtle
   },
   keyboardDismissGlyph: {
     alignItems: 'center',
