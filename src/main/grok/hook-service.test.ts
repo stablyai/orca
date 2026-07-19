@@ -24,14 +24,26 @@ const WINDOWS_POWERSHELL_LAUNCHER =
 
 describe('GrokHookService', () => {
   let homeDir: string
+  let previousGrokHome: string | undefined
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), 'orca-grok-home-'))
     homedirMock.mockReturnValue(homeDir)
+    // Why: getConfigPath() honors $GROK_HOME over the mocked homedir, so an
+    // ambient GROK_HOME would make install/remove touch the real Grok config.
+    // Clear it so the mocked temp home always wins; the GROK_HOME-specific test
+    // sets it explicitly.
+    previousGrokHome = process.env.GROK_HOME
+    delete process.env.GROK_HOME
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+    if (previousGrokHome === undefined) {
+      delete process.env.GROK_HOME
+    } else {
+      process.env.GROK_HOME = previousGrokHome
+    }
     rmSync(homeDir, { recursive: true, force: true })
   })
 

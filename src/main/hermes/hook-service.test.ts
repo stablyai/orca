@@ -92,15 +92,19 @@ describe('HermesHookService', () => {
   })
 
   // Why: remove() must be a strict no-op when Orca never installed anything — it
-  // must not create ~/.hermes/config.yaml or the plugin dir, and must not
+  // must not create the Hermes home/config.yaml or the plugin dir, and must not
   // rewrite/reformat (or .bak-roll) a user config.yaml that never enabled
   // orca-status.
-  it('remove() does not create config.yaml or the plugin dir when nothing was installed', () => {
+  it('remove() does not create the config dir or config.yaml when nothing was installed', () => {
+    // Point HERMES_HOME at a not-yet-existing dir so we can prove remove() never
+    // materializes the config root on a pristine machine.
+    const pristineHome = join(homeDir, 'pristine-hermes')
+    process.env.HERMES_HOME = pristineHome
+
     const status = new HermesHookService().remove()
 
     expect(status.state).toBe('not_installed')
-    expect(existsSync(join(homeDir, 'config.yaml'))).toBe(false)
-    expect(existsSync(join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME))).toBe(false)
+    expect(existsSync(pristineHome)).toBe(false)
   })
 
   it('remove() leaves a user config.yaml byte-identical when orca-status is not enabled', () => {
@@ -122,7 +126,50 @@ describe('HermesHookService', () => {
     expect(existsSync(`${configPath}.bak`)).toBe(false)
   })
 
-  it('remove() deletes the managed plugin and disables it in config when Orca did install', () => {
+  it('remove() deletes the managed plugin without recreating a config.yaml Orca deleted', () => {
+    const service = new HermesHookService()
+    expect(service.install().state).toBe('installed')
+    // Simulate a partial state: managed plugin on disk but config.yaml gone.
+    const configPath = join(homeDir, 'config.yaml')
+    rmSync(configPath)
+
+    const status = service.remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(existsSync(join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME))).toBe(false)
+    // The config write is gated on orca-status being enabled, which the deleted
+    // file no longer is — so remove() must not resurrect config.yaml (or a .bak).
+    expect(existsSync(configPath)).toBe(false)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+
+  it('remove() deletes the managed plugin but leaves an unrelated user config.yaml byte-identical', () => {
+    const service = new HermesHookService()
+    expect(service.install().state).toBe('installed')
+    // Managed plugin on disk, but the user replaced config.yaml with a
+    // byte-irregular file (leading comment, flow-style plugins) that no longer
+    // enables orca-status — Orca's serializer would normalize it, so a byte
+    // check proves remove() did not rewrite it.
+    const configPath = join(homeDir, 'config.yaml')
+    const userContent =
+      '# my hermes config\nmodel: test-model\nplugins: {enabled: [disk-cleanup]}\n'
+    writeFileSync(configPath, userContent, 'utf-8')
+
+    const status = service.remove()
+
+    expect(existsSync(join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME))).toBe(false)
+    expect(status.state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf-8')).toBe(userContent)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+
+  it('remove() deletes the managed plugin, disables it, and preserves user content', () => {
+    // Preseed user content so we can prove remove() strips only orca-status.
+    writeFileSync(
+      join(homeDir, 'config.yaml'),
+      ['model: test-model', 'plugins:', '  enabled:', '    - disk-cleanup', ''].join('\n'),
+      'utf-8'
+    )
     const service = new HermesHookService()
     expect(service.install().state).toBe('installed')
 
@@ -131,8 +178,11 @@ describe('HermesHookService', () => {
     expect(status.state).toBe('not_installed')
     expect(existsSync(join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME))).toBe(false)
     const config = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
+      model: string
       plugins: { enabled: string[] }
     }
+    expect(config.model).toBe('test-model')
+    expect(config.plugins.enabled).toContain('disk-cleanup')
     expect(config.plugins.enabled).not.toContain(_internals.HERMES_PLUGIN_NAME)
   })
 

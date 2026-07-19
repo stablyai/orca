@@ -530,16 +530,20 @@ export class HermesHookService {
       }
     }
     const pluginDir = getPluginDir()
-    const pluginManaged = getPluginFilesState(pluginDir).managed
-    if (pluginManaged) {
+    if (getPluginFilesState(pluginDir).managed) {
       rmSync(pluginDir, { recursive: true, force: true })
     }
-    // Why: no-op gate — only rewrite config.yaml when Orca actually had
-    // something enabled (managed plugin on disk, or orca-status in
-    // plugins.enabled). On a pristine home this must not create ~/.hermes or a
-    // config.yaml, and a user file that never enabled orca-status stays
-    // byte-identical (no reformat, no .bak roll).
-    if (pluginManaged || getConfigEnablement(parsed.config).enabled) {
+    // Why: no-op gate — rewrite config.yaml only when orca-status is actually in
+    // plugins.enabled, the sole key disablePlugin() would remove. Gating on the
+    // managed plugin files instead would still create a missing config.yaml (or
+    // reformat + .bak-roll a user file that never enabled orca-status) after the
+    // plugin dir is deleted. Plugin removal above stays independent. A malformed
+    // plugins.disabled must not mask an enabled orca-status, so check membership
+    // directly rather than via getConfigEnablement().
+    const enabledPlugins = isRecord(parsed.config.plugins)
+      ? asStringArray(parsed.config.plugins.enabled)
+      : null
+    if (enabledPlugins?.includes(HERMES_PLUGIN_NAME)) {
       writeConfigFile(configPath, disablePlugin(parsed.config))
     }
     return this.getStatus()
