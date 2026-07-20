@@ -49,6 +49,7 @@ import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGat
 import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
+import { LeftSidebarEdgePeekZone } from './components/sidebar/left-sidebar-edge-peek'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
 import {
@@ -2295,7 +2296,10 @@ function App(): React.JSX.Element {
                 'The app is still running. Retry the shell or use the menu to report the crash details.'
               )}
             >
-              <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+              {/* Why: relative anchors the left-sidebar edge-peek overlay to
+              this row, so a peek spans the same height as the docked sidebar
+              and ends above the status bar. */}
+              <div className="relative flex flex-row flex-1 min-h-0 overflow-hidden">
                 {/* Why: the non-workspace titlebar lives inside this left+center
               wrapper so it does not span over the right-sidebar column —
               when the right sidebar is open, its own header anchors at the
@@ -2312,10 +2316,12 @@ function App(): React.JSX.Element {
                       {titlebarMainStrip}
                     </div>
                   ) : null}
-                  <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+                  <div className="relative flex flex-row flex-1 min-h-0 overflow-hidden">
                     {showSidebar ? (
-                      leftTitlebarChromeLayout.shouldMount ? (
-                        /* Why: left column wraps the sidebar with a titlebar-height
+                      <>
+                        <LeftSidebarEdgePeekZone />
+                        {leftTitlebarChromeLayout.shouldMount ? (
+                          /* Why: left column wraps the sidebar with a titlebar-height
                      header above it. The header holds the same controls
                      (traffic lights, sidebar toggle, "Orca" title, agent badge)
                      that the full-width titlebar held while the center and right
@@ -2323,84 +2329,89 @@ function App(): React.JSX.Element {
                      When the sidebar is collapsed, take this header out of flex
                      layout so the terminal/editor reclaim the left edge instead of
                      leaving behind a content-width blank strip. */
-                        <div
-                          className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-                        >
                           <div
-                            // Why: when the sidebar is collapsed, titlebar-left floats
-                            // absolutely on top of the center column's own `border-l`
-                            // (see TabGroupSplitLayout), occluding that seam. Add a
-                            // `border-r` in the floating state so the vertical line
-                            // between the traffic-light/nav cluster and the tab strip
-                            // stays visible in both states. w-max keeps the floating
-                            // header sized to its own controls instead of the w-0
-                            // sidebar wrapper.
-                            className={`titlebar-left${
-                              leftTitlebarChromeLayout.isFloating
-                                ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
-                                : ''
-                            }`}
-                            style={{
-                              // Why: custom sidebar appearances are scoped to the sidebar
-                              // root, so mirror those variables onto the open header that
-                              // visually belongs to the same left-column panel.
-                              ...(sidebarOpen ? leftSidebarStyle : undefined),
-                              // Why: the Sidebar resize hook updates the sidebar DOM width
-                              // directly during drag and only persists to Zustand on
-                              // mouseup. In workspace view, size this header from the
-                              // wrapper's live width so it tracks those in-flight resizes
-                              // instead of leaving a stale-width gap until the drag ends.
-                              width: sidebarOpen ? '100%' : undefined
-                            }}
+                            className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
                           >
-                            {titlebarLeftControls}
-                          </div>
-                          <div className="flex min-h-0 flex-1">
-                            {/* Why: the workspace-view wrapper adds a fixed 36px header
+                            <div
+                              // Why: when the sidebar is collapsed, titlebar-left floats
+                              // absolutely on top of the center column's own `border-l`
+                              // (see TabGroupSplitLayout), occluding that seam. Add a
+                              // `border-r` in the floating state so the vertical line
+                              // between the traffic-light/nav cluster and the tab strip
+                              // stays visible in both states. w-max keeps the floating
+                              // header sized to its own controls instead of the w-0
+                              // sidebar wrapper. z-40 keeps it above an edge-peek panel
+                              // (z-30) so traffic lights / toggle stay clickable.
+                              className={`titlebar-left${
+                                leftTitlebarChromeLayout.isFloating
+                                  ? ' titlebar-left-floating absolute top-0 left-0 z-40 w-max border-r border-border'
+                                  : ''
+                              }`}
+                              style={{
+                                // Why: custom sidebar appearances are scoped to the sidebar
+                                // root, so mirror those variables onto the open header that
+                                // visually belongs to the same left-column panel.
+                                ...(sidebarOpen ? leftSidebarStyle : undefined),
+                                // Why: the Sidebar resize hook updates the sidebar DOM width
+                                // directly during drag and only persists to Zustand on
+                                // mouseup. In workspace view, size this header from the
+                                // wrapper's live width so it tracks those in-flight resizes
+                                // instead of leaving a stale-width gap until the drag ends.
+                                width: sidebarOpen ? '100%' : undefined
+                              }}
+                            >
+                              {titlebarLeftControls}
+                            </div>
+                            <div className="relative flex min-h-0 flex-1 overflow-visible">
+                              {/* Why: the workspace-view wrapper adds a fixed 36px header
                           above the sidebar. Without a flex-1/min-h-0 slot here,
                           the sidebar falls back to its content height, so the
                           worktree list loses its scroll viewport and the fixed
-                          bottom toolbar (including Add Project) gets pushed offscreen. */}
-                            <RecoverableRenderErrorBoundary
-                              boundaryId="sidebar.worktrees"
-                              surface="sidebar"
-                              resetKey={activeView}
-                              title={translate(
-                                'auto.App.1468601e7b',
-                                'The workspace list hit an error.'
-                              )}
-                              description={translate(
-                                'auto.App.bdc71dddc9',
-                                'The active workspace remains open. Retry the list or switch views.'
-                              )}
-                            >
-                              <Sidebar
-                                worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
-                                worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
-                              />
-                            </RecoverableRenderErrorBoundary>
+                          bottom toolbar (including Add Project) gets pushed offscreen.
+                          relative + overflow-visible anchors the edge-peek overlay
+                          without clipping it when the column is collapsed to w-0. */}
+                              <RecoverableRenderErrorBoundary
+                                boundaryId="sidebar.worktrees"
+                                surface="sidebar"
+                                resetKey={activeView}
+                                title={translate(
+                                  'auto.App.1468601e7b',
+                                  'The workspace list hit an error.'
+                                )}
+                                description={translate(
+                                  'auto.App.bdc71dddc9',
+                                  'The active workspace remains open. Retry the list or switch views.'
+                                )}
+                              >
+                                <Sidebar
+                                  worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                                  worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                                  peekBelowFloatingTitlebar={leftTitlebarChromeLayout.isFloating}
+                                />
+                              </RecoverableRenderErrorBoundary>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <RecoverableRenderErrorBoundary
-                          boundaryId="sidebar.worktrees"
-                          surface="sidebar"
-                          resetKey={activeView}
-                          title={translate(
-                            'auto.App.1468601e7b',
-                            'The workspace list hit an error.'
-                          )}
-                          description={translate(
-                            'auto.App.cba0fafda5',
-                            'The active page remains open. Retry the list or switch views.'
-                          )}
-                        >
-                          <Sidebar
-                            worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
-                            worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
-                          />
-                        </RecoverableRenderErrorBoundary>
-                      )
+                        ) : (
+                          <RecoverableRenderErrorBoundary
+                            boundaryId="sidebar.worktrees"
+                            surface="sidebar"
+                            resetKey={activeView}
+                            title={translate(
+                              'auto.App.1468601e7b',
+                              'The workspace list hit an error.'
+                            )}
+                            description={translate(
+                              'auto.App.cba0fafda5',
+                              'The active page remains open. Retry the list or switch views.'
+                            )}
+                          >
+                            <Sidebar
+                              worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                              worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                            />
+                          </RecoverableRenderErrorBoundary>
+                        )}
+                      </>
                     ) : null}
                     <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
                       {stackedSidebarOpen ? (

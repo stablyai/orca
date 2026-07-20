@@ -597,9 +597,12 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
 
 export type UISlice = {
   sidebarOpen: boolean
+  /** Transient edge-hover reveal; cleared when the sidebar is pinned open/closed. */
+  sidebarPeek: boolean
   sidebarWidth: number
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
+  setSidebarPeek: (peek: boolean) => void
   setSidebarWidth: (width: number) => void
   agentSendPopoverTargetMode: AgentSendPopoverTargetMode | null
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
@@ -1012,9 +1015,11 @@ export type UISlice = {
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
   sidebarOpen: true,
+  sidebarPeek: false,
   sidebarWidth: 280,
-  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen, sidebarPeek: false })),
+  setSidebarOpen: (open) => set({ sidebarOpen: open, sidebarPeek: false }),
+  setSidebarPeek: (peek) => set({ sidebarPeek: peek }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
   agentSendPopoverTargetMode: null,
   openAgentSendPopoverTargetMode: (args) => {
@@ -1625,9 +1630,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (tourProgression === 'reveal-sidebar-and-advance') {
         // Why: the split can be triggered by keyboard/menu paths while the
         // sidebar is closed, but the next tour target lives in the sidebar.
+        // Clear peek so a mid-hover edge peek cannot leave a stale overlay flag
+        // after the tour pins the sidebar open.
         return {
           featureInteractions: next,
           sidebarOpen: true,
+          sidebarPeek: false,
           activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
         }
       }

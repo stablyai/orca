@@ -16,6 +16,11 @@ import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import {
+  LEFT_SIDEBAR_PEEK_BELOW_TITLEBAR_CLASS_NAME,
+  LEFT_SIDEBAR_PEEK_OVERLAY_CLASS_NAME,
+  useLeftSidebarEdgePeekDismiss
+} from './left-sidebar-edge-peek'
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
@@ -35,13 +40,22 @@ export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
 type SidebarProps = {
   worktreeScrollOffsetRef: React.MutableRefObject<number>
   worktreeScrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+  /**
+   * When true, the collapsed titlebar chrome stays floating above the peek
+   * (keeps the tab strip spacer stable). The peek panel then starts below that
+   * 36px row so Tasks/nav remain visible.
+   */
+  peekBelowFloatingTitlebar?: boolean
 }
 
 function Sidebar({
   worktreeScrollOffsetRef,
-  worktreeScrollAnchorRef
+  worktreeScrollAnchorRef,
+  peekBelowFloatingTitlebar = false
 }: SidebarProps): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarPeek = useAppStore((s) => s.sidebarPeek)
+  const setSidebarPeek = useAppStore((s) => s.setSidebarPeek)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
@@ -68,6 +82,11 @@ function Sidebar({
     solidifyWorkspaceBoardFromDrag,
     cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
+
+  // An edge-hover peek shows the same content as a pinned-open sidebar; only
+  // the positioning differs (floating overlay vs in-flow panel).
+  const isPeeking = sidebarPeek && !sidebarOpen
+  const sidebarVisible = sidebarOpen || isPeeking
 
   const setLiveSidebarWidth = React.useCallback((width: number) => {
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
@@ -121,7 +140,7 @@ function Sidebar({
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
-    isOpen: sidebarOpen,
+    isOpen: sidebarVisible,
     width: sidebarWidth,
     minWidth: MIN_WIDTH,
     maxWidth: MAX_WIDTH,
@@ -129,17 +148,33 @@ function Sidebar({
     setWidth: setSidebarWidth,
     onDraftWidthChange: setLiveSidebarWidth
   })
+  useLeftSidebarEdgePeekDismiss({
+    isPeeking,
+    isResizing,
+    setPeek: setSidebarPeek,
+    overlayRef: containerRef
+  })
 
   return (
     <TooltipProvider delayDuration={400}>
       <div
         ref={containerRef}
-        data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
-        className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        data-native-file-drop-target={sidebarVisible ? nativeDropTarget : undefined}
+        className={cn(
+          'min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent',
+          // Why: peek floats over the workspace (no reflow) so the tab strip
+          // spacer stays put. When a floating collapsed titlebar is present,
+          // start below it so Tasks/nav are not covered.
+          isPeeking
+            ? peekBelowFloatingTitlebar
+              ? LEFT_SIDEBAR_PEEK_BELOW_TITLEBAR_CLASS_NAME
+              : LEFT_SIDEBAR_PEEK_OVERLAY_CLASS_NAME
+            : 'relative'
+        )}
         style={leftSidebarStyle}
         {...dropHandlers}
       >
-        {sidebarOpen && (
+        {sidebarVisible && (
           <>
             {/* Fixed controls */}
             <SidebarNav />
@@ -165,7 +200,7 @@ function Sidebar({
           </>
         )}
 
-        {sidebarOpen && affordance.visible ? (
+        {sidebarVisible && affordance.visible ? (
           <div
             className={cn(
               'pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-1.5 rounded-md border bg-worktree-sidebar-accent/95 px-4 text-center text-worktree-sidebar-accent-foreground shadow-xs',
@@ -185,7 +220,7 @@ function Sidebar({
         ) : null}
 
         {/* Resize handle */}
-        {sidebarOpen && (
+        {sidebarVisible && (
           <div
             data-sidebar-resize-handle=""
             className={cn(WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME, isResizing && 'bg-ring/10')}
