@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: this persistence suite keeps defaulting,
-migration, mutation, and flush behavior in one file so schema changes are
-reviewed against the full storage contract instead of being scattered. */
+/* eslint-disable max-lines -- Why: one file keeps the full storage contract (defaults, migration, mutation, flush) reviewable together. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   writeFileSync,
@@ -47,9 +45,7 @@ import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
 
-// Stub the ~/.ssh/config parser so the SSH-import integration test below drives
-// the real Store (real normalizeSshTarget + disk round-trip) with deterministic
-// config hosts instead of the operator's actual ~/.ssh/config.
+// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -717,8 +713,7 @@ describe('Store', () => {
 
   it('coerces non-boolean minimizeToTrayOnClose payloads to a strict boolean', async () => {
     const store = await createStore()
-    // Why: a renderer-supplied non-bool must never persist as a truthy non-bool
-    // that would later read as "tray-minimize on".
+    // Why: a renderer-supplied non-bool must never persist as truthy and later read as "tray-minimize on".
     store.updateSettings({ minimizeToTrayOnClose: 'true' as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
     store.updateSettings({ minimizeToTrayOnClose: 1 as unknown as boolean })
@@ -779,8 +774,7 @@ describe('Store', () => {
       store.flush()
     })
 
-    // Why: a profile opened on another OS must not rewrite the mac preference
-    // on its next flush; only the darwin consumers act on the value.
+    // Why: a profile opened on another OS must not rewrite the mac-only preference on flush.
     await withPlatform('win32', async () => {
       const store = await createStore()
       store.updateSettings({ minimizeToTrayOnClose: true })
@@ -821,10 +815,7 @@ describe('Store', () => {
   })
 
   it('persists the existing-user onboarding backfill back to disk', async () => {
-    // Why: the upgrade-cohort backfill is derived at load; this asserts the
-    // backfilled onboarding+gate state round-trips through a write intact (the
-    // load-time scheduleSave that triggers it without a manual flush is wired
-    // via loadNeedsSave at the no-onboarding-block branch).
+    // Why: the upgrade-cohort backfill is derived at load; assert it round-trips through a write intact (load-time scheduleSave via loadNeedsSave, no manual flush).
     writeDataFile({
       schemaVersion: 1,
       ui: {}
@@ -987,9 +978,7 @@ describe('Store', () => {
   })
 
   it('recovers a close timestamp when closed onboarding omits the closedAt key', async () => {
-    // Why: a persisted block missing `closedAt` entirely (vs an explicit null)
-    // must still stay closed via outcome recovery, guarding the
-    // `'closedAt' in raw` sanitizer branch separately from the null case.
+    // Why: a block missing `closedAt` entirely (vs explicit null) must still stay closed via outcome recovery, guarding the `'closedAt' in raw` branch.
     writeDataFile({
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
@@ -1007,9 +996,7 @@ describe('Store', () => {
   })
 
   it('does not mutate gate fields for a consistent closed-onboarding existing user', async () => {
-    // Why: the gate must be idempotent. A user already persisted as
-    // closed+completed must round-trip unchanged — the backfill path must not
-    // fire and stomp the real closedAt with a fresh Date.now() each launch.
+    // Why: the gate must be idempotent — a closed+completed user round-trips unchanged, and the backfill must not stomp closedAt with a fresh Date.now().
     const consistent = {
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
@@ -1242,8 +1229,7 @@ describe('Store', () => {
   // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {
-    // Why: hydration must serve the persisted username without spawning
-    // git/gh (issue #7225); resolution happens in background enrichment.
+    // Why: hydration serves the persisted username without spawning git/gh (issue #7225); resolution happens in background enrichment.
     const repo = makeRepo({ gitUsername: 'testuser' })
     writeDataFile({
       schemaVersion: 1,
@@ -1384,8 +1370,7 @@ describe('Store', () => {
       source: 'ssh-config'
     })
 
-    // normalizeSshTarget must not strip `source` on update, and the new port
-    // must take effect — this is the persistence-layer guard for #4684 item #1.
+    // normalizeSshTarget must not strip `source` on update and the new port must take effect (persistence-layer guard for #4684 item #1).
     const updated = store.updateSshTarget('ssh-src-1', { port: 2222, source: 'ssh-config' })
     expect(updated?.port).toBe(2222)
     expect(updated?.source).toBe('ssh-config')
@@ -1455,17 +1440,14 @@ describe('Store', () => {
     expect(inserted[0]?.source).toBe('ssh-config')
     expect(inserted[0]?.port).toBe(2200)
 
-    // Rotated port: the upsert must update the SAME target in place — and the
-    // real normalizeSshTarget must keep `source` and not falsely re-derive
-    // configHost into a permanently-dirty state.
+    // Rotated port: upsert updates the same target in place and normalizeSshTarget must keep `source` (no false re-derive into a permanently-dirty state).
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
     const changed = sshStore.importFromSshConfig()
     expect(changed).toHaveLength(1)
     expect(changed[0]?.port).toBe(2222)
     expect(changed[0]?.source).toBe('ssh-config')
 
-    // A third identical sync is a no-op (dirty-check against the real persisted
-    // fields) — proving repeated auto-sync on every pane open writes nothing.
+    // A third identical sync is a no-op — repeated auto-sync on every pane open writes nothing.
     expect(sshStore.importFromSshConfig()).toHaveLength(0)
 
     // Exactly one cluster target on disk with the rotated port and source kept.
@@ -1909,8 +1891,7 @@ describe('Store', () => {
     seed.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
     seed.flush()
 
-    // Why: a fresh store never stamps the one-shot UI migration flags, so a
-    // second load+flush settles them — otherwise they, not the prune, mark dirty.
+    // Why: a second load+flush settles the one-shot UI migration flags first, so they (not the prune) don't mark the store dirty.
     const warm = await createStore()
     warm.flush()
 
@@ -1925,8 +1906,7 @@ describe('Store', () => {
         createdAt: 1_000 + i,
         scheduledFor: 1_000 + i
       }
-      // A real legacy file predates runNumber; backfill must run BEFORE the prune
-      // so survivors keep their true ordinals instead of restarting at 1.
+      // Legacy files predate runNumber; backfill must run BEFORE the prune so survivors keep their true ordinals.
       delete legacy.runNumber
       return legacy
     })
@@ -2003,9 +1983,7 @@ describe('Store', () => {
 
     const runs = store.listAutomationRuns(automation.id)
     expect(runs.some((run) => run.id === inFlight.id)).toBe(true)
-    // Final runs beyond the cap were still evicted. The store can briefly hold
-    // cap + 2: the last-created run finalizes after the prune at its creation,
-    // and the late completion lands without a prune of its own.
+    // Store can briefly hold cap+2: the last-created run finalizes after its creation-time prune, and the late completion lands without a prune of its own.
     expect(runs.some((run) => run.id === firstCompletedId)).toBe(false)
     expect(runs.length).toBeLessThanOrEqual(102)
   })
@@ -3534,8 +3512,7 @@ describe('Store', () => {
       displayName: 'remote-wt',
       hostId: 'ssh:ssh-old'
     })
-    // A hostId-less meta under the same id is treated as local and left behind
-    // (conservative: never deletes the wrong host's meta).
+    // A hostId-less meta is treated as local and left behind (never delete the wrong host's meta).
     store.setWorktreeMeta('shared::/local/repo/wt', { displayName: 'local-wt' })
 
     store.removeProjectForHost('shared', 'ssh:ssh-old')
@@ -3606,8 +3583,7 @@ describe('Store', () => {
 
   it('reassignSshTargetId persists a worktree-meta-only re-point (no matching repo)', async () => {
     const store = await createStore()
-    // A meta on the old SSH host with no corresponding repo row — the re-point
-    // must still be saved, not left in memory only.
+    // A meta on the old SSH host with no repo row — the re-point must still be persisted, not memory-only.
     store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
 
     const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
@@ -3717,8 +3693,7 @@ describe('Store', () => {
       setupMethod: 'provisioned'
     })
 
-    // Meta-only re-adoption (no repo pinned to the old id) must still migrate
-    // the provisioned setup, or new worktrees would be born on a dead host id.
+    // Meta-only re-adoption must still migrate the provisioned setup, or new worktrees would be born on a dead host id.
     store.reassignSshTargetId('ssh-old', 'ssh-new')
 
     const setups = store.getProjectHostSetups()
@@ -4171,9 +4146,7 @@ describe('Store', () => {
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))
     expect(store.getRepo('r1')!.issueSourcePreference).toBe('origin')
 
-    // Why: passing the key with value `undefined` must clear the preference.
-    // Plain `Object.assign` skips undefined values, so without the explicit
-    // delete branch in updateRepo, the persisted record would keep 'origin'.
+    // Why: `Object.assign` skips undefined, so updateRepo needs an explicit delete branch or the key with value undefined wouldn't clear.
     store.updateRepo('r1', { issueSourcePreference: undefined })
     expect(store.getRepo('r1')!.issueSourcePreference).toBeUndefined()
 
@@ -5226,8 +5199,7 @@ describe('Store', () => {
   })
 
   // ── Content-hash write skipping ────────────────────────────────────
-  // Why inode comparison: every real write is a tmp+rename, which allocates a
-  // new inode. An unchanged inode proves no write happened.
+  // Why inode comparison: every real write is a tmp+rename (new inode), so an unchanged inode proves no write happened.
 
   it('skips the disk write when a mutation burst nets out to already-persisted state', async () => {
     vi.useFakeTimers()
@@ -5270,8 +5242,7 @@ describe('Store', () => {
     vi.useFakeTimers()
     try {
       const store = await createStore()
-      // Mutations every 500ms keep resetting the 1s trailing debounce; the
-      // 5s max-wait must force a write anyway.
+      // Mutations every 500ms reset the 1s debounce; the 5s max-wait must force a write anyway.
       let width = 400
       for (let i = 0; i < 11; i++) {
         store.updateUI({ sidebarWidth: width++ })
@@ -5325,8 +5296,7 @@ describe('Store', () => {
     store.persistPtyBinding(binding)
     const inoBefore = statSync(dataFile()).ino
 
-    // The warm-restart re-bind storm: every restored terminal re-asserts an
-    // identical binding with a sync flush. Identical state must not rewrite.
+    // Warm-restart re-bind storm: an identical binding re-asserted with a sync flush must not rewrite.
     store.persistPtyBinding(binding)
 
     expect(statSync(dataFile()).ino).toBe(inoBefore)
@@ -6118,9 +6088,7 @@ describe('Store', () => {
   })
 
   it('uses recent as the default sort for a fresh install (no persisted sortBy)', async () => {
-    // Why: the legacy-recent→smart migration must gate on the *raw* persisted
-    // value, not the normalized default. Otherwise, changing the default sort
-    // to 'recent' would cause every fresh install to be mis-migrated to 'smart'.
+    // Why: the legacy-recent→smart migration must gate on the raw persisted value, not the normalized default, or fresh installs get mis-migrated to 'smart'.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -6299,11 +6267,7 @@ describe('Store', () => {
   // ── terminalMacOptionAsAlt migration (issue #903) ───────────────────
 
   it('migrates legacy "true" terminalMacOptionAsAlt to "auto" on first load', async () => {
-    // Why: before the 'auto' mode shipped, 'true' was the global default.
-    // A persisted 'true' on an un-migrated install is indistinguishable
-    // from an explicit choice, so we flip to 'auto' and let detection pick
-    // the right value per keyboard layout. Non-US users stop losing their
-    // @ / € / [ ] characters.
+    // Why: legacy 'true' (old default) is indistinguishable from an explicit choice; flip un-migrated installs to 'auto' so non-US layouts keep @ / € / [ ].
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -6439,8 +6403,7 @@ describe('Store', () => {
   })
 
   it('respects already-migrated settings with explicit "true"', async () => {
-    // After migration, if a user deliberately picks 'Both' in the UI,
-    // their choice is preserved on subsequent launches.
+    // A deliberate 'true' ('Both') choice post-migration is preserved on later launches.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -6456,21 +6419,15 @@ describe('Store', () => {
   })
 
   it('fresh install defaults terminalMacOptionAsAlt to "auto" and marks migrated', async () => {
-    // No data file at all: auto is the new default; migration is considered
-    // complete since there's nothing legacy to migrate.
+    // No data file: 'auto' is the new default and migration is complete (nothing legacy to migrate).
     const store = await createStore()
     expect(store.getSettings().terminalMacOptionAsAlt).toBe('auto')
-    // Fresh install: default is migrated=false (nothing loaded, so the
-    // migration code didn't run). On first persisted write, the flag stays
-    // false, which is fine — next load with legacy 'true' would still
-    // migrate correctly. Only loaded files flip the flag.
+    // Fresh install: migrated stays false (migration code never ran); a later load with legacy 'true' still migrates correctly.
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(false)
   })
 
   it('missing terminalMacOptionAsAlt in persisted file defaults to "auto" and flags migrated', async () => {
-    // Existing file predates the setting entirely. Treat like upgrade from
-    // pre-Option-as-Alt Orca: land on 'auto' and mark migrated so we don't
-    // re-examine.
+    // Existing file predates the setting: land on 'auto' and mark migrated so we don't re-examine.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -9728,12 +9685,7 @@ describe('Store', () => {
   })
 
   // ── Telemetry cohort migration ─────────────────────────────────────
-  //
-  // The migration keys on `existsSync(dataFile)` rather than field-based
-  // inference because the `telemetry` field is new in this release: keying
-  // on its presence would misclassify every pre-telemetry install as fresh,
-  // silently flipping existing users to default-on and violating the social
-  // contract they installed Orca under.
+  // Why: keys on `existsSync(dataFile)`, not the new `telemetry` field, so pre-telemetry installs aren't misclassified as fresh and flipped default-on.
 
   it('classifies a truly fresh install as new-user cohort (file absent → optedIn=true)', async () => {
     // No data file written — truly fresh install of the telemetry release.
@@ -9771,10 +9723,7 @@ describe('Store', () => {
   })
 
   it('still classifies as existing-user cohort when the data file is corrupt', async () => {
-    // Load-bearing: `fileExistedOnLoad` stays true even when the parse
-    // throws, so the corrupt-file catch path must also apply the migration.
-    // Otherwise a user whose `orca-data.json` got corrupted would be
-    // silently opted in as if they were a fresh install.
+    // Load-bearing: the corrupt-file catch path keeps `fileExistedOnLoad` true so a corrupted install isn't silently opted in as fresh.
     mkdirSync(testState.dir, { recursive: true })
     writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
     const store = await createStore()
@@ -9814,9 +9763,7 @@ describe('Store', () => {
 })
 
 describe('Store.migrateTabSwitchKeybindings', () => {
-  // Freezes the install cohort for the tab-switch convention swap on first load.
-  // Keys on `fileExistedOnLoad` (not field presence) so the verdict is stable
-  // even after a fresh install writes its own data file on later launches.
+  // Freezes the tab-switch cohort on first load, keying on `fileExistedOnLoad` (not field presence) so the verdict survives later launches.
 
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -9864,8 +9811,7 @@ describe('Store.migrateTabSwitchKeybindings', () => {
       workspaceSession: {}
     })
     const store = await createStore()
-    // Existing file but cohort already resolved to 'done' — must not flip to
-    // 'pending' just because the data file happens to exist.
+    // Existing file, cohort already 'done' — must not flip to 'pending' just because the file exists.
     expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
   })
 })
@@ -10194,9 +10140,7 @@ describe('Store native-chat tab viewMode persistence', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // Why: a tab persisted in 'chat' must restore to 'chat' (R1), and a tab
-  // persisted before the field existed must default to 'terminal' — i.e. the
-  // field is absent on restore — so older sessions stay backward-compatible.
+  // Why: tabs persisted before viewMode existed default to 'terminal' so older sessions stay backward-compatible.
   it('round-trips viewMode for unified tabs and defaults legacy tabs to terminal', async () => {
     const WORKTREE = 'repo1::/worktree'
     writeDataFile({

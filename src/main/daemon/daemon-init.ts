@@ -1,11 +1,5 @@
-/* eslint-disable max-lines -- Why: this module owns the complete daemon
-lifecycle for the Electron main process — init, out-of-process launch,
-current+legacy adapter wiring, restart orchestration (the 7-step sequence
-from docs/daemon-staleness-ux.md §Phase 1), and teardown on app quit. Splitting
-it would scatter the "swap the running provider atomically" invariant across
-files with no cleaner ownership seam: restart, replaceDaemonProvider, and the
-module-level spawner/adapter singletons must stay co-located so a future
-change cannot leave them drifting out of sync. */
+/* eslint-disable max-lines -- Why: owns the full daemon lifecycle (init, launch, adapter wiring,
+restart, teardown); the "swap the provider atomically" invariant keeps restart + singletons co-located. */
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
@@ -58,31 +52,14 @@ import {
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
 
-// Why: daemon init runs concurrently with window load, so harness-side stderr
-// arrival times are useless — in-process `t` lets the startup benchmark derive
-// how long the daemon cold-start path actually took.
+// Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
   if (isStartupDiagnosticsEnabled()) {
     logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
   }
 }
 
-// Why: how many extra hello+listSessions probes to make against a wedged-but-
-// connectable daemon before replacing it. Each probe waits out the client's 5s
-// hello timeout, so this spaces re-checks ~5s apart: 1 initial + 11 retries ≈
-// 60s of grace for a transiently wedged daemon (Windows update-relaunch drain)
-// to answer and be preserved WITH its live sessions, before a permanent wedge
-// (#8689) is replaced. Deliberately generous to keep live-session loss on the
-// transient path as close to zero as possible.
-//
-// A transient wedge drains early (well under the 60s local-PTY fail-open cap),
-// so its startup is short. Only a *permanent* wedge runs the full window; it can
-// then approach/exceed the fail-open cap, at which point restored panes fail
-// open to the in-process provider for the session and adopt the freshly forked
-// daemon on the next launch — a rare path that still recovers, versus the old
-// forever-broken behavior. Trade-off: a transient wedge owning live sessions
-// that takes longer than ~60s to drain is replaced (live processes lost, though
-// scrollback cold-restores). Raise this only alongside the fail-open cap.
+// Why: extra hello+listSessions probes (~5s each) giving a wedged-but-connectable daemon ~60s grace to answer and keep its live sessions before a permanent wedge (#8689) is replaced; raise only alongside the fail-open cap.
 export const WEDGED_DAEMON_GRACE_RETRIES = 11
 const DAEMON_SELF_SHUTDOWN_WAIT_MS = 5_000
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
@@ -92,10 +69,7 @@ let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
 let adapter: DaemonProvider | null = null
-// Why: coalesce concurrent restartDaemon() calls so two clicks (or a UI
-// click racing an internal caller) can't both enter the 7-step sequence —
-// the second entry would read the already-disposed current adapter and
-// race cleanupDaemonForProtocol against a half-spawned replacement.
+// Why: coalesce concurrent restartDaemon() calls so two entries can't race the 7-step sequence against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
 
 function getRuntimeDir(): string {
@@ -112,9 +86,7 @@ function getHistoryDir(): string {
 
 function getDaemonEntryPath(): string {
   const appPath = app.getAppPath()
-  // Why: electron-builder unpacks daemon-entry.js so child_process.fork() can
-  // execute it from disk. In packaged apps app.getAppPath() points at
-  // app.asar, so redirect to the unpacked sibling before joining the script.
+  // Why: packaged app.getAppPath() points at app.asar, so redirect to app.asar.unpacked where daemon-entry.js is fork-executable.
   const basePath = app.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
   const directEntryPath = join(basePath, 'daemon-entry.js')
   if (existsSync(directEntryPath)) {
@@ -123,10 +95,7 @@ function getDaemonEntryPath(): string {
   return join(basePath, 'out', 'main', 'daemon-entry.js')
 }
 
-// Why: the detached daemon writes lifecycle events to a rotated file so field
-// failures are diagnosable from a bundle. Honor the same hard privacy switch
-// the local trace sink honors (ORCA_DIAGNOSTICS_DISABLED); absence of the arg
-// is fully supported, so gating it off is safe and adoption-neutral.
+// Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.
 function daemonLogArgs(): string[] {
   const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
   if (disabled === '1' || disabled === 'true') {
@@ -135,9 +104,7 @@ function daemonLogArgs(): string[] {
   return ['--log-file', getDaemonLogFilePath()]
 }
 
-// Why: before spawning a new daemon, check if an existing one is alive by
-// attempting a TCP connection to the socket. If it connects, the daemon
-// survived from a previous app session — reuse it instead of spawning.
+// Why: a socket that accepts a connection proves a daemon survived a previous app session and can be reused.
 function probeSocket(socketPath: string): Promise<boolean> {
   return new Promise((resolve) => {
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
@@ -253,8 +220,7 @@ async function cleanupFailedDaemonAdoption(
     ...legacy.map((entry) => entry.disconnectOnly()),
     (async () => {
       try {
-        // Why: endpoint publication allows other authenticated clients to win;
-        // only daemon-side shutdownIfIdle may prove a failed adoption is killable.
+        // Why: other authenticated clients may win, so only daemon-side shutdownIfIdle can prove a failed adoption is killable.
         await current.disconnectOnly()
       } catch (error) {
         current.dispose()
@@ -362,8 +328,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     const launchNonce = suppliedLaunchNonce ?? randomUUID()
     let adoptionClient: DaemonClient | null = new DaemonClient({ socketPath, tokenPath })
     try {
-      // Why: acquire the full pair before any control-only probes so an expired
-      // inherited deadline cannot fire in the probe-to-adoption gap.
+      // Why: acquire the full pair before control-only probes so an expired inherited deadline can't fire in the probe-to-adoption gap.
       await adoptionClient.ensureConnected()
     } catch {
       adoptionClient.disconnect()
@@ -398,10 +363,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
           await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
         } else {
-          // Why: a protocol-healthy daemon can outlive the app bundle that
-          // launched it. In dev this happens after deleting/rebuilding a
-          // worktree; in packaged apps it happens when the stable
-          // /Applications/Orca.app path is replaced during update.
+          // Why: a protocol-healthy daemon can outlive its launching app bundle (dev worktree rebuild, or packaged update replacing the app path).
           const identity = await getDaemonLaunchIdentity(
             runtimeDir,
             socketPath,
@@ -417,8 +379,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               app.getVersion()
             ))
           if (identity === 'mismatch' || stalePackagedBundle) {
-            // Why: replacing a healthy daemon kills its child PTYs; defer code
-            // freshness until no live terminal sessions would be lost.
+            // Why: replacing a healthy daemon kills its child PTYs; defer code freshness until no live sessions would be lost.
             const replacementLabel = stalePackagedBundle
               ? 'launched before the current app bundle was installed'
               : 'launched from a different app path'
@@ -434,28 +395,14 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             )
             await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
           } else {
-            // Why: daemon is already running from a previous app session and
-            // responded to a protocol-level ping. Safe to reuse.
+            // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.
             return preserveDaemon()
           }
         }
       } else {
-        // Why: a busy machine (e.g. right after an update) can time out the
-        // health check while the daemon is alive and owning terminals. Killing
-        // it would destroy every live session, so re-verify with a session list
-        // first.
+        // Why: a busy machine can time out the health check on a live daemon; re-verify with a session list before killing its sessions.
         let liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
-        // Why: on a Windows update relaunch the daemon can be transiently wedged
-        // past every RPC budget (final checkpoint flush + installer/AV disk
-        // pressure) while its sessions are still alive — replacing it here is what
-        // killed those sessions. A pipe that still accepts connections proves a
-        // live daemon, so give a wedged-but-connectable daemon a bounded grace to
-        // drain and answer before deciding. A PERMANENTLY wedged daemon (accepts
-        // connections but its event loop never answers hello — #8689) exhausts the
-        // grace and falls through to replacement below, instead of being preserved
-        // forever, which strands the app with zero working terminals. 'rejected'
-        // means the daemon answered and refused the handshake — it can never be
-        // adopted, so it skips the grace and replacement stays the only recovery.
+        // Why: a wedged-but-connectable daemon (Windows update relaunch) may still own live sessions, so grace-retry before replacing; a permanent wedge (#8689) exhausts the grace, and 'rejected' skips it (handshake refused = never adoptable).
         let graceRetry = 0
         while (
           liveSessionCount === null &&
@@ -480,18 +427,13 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
       }
 
-      // Why: a raw socket can outlive a broken or wedged daemon. Kill by PID
-      // before respawn so the new daemon does not race the stale process.
+      // Why: a raw socket can outlive a broken daemon; kill by PID before respawn so the new daemon doesn't race the stale one.
       adoptionClient?.disconnect()
       adoptionClient = null
       await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
       const userDataPath = app.getPath('userData')
-      // Why: on win32 packaged, fork from a copy of the Electron runtime staged
-      // in userData so the daemon's image + loaded modules escape the install dir
-      // the NSIS updater deletes and force-closes. Staged here (not at app start)
-      // so the one-time copy stays off the first-paint path and is skipped on
-      // launches that adopt a live daemon. Fail-open: null → in-dir host, below.
+      // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
       const relocatedHost = materializeRelocatedDaemonHost()
       // Fork the relocated entry when available; otherwise the install-dir entry.
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
@@ -509,37 +451,24 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           ...daemonLogArgs()
         ],
         {
-          // Why: detached daemons can outlive dev worktrees. Starting from
-          // userData keeps process.cwd() valid after a repo/worktree is deleted.
+          // Why: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
           cwd: userDataPath,
-          // Why: detached + unref lets the daemon outlive the Electron process.
-          // stdout stays 'ignore' so the child never holds the parent's stdout
-          // open (which would block Electron exit); stderr is 'pipe' so a
-          // module-load crash during startup is captured instead of discarded
-          // (v1.4.129-rc.1 shipped a daemon that only logged "exited with code 1"
-          // because stderr was thrown away). The pipe is destroyed on readiness.
+          // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
           detached: true,
           stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-          // Why: run the relocated Orca.exe copy instead of the install-dir one.
-          // It is byte-identical, so run-as-node behavior is unchanged; only the
-          // image path moves out of the updater's kill zone.
+          // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
           ...(relocatedHost ? { execPath: relocatedHost.execPath } : {}),
-          // Why: ELECTRON_RUN_AS_NODE makes the forked process run as a plain
-          // Node.js process instead of an Electron renderer/main process. Without
-          // it, Electron's GPU/display initialization can interfere with native
-          // module operations like node-pty's posix_spawn of the spawn-helper.
+          // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
           env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: '1',
-            // Why: the detached daemon is plain Node and cannot call Electron's
-            // app.getPath(), but shell-ready rcfiles must live outside swept tmp.
+            // Why: the detached plain-Node daemon can't call app.getPath(), but shell rcfiles must live outside swept tmp.
             ORCA_USER_DATA_PATH: userDataPath
           }
         }
       )
 
-      // Why: keep only the startup-window stderr tail so a crash cause is
-      // visible without unbounded memory if the daemon spews before dying.
+      // Why: keep only the startup-window stderr tail so a crash cause is visible without unbounded memory.
       const STARTUP_STDERR_MAX_BYTES = 8192
       let startupStderr = ''
       let collectingStderr = true
@@ -553,9 +482,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
       }
       child.stderr?.on('data', onStartupStderr)
-      // Why: once the daemon is up (or has failed) the parent must not keep a
-      // live handle on the detached daemon's stderr — a piped stream would ref
-      // the parent event loop and prevent Electron from exiting cleanly.
+      // Why: release the detached daemon's stderr once up/failed — a live piped stream refs the parent loop and blocks Electron exit.
       const releaseStderr = (): void => {
         collectingStderr = false
         child.stderr?.off('data', onStartupStderr)
@@ -580,9 +507,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           }
           settled = true
           cleanupStartupListeners()
-          // Why: stderr was previously discarded, so a startup crash surfaced only
-          // as "exited with code 1". Attach the captured tail to the thrown error
-          // (which the fallback path reports) and log it so the real cause shows.
+          // Why: attach the captured stderr tail to the thrown error and log it so a startup crash isn't just "exited with code 1".
           const stderrTail = startupStderr.trim()
           if (stderrTail) {
             console.warn(`[daemon] startup failed; captured stderr tail:\n${stderrTail}`)
@@ -621,8 +546,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               return
             }
             try {
-              // Why: hello and the PID record must share the daemon's self time
-              // and nonce so cleanup can identify this exact process incarnation.
+              // Why: pid record shares the daemon's self time and nonce so cleanup can identify this exact process incarnation.
               writeFileSync(
                 pidPath,
                 serializeDaemonPidFile({
@@ -639,12 +563,9 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               return
             }
             settled = true
-            // Why: the daemon process is detached after readiness; leaving
-            // startup listeners attached retains this launch promise closure.
+            // Why: daemon is detached after readiness; detach startup listeners so the launch promise closure isn't retained.
             cleanupStartupListeners()
-            // Why: disconnect IPC channel, release the stderr pipe, and unref so
-            // Electron can exit without waiting for the daemon. The daemon keeps
-            // running detached.
+            // Why: release IPC/stderr and unref so Electron can exit without waiting; the daemon keeps running detached.
             releaseStderr()
             child.disconnect()
             child.unref()
@@ -678,8 +599,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           tokenPath
         )
       } catch (error) {
-        // Why: another client may have adopted this still-live process. Keep its
-        // valid identity until exit, but remove a record published after an early exit.
+        // Why: another client may have adopted this live process; keep its pid record until exit, but remove one published after an early exit.
         let pidRecordRemoved = false
         const removeExitedPidRecord = (): void => {
           if (pidRecordRemoved) {
@@ -707,10 +627,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
 export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
   logDaemonMilestone('daemon-init-start')
-  // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init
-  // that deterministically outlasts the first-window timeout. Real triggers
-  // (stale-daemon cleanup, legacy probes on a busy disk) are not controllable
-  // from a test.
+  // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
   if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
@@ -722,20 +639,14 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
     launcher: createOutOfProcessLauncher(runtimeDir)
   })
 
-  // Why: assign spawner/adapter only after both succeed. If ensureRunning()
-  // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
-  // correctly on retry.
+  // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.
   const info = await newSpawner.ensureRunning()
-  // Reclaim superseded daemon-host copies on EVERY launch, not just on a fresh
-  // spawn: surviving daemons make spawns rare, so a spawn-only sweep would let
-  // old-version copies accumulate. Current + live-daemon-pinned versions stay.
+  // Why: reclaim superseded daemon-host copies on EVERY launch (spawns are rare), keeping current + live-daemon-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
   if (signal?.aborted) {
-    // Why: startup fail-open may already have allowed fallback LocalPtyProvider
-    // PTYs to spawn. Do not install late, but give an empty daemon one bounded
-    // authenticated retirement attempt; live adopted sessions reject it and survive.
+    // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).
     const abortedStartupAdapter = new DaemonPtyAdapter({
       socketPath: info.socketPath,
       tokenPath: info.tokenPath
@@ -749,10 +660,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
     historyPath: getHistoryDir(),
-    // Why: when the daemon process dies (e.g. killed by a signal, OOM, or
-    // cascading from a force-quit of child processes), the adapter's
-    // ensureConnected() detects the dead socket and calls this to fork a
-    // replacement daemon before retrying the connection.
+    // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async () => {
       console.warn('[daemon] Daemon process died — respawning')
       newSpawner.resetHandle()
@@ -763,8 +671,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   let legacyAdapters: DaemonPtyAdapter[] = []
   let routedAdapter: DaemonProvider = newAdapter
   try {
-    // Why: the launcher's temporary pair closes only after this permanent
-    // adapter pair is established, leaving no retirement gap during adoption.
+    // Why: the launcher's temporary pair closes only after this permanent pair is established, leaving no adoption gap.
     await newAdapter.establishLifecycleLease()
     releaseDaemonAdoptionLease(newSpawner.getHandle())
 
@@ -783,17 +690,13 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
             })
           : newAdapter
     if (routedAdapter instanceof DegradedDaemonPtyProvider) {
-      // Why: the preserved daemon cannot create fresh terminals, but its live
-      // sessions may still be writable. Discover those ids so only known old
-      // sessions route to the degraded daemon; fresh panes fall back locally.
+      // Why: preserved daemon can't create fresh terminals; discover its live session ids so only they route to it (fresh panes fall back locally).
       await routedAdapter.discoverDaemonSessions()
     } else if (routedAdapter instanceof DaemonPtyRouter) {
       await routedAdapter.discoverLegacySessions()
     }
     if (signal?.aborted) {
-      // Why: same late-swap guard after legacy discovery, which can also exceed
-      // the first-window startup timeout on slow or stale daemon state. Release
-      // every uninstalled adapter lease without killing its live sessions.
+      // Why: same late-swap guard after legacy discovery; release uninstalled adapter leases without killing live sessions.
       await routedAdapter.disconnectOnly()
       return
     }
@@ -808,19 +711,13 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   spawner = newSpawner
   adapter = routedAdapter
   setLocalPtyProvider(routedAdapter)
-  // Why: desktop startup now lets the first window register PTY listeners
-  // before daemon init finishes. Rebind here so daemon PTYs still fan out
-  // data/exit events through the renderer and runtime listeners.
+  // Why: the first window may register PTY listeners before daemon init finishes; rebind so daemon PTYs still fan out events.
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
   await reconcileSeededClaudeLivePtys(routedAdapter)
 }
 
-// Why: the Claude live-PTY gate is seeded pessimistically from persistence at
-// store load. Once the daemon is up we know which of those sessions actually
-// survived — release dead ids so they cannot defer OAuth refresh forever.
-// Listing failures keep the seeds: over-holding the gate only delays a usage
-// refresh, while releasing it early can rotate a live CLI's refresh token.
+// Why: release gate ids only for daemon-confirmed-dead sessions; keep seeds on listing failure since releasing early can rotate a live CLI's refresh token.
 async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<void> {
   if (!hasSeededUnconfirmedClaudePtys()) {
     return
@@ -841,24 +738,17 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
       )
     )
   } catch (error) {
-    // Why: gate bookkeeping must never fail daemon init; stale seeds only
-    // defer a usage refresh until the next restart.
+    // Why: gate bookkeeping must never fail daemon init; stale seeds only defer a usage refresh until next restart.
     console.warn('[daemon] Failed to reconcile seeded Claude live-PTY gate:', error)
   }
 }
 
-// Why: the Manage Sessions IPC handlers need read access to the current
-// adapter/router to list sessions, kill them, etc. Exposed as a narrow getter
-// rather than exporting the module-level variable to keep the "swap on
-// restart" invariant in one place (replaceDaemonProvider).
+// Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
 
-// Why: the "Restart daemon" flow rebuilds the current-protocol adapter and
-// must update both the module-level `adapter` singleton here and the
-// `localProvider` reference inside ipc/pty.ts. Without this helper they could
-// drift — app-quit would dispose a stale adapter reference.
+// Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
 export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
   adapter = newAdapter
   setLocalPtyProvider(newAdapter)
@@ -892,11 +782,7 @@ export type RestartDaemonResult = {
   killedCount: number
 }
 
-// Why: the 7-step sequence from docs/daemon-staleness-ux.md §Phase 1 restart.
-// Current-protocol only — legacy adapters are preserved and route to their
-// original daemons with no respawn path. See the design doc for rationale on
-// each step, notably why synthetic exits must fan out *before* the listener
-// unsubscribe.
+// Why: the 7-step restart sequence from docs/daemon-staleness-ux.md §Phase 1; current-protocol only (legacy adapters preserved).
 export async function restartDaemon(): Promise<RestartDaemonResult> {
   if (restartInFlight) {
     return restartInFlight
@@ -918,11 +804,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const currentOnly = getCurrentDaemonAdapter(currentAdapter)
   const legacyAdapters = getLegacyDaemonAdapters(currentAdapter)
 
-  // Step 1: synthesize pty:exit for every active session on the current
-  // adapter BEFORE any teardown. The daemon's kill-all-and-shutdown path
-  // explicitly does not fan onExit to clients (session.ts:246-252), so
-  // without this the renderer would never see exits and would black-hole
-  // writes against the disposed adapter.
+  // Step 1: synthesize pty:exit for every active session BEFORE teardown — the daemon's shutdown path never fans onExit to clients (session.ts:246-252), so the renderer would otherwise never see exits.
   const fallbackKilledCount =
     currentAdapter instanceof DegradedDaemonPtyProvider
       ? await currentAdapter.shutdownFallbackSessions()
@@ -939,31 +821,24 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
   }
 
-  // Step 2: detach renderer listeners from the current adapter. Must happen
-  // AFTER step 1 so the synthesized exits actually reach the renderer, and
-  // BEFORE step 6 so the new provider isn't bound with stale listeners.
+  // Step 2: detach renderer listeners — after step 1 (so synthesized exits land) and before step 6 (no stale binding).
   unbindLocalProviderListeners()
 
-  // Step 3: kill the current-protocol daemon process (shutdown RPC → fallback
-  // killStaleDaemon → socket/pid unlink). Legacy adapters untouched.
+  // Step 3: kill the current-protocol daemon process; legacy adapters untouched.
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
   try {
     await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
 
-    // Step 4: reuse the existing spawner so the respawn closure baked into
-    // long-lived adapters stays valid. Do NOT construct a new DaemonSpawner.
+    // Step 4: reuse the existing spawner so the respawn closure baked into long-lived adapters stays valid (do NOT new one).
     currentSpawner.resetHandle()
     info = await currentSpawner.ensureRunning()
   } catch (error) {
-    // Why: the old provider remains authoritative until the final swap, even
-    // if cleanup or replacement launch fails after listener teardown.
+    // Why: old provider stays authoritative until the final swap; rebind since relaunch failed after teardown.
     rebindLocalProviderListeners()
     throw error
   }
 
-  // Step 5: build a fresh current adapter against the respawned daemon. Its
-  // respawn callback closes over the same spawner instance (identical to the
-  // crash-respawn closure in initDaemonPtyProvider).
+  // Step 5: build a fresh current adapter against the respawned daemon.
   const newCurrent = new DaemonPtyAdapter({
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
@@ -977,14 +852,11 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   })
   let newProvider: DaemonProvider = newCurrent
   try {
-    // Why: the temporary launcher lease overlaps this permanent pair so manual
-    // restart cannot strand a newly spawned daemon during adoption.
+    // Temporary launcher lease overlaps this permanent pair so a manual restart can't strand a newly spawned daemon during adoption.
     await newCurrent.establishLifecycleLease()
     releaseDaemonAdoptionLease(currentSpawner.getHandle())
 
-    // Re-wrap in router if there were legacy adapters at startup; otherwise
-    // point straight at the new adapter. Legacy instances are preserved by
-    // reference — they still route to the same pre-upgrade daemons.
+    // Re-wrap in a router only if legacy adapters exist; they're preserved by reference and still route to their pre-upgrade daemons.
     newProvider =
       legacyAdapters.length > 0
         ? new DaemonPtyRouter({ current: newCurrent, legacy: legacyAdapters })
@@ -1002,8 +874,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     } catch (caught) {
       cleanupError = caught
     }
-    // Why: the previous provider remains module-authoritative until the swap;
-    // restore its renderer bindings when replacement adoption fails.
+    // Previous provider stays module-authoritative until the swap; restore its renderer bindings when adoption fails.
     rebindLocalProviderListeners()
     if (cleanupError) {
       throw new AggregateError([error, cleanupError], 'Daemon restart and cleanup both failed')
@@ -1011,12 +882,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     throw error
   }
 
-  // Why: drain the outgoing router's subscriptions from the shared legacy
-  // adapters before installing the new router (which subscribes fresh). Must
-  // run *after* the new provider exists so no adapter event is unhandled in
-  // the narrow window, and *before* replaceDaemonProvider so the swap is
-  // atomic from the renderer's perspective. Plain dispose() would also tear
-  // down the legacy adapters themselves — use the router-only variant.
+  // Drain the old router's subscriptions via the router-only variant (plain dispose() would tear down the shared legacy adapters), after the new provider exists (no unhandled events) and before the swap (atomic for the renderer).
   disposeProviderSubscriptionsOnly(currentAdapter)
 
   // Step 6: swap module state (adapter + localProvider) atomically.
@@ -1028,10 +894,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   return { killedCount }
 }
 
-// Why: disconnect from the daemon without killing it. The daemon runs as a
-// separate process and survives app quit — sessions stay alive for warm
-// reattach on next launch. Leave history sessions marked "unclean" here so a
-// later daemon crash while Orca is closed is still recoverable on next launch.
+// Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
+// Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
 export async function disconnectDaemon(): Promise<void> {
   await adapter?.disconnectOnly()
   adapter = null
@@ -1046,11 +910,9 @@ export async function shutdownDaemon(): Promise<void> {
 }
 
 export type OrphanedDaemonCleanupResult = {
-  /** True when we detected a live daemon socket and connected to tear it down.
-   *  False when no daemon was running (fresh install or clean previous quit). */
+  /** True when a live daemon socket was found and torn down; false when none was running. */
   cleaned: boolean
-  /** Number of live PTY sessions killed during cleanup. The caller surfaces this
-   *  to the user so they know what background work was stopped. */
+  /** Number of live PTY sessions killed during cleanup (surfaced to the user). */
   killedCount: number
 }
 
@@ -1065,12 +927,10 @@ export async function cleanupDaemonForProtocol(
   const alive = await probeSocket(socketPath)
   if (!alive) {
     if (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
-      // Why: endpoint absence does not prove a canonical PID record still
-      // belongs to the current protocol; the exact daemon owns its artifact cleanup.
+      // Endpoint absence doesn't prove the PID record belongs to the current protocol; leave artifact cleanup to the owning daemon.
       return { cleaned: false, killedCount: 0 }
     }
-    // Why: still best-effort remove a stale socket file so a future opt-in
-    // launch doesn't hit EADDRINUSE when the daemon tries to bind.
+    // Best-effort remove a stale socket so a future launch doesn't hit EADDRINUSE on bind.
     if (process.platform !== 'win32' && existsSync(socketPath)) {
       try {
         unlinkSync(socketPath)
@@ -1097,18 +957,13 @@ export async function cleanupDaemonForProtocol(
       .catch(() => ({ sessions: [] }))
     killedCount = sessions.sessions.filter((s) => s.isAlive).length
 
-    // Why: the daemon exposes a single-shot `shutdown` RPC (daemon-server.ts)
-    // that kills every session and then terminates its own process. Using it
-    // avoids the race between per-session `kill` calls and the daemon exiting.
+    // Use the single-shot `shutdown` RPC (kills all sessions then exits) to avoid racing per-session `kill` calls against the daemon exiting.
     await client.request('shutdown', { killSessions: true }).catch(() => {
-      // Daemon exits immediately after handling the RPC — the socket may close
-      // before the reply round-trips. Treat that as success.
+      // Daemon exits immediately after the RPC, so the socket may close before the reply arrives; treat as success.
     })
     didRequestShutdown = true
   } catch {
-    // Why: previous-protocol daemons may be wedged or too old to complete the
-    // RPC cleanup path. Fall back to PID cleanup, but daemon-health only
-    // unlinks a live socket after proving it killed the matching process.
+    // Previous-protocol daemons may be wedged or too old for the RPC path; fall back to PID cleanup (only unlinks a live socket after proving the process is killed).
     didKillStaleDaemon = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
   } finally {
     client.disconnect()
@@ -1116,16 +971,13 @@ export async function cleanupDaemonForProtocol(
 
   if (didRequestShutdown && protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
     if (!(await waitForDaemonEndpointExit(socketPath))) {
-      // Why: never fork a replacement while the old incarnation may still
-      // own the endpoint or be disposing terminal children.
+      // Never fork a replacement while the old incarnation may still own the endpoint or be disposing terminal children.
       throw new Error('Timed out waiting for daemon self-shutdown')
     }
     return { cleaned: true, killedCount }
   }
 
-  // Why: after `shutdown`, the daemon unlinks its socket itself — but on some
-  // crash paths the file lingers. Clean up defensively so a later opt-in
-  // relaunch can bind cleanly.
+  // Defensively unlink the socket: the daemon normally removes it after `shutdown`, but on some crash paths it lingers and blocks a later rebind.
   if (didRequestShutdown && process.platform !== 'win32' && existsSync(socketPath)) {
     try {
       unlinkSync(socketPath)
@@ -1174,13 +1026,7 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
     const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
     if (!(await probeSocket(socketPath))) {
-      // Why: dead legacy daemons leave pid/token files behind forever (one per
-      // protocol bump). A stale pid eventually gets recycled by an unrelated
-      // process, turning any future identity check into a PowerShell spawn.
-      // Only clean up when the pid-file process is provably gone: a live
-      // legacy daemon can transiently fail the 1s probe right after an update
-      // (wedged event loop, exhausted pipe backlog), and deleting its token
-      // file would make its sessions permanently unadoptable.
+      // Why: a recycled stale pid later turns an identity check into a PowerShell spawn, so delete leaked pid/token files — but only when the pid-process is provably gone (a live daemon can transiently fail the probe, and dropping its token makes its sessions permanently unadoptable).
       if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
         for (const stalePath of [
           getDaemonPidPath(runtimeDir, protocolVersion),
@@ -1202,17 +1048,8 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
       }
       continue
     }
-    // Why: old daemon PTYs can be running long-lived agents during an app
-    // upgrade. Keep those sessions routed to their original daemon while new
-    // terminals use the current protocol, instead of killing background work.
-    // Legacy adapters intentionally do not respawn: respawning an old protocol
-    // daemon from new code would recreate stale env semantics and can be less
-    // predictable than letting the session fail if that old daemon dies.
-    // Why historyPath is still passed: checkpoint writes will fail silently
-    // (pre-v4 daemons don't support getSnapshot), but the HistoryManager is
-    // still needed for cleanup — close/exit events must remove history dirs
-    // and mark meta.json as ended. Without it, a later v4 session reusing
-    // the same ID could false-restore stale scrollback.bin.
+    // Keep old-protocol PTYs routed to their original daemon during upgrade; legacy adapters never respawn (new code would recreate stale env semantics).
+    // historyPath is still needed for cleanup — without it a later v4 session reusing the same ID could false-restore stale scrollback.bin.
     adapters.push(
       new DaemonPtyAdapter({
         socketPath,

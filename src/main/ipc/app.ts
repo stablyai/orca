@@ -25,10 +25,7 @@ import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-c
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
-// Why: macOS 15's `plutil -extract <key> json` aborts on the (pure-string)
-// input-source array and the on-disk plist lags cfprefsd; read live prefs via
-// `defaults export`, extract as xml1 (dodges the json bug), then convert to JSON.
-// Absolute paths so a GUI-launched app's minimal PATH can't shadow the tools.
+// Why: defaults export reads live prefs (on-disk plist lags cfprefsd); xml1 dodges plutil's json abort on macOS 15 input-source arrays; absolute paths so a minimal PATH can't shadow the tools.
 const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
   `/usr/bin/defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
   '/usr/bin/plutil -extract AppleSelectedInputSources xml1 -o - -',
@@ -69,8 +66,7 @@ async function pickFloatingWorkspaceDirectory(
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
   const options = {
-    // Why: this picker grants access to an existing workspace directory.
-    // Creation belongs to explicit file/write actions, not typeahead input.
+    // Why: this picker only grants access to an existing directory; creation belongs to explicit file actions.
     properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
   const result = parentWindow
@@ -80,8 +76,7 @@ async function pickFloatingWorkspaceDirectory(
     return null
   }
   const selectedDir = result.filePaths[0]
-  // Why: a user-approved picker selection is a trust grant for later Floating
-  // Workspace markdown creation, unlike arbitrary typed settings text.
+  // Why: a user-approved picker selection is a trust grant for later markdown creation, unlike typed settings text.
   await grantFloatingWorkspaceDirectory(store, selectedDir)
   return selectedDir
 }
@@ -94,8 +89,7 @@ function getFeatureWallAssetBaseUrl(): string {
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     const vitePath = assetDir.split(path.sep).join('/')
     const absoluteVitePath = vitePath.startsWith('/') ? vitePath : `/${vitePath}`
-    // Why: the dev renderer is served from http://localhost, where Chromium
-    // blocks file:// image loads. Vite's /@fs route serves the same local media.
+    // Why: Chromium blocks file:// image loads from the http dev origin; Vite's /@fs route serves the same local media.
     return new URL(`/@fs${absoluteVitePath}/`, process.env.ELECTRON_RENDERER_URL).toString()
   }
 
@@ -110,8 +104,7 @@ function resolveDevFeatureWallAssetDir(): string {
     path.join(process.cwd(), relativeDir)
   ]
 
-  // Why: E2E launches out/main/index.js, so app.getAppPath() can point at
-  // out/main even though development resources still live at the repo root.
+  // Why: E2E launches out/main, so app.getAppPath() can point there while dev resources live at the repo root.
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
@@ -124,10 +117,7 @@ function readCommandStdout(
     let settled = false
     let child: ReturnType<typeof spawn> | undefined
 
-    // Why: the probe runs a `/bin/sh -c` pipeline, so signaling only the shell
-    // orphans wedged `defaults`/`plutil` stages on a stuck cfprefsd. Spawning
-    // detached makes the child a process-group leader, so one negative-pid
-    // SIGKILL reaps the shell and every stage; child.kill() covers the fallback.
+    // Why: killing only the shell orphans pipeline stages; detached spawn lets one negative-pid SIGKILL reap the whole group.
     const killTree = (): void => {
       if (!child?.pid) {
         return
@@ -139,9 +129,7 @@ function readCommandStdout(
       }
     }
 
-    // Why: short timeout so a wedged macOS preference probe (corporate-managed
-    // config, sandbox policy, ...) never holds the handle indefinitely. This
-    // manual timer is the only timeout guard, so it owns the process-group kill.
+    // Why: short timeout so a wedged macOS probe never hangs; this timer owns the process-group kill.
     const timer = setTimeout(() => {
       if (settled) {
         return
@@ -171,8 +159,7 @@ function readCommandStdout(
         killTree()
         settle(() => reject(error))
       }
-      // Why: an unhandled Readable 'error' would crash the main process; treat a
-      // stdout read failure the same as a child spawn error.
+      // Why: an unhandled Readable 'error' would crash the main process; treat stdout errors like spawn errors.
       child.stdout?.on('error', failWith)
       child.on('error', failWith)
       child.on('close', (code, signal) => {
@@ -276,47 +263,27 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
-  // Why: ABC, Polish Pro, US Extended, ABC Extended, and every CJK Roman
-  // IME all report a US-QWERTY base layer to navigator.keyboard.getLayoutMap()
-  // — the layout-fingerprint probe in the renderer therefore classifies
-  // them as 'us' and flips macOptionIsMeta=true, silently swallowing every
-  // Option+letter composition (#1205: Option+A → å / ą is dropped). The
-  // macOS-shipped `com.apple.HIToolbox` preferences name the actual input
-  // mode when one is selected, falling back to the keyboard layout ID
-  // (e.g. `com.apple.keylayout.ABC` vs `com.apple.keylayout.US`), which
-  // the renderer uses as an authoritative override. Non-Darwin platforms
-  // have no equivalent and return null so the fingerprint stays the only
-  // signal.
+  // Why: renderer layout fingerprint tags ABC/CJK-Roman as 'us', breaking Option+letter (#1205); HIToolbox prefs override it.
   ipcMain.handle('app:getKeyboardInputSourceId', async (): Promise<string | null> => {
     if (process.platform !== 'darwin') {
       return null
     }
     try {
-      // Why: async so the probe never blocks the main-process event loop.
-      // The probe re-runs on every window focus-in (see option-as-alt-probe.ts),
-      // and a blocking execFileSync would briefly stall unrelated IPC each
-      // time the user Alt-Tabbed back into the app.
+      // Why: async so the focus-in probe (see option-as-alt-probe.ts) never blocks the main event loop.
       const stdout = await readKeyboardInputSourceId()
       const trimmed = stdout?.trim() ?? ''
       return trimmed.length > 0 ? trimmed : null
     } catch {
-      // Why: macOS preference probes can fail when keys are absent (first boot
-      // before any input-source interaction), or when sandboxed. Treat that as
-      // "no signal" — the fingerprint still runs as fallback.
+      // Why: probe can fail (missing keys on first boot, sandbox) — treat as "no signal" and fall back to the fingerprint.
       return null
     }
   })
 
   ipcMain.handle('app:relaunch', async () => {
-    // Why: small delay lets the renderer finish painting any "Restarting…"
-    // UI state before the window tears down. `app.relaunch()` schedules a
-    // spawn; `app.exit(0)` triggers the actual quit without invoking
-    // before-quit handlers that could block on confirmation dialogs.
-    // Mark shutdown first because app.exit() can bypass the usual quit latch.
+    // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      // Why: app.exit(0) skips before-quit/will-quit, so clean the Windows tray
-      // explicitly before relaunching to avoid a stale notification-area icon.
+      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
       destroySystemTray()
       relaunchApp('renderer-request')
       app.exit(0)
@@ -324,9 +291,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('app:restart', async () => {
-    // Why: the hidden admin restart should mirror the update relaunch path:
-    // schedule a new Orca process, then use the normal quit pipeline so daemon
-    // checkpoints, runtime metadata, and telemetry flush before exit.
+    // Why: use the normal quit pipeline so daemon checkpoints and telemetry flush before exit.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       relaunchApp('admin-restart')
@@ -357,8 +322,7 @@ async function runBeforeRelaunchCleanup(
   try {
     await onBeforeRelaunch?.()
   } catch (error) {
-    // Why: restart/relaunch must not get trapped if best-effort shutdown
-    // cleanup fails; the cleanup path logs without exposing secret contents.
+    // Why: best-effort cleanup must never block relaunch; log only error.name to avoid leaking secrets.
     console.warn(
       '[app] Pre-relaunch cleanup failed; continuing relaunch:',
       error instanceof Error ? error.name : typeof error

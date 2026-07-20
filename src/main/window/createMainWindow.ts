@@ -50,13 +50,11 @@ import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 
-// Why: show/restore/resume can overlap before the size nudge resets; never
-// capture the temporary width as the next repaint's baseline.
+// Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
 
 function forceRepaint(window: BrowserWindow): void {
-  // Why: webContents can be destroyed a beat before the BrowserWindow during
-  // close, and this runs from timers/focus events that can land in that gap.
+  // Why: webContents can be destroyed a beat before the BrowserWindow during close, and this runs from timers/focus events in that gap.
   if (window.isDestroyed() || window.webContents.isDestroyed()) {
     return
   }
@@ -82,8 +80,7 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
     if (delayedRepaintTimer) {
       clearTimeout(delayedRepaintTimer)
     }
-    // Why: macOS can finish restoring webview compositor layers after Electron's
-    // show/restore event, so a second paint catches late black-surface recovery.
+    // Why: macOS may restore compositor layers after the show/restore event; a second paint catches late black-surface recovery.
     delayedRepaintTimer = setTimeout(() => {
       delayedRepaintTimer = null
       forceRepaint(window)
@@ -98,9 +95,7 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
 
   window.on('restore', repaintAfterVisibilityTransition)
   window.on('show', repaintAfterVisibilityTransition)
-  // Why: occlusion-uncover fires neither restore nor show; focus is the only
-  // signal. Invalidate only — the setSize jiggle would SIGWINCH every terminal
-  // on each Cmd+Tab.
+  // Why: occlusion-uncover fires no restore/show, only focus; invalidate only — the setSize jiggle would SIGWINCH every terminal on Cmd+Tab.
   window.on('focus', () => {
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.invalidate()
@@ -121,10 +116,7 @@ function isMacAppPasteInput(input: Electron.Input): boolean {
   )
 }
 
-// Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
-// center of the CSS-centered content sits at ~18 CSS px from the top.
-// At zoom factor z that becomes 18·z window px.  Traffic lights are
-// ~12px tall, so we position their top edge at (center − 6).
+// Why: titlebar content center sits ~18 CSS px from top (×zoom); traffic lights are ~12px tall, so top edge = center − 6.
 const TITLEBAR_CSS_CENTER = 18
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
@@ -140,44 +132,31 @@ function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void 
 }
 
 type CreateMainWindowOptions = {
-  /** Returns true when a manual app.quit() (Cmd+Q) is in progress. The close
-   *  handler sends this to the renderer so it can skip the running-process
-   *  confirmation dialog and proceed directly to buffer capture + close. */
+  /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
   getIsQuitting?: () => boolean
-  /** Notifies the caller when the renderer vetoes unload. Why: a prevented
-   *  beforeunload cancels the in-flight app.quit(), so the app-level quit
-   *  latch must be cleared or later window closes will be misclassified as
-   *  quit attempts. */
+  /** Notifies the caller when the renderer vetoes unload, so the quit latch clears — a prevented beforeunload cancels the in-flight app.quit(). */
   onQuitAborted?: () => void
   onRendererProcessGone?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => void
-  /** Returns true when Orca should reload after an unexpected renderer loss.
-   *  Why: update relaunch and app quit intentionally tear down child
-   *  processes; recovering those paths can fight Electron's shutdown. */
+  /** Returns true when Orca should reload after renderer loss; update-relaunch/quit tear down children intentionally, so don't fight shutdown. */
   shouldRecoverRenderer?: (
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => boolean
-  /** Called when consecutive auto-recoveries hit the circuit-breaker limit, so
-   *  the host can record diagnostics and surface a recovery prompt instead of
-   *  letting Orca crash-loop. */
+  /** Called when consecutive auto-recoveries hit the circuit-breaker limit so the host can prompt instead of crash-looping. */
   onRendererRecoveryExhausted?: (info: {
     details: Electron.RenderProcessGoneDetails
     webContentsId: number
     recentRecoveryCount: number
   }) => void
-  /** Why: main-process startup must register IPC handlers before the renderer
-   *  begins booting, or eager renderer calls can race into missing channels. */
+  /** Defer renderer load until IPC handlers are registered, or eager renderer calls race into missing channels. */
   deferLoad?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
-  /** Why: the in-place renderer-recovery reload re-fires did-finish-load, whose
-   *  local-PTY orphan sweep would kill live sessions across the single window
-   *  before session restore re-attaches them (#5787). This callback lets the host
-   *  mark that one reload so the sweep can be skipped for it. */
+  /** Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore re-attaches (#5787). */
   onBeforeRecoveryReload?: (webContentsId: number) => void
 }
 
@@ -194,19 +173,8 @@ export function createMainWindow(
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
   const rawSavedBounds = store?.getUI().windowBounds
-  // Why: defense in depth — if a previous quit/update path persisted
-  // shrink-to-min bounds (see freezeBoundsOnQuit), discard them on restore
-  // rather than resurrecting a tiny window. Anything at or below the min
-  // dimensions is treated as corrupt and falls back to defaultBounds. The
-  // position must also land on a currently-attached display with a
-  // *meaningful* visible area — not just any >0 overlap, since a 1-pixel
-  // sliver (or a sub-pixel shaving after DPI scaling) would still leave
-  // the titlebar unreachable. Require at least MIN_WIDTH/2 of horizontal
-  // and MIN_HEIGHT/2 of vertical overlap with some display's workArea
-  // (workArea excludes menu bar / dock, so a rect entirely hidden under
-  // the dock is also correctly discarded). A rect saved while an external
-  // monitor was connected would otherwise be restored off-screen and
-  // macOS would silently shrink/reposition the window.
+  // Why: discard persisted bounds that are shrink-to-min (corrupt, see freezeBoundsOnQuit) or off-screen, falling back to defaultBounds.
+  // Require ~half MIN_WIDTH/HEIGHT of workArea overlap so a 1px sliver or dock-hidden rect isn't treated as visible.
   const rectHasVisibleAreaOnAnyDisplay = (b: {
     x: number
     y: number
@@ -242,9 +210,7 @@ export function createMainWindow(
     )
   }
   const savedMaximized = store?.getUI().windowMaximized ?? false
-  // Why: on first launch (no saved bounds), fill the primary display work area
-  // so the window feels spacious without calling maximize(). Saved bounds still
-  // win on subsequent launches.
+  // Why: on first launch fill the primary display work area so the window feels spacious without maximize(); saved bounds win later.
   const defaultBounds = (() => {
     try {
       const { width, height } = screen.getPrimaryDisplay().workAreaSize
@@ -256,16 +222,11 @@ export function createMainWindow(
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    // Why: focused webview guests do not expose a safe transcript insertion
-    // target yet. Let Cmd/Ctrl+E continue to the page instead of starting a
-    // dictation session whose final text would be dropped.
+    // Why: webview guests expose no safe transcript insertion target; let Cmd/Ctrl+E reach the page instead of dropping dictation text.
     return false
   })
   const blur = settings?.windowBackgroundBlur ?? false
-  // Why: native blur requires platform-specific Electron APIs. macOS uses
-  // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
-  // Linux has no native equivalent. Blur only applies at window creation;
-  // changing the setting requires a restart.
+  // Why: blur uses platform APIs (macOS vibrancy+transparent, Windows backgroundMaterial, Linux none) and only applies at creation, needs restart.
   const platformBlurOptions = blur
     ? process.platform === 'darwin'
       ? { vibrancy: 'under-window' as const, transparent: true }
@@ -282,37 +243,21 @@ export function createMainWindow(
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
     show: false,
-    // Why: macOS swallows the app-activating click by default, so clicking
-    // back into Orca (e.g. the floating workspace) needed a second click.
-    // macOS-only option; Windows/Linux already deliver that click.
+    // Why: macOS swallows the app-activating click by default, so clicking back into Orca needed a second click (Windows/Linux already deliver it).
     acceptFirstMouse: true,
-    // Why: on macOS the menu lives in the system menu bar, so the in-window
-    // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
-    // doesn't consume a dedicated row of vertical space on every launch —
-    // users can still reveal the (properly restructured) File/Edit/View/
-    // Window/Help menus by pressing Alt, matching native Windows/Linux
-    // conventions (File Explorer, Firefox, etc.).
+    // Why: auto-hide the Windows/Linux menu bar to save a row (Alt reveals it); macOS uses the system menu bar anyway.
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
-    // Why: on macOS 'hiddenInset' keeps the native traffic lights positioned
-    // inside our custom 42px titlebar. On Windows 'hidden' removes the default
-    // OS title bar (which would otherwise stack on top of our renderer titlebar
-    // and waste vertical space) while still allowing our renderer to draw its
-    // own drag region and window controls.
+    // Why: macOS 'hiddenInset' keeps native traffic lights in our custom titlebar; Windows 'hidden' removes the OS title bar so it doesn't double up.
     titleBarStyle:
       process.platform === 'darwin'
         ? 'hiddenInset'
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
-    // Why: Linux ignores titleBarStyle: 'hidden', so without this the native
-    // WM title bar stays and stacks on top of our renderer titlebar (double
-    // title bar). frame: false drops the native frame; the renderer draws its
-    // own titlebar + window controls (see WindowControls in App.tsx), matching
-    // the Windows custom-titlebar path.
+    // Why: Linux ignores titleBarStyle 'hidden'; frame:false drops the native frame so we don't get a double title bar (renderer draws its own).
     ...(process.platform === 'linux' ? { frame: false } : {}),
-    // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
-    // dynamically when the user changes UI zoom.
+    // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts on zoom change.
     ...(process.platform === 'darwin'
       ? {
           trafficLightPosition: {
@@ -330,24 +275,16 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
-  // Why: native paste fallback is privileged IPC; only the real top-level
-  // renderer should be allowed to request Electron's native paste operation.
+  // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   if (process.platform === 'darwin') {
-    // Why: browser-guest surfaces are kept alive by their own per-guest
-    // unthrottle (browser-manager attach), so the main window can throttle
-    // normally while hidden/occluded instead of rendering at full rate.
-    // Toggling must happen only while visible: flipping it on a hidden window
-    // desyncs Chromium's frame evictor and blanks the surface (electron#42378).
+    // Why: throttle the main window while hidden (guests self-unthrottle); toggle only while visible or Chromium blanks the surface (electron#42378).
     mainWindow.webContents.setBackgroundThrottling(true)
     installMacosVisibilityRepaint(mainWindow)
   }
 
-  // Why: a focus-preserving system/display wake fires no window focus or
-  // visibility events in the renderer, so terminal wake recovery would never
-  // run. Relay powerMonitor resume explicitly (supported on mac/win/linux)
-  // and force a repaint so stale compositor surfaces recover too.
+  // Why: a focus-preserving wake fires no focus/visibility events; relay resume so terminal wake recovery runs and force a repaint so stale compositor surfaces recover.
   const onSystemResume = (): void => {
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
       return
@@ -360,25 +297,18 @@ export function createMainWindow(
   mainWindow.webContents.on('dom-ready', () => {
     const level = store?.getUI().uiZoomLevel ?? 0
     mainWindow.webContents.setZoomLevel(level)
-    // Why: the native traffic lights sit at a fixed position in the window
-    // while CSS content scales with zoom.  We must reposition the buttons
-    // on startup so they stay vertically aligned with the zoomed titlebar.
+    // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
     if (process.platform === 'darwin') {
       syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
     }
   })
 
-  // Why: on macOS + Electron 41, creating a webview guest process can re-emit
-  // ready-to-show on the same BrowserWindow. Without a one-shot guard the
-  // handler re-runs maximize() from the persisted savedMaximized flag, snapping
-  // the window back to full-screen after the user already resized it (#591).
+  // Why: macOS+Electron 41 re-emits ready-to-show on webview-guest creation; a one-shot guard stops re-running maximize() after resize (#591).
   let handledInitialReadyToShow = false
   let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
     process.platform === 'win32' || process.platform === 'linux'
       ? setTimeout(() => {
-          // Why: GPU/driver failures on Windows and Linux/X11 can prevent
-          // ready-to-show forever, leaving the only app window hidden while the
-          // main process stays alive (#8421).
+          // Why: GPU/driver failures on Windows/Linux can prevent ready-to-show forever, hiding the only app window (#8421).
           initialRevealFallbackTimer = null
           revealInitialWindow()
         }, 10_000)
@@ -403,9 +333,7 @@ export function createMainWindow(
     handledInitialReadyToShow = true
     clearInitialRevealFallbackTimer()
 
-    // Why: in E2E headless mode, the window stays hidden to avoid stealing
-    // focus and screen real estate during test runs. Playwright interacts
-    // with the renderer via CDP, which works without a visible window.
+    // Why: in E2E headless mode keep the window hidden (Playwright drives via CDP) so tests don't steal focus.
     const e2eConfig = getMainE2EConfig()
     if (e2eConfig.headless) {
       return
@@ -417,17 +345,9 @@ export function createMainWindow(
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
 
-  // Why: persist window bounds so the app restores to the user's last
-  // position/size instead of maximizing on every launch. Debounce to avoid
-  // hammering the persistence layer during continuous resize drags.
+  // Why: persist window bounds to restore last position/size; debounce to avoid hammering persistence during resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
-  // Why: once close has been initiated (user Cmd+Q, auto-updater relaunch,
-  // app.quit during quitAndInstall), Electron can still emit resize/move/
-  // unmaximize events while the OS tears the window down — persisting those
-  // intermediate, often near-minimum bounds would clobber the user's real
-  // last-used size and cause the next launch (especially post-update
-  // relaunch) to come up at minWidth × minHeight. Freeze persistence as soon
-  // as 'close' is observed.
+  // Why: teardown still emits resize/move/unmaximize at near-min bounds; freeze persistence once closing so they can't clobber the saved size.
   let windowClosing = false
   const saveBounds = (): void => {
     if (boundsTimer) {
@@ -438,25 +358,14 @@ export function createMainWindow(
       if (windowClosing || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
         return
       }
-      // Why: windowMaximized and windowBounds must be sampled and persisted
-      // atomically — writing windowMaximized first and then deciding whether
-      // to write bounds can leave the store with `windowMaximized: false`
-      // paired with stale/absent windowBounds if the near-min guard trips,
-      // which violates the pairing invariant subsequent launches rely on.
+      // Why: persist windowMaximized and windowBounds atomically; the near-min guard must not leave them a mismatched pair.
       const isMaximized = mainWindow.isMaximized()
       if (isMaximized) {
         store?.updateUI({ windowMaximized: true })
         return
       }
       const bounds = mainWindow.getBounds()
-      // Why: never persist shrink-to-min bounds. The user cannot want these
-      // saved — the window hit the enforced minimum, so either the teardown
-      // race from PR #1269 slipped past the freeze (e.g. dev-mode Ctrl+C
-      // where will-prevent-unload re-opens the freeze), or a transient
-      // OS resize fired. Dropping the bounds write here makes the next
-      // launch fall back to defaultBounds instead of resurrecting a tiny
-      // window. We still record windowMaximized: false so subsequent
-      // launches don't incorrectly restore maximized state.
+      // Why: never persist shrink-to-min bounds (teardown race past the freeze, PR #1269); fall back to defaultBounds next launch.
       if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
         console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
         store?.updateUI({ windowMaximized: false })
@@ -468,12 +377,7 @@ export function createMainWindow(
   mainWindow.on('resize', saveBounds)
   mainWindow.on('move', saveBounds)
 
-  // Why: the auto-updater install path calls
-  // `win.removeAllListeners('close')` before quitting, so the per-window
-  // 'close' handler below never runs for update-triggered relaunches.
-  // Listen to app-level 'before-quit' as a second latch so resize/move
-  // events emitted during window teardown don't persist shrink-to-min
-  // bounds that would be restored on next launch.
+  // Why: the auto-updater calls removeAllListeners('close') before quitting, so latch on app 'before-quit' too to freeze bounds during teardown.
   const freezeBoundsOnQuit = (): void => {
     windowClosing = true
     if (boundsTimer) {
@@ -496,9 +400,7 @@ export function createMainWindow(
     }
     mainWindow.webContents.send('window:maximize-changed', false)
     const bounds = mainWindow.getBounds()
-    // Why: mirror the saveBounds guard — unmaximize during teardown can land
-    // at MIN_WIDTH × MIN_HEIGHT and we must not persist those as the user's
-    // remembered size.
+    // Why: mirror the saveBounds guard — unmaximize during teardown can land at min size; don't persist that as remembered size.
     if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
       console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
       store?.updateUI({ windowMaximized: false })
@@ -528,23 +430,14 @@ export function createMainWindow(
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
 
-    // Why: arbitrary sites must stay inside an unprivileged guest surface. We
-    // fail closed here so a renderer bug cannot smuggle preload, Node, or a
-    // non-browser partition into the guest and widen the app privilege boundary.
-    // The one allowed data URL is Orca's inert blank-tab bootstrap page; deny
-    // every other data URL so the renderer cannot inject arbitrary inline HTML.
-    // Why: session profiles use per-profile partitions (e.g.
-    // persist:orca-browser-session-<uuid>). The registry is the sole authority
-    // for which partitions are valid — renderer-provided strings that are not
-    // in the allowlist are rejected.
+    // Why: fail closed — deny any src or partition not in the registry allowlist so a renderer bug can't smuggle preload/Node into an unprivileged guest.
     if (!normalizedSrc || !browserSessionRegistry.isAllowedPartition(partition)) {
       event.preventDefault()
       return
     }
 
     delete webPreferences.preload
-    // Why: older Electron builds expose preloadURL alongside preload; delete
-    // both so the guest surface cannot inherit the main preload bridge.
+    // Why: older Electron builds expose preloadURL alongside preload; delete both so the guest can't inherit the main preload bridge.
     delete (webPreferences as Record<string, unknown>).preloadURL
     webPreferences.nodeIntegration = false
     webPreferences.nodeIntegrationInSubFrames = false
@@ -554,26 +447,18 @@ export function createMainWindow(
     webPreferences.allowRunningInsecureContent = false
     webPreferences.contextIsolation = true
     webPreferences.sandbox = true
-    // Why: keep renderer-created webviews aligned with the browser guest policy
-    // even if the host markup omits or misspells a preference.
+    // Why: force the browser guest policy even if host markup omits or misspells a preference.
     Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
-    // Why: preserve the registry-validated partition instead of forcing the
-    // legacy constant. This lets imported/isolated session profiles use their
-    // own cookie/storage partition while keeping all other hardening intact.
+    // Why: keep the registry-validated partition so isolated session profiles use their own storage while other hardening stays intact.
     webPreferences.partition = partition
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
-    // Why: popup and navigation policy must attach as soon as Chromium creates
-    // the guest webContents. Waiting until renderer-driven registration leaves
-    // a race where target=_blank or early redirects can bypass Orca's intended
-    // fallback behavior.
+    // Why: attach guest popup/nav policy at creation; waiting for renderer registration races target=_blank/early redirects past it.
     browserManager.attachGuestPolicies(guest)
   })
 
-  // Block ALL in-window navigations to prevent remote pages from inheriting
-  // the privileged preload bridge (PTY, filesystem, etc.).
-  // In dev mode, allow navigations to the local dev server (e.g. HMR reloads).
+  // Why: block in-window navigations so remote pages can't inherit the privileged preload bridge (dev server allowed for HMR).
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const externalUrl = normalizeExternalBrowserUrl(url)
 
@@ -596,23 +481,14 @@ export function createMainWindow(
     event.preventDefault()
   })
 
-  // Why: mirrors the renderer's markdown-editor focus state so the main-process
-  // before-input-event handler can skip Cmd/Ctrl+B interception while TipTap
-  // owns focus. See docs/markdown-cmd-b-bold-design.md. We only carve out
-  // Cmd+B so browser guests and other editable surfaces keep the existing
-  // global shortcut behavior.
+  // Why: mirror markdown-editor focus so before-input-event skips Cmd/Ctrl+B while TipTap owns focus (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
   let terminalInputFocused = false
   let floatingTerminalInputFocused = false
   let shortcutRecorderFocused = false
 
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
-  // Why: coerce to strict boolean and verify the sender. A renderer bug or
-  // compromised IPC payload must not set the flag to a truthy non-bool (e.g.
-  // an object) and silently disable the sidebar toggle — default-deny on any
-  // non-bool. Additionally, only this main window's top-level webContents may
-  // mutate the flag, so a guest/webview or unrelated sender can't disable the
-  // Cmd+B sidebar carve-out.
+  // Why: strict-bool + sender check so a guest/webview or malformed IPC payload can't disable the Cmd+B sidebar carve-out.
   const onMarkdownEditorFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
@@ -621,8 +497,7 @@ export function createMainWindow(
   }
   ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
   const terminalInputFocusChannel = 'ui:setTerminalInputFocused'
-  // Why: before-input-event resolves shortcuts before renderer keydown. Mirror
-  // regular xterm focus so Terminal-first can let shells/TUIs own app chords.
+  // Why: before-input-event resolves shortcuts before renderer keydown; mirror xterm focus so Terminal-first lets shells own app chords.
   const onTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
@@ -631,8 +506,7 @@ export function createMainWindow(
   }
   ipcMain.on(terminalInputFocusChannel, onTerminalInputFocused)
   const floatingTerminalInputFocusChannel = 'ui:setFloatingTerminalInputFocused'
-  // Why: main before-input-event runs before renderer keydown handlers. Mirror
-  // floating xterm focus so Ctrl+B/L and related shell chords can reach SSH/tmux.
+  // Why: before-input-event runs before renderer keydown; mirror floating xterm focus so Ctrl+B/L reach SSH/tmux.
   const onFloatingTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
@@ -641,8 +515,7 @@ export function createMainWindow(
   }
   ipcMain.on(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
   const shortcutRecorderFocusChannel = 'ui:setShortcutRecorderFocused'
-  // Why: the Settings recorder must receive existing app shortcuts so users can
-  // rebind them; before-input-event would otherwise consume the key first.
+  // Why: the Settings recorder must receive app shortcuts to rebind them; before-input-event would otherwise consume the key first.
   const onShortcutRecorderFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
@@ -656,16 +529,12 @@ export function createMainWindow(
     if (template.length === 0) {
       return
     }
-    // Why: right-click can produce a Chromium context-menu event before our
-    // renderer focus mirror updates, so trust Electron's editable/spellcheck
-    // params here instead of gating on markdownEditorFocused.
+    // Why: the context-menu event can precede our focus-mirror update; trust Electron's editable params, not markdownEditorFocused.
     Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
   }
   mainWindow.webContents.on('context-menu', onMainContextMenu)
 
-  // Why: renderer can't mirror focus state across a crash/reload/close.
-  // Default-deny the carve-outs so focus context from a dead renderer cannot
-  // disable app shortcuts in a later lifecycle state.
+  // Why: a dead renderer can't clear its focus mirror; default-deny carve-outs so it can't disable app shortcuts in a later lifecycle.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
   }
@@ -680,10 +549,7 @@ export function createMainWindow(
   }
   let rendererProcessGone = false
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
-  // Why: stop a deterministic per-load renderer fault (bad GPU driver, corrupt
-  // chunk, AV interference) from auto-reloading every ~0.25-1.3s forever
-  // (Windows crash-loop clusters). The breaker opens after too many recoveries
-  // inside a rolling window and hands off to the host's recovery surface.
+  // Why: stop a deterministic per-load renderer fault from auto-reloading forever; breaker opens after too many recoveries in a rolling window.
   const rendererRecoveryCircuitBreaker = new RendererRecoveryCircuitBreaker({
     windowMs: DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
     maxRecoveries: DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES
@@ -718,8 +584,7 @@ export function createMainWindow(
       }
       const recovery = rendererRecoveryCircuitBreaker.registerRecoveryAttempt(Date.now())
       if (!recovery.allowed) {
-        // Why: too many reloads in the window means reloading again will just
-        // crash again. Stop the loop and let the host surface a recovery prompt.
+        // Why: too many reloads means it will just crash again; stop and let the host surface a recovery prompt.
         opts?.onRendererRecoveryExhausted?.({
           details,
           webContentsId: rendererWebContentsId,
@@ -727,11 +592,8 @@ export function createMainWindow(
         })
         return
       }
-      // Why: a transient Network Service / renderer loss can leave Chromium
-      // showing a blank shell. Reload the app document once so the user gets
-      // back to a usable window instead of needing a full relaunch.
-      // Why: mark this one in-place reload so the did-finish-load orphan sweep
-      // spares live local PTYs until session restore re-attaches them (#5787).
+      // Why: a transient renderer/Network Service loss can blank Chromium; reload the app document once to recover.
+      // Why: mark this in-place reload so the did-finish-load orphan sweep spares live PTYs until session restore (#5787).
       opts?.onBeforeRecoveryReload?.(mainWindow.webContents.id)
       loadMainWindow(mainWindow)
     }, 250)
@@ -742,11 +604,9 @@ export function createMainWindow(
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
-    // Why: macOS can report BrowserWindow teardown as renderer `killed`/SIGKILL
-    // after a confirmed close; that is window lifecycle noise, not a crash.
+    // Why: macOS reports BrowserWindow teardown as renderer killed/SIGKILL after close — window noise, not a crash.
     if (!windowClosing) {
-      // Why: the recorder owns crash classification and durable suppression
-      // diagnostics; filtering here made expected-teardown evidence unreachable.
+      // Why: the recorder owns crash classification; filtering here made expected-teardown evidence unreachable.
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
     if (!windowClosing) {
@@ -775,12 +635,10 @@ export function createMainWindow(
 
   const doubleTapDetector = new ModifierDoubleTapDetector()
 
-  // Why: one place maps a resolved window-shortcut action to its IPC/side effect,
-  // reused by the normal keydown path and the double-tap path so they cannot drift.
+  // Why: one mapping of action → IPC/side effect, shared by the keydown and double-tap paths so they can't drift.
   const sendResolvedWindowShortcutAction = (action: WindowShortcutAction): void => {
     switch (action.type) {
-      // The renderer's DictationController re-checks enabled/sttModel and ignores
-      // hold mode, so this path needs no voice guards.
+      // The renderer's DictationController re-checks enabled/sttModel and ignores hold mode, so this path needs no voice guards.
       case 'dictationKeyDown':
         mainWindow.webContents.send('ui:dictationKeyDown')
         return
@@ -861,8 +719,7 @@ export function createMainWindow(
         ? getWindowShortcutActionId(action)
         : null
 
-    // Why: hold-mode dictation needs renderer keyup events, so the main process
-    // may only consume shortcuts that toggle dictation from a single keydown.
+    // Why: hold-mode dictation needs renderer keyup events, so main only consumes single-keydown dictation toggles.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
       if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
@@ -918,8 +775,7 @@ export function createMainWindow(
     }
 
     if (isMacAppPasteInput(input)) {
-      // Why: native chat/terminal panes can own focus without being native
-      // editable controls, so route Cmd+V through Orca's paste ownership first.
+      // Why: chat/terminal panes hold focus without native editable controls, so route Cmd+V through Orca's paste ownership.
       event.preventDefault()
       mainWindow.webContents.send('ui:appMenuPaste')
       return
@@ -937,8 +793,7 @@ export function createMainWindow(
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
 
-    // Why: detect double-tap-modifier gestures on the raw key stream. A bare
-    // modifier emits no terminal bytes, so this never steals readline input.
+    // Why: bare modifiers emit no terminal bytes, so double-tap detection on the raw key stream never steals readline input.
     if (input.type === 'keyDown' || input.type === 'keyUp') {
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
@@ -967,13 +822,10 @@ export function createMainWindow(
             focusedShortcutContext: terminalShortcutContext
           })
         ) {
-          // Only preventDefault the emitting keydown — never the first tap's
-          // down/up. This suppresses the renderer DOM keydown so the renderer
-          // detector cannot also fire for the same gesture.
+          // preventDefault only the emitting keydown so the renderer detector can't also fire for the same gesture.
           return
         }
-        // No allowlisted action: let the keydown reach the renderer, whose
-        // detector completes and dispatches inline.
+        // No allowlisted action: let the keydown reach the renderer, whose detector completes and dispatches inline.
       }
     }
 
@@ -981,15 +833,11 @@ export function createMainWindow(
       input.type === 'keyDown' &&
       matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
     ) {
-      // Why: the held switcher commits on modifier keyup. If main prevents the
-      // keydown, Electron can suppress the renderer keyup and strand the overlay.
+      // Why: the held switcher commits on modifier keyup; preventing the keydown here can suppress the keyup and strand the overlay.
       return
     }
 
-    // Why: TipTap owns bare Cmd/Ctrl+B for bold while the markdown editor is
-    // focused — skip interception so its keymap runs. Scoped to the bare chord
-    // (no Shift/Alt): any extra modifier signals different intent and must
-    // still resolve through the policy allowlist.
+    // Why: TipTap owns bare Cmd/Ctrl+B for bold in the markdown editor; skip interception for the bare chord only.
     // See docs/markdown-cmd-b-bold-design.md.
     const modForBold = process.platform === 'darwin' ? input.meta : input.control
     if (
@@ -1002,9 +850,7 @@ export function createMainWindow(
       return
     }
 
-    // Why: keep the main-process interception surface as an explicit allowlist.
-    // Anything outside this helper must continue to the renderer/PTTY so
-    // readline control chords are not silently stolen above the terminal.
+    // Why: keep interception an explicit allowlist so readline control chords reach the PTY instead of being silently stolen.
     const action = resolveWindowShortcutAction(
       input,
       process.platform,
@@ -1025,14 +871,11 @@ export function createMainWindow(
     })
   })
 
-  // Why: a mid-gesture focus loss must not leave the detector armed so the next
-  // unrelated modifier press completes a phantom double-tap.
+  // Why: mid-gesture focus loss must not leave the detector armed, or the next modifier press completes a phantom double-tap.
   mainWindow.on('blur', () => doubleTapDetector.reset())
 
   mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
-    // Why: Some keyboard layouts/platforms consume Ctrl/Cmd+Minus before
-    // before-input-event fires, but still emit Electron's zoom command. Keep
-    // that fallback only while the matching zoom action is still bound.
+    // Why: some layouts fire Electron's zoom command without before-input-event; honor it only while the zoom action is still bound.
     if (zoomDirection !== 'in' && zoomDirection !== 'out') {
       return
     }
@@ -1055,17 +898,11 @@ export function createMainWindow(
     mainWindow.webContents.send('terminal:zoom', zoomDirection)
   })
 
-  // Intercept window close so the renderer can show a confirmation dialog
-  // when terminals with running processes would be killed. The renderer
-  // replies with 'window:confirm-close' to proceed, or does nothing to cancel.
+  // Intercept close so the renderer can confirm killing running-process terminals (replies window:confirm-close to proceed).
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
 
-  // Why: Windows minimize-to-tray. Hides the window instead of closing when the
-  // setting is on, this isn't a real quit (Ctrl+Q / tray "Quit" set
-  // getIsQuitting), and the renderer is alive. Returns true when it handled the
-  // close by hiding, so callers skip their normal close path. Shared by BOTH the
-  // renderer-drawn X (window:request-close) and the native close event (Alt+F4).
+  // Windows minimize-to-tray: hide instead of close when enabled; returns true when it hid so callers skip their close path.
   const hideToTrayIfEnabled = (): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (
@@ -1078,8 +915,7 @@ export function createMainWindow(
       return false
     }
     mainWindow.hide()
-    // Why: tell the user once that closing only hid the window; the persisted
-    // flag stops the notice from repeating on every later minimize.
+    // Why: notify once that closing only hid the window; the persisted flag stops it repeating on every later minimize.
     if (store.getUI().trayMinimizeNoticeShown !== true) {
       try {
         new Notification({
@@ -1098,35 +934,25 @@ export function createMainWindow(
   }
 
   mainWindow.on('close', (e) => {
-    // Why: Alt+F4 and programmatic closes reach the native event; apply the same
-    // minimize-to-tray guard the renderer-drawn X uses via onRequestClose.
+    // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
     if (!windowCloseConfirmed && hideToTrayIfEnabled()) {
       e.preventDefault()
       return
     }
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
-    // Why: a hung-but-ALIVE renderer (neither gone nor crashed) must still hit
-    // the renderer's save/running-process confirmation; only a genuinely gone or
-    // crashed renderer — which cannot answer window:close-requested — may bypass
-    // it. Routing this through the pure decision locks that invariant (#5787).
+    // Why: only a gone/crashed renderer (can't answer) may bypass close confirmation; a hung-but-alive one still must (#5787).
     const closeAction = resolveWindowCloseAction({
       windowCloseConfirmed,
       rendererProcessGone,
       isRendererCrashed
     })
     if (closeAction !== 'request-confirmation') {
-      // allow-confirmed: the renderer already replied and re-entered close().
-      // bypass-gone: after a native renderer crash the renderer cannot answer
-      // window:close-requested, so let Cmd+Q / OS close complete instead of
-      // trapping the user in a blank, unquittable window.
+      // allow-confirmed: renderer already replied and re-entered close().
+      // bypass-gone: a gone renderer can't answer window:close-requested, so let OS close complete rather than trap a blank window.
       if (closeAction === 'allow-confirmed') {
         windowCloseConfirmed = false
       }
-      // Why: past this point Electron/OS may emit resize/move/unmaximize as
-      // the window is destroyed. Freeze bounds persistence so those
-      // teardown events can't clobber the user's saved window size — which
-      // would otherwise make the post-update relaunch come up at minWidth ×
-      // minHeight (issue surfaced in v1.3.26-rc2).
+      // Why: window teardown emits resize/move/unmaximize; freeze bounds persistence so they can't clobber saved size (v1.3.26-rc2).
       windowClosing = true
       if (boundsTimer) {
         clearTimeout(boundsTimer)
@@ -1135,17 +961,13 @@ export function createMainWindow(
       return
     }
     e.preventDefault()
-    // Why: the renderer owns the close decision (dirty-file save dialogs,
-    // running-process confirmation). The subscription lives at the always-
-    // mounted App root, so even pre-workspace states reply — see #5144.
+    // Why: renderer owns the close decision; the always-mounted App root subscription lets even pre-workspace states reply (#5144).
     mainWindow.webContents.send('window:close-requested', {
       isQuitting: opts?.getIsQuitting?.() ?? false
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
-    // Why: a prevented beforeunload cancels the in-flight quit. Release the
-    // bounds-persistence freeze so a user who keeps using the window after
-    // aborting Cmd+Q still gets their size saved.
+    // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
     windowClosing = false
     opts?.onQuitAborted?.()
     mainWindow.webContents.send('window:unload-prevented')
@@ -1163,8 +985,7 @@ export function createMainWindow(
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
-  // Why: renderer-drawn window controls on Windows/Linux desktop send these to
-  // replicate the native title bar buttons hidden by custom chrome.
+  // Why: renderer-drawn window controls on Windows/Linux replicate the native title-bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
     if (!mainWindow.isDestroyed()) {
@@ -1182,39 +1003,24 @@ export function createMainWindow(
       mainWindow.maximize()
     }
   }
-  // Why: send window:close-requested directly rather than calling
-  // mainWindow.close() and letting the 'close' event re-send it. Calling
-  // mainWindow.close() from within an IPC message handler on Windows can cause
-  // the 'close' event to misfire (e.preventDefault() doesn't suppress the OS
-  // close in all Windows configurations). Going straight to the renderer's
-  // close guard (Terminal.tsx onWindowCloseRequested) keeps the flow identical
-  // to what happens when confirmWindowClose() ultimately calls mainWindow.close()
-  // with windowCloseConfirmed = true.
+  // Why: mainWindow.close() from an IPC handler on Windows can make 'close' misfire, so send window:close-requested directly.
   const requestCloseChannel = 'window:request-close'
   const onRequestClose = (): void => {
     if (mainWindow.isDestroyed()) {
       return
     }
-    // Why: the renderer-drawn X on Windows routes here (not the native close
-    // event), so the minimize-to-tray guard must run on this path too — hide
-    // instead of asking the renderer to close.
+    // Why: renderer-drawn X routes here (not the native close event), so the minimize-to-tray guard must also run here.
     if (hideToTrayIfEnabled()) {
       return
     }
     mainWindow.webContents.send('window:close-requested', { isQuitting: false })
   }
-  // Why: the ··· button in the renderer-drawn title bar on Windows/Linux
-  // desktop pops up the application menu at the cursor position, replicating
-  // the Alt-key reveal that autoHideMenuBar normally provides.
+  // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
   const popupMenuChannel = 'menu:popup'
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
   }
-  // Why: the renderer's WindowControls mounts after ready-to-show, which is
-  // also when savedMaximized is restored — so window:maximize-changed has
-  // already fired (or not fired, if maximize() was called pre-mount) before
-  // the listener attaches. Expose a synchronous getter so the button can
-  // initialize its icon to match the current state on mount.
+  // Why: WindowControls mounts after window:maximize-changed already fired, so expose a synchronous getter to init its icon.
   const isMaximizedChannel = 'window:isMaximized'
   const onIsMaximized = (): boolean => {
     return !mainWindow.isDestroyed() && mainWindow.isMaximized()
@@ -1228,9 +1034,7 @@ export function createMainWindow(
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
     clearInitialRevealFallbackTimer()
-    // Why: default-deny the Cmd+B carve-out after the window is gone so a
-    // stale-true flag can't leak past subsequent state transitions. Paired
-    // with the webContents lifecycle resets above.
+    // Why: default-deny the Cmd+B carve-out after the window is gone so a stale-true flag can't leak into later state.
     markdownEditorFocused = false
     terminalInputFocused = false
     floatingTerminalInputFocused = false
@@ -1248,14 +1052,10 @@ export function createMainWindow(
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
-    // Why: powerMonitor is app-global; without this the closed window's
-    // resume relay would leak and fire against a destroyed webContents.
+    // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
-    // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
-    // after its webContents has already been destroyed. The destroyed
-    // webContents owns its listeners, so do not touch `mainWindow.webContents`
-    // here or the quit path can crash before Squirrel.Mac relaunches Orca.
+    // Why: on updater shutdown 'closed' can fire after webContents is destroyed, so don't touch mainWindow.webContents here.
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 

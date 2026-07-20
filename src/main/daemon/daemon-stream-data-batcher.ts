@@ -19,58 +19,27 @@ type StreamDataClient = {
   streamSocket: Socket | null
 }
 
-// Why 2ms: under continuous agent output every chunk waits an expected
-// half-window here AND again in main's PTY batch — at 8ms each that was
-// ~8ms of the measured ~19ms DSR-under-load latency. 2ms keeps burst
-// coalescing (~500 socket writes/s worst case, ~100B framing overhead per
-// write against MB/s payloads) while cutting the fixed latency tax 4x.
+// 2ms: each chunk waits a half-window here AND again in main's PTY batch; a smaller interval still coalesces bursts while cutting the fixed latency tax (~8ms of the measured ~19ms DSR-under-load latency).
 const STREAM_DATA_BATCH_INTERVAL_MS = 2
 
-// Why a shallow socket: the stream socket is one FIFO for every session, and
-// bytes already written can never be overtaken — a deep user-space buffer
-// buries a visible pane's keystroke echo behind bulk output for other panes
-// (measured 192MB / 6+s under 12 flooding hidden agents). Bulk writes stop at
-// this depth and the remainder is HELD here, where the interactive
-// flushSession path can still jump it; socket 'drain' refills. Echo latency
-// is then bounded by the shallow depth, not by how much bulk is in flight.
-// 128KB must stay above the socket's ~16KB highWaterMark so a held state
-// implies a false write() and therefore a guaranteed 'drain' wake-up.
-// Kill switch: ORCA_DAEMON_SHALLOW_SOCKET_GATE=0 restores pre-gate unbounded
-// socket writes for field debugging and true fix-off A/B benches.
+// Shallow socket: the stream is one FIFO, so a deep buffer buries a visible pane's echo behind other panes' bulk; bulk stops here and is HELD (flushSession can jump it), bounding echo latency.
+// 128KB stays above the socket's ~16KB highWaterMark so a held state implies a false write() and thus a guaranteed 'drain' wake-up.
 const SHALLOW_SOCKET_WRITE_GATE_BYTES =
   process.env.ORCA_DAEMON_SHALLOW_SOCKET_GATE === '0' ? Number.POSITIVE_INFINITY : 128 * 1024
-// Why sliced writes: enqueue coalesces per-session entries, so a held entry
-// can grow to megabytes; writing it whole would re-deepen the socket past the
-// gate in one call.
+// Sliced writes: a coalesced entry can grow to megabytes; writing it whole would re-deepen the socket past the gate in one call.
 const BULK_WRITE_SLICE_CHARS = 64 * 1024
-// Safety valve: if held bulk ever exceeds this, write through to the socket
-// (exactly the pre-gate behavior) — bounded daemon memory beats bounded echo
-// latency in the extreme. Must sit FAR above the pacer's pause watermark plus
-// its overshoot (observed ~5MB with 17 paused sessions' in-flight pty reads):
-// an engaged valve deepens the socket and buries interactive echo behind the
-// whole backlog (measured as bimodal ~2.4s key medians when this was 8MB).
+// Safety valve: past this, write through — bounded daemon memory beats bounded echo latency in the extreme. Must sit FAR above the pacer's pause watermark + overshoot (~5MB) or an engaged valve buries interactive echo behind the whole backlog.
 const HELD_WRITE_THROUGH_TOTAL_CHARS = 32 * 1024 * 1024
-// Why a small-session bypass: the hold is there to stop FLOODS from burying
-// everyone else; a session with only a few KB queued (keystroke echo, prompt
-// redraws, query replies) is never the flood and must not wait FIFO behind
-// other sessions' megabytes. The daemon's 100ms interactive fast-path is a
-// heuristic that misses under event-loop load (measured: echo classified
-// non-interactive rode the held queue for ~2.4s); this bypass is the
-// deterministic backstop. Worst socket over-deepening per flush is
-// sessions × this ≈ tens of KB.
+// Small-session bypass: a few-KB session (echo, redraws, query replies) is never the flood, so it must not wait FIFO behind others' megabytes; backstops the 100ms interactive fast-path, which misses under event-loop load.
 const SMALL_SESSION_HOLD_BYPASS_CHARS = 4 * 1024
 
 type DaemonStreamDataBatcherOptions = {
   maxLineBytes?: number
-  /** Fires after each stream-socket write — the only place backlog grows, so
-   *  the backlog pacer checks its watermark here. */
+  /** Fires after each stream-socket write — the only place backlog grows, so the backlog pacer checks its watermark here. */
   onAfterSocketWrite?: () => void
-  /** True for sessions whose queued output may be keep-tail dropped
-   *  (main-marked background sessions). */
+  /** True for sessions whose queued output may be keep-tail dropped (main-marked background sessions). */
   isSessionDroppable?: (sessionId: string) => boolean
-  /** Carve reply-eliciting query bytes (DSR/DA/DECRQM/OSC color probes) out
-   *  of dropped data — the hidden program blocks on the reply, so those few
-   *  bytes must still be delivered even when their flood is not. */
+  /** Carve reply-eliciting query bytes (DSR/DA/DECRQM/OSC probes) out of dropped data — the hidden program blocks on the reply, so they must still be delivered even when their flood is not. */
   salvageDroppedData?: (dropped: string) => string
 }
 
@@ -108,8 +77,7 @@ export class DaemonStreamDataBatcher {
     appendDaemonStreamData(batch, sessionId, data, options)
 
     if (this.isSessionDroppable(sessionId)) {
-      // Keep-tail scales down as more backgrounded sessions queue, bounding
-      // the AGGREGATE a reveal must drain (see daemon-stream-keep-tail-drop).
+      // Keep-tail scales down as more backgrounded sessions queue, bounding the aggregate a reveal must drain (see daemon-stream-keep-tail-drop).
       const droppableQueued = this.countDroppableSessionsWithQueuedData(batch)
       const dropCap = backgroundSessionDropCapChars(droppableQueued)
       const keepTail = backgroundSessionKeepTailChars(droppableQueued)
@@ -117,8 +85,7 @@ export class DaemonStreamDataBatcher {
         dropOldestQueuedForSession(batch, sessionId, keepTail, this.salvageDroppedData)
       }
       if (droppableQueued > (batch.lastDroppableSessionCount ?? 0)) {
-        // The shared budget tightened: re-trim sessions that already finished
-        // producing — they never re-enter this path on their own.
+        // Shared budget tightened: re-trim sessions that already finished producing — they never re-enter this path on their own.
         for (const [queuedSessionId, queued] of Array.from(batch.queuedCharsBySession)) {
           if (
             queued > dropCap &&
@@ -145,8 +112,7 @@ export class DaemonStreamDataBatcher {
     }
   }
 
-  /** Append a pre-shaped stream event at the current position in the
-   *  session's byte order (scan handoff markers, gaps, transient facts). */
+  /** Append a pre-shaped stream event at the current position in the session's byte order (scan handoff markers, gaps, transient facts). */
   enqueueControlEvent(clientId: string, sessionId: string, control: DaemonEvent): void {
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
@@ -195,23 +161,19 @@ export class DaemonStreamDataBatcher {
 
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
-      // Same as pre-gate behavior: a vanished stream socket drops the batch —
-      // the model owns the bytes and reconnect restores from a snapshot.
+      // A vanished stream socket drops the batch — the model owns the bytes and reconnect restores from a snapshot.
       this.pendingByClient.delete(clientId)
       return
     }
 
     const socket = client.streamSocket
-    // Sessions that held an entry must hold ALL their later entries in this
-    // pass — writing around a held entry would reorder that session's bytes.
+    // A session that held an entry must hold all its later entries this pass — writing around a held entry would reorder that session's bytes.
     const heldSessions = new Set<string>()
     const retained: PendingStreamDataBatch['queue'] = []
     while (batch.queue.length > 0) {
       const entry = batch.queue[0]
       if (entry.control) {
-        // Control entries only respect the held-session order latch — they
-        // are ~100B, so writing them onto a deep socket is as harmless as the
-        // small-session bypass.
+        // Control entries only respect the held-session order latch; at ~100B, writing them onto a deep socket is as harmless as the small-session bypass.
         if (heldSessions.has(entry.sessionId)) {
           retained.push(entry)
           batch.queue.shift()
@@ -226,19 +188,14 @@ export class DaemonStreamDataBatcher {
       if (socketDeep && batch.queuedChars <= HELD_WRITE_THROUGH_TOTAL_CHARS) {
         const sessionHeld = batch.queuedCharsBySession.get(entry.sessionId) ?? 0
         if (heldSessions.has(entry.sessionId) || sessionHeld > SMALL_SESSION_HOLD_BYPASS_CHARS) {
-          // Hold this flooding session's entry; small talkers keep flowing.
-          // The socket's 'drain' (routed back to flush by the server)
-          // resumes held bulk. No timer: a deep socket implies a prior
-          // false write(), so 'drain' is guaranteed.
+          // Hold this flooding session's entry; small talkers keep flowing. No timer: a deep socket implies a prior false write(), so 'drain' (routed back to flush) is guaranteed to resume held bulk.
           heldSessions.add(entry.sessionId)
           retained.push(entry)
           batch.queue.shift()
           continue
         }
       } else if (socketDeep) {
-        // Valve engaged: held bulk exceeded the memory cap and is being
-        // written through onto a deep socket — echo protection is off until
-        // it drains. Rare enough to be worth a diagnostics event every time.
+        // Valve engaged: held bulk exceeded the memory cap, so echo protection is off until it drains — rare enough to log every time.
         recordDaemonStreamBacklogEvent('heldWriteThrough', {
           heldChars: batch.queuedChars,
           socketBufferedBytes: socket.writableLength ?? 0
@@ -284,16 +241,7 @@ export class DaemonStreamDataBatcher {
     }
     if (retained.length > 0) {
       batch.queue = retained
-      // Held entries must not wait for the socket's 'drain' alone: drain only
-      // fires when the user-space buffer fully EMPTIES, so bulk would advance
-      // one gate-depth per daemon event-loop turn — seconds of dead time for
-      // a multi-MB hidden backlog on a busy daemon (measured: hidden-restore
-      // 2.5s vs the 1.5s budget). Arm ONE ~90B empty data event whose
-      // kernel-flush callback re-flushes while bytes are still in flight, so
-      // main never starves. (An empty socket write's callback fires
-      // immediately — verified — so the sentinel must be a real protocol
-      // no-op line.) Event-driven, no timers; the per-client latch stops
-      // sentinel stacking; 'drain' remains the backstop.
+      // 'drain' only fires when the buffer fully empties (one gate-depth/turn = seconds for multi-MB backlogs); arm a no-op data event whose flush callback re-flushes while bytes are still in flight.
       this.armHeldQueueRefill(socket, clientId, retained[0].sessionId)
       return
     }
@@ -307,6 +255,7 @@ export class DaemonStreamDataBatcher {
       return
     }
     this.refillArmedClients.add(clientId)
+    // Must be a real protocol no-op line, not an empty write: an empty write's callback fires immediately, defeating the in-flight re-flush.
     socket.write(encodeStreamDataEvent(sessionId, ''), () => {
       this.refillArmedClients.delete(clientId)
       this.flush(clientId)

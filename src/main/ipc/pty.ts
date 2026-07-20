@@ -1,8 +1,4 @@
-/* eslint-disable max-lines -- Why: PTY IPC is intentionally centralized in one
-main-process module so spawn-time environment scoping, lifecycle cleanup,
-foreground-process inspection, and renderer IPC stay behind a single audited
-boundary. Splitting it by line count would scatter tightly coupled terminal
-process behavior across files without a cleaner ownership seam. */
+/* eslint-disable max-lines -- Why: PTY IPC is centralized in one main-process module so spawn env scoping, lifecycle cleanup, process inspection, and renderer IPC stay behind one audited boundary. */
 import { join, delimiter } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
@@ -158,8 +154,7 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 
 // ─── Provider Registry ──────────────────────────────────────────────
-// Routes PTY operations by connectionId. null = local provider.
-// SSH providers will be registered here in Phase 1.
+// Routes PTY operations by connectionId (null = local provider).
 
 let localProvider: IPtyProvider = new LocalPtyProvider()
 type FreshLocalFallbackProvider = IPtyProvider & {
@@ -167,21 +162,13 @@ type FreshLocalFallbackProvider = IPtyProvider & {
 }
 const sshProviders = new Map<string, IPtyProvider>()
 const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
-// Why: producer flow control changes terminal physics — a flooding shell now
-// blocks on write instead of buffering in main. Kill switch: flip this one
-// line to disable pause/resume entirely without untangling the wiring.
+// Why: kill switch — flip to disable producer flow control (pause/resume) without untangling the wiring.
 const PRODUCER_FLOW_CONTROL_ENABLED = true
-// Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
-// write/resize/kill calls only carry the PTY ID. This map lets us route
-// post-spawn operations to the correct provider without the renderer needing
-// to track connectionId per-PTY.
+// Why: post-spawn write/resize/kill calls carry only the PTY ID; map it to its connectionId so ops route to the right provider.
 const ptyOwnership = new Map<string, string | null>()
-// Why: mobile clients must mirror desktop PTY geometry even when the renderer
-// cannot provide an xterm snapshot yet, such as immediately after tab creation.
+// Why: mobile clients must mirror desktop PTY geometry even before the renderer can provide an xterm snapshot (e.g. right after tab creation).
 const ptySizes = new Map<string, { cols: number; rows: number }>()
-// Why: PTY data batching is window-bound, but the "recent user input" signal
-// is PTY-scoped and must be cleared by every teardown path, including SSH and
-// daemon shutdowns that do not flow through the local provider exit listener.
+// Why: the "recent user input" signal is PTY-scoped and must be cleared by every teardown path, incl. SSH/daemon shutdowns that skip the local exit listener.
 const lastInputAtByPty = new Map<string, number>()
 const interactiveOutputCharsByPty = new Map<string, number>()
 const activeRendererPtys = new Set<string>()
@@ -191,16 +178,9 @@ const pendingHiddenRendererResizeOutputPtys = new Set<string>()
 const deliveredHiddenRendererResizeOutputPtys = new Set<string>()
 const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
 const KEEP_HISTORY_STOP_POLL_MS = 100
-// Why: the agent-hooks server caches per-paneKey state (last prompt, last
-// tool) that otherwise grows unbounded as panes come and go. Track the
-// spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
-// teardown — the renderer knows the paneKey but the PTY lifecycle does not
-// without this mapping.
+// Why: track spawn-time paneKey so teardown can clear the agent-hooks server's per-paneKey cache, which otherwise grows unbounded as panes come and go.
 const ptyPaneKey = new Map<string, string>()
-// Why: reverse of ptyPaneKey — callers that receive a paneKey from outside the
-// PTY lifecycle (e.g. the agent-hook server routing a cursor-agent status event
-// back into the pane's data stream) need to find the ptyId for that paneKey.
-// Kept in lock-step with ptyPaneKey via the same spawn and teardown sites.
+// Why: reverse of ptyPaneKey — callers with a paneKey from outside the PTY lifecycle (e.g. agent-hook status routing) need the ptyId; kept in lock-step via the same sites.
 const paneKeyPtyId = new Map<string, string>()
 
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
@@ -209,8 +189,7 @@ const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENV',
   'ORCA_AGENT_HOOK_VERSION',
   'ORCA_AGENT_HOOK_ENDPOINT',
-  // Why: PR 2778 briefly exported this scoped Claude settings path. Keep
-  // deleting stale inherited values so older PTYs cannot leak the reverted path.
+  // Why: PR 2778 briefly exported this path; keep deleting stale inherited values so older PTYs can't leak the reverted path.
   'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
 ] as const
 
@@ -218,12 +197,7 @@ export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
 }
 
-// Why: consumers (currently the cursor-agent synthesized-spinner loop in
-// main/index.ts) need to tear down paneKey-scoped state when a PTY exits so
-// intervals / timers cannot leak for the process lifetime. A callback
-// registry keeps the cross-module dependency narrow — clearProviderPtyState
-// only has to know about "things to notify", not about every consumer's
-// internals.
+// Why: let consumers tear down paneKey-scoped state on PTY exit so their timers can't leak; a callback registry keeps the cross-module dependency narrow.
 type PaneKeyTeardownListener = (paneKey: string) => void
 const paneKeyTeardownListeners = new Set<PaneKeyTeardownListener>()
 
@@ -232,13 +206,7 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
   return () => paneKeyTeardownListeners.delete(listener)
 }
 
-// Why: pre-signal handshake — the renderer declares it will own the serializer
-// for a paneKey BEFORE issuing pty:spawn. The cooperation gate at provider.spawn
-// return consults this map to suppress the daemon-snapshot seed when a renderer
-// is taking over. Generation tokens prevent paneKey-reuse races during teardown:
-// a paneKeyTeardownListener cleanup only fires settle when the captured gen
-// still matches, so a remount that pre-signals before the old PTY's teardown
-// runs is preserved. See docs/mobile-prefer-renderer-scrollback.md.
+// Why: renderer pre-declares serializer ownership before pty:spawn to suppress the daemon-snapshot seed; gen tokens prevent paneKey-reuse races on teardown. See docs/mobile-prefer-renderer-scrollback.md.
 let pendingSerializerGenSeq = 0
 const pendingByPaneKey = new Map<string, { gen: number; ownerWebContentsId: number | null }>()
 const pendingPaneSerializerCleanupRegistered = new Set<number>()
@@ -251,16 +219,11 @@ type PaneSpawnReservationResult = {
   id: string
   launchConfig?: SleepingAgentLaunchConfig
 } & Partial<PtySpawnResult>
-// Why: mobile runtime materialization and a newly-focused renderer pane can
-// race to spawn the same tab/leaf. Key by stable paneKey so the loser adopts
-// the winner's PTY instead of creating a duplicate shell.
+// Why: mobile materialization and a newly-focused pane can race to spawn the same leaf; key by paneKey so the loser adopts the winner's PTY.
 const paneSpawnReservationsByPaneKey = new Map<string, PaneSpawnReservation>()
-// Why: bind the declaration generation directly to its spawn result. PTY ids
-// are reusable and teardown callbacks carry no incarnation token, so teardown
-// must never guess which pending renderer generation it owns.
+// Why: PTY ids are reusable and teardown callbacks carry no incarnation token; bind the generation to its spawn result so teardown never guesses.
 const pendingPtyIdBySerializerGeneration = new Map<number, string>()
-// Why: the runtime's hasRendererSerializer probe needs a ptyId-keyed signal.
-// A later spawn starts a fresh incarnation; subscription abort owns waiter cleanup.
+// Why: hasRendererSerializer probe needs a ptyId-keyed signal; a later spawn starts a fresh incarnation, subscription abort owns waiter cleanup.
 const rendererSerializerReadiness = new RendererTerminalSerializerReadiness()
 
 function parseValidPaneKey(paneKey: unknown): ReturnType<typeof parsePaneKey> {
@@ -407,8 +370,7 @@ function getProviderForPty(ptyId: string): IPtyProvider {
 }
 
 function hasPtyProviderForInspection(ptyId: string): boolean {
-  // Why: process inspection is background polling; disconnected SSH hosts should
-  // read as idle instead of surfacing repeated IPC errors.
+  // Why: process inspection is background polling; disconnected SSH hosts should read as idle, not raise repeated IPC errors.
   const connectionId = ptyOwnership.get(ptyId)
   return connectionId == null || sshProviders.has(connectionId)
 }
@@ -470,8 +432,7 @@ function normalizeNodePtySpawnError(err: unknown): Error {
     return err
   }
   if (err instanceof Error) {
-    // Why: preserve the original stack/name/custom fields while returning the
-    // same recovery guidance as the renderer-driven pty:spawn path.
+    // Why: preserve the original stack/name/custom fields while adding the same recovery hint as the pty:spawn path.
     err.message = hintedMessage
     return err
   }
@@ -539,17 +500,7 @@ function finishPtyShutdown(
 }
 
 // ─── Host PTY env assembly ──────────────────────────────────────────
-// Why: both the LocalPtyProvider.buildSpawnEnv closure and the daemon-active
-// fallback in pty:spawn need the same set of host-local env injections
-// (OpenCode plugin dir, agent-hook server coordinates, Pi/OMP managed
-// extensions, Codex account home, dev-mode CLI overrides, GitHub attribution
-// shims). They used to be implemented twice, which silently drifted —
-// daemon-backed PTYs never got the OpenCode plugin, Pi integration, Codex
-// home, or dev CLI PATH prepend, so status dots, Pi state, Codex switching, and CLI→dev
-// routing were all broken for daemon users (the common case).
-//
-// Centralizing the injections here makes future additions fail-safe: a new
-// variable added to this function lands in BOTH spawn paths or NEITHER.
+// Why: centralize host-local env injections so both spawn paths (local + daemon) get them; implemented twice they drifted, silently breaking daemon PTYs.
 
 export type BuildPtyHostEnvOptions = {
   isPackaged: boolean
@@ -557,24 +508,19 @@ export type BuildPtyHostEnvOptions = {
   selectedCodexHomePath: string | null
   skipCodexHomeEnv?: boolean
   githubAttributionEnabled: boolean
-  /** The launch command the renderer chose for this PTY (e.g. 'pi', 'omp',
-   *  'claude'). Used to resolve the per-agent managed extension target for
-   *  Pi / OMP - both consume `PI_CODING_AGENT_DIR` but default to different
-   *  `~/.<kind>/agent` paths. Undefined for bare-shell spawns; defaults
-   *  resolve to Pi for back-compat. NEVER infer from disk presence; that's
-   *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
+  /** Launch command the renderer chose (e.g. 'pi', 'omp', 'claude'); resolves the per-agent
+   *  extension target for Pi/OMP. Undefined for bare shells → defaults to Pi. NEVER infer from
+   *  disk presence (cross-agent shadowing when both dirs exist). */
   launchCommand?: string
   /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
   launchAgent?: TuiAgent
   shellPath?: string
   isWsl?: boolean
-  /** Distro for WSL spawns (null = Windows default distro). Drives the WSL
-   *  hook relay ensure + guest endpoint repoint; only read when isWsl. */
+  /** Distro for WSL spawns (null = Windows default distro); drives the WSL hook relay + endpoint repoint. Only read when isWsl. */
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
   networkProxySettings?: NetworkProxySettings
-  /** Keep indexed Git config off the sparse daemon wire; the daemon appends
-   *  guard entries after merging its authoritative inherited environment. */
+  /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
   deferGitConfigGuardToDaemon?: boolean
 }
 
@@ -603,8 +549,7 @@ function promoteAgentTeamsShimPath(
   const remaining = currentPath
     .split(delimiter)
     .filter((entry) => entry.length > 0 && entry !== shimPath)
-  // Why: host env injection can prepend Orca's attribution/dev shims. Claude
-  // Agent Teams must still resolve our fake tmux before any real tmux.
+  // Why: host env injection prepends Orca's shims; Claude Agent Teams must still resolve our fake tmux before any real tmux.
   env[currentPathKey] = [shimPath, ...remaining].join(delimiter)
 }
 
@@ -684,9 +629,7 @@ function resolvePiAgentSourceDir(
   const publicDir = readEnvWithProcessFallback(baseEnv, 'PI_CODING_AGENT_DIR')
   const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
   const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
-  // Why: if PI_CODING_AGENT_DIR is just a restored Orca overlay from either
-  // kind and the matching source shadow is absent, remirroring it would leak
-  // another agent's overlay tree into this launch. Fall through to defaults.
+  // Why: if PI_CODING_AGENT_DIR is a restored Orca overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
   if (publicDir && publicDir !== ownOverlayDir && publicDir !== otherOverlayDir) {
     return publicDir
   }
@@ -758,16 +701,11 @@ function getInheritedAgentHookEnvKeysToDelete(
   spawnEnv: Record<string, string> | undefined
 ): string[] {
   const env = spawnEnv ?? {}
-  // Why: daemon/local providers merge process.env after main-process cleanup.
-  // Delete reverted or unavailable hook env keys there without dropping fresh
-  // receiver coordinates that buildPtyHostEnv intentionally set.
+  // Why: providers merge process.env after cleanup; delete stale hook keys without dropping fresh coordinates buildPtyHostEnv set.
   return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
-// Why: when agent status is disabled, a nested Orca terminal can still pass
-// through prior OpenCode or legacy Pi/OMP overlay env. Restore the user's
-// original source dir when Orca recorded one, otherwise strip only values
-// known to be ours.
+// Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.
 function restoreOrStripOverlayEnv(
   baseEnv: Record<string, string>,
   keys: {
@@ -816,10 +754,7 @@ function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string
 
   const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
   const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
-  // Why: nested Orca terminals inherit OPENCODE_CONFIG_DIR from the parent
-  // PTY. If there is no recorded source dir, that value is Orca-owned, not a
-  // user config. Treating it as user config makes child Orcas mirror Orca's
-  // hook dir and can create large OpenCode runtime trees per terminal.
+  // Why: with no recorded source dir, an inherited OPENCODE_CONFIG_DIR is Orca-owned, not user config; treating it as user config makes child Orcas mirror the hook dir.
   if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
     return undefined
   }
@@ -837,13 +772,8 @@ function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
  *
- * This is the single source of truth for the env shape an Orca PTY needs
- * BEFORE the provider-specific wrapper (LocalPtyProvider's TERM/LANG defaults,
- * DaemonPtyAdapter's subprocess env). Callers are responsible for the SSH
- * guard — if `args.connectionId` is set, do NOT call this function, because
- * every injection here is either host-loopback (hook server, attribution
- * shims) or references paths on the local filesystem that would be meaningless
- * to a remote shell.
+ * Do NOT call when `args.connectionId` is set (SSH): every injection is host-loopback
+ * or references local filesystem paths meaningless to a remote shell.
  */
 export function buildPtyHostEnv(
   id: string,
@@ -853,21 +783,14 @@ export function buildPtyHostEnv(
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
-  // Why: the Local path passes a baseEnv that already includes process.env
-  // (LocalPtyProvider.spawn merges it before calling buildSpawnEnv). The
-  // daemon path passes only args.env since process.env propagates to the
-  // daemon subprocess via fork inheritance, not the IPC wire. Checking both
-  // sources when reading a potentially-user-provided value keeps the guards
-  // in lock-step across spawn paths without pushing process.env onto the
-  // IPC wire unnecessarily.
+  // Why: local path's baseEnv includes process.env but the daemon path doesn't (fork inheritance, not IPC); check both sources so guards stay in lock-step across spawn paths.
   const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
   const piAgentKind = detectPiAgentKindFromCommand(launchCommandHint)
   const hasLaunchCommand =
     typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
 
-  // Why: unattended agents must fail instead of opening OS credential UI and
-  // retrying auth in a loop; ordinary user terminals keep normal Git behavior.
+  // Why: unattended agents must fail instead of looping on OS credential prompts; user terminals keep normal Git behavior.
   applyTerminalGitCredentialPromptGuard(baseEnv, {
     launchCommand: launchCommandHint,
     isUnattended: opts.launchAgent !== undefined,
@@ -875,8 +798,7 @@ export function buildPtyHostEnv(
   })
 
   const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
-  // Why: source shadows are agent-scoped. Trusting the other kind's source
-  // would reintroduce the exact Pi/OMP extension-state shadowing this PR fixes.
+  // Why: source shadows are agent-scoped; trusting the other kind's source reintroduces Pi/OMP extension-state shadowing.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
     piAgentKind === 'omp'
@@ -884,20 +806,13 @@ export function buildPtyHostEnv(
       : resolveScopedPiAgentSourceDir(baseEnv, 'omp')
 
   if (opts.agentStatusHooksEnabled) {
-    // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
-    // value cannot coexist with an Orca-only injection. Hand the user's value
-    // (when present) to the hook service and let it materialize a source-scoped
-    // mirror overlay that lets the user's plugins and Orca's status plugin
-    // load together. See docs/opencode-config-dir-collision.md.
+    // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
     Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
     if (baseEnv.OPENCODE_CONFIG_DIR) {
-      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
-      // wrappers restore this PTY-scoped value after user startup files run.
+      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
       baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
       if (preexistingOpenCodeConfigDir) {
-        // Why: terminals launched from another Orca terminal inherit the overlay
-        // as OPENCODE_CONFIG_DIR; keep the original source so overlays do not
-        // mirror overlays and drop the user's real config.
+        // Why: nested Orca terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
         baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
       } else {
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
@@ -928,24 +843,14 @@ export function buildPtyHostEnv(
     })
   }
 
-  // Why: Claude/Codex native hooks run inside the shell process, so Orca
-  // must inject the loopback receiver coordinates before the agent starts.
-  // Without these env vars the global hook config cannot map callbacks back
-  // to the correct Orca pane.
-  // Why: nested Orca terminals can inherit another process's hook endpoint or
-  // token. Strip all hook runtime coordinates before injecting this PTY's fresh
-  // server values so callbacks route to the owning app/runtime.
+  // Why: strip inherited hook coordinates before injecting this PTY's fresh loopback receiver, so nested-terminal callbacks route to the owning pane.
   for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
     delete baseEnv[key]
   }
   if (opts.agentStatusHooksEnabled) {
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
     if (opts.isWsl === true) {
-      // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace. Ensure
-      // the guest-resident relay for this distro (covers fresh spawns and
-      // post-restart reattach re-spawns), and once the relay has reported the
-      // guest home, point restart re-coordination at the relay-written
-      // guest-side endpoint file instead of the /p-translated Windows one.
+      // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
       wslHookRelayManager.ensureForDistro(distro)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
@@ -955,9 +860,7 @@ export function buildPtyHostEnv(
     }
   }
 
-  // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root. Keep
-  // that home as the user's normal source of truth and install only Orca-owned,
-  // env-guarded extension files into the selected agent's extension dir.
+  // Why: PI_CODING_AGENT_DIR is the user's config/session root; install only Orca-owned extension files, don't override it.
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
@@ -973,8 +876,7 @@ export function buildPtyHostEnv(
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
     }
   } else {
-    // Why: when agent status is disabled we must strip BOTH kinds' shadow vars
-    // so a nested PTY does not inherit a stale overlay from either agent.
+    // Why: strip BOTH kinds' shadow vars so a nested PTY can't inherit a stale overlay from either agent.
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_PI_CODING_AGENT_DIR',
@@ -988,25 +890,20 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
   }
 
-  // Why: Codex account switching now materializes auth into an Orca-scoped
-  // runtime home, and Codex launched inside Orca terminals must use that same
-  // prepared home as quota fetches and other entry points. Keep the override
-  // PTY-scoped so dev/prod Orcas do not share hooks through ~/.codex.
+  // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
   if (opts.skipCodexHomeEnv) {
     delete baseEnv.CODEX_HOME
     delete baseEnv.ORCA_CODEX_HOME
   } else if (opts.selectedCodexHomePath) {
     baseEnv.CODEX_HOME = opts.selectedCodexHomePath
-    // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers
-    // restore this runtime home before Codex can be launched from the prompt.
+    // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
     baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
   }
 
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
   if (opts.isWsl) {
     baseEnv.ORCA_USER_DATA_PATH = opts.userDataPath
-    // Why: managed WSL registration deliberately uses `orca-ide`; exposing
-    // that literal keeps agent guidance scoped to WSL without a bare-orca shim.
+    // Why: managed WSL registration uses `orca-ide`; exposing that literal scopes agent guidance to WSL without a bare-orca shim.
     baseEnv.ORCA_CLI_COMMAND = opts.isPackaged ? 'orca-ide' : 'orca-dev'
   } else {
     if (!opts.isPackaged) {
@@ -1018,16 +915,10 @@ export function buildPtyHostEnv(
   if (!opts.isPackaged) {
     const devCliBin = join(opts.userDataPath, 'cli', 'bin')
     const inheritedPath = readInheritedPath(baseEnv)
-    // Why: avoid a trailing delimiter when PATH is empty — some shells
-    // treat an empty segment as `.`, which would let commands resolve from
-    // the current working directory (a foot-gun we don't want to create
-    // for dev terminals).
+    // Why: an empty PATH segment resolves as `.` in some shells (commands run from cwd); avoid a trailing delimiter.
     baseEnv.PATH = inheritedPath ? `${devCliBin}${delimiter}${inheritedPath}` : devCliBin
   } else if (process.platform === 'linux') {
-    // Why: the Linux CLI installs as `orca-ide` (never shadowing GNOME's
-    // /usr/bin/orca screen reader), but agent-facing guidance invokes bare
-    // `orca`. Scope a bare-`orca` shim to Orca-managed PTYs so agents reach
-    // the Orca CLI instead of the screen reader (stablyai/orca#7904).
+    // Why: bare-`orca` shim scoped to Orca PTYs — Linux CLI installs as `orca-ide` to avoid shadowing GNOME's /usr/bin/orca screen reader (stablyai/orca#7904).
     const shimDir = ensureLinuxTerminalOrcaCliShimDir({ userDataPath: opts.userDataPath })
     if (shimDir) {
       const inheritedEntries = readInheritedPath(baseEnv)
@@ -1037,10 +928,7 @@ export function buildPtyHostEnv(
     }
   }
 
-  // Why: GitHub attribution should only affect commands launched from
-  // Orca's own PTYs. Injecting lightweight PATH shims at spawn-time keeps
-  // the behavior local to Orca instead of rewriting user git config or
-  // touching external shells.
+  // Why: PATH shims keep GitHub attribution scoped to Orca's own PTYs without rewriting user git config.
   if (!opts.githubAttributionEnabled) {
     delete baseEnv.ORCA_ENABLE_GIT_ATTRIBUTION
     delete baseEnv.ORCA_GIT_COMMIT_TRAILER
@@ -1095,8 +983,7 @@ function beginPtySpawnForWorktree(
       finishes.push(beginTerminalInstall(candidate, connectionId ?? undefined))
     }
   } catch (error) {
-    // Why: the worktree ID and actual cwd can belong to different roots. If
-    // either is deleting, release any earlier admission before rejecting.
+    // Why: worktree ID and cwd can be different roots; release earlier admissions before rejecting.
     finishes.toReversed().forEach((finish) => finish())
     throw error
   }
@@ -1119,13 +1006,8 @@ export function getSshPtyProvider(connectionId: string): IPtyProvider | undefine
 }
 
 /** Get the installed PTY provider (for direct access in tests/runtime).
- *
- * Returns the installed PTY provider — after `setLocalPtyProvider()` runs
- * during daemon init this may be the routed adapter (specifically either
- * `DaemonPtyAdapter` or its `DaemonPtyRouter` wrapper). Callers needing
- * `LocalPtyProvider`-specific methods (`killOrphanedPtys`,
- * `advanceGeneration`, `getPtyProcess`) must type-narrow or import the
- * concrete class directly. */
+ *  After daemon init this may be a DaemonPtyAdapter/DaemonPtyRouter, not LocalPtyProvider;
+ *  callers needing LocalPtyProvider-specific methods must type-narrow or import the class. */
 export function getLocalPtyProvider(): IPtyProvider {
   return localProvider
 }
@@ -1149,17 +1031,12 @@ export function getPtyIdsForConnection(connectionId: string): string[] {
 
 /**
  * Remove all PTY ownership entries for a given connectionId.
- * Why: when an SSH connection is closed, the remote PTYs are gone but their
- * ownership entries linger. Without cleanup, subsequent spawn calls could
- * look up a stale provider for those PTY IDs, and the map grows unboundedly.
+ * Why: SSH close leaves stale ownership entries that route later spawns to a dead provider and grow unbounded.
  */
 export function clearPtyOwnershipForConnection(connectionId: string): void {
   for (const [ptyId, connId] of ptyOwnership) {
     if (connId === connectionId) {
-      // Why: remote PTYs are gone after the SSH connection closes — their
-      // paneKey-scoped caches (agent-hooks server, OpenCode, Pi) must be swept
-      // the same way a local onExit would, otherwise they leak indefinitely
-      // for the process lifetime.
+      // Why: SSH close bypasses the local onExit, so sweep paneKey-scoped caches manually or they leak.
       clearProviderPtyState(ptyId)
       ptyOwnership.delete(ptyId)
     }
@@ -1169,13 +1046,10 @@ export function clearPtyOwnershipForConnection(connectionId: string): void {
 // ─── Provider-scoped PTY state cleanup ──────────────────────────────
 
 export function clearProviderPtyState(id: string): void {
-  // Why: OpenCode and Pi both allocate PTY-scoped runtime state outside the
-  // node-pty process table. Centralizing provider cleanup avoids drift where a
-  // new teardown path forgets to remove one provider's overlay/hook state.
+  // Why: OpenCode and Pi allocate PTY-scoped state outside the node-pty process table; centralizing cleanup avoids a teardown path forgetting one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
-  // Why: SSH exit and connection-teardown paths bypass pty.ts's local onExit
-  // callback but still need to release Claude account-switch guards.
+  // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
   markClaudePtyExited(id)
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
@@ -1185,9 +1059,7 @@ export function clearProviderPtyState(id: string): void {
   rendererVisibilityKnownPtys.delete(id)
   pendingHiddenRendererResizeOutputPtys.delete(id)
   deliveredHiddenRendererResizeOutputPtys.delete(id)
-  // Why: every PTY teardown path funnels through here (local exit, daemon
-  // shutdown, SSH exit/connection teardown) — hidden/interest gate bits must
-  // not outlive the PTY or a reused map entry could silently gate a new one.
+  // Why: every teardown path funnels through here — hidden/interest gate bits must not outlive the PTY or a reused map entry could silently gate a new one.
   clearHiddenRendererPtyDeliveryState(id)
   clearBackgroundedDeliverySyncForPty(id)
   providerSnapshotRequiredPtys.delete(id)
@@ -1195,21 +1067,14 @@ export function clearProviderPtyState(id: string): void {
   clearNativeWindowsConptyPty(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
-  // Why: drop the memory-collector registration so a dead PTY does not keep
-  // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
-  // PTYs that were never registered (SSH-owned).
+  // Why: drop the memory-collector registration so a dead PTY doesn't resolve its dead pid on every snapshot; no-op for never-registered (SSH-owned) PTYs.
   unregisterPty(id)
-  // Why: cover lifecycle paths that bypass runtime.onPtyExit — SSH reattach
-  // failures, SSH connection shutdown (clearPtyOwnershipForConnection), and
-  // daemon spawn-failure cleanup all funnel through here. Without this the
-  // watcher's per-PTY buffer and worktree binding outlive the PTY.
+  // Why: cover paths that bypass runtime.onPtyExit (SSH reattach/shutdown, daemon spawn-failure) — else the watcher's per-PTY buffer and worktree binding outlive the PTY.
   advertisedUrlWatcher.unbindPty(id)
   clearMigrationUnsupportedPty(id)
   agentHookServer.clearPaneKeyAliasesForPty(id, {
     shouldClearStablePaneKey: (stablePaneKey) => {
-      // Why: when this PTY never rebuilt ptyPaneKey after restart, alias
-      // ownership is our only proof. Once a newer PTY owns the same stable
-      // paneKey, alias teardown must not erase that newer status.
+      // Why: when this PTY never rebuilt ptyPaneKey after restart, alias ownership is our only proof — don't erase a newer PTY that now owns the same stable paneKey.
       const stablePaneOwner = paneKeyPtyId.get(stablePaneKey)
       if (stablePaneOwner && stablePaneOwner !== id) {
         return false
@@ -1217,10 +1082,7 @@ export function clearProviderPtyState(id: string): void {
       return !paneKey || (stillOwnsPaneKey && stablePaneKey === paneKey)
     }
   })
-  // Why: the hook server's per-paneKey caches (lastPrompt / lastTool) would
-  // otherwise accumulate entries for dead panes over the process lifetime.
-  // Use the spawn-time paneKey mapping since the server has no other way to
-  // correlate a ptyId back to its paneKey.
+  // Why: clear the hook server's per-paneKey caches (via the spawn-time paneKey mapping, its only ptyId→paneKey correlation) so dead panes don't accumulate over process lifetime.
   if (paneKey) {
     if (stillOwnsPaneKey) {
       agentHookServer.clearPaneState(paneKey)
@@ -1228,9 +1090,7 @@ export function clearProviderPtyState(id: string): void {
     }
     ptyPaneKey.delete(id)
     if (stillOwnsPaneKey) {
-      // Why: notify registered consumers AFTER we've dropped the paneKey↔ptyId
-      // entries so a listener that re-reads the map sees the post-teardown
-      // state. Wrap each call so one throwing listener cannot block the rest.
+      // Why: notify AFTER dropping the paneKey↔ptyId entries so a listener re-reading the map sees post-teardown state; wrap each so one throw can't block the rest.
       for (const listener of paneKeyTeardownListeners) {
         try {
           listener(paneKey)
@@ -1250,10 +1110,7 @@ export function setPtyOwnership(id: string, connectionId: string | null): void {
   ptyOwnership.set(id, connectionId)
 }
 
-// Why: localProvider.onData/onExit return unsubscribe functions. Without
-// storing and calling these on re-registration, macOS app re-activation
-// creates a new BrowserWindow and re-calls registerPtyHandlers, leaking
-// duplicate listeners that forward every event twice.
+// Why: store onData/onExit unsubscribers so macOS re-activation re-calling registerPtyHandlers doesn't leak duplicate listeners forwarding every event twice.
 let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let localBackgroundStreamUnsub: (() => void) | null = null
@@ -1261,32 +1118,18 @@ let didFinishLoadHandler: (() => void) | null = null
 let didFinishLoadWebContents: WebContents | null = null
 let rendererLifecycleResetWebContents: WebContents | null = null
 let rendererLifecycleResetHandler: (() => void) | null = null
-// Why: the hidden-delivery gate's interest/hidden registries mirror renderer
-// state (ref-counted holds, per-pane hidden marks). A reload or renderer
-// crash destroys the owners without unregistering, so the registries are
-// reset whenever the renderer process is replaced
-// (resetRendererScopedHiddenPtyDeliveryState preserves drop memory).
+// Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so they reset when the renderer is replaced (drop memory preserved).
 let rendererGateResetLoadHandler: (() => void) | null = null
 let rendererGateResetGoneHandler: (() => void) | null = null
 let rendererGateResetWebContents: WebContents | null = null
-// Why: the backgrounded-delivery dedupe map lives in the registerPtyHandlers
-// closure but teardown funnels through module-scope clearProviderPtyState.
+// Why: the backgrounded-delivery dedupe map lives in the registerPtyHandlers closure but teardown funnels through module-scope clearProviderPtyState.
 let clearBackgroundedDeliverySyncForPty: (id: string) => void = () => {}
-// Why: after daemon keep-tail thinning, main's mirror contains only the kept
-// tail. Recovery must keep consulting the daemon's complete model until exit.
+// Why: after daemon keep-tail thinning main's mirror holds only the kept tail, so recovery must keep consulting the daemon's complete model until exit.
 const providerSnapshotRequiredPtys = new Set<string>()
-// Why: did-start-loading also fires for in-page subframe loads (e.g. the
-// sandboxed srcDoc iframes notebook HTML output renders), which are not renderer
-// lifecycle resets. A dedicated handler filters those via isLoadingMainFrame so a
-// subframe load cannot reset delivery accounting on the still-alive page.
+// Why: did-start-loading also fires for in-page subframe loads (notebook srcDoc iframes); a dedicated handler filters those via isLoadingMainFrame.
 let rendererDidStartLoadingHandler: (() => void) | null = null
 
-// Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
-// against the freshly-created adapter after replaceDaemonProvider swaps the
-// module-level `localProvider` pointer. Without this, old subscribers stay
-// bound to the disposed adapter and new PTY data silently drops. Saved at
-// module scope so the restart flow (src/main/daemon/daemon-init.ts) can
-// trigger a rebind without re-running the full registerPtyHandlers setup.
+// Why: Restart daemon must re-bind provider→renderer listeners after replaceDaemonProvider swaps localProvider, else subscribers stay bound to the disposed adapter and new PTY data silently drops.
 let rebindProviderListeners: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {
@@ -1308,9 +1151,7 @@ export type PtyRendererDeliveryDebugSnapshot = {
   peakMaxRendererInFlightCharsByPty: number
   ackGatedFlushSkipCount: number
   hiddenDeliveryGatedPtyCount: number
-  /** Hidden-gated ptys the renderer ALSO reports visible/active — a
-   *  contradiction that should be zero; nonzero means the user may be staring
-   *  at a pane main is deliberately starving (v1.4.124-rc.2.perf field lead). */
+  /** Hidden-gated ptys the renderer ALSO reports visible/active — a contradiction that should be zero (v1.4.124-rc.2.perf field lead). */
   hiddenDeliveryGatedVisiblePtyCount: number
   hiddenDeliveryGatedActivePtyCount: number
   deliveryInterestPtyCount: number
@@ -1319,27 +1160,21 @@ export type PtyRendererDeliveryDebugSnapshot = {
   pendingDroppedChars: number
   /** One-paste freeze diagnostics: per-pty delivery table + event history. */
   diagnostics: PtyMainDeliveryDiagnostics
-  // Why: a nonzero lastLifecycleResetClearedChars is the exact signature of the
-  // leaked-delivery-accounting freeze this reset fixes; the count tracks how
-  // many renderer lifecycle resets have run since launch.
+  // Why: a nonzero lastLifecycleResetClearedChars is the exact signature of the leaked-accounting freeze this reset fixes.
   rendererLifecycleResetCount: number
   lastLifecycleResetClearedChars: number
-  // Why: the boot-window hold early-returns before ackGatedFlushSkipCount++, so
-  // without these a held gate is invisible in the snapshot; forcedCount > 0 flags
-  // that the watchdog self-healed a lost handshake.
+  // Why: the boot-window hold early-returns before ackGatedFlushSkipCount++, so these expose an otherwise-invisible held gate; forcedCount > 0 flags a watchdog self-heal.
   rendererPtyDispatcherReady: boolean
   rendererDispatcherReadyForcedCount: number
 }
 
-// Why module scope: breadcrumb writers live both inside registerPtyHandlers
-// (gate marks, heals) and outside it (renderer lifecycle resets).
+// Why module scope: breadcrumb writers live both inside registerPtyHandlers and outside it (renderer lifecycle resets).
 const mainDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
 let lastPowerSuspendAtMs: number | null = null
 let lastPowerResumeAtMs: number | null = null
 let powerSignalBreadcrumbsInstalled = false
 
-// Why: both field freeze variants correlate with display sleep; suspend/resume
-// timestamps in the report let us line breadcrumbs up against the wake.
+// Why: both field freeze variants correlate with display sleep; suspend/resume timestamps let breadcrumbs line up against the wake.
 function installPowerSignalBreadcrumbs(): void {
   if (powerSignalBreadcrumbsInstalled) {
     return
@@ -1387,12 +1222,9 @@ let readPtyRendererDeliveryDebugSnapshot = (): PtyRendererDeliveryDebugSnapshot 
   ...EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT
 })
 let resetPtyRendererDeliveryDebugSnapshot = (): void => {}
-// Bridged into the registerPtyHandlers closure (like readPtyRendererDeliveryDebugSnapshot)
-// so the module-scope lifecycle-reset handler can zero the closure-owned delivery
-// accounting on a renderer reload/crash.
+// Bridged into the registerPtyHandlers closure so the module-scope lifecycle-reset handler can zero closure-owned delivery accounting on renderer reload/crash.
 let resetRendererDeliveryAccountingForLifecycleReset = (): void => {}
-// Bridged so a re-registration (new window) can cancel the prior closure's
-// dispatcher-ready watchdog before wiring up its own.
+// Bridged so a re-registration can cancel the prior closure's dispatcher-ready watchdog before wiring its own.
 let clearRendererDispatcherReadyWatchdog = (): void => {}
 
 export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
@@ -1412,15 +1244,12 @@ function clearDidFinishLoadHandler(): void {
 }
 
 function markRendererPtysHiddenForRendererLifecycleReset(): void {
-  // A reload/crash in the history is load-bearing context for any freeze
-  // report ("did the user already reload before capturing?").
+  // A reload/crash in the breadcrumb history is load-bearing context for any freeze report.
   mainDeliveryBreadcrumbs.record('renderer-lifecycle-reset')
-  // Why: renderer-owned hints die with the page; keep known-visibility state so
-  // surviving daemon/SSH PTYs fail closed until the new renderer reports again.
+  // Why: renderer-owned hints die with the page; clear visibility so surviving daemon/SSH PTYs fail closed until the new renderer reports.
   activeRendererPtys.clear()
   visibleRendererPtys.clear()
-  // Why: the dead page never ACKs its in-flight bytes, so leaked in-flight/pending
-  // accounting would delivery-gate surviving PTYs forever after a reload/crash.
+  // Why: the dead page never ACKs its in-flight bytes, so leaked accounting would delivery-gate surviving PTYs forever after a reload/crash.
   resetRendererDeliveryAccountingForLifecycleReset()
 }
 
@@ -1451,11 +1280,7 @@ function registerRendererLifecycleResetHandlers(webContents: WebContents): void 
   markRendererPtysHiddenForRendererLifecycleReset()
   rendererLifecycleResetWebContents = webContents
   rendererLifecycleResetHandler = markRendererPtysHiddenForRendererLifecycleReset
-  // Why: did-start-loading also fires for in-page subframe loads (sandboxed
-  // srcDoc iframes in notebook HTML output), where isLoadingMainFrame() is false.
-  // Only a main-frame load is a real renderer lifecycle reset; filtering here
-  // stops a subframe load from clearing pendingData and holding the send gate
-  // (a spurious multi-second freeze) on the otherwise-alive page.
+  // Why: did-start-loading also fires for in-page subframe loads (notebook srcDoc iframes); filter via isLoadingMainFrame so a subframe load can't clear pendingData and freeze the alive page.
   rendererDidStartLoadingHandler = () => {
     if (!webContents.isLoadingMainFrame()) {
       return
@@ -1484,11 +1309,7 @@ function clearRendererGateResetHandlers(): void {
   rendererGateResetWebContents = null
 }
 
-// Why: the "Restart daemon" flow needs to detach listeners from the current
-// adapter *after* synthetic pty:exit events fan out (so the renderer receives
-// them) but *before* replaceDaemonProvider swaps in the new adapter (so the
-// new provider isn't missing bindings). This export narrows that window to
-// the caller.
+// Why: Restart daemon must detach listeners AFTER synthetic pty:exit events fan out but BEFORE replaceDaemonProvider swaps the adapter; this export narrows that window to the caller.
 export function unbindLocalProviderListeners(): void {
   localDataUnsub?.()
   localExitUnsub?.()
@@ -1510,15 +1331,11 @@ export function registerPtyHandlers(
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
-    // Why: returns true (once, consuming the flag) for the crash-recovery reload
-    // so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
+    // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
   }
 ): void {
-  // Why: a re-registration means a new window owns delivery. Cancel any watchdog the
-  // prior closure armed, and neutralize its bridged reset so the registration-time
-  // mark-hidden below can't arm a timer against the now-dead closure — the fresh
-  // closure re-installs both bridges once its state is set up.
+  // Why: a re-registration means a new window owns delivery — cancel the prior closure's watchdog and neutralize its bridged reset so mark-hidden below can't arm a timer against the dead closure.
   clearRendererDispatcherReadyWatchdog()
   resetRendererDeliveryAccountingForLifecycleReset = () => {}
   registerRendererLifecycleResetHandlers(mainWindow.webContents)
@@ -1527,9 +1344,7 @@ export function registerPtyHandlers(
     if (connectionId) {
       return undefined
     }
-    // Why: during desktop cold start the daemon provider swap now overlaps
-    // first paint. Local spawns must wait before resolving getProvider(), while
-    // SSH/headless paths do not use the desktop daemon.
+    // Why: during cold start the daemon provider swap overlaps first paint, so local spawns must wait; SSH/headless don't use the desktop daemon.
     return options?.awaitLocalPtyStartup?.()
   }
 
@@ -1542,8 +1357,7 @@ export function registerPtyHandlers(
     return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
   }
 
-  // Remove any previously registered handlers so we can re-register them
-  // (e.g. when macOS re-activates the app and creates a new window).
+  // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
@@ -1570,11 +1384,7 @@ export function registerPtyHandlers(
   ipcMain.removeAllListeners('pty:deliveryResyncResponse')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
-  // Configure the local provider with app-specific hooks.
-  // Why: only LocalPtyProvider has the configure() method — daemon-backed
-  // providers handle subprocess spawning internally and don't need main-process
-  // hook injection. The hooks (buildSpawnEnv, onSpawned, etc.) only make sense
-  // when the PTY lives in the Electron main process.
+  // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
   if (localProvider instanceof LocalPtyProvider) {
     localProvider.configure({
       isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
@@ -1607,8 +1417,7 @@ export function registerPtyHandlers(
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.()
         })
-        // Why: agents need their own terminal handle at process start so they
-        // can self-identify in orchestration messages without an extra RPC.
+        // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
         const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
         const preAllocatedHandle =
           requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
@@ -1637,21 +1446,14 @@ export function registerPtyHandlers(
     })
   }
 
-  // Why: batching PTY data into short flush windows (8ms ≈ half a frame)
-  // reduces IPC round-trips from hundreds/sec to ~120/sec under high
-  // throughput. Keystroke echo/redraws bypass this below because agent TUIs
-  // already spend tens of ms producing their redraw.
+  // Why: batching PTY data into short flush windows cuts IPC round-trips from hundreds/sec to ~120/sec; keystroke echo/redraws bypass it below.
   type PendingPtyData = {
     data: string
     startSeq?: number
     rawLength?: number
     transformed?: true
     containsBackgroundOutput?: boolean
-    // Why droppedOutput (not main's droppedBacklog trim): this branch bounds
-    // the unsent backlog with the O(1) drop-to-sentinel + query-salvage +
-    // snapshot-restore mechanism below, which strictly supersedes main's
-    // #7630 keep-2MB-tail trim — carrying both would race two cap policies
-    // over the same buffer.
+    // Why droppedOutput (not main's droppedBacklog trim): this branch's drop-to-sentinel + snapshot-restore supersedes #7630's 2MB-tail trim; both would race two cap policies over one buffer.
     droppedOutput?: true
   }
 
@@ -1666,13 +1468,9 @@ export function registerPtyHandlers(
   }
 
   const pendingData = new Map<string, PendingPtyData>()
-  // Why: one restore marker per overflow episode — cleared when the entry
-  // fully drains so a later overflow re-marks the renderer exactly once.
+  // Why: one restore marker per overflow episode — cleared on full drain so a later overflow re-marks exactly once.
   const pendingOverflowMarkedPtys = new Set<string>()
-  // Why: TCP-style cumulative delivery accounting. Relative in-flight counters
-  // make every lost ACK a permanent debt; monotonic sent/acked totals self-heal
-  // as soon as any later ACK (or resync reply) reports the renderer's full
-  // processed count.
+  // Why: TCP-style cumulative accounting — monotonic sent/acked totals self-heal on any later ACK, where relative in-flight counters would make each lost ACK a permanent debt.
   type RendererPtyDeliveryAccounting = {
     sentChars: number
     ackedChars: number
@@ -1689,45 +1487,27 @@ export function registerPtyHandlers(
   let deliveryResyncTimer: ReturnType<typeof setTimeout> | null = null
   let deliveryResyncUnansweredWarnLogged = false
   let lastAckReceivedAtMs: number | null = null
-  // Why 2ms: pairs with the daemon stream batcher (see
-  // daemon-stream-data-batcher.ts) — both hops charged an expected
-  // half-window per chunk; 2ms keeps flood coalescing at negligible IPC
-  // overhead while cutting the pipeline's fixed latency tax.
+  // Why 2ms: pairs with the daemon stream batcher (daemon-stream-data-batcher.ts); keeps flood coalescing at negligible IPC overhead while cutting the pipeline's latency tax.
   const PTY_BATCH_INTERVAL_MS = 2
   const PTY_BATCH_DRAIN_CONTINUE_MS = 1
   const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
   const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
   const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
-  // Why: while the renderer cannot receive (frozen, starved, mid-reload), a
-  // chatty PTY used to grow its pendingData string without bound — main-process
-  // heap ballooning that a renderer reload cannot clear (main's #7630 fixed the
-  // same Win/Linux background-throttled-renderer leak with a 2MB tail trim;
-  // this branch's sentinel mechanism supersedes it). Beyond this cap the
-  // buffered bytes are dropped and the pane heals from the main-owned buffer
-  // snapshot via the droppedOutput sentinel (renderer hidden-output restore).
-  // Why read settings live: the cap scales with the user's scrollback setting
-  // so power users don't lose lines their scrollback would have retained.
+  // Why: cap unbounded pendingData growth when the renderer can't receive (frozen/reloading); beyond it bytes drop and the pane heals from the main buffer snapshot via the droppedOutput sentinel (#7630).
+  // Why read settings live: the cap scales with the user's scrollback so power users don't lose lines their scrollback would have retained.
   const pendingDataCapChars = (): number =>
     terminalOutputBacklogCapChars(getSettings?.().terminalScrollbackRows)
-  // Why: self-heal bound for the dispatcher-ready gate — if a reloaded page never
-  // sends pty:rendererDispatcherReady (lost IPC), force sends back on after this
-  // window so a dropped handshake can't itself become a permanent hold.
+  // Why: self-heal bound — if a reloaded page never sends pty:rendererDispatcherReady, force sends on after this window so a lost handshake can't become a permanent hold.
   const PTY_DISPATCHER_READY_WATCHDOG_MS = 10_000
   const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
-  // Why: active panes need a bounded lane through old hidden bulk output so a
-  // keystroke redraw can reach the renderer before every background ACK lands.
+  // Why: reserve a bounded lane so an active pane's keystroke redraw reaches the renderer ahead of hidden bulk output's ACKs.
   const PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS = 512 * 1024
-  // Why: request/response hygiene only — this timeout never mutates delivery
-  // state. It clears the outstanding-probe flag so a later gated arrival can
-  // probe again, and logs once per silent streak for field diagnosis.
+  // Why: request/response hygiene only (never mutates delivery state) — clears the outstanding-probe flag so a later arrival can re-probe, logs once per silent streak.
   const PTY_DELIVERY_RESYNC_TIMEOUT_MS = 5_000
-  // Why: a heal write-off destroys delivery accounting; require main to have
-  // seen zero ACKs for this long too, independent of the renderer's own
-  // two-silent-ticks evidence, before believing the channel is dead.
+  // Why: a heal write-off destroys delivery accounting; require this much main-side ACK silence (independent of renderer evidence) before declaring the channel dead.
   const PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS = 10_000
-  // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
-  // large output and non-interactive output must still use the batcher.
+  // Why: keep the immediate path to keystroke-sized TUI redraws; large/non-interactive output must use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
   const INTERACTIVE_REDRAW_MAX_CHARS = PTY_BATCH_FLUSH_CHUNK_CHARS
@@ -1739,24 +1519,13 @@ export function registerPtyHandlers(
   let ackGatedFlushSkipCount = 0
   let rendererLifecycleResetCount = 0
   let lastLifecycleResetClearedChars = 0
-  // Why: how many times the watchdog force-opened the gate because no handshake
-  // arrived; nonzero flags a dropped-handshake self-heal (degrades to pre-§1b
-  // behavior, observable + recoverable at the next reset, never a freeze).
+  // Why: count of watchdog gate force-opens (no handshake arrived); nonzero flags a dropped-handshake self-heal.
   let rendererDispatcherReadyForcedCount = 0
-  // Why: gate sends until the current page's pty:data listener is registered.
-  // A reloaded/first-load page has no listener yet, so webContents.send drops
-  // the bytes but still counts them in-flight, permanently pinning the gate.
-  // Flipped true by the pty:rendererDispatcherReady handshake, reset false on
-  // every lifecycle reset (below); starts false so nothing sends pre-handshake.
+  // Why: gate sends until the page's pty:data listener exists; else webContents.send drops bytes but still counts them in-flight, permanently pinning the gate.
   let rendererPtyDispatcherReady = false
   let dispatcherReadyWatchdogTimer: ReturnType<typeof setTimeout> | null = null
 
-  // Why: watermark-driven producer pause/resume (terminal-performance
-  // initiative §5). Signal source is per-PTY pendingData only — renderer
-  // in-flight is already bounded by the ACK window above, while pendingData
-  // is what grows without bound when the renderer cannot keep up. Providers
-  // without support (SSH, legacy daemon protocol) surface no pauseProducer
-  // and the call chain no-ops; the pending cap still bounds memory then.
+  // Why: watermark producer pause/resume keyed on per-PTY pendingData (in-flight is already ACK-bounded); providers without pauseProducer no-op, memory still bounded by the pending cap.
   const producerFlowControl = new PtyProducerFlowController({
     pauseProducer: (id) => tryGetProviderForPty(id)?.pauseProducer?.(id),
     resumeProducer: (id) => tryGetProviderForPty(id)?.resumeProducer?.(id)
@@ -1769,20 +1538,8 @@ export function registerPtyHandlers(
     producerFlowControl.update(id, pendingData.get(id)?.data.length ?? 0)
   }
 
-  // Why this exists: hidden ptys are exempt from pendingData flow control
-  // (their bytes are dropped after model ingestion, so pendingData never
-  // grows), which let background agents run 100MB+ ahead of main in the
-  // daemon's stream-socket buffer and bury the visible pane's echo. The
-  // provider transport keep-tail thins backgrounded ptys' monitoring stream
-  // under backlog; this sync tells it which ptys qualify.
-  // Why keyed on the visibility registry (NOT gate marks or gate-effective
-  // shouldDrop): delivery claims and raw-byte sidecars describe transport
-  // ownership, while thinning asks the semantic question "does any visible
-  // view show this PTY?" Remote view subscribers (mobile/web live terminals)
-  // consume raw bytes from main's fan-out, so their presence vetoes thinning
-  // outright. Dedupe keeps visibility-sync churn off the wire; `?? false`
-  // also swallows the initial
-  // not-background state.
+  // Why: hidden ptys are exempt from pendingData flow control, so background agents can run 100MB+ ahead in the daemon stream buffer; this sync tells the provider transport which ptys to keep-tail thin.
+  // Why keyed on the visibility registry (not gate marks): thinning asks "does any visible view show this PTY?"; remote-view subscribers consume raw bytes, so their presence vetoes thinning.
   const backgroundedDeliverySyncByPty = new Map<string, boolean>()
   function syncPtyBackgroundedDelivery(id: string, caller: string): void {
     const background =
@@ -1840,9 +1597,7 @@ export function registerPtyHandlers(
       }
       maxRendererInFlightCharsByPty = Math.max(maxRendererInFlightCharsByPty, inFlight)
     }
-    // Why: the two renderer visibility signals must agree; a pty both
-    // hidden-gated and reported visible means main is starving a pane the
-    // user can see (v1.4.124-rc.2.perf blank-terminal field lead).
+    // Why: a pty both hidden-gated and reported visible means main is starving a visible pane (v1.4.124-rc.2.perf field lead).
     let hiddenDeliveryGatedVisiblePtyCount = 0
     for (const id of visibleRendererPtys) {
       if (isHiddenRendererPty(id)) {
@@ -1883,14 +1638,10 @@ export function registerPtyHandlers(
 
   const DELIVERY_DIAGNOSTICS_MAX_PTYS = 30
 
-  // Built only when the debug snapshot is actually read — never on the data
-  // path. Aggregate counters can't say WHICH pty is wedged or WHEN the state
-  // arose; this per-pty table + both-process breadcrumb history can.
+  // Built only when the debug snapshot is read (never on the data path): the per-pty table + breadcrumb history says WHICH pty is wedged and WHEN, unlike aggregate counters.
   function buildMainDeliveryDiagnostics(): PtyMainDeliveryDiagnostics {
     const now = Date.now()
-    // Hidden/visible/active set members are included even with no accounting
-    // entry: a pty gated before its first byte is exactly the wedge case the
-    // table must surface.
+    // Include hidden/visible/active members even without an accounting entry: a pty gated before its first byte is exactly the wedge case to surface.
     const ids = new Set([
       ...rendererDeliveryAccountingByPty.keys(),
       ...pendingData.keys(),
@@ -1929,15 +1680,13 @@ export function registerPtyHandlers(
     }
   }
 
-  // Why rate-limited: the contradiction persists chunk after chunk while
-  // latched; one line per minute keeps field logs readable but present.
+  // Why rate-limited: the contradiction persists chunk after chunk while latched; one line per minute keeps field logs readable but present.
   let lastHiddenDropContradictionWarnAtMs = 0
   function warnIfDroppingHiddenBytesForVisiblePty(id: string, droppedChars: number): void {
     if (!visibleRendererPtys.has(id) && !activeRendererPtys.has(id)) {
       return
     }
-    // Recorded before the warn rate limit: the ring coalesces repeats itself,
-    // and the contradiction must appear in the freeze report either way.
+    // Recorded before the warn rate limit: the ring coalesces repeats, and the contradiction must appear in the freeze report either way.
     mainDeliveryBreadcrumbs.record('hidden-drop-visible', {
       id: redactPtyIdForDiagnostics(id),
       droppedChars
@@ -1957,11 +1706,7 @@ export function registerPtyHandlers(
   }
 
   function recordPtyRendererDeliveryPressure(): void {
-    // Why: this fires on every PTY delivery event (per send, per flush, per
-    // onData append). Update the four diagnostic peaks directly instead of
-    // allocating a full 13-field debug snapshot object per call — that object
-    // is only needed when the debug getter is actually read. Peak values are
-    // computed identically to readCurrentPtyRendererDeliveryDebugSnapshot.
+    // Why update peaks directly: this fires on every delivery event, so avoid allocating a full 13-field snapshot object per call (only needed when the debug getter is read).
     let pendingChars = 0
     let maxPendingCharsByPty = 0
     for (const pending of pendingData.values()) {
@@ -1972,8 +1717,7 @@ export function registerPtyHandlers(
     peakPendingChars = Math.max(peakPendingChars, pendingChars)
     peakMaxPendingCharsByPty = Math.max(peakMaxPendingCharsByPty, maxPendingCharsByPty)
     peakRendererInFlightChars = Math.max(peakRendererInFlightChars, rendererInFlightTotalChars)
-    // Why derived per entry: this branch tracks cumulative sent/acked totals
-    // (TCP-style), not a per-pty in-flight map — in-flight is the difference.
+    // Why derived per entry: this tracks cumulative sent/acked totals (TCP-style), not a per-pty in-flight map — in-flight is the difference.
     let maxRendererInFlightCharsByPty = 0
     for (const accounting of rendererDeliveryAccountingByPty.values()) {
       maxRendererInFlightCharsByPty = Math.max(
@@ -1999,14 +1743,10 @@ export function registerPtyHandlers(
     recordPtyRendererDeliveryPressure()
   }
   resetRendererDeliveryAccountingForLifecycleReset = () => {
-    // Why: clearing pendingData is lossless — its bytes were only ever bound for
-    // the dead page, and the replacement page repaints each pane from main's
-    // authoritative sources (daemon snapshot / headless buffer / cold-restore),
-    // which are fed before the pendingData append so they always superset it.
+    // Why lossless: pendingData bytes were bound for the dead page; the replacement repaints from main's authoritative sources, which superset it.
     lastLifecycleResetClearedChars = rendererInFlightTotalChars
     rendererLifecycleResetCount += 1
-    // Why: pending bytes and outstanding credits belonged to the dead page.
-    // Release producer pauses before clearing them so no shell stays wedged.
+    // Why release before clearing: pending bytes and credits belonged to the dead page; releasing producer pauses first keeps no shell wedged.
     producerFlowControl.releaseAll()
     clearDeliveryResyncProbe()
     deliveryResyncUnansweredWarnLogged = false
@@ -2014,26 +1754,20 @@ export function registerPtyHandlers(
     rendererInFlightTotalChars = 0
     pendingData.clear()
     pendingOverflowMarkedPtys.clear()
-    // Why: the reloading page's pty:data listener is gone until it re-registers
-    // and re-sends the handshake; hold sends until then so the boot window can't
-    // re-pin the gate with bytes dropped into a listener-less page.
+    // Why hold sends: the reloading page's pty:data listener is gone until it re-registers/handshakes, so bytes would drop into a listener-less page and re-pin the gate.
     rendererPtyDispatcherReady = false
-    // Why: arm the self-heal watchdog so a never-arriving handshake can't leave the
-    // gate held forever; the real handshake cancels it.
+    // Why: arm the self-heal watchdog so a never-arriving handshake can't hold the gate forever; the real handshake cancels it.
     armDispatcherReadyWatchdog()
     recordPtyRendererDeliveryPressure()
   }
-  // Why: let a later re-registration cancel this closure's watchdog (armed via a
-  // hoisted fn, so this bridge assignment can precede its definition).
+  // Why the bridge: let a later re-registration cancel this closure's watchdog (armed via a hoisted fn, so this assignment can precede its definition).
   clearRendererDispatcherReadyWatchdog = clearDispatcherReadyWatchdog
 
   function isLikelyInteractiveRedraw(data: string): boolean {
     if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
       return true
     }
-    // Why: Codex-style TUIs can repaint more than 1 KB per keypress. ANSI
-    // control redraws are still latency-sensitive, while plain command output
-    // should stay on the throughput batch path.
+    // Why the ANSI check: Codex-style TUIs repaint >1 KB per keypress (latency-sensitive), while plain command output should stay on the throughput batch path.
     return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
   }
 
@@ -2088,19 +1822,14 @@ export function registerPtyHandlers(
     const totalLimit =
       PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS +
       (options.interactive === true ? PTY_RENDERER_INTERACTIVE_RESERVE_CHARS : 0)
-    // Why: the reserve is per active PTY, not global; one active pane should
-    // stay responsive without letting every background pane burst past the cap.
+    // Why per-PTY (not global) reserve: keep one active pane responsive without letting every background pane burst past the cap.
     const ptyLimit =
       PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS +
       (options.interactive === true ? PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS : 0)
     return getRendererInFlightCharsForPty(id) < ptyLimit && rendererInFlightTotalChars < totalLimit
   }
 
-  // Why: max-merge on cumulative totals is idempotent and reorder-tolerant —
-  // a replayed or out-of-order ACK can never double-credit, and a lost ACK
-  // self-heals when any later ACK reports the full processed count. Returns
-  // the newly acknowledged delta so provider (SSH/daemon) backpressure is only
-  // credited for bytes main actually tracked in flight, never negative.
+  // Why max-merge cumulative totals: idempotent and reorder-tolerant — replayed/out-of-order ACKs can't double-credit and a lost ACK self-heals. Returns the newly acknowledged delta.
   function applyCumulativeAck(id: string, processedChars: number): number {
     const accounting = rendererDeliveryAccountingByPty.get(id)
     if (!accounting) {
@@ -2128,10 +1857,7 @@ export function registerPtyHandlers(
     }
   }
 
-  // Why: event-triggered verified-state recovery. Data arriving for a fully
-  // gated PTY is the deterministic signal that delivery may be stuck on lost
-  // ACKs (e.g. dropped across a system suspend); ask the renderer for its
-  // authoritative processed totals instead of resetting on a wall-clock guess.
+  // Why: data for a fully gated PTY signals delivery may be stuck on lost ACKs (e.g. dropped across suspend); ask the renderer for authoritative totals instead of a wall-clock guess.
   function requestDeliveryResyncForGatedPty(): void {
     if (deliveryResyncOutstandingRequestId !== null || mainWindow.isDestroyed()) {
       return
@@ -2144,9 +1870,7 @@ export function registerPtyHandlers(
         return
       }
       clearDeliveryResyncProbe()
-      // Why: no state mutation on timeout — a renderer that cannot answer has
-      // dead IPC, and only a reload cures that. Log once per silent streak so
-      // field diagnosis is captured without spamming every probe cycle.
+      // Why no mutation on timeout: unanswered means dead IPC that only a reload cures; log once per silent streak to avoid spamming every probe.
       if (deliveryResyncUnansweredWarnLogged) {
         return
       }
@@ -2160,11 +1884,7 @@ export function registerPtyHandlers(
     mainWindow.webContents.send('pty:requestDeliveryResync', { requestId })
   }
 
-  // Why: bytes sent but never counted received by the renderer after a
-  // confirmed wedge are gone — no ACK message can ever repay them (unlike a
-  // lost ACK, which any later cumulative total heals). Write the debt off and
-  // hand back restore markers so panes repaint from the main-owned snapshot;
-  // the caller routes them locally because push markers cannot arrive.
+  // Why write off: bytes sent but never received after a confirmed wedge are gone (no ACK can repay them); hand back restore markers so panes repaint from the snapshot.
   function writeOffLostRendererDelivery(
     report: PtyRendererDeliveryStateReport
   ): PtyDeliveryWriteOff[] {
@@ -2176,8 +1896,7 @@ export function registerPtyHandlers(
       const received = report.receivedCharsByPty?.[id]
       const receivedChars =
         typeof received === 'number' && Number.isFinite(received) ? Math.max(0, received) : 0
-      // Why skip a parse-pending window: received-but-unparsed bytes sit alive
-      // in the renderer write queue; their deferred ACK still repays this debt.
+      // Why skip: received-but-unparsed bytes are alive in the renderer write queue; their deferred ACK still repays this debt.
       if (receivedChars > accounting.ackedChars) {
         continue
       }
@@ -2186,9 +1905,7 @@ export function registerPtyHandlers(
         continue
       }
       tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
-      // Why drop pending: everything at or before markerSeq comes from the
-      // snapshot (hidden-drop parity); flushing pre-marker bytes afterward
-      // would double-paint what the restore already covers.
+      // Why drop pending: everything at/before markerSeq comes from the snapshot, so flushing pre-marker bytes would double-paint the restore.
       const pending = pendingData.get(id)
       if (pending) {
         pendingDroppedChars += pending.data.length
@@ -2266,11 +1983,7 @@ export function registerPtyHandlers(
     deliveredHiddenRendererResizeOutputPtys.delete(id)
   }
 
-  // Why: when main drops renderer delivery (hidden gate / pending cap), an
-  // explicit out-of-band pty:modelRestoreNeeded signal tells the renderer to
-  // latch model-restore-needed. It must NOT ride pty:data: an in-band empty
-  // chunk is indistinguishable from a chunk fully consumed by renderer-side
-  // OSC-9999 stripping, which spuriously restored visible panes.
+  // Why out-of-band (not pty:data): an in-band empty chunk is indistinguishable from one fully consumed by renderer-side OSC-9999 stripping, which spuriously restored visible panes.
   function sendModelRestoreNeededMarker(
     id: string,
     reason: PtyModelRestoreReason,
@@ -2302,16 +2015,10 @@ export function registerPtyHandlers(
 
   const pendingDataDropWarnedPtys = new Set<string>()
 
-  // Why capped: the drop path guarantees O(1) memory per PTY; salvaged query
-  // bytes are tiny (a DSR probe is 4 chars) and anything past the cap means a
-  // pathological stream, where degrading to the plain sentinel is fine.
+  // Why capped: keeps O(1) memory per PTY; salvaged query bytes are tiny, so past the cap a pathological stream can degrade to the plain sentinel.
   const DROPPED_QUERY_SALVAGE_MAX_CHARS = 4096
 
-  // Why: a bulk drop must not swallow reply-eliciting queries embedded in the
-  // flood (DSR 6n / CPR, DA1/DA2, DECRQM, OSC 10/11 probes). The program that
-  // wrote them blocks on the reply (the bench DSR timeout). Carve just the
-  // query bytes out and let them ride the droppedOutput sentinel — content is
-  // healed by the snapshot restore, so replies cannot double-fire.
+  // Why carve out queries: a bulk drop must not swallow reply-eliciting probes (DSR/CPR, DA1/DA2, DECRQM, OSC 10/11) the program blocks on; snapshot heals content so replies can't double-fire.
   function extractDroppedPtyQueryBytes(data: string): string {
     if (!data.includes('\x1b')) {
       return ''
@@ -2330,28 +2037,19 @@ export function registerPtyHandlers(
       console.error(
         `[pty] dropped ${pending.data.length} buffered chars for ${id}: renderer not receiving and per-PTY pending cap exceeded; pane will restore from the main-owned snapshot`
       )
-      // Why: field visibility for cap tuning — drop frequency and size decide
-      // whether the cap is too small (issue #2836 / #7017). No pty id: session
-      // ids can embed workspace paths.
+      // Why: field visibility for cap tuning (issue #2836 / #7017); no pty id since session ids can embed workspace paths.
       recordCrashBreadcrumb('terminal_pending_output_dropped', {
         droppedChars: pending.data.length,
         capChars
       })
     }
-    // Why: with the hidden-delivery gate rolled out, the model snapshot can
-    // recover the dropped middle — emit the out-of-band restore marker once
-    // per overflow episode alongside the droppedOutput sentinel so a fresh
-    // or reloaded view latches restore too.
+    // Why the marker: the snapshot can recover the dropped middle; emit it once per overflow episode so a fresh or reloaded view latches restore too.
     if (isHiddenPtyDeliveryGateEnabled(getSettings?.()) && !pendingOverflowMarkedPtys.has(id)) {
       pendingOverflowMarkedPtys.add(id)
       sendModelRestoreNeededMarker(id, 'pending-cap', runtime?.getPtyOutputSequence(id))
     }
     pendingDroppedChars += pending.data.length
-    // Why no trimmed content tail: a mid-stream gap would silently corrupt
-    // the pane. The droppedOutput sentinel routes the pane through
-    // hidden-output restore, which repaints from the authoritative main-owned
-    // buffer and realigns with the live stream by sequence. Only carved-out
-    // query bytes ride along so their replies survive the drop.
+    // Why no trimmed content tail: a mid-stream gap would corrupt the pane; the droppedOutput sentinel repaints from the snapshot and realigns by sequence (only query bytes ride along).
     return {
       data: extractDroppedPtyQueryBytes(pending.data).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS),
       droppedOutput: true
@@ -2368,10 +2066,7 @@ export function registerPtyHandlers(
     rawLength = data.length,
     transformed = false
   ): PendingPtyData {
-    // Why: once over the cap, stay dropped at O(1) memory until the renderer
-    // can receive again — the restore sentinel supersedes any interim bytes.
-    // Queries arriving while latched still get carved out (bounded) so their
-    // replies survive the whole drop episode, not just the first burst.
+    // Why stay dropped at O(1): once over the cap the restore sentinel supersedes interim bytes; queries still get carved out (bounded) so replies survive the whole episode.
     if (existing?.droppedOutput === true) {
       if (existing.data.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
         return existing
@@ -2423,10 +2118,7 @@ export function registerPtyHandlers(
     if (mainWindow.isDestroyed()) {
       return
     }
-    // Why: one-shot self-heal — if the reloaded page never signals ready, force the
-    // gate open so a dropped handshake degrades to pre-handshake behavior (bounded
-    // duplicate/overwrite at worst) instead of a permanent hold. Unref'd so it can
-    // never keep the process alive.
+    // Why: one-shot self-heal — force the gate open if the reloaded page never signals ready, so a dropped handshake can't hold it forever. Unref'd so it can't keep the process alive.
     dispatcherReadyWatchdogTimer = setTimeout(() => {
       dispatcherReadyWatchdogTimer = null
       if (rendererPtyDispatcherReady || mainWindow.isDestroyed()) {
@@ -2442,8 +2134,7 @@ export function registerPtyHandlers(
   function flushPendingData(): void {
     flushTimer = null
     if (mainWindow.isDestroyed()) {
-      // Why: the bookkeeping is being wiped, so no future drain can ever
-      // resume these producers — release them now or local shells wedge.
+      // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
       producerFlowControl.releaseAll()
       clearDeliveryResyncProbe()
       pendingData.clear()
@@ -2454,9 +2145,7 @@ export function registerPtyHandlers(
       recordPtyRendererDeliveryPressure()
       return
     }
-    // Why: hold sends until the page's pty:data listener is registered. Bytes
-    // keep accruing in pendingData (2 MB cap + droppedBacklog rebuild it
-    // losslessly); the ready handshake reschedules this flush.
+    // Why hold: the page's pty:data listener isn't registered yet; bytes accrue in pendingData (rebuilt losslessly) and the ready handshake reschedules this flush.
     if (!rendererPtyDispatcherReady) {
       return
     }
@@ -2466,8 +2155,7 @@ export function registerPtyHandlers(
       if (writes >= PTY_BATCH_FLUSH_MAX_WRITES) {
         break
       }
-      // Why: hidden-gated bytes are dropped, never re-queued — the model
-      // already ingested them; reveal restores from the snapshot+seq machinery.
+      // Why drop, never re-queue: the model already ingested hidden-gated bytes; reveal restores from the snapshot+seq machinery.
       if (shouldDropHiddenRendererPtyData(id, settings)) {
         pendingData.delete(id)
         pendingOverflowMarkedPtys.delete(id)
@@ -2485,10 +2173,7 @@ export function registerPtyHandlers(
       pendingData.delete(id)
       if (pending.droppedOutput === true) {
         updateProducerFlowControl(id)
-        // Why: the buffered bytes were dropped at the pending cap; tell the
-        // renderer so the pane repaints from the main-owned buffer snapshot
-        // instead of continuing a stream with a silent gap. data carries only
-        // the carved-out query bytes (see extractDroppedPtyQueryBytes).
+        // Why droppedOutput sentinel: pending-cap drop means the pane must repaint from the snapshot, not continue a gapped stream (data = carved query bytes only).
         sendPtyDataToRenderer(id, { id, data: pending.data, droppedOutput: true })
         writes++
         continue
@@ -2528,8 +2213,7 @@ export function registerPtyHandlers(
     }
     recordPtyRendererDeliveryPressure()
     if (pendingData.size > 0 && writes > 0) {
-      // Why: a background terminal can dump megabytes at once. Yield between
-      // small IPC slices so keystroke writes are not stuck behind one flush.
+      // Why yield between slices: a background terminal can dump megabytes at once, and keystroke writes must not stall behind one flush.
       schedulePendingDataFlush(PTY_BATCH_DRAIN_CONTINUE_MS)
     }
   }
@@ -2549,8 +2233,7 @@ export function registerPtyHandlers(
     if (existing) {
       clearTimeout(existing)
     }
-    // Why: some providers can report the real exit after kill has already
-    // completed; skip only that late duplicate, not a future reused id forever.
+    // Why a timed window: providers may report the real exit after kill completes; skip only that late duplicate, not a future reused id forever.
     const cleanupTimer = setTimeout(() => {
       syntheticKillExitPtyIds.delete(id)
     }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
@@ -2572,14 +2255,11 @@ export function registerPtyHandlers(
     if (mainWindow.isDestroyed()) {
       return
     }
-    // Why: flush any batched data for this PTY before sending the exit event,
-    // otherwise the last <=8ms of output is silently lost because the renderer
-    // tears down the terminal on pty:exit before the batch timer fires.
+    // Why flush before exit: the renderer tears down the terminal on pty:exit, so any batched output not yet flushed would be silently lost.
     const remaining = pendingData.get(payload.id)
     if (remaining) {
       if (remaining.droppedOutput === true) {
-        // Sentinel entry: only salvaged query bytes remain; keep the flag so
-        // the renderer knows the span was dropped (same as the flush loop).
+        // Sentinel entry: only salvaged query bytes remain; keep the flag so the renderer knows the span was dropped.
         sendPtyDataToRenderer(payload.id, {
           id: payload.id,
           data: remaining.data,
@@ -2600,8 +2280,7 @@ export function registerPtyHandlers(
       }
       pendingData.delete(payload.id)
     }
-    // Why: exit drops this PTY's bookkeeping; resume (no-op on a dead PTY)
-    // rather than leave a stale paused mark behind for a reused id.
+    // Why resume a dead PTY (no-op): avoid leaving a stale paused mark behind for a reused id.
     producerFlowControl.release(payload.id)
     pendingOverflowMarkedPtys.delete(payload.id)
     lastInputAtByPty.delete(payload.id)
@@ -2610,8 +2289,7 @@ export function registerPtyHandlers(
       0,
       rendererInFlightTotalChars - getRendererInFlightCharsForPty(payload.id)
     )
-    // Why: the renderer also drops its cumulative total on pty:exit, so a
-    // reused id restarts aligned at zero on both sides.
+    // Why: the renderer also drops its cumulative total on pty:exit, so a reused id restarts aligned at zero on both sides.
     rendererDeliveryAccountingByPty.delete(payload.id)
     recordPtyRendererDeliveryPressure()
     mainWindow.webContents.send('pty:exit', payload)
@@ -2636,20 +2314,13 @@ export function registerPtyHandlers(
     return providerExitObserved
   }
 
-  // Why: extracted so the "Restart daemon" flow can rebind against the fresh
-  // adapter after replaceDaemonProvider runs. Both the startup registration
-  // and the post-restart rebind go through the same code path — no risk of
-  // drift between the two entry points.
+  // Why extracted: the "Restart daemon" flow rebinds against the fresh adapter after replaceDaemonProvider, sharing this code path with startup registration.
   const bindProviderListeners = (): void => {
     localDataUnsub?.()
     localExitUnsub?.()
     localBackgroundStreamUnsub?.()
 
-    // Keep-tail thinning facts from the daemon, in byte order with onData.
-    // The marker flips scan authority for the four transient-fact scanners;
-    // a gap resets main's cross-chunk parse state and forces the renderer to
-    // restore from the model snapshot (same seq-guard path as hidden drops)
-    // in case any view — eager buffer included — was receiving bytes.
+    // Daemon keep-tail thinning facts, in byte order with onData: markers flip transient-fact scan authority; a gap forces renderer restore from the snapshot.
     localBackgroundStreamUnsub =
       localProvider.onBackgroundStreamEvent?.((payload) => {
         if (payload.kind === 'backgroundMarker') {
@@ -2673,12 +2344,7 @@ export function registerPtyHandlers(
         runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact)
       }) ?? null
 
-    // Why: LocalPtyProvider routes data to the runtime via configure().onData,
-    // but daemon-backed providers don't have configure(). Without this, daemon
-    // PTY data never reaches the runtime's tail buffer, so terminal.read returns
-    // empty and agent-detection from raw data never fires. Runtime tails also
-    // power mobile read/stream, so they must be notified regardless of window
-    // state.
+    // Why: daemon providers lack configure().onData, so feed the runtime here or their tail buffer (terminal.read, agent-detection, mobile stream) stays empty.
     const isLocalProvider = localProvider instanceof LocalPtyProvider
 
     localDataUnsub = localProvider.onData((payload) => {
@@ -2691,9 +2357,7 @@ export function registerPtyHandlers(
       const startSeq =
         typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
       if (mainWindow.isDestroyed()) {
-        // Why: clear the pending flush timer so it doesn't fire after the window
-        // is gone. Without this, macOS app re-activation leaks orphaned timers
-        // from the previous window's registration.
+        // Why clear the flush timer: macOS app re-activation otherwise leaks orphaned timers from the previous window's registration.
         if (flushTimer) {
           clearTimeout(flushTimer)
           flushTimer = null
@@ -2709,11 +2373,7 @@ export function registerPtyHandlers(
         return
       }
       const settings = getSettings?.()
-      // Why: hidden-delivery gate — runtime ingestion above already consumed
-      // the chunk; gated renderer delivery is DROPPED (never queued) and the
-      // reveal path restores from the model snapshot via the seq guard. The
-      // drop sits before the interactive bypass so gated PTYs take neither
-      // the immediate nor the batched renderer path.
+      // Why drop before the interactive bypass: runtime already ingested the chunk, so gated PTYs skip both renderer paths and reveal restores from the snapshot.
       if (shouldDropHiddenRendererPtyData(payload.id, settings)) {
         const drop = recordHiddenRendererPtyDataDrop(payload.id, payload.data.length)
         warnIfDroppingHiddenBytesForVisiblePty(payload.id, payload.data.length)
@@ -2747,13 +2407,9 @@ export function registerPtyHandlers(
         nextData,
         performance.now()
       )
-      // Why: gate the interactive fast path on the dispatcher handshake too, so
-      // boot-window keystroke echo accrues in pendingData instead of being sent
-      // into a listener-less page and pinning the gate.
+      // Why gate the fast path on the handshake too: else boot-window keystroke echo is sent into a listener-less page and pins the gate.
       if (isInteractiveOutput && rendererPtyDispatcherReady) {
-        // Why: user-input echo should not be pinned behind unrelated bulk
-        // terminal output already handed to the renderer. The reserve is
-        // bounded, and the per-PTY cap still prevents an active TUI runaway.
+        // Why the reserve: keep input echo from being pinned behind unrelated bulk output; it's bounded and the per-PTY cap still prevents an active TUI runaway.
         if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
           requestDeliveryResyncForGatedPty()
           pendingData.set(payload.id, pending)
@@ -2765,8 +2421,7 @@ export function registerPtyHandlers(
         updateProducerFlowControl(payload.id)
         pendingOverflowMarkedPtys.delete(payload.id)
         clearFlushTimerIfIdle()
-        // Why: agent TUIs redraw small prompt regions after every keystroke.
-        // Waiting for the throughput batch timer adds visible input latency.
+        // Why immediate: agent TUIs redraw small prompt regions per keystroke; the throughput batch timer would add visible input latency.
         sendPtyDataToRenderer(payload.id, {
           id: payload.id,
           data: nextData,
@@ -2785,8 +2440,7 @@ export function registerPtyHandlers(
       pendingData.set(payload.id, pending)
       updateProducerFlowControl(payload.id)
       recordPtyRendererDeliveryPressure()
-      // Why: probe on data arrival, not on flush skips — new output for a
-      // fully gated PTY is the moment stuck delivery becomes observable.
+      // Why probe on data arrival (not flush skips): new output for a fully gated PTY is the moment stuck delivery becomes observable.
       if (
         !canSendPtyDataToRenderer(payload.id, { interactive: activeRendererPtys.has(payload.id) })
       ) {
@@ -2813,11 +2467,7 @@ export function registerPtyHandlers(
   bindProviderListeners()
   rebindProviderListeners = bindProviderListeners
 
-  // Why: a persistent ipcMain listener with a request-ID dispatch table
-  // (instead of one listener per call) so concurrent serialize requests do
-  // not stack listeners and trip Node's MaxListeners=10 warning. Many
-  // sleeping PTYs waking at once (e.g. on relaunch) routinely fan out 10+
-  // concurrent calls.
+  // Why: one persistent listener with a request-ID dispatch table instead of one per call, so concurrent serialize requests don't trip Node's MaxListeners=10 warning.
   type SerializeResult = {
     data: string
     cols: number
@@ -2915,18 +2565,11 @@ export function registerPtyHandlers(
     })
   }
 
-  // Why: a reload (did-finish-load) or renderer crash replaces the process
-  // that owned every delivery-interest hold and hidden mark; surviving
-  // daemon/SSH PTYs would otherwise stay force-fed (leaked interest defeats
-  // the gate) or stay gated against a renderer that never marked them. Drop
-  // memory is preserved — each pane's first sync re-marks/unmarks and the
-  // unmark path re-emits the restore marker for unrestored drops.
+  // Why: reload/crash orphans delivery-interest holds and hidden marks; reset so surviving PTYs aren't stuck force-fed or gated — each pane's first sync re-marks.
   clearRendererGateResetHandlers()
   rendererGateResetLoadHandler = () => {
     resetRendererScopedHiddenPtyDeliveryState()
-    // Why: the daemon pacer must not keep throttling ptys whose hidden marks
-    // died with the renderer; the fresh renderer's first visibility sync
-    // re-marks the ones that are still hidden.
+    // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
     resyncBackgroundedDeliveriesAfterGateReset()
   }
   rendererGateResetGoneHandler = () => {
@@ -2937,25 +2580,17 @@ export function registerPtyHandlers(
   mainWindow.webContents.on('did-finish-load', rendererGateResetLoadHandler)
   mainWindow.webContents.on('render-process-gone', rendererGateResetGoneHandler)
 
-  // Kill orphaned PTY processes from previous page loads when the renderer reloads.
-  // Why: only applies to LocalPtyProvider where PTYs live in the Electron main
-  // process and can become orphaned on page reload. Daemon-backed sessions
-  // survive renderer restarts by design — orphan cleanup would kill them.
+  // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
   clearDidFinishLoadHandler()
   if (localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
     didFinishLoadHandler = () => {
-      // Why: always advance so the load generation stays monotonic, but skip the
-      // sweep (and its per-PTY cleanup) on the crash/freeze-recovery reload — it
-      // would kill live LOCAL PTYs across the single window before session
-      // restore re-attaches them (#5787). The getter consumes the flag, so the
-      // next genuine reload still reclaims genuinely-orphaned PTYs.
+      // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
       const generation = lp.advanceGeneration()
       if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
         return
       }
-      // Why: the retained provider onExit callback is the only physical-exit
-      // proof; it clears ownership and notifies runtime after the OS reaps it.
+      // Why: the retained provider onExit callback is the only physical-exit proof; it clears ownership after the OS reaps it.
       lp.killOrphanedPtys(generation - 1)
     }
     didFinishLoadWebContents = mainWindow.webContents
@@ -2991,9 +2626,7 @@ export function registerPtyHandlers(
     })
 
   const localStartupCwdDirectoryExists = (path: string): boolean => {
-    // Why: Win32 statSync on \\wsl.localhost 9P shares can falsely report
-    // ENOENT for directories that exist on the Linux side; never fall back on
-    // that signal — the provider's WSL-aware validation decides instead.
+    // Why: Win32 statSync on \\wsl.localhost 9P shares can falsely report ENOENT; defer to the provider's WSL-aware validation.
     if (isWslUncPath(path)) {
       return true
     }
@@ -3004,9 +2637,7 @@ export function registerPtyHandlers(
     }
   }
 
-  // Why: the runtime controller must route through getProviderForPty() so that
-  // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
-  // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
+  // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   runtime?.setPtyController({
     spawn: async (args) => {
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
@@ -3020,8 +2651,7 @@ export function registerPtyHandlers(
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
-      // Why: runtime-created terminals do not carry renderer-computed
-      // projectRuntime, so resolve from worktreeId to honor project Windows runtime.
+      // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
       const terminalRuntimeOptions =
         process.platform === 'win32' && !args.connectionId
           ? resolveLocalWindowsTerminalRuntimeOptions({
@@ -3297,9 +2927,7 @@ export function registerPtyHandlers(
           }
         }
         ptyOwnership.set(result.id, args.connectionId ?? null)
-        // Why: Phase-5 ConPTY DA1 — record the native-Windows-local-PTY
-        // determination from the spawn record before any byte reaches the
-        // runtime emulator, so its DA1 override exists from byte zero.
+        // Why: record the native-Windows-local-PTY determination before any byte reaches the emulator, so its ConPTY DA1 override exists from byte zero.
         if (
           isNativeWindowsLocalPtySpawn({
             connectionId: args.connectionId,
@@ -3314,8 +2942,7 @@ export function registerPtyHandlers(
           if (!store || !args.connectionId) {
             return
           }
-          // Why: workspace-session bindings keep app-facing PTY ids for hydration,
-          // while SSH leases keep relay ids for remote lease reconciliation.
+          // Why: SSH leases keep relay ids for remote reconciliation, while session bindings keep app-facing ids for hydration.
           store.upsertSshRemotePtyLease({
             targetId: args.connectionId,
             ptyId: relayResultId,
@@ -3367,9 +2994,7 @@ export function registerPtyHandlers(
             result.id,
             args.worktreeId,
             args.connectionId ?? null,
-            // Why: thread the validated pane identity so main can back a pending
-            // mobile create from this live spawn even if graph-sync stalls (#7587).
-            // Bound tabId like the sibling metadataPaneKey/spawnOptions.tabId here.
+            // Why: thread validated pane identity so main can back a pending mobile create even if graph-sync stalls (#7587).
             typeof args.tabId === 'string' &&
               isValidTerminalTabId(args.tabId) &&
               args.tabId.length <= 512 &&
@@ -3381,9 +3006,7 @@ export function registerPtyHandlers(
               : undefined
           )
         }
-        // Why: arms main's per-PTY Command Code output detector from the launch
-        // command (renderer startupCommand parity); banner detection covers
-        // PTYs spawned without one.
+        // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
         runtime?.noteTerminalSpawnCommand?.(result.id, args.command ?? null)
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
@@ -3401,9 +3024,7 @@ export function registerPtyHandlers(
             })
           }
         }
-        // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
-        // so record their spawn-time paneKey here too. Synthetic hook titles and
-        // paneKey-scoped cache cleanup both depend on this reverse lookup.
+        // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
         const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
         const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
         const inheritRendererReadiness =
@@ -3429,12 +3050,7 @@ export function registerPtyHandlers(
         const response = { id: result.id }
         return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
       } catch (err) {
-        // Why: once the reservation is created, any later throw — spawn
-        // failure, persist failure, or a post-spawn helper such as
-        // registerPty/rememberPaneKeyForPty/track — must settle it. Otherwise
-        // it lingers in paneSpawnReservationsByPaneKey and every future spawn
-        // for this pane awaits a promise that never resolves. reject is a
-        // no-op once the reservation has already resolved.
+        // Why: any later throw must settle the reservation, or it lingers and every future spawn for this pane awaits a promise that never resolves (reject no-ops if already resolved).
         rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
@@ -3460,9 +3076,7 @@ export function registerPtyHandlers(
           provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
         } catch {
           if (connectionId) {
-            // Why: runtime/CLI close can target a detached SSH PTY after its
-            // provider was unregistered. Tombstone the lease so reconnect does
-            // not revive a terminal the user explicitly closed.
+            // Why: runtime/CLI close can target a detached SSH PTY after its provider was unregistered; tombstone the lease so reconnect can't revive it.
             finishPtyShutdown(ptyId, connectionId, store)
             runtime?.onPtyExit(ptyId, -1)
             rememberSyntheticKillExit(ptyId)
@@ -3471,8 +3085,7 @@ export function registerPtyHandlers(
           }
           return false
         }
-        // Why: the controller is synchronous, but ownership must remain until
-        // asynchronous shutdown proves whether the provider emitted an exit.
+        // Why: controller is synchronous, but keep ownership until async shutdown proves whether the provider emitted an exit.
         void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
           .then((providerExitObserved) => {
             finishPtyShutdown(ptyId, connectionId, store)
@@ -3493,16 +3106,14 @@ export function registerPtyHandlers(
             console.warn(
               `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
             )
-            // Why: close runtime tails without clearing provider ownership, so
-            // a retry can still target a PTY that survived the failed shutdown.
+            // Why: close runtime tails but keep provider ownership so a retry can still target a PTY that survived the failed shutdown.
             runtime?.onPtyExit(ptyId, -1)
           })
         return true
       }
       const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
       if (startupPromise) {
-        // Why: provider selection must happen after the daemon swap; selecting
-        // the fallback first can report success while orphaning a daemon PTY.
+        // Why: select the provider after the daemon swap; the fallback first can report success while orphaning a daemon PTY.
         void startupPromise.then(killWithCurrentProvider).catch((err) => {
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
@@ -3549,8 +3160,7 @@ export function registerPtyHandlers(
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
         if (connectionId) {
-          // Why: an absent SSH provider means there is no live target left to
-          // await, but the relay lease must still be tombstoned.
+          // Why: an absent SSH provider means no live target to await, but the relay lease must still be tombstoned.
           finishPtyShutdown(ptyId, connectionId, store)
           runtime?.onPtyExit(ptyId, -1)
           rememberSyntheticKillExit(ptyId)
@@ -3626,9 +3236,7 @@ export function registerPtyHandlers(
       }
     },
     clearBuffer: async (ptyId) => {
-      // Why: desktop xterm owns local scrollback, while daemon/SSH providers
-      // own their own retained buffers. Clear both surfaces so mobile
-      // resubscribe snapshots do not resurrect cleared history.
+      // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
       mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
       try {
         await getProviderForPty(ptyId).clearBuffer(ptyId)
@@ -3644,25 +3252,19 @@ export function registerPtyHandlers(
       return providerSessions.flat()
     },
     serializeBuffer: (ptyId, opts) => {
-      // Why: mobile xterm must start from the desktop xterm's exact screen
-      // state and dimensions before live TUI chunks can render correctly.
+      // Why: mobile xterm must start from the desktop's exact screen state/dimensions before live TUI chunks render correctly.
       return requestSerializedBuffer(ptyId, opts)
     },
     serializeProviderBuffer: async (ptyId, opts) => {
       try {
-        // Why: restored daemon PTYs can be live while their desktop pane stays
-        // unmounted; query the provider model so phone-local navigation works.
+        // Why: restored daemon PTYs can be live while their desktop pane is unmounted; query the provider model so phone-local navigation works.
         return (await getProviderForPty(ptyId).getBufferSnapshot?.(ptyId, opts)) ?? null
       } catch {
         return null
       }
     },
     hasRendererSerializer: (ptyId) => {
-      // Why: the runtime needs a synchronous probe so it can decide whether to
-      // skip the daemon-snapshot seed (the renderer will hydrate it) or run the
-      // seed (no renderer authoritative for this PTY). A registry write happens
-      // when the renderer calls registerPtySerializer; we check via the same
-      // pendingByPaneKey + ptyId pairing that the cooperation gate uses.
+      // Why: a synchronous probe lets the runtime decide whether to skip the daemon-snapshot seed (renderer will hydrate) or run it (no renderer authoritative).
       return rendererSerializerReadiness.has(ptyId)
     },
     getRendererSerializerGeneration: (ptyId) => {
@@ -3722,8 +3324,7 @@ export function registerPtyHandlers(
               scrollbackRows
             })
           : null
-        // Why: after a data gap, main's model contains only the retained tail.
-        // Returning it as a full snapshot would silently erase older scrollback.
+        // Why: after a data gap main holds only the retained tail; returning it as a full snapshot would erase older scrollback.
         if (providerSnapshotRequired && !providerSnapshot) {
           return null
         }
@@ -3735,11 +3336,7 @@ export function registerPtyHandlers(
         if (!snapshot || typeof snapshot.seq !== 'number') {
           return snapshot
         }
-        // Why: sampled after serialize — every byte at or below snapshot.seq
-        // that can still reach the renderer sits in this pending queue. The
-        // renderer's post-restore dedupe bounds its duplicate window with it;
-        // without the bound a stale baseline silently swallows genuinely-new
-        // chunks whose seq domain sits below the snapshot counter.
+        // Why: the renderer's post-restore dedupe needs this pending-queue bound, or a stale baseline swallows new chunks whose seq sits below the snapshot counter.
         const pending = pendingData.get(args.id)
         if (pending && typeof pending.startSeq !== 'number') {
           // Why: a seq-less backlog cannot be bounded — stay conservative.
@@ -3758,10 +3355,7 @@ export function registerPtyHandlers(
     }
   )
 
-  // Why: with main holding side-effect authority the renderer no longer
-  // derives titles from replayed bytes on (re)attach. This title-only replay
-  // snapshot restores title state — never historical bells/completions (the
-  // no-attention-replay rule, terminal-side-effect-authority.md).
+  // Why: main owns side effects, so this replay restores title state only — never historical bells/completions (no-attention-replay rule, terminal-side-effect-authority.md).
   ipcMain.handle('pty:sideEffectSnapshot', (_event, args: { id: string }) => {
     if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
       return null
@@ -3785,9 +3379,7 @@ export function registerPtyHandlers(
         cols: number
         rows: number
         cwd?: string
-        // Why: fresh local renderer spawns opt into recovering a saved cwd
-        // whose directory was deleted (#7239); reattach/remote callers must
-        // keep exact cwd semantics, so the flag alone is not sufficient.
+        // Why: fresh local spawns opt into recovering a saved cwd whose dir was deleted (#7239); reattach/remote need exact cwd, so the flag alone isn't sufficient.
         cwdFallback?: 'worktree'
         env?: Record<string, string>
         envToDelete?: string[]
@@ -3805,25 +3397,12 @@ export function registerPtyHandlers(
           foreground?: unknown
           background?: unknown
         }
-        // Why: hidden-at-spawn declaration (terminal-query-authority.md
-        // §races) — the renderer knows at spawn time that no visible view
-        // will consume this PTY's bytes, so main marks it hidden BEFORE the
-        // first byte and the gate + model responder own spawn-time queries.
+        // Why: hidden-at-spawn declaration (terminal-query-authority.md §races) — main marks hidden before byte zero so the gate owns spawn-time queries.
         initiallyHidden?: boolean
-        // Why: closes the SIGKILL race documented in INVESTIGATION.md by
-        // letting main patch + sync-flush the (worktreeId, tabId, leafId →
-        // ptyId) binding before pty:spawn returns. Only the renderer's
-        // user-typing-Ctrl+T daemon-host path threads these; mobile/runtime
-        // CLI/SSH spawns leave them undefined and the main-side guard
-        // short-circuits.
+        // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
         tabId?: string
         leafId?: string
-        // Why: telemetry-plan.md§Agent launch semantics. The renderer
-        // threads what Orca was *asked* to launch through this field; main
-        // fires `agent_started` only after `provider.spawn` resolves. Loose
-        // typing on the IPC boundary because the main-side schema
-        // validator is the single enforcement point — `track()` will drop
-        // the event if any field is outside its closed enum.
+        // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
         telemetry?: {
           agent_kind?: unknown
           launch_source?: unknown
@@ -3837,9 +3416,7 @@ export function registerPtyHandlers(
         await startupPromise
       }
       await assertFolderWorkspacePtyPathUsable(args.worktreeId)
-      // Why: honor the fallback only for fresh local spawns even if a caller
-      // sends the flag — reattach must keep the session's exact cwd and
-      // remote/SSH paths cannot probe the local filesystem meaningfully.
+      // Why: honor the fallback only for fresh local spawns — reattach needs exact cwd and SSH can't probe the local filesystem.
       const allowMissingCwdFallback =
         !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
       let didFallbackToWorkspaceRootCwd = false
@@ -3889,38 +3466,15 @@ export function registerPtyHandlers(
           'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
         )
       }
-      // Why: the daemon-backed provider replaces LocalPtyProvider and therefore
-      // never runs its buildSpawnEnv closure. We must assemble the same
-      // host-local env (OpenCode plugin, agent-hook server, Pi/OMP managed
-      // extensions, Codex home, dev CLI overrides, GitHub attribution shims)
-      // here so both spawn paths behave identically. buildPtyHostEnv is the
-      // shared helper that encapsulates the full set of injections and guards.
-      //
-      // Safety: skip the entire injection when a remote (SSH) connection is in
-      // play. Every injection here is either host-loopback (the agent-hook
-      // server binds 127.0.0.1, so shipping its token to an SSH host would
-      // leak a loopback secret for no functional benefit) or a path on the
-      // local filesystem (OpenCode plugin dir, Pi/OMP extension paths, Codex
-      // home, dev CLI bin, attribution shim dir) that would resolve to
-      // nothing — or something misleading — on the remote machine.
+      // Why: the daemon-backed provider skips LocalPtyProvider's buildSpawnEnv, so assemble the same host-local env here for parity.
+      // Safety: skip entirely for SSH — every injection is a loopback secret or a local path that leaks or misleads on the remote host.
       const isDaemonHostSpawn =
         !args.connectionId &&
         !(provider instanceof LocalPtyProvider) &&
         !routesFreshSpawnsToLocalProvider(provider)
-      // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so
-      // provider hooks and legacy Pi overlay cleanup can run in buildPtyHostEnv.
-      // DaemonPtyAdapter.doSpawn mints an id the same way when sessionId is
-      // absent — lifting the mint here gives pty.ts the id up-front without
-      // changing daemon semantics (the daemon still honors opts.sessionId ?? mint()).
-      //
-      // Note: the sessionId is STABLE across daemon restarts by design —
-      // DaemonPtyAdapter.reconcileOnStartup reuses it so that users' live
-      // shells survive crashes. Do NOT "simplify" id allocation back to a
-      // fresh UUID per spawn; that would orphan reconnectable terminal state.
-      // Why: only state for ids we minted in THIS request should be cleared on
-      // spawn failure. If the caller supplied args.sessionId it may refer to
-      // an existing PTY whose state (OpenCode hooks, legacy Pi overlay cleanup,
-      // agent-hook pane caches) we must not clobber on a retry/attach failure.
+      // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so buildPtyHostEnv hooks/Pi cleanup can run; daemon still honors opts.sessionId ?? mint().
+      // Note: sessionId is STABLE across daemon restarts by design — do NOT simplify to a fresh UUID per spawn; that orphans reconnectable state.
+      // Why: only clear ids minted in THIS request on failure — a caller-supplied args.sessionId may name an existing PTY we must not clobber.
       const isMintedSessionId = args.sessionId === undefined && isDaemonHostSpawn
       const effectiveSessionId =
         args.sessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
@@ -3941,9 +3495,7 @@ export function registerPtyHandlers(
           })?.distro ?? null)
         : null
       const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
-      // Why: the renderer sets pane env for SSH too. Only forward it to the
-      // remote when the relay hook path is enabled; otherwise a newer relay
-      // could emit statuses this Orca build is not prepared to route.
+      // Why: forward pane env to SSH only when the relay hook path is enabled, or a newer relay could emit statuses this build can't route.
       const sshSourceEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
       const baseEnvWithAuth = claudeAuth
         ? { ...sshSourceEnv, ...claudeAuth.envPatch }
@@ -3996,9 +3548,7 @@ export function registerPtyHandlers(
         ? runtime.createPreAllocatedTerminalHandle()
         : null
       if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
-        // Why: native Agent Teams team ids/tokens are process-local. A sleeping
-        // record preserves the user's native launch shape, but the team env
-        // itself must be regenerated for the new leader PTY.
+        // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
         const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
           handle: preAllocatedHandle,
           baseEnv: baseEnv ?? {}
@@ -4034,16 +3584,14 @@ export function registerPtyHandlers(
           delete baseEnv.ORCA_WORKTREE_ID
         }
       } else if (baseEnv) {
-        // Why: ORCA_PANE_KEY crosses into shells and hook registries. Only the
-        // key proven to match this spawn's tab+leaf may leave the IPC boundary.
+        // Why: ORCA_PANE_KEY crosses into shells/hook registries; only a key proven to match this spawn's tab+leaf may cross the IPC boundary.
         delete baseEnv.ORCA_PANE_KEY
         delete baseEnv.ORCA_TAB_ID
         delete baseEnv.ORCA_WORKTREE_ID
         delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
       }
       const validatedPaneKey = stablePaneKey
-      // Why: SSH can strip ORCA_PANE_KEY when remote hooks are disabled; the
-      // IPC tab/leaf metadata still names the pane and matches runtime fallback.
+      // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
       const reservationPaneKey = metadataPaneKey ?? validatedPaneKey
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
@@ -4070,21 +3618,15 @@ export function registerPtyHandlers(
         !selectedCodexHomePath
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
-          // Should be unreachable: the expression above returns a string when
-          // isDaemonHostSpawn is true. Defense-in-depth in case future edits
-          // break this invariant.
+          // Should be unreachable: effectiveSessionId is a string when isDaemonHostSpawn; defense-in-depth.
           throw new Error('Invariant violation: daemon spawn without sessionId')
         }
         const sessionIdForEnv = effectiveSessionId
-        // Why: this id still reaches filesystem side-effects for provider
-        // hook state and stale pre-migration Pi overlay cleanup; reject
-        // traversal/path separators before a crafted IPC payload can escape
-        // the expected roots.
+        // Why: this id reaches filesystem paths; reject traversal/separators so a crafted IPC payload can't escape the expected roots.
         if (!isSafePtySessionId(sessionIdForEnv, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
         }
-        // Why: clone before mutating so we don't leak injections back into
-        // args.env (which the renderer may reuse for other IPC calls).
+        // Why: clone before mutating so injections don't leak back into args.env (renderer may reuse it).
         env = { ...baseEnv }
         try {
           buildPtyHostEnv(sessionIdForEnv, env, {
@@ -4106,14 +3648,7 @@ export function registerPtyHandlers(
           })
           promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
         } catch (err) {
-          // Why: buildPtyHostEnv has filesystem side-effects (Pi/OMP managed
-          // extension installation). If it throws before we reach provider.spawn,
-          // clear per-PTY state so the next attempt starts clean.
-          //
-          // Only sweep state for ids we MINTED in this request — caller-
-          // supplied ids may refer to existing PTYs whose overlay/hook state
-          // must not be clobbered by a transient overlay-mkdir failure on a
-          // retry/attach path.
+          // Why: buildPtyHostEnv has fs side-effects (Pi/OMP install); clear per-PTY state on throw, but only minted ids — caller ids may name existing PTYs.
           if (isMintedSessionId) {
             clearProviderPtyState(sessionIdForEnv)
           }
@@ -4173,13 +3708,7 @@ export function registerPtyHandlers(
       if (effectiveSessionId !== undefined) {
         spawnOptions.sessionId = effectiveSessionId
       }
-      // Why: on Windows, fall back to the persisted default-shell setting
-      // when the renderer didn't send a per-tab override. Without this, the
-      // daemon path ignores the user's "Default Shell" preference entirely —
-      // it just calls resolvePtyShellPath(env) which reads COMSPEC (cmd.exe)
-      // or falls back to PowerShell. The LocalPtyProvider already consults
-      // getWindowsShell(); this mirrors that on the daemon path so users who
-      // set WSL as default actually get WSL when pressing Ctrl+T.
+      // Why: without this, the Windows daemon path ignores the user's Default Shell preference (LocalPtyProvider already honors it via getWindowsShell()).
       if (effectiveShellOverride !== undefined) {
         spawnOptions.shellOverride = effectiveShellOverride
       }
@@ -4188,19 +3717,14 @@ export function registerPtyHandlers(
       const sessionSizeBeforeAttach =
         effectiveSessionAppId !== undefined ? ptySizes.get(effectiveSessionAppId) : undefined
       if (effectiveSessionId !== undefined) {
-        // Why: daemon PTYs can emit prompt/startup bytes before spawn()
-        // resolves. Runtime headless snapshots need the real pane geometry
-        // for those early bytes; otherwise they default to 80x24 and wrap TUIs.
+        // Why: daemon PTYs can emit before spawn() resolves; set real geometry now or early bytes default to 80x24 and wrap TUIs.
         ptySizes.set(effectiveSessionAppId ?? effectiveSessionId, {
           cols: args.cols,
           rows: args.rows
         })
       }
       if (process.platform === 'win32' && !args.connectionId) {
-        // Why: the renderer only models PowerShell as one shell family. Thread
-        // the persisted implementation choice through spawnOptions so both the
-        // in-process and daemon-backed PTY paths can resolve the same effective
-        // executable without inventing a fourth top-level shell.
+        // Why: the renderer models PowerShell as one shell family; thread the implementation choice so both PTY paths resolve the same executable.
         spawnOptions.terminalWindowsWslDistro =
           terminalRuntimeOptions.terminalWindowsWslDistro ?? null
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
@@ -4229,12 +3753,7 @@ export function registerPtyHandlers(
       )
       const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
       const initiallyHidden = args.initiallyHidden === true
-      // Why pre-spawn for daemon-host sessions (id minted up front): daemon
-      // PTYs can emit prompt bytes before spawn() resolves, and the hidden
-      // mark must beat the first byte so the gate + model responder own
-      // spawn-time queries (terminal-query-authority.md §races). Other
-      // providers cannot emit until spawn resolves; the post-spawn mark
-      // below is byte-zero-safe for them.
+      // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
       const preSpawnHiddenMarkId =
         initiallyHidden && isDaemonHostSpawn && effectiveSessionAppId !== undefined
           ? effectiveSessionAppId
@@ -4284,8 +3803,7 @@ export function registerPtyHandlers(
               resetIncarnation: true
             })
           }
-          // Why: a failed spawn must not leave a stale hidden mark on a session
-          // id a later visible attach may reuse.
+          // Why: a stale hidden mark on this session id would gate a later visible attach that reuses it.
           if (preSpawnHiddenMarkId !== null) {
             unmarkHiddenRendererPty(preSpawnHiddenMarkId)
           }
@@ -4306,9 +3824,7 @@ export function registerPtyHandlers(
             (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
               rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
           ) {
-            // Why: expired remote reattach means the relay has already dropped
-            // the backing PTY. Clear the durable lease so later session writes
-            // cannot restore the stale pane binding.
+            // Why: expired remote reattach = relay already dropped the PTY; clear the lease so writes can't restore the stale binding.
             if (effectiveSessionAppId !== undefined && !isIdentityMismatch) {
               clearProviderPtyState(effectiveSessionAppId)
               deletePtyOwnership(effectiveSessionAppId)
@@ -4317,19 +3833,11 @@ export function registerPtyHandlers(
               store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
             }
           }
-          // Why: if buildPtyHostEnv materialized provider state for this minted
-          // id but provider.spawn failed, that state would otherwise leak.
+          // Why: provider state buildPtyHostEnv materialized for this minted id leaks if spawn failed.
           if (isMintedSessionId && effectiveSessionId !== undefined) {
             clearProviderPtyState(effectiveSessionId)
           }
-          // Why: telemetry-plan.md§agent_error — when the renderer threaded
-          // agent_kind through args.telemetry, attribute the error to that agent.
-          // Otherwise fall back to sniffing the command for `claude` (the one
-          // agent the main process can identify on its own via the existing
-          // `isClaudeLaunchCommand` regex used for auth gating). Bare-shell
-          // catches and unknown-agent catches without renderer telemetry remain
-          // unattributed. The event still emits with a classified `error_class`;
-          // raw error messages are dropped at the telemetry validator boundary.
+          // Why: telemetry-plan.md§agent_error — attribute the error to the renderer-threaded agent_kind, else sniff the command for `claude`; raw messages are dropped at the validator boundary.
           const rendererAgentKindParse =
             args.telemetry?.agent_kind !== undefined
               ? agentKindSchema.safeParse(args.telemetry.agent_kind)
@@ -4359,33 +3867,23 @@ export function registerPtyHandlers(
         })
         ptyOwnership.set(result.id, args.connectionId ?? null)
         if (initiallyHidden) {
-          // Why marked synchronously before any await below: local/SSH provider
-          // data events dispatch on later tasks, so this is still ahead of the
-          // first byte's delivery decision. Idempotent for daemon hosts already
-          // marked pre-spawn; the renderer's first visibility sync re-marks or
-          // unmarks (emitting the restore marker) through the Phase-4 path.
+          // Why marked synchronously here: provider data events dispatch on later tasks, so this still lands ahead of the first byte's delivery decision (idempotent if already marked pre-spawn).
           markHiddenRendererPty(result.id)
           if (preSpawnHiddenMarkId !== null && preSpawnHiddenMarkId !== result.id) {
             // Defense: never strand a mark on an id the provider renamed.
             unmarkHiddenRendererPty(preSpawnHiddenMarkId)
           }
-          // Why after ptyOwnership.set: the provider lookup routes by
-          // ownership, and a hidden-spawned agent should be paceable from its
-          // first flood, not from its first visibility transition.
+          // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
           syncPtyBackgroundedDelivery(result.id, 'spawn')
           closeStartupQueryAuthorityForPty(result.id)
         }
-        // Why: Phase-5 ConPTY DA1 — record the native-Windows-local-PTY
-        // determination from the spawn record before the headless seed below,
-        // so the runtime emulator's DA1 override exists from byte zero.
+        // Why: record the native-Windows-ConPTY determination before the headless seed so the emulator's DA1 override exists from byte zero.
         if (nativeWindowsConptySpawn) {
           markNativeWindowsConptyPty(result.id)
         }
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
         if (store && args.connectionId) {
-          // Why: remote PTYs live in the SSH relay grace window after Orca
-          // detaches. Persist their IDs immediately so reconnect can reattach
-          // instead of treating the tab as a fresh shell.
+          // Why: remote PTYs live in the SSH relay grace window after Orca detaches; persist IDs immediately so reconnect reattaches instead of spawning a fresh shell.
           store.upsertSshRemotePtyLease({
             targetId: args.connectionId,
             ptyId: relayResultId,
@@ -4400,12 +3898,7 @@ export function registerPtyHandlers(
           runtime?.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
         }
         ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
-        // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217)
-        // for local daemon PTYs and the equivalent remote-relay race for SSH.
-        // The renderer's debounced session writer runs in parallel for every
-        // other field; patch the load-bearing (tab.ptyId, ptyIdsByLeafId)
-        // binding synchronously so a force-quit in the ~450 ms debounce window
-        // cannot orphan either daemon history or a remote relay PTY lease.
+        // Why: patch the load-bearing ptyId binding synchronously so a force-quit in the renderer's ~450 ms debounce window can't orphan daemon history or an SSH relay lease (Issue #217).
         if (
           (isDaemonHostSpawn || args.connectionId) &&
           store &&
@@ -4438,12 +3931,7 @@ export function registerPtyHandlers(
             throw new Error(createTerminalSessionStateSaveFailureMessage())
           }
         }
-        // Why: pre-signal cooperation gate — when the renderer has declared it
-        // will own the serializer for this paneKey, suppress the daemon-snapshot
-        // seed so the renderer's hydration path (maybeHydrateHeadlessFromRenderer)
-        // is the sole authority. The pre-signal is keyed on paneKey because at
-        // spawn time the renderer doesn't yet know the new ptyId. See
-        // docs/mobile-prefer-renderer-scrollback.md.
+        // Why: when the renderer has declared it will own the serializer for this paneKey, suppress the daemon-snapshot seed so its hydration path is sole authority (keyed on paneKey since the ptyId isn't known yet). See docs/mobile-prefer-renderer-scrollback.md.
         const rendererPreSignaled = validatedPaneKey
           ? pendingByPaneKey.has(validatedPaneKey)
           : false
@@ -4452,9 +3940,7 @@ export function registerPtyHandlers(
           !rendererPreSignaled &&
           rendererSerializerReadiness.has(result.id)
         rendererSerializerReadiness.beginIncarnation(result.id, rendererAlreadyRegistered)
-        // Why: capture the pending gen at spawn time so teardown for THIS PTY
-        // only settles its own generation. A remount that replaces the entry
-        // with a new gen must not be stomped by the old PTY's teardown.
+        // Why: capture the pending gen at spawn time so this PTY's teardown only settles its own generation, not a remount that replaced the entry.
         if (validatedPaneKey && rendererPreSignaled) {
           const pending = pendingByPaneKey.get(validatedPaneKey)
           if (pending) {
@@ -4462,27 +3948,15 @@ export function registerPtyHandlers(
           }
         }
 
-        // Why: hydrate the runtime's headless emulator with the adapter's
-        // restore data BEFORE registerPty so any live PTY data that arrives
-        // concurrently lands on top of the seed instead of replacing it. Mobile
-        // subscribers then see the same scrollback the desktop xterm received
-        // via coldRestore/snapshot. Without this, mobile snapshots after a
-        // daemon-restored attach contain only bytes emitted since the relaunch
-        // and the prior agent output silently disappears.
-        //
-        // Skip when the renderer is or will be authoritative for this PTY:
-        // its hydration path will seed the emulator from xterm's live buffer,
-        // which is richer than the daemon snapshot.
+        // Why: seed the headless emulator before registerPty so concurrent live PTY data lands on top of the seed, not replacing it (mobile keeps the daemon-restored scrollback).
+        // Skip when the renderer will be authoritative — its xterm buffer is richer than the daemon snapshot.
         if (runtime && !rendererPreSignaled && !rendererAlreadyRegistered) {
           const snapshotSeedSize =
             typeof result.snapshotCols === 'number' && typeof result.snapshotRows === 'number'
               ? { cols: result.snapshotCols, rows: result.snapshotRows }
               : undefined
           if (typeof result.snapshot === 'string' && result.snapshot.length > 0) {
-            // Why kitty flags ride seed metadata: the snapshot string omits
-            // them by design (renderer kitty reset stays authoritative), but
-            // the re-seeded emulator must answer hidden `CSI ? u` with the
-            // flags the still-running app pushed (terminal-query-authority.md).
+            // Why kitty flags ride seed metadata: the snapshot omits them, but the re-seeded emulator must answer hidden `CSI ? u` with the running app's flags (terminal-query-authority.md).
             runtime.seedHeadlessTerminal(
               result.id,
               result.snapshot,
@@ -4522,10 +3996,7 @@ export function registerPtyHandlers(
             result.id,
             args.worktreeId,
             args.connectionId ?? null,
-            // Why: pass the validated pane identity so a mobile create waiting on
-            // this renderer tab can publish its surface main-side when graph-sync
-            // is throttled, instead of destroying the live PTY (#7587). Bound the
-            // untrusted tabId like the sibling metadataPaneKey/spawnOptions.tabId.
+            // Why: pass validated pane identity so a throttled mobile create publishes its surface main-side instead of destroying the live PTY (#7587); bound the untrusted tabId.
             typeof args.tabId === 'string' &&
               isValidTerminalTabId(args.tabId) &&
               args.tabId.length <= 512 &&
@@ -4537,9 +4008,7 @@ export function registerPtyHandlers(
               : undefined
           )
         }
-        // Why: arms main's per-PTY Command Code output detector from the launch
-        // command (renderer startupCommand parity); banner detection covers
-        // PTYs spawned without one.
+        // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
         runtime?.noteTerminalSpawnCommand?.(
           result.id,
           typeof args.command === 'string' ? args.command : null
@@ -4547,14 +4016,8 @@ export function registerPtyHandlers(
         if (isClaudeLaunch) {
           markClaudePtySpawned(result.id)
         }
-        // Why: renderer sets ORCA_PANE_KEY in `args.env` for every pane-owned
-        // spawn (see pty-connection.ts). Recording the mapping here lets
-        // clearProviderPtyState clear the agent-hooks server's per-paneKey
-        // caches when the PTY exits.
-        // Why: args.env arrives as untrusted JSON over IPC — the static
-        // Record<string, string> type is not actually enforced at the boundary.
-        // Narrow to a bounded string so malformed or oversized values cannot
-        // pollute ptyPaneKey or the downstream clearPaneState call.
+        // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
+        // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.
         const rememberedPaneKey = validatedPaneKey
           ? rememberPaneKeyForPty(result.id, validatedPaneKey)
           : null
@@ -4572,22 +4035,11 @@ export function registerPtyHandlers(
             clearMigrationUnsupportedPtysForPaneKey(validatedPaneKey)
           }
         }
-        // Why: register local PTYs (connectionId falsy) with the memory
-        // collector so it can walk each PTY's process subtree and attribute
-        // memory back to its worktree. SSH PTYs execute remotely and their
-        // process tree is not visible to our local `ps`, so we skip them.
+        // Why: register only local PTYs with the memory collector — SSH PTYs run remotely and their process tree is invisible to our local `ps`.
         if (!args.connectionId) {
-          // Why: providers publish the OS pid on the spawn result (both
-          // LocalPtyProvider and DaemonPtyAdapter). Recording it once here keeps
-          // the memory module from reaching back into ipc/pty on a hot path, and
-          // works uniformly whether the PTY is hosted in-process or by the
-          // daemon subprocess.
+          // Why: record the spawn-result pid once here so the memory module needn't reach back into ipc/pty on a hot path (works for in-process and daemon-hosted PTYs).
           const spawnedPid = result.pid ?? null
-          // Why: args.worktreeId and args.sessionId arrive as untrusted IPC
-          // payload strings — the static type is not enforced at the boundary.
-          // Narrow them to bounded strings here to match the paneKey defense
-          // above so malformed or oversized values cannot pollute registerPty's
-          // maps or downstream memory-attribution lookups.
+          // Why: args.worktreeId/sessionId arrive as untrusted IPC strings (type unenforced at the boundary); bound them so malformed/oversized values can't pollute registerPty's maps.
           registerPty({
             ptyId: result.id,
             worktreeId:
@@ -4609,16 +4061,7 @@ export function registerPtyHandlers(
                 : null
           })
         }
-        // Why: telemetry-plan.md§Agent launch semantics — fire `agent_started`
-        // only after `provider.spawn` resolved. The renderer threads
-        // `args.telemetry` through the spawn IPC for every launch we want to
-        // attribute; bare-shell tabs (no agent) leave the field undefined and
-        // do not produce an event. Each field is parsed against its closed
-        // enum here so a malformed renderer payload (or a spoofed IPC) does
-        // not poison the event — `safeParse` failure drops that field, and
-        // if any required field is missing we skip the event entirely. The
-        // main-side `track()` validator re-runs the schema on the full
-        // payload as a second defense-in-depth check.
+        // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
         if (args.telemetry) {
           const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
           const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
@@ -4637,18 +4080,12 @@ export function registerPtyHandlers(
           ...(!result.isReattach && effectiveLaunchConfig
             ? { launchConfig: effectiveLaunchConfig }
             : {}),
-          // Why: a daemon-retry race can surface isReattach even for a minted
-          // session id, and a reattach must never claim its cwd was remapped.
+          // Why: a daemon-retry race can surface isReattach even for a minted session id, and a reattach must never claim its cwd was remapped.
           ...(startupCwdFallback && !result.isReattach ? { startupCwdFallback } : {})
         }
         return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
       } catch (err) {
-        // Why: once the reservation is created, any later throw —
-        // spawn failure, persist failure, or a post-spawn helper such as
-        // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise
-        // it lingers in paneSpawnReservationsByPaneKey and every future spawn
-        // for this pane awaits a promise that never resolves. reject is a
-        // no-op once the reservation has already resolved.
+        // Why: any later throw must settle the reservation, else it lingers and every future spawn for this pane awaits a promise that never resolves (reject no-ops if already resolved).
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
@@ -4749,12 +4186,7 @@ export function registerPtyHandlers(
     !(typeof mainWebContents.isDestroyed === 'function' && mainWebContents.isDestroyed())
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
-    // Why: defense-in-depth for the mobile-presence lock. The renderer's
-    // xterm.onData guard already drops desktop keystrokes when mobile is
-    // driving, but a stale view between the main-side state flip and the
-    // IPC arriving in the renderer can let one keystroke slip through.
-    // This server-side check catches it. See
-    // docs/mobile-presence-lock.md.
+    // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
@@ -4779,10 +4211,7 @@ export function registerPtyHandlers(
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
-    // Why: the acknowledgement is used to infer Ctrl+C/Escape actually reached
-    // the local PTY. SSH providers are fire-and-forget relay notifications, so
-    // they cannot truthfully acknowledge until the relay protocol grows a write
-    // request/response.
+    // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
     if (ptyOwnership.get(args.id) !== null) {
       return false
     }
@@ -4836,8 +4265,7 @@ export function registerPtyHandlers(
       return
     }
     const prior = hostViewportClaimTails.get(args.id)
-    // Why: two panes can mirror one PTY. Never let a later no-op claim replace
-    // the in-flight resize that the following host input must await.
+    // Why: two panes can mirror one PTY — never let a later no-op claim replace the in-flight resize that the following host input must await.
     const claim = (
       prior
         ? prior.then(
@@ -4854,29 +4282,14 @@ export function registerPtyHandlers(
     })
   })
 
-  // Why: resize is fire-and-forget — the renderer doesn't need a reply.
-  // Using ipcMain.on (not .handle) halves IPC traffic by avoiding the
-  // empty acknowledgement message back to the renderer.
+  // Why: resize is fire-and-forget — ipcMain.on (not .handle) halves IPC traffic by skipping the empty acknowledgement reply.
   ipcMain.removeAllListeners('pty:resize')
   ipcMain.on('pty:resize', (_event, args: { id: string; cols: number; rows: number }) => {
-    // Why: after a desktop-fit override change, the desktop renderer's
-    // re-render cascade runs safeFit on ALL panes (not just the affected
-    // one). Background-tab panes get measured at full-width (214) instead
-    // of their correct split width. Suppressing ALL pty:resize during
-    // this window prevents the cascade from corrupting PTY dimensions.
+    // Why: after a desktop-fit override change the renderer's safeFit cascade re-measures ALL panes (background ones at full width), so suppress every pty:resize in this window to avoid corrupting PTY dimensions.
     if (runtime?.isResizeSuppressed()) {
       return
     }
-    // Why: presence-lock defense-in-depth. While a phone OR a remote desktop
-    // viewer drives the PTY width, the host's own desktop-side resizes
-    // (auto-fit on window resize, split drag, tab reveal, "+"-new-tab
-    // re-render) must not reach the PTY — otherwise they overwrite the remote
-    // viewer's grid and its alt-screen TUI garbles ("porridge"). The renderer
-    // guard checks the driver state too, but this is the load-bearing layer
-    // because the renderer mirror lags by one IPC hop. Note: BOTH guards apply
-    // — isResizeSuppressed handles the safeFit cascade after take-back; this
-    // driver check handles the ongoing locked state. See
-    // docs/mobile-presence-lock.md.
+    // Why: presence-lock defense-in-depth — while a phone or remote-desktop viewer drives the width, host-side resizes must not reach the PTY or its alt-screen grid garbles; load-bearing because the renderer mirror lags one IPC hop. See docs/mobile-presence-lock.md.
     const mobileOwnsResize = runtime?.getDriver(args.id).kind === 'mobile'
     const remoteDesktopOwnsResize = runtime?.isRemoteDesktopResizeDriven?.(args.id) === true
     if (mobileOwnsResize || remoteDesktopOwnsResize) {
@@ -4891,14 +4304,11 @@ export function registerPtyHandlers(
     }
     const markedHiddenResizeOutput = rendererPtyIsKnownHidden(args.id)
     if (markedHiddenResizeOutput) {
-      // Why: alternate-screen TUIs repaint on SIGWINCH. If that hidden repaint
-      // is read after the user switches back, it must not masquerade as live
-      // foreground output and overwrite the correctly-sized screen.
+      // Why: alt-screen TUIs repaint on SIGWINCH; a hidden repaint read after switch-back must not masquerade as live output and overwrite the correctly-sized screen.
       pendingHiddenRendererResizeOutputPtys.add(args.id)
       deliveredHiddenRendererResizeOutputPtys.delete(args.id)
     } else if (visibleRendererPtys.has(args.id)) {
-      // Why: after the stale hidden-resize repaint has been observed, the
-      // renderer's visible resize pulse owns the next repaint.
+      // Why: after the stale hidden-resize repaint is observed, the renderer's visible resize pulse owns the next repaint.
       clearDeliveredHiddenRendererResizeOutput(args.id)
     }
     try {
@@ -4913,25 +4323,13 @@ export function registerPtyHandlers(
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 
-  // Why: pty:reportGeometry is a measurement-only sibling of pty:resize.
-  // pty:resize means "I want the PTY at this size" (a write/intent — gated
-  // by mobile-driver and cascade suppress). pty:reportGeometry means "the
-  // desktop pane I'm rendering currently measures this many cells" (a
-  // read/observation). Mobile-fit hold needs the latter even while the
-  // former is intentionally blocked: when a previously-hidden desktop
-  // tab becomes visible while a phone is driving, the server has no way
-  // to learn the real desktop dims, and resolveDesktopRestoreTarget
-  // returns the stale spawn default (e.g. 80×24) on Take Back. Splitting
-  // the channels keeps each guard simple — pty:resize keeps its mobile-
-  // driver gate; pty:reportGeometry never resizes the PTY, only refreshes
-  // the restore-target cache. See docs/mobile-fit-hold.md.
+  // Why: pty:reportGeometry is a measurement-only sibling of pty:resize — it refreshes the restore-target cache (never resizes) so mobile-fit hold learns real desktop dims even while resize is blocked. See docs/mobile-fit-hold.md.
   ipcMain.removeAllListeners('pty:reportGeometry')
   ipcMain.on('pty:reportGeometry', (_event, args: { id: string; cols: number; rows: number }) => {
     runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
   })
 
-  // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold restore
-  // cache after the renderer has consumed the data. No-op for non-daemon providers.
+  // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold-restore cache after the renderer consumed it; no-op for non-daemon providers.
   ipcMain.on('pty:ackColdRestore', (_event, args: { id: string }) => {
     const provider = tryGetProviderForPty(args.id)
     if (provider && 'ackColdRestore' in provider && typeof provider.ackColdRestore === 'function') {
@@ -4939,22 +4337,18 @@ export function registerPtyHandlers(
     }
   })
 
-  // Why: renderer ACKs bound main→renderer terminal delivery without stopping
-  // PTY ingestion. Agent/status consumers still see every chunk through the
-  // provider/runtime path while background renderer writes wait their turn.
+  // Why: renderer ACKs bound main→renderer delivery without stopping PTY ingestion — agent/status consumers still see every chunk via the provider/runtime path.
   ipcMain.on(
     'pty:ackData',
     (_event, args: { id: string; charCount?: number; processedChars?: number }) => {
       lastAckReceivedAtMs = Date.now()
-      // Why: a live ACK channel means a future unanswered probe is a fresh
-      // diagnostic event, not a continuation of the last silent streak.
+      // Why: a live ACK channel means a future unanswered probe is a fresh diagnostic event, not a continuation of the last silent streak.
       deliveryResyncUnansweredWarnLogged = false
       let acknowledged = 0
       if (typeof args.processedChars === 'number' && Number.isFinite(args.processedChars)) {
         acknowledged = applyCumulativeAck(args.id, Math.max(0, args.processedChars))
       } else {
-        // Why: tolerate legacy per-chunk delta payloads — dev hot-reload can
-        // pair an old renderer with a new main. Keyed by field presence.
+        // Why: tolerate legacy per-chunk delta payloads — dev hot-reload can pair an old renderer with a new main.
         const accounting = rendererDeliveryAccountingByPty.get(args.id)
         const delta = Number.isFinite(args.charCount) ? Math.max(0, args.charCount ?? 0) : 0
         acknowledged = accounting ? applyCumulativeAck(args.id, accounting.ackedChars + delta) : 0
@@ -4978,9 +4372,7 @@ export function registerPtyHandlers(
       }
       clearDeliveryResyncProbe()
       deliveryResyncUnansweredWarnLogged = false
-      // Why: max-merge — the renderer's cumulative totals are authoritative
-      // for what it processed; reconciling them drains exactly the in-flight
-      // debt left by lost ACKs, nothing more.
+      // Why max-merge: the renderer's cumulative totals are authoritative for what it processed, draining exactly the in-flight debt from lost ACKs.
       for (const [id, processedChars] of Object.entries(args.processedCharsByPty ?? {})) {
         if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
           continue
@@ -4997,16 +4389,11 @@ export function registerPtyHandlers(
     }
   )
 
-  // Why invoke + renderer-initiated: the field wedge (v1.4.121-rc.0 snapshot,
-  // 2026-07-06) kills every main→renderer push channel while invoke stays
-  // alive, so the solicited-resync probe above can never be answered there.
-  // This is the same reconcile, ridden over the direction proven to work, plus
-  // a write-off lane for bytes the renderer provably never received.
+  // Why invoke + renderer-initiated: the field wedge (v1.4.121-rc.0) kills every main→renderer push channel while invoke survives, so the resync rides here plus a write-off lane.
   ipcMain.handle(
     'pty:reportRendererDeliveryState',
     (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
-      // Extra repair lane for the lost-ACK variant: identical max-merge to the
-      // resync response, so a heal is only reached when merging cannot drain.
+      // Extra repair lane for the lost-ACK variant: identical max-merge to the resync response, so a heal is only reached when merging cannot drain.
       for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
         if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
           continue
@@ -5017,9 +4404,7 @@ export function registerPtyHandlers(
         }
       }
       let writtenOff: PtyDeliveryWriteOff[] = []
-      // Why the main-side ACK-silence check: the renderer's two silent ticks
-      // already argue for a wedge; requiring main to have seen no ACK either
-      // keeps a buggy/foreign caller from writing off live delivery.
+      // Why the main-side ACK-silence check: requiring main to have also seen no ACK stops a buggy/foreign caller from writing off live delivery.
       if (
         args?.heal === true &&
         rendererInFlightTotalChars > 0 &&
@@ -5047,28 +4432,18 @@ export function registerPtyHandlers(
     }
   )
 
-  // Why: the renderer sends this once its pty:data listener is live (per page
-  // load / reload). Until it arrives, sends are held so boot-window bytes can't
-  // drop into a listener-less page and pin the delivery gate; on arrival, flush
-  // the backlog that accrued during the boot window.
+  // Why: renderer signals its pty:data listener is live; until then sends are held so boot-window bytes can't drop into a listener-less page and pin the gate.
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
-    // Why: the reconcile below destructively clears delivery accounting, so a
-    // straggler handshake from a dying window must not reset the new window.
+    // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
     if (!isPtyWriteEventFromMainWindow(event, mainWindow.webContents)) {
       return
     }
-    // Why: the handshake is one-shot per page load, so receiving it while the gate
-    // is already open means a fresh page loaded but its lifecycle reset was missed —
-    // a main-frame reload overlapped by an in-page subframe load emits no
-    // did-start-loading, and the watchdog may have force-opened the gate — leaving
-    // main holding the dead page's in-flight accounting, which permanently gates the
-    // survivors. Reconcile by clearing that stale accounting before re-opening.
+    // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.
     if (rendererPtyDispatcherReady) {
       resetRendererDeliveryAccountingForLifecycleReset()
     }
-    // Why: real handshake landed — cancel the self-heal watchdog so it can't later
-    // force-open the gate and inflate rendererDispatcherReadyForcedCount.
+    // Why: real handshake landed — cancel the self-heal watchdog so it can't later force-open the gate.
     clearDispatcherReadyWatchdog()
     rendererPtyDispatcherReady = true
     schedulePendingDataFlush(0)
@@ -5079,9 +4454,7 @@ export function registerPtyHandlers(
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
-    // Why: this is a renderer scheduling hint only. PTY reads, runtime state,
-    // and notifications continue for inactive terminals; active panes merely
-    // get first chance at the bounded renderer output reserve.
+    // Why: renderer scheduling hint only — active panes just get first chance at the bounded output reserve; reads/state/notifications continue for inactive terminals.
     if (args.active) {
       activeRendererPtys.add(args.id)
     } else {
@@ -5097,8 +4470,7 @@ export function registerPtyHandlers(
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
-    // Why: data produced while no renderer can see this PTY must keep that origin
-    // through batching, even if the user switches back before the flush lands.
+    // Why: data produced while no renderer can see this PTY must keep that origin through batching, even if the user switches back before the flush lands.
     rendererVisibilityKnownPtys.add(args.id)
     if (args.visible) {
       visibleRendererPtys.add(args.id)
@@ -5120,9 +4492,7 @@ export function registerPtyHandlers(
     if (args.hidden === true) {
       markHiddenRendererPty(args.id)
       closeStartupQueryAuthorityForPty(args.id)
-      // Why: bytes already queued for a newly hidden PTY are model-owned
-      // state; drop them now instead of holding them under ACK starvation.
-      // Reveal restores from the snapshot.
+      // Why: drop bytes queued for a newly hidden PTY instead of holding them under ACK starvation; reveal restores from the snapshot.
       const pending = pendingData.get(args.id)
       if (pending && shouldDropHiddenRendererPtyData(args.id, getSettings?.())) {
         pendingData.delete(args.id)
@@ -5143,12 +4513,7 @@ export function registerPtyHandlers(
     }
     const { droppedWhileHidden } = unmarkHiddenRendererPty(args.id)
     syncPtyBackgroundedDelivery(args.id, 'gate-unmark')
-    // Why: a renderer reload or remount can replace the view that latched
-    // restore-needed from the first-drop marker. Re-emit on unhide so the
-    // (possibly fresh) visible view still pulls the model snapshot covering
-    // the dropped bytes. If the original view is still alive this can trigger
-    // a redundant second restore — accepted: a snapshot replay is cheap and
-    // idempotent, while a missed restore leaves a corrupt pane.
+    // Why: a reload/remount may have replaced the view that latched restore-needed, so re-emit on unhide; a redundant replay is cheap/idempotent, a missed restore corrupts the pane.
     if (droppedWhileHidden) {
       sendModelRestoreNeededMarker(args.id, 'unhide', runtime?.getPtyOutputSequence(args.id))
     }
@@ -5156,9 +4521,7 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:terminalViewAttributes')
   ipcMain.on('pty:terminalViewAttributes', (_event, args: unknown) => {
-    // Why validate-or-drop: the responder must never store a malformed
-    // palette — a wrong color reply breaks TUI theme detection worse than
-    // the documented silent-until-first-push behavior.
+    // Why validate-or-drop: a malformed palette gives a wrong color reply that breaks TUI theme detection worse than the silent-until-first-push default.
     const attributes = validateTerminalViewAttributes(args)
     if (attributes) {
       setTerminalViewAttributes(attributes)
@@ -5170,11 +4533,7 @@ export function registerPtyHandlers(
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
-    // Why: explicit delivery-interest signal from renderer byte sidecars —
-    // any interest suppresses the hidden-delivery gate so
-    // raw-byte consumers keep receiving while the view is hidden or parked.
-    // Deliberately NOT synced to the daemon backlog pacer: interest consumers
-    // tolerate paced data, and interest churn must not un-pace a flood.
+    // Why: any delivery interest suppresses the hidden-delivery gate (raw-byte consumers keep receiving while hidden); not synced to the daemon pacer so interest churn can't un-pace a flood.
     setRendererPtyDeliveryInterest(args.id, args.interested === true)
   })
 
@@ -5187,9 +4546,7 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:clearBuffer')
   ipcMain.on('pty:clearBuffer', (_event, args: { id: string }) => {
-    // Why: the renderer already cleared its own xterm buffer. This clears the
-    // PTY-side state (ConPTY screen buffer, daemon emulator, SSH host buffer)
-    // so the next prompt repaint doesn't land at a stale cursor row.
+    // Why: clear PTY-side state (ConPTY/daemon/SSH buffer) so the next prompt repaint doesn't land at a stale cursor row.
     tryGetProviderForPty(args.id)
       ?.clearBuffer(args.id)
       .catch(() => {})
@@ -5198,24 +4555,20 @@ export function registerPtyHandlers(
 
   ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
     if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
-      // Why: runtime terminal handles belong to terminal.close; allowing them
-      // to fall through unowned PTY routing could target the local provider.
+      // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
       throw new Error('Invalid PTY provider id')
     }
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-    // Why: select the local provider only after daemon startup; fallback shutdown
-    // can otherwise falsely succeed and orphan a restored daemon PTY (#7742).
+    // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
     const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
     if (startupPromise) {
       await startupPromise
     }
     const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
     if (!provider && connectionId) {
-      // Why: detached SSH PTYs intentionally keep ownership after their
-      // provider is unregistered; hydrated app-scoped ids can also arrive
-      // before ownership is rebuilt. Tombstone instead of falling back local.
+      // Why: detached SSH PTYs keep ownership after provider unregister, and hydrated app-scoped ids may arrive pre-ownership; tombstone instead of falling back local.
       finishPtyShutdown(args.id, connectionId, store)
       runtime?.onPtyExit(args.id, -1)
       rememberSyntheticKillExit(args.id)
@@ -5231,15 +4584,12 @@ export function registerPtyHandlers(
       })
     } catch (err) {
       if (!isPtyAlreadyGoneError(err)) {
-        // Why: a failed SSH shutdown can leave the remote process alive in
-        // the relay grace window; daemon failures have the same risk locally.
-        // Keep ownership/lease state so the user can retry.
+        // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
         throw err
       }
       /* session already dead — cleanup below handles the rest */
     }
-    // Why: some shutdown paths do not emit onExit through the provider listener.
-    // Explicit cleanup is idempotent and covers already-dead PTYs.
+    // Why: some shutdown paths don't emit onExit via the provider listener; this cleanup is idempotent and covers already-dead PTYs.
     finishPtyShutdown(args.id, connectionId, store)
     if (!providerExitObserved) {
       runtime?.onPtyExit(args.id, -1)
@@ -5264,9 +4614,7 @@ export function registerPtyHandlers(
       const deduped = new Map<string, { id: string; cwd: string; title: string }>()
       for (const { connectionId, sessions } of providerSessions) {
         for (const session of sessions) {
-          // Why: SessionsStatusSegment kill actions only send the PTY id back
-          // through IPC. Rebuild ownership while listing so remote sessions
-          // discovered after reconnect still route to their original provider.
+          // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
           ptyOwnership.set(session.id, connectionId)
           deduped.set(session.id, session)
         }
@@ -5292,8 +4640,7 @@ export function registerPtyHandlers(
         }
         seen.add(value)
         const provider = tryGetProviderForPty(value)
-        // Why: degraded routing mixes preserved daemons with an in-process
-        // fallback. Keep all of its panes mounted rather than guess ownership.
+        // Why: degraded routing mixes preserved daemons with an in-process fallback; keep all panes mounted rather than guess ownership.
         capabilities.push({
           id: value,
           authoritative: provider?.canProvideAuthoritativeBufferSnapshot
@@ -5303,8 +4650,7 @@ export function registerPtyHandlers(
               : null
         })
       }
-      // Why: cold deferral runs during render, before hidden panes mount. This
-      // batch is an in-memory route lookup so legacy PTYs can mount in that pass.
+      // Why: cold deferral runs during render before hidden panes mount; this in-memory route lookup lets legacy PTYs mount in that pass.
       event.returnValue = capabilities
     }
   )
@@ -5353,18 +4699,12 @@ export function registerPtyHandlers(
         return null
       }
       const provider = getProviderForPty(args.id)
-      // Why: falling back to the cached foreground API would turn stale
-      // process identity into shell/agent authority at a command boundary.
+      // Why: the cached foreground API would turn stale process identity into shell/agent authority at a command boundary.
       return provider.confirmForegroundProcess?.(args.id) ?? null
     }
   )
 
-  // Why: renderer needs the live shell cwd when the user presses Cmd+D so
-  // the new split pane inherits the source pane's cwd instead of the
-  // worktree root. Routed through getProviderForPty so local and SSH PTYs
-  // use the same code path. Providers return '' when the id is unknown or
-  // the platform cannot resolve a cwd (Windows); the renderer treats ''
-  // as "fall through to the next fallback layer".
+  // Why: Cmd+D split needs the live shell cwd so the new pane inherits it (not the worktree root); '' means unknown/unresolvable (Windows) → renderer falls through.
   ipcMain.handle('pty:getCwd', async (_event, args: { id: string }): Promise<string> => {
     try {
       return await getProviderForPty(args.id).getCwd(args.id)
@@ -5373,19 +4713,7 @@ export function registerPtyHandlers(
     }
   })
 
-  // Why: the renderer forwards resizes fire-and-forget and otherwise has no way
-  // to learn the PTY's actual size. A resize dropped main-side (suppression
-  // window, mobile-driver gate, or a provider no-op) OR daemon/SSH-side (the
-  // remote resize notify is unacked and can be silently dropped — session not
-  // yet alive, exited, invalid dims, cold-restore snapshot-col coercion) leaves
-  // the renderer believing it synced when it did not, so a later same-cols
-  // layout never re-forwards and the TUI stays garbled. ptySizes records only
-  // the REQUESTED size, so it cannot reveal such a drop. Prefer the provider's
-  // APPLIED size (node-pty's cached winsize / the daemon emulator's dims, which
-  // track the subprocess resize) so the renderer's resume drift-check sees the
-  // truth; fall back to ptySizes only when the provider can't report (no
-  // getAppliedSize, e.g. SSH relay, or an unknown id) — a null then reads as
-  // "cannot confirm", which the renderer treats as a cue to re-forward once.
+  // Why: prefer the provider's APPLIED size over the requested ptySizes so the renderer's resume drift-check can spot a dropped resize; null means "cannot confirm" → re-forward once.
   ipcMain.handle(
     'pty:getSize',
     async (_event, args: { id: string }): Promise<{ cols: number; rows: number } | null> => {
@@ -5395,19 +4723,13 @@ export function registerPtyHandlers(
           return applied
         }
       } catch {
-        // Fall through to the requested-size cache on any provider/RPC failure
-        // so a dead daemon/relay never blocks or throws across the IPC boundary.
+        // Fall through to the requested-size cache so a dead daemon/relay can't throw across the IPC boundary.
       }
       return ptySizes.get(args.id) ?? null
     }
   )
 
-  // Why: pre-signal handshake handlers. See
-  // docs/mobile-prefer-renderer-scrollback.md and the rationale on
-  // `pendingByPaneKey` above. The IPC contract is: renderer awaits declare
-  // (capturing the returned gen), awaits pty:spawn, then registers its
-  // serializer locally and calls settle (echoing the gen). On spawn rejection
-  // or pane unmount before settle, renderer calls clear with the same gen.
+  // Pre-signal handshake handlers (declare→spawn→settle/clear); see docs/mobile-prefer-renderer-scrollback.md and `pendingByPaneKey` above.
   ipcMain.handle(
     'pty:declarePendingPaneSerializer',
     async (event, args: { paneKey?: unknown }): Promise<number> => {
@@ -5426,8 +4748,7 @@ export function registerPtyHandlers(
       }
       const ptyId = pendingPtyIdBySerializerGeneration.get(args.gen)
       const settledCurrentGeneration = settlePendingPaneSerializer(args.paneKey, args.gen)
-      // Why: the generation-to-PTY binding survives late teardown of a reused
-      // id; paneKey reverse maps are provider lifecycle state and may already be gone.
+      // Why: the generation-to-PTY binding survives late teardown of a reused id; paneKey reverse maps may already be gone.
       pendingPtyIdBySerializerGeneration.delete(args.gen)
       if (settledCurrentGeneration && ptyId) {
         rendererSerializerReadiness.markReady(ptyId)
@@ -5456,8 +4777,7 @@ export function registerPtyHandlers(
       ) {
         return
       }
-      // Why: remote-runtime panes do not pass through the local spawn
-      // cooperation gate, so their exact PTY id is the only readiness key.
+      // Why: remote-runtime panes skip the local spawn cooperation gate, so their exact PTY id is the only readiness key.
       rendererSerializerReadiness.markReady(args.ptyId)
     }
   )
@@ -5470,9 +4790,7 @@ export function registerHeadlessPtyRuntime(
   prepareClaudeAuth?: PrepareClaudeAuth,
   store?: Store
 ): void {
-  // Why: headless `orca serve` has no renderer window, but the runtime still
-  // needs the same PTY controller and provider listeners as desktop so remote
-  // clients can create, stream, inspect, and stop terminals.
+  // Why: headless `orca serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
   const headlessWindow = {
     isDestroyed: () => true,
     webContents: {
