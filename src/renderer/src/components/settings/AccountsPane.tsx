@@ -1501,14 +1501,14 @@ export function AccountsPane({
             {translate(
               'auto.components.settings.AccountsPane.0023cc336e',
               'Paste either the raw token value (e.g.'
-            )}
+            )}{' '}
             <code className="text-xs">
               {translate('auto.components.settings.AccountsPane.922b51e02d', 'Fe26.2**…')}
             </code>
             {translate(
               'auto.components.settings.AccountsPane.338820326a',
               ') or the full cookie header (e.g.'
-            )}
+            )}{' '}
             <code className="text-xs">
               {translate('auto.components.settings.AccountsPane.8951c5309f', 'auth=Fe26.2**…')}
             </code>

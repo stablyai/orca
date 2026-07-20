@@ -78,7 +78,10 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           className={cn(
             // Why: match the sidebar worktree spinner's stepped cadence so
             // long-running visible agents do not keep a full-frame-rate loop.
-            'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite] motion-reduce:animate-none',
+            // Why: under reduced motion the spin is disabled, so fill the top
+            // border too — a frozen transparent-top ring reads as a broken
+            // spinner; a complete ring reads as an intentional static marker.
+            'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite] motion-reduce:animate-none motion-reduce:border-t-yellow-500',
             inner
           )}
         />

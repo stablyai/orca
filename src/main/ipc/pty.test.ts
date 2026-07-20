@@ -4114,7 +4114,8 @@ describe('registerPtyHandlers', () => {
         result.id,
         'daemon output',
         expect.any(Number),
-        'daemon output'.length
+        'daemon output'.length,
+        undefined
       )
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: result.id,
@@ -8536,14 +8537,17 @@ describe('registerPtyHandlers', () => {
       mockProc.proc.write.mockClear()
       mainWindow.webContents.send.mockClear()
 
-      mockProc.emitData('\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready')
+      const sourceData = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
+      mockProc.emitData(sourceData)
 
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
       vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: 'ready'
+        data: 'ready',
+        rawLength: sourceData.length,
+        transformed: true
       })
     } finally {
       vi.useRealTimers()
@@ -8570,14 +8574,17 @@ describe('registerPtyHandlers', () => {
       mockProc.proc.write.mockClear()
       mainWindow.webContents.send.mockClear()
 
-      mockProc.emitData('\x1b]10;?;?\x1b\\ready')
+      const sourceData = '\x1b]10;?;?\x1b\\ready'
+      mockProc.emitData(sourceData)
 
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
       vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: 'ready'
+        data: 'ready',
+        rawLength: sourceData.length,
+        transformed: true
       })
     } finally {
       vi.useRealTimers()
@@ -8650,13 +8657,28 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('answers daemon agent startup OSC color queries before spawn resolves', async () => {
+  it('accepts source-classified daemon startup spans before spawn resolves', async () => {
     vi.useFakeTimers()
-    let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
+    type ProviderData = {
+      id: string
+      data: string
+      sequenceChars?: number
+      transformed?: boolean
+      seq?: number
+    }
+    let dataHandler: ((payload: ProviderData) => void) | null = null
     const write = vi.fn()
-    const spawn = vi.fn(async (options: { sessionId?: string }) => {
+    const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
+    const spawn = vi.fn(async (options: { sessionId?: string; startupIngress?: unknown }) => {
       const id = options.sessionId ?? 'daemon-pty'
-      dataHandler?.({ id, data: '\x1b]10;?\x1b\\\x1b]11;?\x1b\\daemon-ready' })
+      dataHandler?.({
+        id,
+        data: '',
+        sequenceChars: query.length,
+        transformed: true,
+        seq: query.length
+      })
+      dataHandler?.({ id, data: 'daemon-ready' })
       return { id }
     })
     setLocalPtyProvider({
@@ -8674,7 +8696,7 @@ describe('registerPtyHandlers', () => {
       getForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
-      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+      onData: vi.fn((handler: (payload: ProviderData) => void) => {
         dataHandler = handler
         return () => {}
       }),
@@ -8687,7 +8709,16 @@ describe('registerPtyHandlers', () => {
     } as never)
 
     try {
-      registerPtyHandlers(mainWindow as never)
+      let seq = 0
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        onPtyData: vi.fn(
+          (_id: string, _data: string, _at: number, rawLength: number) => (seq += rawLength)
+        ),
+        registerPty: vi.fn()
+      }
+      registerPtyHandlers(mainWindow as never, runtime as never)
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -8699,22 +8730,39 @@ describe('registerPtyHandlers', () => {
         }
       })) as { id: string }
 
-      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
-      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          startupIngress: expect.objectContaining({
+            colors: { foreground: '#eeeeee', background: '#111111' },
+            deadlineMs: 5_000
+          })
+        })
+      )
+      expect(write).not.toHaveBeenCalled()
       vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: 'daemon-ready'
+        data: 'daemon-ready',
+        seq: query.length + 'daemon-ready'.length,
+        rawLength: query.length + 'daemon-ready'.length,
+        transformed: true
       })
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('drops renderer sequence metadata when an answered OSC query is batched', async () => {
+  it('preserves source raw sequence metadata when a consumed query is batched', async () => {
     vi.useFakeTimers()
+    type ProviderData = {
+      id: string
+      data: string
+      sequenceChars?: number
+      transformed?: boolean
+      seq?: number
+    }
     const providerEvents: {
-      dataHandler?: (payload: { id: string; data: string }) => void
+      dataHandler?: (payload: ProviderData) => void
     } = {}
     const write = vi.fn()
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
@@ -8735,7 +8783,7 @@ describe('registerPtyHandlers', () => {
       getForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
-      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+      onData: vi.fn((handler: (payload: ProviderData) => void) => {
         providerEvents.dataHandler = handler
         return () => {}
       }),
@@ -8750,8 +8798,8 @@ describe('registerPtyHandlers', () => {
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => null),
-      onPtyData: vi.fn((_id: string, data: string) => {
-        seq += data.length
+      onPtyData: vi.fn((_id: string, data: string, _at: number, rawLength = data.length) => {
+        seq += rawLength
         return seq
       }),
       registerPty: vi.fn()
@@ -8772,17 +8820,24 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
 
       providerEvents.dataHandler?.({ id: spawnResult.id, data: 'prefix' })
+      const query = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
       providerEvents.dataHandler?.({
         id: spawnResult.id,
-        data: '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
+        data: '',
+        sequenceChars: query.length,
+        transformed: true,
+        seq: 'prefix'.length + query.length
       })
+      providerEvents.dataHandler?.({ id: spawnResult.id, data: 'ready' })
       vi.advanceTimersByTime(2)
 
-      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
-      expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
+      expect(write).not.toHaveBeenCalled()
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
-        data: 'prefixready'
+        data: 'prefixready',
+        seq: 'prefix'.length + query.length + 'ready'.length,
+        rawLength: 'prefix'.length + query.length + 'ready'.length,
+        transformed: true
       })
     } finally {
       vi.useRealTimers()
@@ -10204,7 +10259,8 @@ describe('registerPtyHandlers', () => {
           result.id,
           'hidden output',
           expect.any(Number),
-          'hidden output'.length
+          'hidden output'.length,
+          undefined
         )
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         // Why out-of-band: an in-band empty pty:data chunk is ambiguous with
@@ -10756,7 +10812,8 @@ describe('registerPtyHandlers', () => {
           'daemon-session',
           'pre-spawn prompt\x1b[c',
           expect.any(Number),
-          'pre-spawn prompt\x1b[c'.length
+          'pre-spawn prompt\x1b[c'.length,
+          undefined
         )
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
         expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {

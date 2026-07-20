@@ -1,4 +1,3 @@
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type {
   ConfirmForegroundProcessRequest,
   GetForegroundProcessRequest
@@ -12,66 +11,23 @@ export type {
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/types'
-// Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
-// when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bump when adding daemon wire behavior so same-version old daemons do
-// not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 24
-export const GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION = 22
-export const CLEAN_DISCONNECT_PROTOCOL_VERSION = 24
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
-] as const
+import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+export type { TerminalModes } from './terminal-modes'
+import type { TerminalSnapshot } from './terminal-snapshot'
+export type { TerminalSnapshot } from './terminal-snapshot'
+export {
+  CLEAN_DISCONNECT_PROTOCOL_VERSION,
+  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
+  PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
+  PROTOCOL_VERSION,
+  PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
+  supportsPtyStartupIngress
+} from './daemon-protocol-version'
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
 
 export type ShellReadyState = 'pending' | 'ready' | 'timed_out' | 'unsupported'
-
-// ─── Terminal Snapshot ──────────────────────────────────────────────
-export type TerminalSnapshot = {
-  snapshotAnsi: string
-  /** Trailing incomplete escape sequence the emulator ingested but xterm's
-   *  parser is still holding (a PTY read ended mid-escape). Restorers must
-   *  write this LAST — after their own post-replay resets, immediately before
-   *  post-snapshot live chunks — so the continuation bytes complete it
-   *  exactly as live (Bug E / #7329, notes/garble-fuzz-divergences.md). Its
-   *  bytes are already counted by the snapshot seq. */
-  pendingEscapeTailAnsi?: string
-  /** Normal buffer captured separately while snapshotAnsi holds an active
-   *  alternate buffer. Empty for normal-screen snapshots. */
-  scrollbackAnsi: string
-  oscLinks?: TerminalOscLinkRange[]
-  rehydrateSequences: string
-  cwd: string | null
-  modes: TerminalModes
-  cols: number
-  rows: number
-  scrollbackLines: number
-  lastTitle?: string
-  /** Absolute UTF-16 character count ingested by this live daemon session.
-   *  Optional because persisted snapshots and older v19 daemons lack it. */
-  outputSequence?: number
-}
-
-export type TerminalModes = {
-  bracketedPaste: boolean
-  mouseTracking: boolean
-  mouseTrackingMode?: 'none' | 'x10' | 'vt200' | 'drag' | 'any'
-  sgrMouseMode?: boolean
-  sgrMousePixelsMode?: boolean
-  applicationCursor: boolean
-  alternateScreen: boolean
-  /** Kitty keyboard protocol flags (CSI = u pushes) for emulator re-seed
-   *  parity ONLY. Consumed by the daemon warm-reattach path: the spawn
-   *  result threads them into seedHeadlessTerminal, which re-applies them to
-   *  the fresh runtime emulator (HeadlessEmulator.applyKittyKeyboardFlags)
-   *  so hidden `CSI ? u` answers the real flags instead of ?0u.
-   *  rehydrateSequences must never push these into a renderer xterm —
-   *  POST_REPLAY_REATTACH_RESET's deliberate kitty reset stays authoritative
-   *  (terminal-query-authority.md §kitty). */
-  kittyKeyboardFlags?: number
-}
 
 // The on-disk checkpoint.json shape lives in daemon-checkpoint-file.ts (it
 // depends only on TerminalModes here) — re-exported so existing importers of
@@ -115,7 +71,14 @@ export type CreateOrAttachRequest = {
     shellReadyTimeoutMs?: number
     /** Recovered ANSI applied before the new subprocess can emit startup output. */
     historySeed?: string
+    startupIngress?: PtyStartupIngressIntent
   }
+}
+
+export type CloseStartupQueryAuthorityRequest = {
+  id: string
+  type: 'closeStartupQueryAuthority'
+  payload: { sessionId: string }
 }
 
 export type CancelCreateOrAttachRequest = {
@@ -337,6 +300,7 @@ export type DaemonRequest =
   | GetSnapshotRequest
   | GetSizeRequest
   | TakePendingOutputRequest
+  | CloseStartupQueryAuthorityRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 

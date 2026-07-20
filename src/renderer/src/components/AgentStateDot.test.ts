@@ -24,6 +24,9 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('border-t-transparent')
     expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
     expect(markup).toContain('motion-reduce:animate-none')
+    // Why: under reduced motion the top border is filled so the frozen ring
+    // reads as a complete static marker, not a broken partial spinner.
+    expect(markup).toContain('motion-reduce:border-t-yellow-500')
     expect(markup).not.toContain('animate-spin')
   })
 

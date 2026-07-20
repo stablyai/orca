@@ -12,6 +12,11 @@ import { isPowerShellProcess } from '../../shared/shell-process-detection'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { TuiAgent } from '../../shared/types'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import {
+  PtyStartupIngress,
+  type PtyIngressEmission,
+  type PtyStartupIngressIntent
+} from '../../shared/pty-startup-ingress'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -97,11 +102,12 @@ export type SessionOptions = {
   // reaper, dead sessions (and their ~5000-row scrollback emulators) accumulate
   // for the lifetime of the long-lived daemon process.
   onExit?: (code: number) => void
+  startupIngress?: PtyStartupIngressIntent
 }
 
 type AttachedClient = {
   token: symbol
-  onData: (data: string) => void
+  onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
   onExit: (code: number) => void
 }
 
@@ -135,6 +141,7 @@ export class Session {
   private forceKillSent = false
   private subprocessDisposed = false
   private readonly physicalExit = new PhysicalExitTracker()
+  private readonly startupIngress: PtyStartupIngress
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -170,6 +177,11 @@ export class Session {
     }
 
     this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
+    this.startupIngress = new PtyStartupIngress({
+      ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
+      write: (data) => this.subprocess.write(data),
+      onEmission: (emission) => this.emitSubprocessOutput(emission)
+    })
     this.subprocess.onData((data) => this.handleSubprocessData(data))
     this.subprocess.onExit((code) => this.handleSubprocessExit(code))
   }
@@ -389,7 +401,7 @@ export class Session {
     this.subprocess.signal(sig)
   }
 
-  attachClient(client: { onData: (data: string) => void; onExit: (code: number) => void }): symbol {
+  attachClient(client: Omit<AttachedClient, 'token'>): symbol {
     const token = Symbol('attach')
     this.attachedClients.push({ token, ...client })
     return token
@@ -413,6 +425,7 @@ export class Session {
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
+    this.startupIngress.snapshotBarrier()
     if (this._disposed) {
       return null
     }
@@ -518,7 +531,9 @@ export class Session {
   }
 
   prepareForFinalSnapshot(): string {
-    return this.releaseHeldShellReadyBytes()
+    const held = this.releaseHeldShellReadyBytes()
+    this.startupIngress.snapshotBarrier()
+    return held
   }
 
   dispose(): void {
@@ -533,6 +548,8 @@ export class Session {
     // move this capture below #teardownSubprocess or the `_state = 'exited'`
     // assignment — #teardownSubprocess flips `_disposed` but the invariant
     // depends on the PRE-flip value of `_state`.
+    this.releaseHeldShellReadyBytes()
+    this.startupIngress.drainAndClose()
     const wasTerminating = this._isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.attachedClients.slice() : []
     if (wasTerminating) {
@@ -667,25 +684,29 @@ export class Session {
       this.postReadyFlushGate.notifyData()
     }
 
-    this.emitSubprocessOutput(data)
+    this.startupIngress.accept(data)
   }
 
-  private emitSubprocessOutput(data: string): void {
-    if (data.length === 0) {
-      return
-    }
-
+  private emitSubprocessOutput(emission: PtyIngressEmission): void {
+    const { data } = emission
+    const rawLength = emission.rawEndSeq - emission.rawStartSeq
     // Why: daemon stream thinning can omit bytes before main sees them. The
     // absolute count lets an authoritative snapshot cover those gaps while
     // renderer reconciliation deduplicates any queued post-snapshot tail.
-    this.outputSequence += data.length
+    this.outputSequence += rawLength
     // Feed data to headless emulator for state tracking
-    this.emulator.write(data)
-    this.recordPendingOutput({ kind: 'output', data })
+    if (data.length > 0) {
+      this.emulator.write(data)
+      this.recordPendingOutput({ kind: 'output', data })
+    }
 
     // Broadcast to attached clients
     for (const client of this.attachedClients) {
-      client.onData(data)
+      if (emission.transformed || rawLength !== data.length) {
+        client.onData(data, rawLength, true, this.outputSequence)
+      } else {
+        client.onData(data)
+      }
     }
   }
 
@@ -695,13 +716,14 @@ export class Session {
       return
     }
 
+    this.releaseHeldShellReadyBytes()
+    this.startupIngress.drainAndClose()
     this._exitCode = code
     this._state = 'exited'
     this._isTerminating = false
     // Why resume:false — the child is reaped, so there is nothing to unblock;
     // only the failsafe timer must not outlive the session.
     this.releaseProducerPause({ resume: false })
-    this.releaseHeldShellReadyBytes()
 
     if (this.killTimer) {
       clearTimeout(this.killTimer)
@@ -740,8 +762,12 @@ export class Session {
     // bytes can be stripped. If readiness never completes, preserve the
     // previous behavior by releasing any held prefix before timeout or exit
     // state changes discard it.
-    this.emitSubprocessOutput(heldBytes)
+    this.startupIngress.accept(heldBytes)
     return heldBytes
+  }
+
+  closeStartupQueryAuthority(): number {
+    return this.startupIngress.closeQueryAuthority()
   }
 
   private transitionToReady(postMarkerBytesObserved = false): void {

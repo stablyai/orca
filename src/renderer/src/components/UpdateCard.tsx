@@ -887,8 +887,7 @@ function DownloadingContent({
       <div className="flex items-start justify-between gap-2">
         {release ? (
           <h3 className="text-sm font-semibold">
-            {translate('auto.components.UpdateCard.f58b5c57a6', 'New:')}
-            {release.title}
+            {translate('auto.components.UpdateCard.f58b5c57a6', 'New:')} {release.title}
           </h3>
         ) : (
           <h3 className="text-sm font-semibold">

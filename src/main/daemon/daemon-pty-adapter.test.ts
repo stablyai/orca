@@ -146,6 +146,72 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
 
+    it('carries classified startup spans from the daemon source to the adapter', async () => {
+      const onData = vi.fn()
+      adapter.onData(onData)
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000,
+          ...(process.platform === 'win32'
+            ? { echoProjection: 'windows-conpty-esc-stripped' as const }
+            : {})
+        }
+      })
+      const query = '\x1b]10;?\x07'
+      lastSubprocess._simulateData(query)
+      lastSubprocess._simulateData('prompt')
+
+      await waitFor(() => onData.mock.calls.length >= 2)
+
+      expect(lastSubprocess.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+      expect(onData).toHaveBeenCalledWith({
+        id,
+        data: '',
+        sequenceChars: query.length,
+        seq: query.length,
+        transformed: true
+      })
+      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt' })
+      await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
+        data: expect.not.stringContaining(']10;rgb')
+      })
+    })
+
+    it('omits startup intent and close control for the preserved v23 protocol', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: true,
+        pid: null,
+        shellState: 'unsupported',
+        snapshot: null
+      } as never)
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
+      try {
+        await legacy.spawn({
+          sessionId: 'legacy-session',
+          cols: 80,
+          rows: 24,
+          startupIngress: {
+            colors: { foreground: '#2e3434', background: '#ffffff' },
+            deadlineMs: 5_000
+          }
+        })
+        const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+        expect(createPayload).not.toHaveProperty('startupIngress')
+        await expect(legacy.closeStartupQueryAuthority('legacy-session')).resolves.toBe(0)
+        expect(requestSpy).not.toHaveBeenCalledWith('closeStartupQueryAuthority', expect.anything())
+      } finally {
+        legacy.dispose()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
     it('uses worktreeId as session prefix when provided', async () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       expect(result.id).toContain('wt-1')

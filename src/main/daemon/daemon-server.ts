@@ -23,6 +23,8 @@ import type { SubprocessHandle } from './session'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import { isNativeWindowsLocalPtySpawn } from '../runtime/terminal-model-query-authority'
 import { unlinkOwnedDaemonPidFile, unlinkOwnedDaemonTokenFile } from './daemon-spawner'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
@@ -707,11 +709,18 @@ export class DaemonServer {
             terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
             shellReadySupported: p.shellReadySupported,
             historySeed: p.historySeed,
+            startupIngress: parsePtyStartupIngressIntent(p.startupIngress, {
+              allowWindowsEchoProjection: isNativeWindowsLocalPtySpawn({
+                connectionId: null,
+                cwd: p.cwd,
+                shellOverride: p.shellOverride
+              })
+            }),
             ...(p.shellReadyTimeoutMs !== undefined
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),
             streamClient: {
-              onData: (data) => {
+              onData: (data, rawLength = data.length, transformed = false, seq) => {
                 // Scan BEFORE enqueue: the batcher may keep-tail drop this
                 // chunk, but its facts must be captured regardless.
                 this.transientFactRelay.onSessionData(p.sessionId, data)
@@ -722,7 +731,10 @@ export class DaemonServer {
                   performance.now() - lastInputAt <= DaemonServer.INTERACTIVE_OUTPUT_WINDOW_MS
                 this.streamDataBatcher.enqueue(clientId, p.sessionId, data, {
                   flushImmediately: isInteractiveOutput,
-                  flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS
+                  flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS,
+                  rawLength,
+                  transformed,
+                  seq
                 })
               },
               onExit: (code) => {

@@ -2292,7 +2292,12 @@ export class OrcaRuntimeService {
   // without polling. Keyed by ptyId for O(1) lookup per data event.
   private dataListeners = new Map<
     string,
-    Set<(data: string, meta?: { seq?: number; rawLength?: number; cwd?: string }) => void>
+    Set<
+      (
+        data: string,
+        meta?: { seq?: number; rawLength?: number; transformed?: boolean; cwd?: string }
+      ) => void
+    >
   >()
   // Why: startup draft paste can subscribe after the agent already emitted its
   // ready marker. Keep a bounded raw buffer so fast startup output is replayed.
@@ -6264,7 +6269,13 @@ export class OrcaRuntimeService {
    * Handles incoming data from a PTY process, running agent detection,
    * updating terminal tail buffers, and triggering foreground agent refreshes.
    */
-  onPtyData(ptyId: string, data: string, at: number, sequenceChars = data.length): number {
+  onPtyData(
+    ptyId: string,
+    data: string,
+    at: number,
+    sequenceChars = data.length,
+    transformed = false
+  ): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
@@ -6482,7 +6493,8 @@ export class OrcaRuntimeService {
     if (listeners) {
       const meta = {
         seq: outputSequence,
-        rawLength: data.length,
+        rawLength: sequenceChars,
+        ...(transformed ? { transformed: true } : {}),
         ...(cwdChanged && cwd !== null ? { cwd } : {})
       }
       for (const listener of listeners) {
@@ -7333,7 +7345,10 @@ export class OrcaRuntimeService {
 
   subscribeToTerminalData(
     ptyId: string,
-    listener: (data: string, meta?: { seq?: number; rawLength?: number; cwd?: string }) => void
+    listener: (
+      data: string,
+      meta?: { seq?: number; rawLength?: number; transformed?: boolean; cwd?: string }
+    ) => void
   ): () => void {
     return addListenerToMap(this.dataListeners, ptyId, listener)
   }

@@ -140,11 +140,17 @@ type TerminalOutputChunk = {
   meta?: TerminalOutputMeta
 }
 
-type TerminalOutputMeta = { seq?: number; rawLength?: number; cwd?: string }
+type TerminalOutputMeta = {
+  seq?: number
+  rawLength?: number
+  transformed?: boolean
+  cwd?: string
+}
 
 type TerminalOutputFrameChunk = {
   bytes: Uint8Array<ArrayBufferLike>
   seq?: number
+  opcode?: TerminalStreamOpcode
 }
 
 function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutputMeta) => void): {
@@ -156,6 +162,7 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
   let bytes = 0
   let lastSeq: number | undefined
   let pendingCwd: string | undefined
+  let pendingRawLength = 0
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const clearTimer = (): void => {
@@ -168,14 +175,14 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
 
   const flush = (): void => {
     clearTimer()
-    if (chunks.length === 0) {
+    if (chunks.length === 0 && pendingRawLength === 0) {
       return
     }
     const data = chunks.length === 1 ? chunks[0]! : chunks.join('')
     const meta =
       typeof lastSeq === 'number' || pendingCwd !== undefined
         ? {
-            ...(typeof lastSeq === 'number' ? { seq: lastSeq, rawLength: data.length } : {}),
+            ...(typeof lastSeq === 'number' ? { seq: lastSeq, rawLength: pendingRawLength } : {}),
             ...(pendingCwd !== undefined ? { cwd: pendingCwd } : {})
           }
         : undefined
@@ -183,12 +190,19 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
     bytes = 0
     lastSeq = undefined
     pendingCwd = undefined
+    pendingRawLength = 0
     onFlush(data, meta)
   }
 
   return {
     push(data: string, meta?: TerminalOutputMeta): void {
-      if (!data) {
+      const rawLength = meta?.rawLength ?? data.length
+      if (!data && rawLength === 0) {
+        return
+      }
+      if (meta?.transformed || rawLength !== data.length) {
+        flush()
+        onFlush(data, { ...meta, rawLength, transformed: true })
         return
       }
       if (meta?.cwd !== undefined) {
@@ -196,6 +210,7 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
         pendingCwd = meta.cwd
       }
       chunks.push(data)
+      pendingRawLength += rawLength
       const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
       const measurement = measureTerminalStreamByteLength(data, {
         stopAfterBytes: remainingBudget
@@ -222,6 +237,7 @@ function createTerminalOutputBatcher(onFlush: (data: string, meta?: TerminalOutp
       clearTimer()
       chunks = []
       bytes = 0
+      pendingRawLength = 0
     }
   }
 }
@@ -230,11 +246,19 @@ function* iterateTerminalOutputFrameChunks(
   data: string,
   meta?: TerminalOutputMeta
 ): Generator<TerminalOutputFrameChunk> {
+  const rawLength = meta?.rawLength ?? data.length
+  if (meta?.transformed || rawLength !== data.length) {
+    yield {
+      opcode: TerminalStreamOpcode.OutputSpan,
+      bytes: encodeTerminalStreamJson({ data, rawLength, transformed: true }),
+      seq: meta?.seq
+    }
+    return
+  }
   if (!terminalStreamByteLengthExceeds(data, TERMINAL_STREAM_CHUNK_BYTES)) {
     yield { bytes: encodeTerminalStreamText(data), seq: meta?.seq }
     return
   }
-  const rawLength = meta?.rawLength ?? data.length
   const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
   const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
   const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
@@ -1640,7 +1664,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream: TerminalMultiplexStream,
         chunk: TerminalOutputFrameChunk
       ): void => {
-        sendFrame(stream.streamId, TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
+        sendFrame(
+          stream.streamId,
+          chunk.opcode ?? TerminalStreamOpcode.Output,
+          chunk.bytes,
+          chunk.seq
+        )
         if (stream.ackOutput) {
           stream.ackInFlightBytes += chunk.bytes.byteLength
           ackTotalInFlightBytes += chunk.bytes.byteLength
@@ -2802,7 +2831,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           )
         }
         for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
-          sendFrame(TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
+          sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
         }
       })
       unregisterBinaryHandler =
@@ -3199,6 +3228,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         if (!initialOutputOverflowed) {
           for (const item of bufferedOutput) {
             let uncoveredData = getOutputAfterSnapshotSeq(item, snapshotOutputSeq)
+            let uncoveredMeta = item.meta
             if (
               uncoveredData &&
               uncoveredData !== item.data &&
@@ -3206,6 +3236,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               typeof item.meta?.seq === 'number' &&
               typeof item.meta.rawLength === 'number'
             ) {
+              if (item.meta.rawLength === item.data.length) {
+                uncoveredMeta = { ...item.meta, rawLength: uncoveredData.length }
+              }
               uncoveredData = stripSnapshotBoundaryQuerySuffixes(
                 uncoveredData,
                 snapshotOutputSeq,
@@ -3214,7 +3247,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               )
             }
             if (uncoveredData) {
-              outputBatcher.push(uncoveredData, item.meta)
+              outputBatcher.push(uncoveredData, uncoveredMeta)
             }
           }
         }

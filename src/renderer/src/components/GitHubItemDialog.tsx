@@ -4935,13 +4935,12 @@ function ChecksTab({
               </span>
               {startedAt && (
                 <span>
-                  {translate('auto.components.GitHubItemDialog.4812814bc8', 'Started')}
-                  {startedAt}
+                  {translate('auto.components.GitHubItemDialog.4812814bc8', 'Started')} {startedAt}
                 </span>
               )}
               {completedAt && (
                 <span>
-                  {translate('auto.components.GitHubItemDialog.0f478f5efa', 'Completed')}
+                  {translate('auto.components.GitHubItemDialog.0f478f5efa', 'Completed')}{' '}
                   {completedAt}
                 </span>
               )}

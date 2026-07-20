@@ -378,7 +378,7 @@ export function SourceControlAgentActionDialogForm({
                   {translate(
                     'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e',
                     'Launch:'
-                  )}
+                  )}{' '}
                   {deliveryPlan.commandLabel}
                 </div>
                 <div className="text-[11px]">{deliveryPlan.caveat}</div>

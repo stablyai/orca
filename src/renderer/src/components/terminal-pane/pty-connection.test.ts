@@ -5953,7 +5953,8 @@ describe('connectPanePty', () => {
     reattach.resolve()
     await flushAsyncTicks()
 
-    expect(transport.resize).toHaveBeenLastCalledWith(65, 63)
+    expect(transport.resize).toHaveBeenCalledWith(65, 63)
+    expect(transport.resize).toHaveBeenLastCalledWith(65, 63, { claim: true })
   })
 
   it('adopts a live eager PTY and withholds snapshots after its renderer dies', async () => {
@@ -7404,7 +7405,10 @@ describe('connectPanePty', () => {
     const blankViewport = buildFreshShellViewportBlankingSequence(destinationRows)
     expect(pane.terminal.resize).toHaveBeenCalledWith(recoveredCols, recoveredRows)
     expect(transport.resize).not.toHaveBeenCalledWith(recoveredCols, recoveredRows)
-    expect(transport.resize).toHaveBeenLastCalledWith(destinationCols, destinationRows)
+    expect(transport.resize).toHaveBeenCalledWith(destinationCols, destinationRows)
+    expect(transport.resize).toHaveBeenLastCalledWith(destinationCols, destinationRows, {
+      claim: true
+    })
     expect(written).toContain(viewportClear)
     expect(written).not.toContain('\x1b[2J\x1b[3J\x1b[H')
     expect(written).toEqual(
@@ -8615,6 +8619,161 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(8)
     const liveIndex = writes.indexOf('post-snapshot-live')
     expect(liveIndex).toBeGreaterThan(snapshotIndex)
+  })
+
+  it('re-enforces follow intent after deferred reattach live output parses', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { markTerminalFollowOutput } = await import('@/lib/pane-manager/terminal-scroll-intent')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return null
+        }
+        callbacks?.onData?.('post-snapshot-live')
+        return { id: sessionId, snapshot: 'authoritative-snapshot' }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    pane.terminal.buffer.active.baseY = 100
+    pane.terminal.buffer.active.viewportY = 100
+    markTerminalFollowOutput(pane.terminal)
+    const parseCallbacks: (() => void)[] = []
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      parseCallbacks.push(() => {
+        if (data === 'post-snapshot-live') {
+          pane.terminal.buffer.active.baseY = 200
+          pane.terminal.buffer.active.viewportY = 100
+        }
+        callback?.()
+      })
+    })
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    for (let index = 0; index < 30; index += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(4)
+      if (parseCallbacks.length === 0 && index > 5) {
+        break
+      }
+    }
+
+    expect(pane.terminal.buffer.active.viewportY).toBe(200)
+  })
+
+  it('does not steal a newer user pin while deferred reattach output settles', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { markTerminalFollowOutput, markTerminalPinnedViewport } =
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return null
+        }
+        callbacks?.onData?.('post-snapshot-live')
+        return { id: sessionId, snapshot: 'authoritative-snapshot' }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    pane.terminal.buffer.active.baseY = 100
+    pane.terminal.buffer.active.viewportY = 100
+    markTerminalFollowOutput(pane.terminal)
+    const parseCallbacks: { data: string; run: () => void }[] = []
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      parseCallbacks.push({
+        data,
+        run: () => {
+          if (data === 'post-snapshot-live') {
+            pane.terminal.buffer.active.baseY = 200
+            pane.terminal.buffer.active.viewportY = 100
+          }
+          callback?.()
+        }
+      })
+    })
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    for (let index = 0; index < 40; index += 1) {
+      const pending = parseCallbacks.shift()
+      pending?.run()
+      await flushAsyncTicks(4)
+      if (pending?.data === 'post-snapshot-live') {
+        pane.terminal.buffer.active.viewportY = 150
+        markTerminalPinnedViewport(pane.terminal)
+      }
+      if (parseCallbacks.length === 0 && index > 8) {
+        break
+      }
+    }
+
+    expect(pane.terminal.buffer.active.viewportY).toBe(150)
+  })
+
+  it('does not enforce a deferred viewport after the pane becomes hidden', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { markTerminalFollowOutput } = await import('@/lib/pane-manager/terminal-scroll-intent')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return null
+        }
+        callbacks?.onData?.('post-snapshot-live')
+        return { id: sessionId, snapshot: 'authoritative-snapshot' }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    pane.terminal.buffer.active.baseY = 100
+    pane.terminal.buffer.active.viewportY = 100
+    markTerminalFollowOutput(pane.terminal)
+    const parseCallbacks: { data: string; run: () => void }[] = []
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      parseCallbacks.push({
+        data,
+        run: () => {
+          if (data === 'post-snapshot-live') {
+            pane.terminal.buffer.active.baseY = 200
+            pane.terminal.buffer.active.viewportY = 100
+          }
+          callback?.()
+        }
+      })
+    })
+    const deps = createDeps({
+      isVisibleRef: { current: true },
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    for (let index = 0; index < 40; index += 1) {
+      const pending = parseCallbacks.shift()
+      pending?.run()
+      await flushAsyncTicks(4)
+      if (pending?.data === 'post-snapshot-live') {
+        ;(deps.isVisibleRef as { current: boolean }).current = false
+      }
+      if (parseCallbacks.length === 0 && index > 8) {
+        break
+      }
+    }
+
+    expect(pane.terminal.buffer.active.viewportY).toBe(100)
   })
 
   it('does not fresh-spawn after a dead deferred session delivers its buffered exit', async () => {
@@ -11774,6 +11933,99 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
+    disposable.dispose()
+  })
+
+  it('slices abandoned pending chunks against a replay that already painted', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const snapshot = createDeferred<{
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      pendingDeliveryStartSeq: number
+    }>()
+    getMainBufferSnapshot.mockReturnValue(snapshot.promise)
+    const hidden = 'hidden-codex-output\r\n'
+    const coveredLive = 'LIVE_DUP_LINE\r\n'
+    const afterAbandon = 'AFTER_ABANDON\r\n'
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false },
+      startup: { command: 'codex' }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    vi.useFakeTimers()
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(coveredLive, {
+      seq: hidden.length + coveredLive.length,
+      rawLength: coveredLive.length
+    })
+    await flushAsyncTicks(4)
+
+    const heldCallbacks: (() => void)[] = []
+    pane.terminal.write.mockImplementation(function write(
+      data: string,
+      callback?: () => void
+    ): void {
+      if (callback) {
+        heldCallbacks.push(callback)
+      }
+      void data
+    })
+    snapshot.resolve({
+      data: 'SNAP_STATE\r\n',
+      cols: 100,
+      rows: 30,
+      seq: hidden.length + coveredLive.length,
+      pendingDeliveryStartSeq: 0
+    })
+    await flushAsyncTicks(6)
+
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks(10)
+
+    const writtenAfterAbandon = pane.terminal.write.mock.calls.map(([data]) => data as string)
+    expect(writtenAfterAbandon.join('')).not.toContain('LIVE_DUP_LINE')
+
+    pane.terminal.write.mockClear()
+    capturedDataCallback.current?.(coveredLive, {
+      seq: hidden.length + coveredLive.length,
+      rawLength: coveredLive.length
+    })
+    await flushAsyncTicks(4)
+    expect(pane.terminal.write.mock.calls.map(([data]) => data as string).join('')).not.toContain(
+      'LIVE_DUP_LINE'
+    )
+
+    capturedDataCallback.current?.(afterAbandon, {
+      seq: hidden.length + coveredLive.length + afterAbandon.length,
+      rawLength: afterAbandon.length
+    })
+    await flushAsyncTicks(4)
+    expect(pane.terminal.write.mock.calls.map(([data]) => data as string).join('')).toContain(
+      'AFTER_ABANDON'
+    )
+
+    heldCallbacks.forEach((callback) => callback())
     disposable.dispose()
   })
 

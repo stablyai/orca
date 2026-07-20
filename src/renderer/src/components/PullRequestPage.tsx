@@ -5030,13 +5030,12 @@ function ChecksTab({
               </span>
               {startedAt && (
                 <span>
-                  {translate('auto.components.PullRequestPage.76551b1161', 'Started')}
-                  {startedAt}
+                  {translate('auto.components.PullRequestPage.76551b1161', 'Started')} {startedAt}
                 </span>
               )}
               {completedAt && (
                 <span>
-                  {translate('auto.components.PullRequestPage.000f90afcf', 'Completed')}
+                  {translate('auto.components.PullRequestPage.000f90afcf', 'Completed')}{' '}
                   {completedAt}
                 </span>
               )}

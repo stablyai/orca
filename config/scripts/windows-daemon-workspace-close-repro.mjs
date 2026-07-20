@@ -22,7 +22,10 @@ function log(message) {
 }
 
 function readProtocolVersion() {
-  const source = readFileSync(join(projectDir, 'src/main/daemon/types.ts'), 'utf8')
+  const source = readFileSync(
+    join(projectDir, 'src/main/daemon/daemon-protocol-version.ts'),
+    'utf8'
+  )
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
   if (!match) {
     throw new Error('Could not read the daemon protocol version')

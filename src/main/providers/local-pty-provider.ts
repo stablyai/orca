@@ -70,6 +70,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
+import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -126,11 +127,18 @@ export const LOCAL_PTY_FORCE_KILL_RETRY_MS = 250
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
 
-type DataCallback = (payload: { id: string; data: string }) => void
+type DataCallback = (payload: {
+  id: string
+  data: string
+  sequenceChars?: number
+  transformed?: boolean
+  seq?: number
+}) => void
 type ExitCallback = (payload: PtyExitPayload) => void
 
 const dataListeners = new Set<DataCallback>()
 const exitListeners = new Set<ExitCallback>()
+const startupIngressByPty = new Map<string, PtyStartupIngress>()
 
 /**
  * Returns a stable default cwd for locally spawned PTYs.
@@ -496,7 +504,13 @@ export type LocalPtyProviderOptions = {
   pwshAvailable?: () => boolean
   onSpawned?: (id: string) => void
   onExit?: (id: string, code: number) => void
-  onData?: (id: string, data: string, timestamp: number) => void
+  onData?: (
+    id: string,
+    data: string,
+    timestamp: number,
+    sequenceChars?: number,
+    transformed?: boolean
+  ) => void
 }
 
 export class LocalPtyProvider implements IPtyProvider {
@@ -945,6 +959,34 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)
 
+    const emitIngressData = (emission: PtyIngressEmission): void => {
+      const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
+      if (emission.transformed || sequenceChars !== emission.data.length) {
+        this.opts.onData?.(id, emission.data, Date.now(), sequenceChars, true)
+      } else {
+        this.opts.onData?.(id, emission.data, Date.now())
+      }
+      for (const cb of dataListeners) {
+        cb(
+          emission.transformed || sequenceChars !== emission.data.length
+            ? {
+                id,
+                data: emission.data,
+                sequenceChars,
+                seq: emission.rawEndSeq,
+                transformed: true
+              }
+            : { id, data: emission.data }
+        )
+      }
+    }
+    const startupIngress = new PtyStartupIngress({
+      ...(args.startupIngress ? { intent: args.startupIngress } : {}),
+      write: (data) => proc.write(data),
+      onEmission: emitIngressData
+    })
+    startupIngressByPty.set(id, startupIngress)
+
     // Shell-ready startup command support
     let resolveShellReady: ((signal: ShellReadySignal) => void) | null = null
     let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
@@ -976,10 +1018,7 @@ export class LocalPtyProvider implements IPtyProvider {
       if (heldBytes.length === 0) {
         return
       }
-      this.opts.onData?.(id, heldBytes, Date.now())
-      for (const cb of dataListeners) {
-        cb({ id, data: heldBytes })
-      }
+      startupIngress.accept(heldBytes)
     }
     if (args.command) {
       if (shellReadyLaunch?.supportsReadyMarker) {
@@ -1015,13 +1054,7 @@ export class LocalPtyProvider implements IPtyProvider {
           finishShellReady({ postMarkerBytesObserved: scanned.postMarkerBytesObserved })
         }
       }
-      if (data.length === 0) {
-        return
-      }
-      this.opts.onData?.(id, data, Date.now())
-      for (const cb of dataListeners) {
-        cb({ id, data })
-      }
+      startupIngress.accept(data)
     })
     if (onDataDisposable) {
       disposables.push(onDataDisposable)
@@ -1052,6 +1085,8 @@ export class LocalPtyProvider implements IPtyProvider {
       }
       startupCommandCleanup?.()
       clearPtyState(id)
+      startupIngress.drainAndClose()
+      startupIngressByPty.delete(id)
       // Why: release the master ptmx fd on the natural-exit path — without
       // this, a shell that exits cleanly (the common case) never releases its
       // fd until the next GC. See docs/fix-pty-fd-leak.md.
@@ -1274,10 +1309,14 @@ export class LocalPtyProvider implements IPtyProvider {
     // only safe at an empty prompt, and without a headless emulator this
     // provider cannot tell whether input is pending.
     try {
+      startupIngressByPty.get(id)?.snapshotBarrier()
       ptyProcesses.get(id)?.clear()
     } catch {
       /* PTY may have just exited */
     }
+  }
+  closeStartupQueryAuthority(id: string): number {
+    return startupIngressByPty.get(id)?.closeQueryAuthority() ?? 0
   }
   acknowledgeDataEvent(_id: string, _charCount: number): void {
     /* no flow control for local */

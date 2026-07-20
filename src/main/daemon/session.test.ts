@@ -106,6 +106,11 @@ describe('Session', () => {
     cols?: number
     rows?: number
     launchAgent?: TuiAgent
+    startupIngress?: {
+      colors: { foreground: string; background: string }
+      deadlineMs: number
+      echoProjection?: 'windows-conpty-esc-stripped'
+    }
     wslDistro?: string
   }): Session {
     session = new Session({
@@ -116,6 +121,7 @@ describe('Session', () => {
       wslDistro: opts?.wslDistro,
       subprocess,
       shellReadySupported: opts?.shellReadySupported ?? false,
+      ...(opts?.startupIngress ? { startupIngress: opts.startupIngress } : {}),
       ...(opts?.shellReadyTimeoutMs !== undefined
         ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
         : {})
@@ -186,6 +192,56 @@ describe('Session', () => {
       subprocess.simulateData('broadcast')
       expect(received1).toEqual(['broadcast'])
       expect(received2).toEqual(['broadcast'])
+    })
+
+    it('classifies startup queries and cooked echoes before model, persistence, and fanout', () => {
+      createSession({
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000,
+          echoProjection: 'windows-conpty-esc-stripped'
+        }
+      })
+      const onData = vi.fn()
+      session.attachClient({ onData, onExit: () => {} })
+      const query = '\x1b]10;?\x07'
+      const echo = ']10;rgb:2e2e/3434/3434\\'
+
+      subprocess.simulateData(query)
+      subprocess.simulateData(echo)
+      subprocess.simulateData('prompt')
+
+      expect(subprocess.written).toEqual(['\x1b]10;rgb:2e2e/3434/3434\x1b\\'])
+      expect(onData.mock.calls).toEqual([
+        ['', query.length, true, query.length],
+        ['', echo.length, true, query.length + echo.length],
+        ['prompt']
+      ])
+      expect(session.takePendingOutput(false)?.records).toEqual([
+        { kind: 'output', data: 'prompt' }
+      ])
+      expect(session.getSnapshot()).toMatchObject({
+        outputSequence: query.length + echo.length + 'prompt'.length
+      })
+      expect(session.getSnapshot()?.snapshotAnsi).toContain('prompt')
+      expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
+    })
+
+    it('releases a held cooked-echo prefix before taking a snapshot', () => {
+      createSession({
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000,
+          echoProjection: 'windows-conpty-esc-stripped'
+        }
+      })
+      subprocess.simulateData('\x1b]10;?\x07')
+      subprocess.simulateData(']10;rgb:2e2e/')
+
+      const snapshot = session.getSnapshot()
+
+      expect(snapshot?.snapshotAnsi).toContain(']10;rgb:2e2e/')
+      expect(snapshot?.outputSequence).toBe('\x1b]10;?\x07]10;rgb:2e2e/'.length)
     })
   })
 

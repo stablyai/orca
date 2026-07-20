@@ -34,8 +34,12 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {...rest}
       >
         {/* Why: a stepped spin preserves the worker-is-running affordance while
-            avoiding a full-refresh-rate compositor loop for long agent runs. */}
-        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]" />
+            avoiding a full-refresh-rate compositor loop for long agent runs.
+            Why: honor reduced motion (Windows "Animation effects" off →
+            prefers-reduced-motion) by stopping the spin and filling the top
+            border, so the dot stays a complete static ring instead of a
+            partial ring frozen mid-rotation that reads as a broken spinner. */}
+        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite] motion-reduce:animate-none motion-reduce:border-t-yellow-500" />
       </span>
     )
   }

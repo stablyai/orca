@@ -150,13 +150,7 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../shared/setup-agent-sequencing'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import {
-  answerStartupTerminalColorQueries,
-  clearStartupTerminalColorQueryReplies,
-  getStartupTerminalColorQueryReplyColors,
-  moveStartupTerminalColorQueryReplies,
-  registerStartupTerminalColorQueryReplies
-} from './terminal-startup-color-query-replies'
+import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
 import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus
@@ -544,20 +538,14 @@ function tryGetProviderForPty(ptyId: string): IPtyProvider | undefined {
   }
 }
 
-function getProviderForStartupTerminalColorReply(ptyId: string): IPtyProvider | undefined {
-  const ownedConnectionId = ptyOwnership.get(ptyId)
-  if (ownedConnectionId !== undefined) {
-    return getProvider(ownedConnectionId)
+function closeStartupQueryAuthorityForPty(ptyId: string): void {
+  try {
+    void Promise.resolve(tryGetProviderForPty(ptyId)?.closeStartupQueryAuthority?.(ptyId)).catch(
+      () => {}
+    )
+  } catch {
+    /* Best-effort handoff; the bounded source deadline remains the fallback. */
   }
-  const parsedSshId = parseAppSshPtyId(ptyId)
-  if (parsedSshId) {
-    return getProvider(parsedSshId.connectionId)
-  }
-  return localProvider
-}
-
-export function answerStartupTerminalColorQueriesForPty(ptyId: string, data: string): string {
-  return answerStartupTerminalColorQueries(ptyId, data, getProviderForStartupTerminalColorReply)
 }
 
 function normalizeNodePtySpawnError(err: unknown): Error {
@@ -1274,7 +1262,6 @@ export function clearProviderPtyState(id: string): void {
   rendererVisibilityKnownPtys.delete(id)
   pendingHiddenRendererResizeOutputPtys.delete(id)
   deliveredHiddenRendererResizeOutputPtys.delete(id)
-  clearStartupTerminalColorQueryReplies(id)
   // Why: every PTY teardown path funnels through here (local exit, daemon
   // shutdown, SSH exit/connection teardown) — hidden/interest gate bits must
   // not outlive the PTY or a reused map entry could silently gate a new one.
@@ -1731,7 +1718,8 @@ export function registerPtyHandlers(
         markClaudePtyExited(id)
         runtime?.onPtyExit(id, code)
       },
-      onData: (id, data, timestamp) => runtime?.onPtyData(id, data, timestamp)
+      onData: (id, data, timestamp, sequenceChars, transformed) =>
+        runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
     })
   }
 
@@ -1742,6 +1730,8 @@ export function registerPtyHandlers(
   type PendingPtyData = {
     data: string
     startSeq?: number
+    rawLength?: number
+    transformed?: true
     containsBackgroundOutput?: boolean
     // Why droppedOutput (not main's droppedBacklog trim): this branch bounds
     // the unsent backlog with the O(1) drop-to-sentinel + query-salvage +
@@ -1756,6 +1746,7 @@ export function registerPtyHandlers(
     data: string
     seq?: number
     rawLength?: number
+    transformed?: boolean
     background?: boolean
     droppedOutput?: boolean
   }
@@ -2151,20 +2142,23 @@ export function registerPtyHandlers(
     return true
   }
 
-  function getChunkStartSeq(endSeq: number | undefined, data: string): number | undefined {
-    return typeof endSeq === 'number' ? Math.max(0, endSeq - data.length) : undefined
-  }
-
   function makePtyDataPayload(
     id: string,
     data: string,
     startSeq: number | undefined,
-    containsBackgroundOutput: boolean | undefined
+    containsBackgroundOutput: boolean | undefined,
+    rawLength = data.length,
+    transformed = false
   ): PtyDataPayload {
     const payload: PtyDataPayload = { id, data }
     if (typeof startSeq === 'number') {
-      payload.seq = startSeq + data.length
-      payload.rawLength = data.length
+      payload.seq = startSeq + rawLength
+    }
+    if (typeof startSeq === 'number' || rawLength !== data.length || transformed) {
+      payload.rawLength = rawLength
+    }
+    if (transformed) {
+      payload.transformed = true
     }
     if (containsBackgroundOutput === true) {
       payload.background = true
@@ -2456,7 +2450,9 @@ export function registerPtyHandlers(
     data: string,
     startSeq: number | undefined,
     preservesSeq: boolean,
-    containsBackgroundOutput: boolean
+    containsBackgroundOutput: boolean,
+    rawLength = data.length,
+    transformed = false
   ): PendingPtyData {
     // Why: once over the cap, stay dropped at O(1) memory until the renderer
     // can receive again — the restore sentinel supersedes any interim bytes.
@@ -2471,21 +2467,21 @@ export function registerPtyHandlers(
     }
     const nextContainsBackgroundOutput =
       existing?.containsBackgroundOutput === true || containsBackgroundOutput
-    if (!preservesSeq) {
-      return dropOversizedPendingPtyData(id, {
-        data: (existing?.data ?? '') + data,
-        ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
-      })
-    }
     if (!existing) {
       return dropOversizedPendingPtyData(id, {
         data,
         ...(typeof startSeq === 'number' ? { startSeq } : {}),
+        ...(rawLength !== data.length ? { rawLength } : {}),
+        ...(transformed ? { transformed: true } : {}),
         ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
       })
     }
+    const existingRawLength = existing.rawLength ?? existing.data.length
     const next: PendingPtyData = {
       data: existing.data + data,
+      ...(!preservesSeq || existing.transformed || transformed
+        ? { rawLength: existingRawLength + rawLength, transformed: true as const }
+        : {}),
       ...(nextContainsBackgroundOutput ? { containsBackgroundOutput: true } : {})
     }
     if (typeof existing.startSeq === 'number') {
@@ -2584,8 +2580,9 @@ export function registerPtyHandlers(
         continue
       }
       const { data } = pending
-      const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
-      const remaining = data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
+      const indivisible = pending.transformed === true
+      const chunk = indivisible ? data : data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
+      const remaining = indivisible ? '' : data.slice(PTY_BATCH_FLUSH_CHUNK_CHARS)
       if (remaining) {
         const nextPending: PendingPtyData = { data: remaining }
         if (typeof pending.startSeq === 'number') {
@@ -2601,7 +2598,14 @@ export function registerPtyHandlers(
       updateProducerFlowControl(id)
       sendPtyDataToRenderer(
         id,
-        makePtyDataPayload(id, chunk, pending.startSeq, pending.containsBackgroundOutput)
+        makePtyDataPayload(
+          id,
+          chunk,
+          pending.startSeq,
+          pending.containsBackgroundOutput,
+          pending.rawLength,
+          pending.transformed
+        )
       )
       writes++
     }
@@ -2674,7 +2678,9 @@ export function registerPtyHandlers(
             payload.id,
             remaining.data,
             remaining.startSeq,
-            remaining.containsBackgroundOutput
+            remaining.containsBackgroundOutput,
+            remaining.rawLength,
+            remaining.transformed
           )
         )
       }
@@ -2762,19 +2768,14 @@ export function registerPtyHandlers(
     const isLocalProvider = localProvider instanceof LocalPtyProvider
 
     localDataUnsub = localProvider.onData((payload) => {
+      const rawLength = payload.sequenceChars ?? payload.data.length
       const outputSeq = isLocalProvider
         ? runtime?.getPtyOutputSequence(payload.id)
-        : runtime?.onPtyData(
-            payload.id,
-            payload.data,
-            Date.now(),
-            payload.sequenceChars ?? payload.data.length
-          )
-      const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
-      const preservesSeq =
-        rendererData === payload.data &&
-        (payload.sequenceChars === undefined || payload.sequenceChars === payload.data.length)
-      const startSeq = preservesSeq ? getChunkStartSeq(outputSeq, payload.data) : undefined
+        : runtime?.onPtyData(payload.id, payload.data, Date.now(), rawLength, payload.transformed)
+      const rendererData = payload.data
+      const preservesSeq = !payload.transformed && rawLength === payload.data.length
+      const startSeq =
+        typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
       if (mainWindow.isDestroyed()) {
         // Why: clear the pending flush timer so it doesn't fire after the window
         // is gone. Without this, macOS app re-activation leaks orphaned timers
@@ -2807,7 +2808,7 @@ export function registerPtyHandlers(
         }
         return
       }
-      if (rendererData.length === 0) {
+      if (rendererData.length === 0 && !payload.transformed) {
         return
       }
       const containsBackgroundOutput =
@@ -2822,7 +2823,9 @@ export function registerPtyHandlers(
         rendererData,
         startSeq,
         preservesSeq,
-        containsBackgroundOutput
+        containsBackgroundOutput,
+        rawLength,
+        payload.transformed === true
       )
       const nextData = pending.data
       const isInteractiveOutput = shouldSendInteractiveOutputNow(
@@ -2854,8 +2857,12 @@ export function registerPtyHandlers(
           id: payload.id,
           data: nextData,
           ...(typeof pending.startSeq === 'number'
-            ? { seq: pending.startSeq + nextData.length, rawLength: nextData.length }
+            ? {
+                seq: pending.startSeq + (pending.rawLength ?? nextData.length),
+                rawLength: pending.rawLength ?? nextData.length
+              }
             : {}),
+          ...(pending.transformed ? { transformed: true } : {}),
           ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
           ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
         })
@@ -4023,10 +4030,6 @@ export function registerPtyHandlers(
           })?.distro ?? null)
         : null
       const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
-      const preSpawnStartupTerminalColorReplyPtyId =
-        startupTerminalColorQueryReplyColors && effectiveSessionId !== undefined
-          ? (effectiveSessionAppId ?? effectiveSessionId)
-          : null
       // Why: the renderer sets pane env for SSH too. Only forward it to the
       // remote when the relay hook path is enabled; otherwise a newer relay
       // could emit statuses this Orca build is not prepared to route.
@@ -4136,6 +4139,11 @@ export function registerPtyHandlers(
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
+      const nativeWindowsConptySpawn = isNativeWindowsLocalPtySpawn({
+        connectionId: args.connectionId,
+        cwd: args.cwd,
+        shellOverride: effectiveShellOverride
+      })
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         effectiveShellOverride,
         cwd,
@@ -4290,6 +4298,15 @@ export function registerPtyHandlers(
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
       }
+      if (startupTerminalColorQueryReplyColors) {
+        spawnOptions.startupIngress = {
+          colors: startupTerminalColorQueryReplyColors,
+          deadlineMs: 5_000,
+          ...(nativeWindowsConptySpawn
+            ? { echoProjection: 'windows-conpty-esc-stripped' as const }
+            : {})
+        }
+      }
       const existingPaneSpawn = reservationPaneKey
         ? paneSpawnReservationsByPaneKey.get(reservationPaneKey)
         : undefined
@@ -4339,14 +4356,6 @@ export function registerPtyHandlers(
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)
           }
-          if (preSpawnStartupTerminalColorReplyPtyId && startupTerminalColorQueryReplyColors) {
-            // Why: Codex probes OSC 10/11 with a 100 ms timeout and daemon PTYs
-            // can emit that query before spawn() resolves to the renderer.
-            registerStartupTerminalColorQueryReplies(
-              preSpawnStartupTerminalColorReplyPtyId,
-              startupTerminalColorQueryReplyColors
-            )
-          }
           spawnTiming.mark('options')
           const expectedPtyId = effectiveSessionAppId ?? effectiveSessionId
           if (isDaemonHostSpawn && expectedPtyId) {
@@ -4392,9 +4401,6 @@ export function registerPtyHandlers(
           const spawnError = normalizeNodePtySpawnError(err)
           const isIdentityMismatch =
             isSshPtyIdentityMismatchError(spawnError) || isSshPtyIdentityMismatchError(rawMessage)
-          if (preSpawnStartupTerminalColorReplyPtyId) {
-            clearStartupTerminalColorQueryReplies(preSpawnStartupTerminalColorReplyPtyId)
-          }
           if (effectiveSessionAppId !== undefined) {
             if (isIdentityMismatch && hadSessionSizeBeforeAttach && sessionSizeBeforeAttach) {
               ptySizes.set(effectiveSessionAppId, sessionSizeBeforeAttach)
@@ -4475,32 +4481,13 @@ export function registerPtyHandlers(
           // ownership, and a hidden-spawned agent should be paceable from its
           // first flood, not from its first visibility transition.
           syncPtyBackgroundedDelivery(result.id, 'spawn')
+          closeStartupQueryAuthorityForPty(result.id)
         }
         // Why: Phase-5 ConPTY DA1 — record the native-Windows-local-PTY
         // determination from the spawn record before the headless seed below,
         // so the runtime emulator's DA1 override exists from byte zero.
-        if (
-          isNativeWindowsLocalPtySpawn({
-            connectionId: args.connectionId,
-            cwd: args.cwd,
-            shellOverride: effectiveShellOverride
-          })
-        ) {
+        if (nativeWindowsConptySpawn) {
           markNativeWindowsConptyPty(result.id)
-        }
-        if (startupTerminalColorQueryReplyColors) {
-          if (result.isReattach) {
-            if (preSpawnStartupTerminalColorReplyPtyId) {
-              clearStartupTerminalColorQueryReplies(preSpawnStartupTerminalColorReplyPtyId)
-            }
-          } else if (preSpawnStartupTerminalColorReplyPtyId) {
-            moveStartupTerminalColorQueryReplies(preSpawnStartupTerminalColorReplyPtyId, result.id)
-          } else {
-            registerStartupTerminalColorQueryReplies(
-              result.id,
-              startupTerminalColorQueryReplyColors
-            )
-          }
         }
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
         if (store && args.connectionId) {
@@ -5225,6 +5212,7 @@ export function registerPtyHandlers(
     rendererVisibilityKnownPtys.add(args.id)
     if (args.visible) {
       visibleRendererPtys.add(args.id)
+      closeStartupQueryAuthorityForPty(args.id)
     } else {
       visibleRendererPtys.delete(args.id)
     }
@@ -5241,6 +5229,7 @@ export function registerPtyHandlers(
     })
     if (args.hidden === true) {
       markHiddenRendererPty(args.id)
+      closeStartupQueryAuthorityForPty(args.id)
       // Why: bytes already queued for a newly hidden PTY are model-owned
       // state; drop them now instead of holding them under ACK starvation.
       // Reveal restores from the snapshot.

@@ -131,6 +131,7 @@ import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
 import {
+  enforceTerminalCurrentScrollIntent,
   getTerminalScrollIntentKind,
   markTerminalFollowOutput
 } from '@/lib/pane-manager/terminal-scroll-intent'
@@ -4907,7 +4908,8 @@ export function connectPanePty(
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
       replayIntoTerminal(pane, deps.replayingPanesRef, data, {
-        shouldRefreshViewportSynchronously: shouldRefreshForegroundSynchronously
+        shouldRefreshViewportSynchronously: shouldRefreshForegroundSynchronously,
+        shouldReleaseRenderPause: () => deps.isVisibleRef.current
       })
     }
 
@@ -4916,7 +4918,8 @@ export function connectPanePty(
       // merely after the write was queued.
       flushTerminalOutput(pane.terminal)
       return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data, {
-        shouldRefreshViewportSynchronously: shouldRefreshForegroundSynchronously
+        shouldRefreshViewportSynchronously: shouldRefreshForegroundSynchronously,
+        shouldReleaseRenderPause: () => deps.isVisibleRef.current
       })
     }
 
@@ -5215,6 +5218,12 @@ export function connectPanePty(
     let hiddenOutputRestoreGeneration = 0
     // Flood-backpressure suppression (HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS).
     let hiddenOutputRestoreFloodSuppressedUntil = 0
+    // Why: queued replay writes still paint after deadline abandonment; the
+    // fallback drain must not write snapshot-covered live bytes a second time.
+    let hiddenOutputRestoreReplayingSnapshot: {
+      seq?: number
+      pendingDeliveryStartSeq?: number
+    } | null = null
     let hiddenOutputRestoreFloodRepaintTimer: ReturnType<typeof setTimeout> | null = null
     // Why: after a snapshot restore, main can still drain ACK-backlog chunks
     // whose bytes the snapshot already covers — writing them unguarded
@@ -6311,6 +6320,8 @@ export function connectPanePty(
         ? []
         : hiddenOutputRestorePendingChunks.slice()
       const hadPendingOverflow = hiddenOutputRestorePendingOverflow
+      const replayingSnapshot = hiddenOutputRestoreReplayingSnapshot
+      hiddenOutputRestoreReplayingSnapshot = null
       hiddenOutputRestoreGeneration += 1
       if (
         hiddenOutputSnapshotScrollRestore?.valid &&
@@ -6346,7 +6357,21 @@ export function connectPanePty(
       if (hadPendingOverflow) {
         return
       }
-      const pendingData = pendingChunks.map((chunk) => chunk.data).join('')
+      const replayedSeq = typeof replayingSnapshot?.seq === 'number' ? replayingSnapshot.seq : null
+      let pendingData = ''
+      for (const chunk of pendingChunks) {
+        const sliced =
+          replayedSeq === null ? chunk.data : getChunkDataAfterSnapshot(chunk, replayedSeq)
+        pendingData += sliced ?? chunk.data
+      }
+      if (replayingSnapshot && replayedSeq !== null) {
+        setRestoredSnapshotBaseline(expectedPtyId, replayingSnapshot)
+        for (const chunk of pendingChunks) {
+          if (typeof chunk.seq === 'number' && restoredSnapshotExpectedStartSeq !== null) {
+            restoredSnapshotExpectedStartSeq = Math.max(restoredSnapshotExpectedStartSeq, chunk.seq)
+          }
+        }
+      }
       if (pendingData) {
         writePtyOutputToXterm(pendingData, true)
       }
@@ -6391,6 +6416,7 @@ export function connectPanePty(
       resetHiddenRendererRiskState()
       hiddenOutputRestoreNeeded = false
       hiddenOutputRestorePtyId = null
+      hiddenOutputRestoreReplayingSnapshot = null
       hiddenOutputRestoreGeneration += 1
     }
 
@@ -6482,6 +6508,7 @@ export function connectPanePty(
       cols: number
       rows: number
       seq?: number
+      pendingDeliveryStartSeq?: number
       alternateScreen?: boolean
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
@@ -6517,6 +6544,14 @@ export function connectPanePty(
               return
             }
             scrollRestore.started = true
+            if (typeof snapshot.seq === 'number') {
+              hiddenOutputRestoreReplayingSnapshot = {
+                seq: snapshot.seq,
+                ...(typeof snapshot.pendingDeliveryStartSeq === 'number'
+                  ? { pendingDeliveryStartSeq: snapshot.pendingDeliveryStartSeq }
+                  : {})
+              }
+            }
             discardTerminalOutput(pane.terminal)
             if (
               hasSnapshotDimensions &&
@@ -6613,7 +6648,7 @@ export function connectPanePty(
                     }
                   }
                 },
-                { shouldContinue: isCurrentRestore }
+                { shouldContinue: isCurrentRestore, retryIfUnmeasurable: true }
               )
               pendingHiddenSnapshotFit = fit
               try {
@@ -6783,6 +6818,7 @@ export function connectPanePty(
           // still draining from main's ACK backlog below that point are
           // duplicates the dataCallback reconciliation must suppress.
           setRestoredSnapshotBaseline(currentPtyId, snapshot)
+          hiddenOutputRestoreReplayingSnapshot = null
           const needsFreshSnapshot = hiddenOutputRestoreFreshSnapshotNeeded
           hiddenOutputRestoreFreshSnapshotNeeded = false
           const drainOutcome = drainPendingLiveChunksAfterSnapshot(snapshot.seq)
@@ -7049,6 +7085,7 @@ export function connectPanePty(
         return
       }
       if (!foreground && orderedRendererData.length === 0) {
+        recordRendererOrderedSeq(rendererMeta)
         schedulePendingStartupCommandDelivery()
         return
       }
@@ -7162,6 +7199,7 @@ export function connectPanePty(
       // Why: createOrAttach snapshots precede bytes emitted before its IPC
       // reply. Paint the authoritative replay first, then admit those live
       // chunks so the replay clear cannot erase newer output.
+      let deliveredDeferredChunks = 0
       for (const chunk of chunks) {
         if (
           chunk.ptyId !== currentPtyId ||
@@ -7171,6 +7209,23 @@ export function connectPanePty(
           continue
         }
         dataCallback(chunk.data, chunk.meta, chunk.streamGeneration)
+        deliveredDeferredChunks += 1
+      }
+      if (deliveredDeferredChunks > 0) {
+        // Why: replay restores the viewport before these newer bytes parse;
+        // settle the bounded deferred slice, then apply the latest user intent.
+        flushTerminalOutput(pane.terminal, { maxChars: MAX_DEFERRED_REATTACH_LIVE_CHARS })
+        void waitForTerminalReplayWritesParsed(pane.terminal).then(() => {
+          if (
+            disposed ||
+            !deps.isVisibleRef.current ||
+            transport.getPtyId() !== currentPtyId ||
+            transportStreamGeneration !== currentGeneration
+          ) {
+            return
+          }
+          enforceTerminalCurrentScrollIntent(pane.terminal)
+        })
       }
     }
 
@@ -7472,15 +7527,21 @@ export function connectPanePty(
                 window.api.pty.signal(reattachPtyId, 'SIGWINCH')
               }
             },
-            { shouldContinue: isCurrentReattachPayload }
+            { shouldContinue: isCurrentReattachPayload, retryIfUnmeasurable: true }
           )
           pendingReattachFit = fit
+          let fitCompleted = false
           try {
-            await fit.completion
+            fitCompleted = await fit.completion
           } finally {
             if (pendingReattachFit === fit) {
               pendingReattachFit = null
             }
+          }
+          if (fitCompleted && isCurrentReattachPayload() && deps.isVisibleRef.current) {
+            // Why: reattach resize is fire-and-forget; verify the provider's
+            // applied grid while this reveal still owns the visible pane.
+            ptySizeReassertion.request({ fit: false })
           }
         } else if (isCurrentReattachPayload() && !isRemoteRuntimePtyId(reattachPtyId)) {
           window.api.pty.signal(reattachPtyId, 'SIGWINCH')
