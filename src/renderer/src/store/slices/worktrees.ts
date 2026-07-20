@@ -1824,6 +1824,10 @@ function buildWorktreeRenameState(
         workspace: withNewWorktreeId(snapshot.workspace),
         pages: snapshot.pages.map(withNewWorktreeId)
       })),
+    fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
+      ...searchState,
+      resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
+    }),
     unifiedTabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
     groupsByWorktree: (groups: { worktreeId: string }[]) => groups.map(withNewWorktreeId)
   }

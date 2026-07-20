@@ -135,6 +135,13 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   newTerminalButtonDisabled: {
     opacity: 0.45
   },
+  // Divider between the + new-terminal button and the Quick Commands launcher,
+  // matching the tab strip's borderSubtle separators.
+  tabActionDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 18,
+    backgroundColor: colors.borderSubtle
+  },
   terminalFrame: {
     flex: 1,
     minHeight: 0,

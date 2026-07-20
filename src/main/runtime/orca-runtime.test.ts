@@ -30,6 +30,10 @@ import {
   removeWorktree
 } from '../git/worktree'
 import * as gitRunner from '../git/runner'
+import {
+  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
+  WORKTREE_TEARDOWN_RPC_MARGIN_MS
+} from './worktree-teardown'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
 import {
   createSetupRunnerScript,
@@ -66,6 +70,7 @@ import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR
 } from '../../shared/terminal-input'
+import { MAX_QUICK_COMMANDS } from '../../shared/terminal-quick-commands'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -1500,6 +1505,16 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
 
 describe('OrcaRuntimeService', () => {
   it('projects runtime-backed settings to paired clients', () => {
+    const terminalQuickCommands = [
+      {
+        id: 'review',
+        label: 'Review',
+        action: 'agent-prompt' as const,
+        agent: 'codex' as const,
+        prompt: 'Review this diff',
+        scope: { type: 'global' as const }
+      }
+    ]
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -1507,7 +1522,8 @@ describe('OrcaRuntimeService', () => {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        minimaxUsageModels: 'general,abab6.5',
+        terminalQuickCommands
       })
     } as never)
 
@@ -1517,6 +1533,76 @@ describe('OrcaRuntimeService', () => {
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
     })
+    expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
+    expect(runtime.getClientTerminalQuickCommands()).toEqual(terminalQuickCommands)
+  })
+
+  it('updates quick commands without widening general paired settings payloads', () => {
+    const existing = {
+      id: 'review',
+      label: 'Review',
+      action: 'terminal-command' as const,
+      command: 'pnpm review',
+      appendEnter: true,
+      scope: { type: 'global' as const }
+    }
+    let settings = { ...store.getSettings(), terminalQuickCommands: [existing] }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+    const command = {
+      id: 'status',
+      label: 'Status',
+      action: 'terminal-command' as const,
+      command: 'git status',
+      appendEnter: true,
+      scope: { type: 'global' as const }
+    }
+    const commands = [existing, command]
+
+    expect(runtime.updateClientTerminalQuickCommands({ type: 'upsert', command })).toEqual(commands)
+    expect(updateSettings).toHaveBeenCalledWith(
+      { terminalQuickCommands: commands },
+      { notifyListeners: true }
+    )
+    expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
+  })
+
+  it('rejects a concurrent add after the quick command limit is reached', () => {
+    const terminalQuickCommands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) => ({
+      id: `command-${index}`,
+      label: `Command ${index}`,
+      action: 'terminal-command' as const,
+      command: 'true',
+      appendEnter: true,
+      scope: { type: 'global' as const }
+    }))
+    const updateSettings = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({ ...store.getSettings(), terminalQuickCommands }),
+      updateSettings
+    } as never)
+
+    expect(() =>
+      runtime.updateClientTerminalQuickCommands({
+        type: 'upsert',
+        command: {
+          id: 'one-too-many',
+          label: 'One too many',
+          action: 'terminal-command',
+          command: 'true',
+          appendEnter: true,
+          scope: { type: 'global' }
+        }
+      })
+    ).toThrow('Quick command limit reached')
+    expect(updateSettings).not.toHaveBeenCalled()
   })
 
   it('accepts runtime-backed setting updates from paired clients', () => {
@@ -1610,6 +1696,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('terminal.binary-stream.v1')
     expect(status.capabilities).toContain('workspace-ports.v1')
     expect(status.capabilities).toContain('mobile.tasks.v1')
+    expect(status.capabilities).toContain('terminal.quick-commands.v1')
     expect(status.capabilities).toContain('worktree.create-idempotency.v1')
     expect(status.capabilities).toContain('project-host-setup.v1')
     expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
@@ -3204,9 +3291,10 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('Cannot delete the project root workspace')
     deletedWorktreeId = result.worktree.id
     await expect(runtime.removeManagedWorktree(`id:${result.worktree.id}`)).resolves.toEqual({})
-    expect(localProvider.shutdown).toHaveBeenCalledWith(`${result.worktree.id}@@pty-1`, {
-      immediate: true
-    })
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      `${result.worktree.id}@@pty-1`,
+      expect.objectContaining({ immediate: true })
+    )
     expect(metaById[result.worktree.id]).toBeUndefined()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(result.worktree.id)
     expect(notifier.worktreesChanged).toHaveBeenCalledWith('folder-repo')
@@ -5057,7 +5145,10 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
-    expect(ptyProvider.shutdown).toHaveBeenCalledWith('pty-remote', { immediate: true })
+    expect(ptyProvider.shutdown).toHaveBeenCalledWith(
+      'pty-remote',
+      expect.objectContaining({ immediate: true })
+    )
     expect(ptyProvider.shutdown.mock.invocationCallOrder[0]).toBeLessThan(
       gitProvider.removeWorktree.mock.invocationCallOrder[0]
     )
@@ -21765,6 +21856,66 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('injects mobile quick-command prompts into the host-built agent startup command', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: { codex: 'codex' },
+        agentDefaultArgs: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      agent: 'codex',
+      agentPrompt: 'Review this diff'
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringMatching(/^codex .*'Review this diff'$/),
+        launchAgent: 'codex',
+        cwd: TEST_WORKTREE_PATH
+      })
+    )
+  })
+
+  it('rejects startup prompts for agents that require post-ready stdin', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await expect(
+      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        agent: 'aider',
+        agentPrompt: 'Review this diff'
+      })
+    ).rejects.toThrow('does not support startup prompt quick commands')
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('uses POSIX quoting for mobile agent launch commands in WSL project runtimes', async () => {
     await withPlatform('win32', async () => {
       const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
@@ -24980,6 +25131,39 @@ describe('OrcaRuntimeService', () => {
 
     physicalStop.resolve()
     await expect(stopping).resolves.toEqual({ stopped: 1 })
+  })
+
+  it('passes a margin-adjusted RPC deadline into stopAndWait for destructive teardown', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopAndWait = vi.fn(async () => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+      stopped: await stop(),
+      owner: true
+    }))
+
+    // Why: the runtime-graph sweep must bound the underlying shutdown/list RPCs
+    // below the sweep deadline, or a wedged daemon trips the outer sweep deadline.
+    const deadline = Date.now() + WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
+    await expect(
+      runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { deadline, stopPty })
+    ).resolves.toEqual({ stopped: 1 })
+
+    expect(stopAndWait).toHaveBeenCalledTimes(1)
+    const [ptyId, opts] = stopAndWait.mock.calls[0] as unknown as [
+      string,
+      { deadlineMs?: number } | undefined
+    ]
+    expect(ptyId).toBe('pty-1')
+    // Pin the margin: RPCs must settle WORKTREE_TEARDOWN_RPC_MARGIN_MS before the
+    // sweep deadline so the accurate stop failure outruns the sweep-timeout error.
+    expect(opts?.deadlineMs).toBe(deadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS)
   })
 
   it('fails terminal listing closed if the graph reloads during selector resolution', async () => {
@@ -30933,7 +31117,11 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime, 'pty-1')
     vi.mocked(removeWorktree).mockResolvedValue({})
     removeWorktreeLinkedPathsMock.mockImplementationOnce(async () => {
-      expect(stopAndWait).toHaveBeenCalledWith('pty-1')
+      // Destructive teardown must bound the underlying RPCs below the sweep deadline.
+      expect(stopAndWait).toHaveBeenCalledWith(
+        'pty-1',
+        expect.objectContaining({ deadlineMs: expect.any(Number) })
+      )
     })
 
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
@@ -32706,7 +32894,11 @@ describe('OrcaRuntimeService', () => {
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-      expect(stopAndWait).toHaveBeenCalledWith('pty-1')
+      // Destructive teardown must bound the underlying RPCs below the sweep deadline.
+      expect(stopAndWait).toHaveBeenCalledWith(
+        'pty-1',
+        expect.objectContaining({ deadlineMs: expect.any(Number) })
+      )
       // The provider-prefix sweep and the git removal must happen AFTER the
       // runtime-graph physical stop. Git removal must NOT start before it.
       const preflightIdx = callOrder.indexOf('preflight')
@@ -32765,9 +32957,10 @@ describe('OrcaRuntimeService', () => {
 
       // The post-daemon provider's prefix-matching session must have been
       // shut down, proving the thunk resolved lazily at call time.
-      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`, {
-        immediate: true
-      })
+      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
+        `${TEST_WORKTREE_ID}@@aaaaaaaa`,
+        expect.objectContaining({ immediate: true })
+      )
       expect(onPtyStopped).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`)
       // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()

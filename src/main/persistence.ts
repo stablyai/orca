@@ -217,6 +217,7 @@ import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-sett
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
+import { ActiveViewPreference } from './active-view-preference'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
@@ -2627,6 +2628,7 @@ export type StoreOptions = {
 export class Store {
   private state: PersistedState
   private readonly dataFile: string
+  private readonly activeViewPreference: ActiveViewPreference
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
@@ -2667,6 +2669,9 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    // Why: activeView is a frequent, tiny preference; keeping it beside the
+    // profile avoids serializing the multi-MB recovery store on navigation.
+    this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
@@ -3698,9 +3703,7 @@ export class Store {
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
   async waitForPendingWrite(): Promise<void> {
-    if (this.pendingWrite) {
-      await this.pendingWrite
-    }
+    await Promise.all([this.pendingWrite, this.activeViewPreference.waitForPendingWrite()])
   }
 
   // Why githubCache is omitted: it is memory-only during the session (see
@@ -3855,6 +3858,10 @@ export class Store {
     this.writeGeneration++
     this.pendingWrite = null
     this.writeToDiskSync({ force: asyncWriteWasInFlight })
+  }
+
+  flushActiveViewPreferenceOrThrow(): void {
+    this.activeViewPreference.flushOrThrow()
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -5490,16 +5497,30 @@ export class Store {
       ),
       featureTipsSeenIds: normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       contextualToursSeenIds: normalizeContextualTourIds(this.state.ui?.contextualToursSeenIds),
-      featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+      featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions),
+      activeView: this.activeViewPreference.get()
     }
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
-    const previousUI = this.getUI()
+    const { activeView, ...durableUpdates } = sanitizedUpdates
+    const activeViewChanged = this.activeViewPreference.set(activeView)
+    if (Object.keys(durableUpdates).length === 0) {
+      if (activeViewChanged) {
+        this.notifyUIChanged()
+      }
+      return
+    }
     const currentUI = {
       ...getDefaultUIState(),
       ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
+    }
+    const previousUI = {
+      ...this.getUI(),
+      // Why: the legacy field stays unchanged as a migration/downgrade
+      // fallback; the profile sidecar is authoritative in current builds.
+      activeView: currentUI.activeView
     }
     const nextRightSidebarTab =
       sanitizedUpdates.rightSidebarTab !== undefined
@@ -5519,16 +5540,17 @@ export class Store {
             )
     const nextUI = {
       ...currentUI,
-      ...sanitizedUpdates,
-      groupBy: sanitizedUpdates.groupBy
-        ? normalizeGroupBy(sanitizedUpdates.groupBy)
+      ...durableUpdates,
+      groupBy: durableUpdates.groupBy
+        ? normalizeGroupBy(durableUpdates.groupBy)
         : normalizeGroupBy(this.state.ui?.groupBy),
-      sortBy: sanitizedUpdates.sortBy
-        ? normalizeSortBy(sanitizedUpdates.sortBy)
+      sortBy: durableUpdates.sortBy
+        ? normalizeSortBy(durableUpdates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: updates.projectOrderBy
         ? normalizeProjectOrderBy(updates.projectOrderBy)
         : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
+      activeView: currentUI.activeView,
       rightSidebarTab: nextRightSidebarTab,
       rightSidebarExplorerView: nextRightSidebarExplorerView,
       worktreeCardProperties:
@@ -5603,6 +5625,9 @@ export class Store {
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
     if (persistedUIValuesEqual(previousUI, nextUI)) {
+      if (activeViewChanged) {
+        this.notifyUIChanged()
+      }
       return
     }
     this.state.ui = nextUI
@@ -6594,6 +6619,11 @@ export class Store {
       this.flushOrThrow()
     } catch (err) {
       console.error('[persistence] Failed to flush state:', err)
+    }
+    try {
+      this.flushActiveViewPreferenceOrThrow()
+    } catch (err) {
+      console.error('[active-view] Failed to flush preference:', err)
     }
     this.writeGithubCacheSnapshotSync()
   }

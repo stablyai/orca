@@ -72,6 +72,7 @@ import {
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
+import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
 
 export type {
   ActiveRightSidebarTab,
@@ -87,6 +88,7 @@ const DEFAULT_FILE_SEARCH_STATE = {
   includePattern: '',
   excludePattern: '',
   results: null,
+  resultOwner: null,
   loading: false,
   collapsedFiles: new Set<string>()
 } satisfies Omit<
@@ -723,6 +725,7 @@ export type EditorSlice = {
       includePattern: string
       excludePattern: string
       results: SearchResult | null
+      resultOwner: FileSearchResultOwner | null
       loading: boolean
       collapsedFiles: Set<string>
       seedRequestId?: number
@@ -1528,6 +1531,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ...(shouldSeed
           ? {
               results: null,
+              resultOwner: null,
               loading: false,
               collapsedFiles: new Set<string>(),
               seedRequestId: (current.seedRequestId ?? 0) + 1
@@ -4106,6 +4110,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             ...current,
             query,
             results: null,
+            resultOwner: null,
             loading: false,
             collapsedFiles: new Set(),
             seedRequestId: (current.seedRequestId ?? 0) + 1
@@ -4123,6 +4128,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             ...current,
             includePattern,
             results: null,
+            resultOwner: null,
             loading: false,
             collapsedFiles: new Set(),
             seedRequestId: (current.seedRequestId ?? 0) + 1
@@ -4177,6 +4183,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             ...current,
             query: '',
             results: null,
+            resultOwner: null,
             loading: false,
             collapsedFiles: new Set()
           }

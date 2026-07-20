@@ -1484,6 +1484,7 @@ describe('createMainWindow', () => {
 
     windowHandlers['will-prevent-unload']()
     expect(onQuitAborted).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('window:unload-prevented')
   })
 
   it('allows close after the renderer process is gone', () => {

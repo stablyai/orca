@@ -928,6 +928,12 @@ export type AppApi = {
   /** Reloads the current app renderer through main so expected renderer
    *  teardown can be classified before Electron emits process-gone events. */
   reload: () => Promise<void>
+  /** Commits the renderer's final locally durable state before unload and
+   *  throws when the blocking durable write fails. */
+  persistBeforeUnloadSync: (args: {
+    sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
+    ui: Partial<PersistedUIState>
+  }) => void
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>

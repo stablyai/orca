@@ -492,16 +492,24 @@ function delay(ms: number): Promise<void> {
   })
 }
 
-async function isProviderPtyLive(provider: IPtyProvider, ptyId: string): Promise<boolean> {
-  return (await provider.listProcesses()).some((session) => session.id === ptyId)
+async function isProviderPtyLive(
+  provider: IPtyProvider,
+  ptyId: string,
+  deadlineMs?: number
+): Promise<boolean> {
+  // Why: bound the liveness list RPC by the teardown deadline so a wedged daemon
+  // fails fast; undefined keeps the provider default for all other callers.
+  return (
+    await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)
+  ).some((session) => session.id === ptyId)
 }
 
 async function verifyPtyStopped(
   provider: IPtyProvider,
   ptyId: string,
-  opts: { keepHistory?: boolean } | undefined
+  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
 ): Promise<boolean> {
-  if (await isProviderPtyLive(provider, ptyId)) {
+  if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
     return false
   }
   if (!opts?.keepHistory) {
@@ -510,7 +518,7 @@ async function verifyPtyStopped(
   const deadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
   while (Date.now() < deadline) {
     await delay(KEEP_HISTORY_STOP_POLL_MS)
-    if (await isProviderPtyLive(provider, ptyId)) {
+    if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
       return false
     }
   }
@@ -2612,7 +2620,7 @@ export function registerPtyHandlers(
   async function shutdownProviderAndDetectExit(
     provider: IPtyProvider,
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean }
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<boolean> {
     let providerExitObserved = false
     const unsubscribe = provider.onExit((payload) => {
@@ -3509,11 +3517,32 @@ export function registerPtyHandlers(
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
+      // Why: destructive teardown threads one absolute deadline through every await
+      // below; each RPC leaf converts it to the remaining time when it issues, so
+      // sequential RPCs share the budget and cannot overrun the sweep deadline.
+      const deadlineMs = opts?.deadlineMs
       const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
       if (startupPromise) {
         // Why: exact-stop must resolve the provider after daemon startup just
         // like renderer kills, or the fallback can falsely confirm teardown.
-        await startupPromise
+        if (deadlineMs !== undefined) {
+          // Why: bound the cold-start await by the teardown deadline instead of the
+          // 60s startup fail-open cap; fail closed so the sweep records the miss.
+          const won = await Promise.race([
+            // Why: () => false on rejection both fails closed on a startup error and
+            // keeps the losing branch's rejection from surfacing as unhandled.
+            startupPromise.then(
+              () => true,
+              () => false
+            ),
+            delay(Math.max(1, deadlineMs - Date.now())).then(() => false)
+          ])
+          if (!won) {
+            return false
+          }
+        } else {
+          await startupPromise
+        }
       }
       let provider: IPtyProvider
       try {
@@ -3534,7 +3563,8 @@ export function registerPtyHandlers(
       try {
         providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
           immediate: true,
-          keepHistory: opts?.keepHistory ?? false
+          keepHistory: opts?.keepHistory ?? false,
+          deadlineMs
         })
       } catch (err) {
         if (!isPtyAlreadyGoneError(err)) {

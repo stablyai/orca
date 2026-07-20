@@ -1148,6 +1148,7 @@ export function createMainWindow(
     // aborting Cmd+Q still gets their size saved.
     windowClosing = false
     opts?.onQuitAborted?.()
+    mainWindow.webContents.send('window:unload-prevented')
   })
 
   const onConfirmClose = (): void => {

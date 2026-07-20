@@ -146,6 +146,7 @@ describe('removeWorktree cascade', () => {
           includePattern: '*.ts',
           excludePattern: 'dist/**',
           results: { files: [], totalMatches: 0, truncated: false },
+          resultOwner: null,
           loading: false,
           collapsedFiles: new Set(['/path/wt1/file.ts'])
         }
@@ -697,6 +698,7 @@ describe('removeWorktree cascade', () => {
           includePattern: '',
           excludePattern: '',
           results: { files: [], totalMatches: 0, truncated: false },
+          resultOwner: null,
           loading: false,
           collapsedFiles: new Set()
         },
@@ -708,6 +710,7 @@ describe('removeWorktree cascade', () => {
           includePattern: '*.md',
           excludePattern: '',
           results: { files: [], totalMatches: 1, truncated: false },
+          resultOwner: null,
           loading: false,
           collapsedFiles: new Set(['/path/wt2/notes.md'])
         }

@@ -408,8 +408,9 @@ function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null 
   const scoped = Array.isArray(data.limits)
     ? data.limits.find(
         (limit) =>
+          // Why: is_active marks the currently-binding limit, not data validity;
+          // inactive Fable entries still carry a real percent/resets_at (#8979).
           limit?.kind === 'weekly_scoped' &&
-          limit.is_active !== false &&
           Number.isFinite(limit.percent) &&
           limit.scope?.model?.display_name?.trim().toLowerCase() === 'fable'
       )

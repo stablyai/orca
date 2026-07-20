@@ -472,20 +472,44 @@ describe('SshPtyProvider', () => {
 
   it('shutdown sends pty.shutdown request', async () => {
     await provider.shutdown(scopedPty1, { immediate: true })
-    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
-      id: 'pty-1',
-      immediate: true,
-      keepHistory: false
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: false
+      },
+      undefined
+    )
   })
 
   it('shutdown forwards keepHistory: true over the relay', async () => {
     await provider.shutdown(scopedPty1, { immediate: true, keepHistory: true })
-    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
-      id: 'pty-1',
-      immediate: true,
-      keepHistory: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: true
+      },
+      undefined
+    )
+  })
+
+  it('shutdown bounds the relay RPC by the teardown deadline', async () => {
+    // Why: freeze Date.now() so the leaf conversion deadline -> remaining relative
+    // timeout is exact and the mux receives precisely the leftover budget.
+    vi.useFakeTimers()
+    try {
+      await provider.shutdown(scopedPty1, { immediate: true, deadlineMs: Date.now() + 4321 })
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.shutdown',
+        { id: 'pty-1', immediate: true, keepHistory: false },
+        { timeoutMs: 4321 }
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('sendSignal sends pty.sendSignal request', async () => {
@@ -546,6 +570,18 @@ describe('SshPtyProvider', () => {
     expect(result).toEqual([
       { id: scopedPty1, cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }
     ])
+    expect(mux.request).toHaveBeenCalledWith('pty.listProcesses', undefined, undefined)
+  })
+
+  it('listProcesses bounds the relay RPC by the teardown deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      mux.request.mockResolvedValue([])
+      await provider.listProcesses({ deadlineMs: Date.now() + 4321 })
+      expect(mux.request).toHaveBeenCalledWith('pty.listProcesses', undefined, { timeoutMs: 4321 })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('getDefaultShell returns shell path', async () => {

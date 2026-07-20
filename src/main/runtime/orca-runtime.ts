@@ -135,6 +135,7 @@ import type {
   MemorySnapshot,
   Tab,
   TabGroupLayoutNode,
+  TerminalQuickCommand,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab,
@@ -212,6 +213,11 @@ import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import {
+  applyTerminalQuickCommandMutation,
+  MAX_QUICK_COMMANDS,
+  type TerminalQuickCommandMutation
+} from '../../shared/terminal-quick-commands'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
@@ -744,7 +750,7 @@ import {
   getTerminalViewAttributes,
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
-import { killAllProcessesForWorktree } from './worktree-teardown'
+import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
 import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
@@ -895,6 +901,7 @@ type RuntimeStore = {
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
+    terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
     mobileEmulatorEnabled?: boolean
@@ -1252,7 +1259,10 @@ type RuntimePtyController = {
   }): Promise<{ id: string; wslDistro?: string }>
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
-  stopAndWait?(ptyId: string, opts?: { keepHistory?: boolean }): Promise<boolean>
+  stopAndWait?(
+    ptyId: string,
+    opts?: { keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
@@ -2875,6 +2885,32 @@ export class OrcaRuntimeService {
       applyAgentStatusHooksEnabled(updates.agentStatusHooksEnabled)
     }
     return this.getClientSettings()
+  }
+
+  getClientTerminalQuickCommands(): TerminalQuickCommand[] {
+    if (!this.store?.getSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.getSettings().terminalQuickCommands ?? []
+  }
+
+  updateClientTerminalQuickCommands(
+    mutation: TerminalQuickCommandMutation
+  ): TerminalQuickCommand[] {
+    if (!this.store?.getSettings || !this.store.updateSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const current = this.getClientTerminalQuickCommands()
+    if (
+      mutation.type === 'upsert' &&
+      !current.some((command) => command.id === mutation.command.id) &&
+      current.length >= MAX_QUICK_COMMANDS
+    ) {
+      throw new Error('Quick command limit reached')
+    }
+    const next = applyTerminalQuickCommandMutation(current, mutation)
+    this.store.updateSettings({ terminalQuickCommands: next }, { notifyListeners: true })
+    return this.getClientTerminalQuickCommands()
   }
 
   updateClientPRBotAuthorOverride(args: { author: string; isBot: boolean }) {
@@ -19259,6 +19295,7 @@ export class OrcaRuntimeService {
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
+      agentPrompt?: string
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
@@ -19304,6 +19341,7 @@ export class OrcaRuntimeService {
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
+      agentPrompt?: string
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
@@ -19498,6 +19536,7 @@ export class OrcaRuntimeService {
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
+      agentPrompt?: string
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
     }
@@ -19537,7 +19576,7 @@ export class OrcaRuntimeService {
     })
     const startupPlan = buildAgentStartupPlan({
       agent: opts.agent,
-      prompt: '',
+      prompt: opts.agentPrompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
@@ -19548,6 +19587,9 @@ export class OrcaRuntimeService {
     })
     if (!startupPlan) {
       throw new Error(`Could not build launch command for ${opts.agent}.`)
+    }
+    if (opts.agentPrompt && startupPlan.followupPrompt) {
+      throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)
     }
     if (workspace.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(
@@ -20396,6 +20438,16 @@ export class OrcaRuntimeService {
         if (options.stopPty) {
           // Why: destructive worktree cleanup must not let its cross-surface
           // dedupe treat fire-and-forget controller.kill as physical exit.
+          // Why: the RPC deadline makes shutdown/list RPCs settle before the sweep
+          // deadline so a wedged daemon yields the accurate stop failure; no deadline
+          // (non-destructive) keeps the provider default RPC timeout.
+          if (options.deadline !== undefined) {
+            return (
+              this.ptyController?.stopAndWait?.(ptyId, {
+                deadlineMs: teardownRpcDeadline(options.deadline)
+              }) ?? false
+            )
+          }
           return this.ptyController?.stopAndWait?.(ptyId) ?? false
         }
         return Boolean(this.ptyController?.kill(ptyId))

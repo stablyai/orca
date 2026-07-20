@@ -35,6 +35,7 @@ import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
+import { isTopLevelView } from '../../../../shared/top-level-view'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
@@ -503,26 +504,13 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
   )
 }
 
-// Record keys are exhaustive over TopLevelView, so a new view can't be silently missed.
-const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
-  terminal: true,
-  settings: true,
-  tasks: true,
-  activity: true,
-  automations: true,
-  space: true,
-  skills: true,
-  mobile: true
-}
-const KNOWN_TOP_LEVEL_VIEWS = new Set<string>(Object.keys(TOP_LEVEL_VIEW_LOOKUP))
-
 function sanitizeHydratedActiveView(
   value: PersistedUIState['activeView'],
   experimentalActivityEnabled: boolean
 ): TopLevelView {
   // Why: older data (pre-activeView) or a view a different build doesn't have
   // falls back to terminal rather than rendering nothing.
-  if (typeof value !== 'string' || !KNOWN_TOP_LEVEL_VIEWS.has(value)) {
+  if (!isTopLevelView(value)) {
     return 'terminal'
   }
   // Why: activity is hidden when its setting is off, so restoring it lands on a
@@ -531,7 +519,7 @@ function sanitizeHydratedActiveView(
   if (value === 'activity' && !experimentalActivityEnabled) {
     return 'terminal'
   }
-  return value as TopLevelView
+  return value
 }
 
 let agentSendTargetModeInstanceCounter = 0

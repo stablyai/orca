@@ -34,6 +34,15 @@ export function isSshPtyIdentityMismatchError(err: unknown): boolean {
   return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
 }
 
+// Why: providers take an absolute teardown deadline, but the mux takes a relative
+// timeout — convert only here, at the RPC itself, so sequential relay calls share
+// the remaining budget (undefined keeps the multiplexer default timeout).
+function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
+  return deadlineMs === undefined
+    ? undefined
+    : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
+}
+
 /**
  * Remote PTY provider that proxies all operations through the relay
  * via the JSON-RPC multiplexer. Implements the same IPtyProvider interface
@@ -256,12 +265,19 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux.notify('pty.resize', { id: this.toRelayPtyId(id), cols, rows })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.mux.request('pty.shutdown', {
-      id: this.toRelayPtyId(id),
-      immediate: opts.immediate ?? false,
-      keepHistory: opts.keepHistory ?? false
-    })
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
+    await this.mux.request(
+      'pty.shutdown',
+      {
+        id: this.toRelayPtyId(id),
+        immediate: opts.immediate ?? false,
+        keepHistory: opts.keepHistory ?? false
+      },
+      relayTimeoutOptions(opts.deadlineMs)
+    )
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -314,8 +330,12 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
-    const result = await this.mux.request('pty.listProcesses')
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    const result = await this.mux.request(
+      'pty.listProcesses',
+      undefined,
+      relayTimeoutOptions(opts?.deadlineMs)
+    )
     return (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)

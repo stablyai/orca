@@ -80,6 +80,13 @@ export type DaemonPtyAdapterOptions = {
 const MAX_TOMBSTONES = 1000
 const MAX_CONCURRENT_CHECKPOINTS = 4
 
+// Why: providers take an absolute teardown deadline, but the client RPC takes a
+// relative timeout — convert only here, at the request itself, so sequential RPCs
+// naturally share the remaining budget (undefined keeps the client's 30s default).
+function remainingRequestTimeoutMs(deadlineMs: number | undefined): number | undefined {
+  return deadlineMs === undefined ? undefined : Math.max(1, deadlineMs - Date.now())
+}
+
 export class TerminalKilledError extends Error {
   constructor(sessionId: string) {
     super(`Session "${sessionId}" was explicitly killed`)
@@ -573,10 +580,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.client.notify('setSessionBackground', { sessionId: id, background: safeBackground })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     // Why: shutdown can be the first lazy-client operation after restart; connect
-    // before killing so a healthy daemon session is not orphaned (#7742).
-    await this.ensureConnected()
+    // before killing so a healthy daemon session is not orphaned (#7742). Connect
+    // and kill share the caller's one absolute deadline, so a wedged handshake
+    // cannot burn the whole teardown budget before the kill even starts.
+    await this.ensureConnected(opts.deadlineMs)
     // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
     // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
@@ -606,7 +618,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.historyManager?.suspendSession(id)
       }
     }
-    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
+    await this.client.request(
+      'kill',
+      { sessionId: id, immediate: opts.immediate ?? false },
+      remainingRequestTimeoutMs(opts.deadlineMs)
+    )
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     if (!opts.keepHistory) {
@@ -856,9 +872,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return { alive, killed }
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
-    await this.ensureConnected()
-    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    // Why: connect + listSessions share the caller's one absolute deadline so a
+    // wedged handshake cannot burn the whole teardown budget before the list issues.
+    await this.ensureConnected(opts?.deadlineMs)
+    const result = await this.client.request<ListSessionsResult>(
+      'listSessions',
+      undefined,
+      remainingRequestTimeoutMs(opts?.deadlineMs)
+    )
     return result.sessions
       .filter((s) => s.isAlive)
       .map((s) => ({
@@ -1058,9 +1080,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.client.disconnect()
   }
 
-  private async ensureConnected(): Promise<void> {
+  private async ensureConnected(deadlineMs?: number): Promise<void> {
     try {
-      await this.client.ensureConnected()
+      // Why: destructive teardown bounds the handshake by its deadline so a wedged
+      // connect fails fast; undefined keeps the default connect behavior.
+      await (deadlineMs !== undefined
+        ? this.client.ensureConnectedWithin(Math.max(1, deadlineMs - Date.now()))
+        : this.client.ensureConnected())
     } finally {
       // Why: a respawn launcher holds a temporary full pair until this adapter
       // has attempted its permanent reconnect, preventing both gaps and leaks.

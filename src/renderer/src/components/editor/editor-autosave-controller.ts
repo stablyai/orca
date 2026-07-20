@@ -5,11 +5,7 @@ import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import {
-  buildWorkspaceSessionPayload,
-  shouldPersistWorkspaceSession
-} from '@/lib/workspace-session'
-import { persistWorkspaceSessionByHostSync } from '@/lib/workspace-session-host-persistence'
+import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
@@ -340,17 +336,8 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
-      // Why: restart/update may quit before the debounced session writer fires.
-      // Write the full session now so dirty drafts restore as unsaved tabs.
-      if (shouldPersistWorkspaceSession(state)) {
-        // Why: runtime-owned worktree slices persist under their host
-        // partition, mirroring the debounced writer's split.
-        persistWorkspaceSessionByHostSync(
-          window.api.session,
-          buildWorkspaceSessionPayload(state),
-          state
-        )
-      }
+      // Why: preload dispatches beforeunload immediately after this resolves;
+      // App owns the one combined session/UI checkpoint for restart and update.
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

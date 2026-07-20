@@ -101,7 +101,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).setPtyBackgrounded(id, background)
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     await this.adapterFor(id).shutdown(id, opts)
     // Why: sleep passes keepHistory=true and re-spawns against the same
     // sessionId on wake. If we delete the routing entry here, adapterFor()
@@ -173,10 +176,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.current.revive(state)
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
-    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
+    const results = await Promise.all(
+      this.allAdapters().map((adapter) => adapter.listProcesses(opts))
+    )
     return results.flat()
   }
 
