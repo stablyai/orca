@@ -899,7 +899,7 @@ export default function IpynbViewer({
             {translate('auto.components.editor.IpynbViewer.329764e9fc', 'BETA')}
           </span>
           <span className="font-mono">
-            {translate('auto.components.editor.IpynbViewer.8c3b21369a', 'nbformat')}
+            {translate('auto.components.editor.IpynbViewer.8c3b21369a', 'nbformat')}{' '}
             {notebook.nbformat}
           </span>
         </div>

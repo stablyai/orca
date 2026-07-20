@@ -136,6 +136,15 @@ describe('collectUntrackedAdditions', () => {
     expect(readFileMock).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects when the status request is aborted instead of returning partial counts', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      collectUntrackedAdditions('/repo', ['a.ts'], controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(lstatMock).not.toHaveBeenCalled()
+  })
+
   it('keeps the cache effective across polls for a status-limit-sized change set', async () => {
     // Why: git status caps at DEFAULT_GIT_STATUS_LIMIT (10,000) entries. A
     // cache smaller than one scan FIFO-evicts every entry mid-scan, so the

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from '../wsl'
 
@@ -21,11 +22,26 @@ vi.mock('../wsl', async (importOriginal) => ({
 
 import { ghExecFileAsync, glabExecFileAsync } from './runner'
 
+type MockChildProcess = EventEmitter & {
+  pid: number
+  kill: ReturnType<typeof vi.fn>
+  unref: ReturnType<typeof vi.fn>
+}
+
+function createMockChildProcess(pid: number): MockChildProcess {
+  const child = new EventEmitter() as MockChildProcess
+  child.pid = pid
+  child.kill = vi.fn()
+  child.unref = vi.fn()
+  return child
+}
+
 describe('ghExecFileAsync WSL fallback', () => {
   const originalPlatform = process.platform
 
   beforeEach(() => {
     execFileMock.mockReset()
+    spawnMock.mockReset()
     getDefaultWslDistroMock.mockReset()
     getDefaultWslDistroMock.mockReturnValue(null)
     Object.defineProperty(process, 'platform', {
@@ -35,6 +51,7 @@ describe('ghExecFileAsync WSL fallback', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -350,6 +367,80 @@ describe('ghExecFileAsync WSL fallback', () => {
       expect.objectContaining({ cwd: undefined }),
       expect.any(Function)
     )
+  })
+
+  it('times out the default-WSL glab fallback and waits for full tree cleanup', async () => {
+    vi.useFakeTimers()
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    const nativeChild = createMockChildProcess(1200)
+    const wslChild = createMockChildProcess(2400)
+    const taskkill = createMockChildProcess(3600)
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+        return nativeChild
+      })
+      .mockReturnValueOnce(wslChild)
+    spawnMock.mockReturnValue(taskkill)
+
+    const promise = glabExecFileAsync(['auth', 'status'], { timeout: 1000 })
+    const rejection = expect(promise).rejects.toThrow('wsl.exe timed out.')
+    let rejected = false
+    void promise.catch(() => {
+      rejected = true
+    })
+
+    await vi.advanceTimersByTimeAsync(999)
+    expect(spawnMock).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(spawnMock).toHaveBeenCalledWith(
+      'taskkill',
+      ['/pid', '2400', '/t', '/f'],
+      expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+    )
+    await Promise.resolve()
+    expect(rejected).toBe(false)
+
+    taskkill.emit('close', 0)
+    await rejection
+    expect(wslChild.kill).not.toHaveBeenCalled()
+  })
+
+  it('aborts the default-WSL glab fallback with full process-tree cleanup', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    const nativeChild = createMockChildProcess(1200)
+    const wslChild = createMockChildProcess(2400)
+    const taskkill = createMockChildProcess(3600)
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+        return nativeChild
+      })
+      .mockReturnValueOnce(wslChild)
+    spawnMock.mockReturnValue(taskkill)
+    const controller = new AbortController()
+
+    const promise = glabExecFileAsync(['auth', 'status'], { signal: controller.signal })
+    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(2))
+    controller.abort()
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "'glab' 'auth' 'status'"],
+      expect.not.objectContaining({ signal: controller.signal }),
+      expect.any(Function)
+    )
+    expect(spawnMock).toHaveBeenCalledWith(
+      'taskkill',
+      ['/pid', '2400', '/t', '/f'],
+      expect.objectContaining({ stdio: 'ignore', windowsHide: true })
+    )
+    taskkill.emit('close', 0)
+
+    await rejection
+    expect(wslChild.kill).not.toHaveBeenCalled()
   })
 
   it('does not wake the default WSL distro for host-only GitLab diagnostics', async () => {

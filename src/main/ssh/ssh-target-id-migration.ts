@@ -1,6 +1,7 @@
 import type { PersistedUIState, WorkspaceSessionState } from '../../shared/types'
 import { parseAppSshPtyId, toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { toSshExecutionHostId } from '../../shared/execution-host'
+import { normalizeManualRepoOrder } from '../../shared/manual-repo-order'
 
 /**
  * Carrier sweep for SSH target re-adoption (see ssh-target-readoption.ts).
@@ -110,6 +111,14 @@ export function migrateUiHostScopeSshTargetId(
     ui.workspaceHostOrder = [
       ...new Set(ui.workspaceHostOrder.map((id) => (id === oldHostId ? newHostId : id)))
     ]
+    changed = true
+  }
+  if (ui.manualRepoOrder?.some((entry) => entry.hostId === oldHostId)) {
+    ui.manualRepoOrder = normalizeManualRepoOrder(
+      ui.manualRepoOrder.map((entry) =>
+        entry.hostId === oldHostId ? { ...entry, hostId: newHostId } : entry
+      )
+    )
     changed = true
   }
   return changed

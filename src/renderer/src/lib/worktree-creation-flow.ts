@@ -25,6 +25,7 @@ import type {
   WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
@@ -254,6 +255,16 @@ async function executeWorktreeCreation(
   // Why: clearing synchronously right after activation lets React commit the
   // panel→terminal swap in one frame — no two-row flicker, no empty-terminal flash.
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
+  if (preparedRequest.startupPlan && preparedRequest.agent) {
+    const optionScopeKey = primaryTabId ?? result.startupTerminal?.tabId
+    if (optionScopeKey) {
+      seedNativeChatAppliedSessionOptions(
+        optionScopeKey,
+        preparedRequest.agent,
+        preparedRequest.startupPlan.sessionOptions
+      )
+    }
+  }
   if (preparedRequest.startupPlan && !backendSpawned) {
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,

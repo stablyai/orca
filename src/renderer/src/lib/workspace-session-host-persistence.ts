@@ -33,9 +33,19 @@ type SessionApi = {
   setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
 }
 
+type DurableSessionApi = SessionApi & {
+  set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
+  flush: () => Promise<void>
+}
+
 export type WorkspaceSessionHostRead = {
   session: WorkspaceSessionState
   runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
+}
+
+export type WorkspaceSessionHostSnapshot = {
+  state: WorkspaceSessionState
+  hostId?: ExecutionHostId
 }
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
@@ -223,16 +233,43 @@ export function patchWorkspaceSessionByHost(
   return localWrite
 }
 
+/** Persist a fresh full snapshot to every owning host partition, then force the
+ * main store to disk. Used by request/reply lifecycle operations whose success
+ * receipt is a durability boundary rather than a debounced UI update. */
+export async function persistWorkspaceSessionByHost(
+  api: DurableSessionApi,
+  payload: WorkspaceSessionState,
+  state: HostPersistenceState
+): Promise<void> {
+  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
+  const writes: Promise<void>[] = [api.set(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)]
+  for (const [hostId, slice] of nonLocalEntries(slices)) {
+    writes.push(api.set(slice, hostId))
+  }
+  await Promise.all(writes)
+  await api.flush()
+}
+
+/** Build local-first full-session snapshots for the beforeunload / quit paths. */
+export function buildWorkspaceSessionHostSnapshots(
+  payload: WorkspaceSessionState,
+  state: HostPersistenceState
+): WorkspaceSessionHostSnapshot[] {
+  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
+  return [
+    { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
+    ...nonLocalEntries(slices).map(([hostId, hostState]) => ({ state: hostState, hostId }))
+  ]
+}
+
 /** Synchronous full-session split for the beforeunload / quit paths. */
 export function persistWorkspaceSessionByHostSync(
   api: SessionApi,
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): void {
-  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
-  api.setSync(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)
-  for (const [hostId, slice] of nonLocalEntries(slices)) {
-    api.setSync(slice, hostId)
+  for (const snapshot of buildWorkspaceSessionHostSnapshots(payload, state)) {
+    api.setSync(snapshot.state, snapshot.hostId)
   }
 }
 

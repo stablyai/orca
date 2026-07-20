@@ -77,20 +77,21 @@ design-docs/
 # Machine-local agent hook endpoint files may contain auth tokens.
 /agent-hooks/
 
-# Local-only design/planning docs (not checked in).
-# Durable docs must live in one of the allow-listed locations below.
+# Local-only design/planning docs (not checked in), including most of docs/reference/.
+# Durable docs that should be tracked must live in one of the allow-listed
+# locations below (assets, readme, STYLEGUIDE, mobile terminal shortcut bar,
+# and the tracked reference docs linked from AGENTS.md / README.md).
 docs/**
 !docs/
 !docs/assets/
 !docs/assets/**
 !docs/readme/
 !docs/readme/**
-!docs/reference/
-!docs/reference/**
-# Keep generated React perf scan ledgers local; durable docs still use docs/reference.
-docs/reference/react-performance-audit.md
 !docs/STYLEGUIDE.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/reference/
+!docs/reference/git-compatibility.md
+!docs/reference/headless-linux-server.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

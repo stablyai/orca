@@ -29,7 +29,7 @@ export function FileExplorerTreeStatus({
         {translate(
           'auto.components.right.sidebar.FileExplorerTreeStatus.c76693e456',
           'Could not load files for this workspace:'
-        )}
+        )}{' '}
         {error}
       </div>
     )

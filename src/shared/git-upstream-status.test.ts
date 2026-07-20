@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  isBehindOnlyUpstream,
   shouldForcePushWithLeaseForUpstream,
   upstreamOnlyCommitsArePatchEquivalent
 } from './git-upstream-status'
@@ -51,5 +52,39 @@ describe('shouldForcePushWithLeaseForUpstream', () => {
         behindCommitsArePatchEquivalent: false
       })
     ).toBe(false)
+  })
+})
+
+describe('isBehindOnlyUpstream', () => {
+  it('is true only when the branch tracks upstream and is purely behind', () => {
+    expect(
+      isBehindOnlyUpstream({
+        hasUpstream: true,
+        ahead: 0,
+        behind: 3
+      })
+    ).toBe(true)
+    expect(
+      isBehindOnlyUpstream({
+        hasUpstream: true,
+        ahead: 1,
+        behind: 2
+      })
+    ).toBe(false)
+    expect(
+      isBehindOnlyUpstream({
+        hasUpstream: true,
+        ahead: 0,
+        behind: 0
+      })
+    ).toBe(false)
+    expect(
+      isBehindOnlyUpstream({
+        hasUpstream: false,
+        ahead: 0,
+        behind: 3
+      })
+    ).toBe(false)
+    expect(isBehindOnlyUpstream(undefined)).toBe(false)
   })
 })

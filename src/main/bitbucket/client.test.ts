@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
@@ -8,7 +9,11 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { getBitbucketAuthStatus, getBitbucketPullRequestForBranch } from './client'
+import {
+  getBitbucketAuthStatus,
+  getBitbucketPullRequestForBranch,
+  getBitbucketPullRequestForBranchOrThrow
+} from './client'
 import { _resetBitbucketRepoRefCache } from './repository-ref'
 
 const OLD_ENV = process.env
@@ -92,6 +97,19 @@ describe('Bitbucket client', () => {
     )
   })
 
+  it('getBitbucketPullRequestForBranchOrThrow surfaces a failure instead of null (finding 4)', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ error: 'forbidden' }, { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // The swallowing variant collapses a real failure into a false "no PR".
+    await expect(getBitbucketPullRequestForBranch('/repo', 'feature/bitbucket')).resolves.toBeNull()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No pull request found".
+    await expect(
+      getBitbucketPullRequestForBranchOrThrow('/repo', 'feature/bitbucket')
+    ).rejects.toThrow(/Bitbucket request failed/)
+  })
+
   it('falls back to a linked PR number when branch lookup misses', async () => {
     const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
       if (url.includes('/statuses/build')) {
@@ -121,5 +139,20 @@ describe('Bitbucket client', () => {
       authenticated: true,
       account: 'bitbucket-user'
     })
+  })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () =>
+      cancelTrackingResponse(502, () => {
+        cancelledBodies += 1
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/bitbucket')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
   })
 })

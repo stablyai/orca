@@ -3,6 +3,7 @@ import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shu
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
+  PtyDataEvent,
   PtyProviderBufferSnapshot,
   PtyProcessInfo,
   PtySpawnOptions,
@@ -26,11 +27,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private fallback: ManagedPtyProvider
   private sessionProviders = new Map<string, ManagedPtyProvider>()
   private unsubscribers: (() => void)[] = []
-  private dataListeners: ((payload: {
-    id: string
-    data: string
-    sequenceChars?: number
-  }) => void)[] = []
+  private dataListeners: ((payload: PtyDataEvent) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
 
   constructor(opts: {
@@ -112,7 +109,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).setPtyBackgrounded?.(id, background)
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     await this.providerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
@@ -148,6 +148,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.providerFor(id).clearBuffer(id)
   }
 
+  async closeStartupQueryAuthority(id: string): Promise<number> {
+    return (await this.providerFor(id).closeStartupQueryAuthority?.(id)) ?? 0
+  }
+
   acknowledgeDataEvent(id: string, charCount: number): void {
     this.providerFor(id).acknowledgeDataEvent(id, charCount)
   }
@@ -172,9 +176,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.fallback.revive(state)
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
     const results = await Promise.all(
-      this.allProviders().map((provider) => provider.listProcesses())
+      this.allProviders().map((provider) => provider.listProcesses(opts))
     )
     return results.flat()
   }
@@ -187,9 +191,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.fallback.getProfiles()
   }
 
-  onData(
-    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
-  ): () => void {
+  onData(callback: (payload: PtyDataEvent) => void): () => void {
     this.dataListeners.push(callback)
     return () => {
       const idx = this.dataListeners.indexOf(callback)

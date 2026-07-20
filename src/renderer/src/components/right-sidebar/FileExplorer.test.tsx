@@ -587,7 +587,7 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowViewFileAction(directoryNode)).toBe(false)
   })
 
-  it('shows remote download only for desktop SSH or Remote Host file-like rows', () => {
+  it('shows remote download only for desktop SSH rows and file-like Remote Host rows', () => {
     const runtimeContext = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       worktreeId: 'wt-1',
@@ -598,7 +598,12 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowRemoteDownloadAction({ ...fileNode, isSymlink: true }, 'ssh-1')).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null, runtimeContext)).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null)).toBe(false)
+    // Why: directory download defaults fail-closed until the connection advertises
+    // supportsFolderDownload (SFTP); system-SSH and unknown capability stay hidden.
     expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1')).toBe(false)
+    expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, true)).toBe(true)
+    expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, false)).toBe(false)
+    expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1', null, false)).toBe(true)
     expect(shouldShowRemoteDownloadAction(directoryNode, null, runtimeContext)).toBe(false)
 
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
@@ -705,6 +710,38 @@ describe('FileExplorerRow collapse folder action', () => {
       | undefined
     action?.onClick()
     expect(openPath).toHaveBeenCalledWith('/downloads/index.ts')
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('calls the preload folder download API for SSH directory rows', async () => {
+    const downloadFolder = vi.fn().mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/src'
+    })
+    const openPath = vi.fn().mockResolvedValue(undefined)
+    ;(
+      globalThis as unknown as {
+        window: {
+          api: {
+            fs: { downloadFolder: typeof downloadFolder }
+            shell: { openPath: typeof openPath }
+          }
+        }
+      }
+    ).window = { api: { fs: { downloadFolder }, shell: { openPath } } }
+
+    await downloadRemoteFile(directoryNode, 'ssh-1')
+
+    expect(downloadFolder).toHaveBeenCalledWith({
+      dirPath: '/repo/src',
+      connectionId: 'ssh-1'
+    })
+    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded folder 'src'", {
+      action: {
+        label: 'Open',
+        onClick: expect.any(Function)
+      }
+    })
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 

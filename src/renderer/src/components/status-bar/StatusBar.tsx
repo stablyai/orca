@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: the status bar keeps provider rendering,
-interaction menus, and compact-layout behavior together so the hover/click
-states stay consistent across Claude and Codex. */
+/* eslint-disable max-lines -- keeps provider rendering, menus, and compact-layout together for consistent Claude/Codex hover/click states. */
 import {
   AlertTriangle,
   Activity,
@@ -57,7 +55,8 @@ import {
 } from './tooltip'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { formatWindowLabel } from '@/lib/window-label-formatter'
+import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
@@ -81,6 +80,7 @@ import {
 } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
 import {
+  getDisplayedUsagePercentage,
   normalizeUsagePercentageDisplay,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
@@ -526,9 +526,7 @@ function getClaudeStatusAccountsFromSettings(
   }
 }
 
-// Why: with a Remote Orca Server active, accounts persisted in local
-// GlobalSettings describe this desktop, not the account owner; the snapshot
-// fetched from the server must win (#7973).
+// Why: with a Remote Orca Server, local GlobalSettings describe this desktop, not the owner — the server snapshot wins (#7973).
 export function resolveCodexStatusAccountState(
   settings: GlobalSettings | null | undefined,
   runtimeState: CodexRateLimitAccountsState
@@ -574,9 +572,7 @@ function CodexRestartStatusPrompt(): React.JSX.Element | null {
       <DropdownMenuSeparator />
       <div className="px-2 py-2">
         <div className="text-[11px] text-muted-foreground">
-          {/* Why: stale restart notices are tracked per PTY session, but the
-          bulk restart action operates per PTY-backed pane restart. Show
-          both counts so split panes do not make the number look wrong. */}
+          {/* Why: notices are per-PTY-session but restart is per-pane; show both counts so split panes don't look wrong. */}
           {staleCodexStatus.staleSessionCount === 1
             ? translate(
                 'auto.components.status.bar.StatusBar.605901a495',
@@ -719,8 +715,7 @@ function ClaudeSwitcherMenu({
   }, [])
 
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
-  // Why: keyed on the owner id, not the settings object identity, so routine
-  // settings mutations don't re-run the remote snapshot round trip.
+  // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
   const loadAccounts = useCallback(async () => {
     const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
     // Why: a failed Claude half is a substituted empty roster; keep prior state.
@@ -746,9 +741,7 @@ function ClaudeSwitcherMenu({
     }
   }, [])
 
-  // Why: inactive-account usage is needed only for the explicit switcher
-  // expansion, so fetch it on that event instead of one render later.
-  // Remote-owned accounts have no local inactive-usage cache to fill.
+  // Why: fetch inactive-account usage only on switcher expansion; remote-owned accounts have no local cache to fill.
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
@@ -775,8 +768,7 @@ function ClaudeSwitcherMenu({
       if (mountedRef.current) {
         setAccounts(next)
       }
-      // Why: remote selections live on the server; local GlobalSettings
-      // account fields are untouched, so refetching them is pure churn.
+      // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()
       }
@@ -943,25 +935,24 @@ function ClaudeSwitcherMenu({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Mini progress bar (shows consumption / % used, grey)
-// ---------------------------------------------------------------------------
-
-function MiniBar({ usedPct }: { usedPct: number }): React.JSX.Element {
+function MiniBar({
+  usedPct,
+  display
+}: {
+  usedPct: number
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
   return (
     <div className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0">
       <div
         className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
-        style={{ width: `${clampUsedPercent(usedPct)}%` }}
+        style={{ width: `${getDisplayedUsagePercentage(usedPct, display)}%` }}
       />
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Inline usage bars (compact bars for inactive accounts in the switcher)
-// ---------------------------------------------------------------------------
-
+// Compact usage bars for inactive accounts in the switcher.
 export function InlineUsageBars({
   limits,
   isFetching
@@ -972,14 +963,15 @@ export function InlineUsageBars({
   const display = normalizeUsagePercentageDisplay(
     useAppStore((state) => state.usagePercentageDisplay)
   )
-  // Why: the preference changes copy, while bar fill stays consumption-based
-  // so empty/green and full/red keep the meter semantics introduced in #8167.
+  // Why: tick the session countdown live via one boundary-scheduled clock, not just the usage poll (#5399).
+  const now = useResetCountdownClock([limits.session?.resetsAt])
   const usageWindows = [
     limits.session
       ? {
           key: 'session',
           used: clampUsedPercent(limits.session.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '5h')
+          // Why: live reset countdown (matches popover); '5h' window length only when resetsAt is unknown (#5399).
+          label: formatRateLimitWindowChipLabel(limits.session, now)
         }
       : null,
     limits.weekly
@@ -1008,9 +1000,10 @@ export function InlineUsageBars({
       {usageWindows.map((window) => (
         <div key={window.key} className="flex min-w-0 items-center gap-1">
           <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+            {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
             <div
               className={`h-full rounded-full ${barColor(window.used)}`}
-              style={{ width: `${window.used}%` }}
+              style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
             />
           </div>
           <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
@@ -1086,10 +1079,6 @@ function InlineUsageSkeleton(): React.JSX.Element {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Window label
-// ---------------------------------------------------------------------------
-
 function WindowLabel({
   w,
   label,
@@ -1106,15 +1095,10 @@ function WindowLabel({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Provider segment
-// ---------------------------------------------------------------------------
-
-// Why: only Flash and the latest Pro are shown in the status bar —
-// the rest (Flash Lite, experimental) are secondary and would clutter the bar.
+// Why: show only Flash and latest Pro in the bar; the rest (Flash Lite, experimental) would clutter it.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
-function ProviderSegment({
+export function ProviderSegment({
   p,
   compact,
   display
@@ -1137,7 +1121,7 @@ function ProviderSegment({
   }
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly) {
+  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1156,7 +1140,7 @@ function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1185,7 +1169,7 @@ function ProviderSegment({
         {visibleBuckets.length === 0 && p.session && (
           <WindowLabel
             w={p.session}
-            label={formatWindowLabel(p.session.windowMinutes)}
+            label={formatRateLimitWindowChipLabel(p.session)}
             display={display}
           />
         )}
@@ -1199,14 +1183,14 @@ function ProviderSegment({
       ? {
           key: 'session',
           window: p.session,
-          label: formatWindowLabel(p.session.windowMinutes)
+          label: formatRateLimitWindowChipLabel(p.session)
         }
       : null,
     p.weekly
       ? {
           key: 'weekly',
           window: p.weekly,
-          label: formatWindowLabel(p.weekly.windowMinutes)
+          label: formatRateLimitWindowChipLabel(p.weekly)
         }
       : null,
     p.fableWeekly
@@ -1215,13 +1199,23 @@ function ProviderSegment({
           window: p.fableWeekly,
           label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
         }
+      : null,
+    // Why: show monthly on the chip only when it's the sole window (Grok); providers with session/weekly keep it tooltip-only.
+    p.monthly && !p.session && !p.weekly
+      ? {
+          key: 'monthly',
+          window: p.monthly,
+          label: formatRateLimitWindowChipLabel(p.monthly)
+        }
       : null
   ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
 
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {p.session && !compact && <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} />}
+      {p.session && !compact && (
+        <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} display={display} />
+      )}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 && <span className="text-muted-foreground">·</span>}
@@ -1255,8 +1249,7 @@ function CodexSwitcherMenu({
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
   const mountedRef = useRef(true)
   const accountsExpandedRef = useRef(accountsExpanded)
-  // Why: Radix item selection is separate from the nested button click, so
-  // propagation stops alone do not prevent the row switch action.
+  // Why: Radix item-select is separate from the nested button click, so stopPropagation alone won't prevent the row switch.
   const suppressNextAccountSelectRef = useRef(false)
   const suppressNextAccountSelect = useCallback(() => {
     suppressNextAccountSelectRef.current = true
@@ -1300,8 +1293,7 @@ function CodexSwitcherMenu({
   const accountState = resolveCodexStatusAccountState(settings, accounts)
 
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
-  // Why: keyed on the owner id, not the settings object identity, so routine
-  // settings mutations don't re-run the remote snapshot round trip.
+  // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
   const loadAccounts = useCallback(async () => {
     const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
     // Why: a failed Codex half is a substituted empty roster; keep prior state.
@@ -1326,10 +1318,7 @@ function CodexSwitcherMenu({
   }, [accountsExpanded])
 
   useEffect(() => {
-    // Why: the status bar keeps its own lightweight account snapshot for the
-    // dropdown. Settings account actions mutate the main-process store outside
-    // this component, so we refresh when the persisted account roster changes
-    // or when the menu opens instead of leaving a stale account list mounted.
+    // Why: refresh our local account snapshot when the roster changes or the menu opens, since Settings mutates the store out-of-band.
     void loadAccounts().catch((error) => {
       console.error('Failed to load Codex accounts for status bar:', error)
     })
@@ -1354,8 +1343,7 @@ function CodexSwitcherMenu({
       if (mountedRef.current) {
         setAccounts(next)
       }
-      // Why: remote selections live on the server; local GlobalSettings
-      // account fields are untouched, so refetching them is pure churn.
+      // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()
       }
@@ -1365,10 +1353,7 @@ function CodexSwitcherMenu({
           previousAccountLabel: getCodexAccountLabel(accountState, previousActiveAccountId),
           nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId)
         })
-        // Why: account switching can require a second explicit recovery step
-        // for live Codex terminals. Keeping the switcher open and collapsing
-        // back to the summary row lets the follow-up "restart open tabs"
-        // prompt appear in the same flow instead of feeling detached.
+        // Why: collapse to the summary row (not close) so the follow-up "restart open tabs" prompt appears in the same flow.
         if (mountedRef.current) {
           setAccountsExpanded(false)
         }
@@ -1475,9 +1460,7 @@ function CodexSwitcherMenu({
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
     if (nextExpanded && !hasActiveRuntimeEnvironment) {
-      // Why: inactive-account usage is needed only for the explicit switcher
-      // expansion, so fetch it on that event instead of one render later.
-      // Remote-owned accounts have no local inactive-usage cache to fill.
+      // Why: fetch inactive-account usage only on switcher expansion; remote-owned accounts have no local cache to fill.
       void fetchInactiveCodexAccountUsage()
     }
   }, [accountsExpanded, fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment])
@@ -1506,8 +1489,7 @@ function CodexSwitcherMenu({
     resetCreditCount !== null
       ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
-  // Why: reset credits redeem against the desktop's own Codex login; with a
-  // remote account owner the credit does not apply to the server's account.
+  // Why: reset credits redeem against the desktop's own Codex login, not a remote account owner's.
   const canRedeemReset =
     !hasActiveRuntimeEnvironment && resetCreditCount !== null && resetCreditCount > 0
 
@@ -1516,8 +1498,7 @@ function CodexSwitcherMenu({
       provider={codex}
       compact={compact}
       iconOnly={iconOnly}
-      // Why: Codex reset credits render beside the reset action below; showing
-      // them in the generic provider summary duplicates the same metadata.
+      // Why: reset credits render beside the reset action below; the generic summary would duplicate them.
       hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.ba55303942',
@@ -1648,8 +1629,7 @@ function CodexSwitcherMenu({
                   const inactiveUsage = target.id
                     ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
                     : null
-                  // Why: sign-in spawns a local `codex login`; a remote-owned
-                  // account cannot be re-authenticated from this desktop.
+                  // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
                   const showSignInAction =
                     !hasActiveRuntimeEnvironment &&
                     !target.active &&
@@ -1662,10 +1642,7 @@ function CodexSwitcherMenu({
                     <DropdownMenuItem
                       key={`${selectedGroup.key}:${target.id ?? 'system'}`}
                       onSelect={(event) => {
-                        // Why: account switching may need an immediate follow-up
-                        // restart action for live Codex tabs. Prevent the menu from
-                        // auto-closing so that prompt can stay within the same
-                        // account-switcher interaction instead of jumping elsewhere.
+                        // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
                         event.preventDefault()
                         if (suppressNextAccountSelectRef.current) {
                           suppressNextAccountSelectRef.current = false
@@ -1783,7 +1760,7 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly || provider.monthly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
                 {provider.provider === 'claude'
@@ -1821,8 +1798,7 @@ export function ProviderDetailsMenu({
             return
           }
           skipCloseAutoFocusRef.current = false
-          // Why: click-away should focus the clicked surface, especially xterm;
-          // Radix's default trigger restore steals that first click.
+          // Why: focus the clicked surface (esp. xterm) — Radix's default trigger restore steals that first click.
           event.preventDefault()
         }}
       >
@@ -1846,10 +1822,6 @@ export function ProviderDetailsMenu({
   )
 }
 
-// ---------------------------------------------------------------------------
-// StatusBar
-// ---------------------------------------------------------------------------
-
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
@@ -1860,24 +1832,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  // Why: same launcher attention dot as the floating-button trigger, so an
-  // unacknowledged bell/agent-completion in the floating workspace is visible
-  // whichever trigger location the user picked (see FloatingTerminalToggleButton).
+  // Why: reuse the floating-button's unread dot so activity shows for either trigger location (see FloatingTerminalToggleButton).
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const floatingTerminalEnabled = settings?.floatingTerminalEnabled === true
   const floatingTerminalTriggerLocation =
     settings?.floatingTerminalTriggerLocation ?? 'floating-button'
-  // Why: usage bars exist to surface CLI rate limits — showing one for an
-  // agent that isn't on the user's PATH is just noise (e.g. a fresh Ubuntu
-  // install showing "Gemini Usage" with no Gemini CLI installed). We gate
-  // the per-CLI bars on detection so the surface stays self-pruning, and
-  // re-show automatically once the agent appears on PATH.
+  // Why: gate per-CLI bars on PATH detection so an uninstalled agent isn't shown a noisy empty bar (auto re-shows when installed).
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
-  // Why: pet segment intentionally does NOT participate in statusBarItems
-  // (see design doc — gating with both the experimental flag and a
-  // statusBarItems checkbox would double-toggle the surface). It is driven
-  // purely by the experimentalPet settings flag.
+  // Why: pet segment is driven purely by experimentalPet, not statusBarItems, to avoid double-toggling the surface (see design doc).
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
@@ -1903,10 +1866,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
-  // Why: trigger PATH-based agent detection on mount so the per-CLI usage
-  // bars (Claude/Codex/Gemini) can hide themselves when the user doesn't
-  // have those CLIs installed. The slice deduplicates concurrent callers,
-  // so this is safe even if other surfaces also call it.
+  // Why: detect agents on mount so per-CLI usage bars hide when the CLI isn't installed; the slice dedupes concurrent callers.
   useEffect(() => {
     void ensureDetectedAgents()
   }, [ensureDetectedAgents])
@@ -1936,8 +1896,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     }
     setIsRefreshing(true)
     try {
-      // Why: also re-run PATH detection so a freshly-installed CLI's bar
-      // appears (and a removed CLI's bar hides) without restarting Orca.
+      // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
       await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
     } finally {
       if (mountedRef.current) {
@@ -1952,21 +1911,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
-  // Why: a provider earns a bar from either a usable live snapshot or durable
-  // setup in Settings. The durable path keeps account switchers visible while
-  // usage snapshots hydrate, fail, or temporarily report unavailable.
-  // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
-  // bars when the agent isn't installed on PATH.
-  // Why: Antigravity usage has no separate persisted credential. A checked
-  // status item plus detected CLI is the durable signal that the user wants
-  // its usage slot visible while the first snapshot is still pending. The
-  // visibility module additionally requires geminiCliOAuthEnabled (already in
-  // settings) because the snapshot mirrors the Gemini fetch.
+  // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
+  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
+  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: thread non-GlobalSettings durability flags from renderer/main state so
-  // bars stay visible after a reload and between snapshot refreshes.
+  // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
     antigravityUsageConfigured,
@@ -2000,15 +1951,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: MiniMax is a cookie-auth provider, not a CLI on PATH, so detection-gating
-  // doesn't apply (same rationale as OpenCode Go below).
+  // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
-  // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
-  // detection-gating doesn't apply.
+  // Why: OpenCode Go is web/cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
@@ -2016,9 +1965,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
-  // Why: which usage-meter children actually render — excludes resource-usage
-  // and other non-meter status items so the % display change callout only
-  // opens when there is a real meter cluster to anchor to.
+  // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
   const hasVisibleUsageMeters =
     showClaude ||
     showCodex ||
@@ -2029,16 +1976,12 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showMiniMax ||
     showGrok
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
-  // Why: a brand-new user with no provider configured would otherwise see an
-  // empty left side of the status bar and wonder what's missing. Settings are
-  // included because managed accounts are durable even when live usage
-  // snapshots are still hydrating or unavailable after an update.
+  // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
     { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
     usageSettings
   )
-  // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
-  // hidden even after providers are disconnected again.
+  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
     claude?.status === 'fetching' ||
@@ -2055,8 +1998,6 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? 'Minimize Floating Workspace'
     : 'Show Floating Workspace'
-  // Why: only while the panel is closed; the dot reflects unacknowledged
-  // floating-workspace activity and clears via the shared unread paths.
   const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
   return (
@@ -2067,12 +2008,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         if (!shouldOpenStatusBarContextMenu(event.target)) {
           return
         }
-        // Why: mirror the right-click pattern used across the app
-        // (WorktreeContextMenu, TerminalContextMenu, tab bar) — dispatch the
-        // global close event so peer menus dismiss, then place a hidden
-        // trigger at the cursor so the menu anchors there. This also lets a
-        // second right-click reposition the menu instead of leaving it where
-        // it first opened.
+        // Why: mirror the app-wide right-click pattern — close peer menus, then anchor a hidden trigger at the cursor so re-clicks reposition.
         event.preventDefault()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         const bounds = event.currentTarget.getBoundingClientRect()
@@ -2086,8 +2022,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <StatusBarUsageEmptyCta />
           ) : null
         ) : (
-          // Why: one-time usage-display change callout anchors to this cluster so
-          // it sits next to the meters the user is confused by, not a global toast.
+          // Why: anchor the one-time %-display callout to this meter cluster, not a global toast.
           <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
             {showClaude && (
               <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
@@ -2218,8 +2153,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 >
                   <PanelsTopLeft className="size-3.5" />
                   {showFloatingWorkspaceAttentionDot ? (
-                    // Why: amber = Orca's "needs attention" convention; ring
-                    // matches the button fill so the dot reads on the icon.
+                    // Why: amber = Orca's "needs attention" convention; ring matches the fill so the dot reads on the icon.
                     <span
                       aria-hidden
                       data-floating-terminal-attention

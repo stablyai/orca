@@ -336,6 +336,27 @@ export async function removeWorktreeLinkedPaths(
   }
 }
 
+export async function findExistingWorktreeSymlinkPaths(
+  worktreePath: string,
+  paths: readonly string[]
+): Promise<string[]> {
+  const symlinkPaths: string[] = []
+  for (const rawPath of paths) {
+    const safePath = getSafeRelativePath(rawPath)
+    if (!safePath.safe) {
+      continue
+    }
+    try {
+      if ((await lstat(resolve(worktreePath, safePath.rel))).isSymbolicLink()) {
+        symlinkPaths.push(safePath.rel)
+      }
+    } catch {
+      // Why: only a positively identified symlink may bypass dirty preflight.
+    }
+  }
+  return symlinkPaths
+}
+
 /** Remove previously-created symlinks from a worktree before deletion.
  *
  *  Why: `git worktree remove` refuses to delete a worktree that has modified

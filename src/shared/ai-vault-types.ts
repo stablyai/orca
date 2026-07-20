@@ -15,6 +15,7 @@ export const AI_VAULT_AGENTS = [
   'omp',
   'cursor',
   'gemini',
+  'antigravity',
   'rovo',
   'copilot',
   'opencode',
@@ -43,6 +44,7 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   cursor: 'Cursor',
   gemini: 'Gemini',
+  antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
@@ -323,6 +325,8 @@ function buildAgentResumeInvocation(
     // but the `--resume <arg>` invocation form is identical to the others here.
     case 'omp':
       return `${baseCommand} --resume ${sessionArg}`
+    case 'antigravity':
+      return `${baseCommand} --conversation ${sessionArg}`
   }
 }
 

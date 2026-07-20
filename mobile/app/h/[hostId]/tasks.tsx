@@ -34,11 +34,11 @@ import {
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import type { RpcSuccess } from '../../../src/transport/types'
+import { useHostClient } from '../../../src/transport/client-context'
 import {
-  useHostClient,
   useLastConnectedAt,
   useReconnectAttempt
-} from '../../../src/transport/client-context'
+} from '../../../src/transport/client-context-connection-metrics'
 import { classifyConnection } from '../../../src/transport/connection-health'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../src/components/ActionSheetModal'

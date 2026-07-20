@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { CalendarClock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
@@ -13,6 +14,18 @@ export function GrokUsagePane(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  // Why: settled snapshots keep their status during refetches (no 'fetching'
+  // repaint), so manual-refresh feedback must be renderer-local, matching the
+  // StatusBar refresh button.
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = (): void => {
+    if (isRefreshing) {
+      return
+    }
+    setIsRefreshing(true)
+    void refreshGrokRateLimits().finally(() => setIsRefreshing(false))
+  }
 
   const openGrokAccounts = (): void => {
     openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'accounts-grok' })
@@ -57,7 +70,7 @@ export function GrokUsagePane(): React.JSX.Element {
     grok?.weekly && typeof grok.weekly.usedPercent === 'number'
       ? Math.round(grok.weekly.usedPercent)
       : null
-  const isFetching = grok?.status === 'fetching'
+  const isFetching = isRefreshing || grok?.status === 'fetching'
 
   return (
     <div
@@ -83,7 +96,7 @@ export function GrokUsagePane(): React.JSX.Element {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={() => void refreshGrokRateLimits()}
+                  onClick={handleRefresh}
                   disabled={isFetching}
                   aria-label={translate(
                     'auto.components.stats.GrokUsagePane.i0j1k2l3m4',

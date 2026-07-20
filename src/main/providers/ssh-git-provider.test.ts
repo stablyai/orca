@@ -97,6 +97,22 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('getStatus forwards line-stat reuse and cancellation to the relay', async () => {
+    const controller = new AbortController()
+    mux.request.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await provider.getStatus('/home/user/repo', {
+      reuseLineStats: true,
+      signal: controller.signal
+    })
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.status',
+      { worktreePath: '/home/user/repo', reuseLineStats: true },
+      { signal: controller.signal }
+    )
+  })
+
   it('getSubmoduleStatus sends git.submoduleStatus request', async () => {
     const statusResult = { entries: [], conflictOperation: 'unknown' }
     mux.request.mockResolvedValue(statusResult)

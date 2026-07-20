@@ -4,20 +4,22 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
+import {
+  callAbortableRuntimeEnvironment,
+  createRuntimeRpcAbortError
+} from './abortable-runtime-environment-call'
 
 export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
-// Why: a saved environment can restart into a different Orca version without
-// changing ids; capability verdicts must eventually follow that version change.
+// Why: capability verdicts must eventually follow a saved environment's version changes.
 const RUNTIME_CAPABILITY_STATUS_TTL_MS = 60_000
 
 type RuntimeCompatibilityCacheEntry = {
   check: Promise<void>
   failedAt: number | null
-  // True only once status.get settled and proved compatible. Stays false while
-  // the probe is in flight, so a recovery clear can drop a doomed pending probe.
+  // False while probing so recovery can drop a doomed pending compatibility check.
   provenCompatible: boolean
   status: RuntimeStatus | null
   statusCheckedAt: number | null
@@ -73,32 +75,36 @@ export async function callRuntimeRpc<TResult>(
     timeoutMs?: number
     suppressFeatureInteraction?: boolean
     reuseRecentCompatibilityFailure?: boolean
+    signal?: AbortSignal
   } = {}
 ): Promise<TResult> {
   if (target.kind === 'environment' && method !== 'status.get') {
     await ensureRuntimeEnvironmentCompatible(target.environmentId, options)
   }
-  const nextParams = addFeatureInteractionSource(params, options)
+  if (options.signal?.aborted) {
+    throw createRuntimeRpcAbortError()
+  }
+  const nextParams = options.suppressFeatureInteraction
+    ? withBrowserPaneUiRuntimeRpcSource(params)
+    : params
   const response =
     target.kind === 'local'
       ? await window.api.runtime.call({ method, params: nextParams })
-      : await window.api.runtimeEnvironments.call({
-          selector: target.environmentId,
-          method,
-          params: nextParams,
-          timeoutMs: options.timeoutMs
-        })
+      : options.signal
+        ? await callAbortableRuntimeEnvironment(
+            target.environmentId,
+            method,
+            nextParams,
+            options.timeoutMs,
+            options.signal
+          )
+        : await window.api.runtimeEnvironments.call({
+            selector: target.environmentId,
+            method,
+            params: nextParams,
+            timeoutMs: options.timeoutMs
+          })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
-}
-
-function addFeatureInteractionSource(
-  params: unknown,
-  options: { suppressFeatureInteraction?: boolean }
-): unknown {
-  if (!options.suppressFeatureInteraction) {
-    return params
-  }
-  return withBrowserPaneUiRuntimeRpcSource(params)
 }
 
 async function ensureRuntimeEnvironmentCompatible(
@@ -187,11 +193,8 @@ function rememberRuntimeEnvironmentCompatibility(
   }
 }
 
-// Why: a live status.get answer proves any cached compatibility verdict that is
-// not a settled success is stale. Drop settled failures AND still-pending probes
-// (a probe queued on the dropped connection is doomed, and a reachability-
-// triggered refresh must not coalesce onto it) so the refresh re-probes. Only
-// proven-compatible successes stay cached.
+// Why: a live status answer invalidates failures and pending probes from the
+// dropped connection; only proven-compatible successes remain reusable.
 export function clearRecentRuntimeCompatibilityFailure(environmentId: string): void {
   const trimmed = environmentId.trim()
   if (!trimmed) {

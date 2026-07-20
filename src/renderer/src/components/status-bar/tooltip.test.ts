@@ -135,18 +135,36 @@ describe('provider usage error copy', () => {
     )
   })
 
-  it('keeps the reworded Grok expired-token error classified as an auth failure (#8497)', () => {
-    // Why: the fix (grok-fetcher.ts) dropped the "run grok login" wording that
-    // used to trigger auth classification; this pins that the new copy still
-    // resolves to the softer refresh message instead of leaking the raw string.
+  it('shows the exact Grok CLI recovery flow for an expired refreshable session (#8497)', () => {
     const grok = provider({
       provider: 'grok',
-      error: 'Grok access token expired — Grok CLI will refresh it on next use'
+      error:
+        'Grok sign-in expired — run grok on the computer running Orca; sign in if prompted. No chat message is needed.',
+      usageMetadata: {
+        failureKind: 'delegated-refresh-required',
+        source: 'oauth'
+      }
     })
 
-    expect(getProviderUsageStatusLabel(grok)).toBe('Refresh failed')
+    expect(getProviderUsageStatusLabel(grok)).toBe('Run Grok to refresh')
     expect(getProviderUsageErrorMessage(grok)).toBe(
-      'Grok usage could not be refreshed. Agent sessions may still be signed in.'
+      'Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.'
+    )
+  })
+
+  it('shows the exact Kimi CLI recovery flow for an expired read-only session', () => {
+    const kimi = provider({
+      provider: 'kimi',
+      error: 'Kimi session expired — run kimi on the computer running Orca, then retry usage.',
+      usageMetadata: {
+        failureKind: 'delegated-refresh-required',
+        source: 'oauth'
+      }
+    })
+
+    expect(getProviderUsageStatusLabel(kimi)).toBe('Run Kimi to refresh')
+    expect(getProviderUsageErrorMessage(kimi)).toBe(
+      'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
   })
 
@@ -182,6 +200,20 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageStatusLabel(p)).toBe('Limited')
     expect(getProviderUsageErrorMessage(p)).toBe(
       'Rate limit reached while refreshing OAuth access token.'
+    )
+  })
+
+  it('classifies the Codex chatgpt-auth-required rate-limits read error as auth, not Limited', () => {
+    // Why: the message mentions "rate limits" only as the object it failed to
+    // read; labeling it "Limited" would wrongly imply the user hit a limit.
+    const p = provider({
+      provider: 'codex',
+      error: 'chatgpt authentication required to read rate limits'
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Refresh failed')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Codex usage could not be refreshed. Agent sessions may still be signed in.'
     )
   })
 
@@ -500,26 +532,24 @@ describe('ProviderPanel reset rendering', () => {
     expect(markup).not.toContain('140%')
   })
 
-  it.each(PROVIDER_IDS)(
-    'applies remaining copy to %s while retaining consumption bar direction',
-    (providerId) => {
-      const p = provider({
-        provider: providerId,
-        status: 'ok',
-        session: {
-          usedPercent: 25,
-          windowMinutes: 300,
-          resetsAt: null,
-          resetDescription: null
-        }
-      })
+  it.each(PROVIDER_IDS)('applies remaining copy and meter fill to %s', (providerId) => {
+    const p = provider({
+      provider: providerId,
+      status: 'ok',
+      session: {
+        usedPercent: 25,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      }
+    })
 
-      const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+    const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
 
-      expect(markup).toContain('75% left')
-      expect(markup).toContain('width:25%')
-    }
-  )
+    expect(markup).toContain('75% left')
+    expect(markup).toContain('width:75%')
+    expect(markup).not.toContain('width:25%')
+  })
 })
 
 describe('clampUsedPercent', () => {

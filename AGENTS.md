@@ -5,10 +5,18 @@
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
 
 ## Code Comments: Document the "Why", Briefly
+When code is non-obvious, Add code comments explaining **why** (not HOW). BE CONCISE — ideally 1 line.
 
-When writing or modifying code driven by a design doc or non-obvious constraint, add a comment explaining **why** the code behaves the way it does.
+```ts
+// 🚫 Over-explained — narrates the crash, the mechanism, where the helper lives, and every caller:
+// Why: Worktree.displayName is typed non-optional, but persisted/discovered worktrees have reached
+// the UI with an undefined name (crash 99657ab1), which made a bare displayName.localeCompare(...)
+// throw a TypeError and take down whatever was sorting them. Lives in lib so every worktree sort
+// site (sidebar board, Cmd+J switcher, right-sidebar, add-repo telemetry) shares one guard.
 
-Keep comments short — one or two lines. Capture only the non-obvious reason (safety constraint, compatibility shim, design-doc rule). Don't restate what the code does, narrate the mechanism, cite design-doc sections verbatim, or explain adjacent API choices unless they're the point.
+// ✅ Just the non-obvious constraint:
+// Why: displayName is typed non-optional but arrives undefined at runtime (crash 99657ab1); coalesce so it can't throw.
+```
 
 ## Lint Rules: Do Not Disable Max Lines
 

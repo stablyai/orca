@@ -193,7 +193,17 @@ export async function ensureWslCliAvailableForAgentSkillTerminal(
       )
       return status
     }
-    if (status.state !== 'installed' || !status.pathConfigured) {
+    if (status.pathConfigured === null) {
+      toast.warning(
+        translate(
+          'auto.components.settings.CliSkillRuntimeSetup.windowsPathUnknown',
+          'WSL shell command PATH could not be checked'
+        ),
+        { description: status.detail ?? 'Refresh CLI registration status and try again.' }
+      )
+      return status
+    }
+    if (status.state !== 'installed' || status.pathConfigured === false) {
       await showOrcaCliRegistrationPromptToast()
       const next = await window.api.cli.installWsl(args)
       if (!isOrcaCliAvailableOnPath(next)) {

@@ -575,6 +575,51 @@ describe('startParkedTerminalByteWatcher', () => {
       dispose()
     })
 
+    it('does not request a title snapshot for an ordinary parked watcher', async () => {
+      enableMainAuthority()
+      const getSideEffectSnapshot = vi.fn()
+      ;(
+        window as unknown as {
+          api: { pty: { getSideEffectSnapshot: typeof getSideEffectSnapshot } }
+        }
+      ).api.pty.getSideEffectSnapshot = getSideEffectSnapshot
+
+      const { dispose } = await startWatcher()
+
+      expect(getSideEffectSnapshot).not.toHaveBeenCalled()
+      dispose()
+    })
+
+    it('restores a cold-started watcher title without replaying attention facts', async () => {
+      enableMainAuthority()
+      const getSideEffectSnapshot = vi.fn().mockResolvedValue({
+        ptyId: PTY_ID,
+        seq: 42,
+        replay: true,
+        facts: [
+          { kind: 'title', normalizedTitle: IDLE_TITLE, rawTitle: IDLE_TITLE },
+          { kind: 'bell' },
+          { kind: 'agent-idle', title: IDLE_TITLE }
+        ] satisfies TerminalSideEffectFact[]
+      })
+      ;(
+        window as unknown as {
+          api: { pty: { getSideEffectSnapshot: typeof getSideEffectSnapshot } }
+        }
+      ).api.pty.getSideEffectSnapshot = getSideEffectSnapshot
+
+      const { dispose } = await startWatcher({ restoreTitleOnRegister: true })
+      await Promise.resolve()
+
+      expect(getSideEffectSnapshot).toHaveBeenCalledWith(PTY_ID)
+      expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
+      expect(mockStoreState.updateTabTitle).toHaveBeenCalledWith(TAB_ID, IDLE_TITLE)
+      expect(mockStoreState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
+      expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+      dispose()
+    })
+
     it('applies bell facts with the byte-mode policy: unread now, OS notification delayed', async () => {
       enableMainAuthority()
       const { dispose } = await startWatcher()

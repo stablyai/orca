@@ -4,9 +4,13 @@ import type { WorkspaceSessionState } from '../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildHostIdByWorktreeId,
+  buildWorkspaceSessionHostSnapshots,
   fetchWorkspaceSessionFromHosts,
   fetchWorkspaceSessionWithRuntimeHostOwners,
-  patchWorkspaceSessionByHost
+  patchWorkspaceSessionByHost,
+  persistWorkspaceSessionByHost,
+  persistWorkspaceSessionByHostSync,
+  type HostPersistenceState
 } from './workspace-session-host-persistence'
 
 describe('fetchWorkspaceSessionFromHosts', () => {
@@ -382,5 +386,120 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     })
 
     expect(owner(worktreeWorkspaceKey(worktreeId))).toBe('runtime:env-1')
+  })
+
+  it('builds local-first host snapshots reused by synchronous persistence', () => {
+    const localWorktreeId = 'local-repo::C:\\src\\local'
+    const remoteWorktreeId = 'remote-repo::/srv/remote'
+    const makeTab = (id: string, worktreeId: string) => ({
+      id,
+      ptyId: null,
+      worktreeId,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const payload: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [localWorktreeId]: [makeTab('local-tab', localWorktreeId)],
+        [remoteWorktreeId]: [makeTab('remote-tab', remoteWorktreeId)]
+      }
+    }
+    const state = {
+      repos: [
+        { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+        { id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+      ],
+      worktreesByRepo: {
+        'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
+        'remote-repo': [{ id: remoteWorktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
+      }
+    } satisfies HostPersistenceState
+
+    const snapshots = buildWorkspaceSessionHostSnapshots(payload, state)
+
+    expect(snapshots.map((snapshot) => snapshot.hostId)).toEqual([undefined, 'runtime:env-1'])
+    expect(snapshots[0].state.tabsByWorktree).toEqual({
+      [localWorktreeId]: [expect.objectContaining({ id: 'local-tab' })]
+    })
+    expect(snapshots[1].state.tabsByWorktree).toEqual({
+      [remoteWorktreeId]: [expect.objectContaining({ id: 'remote-tab' })]
+    })
+
+    const setSync = vi.fn()
+    persistWorkspaceSessionByHostSync({ get: vi.fn(), patch: vi.fn(), setSync }, payload, state)
+
+    expect(setSync.mock.calls).toEqual(
+      snapshots.map((snapshot) => [snapshot.state, snapshot.hostId])
+    )
+  })
+})
+
+describe('persistWorkspaceSessionByHost', () => {
+  it('awaits every host write before crossing the durable flush boundary', async () => {
+    const localWorktreeId = 'local-repo::/src/local'
+    const remoteWorktreeId = 'remote-repo::/srv/remote'
+    const payload: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [localWorktreeId]: [
+          {
+            id: 'local-tab',
+            ptyId: null,
+            worktreeId: localWorktreeId,
+            title: 'Local',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ],
+        [remoteWorktreeId]: [
+          {
+            id: 'remote-tab',
+            ptyId: null,
+            worktreeId: remoteWorktreeId,
+            title: 'Remote',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const set = vi.fn().mockResolvedValue(undefined)
+    const flush = vi.fn().mockResolvedValue(undefined)
+
+    await persistWorkspaceSessionByHost(
+      { get: vi.fn(), set, patch: vi.fn(), flush, setSync: vi.fn() },
+      payload,
+      {
+        repos: [
+          { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+          { id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+        ],
+        worktreesByRepo: {
+          'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
+          'remote-repo': [{ id: remoteWorktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
+        }
+      }
+    )
+
+    expect(set).toHaveBeenCalledTimes(2)
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ tabsByWorktree: { [localWorktreeId]: expect.any(Array) } })
+    )
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabsByWorktree: { [remoteWorktreeId]: expect.any(Array) }
+      }),
+      'runtime:env-1'
+    )
+    expect(flush).toHaveBeenCalledTimes(1)
+    expect(set.mock.invocationCallOrder.at(-1)).toBeLessThan(flush.mock.invocationCallOrder[0]!)
   })
 })

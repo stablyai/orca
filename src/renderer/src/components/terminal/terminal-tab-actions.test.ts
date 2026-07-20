@@ -42,9 +42,9 @@ vi.mock('@/runtime/web-session-tabs-sync', () => ({
 import {
   closeOtherTerminalTabs,
   closeTerminalTab,
-  closeTerminalTabsToRight,
-  createNewTerminalTab
+  closeTerminalTabsToRight
 } from './terminal-tab-actions'
+import { createNewTerminalTab } from './terminal-tab-create'
 
 describe('createNewTerminalTab', () => {
   beforeEach(() => {
@@ -400,6 +400,7 @@ describe('closeTerminalTab', () => {
     const requestPinnedTabCloseConfirm = vi.fn()
     const closeTab = vi.fn()
     const closeUnifiedTab = vi.fn()
+    const onClosed = vi.fn()
     getStateMock.mockReturnValue(
       makePinnedTabState({
         confirmClosePinnedTab: true,
@@ -409,12 +410,57 @@ describe('closeTerminalTab', () => {
       })
     )
 
-    closeTerminalTab('pinned-entity-1')
+    closeTerminalTab('pinned-entity-1', { onClosed })
+    expect(onClosed).not.toHaveBeenCalled()
     const { onConfirm } = requestPinnedTabCloseConfirm.mock.calls[0][0] as { onConfirm: () => void }
     onConfirm()
 
     expect(closeTab).toHaveBeenCalledWith('pinned-entity-1', { reason: undefined })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(onClosed).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports cancellation without finalizing a pinned tab close', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    const onClosed = vi.fn()
+    const onCancel = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1', { onClosed, onCancel })
+    const request = requestPinnedTabCloseConfirm.mock.calls[0][0] as { onCancel?: () => void }
+    request.onCancel?.()
+
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(onClosed).not.toHaveBeenCalled()
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a pinned background lifecycle close without opening a confirmation modal', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeUnifiedTab = vi.fn()
+    const onClosed = vi.fn()
+    const onCancel = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeUnifiedTab
+      })
+    )
+
+    closeTerminalTab('pinned-entity-1', { rejectPinned: true, onClosed, onCancel })
+
+    expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(onClosed).not.toHaveBeenCalled()
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
   it('guards a pinned tab closed by its unified id (workspace overlay path)', () => {
@@ -454,6 +500,69 @@ describe('closeTerminalTab', () => {
     expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
     expect(closeTab).toHaveBeenCalledWith('pinned-entity-1', { reason: undefined })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('threads the PTY-exit reason through to closeTab', () => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
+      },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-2',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    // Why: the legacy no-layout surface routes pty exits through
+    // closeTerminalTab; a self-exited shell must not join the reopen stack.
+    closeTerminalTab('tab-1', { reason: 'pty-exit' })
+
+    expect(closeTab).toHaveBeenCalledWith('tab-1', { reason: 'pty-exit' })
+  })
+
+  it('threads parked-exit history suppression through to closeTab', () => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }] },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-2',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('tab-1', { captureRecentlyClosed: false })
+
+    expect(closeTab).toHaveBeenCalledWith('tab-1', { captureRecentlyClosed: false })
+  })
+
+  it('keeps the plain user-close call shape when no close options are given', () => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
+      },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-2',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('tab-1')
+
+    expect(closeTab).toHaveBeenCalledWith('tab-1')
   })
 })
 

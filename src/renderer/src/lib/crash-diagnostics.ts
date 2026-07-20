@@ -64,6 +64,17 @@ if (typeof import.meta !== 'undefined' && import.meta.hot) {
 }
 
 function recordRendererError(event: ErrorEvent): void {
+  // Why: "ResizeObserver loop completed" is a benign, self-resolving Chromium
+  // quirk. Recording it fills the breadcrumb buffer and inflates the error
+  // count without diagnostic value, contributing to renderer heap growth (#8260).
+  if (
+    /^ResizeObserver loop (?:limit exceeded|completed with undelivered notifications)\.?$/i.test(
+      event.message
+    )
+  ) {
+    event.preventDefault()
+    return
+  }
   recordRendererCrashBreadcrumb(
     'renderer_error',
     compactBreadcrumbData({

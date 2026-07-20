@@ -123,6 +123,50 @@ describe('analyzeWorkspaceSpace', () => {
     expect(result.reclaimableBytes).toBe(feature?.sizeBytes)
   })
 
+  it('omits prunable worktree registrations from the Space scan', async () => {
+    // Why: a prunable registration has no directory to size or reclaim (issue
+    // #8389); before this filter it rendered as a dead "Missing" row whose
+    // checkbox stayed disabled with no prune/remove action.
+    const root = tempDir!
+    const mainPath = join(root, 'repo')
+    const stalePath = join(root, 'stale')
+    await mkdir(join(mainPath, 'src'), { recursive: true })
+    await writeSizedFile(join(mainPath, 'src', 'main.ts'), 256)
+
+    const repo: Repo = {
+      id: 'repo-1',
+      path: mainPath,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: mainPath,
+        head: 'a',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: stalePath,
+        head: 'b',
+        branch: 'refs/heads/stale',
+        isBare: false,
+        prunable: true,
+        prunableReason: 'gitdir file points to non-existent location',
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await analyzeWorkspaceSpace(createStore([repo]))
+
+    expect(result.worktreeCount).toBe(1)
+    expect(result.worktrees.find((row) => row.path === stalePath)).toBeUndefined()
+    expect(result.worktrees.find((row) => row.path === mainPath)?.status).toBe('ok')
+    expect(result.repos[0]?.unavailableWorktreeCount).toBe(0)
+  })
+
   it('reports scan progress as repos and worktrees are scanned', async () => {
     const root = tempDir!
     const repoPath = join(root, 'repo')

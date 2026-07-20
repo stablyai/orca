@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetWritePipelineHealthForTests,
   armTerminalWriteStallWatch,
+  cancelTerminalWriteStallWatch,
+  captureTerminalParseProgressGeneration,
+  failTerminalWriteStallWatch,
+  hasTerminalParseProgressSince,
   isTerminalWritePipelineCertifiedDead,
   notifyUndeliverableWrite,
   registerUndeliverableWriteHandler,
@@ -43,6 +47,56 @@ afterEach(() => {
 })
 
 describe('terminal write pipeline health', () => {
+  it('detects parse progress without relying on wall-clock resolution', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const terminal = makeTerminal()
+    const generation = captureTerminalParseProgressGeneration(terminal)
+
+    settleTerminalWriteStallWatch(terminal)
+
+    expect(Date.now()).toBe(1_000)
+    expect(hasTerminalParseProgressSince(terminal, generation)).toBe(true)
+    _resetWritePipelineHealthForTests(terminal)
+  })
+
+  it('cancels a discarded write watch without recording parse progress', () => {
+    vi.useFakeTimers()
+    const terminal = makeTerminal()
+    const handler = vi.fn()
+    const generation = captureTerminalParseProgressGeneration(terminal)
+    registerUndeliverableWriteHandler(terminal, handler)
+    armTerminalWriteStallWatch(terminal)
+
+    cancelTerminalWriteStallWatch(terminal)
+    vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
+
+    expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
+    expect(terminal.pendingCallbacks).toHaveLength(0)
+    expect(handler).not.toHaveBeenCalled()
+    _resetWritePipelineHealthForTests(terminal)
+  })
+
+  it('certifies a synchronous write failure without recording parse progress', () => {
+    vi.useFakeTimers()
+    const terminal = makeTerminal()
+    const handler = vi.fn()
+    const onCertifiedDead = vi.fn()
+    const generation = captureTerminalParseProgressGeneration(terminal)
+    registerUndeliverableWriteHandler(terminal, handler)
+    armTerminalWriteStallWatch(terminal, { onCertifiedDead })
+
+    failTerminalWriteStallWatch(terminal)
+    vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
+
+    expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
+    expect(onCertifiedDead).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith('write-stalled')
+    expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
+    _resetWritePipelineHealthForTests(terminal)
+  })
+
   it('a settled write never probes or notifies', () => {
     vi.useFakeTimers()
     const terminal = makeTerminal()
@@ -66,12 +120,14 @@ describe('terminal write pipeline health', () => {
     registerUndeliverableWriteHandler(terminal, handler)
 
     armTerminalWriteStallWatch(terminal)
+    const generation = captureTerminalParseProgressGeneration(terminal)
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS)
     // Probe write queued; the pipeline is alive and parses it.
     expect(terminal.pendingCallbacks).toHaveLength(1)
     terminal.flush()
     vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 3)
 
+    expect(hasTerminalParseProgressSince(terminal, generation)).toBe(true)
     expect(handler).not.toHaveBeenCalled()
     expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(false)
     _resetWritePipelineHealthForTests(terminal)

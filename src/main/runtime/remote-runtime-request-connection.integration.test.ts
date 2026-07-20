@@ -19,6 +19,11 @@ import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000
 
+// worktree.create routes through the runtime's clientMutationId idempotency
+// wrapper; these stubs run the create straight through (no dedupe).
+const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
+  run()
+
 describe('remote runtime request connection integration', () => {
   it(
     'fetches repos through the real E2EE WebSocket runtime',
@@ -145,6 +150,7 @@ describe('remote runtime request connection integration', () => {
           source: 'git',
           worktrees
         }),
+        dedupeWorktreeCreate: passthroughDedupe,
         createManagedWorktree: ({ name }: { name?: string }) => {
           const worktree = {
             id: `repo-1::${name || 'created'}`,
@@ -337,6 +343,11 @@ describe('remote runtime request connection integration', () => {
             listener({ claude: null, codex: null })
           }
         },
+        refreshAccountsForMobileSubscriber: async () => {
+          for (const listener of accountsListeners) {
+            listener({ claude: null, codex: null })
+          }
+        },
         onAccountsChanged: (listener: (snapshot: unknown) => void) => {
           accountsListeners.add(listener)
           return () => accountsListeners.delete(listener)
@@ -365,6 +376,7 @@ describe('remote runtime request connection integration', () => {
           source: 'git',
           worktrees
         }),
+        dedupeWorktreeCreate: passthroughDedupe,
         createManagedWorktree: ({ name }: { name?: string }) => {
           const worktree = {
             id: `repo-1::${name || 'created'}`,
@@ -478,9 +490,7 @@ describe('remote runtime request connection integration', () => {
             REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
             () => `cleanup count ${subscriptionCleanups.size}, event count ${mixedEvents.length}`
           )
-          expect(
-            (server as unknown as { wsConnectionIds: Map<unknown, unknown> }).wsConnectionIds.size
-          ).toBe(1)
+          expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
           for (const mixed of mixedSubscriptions) {
             mixed.close()
           }
@@ -500,9 +510,7 @@ describe('remote runtime request connection integration', () => {
               )
             )
           )
-          expect(
-            (server as unknown as { wsConnectionIds: Map<unknown, unknown> }).wsConnectionIds.size
-          ).toBe(1)
+          expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
           for (const extra of extraSubscriptions) {
             extra.close()
           }

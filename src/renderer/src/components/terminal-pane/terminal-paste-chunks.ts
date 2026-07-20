@@ -1,4 +1,8 @@
-import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START,
+  normalizeTerminalPasteLineEndings
+} from './terminal-bracketed-paste'
 import { TERMINAL_PASTE_CHUNK_MAX_BYTES } from './terminal-paste-limits'
 import type { TerminalPastePlan } from './terminal-paste-coordinator'
 
@@ -12,10 +16,16 @@ export function chunkTerminalPastePlan(plan: TerminalPastePlan): string[] {
 
 export function* iterateTerminalPastePlanChunks(plan: TerminalPastePlan): Generator<string> {
   const maxChunkBytes = Math.max(4, plan.maxChunkBytes ?? TERMINAL_PASTE_CHUNK_MAX_BYTES)
+  // Why: normalize before chunking — a per-chunk pass could split a CRLF pair
+  // across a boundary and leak the LF half to ConPTY as a submit.
+  const text =
+    plan.newlinePolicy === 'terminal-cr'
+      ? normalizeTerminalPasteLineEndings(plan.payload.plainText)
+      : plan.payload.plainText
   if (plan.bracketed) {
     yield BRACKETED_PASTE_START
   }
-  yield* iterateTextByUtf8Bytes(plan.payload.plainText, maxChunkBytes, plan.bracketed)
+  yield* iterateTextByUtf8Bytes(text, maxChunkBytes, plan.bracketed)
   if (plan.bracketed) {
     yield BRACKETED_PASTE_END
   }

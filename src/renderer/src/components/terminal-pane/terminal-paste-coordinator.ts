@@ -173,7 +173,7 @@ function buildTerminalPastePlan({
     target,
     payload,
     mode,
-    newlinePolicy: 'preserve',
+    newlinePolicy: effectiveForceBracketedPaste ? 'terminal-cr' : 'preserve',
     runtimeKey: target.runtime.runtimeKey,
     ...(shouldChunk ? { maxChunkBytes } : {}),
     bracketed: mode === 'bracketed-terminal' || (mode === 'chunked' && shouldBracketChunk),

@@ -5,7 +5,6 @@ import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import {
   activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
-  createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
   toHostSessionTabId
 } from '@/runtime/web-runtime-session'
@@ -46,64 +45,18 @@ function isPinnedVisibleTab(
   )
 }
 
-export function createNewTerminalTab(
-  activeWorktreeId: string | null,
-  shellOverride?: string,
-  options?: { startupCwd?: string }
-): void {
-  if (!activeWorktreeId) {
-    return
-  }
-  const state = useAppStore.getState()
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
-  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: paired web clients receive host-owned terminal tabs through
-    // session.tabs. Creating a local tab first races the host snapshot and can
-    // leave stale remote handles in the web store.
-    void createWebRuntimeSessionTerminal({
-      worktreeId: activeWorktreeId,
-      environmentId: runtimeEnvironmentId,
-      command: shellOverride,
-      ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
-      activate: true
-    })
-    return
-  }
-  const newTab = state.createTab(
-    activeWorktreeId,
-    undefined,
-    shellOverride,
-    options?.startupCwd ? { startupCwd: options.startupCwd } : undefined
-  )
-  state.setActiveTabType('terminal')
-  // Why: persist the tab bar order with the new terminal at the end of the
-  // current visual order. Without this, reconcileTabOrder falls back to
-  // terminals-first when tabBarOrderByWorktree is unset, causing a new
-  // terminal to jump to index 0 instead of appending after editor tabs.
-  const freshState = useAppStore.getState()
-  const termIds = (freshState.tabsByWorktree[activeWorktreeId] ?? []).map((t) => t.id)
-  const editorIds = freshState.openFiles
-    .filter((f) => f.worktreeId === activeWorktreeId)
-    .map((f) => f.id)
-  const base = reconcileTabOrder(
-    freshState.tabBarOrderByWorktree[activeWorktreeId],
-    termIds,
-    editorIds
-  )
-  // The new tab is already in base via termIds; move it to the end
-  const order = base.filter((id) => id !== newTab.id)
-  order.push(newTab.id)
-  state.setTabBarOrder(activeWorktreeId, order)
-}
-
 export function closeTerminalTab(
   tabId: string,
   options?: {
     force?: boolean
+    rejectPinned?: boolean
     reason?: TerminalTabCloseReason
+    captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
     precomputedCloseState?: PrecomputedTerminalCloseState
+    onClosed?: () => void
+    onCancel?: () => void
   }
 ): void {
   const state = useAppStore.getState()
@@ -114,6 +67,7 @@ export function closeTerminalTab(
   )
   const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
   if (!target) {
+    options?.onClosed?.()
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
@@ -125,10 +79,17 @@ export function closeTerminalTab(
     !options?.force &&
     isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)
   ) {
+    // Why: background lifecycle callers cannot safely wait on a modal whose
+    // owner may be unattended; reject pinned tabs without bypassing the guard.
+    if (options?.rejectPinned) {
+      options.onCancel?.()
+      return
+    }
     guardPinnedTabClose({
       isPinned: true,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
-      onClose: () => closeTerminalTab(tabId, { force: true })
+      onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
+      ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
     return
   }
@@ -154,6 +115,9 @@ export function closeTerminalTab(
     // host session snapshot catches up.
     closeLocalTerminalTabState(terminalTabId, {
       reason: options?.reason,
+      ...(options?.captureRecentlyClosed !== undefined
+        ? { captureRecentlyClosed: options.captureRecentlyClosed }
+        : {}),
       remoteCloseOwnedByHost: true,
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
@@ -167,6 +131,7 @@ export function closeTerminalTab(
       tabId: hostBackedTabId,
       environmentId: runtimeEnvironmentId
     })
+    options?.onClosed?.()
     return
   }
 
@@ -178,6 +143,9 @@ export function closeTerminalTab(
   if (terminalCountBeforeClose <= 1) {
     closeLocalTerminalTabState(terminalTabId, {
       reason: options?.reason,
+      ...(options?.captureRecentlyClosed !== undefined
+        ? { captureRecentlyClosed: options.captureRecentlyClosed }
+        : {}),
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
         : {}),
@@ -203,6 +171,7 @@ export function closeTerminalTab(
         }
       }
     }
+    options?.onClosed?.()
     return
   }
 
@@ -218,11 +187,15 @@ export function closeTerminalTab(
 
   closeLocalTerminalTabState(terminalTabId, {
     reason: options?.reason,
+    ...(options?.captureRecentlyClosed !== undefined
+      ? { captureRecentlyClosed: options.captureRecentlyClosed }
+      : {}),
     ...(options?.localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
     ...(options?.precomputedRetirementPlan
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})
   })
+  options?.onClosed?.()
 }
 
 export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string | null): void {

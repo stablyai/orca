@@ -110,6 +110,12 @@ export function isSyncPushStageError(error: unknown): boolean {
   )
 }
 
+// Why: shared patterns so unconcluded-merge vs fresh-conflict toast copy cannot
+// drift between the two branches below.
+const UNCONCLUDED_MERGE_ERROR_PATTERN =
+  /unmerged files|needs merge|you have not concluded your merge/i
+const FRESH_MERGE_CONFLICT_ERROR_PATTERN = /automatic merge failed|CONFLICT \(|fix conflicts/i
+
 export function resolveRemoteOperationErrorMessage(
   error: unknown,
   options?: RemoteOperationErrorOptions
@@ -118,7 +124,7 @@ export function resolveRemoteOperationErrorMessage(
     return REMOTE_OPERATION_FAILED_MESSAGE
   }
 
-  if (/unmerged files|needs merge|you have not concluded your merge/i.test(error.message)) {
+  if (UNCONCLUDED_MERGE_ERROR_PATTERN.test(error.message)) {
     if (options?.isRebase) {
       return 'Rebase blocked — resolve existing conflicts first.'
     }
@@ -127,7 +133,7 @@ export function resolveRemoteOperationErrorMessage(
       : 'Pull blocked — resolve existing merge conflicts first.'
   }
 
-  if (/automatic merge failed|CONFLICT \(|fix conflicts/i.test(error.message)) {
+  if (FRESH_MERGE_CONFLICT_ERROR_PATTERN.test(error.message)) {
     if (options?.isRebase) {
       return 'Rebase stopped with conflicts. Resolve them in Source Control, then continue the rebase.'
     }

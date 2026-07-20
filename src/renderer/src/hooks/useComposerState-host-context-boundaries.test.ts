@@ -144,8 +144,10 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(folderSourceSection).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(current)')
 
-    // No path may special-case a single workspace-scoped provider again.
-    expect(HOOK_SOURCE).not.toContain('isLinearLinkedWorkItem')
+    // No switch path may gate the linked-item clear on a Linear-only predicate
+    // again. (isLinearLinkedWorkItem itself may still appear — it drives the
+    // separate Linear branch-name feature — but never the preservation decision.)
+    expect(HOOK_SOURCE).not.toContain('if (!preserveLinearLinkedWorkItem)')
   })
 
   it('does not use local SSH gates for runtime-owned folder targets', () => {
@@ -435,6 +437,36 @@ describe('useComposerState host-context boundaries', () => {
     )
   })
 
+  it('keeps a Linear branch override when its workspace-scoped issue survives a repo change', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRepoChange = useCallback',
+      'const handleFolderSourceRepoChange = useCallback'
+    )
+
+    expect(section).toContain('const preservedLinearBranchName = preserveLinearLinkedWorkItem')
+    expect(section).toContain('getLinearLinkedWorkItemBranchName(linkedWorkItem)')
+    expect(section).toContain('setBranchNameOverride(preservedLinearBranchName)')
+    expect(section).toContain(
+      'setBranchNameOverridePreservesNameEdits(Boolean(preservedLinearBranchName))'
+    )
+    expect(section).toContain("branchAutoNameRef.current = preservedLinearBranchName ?? ''")
+  })
+
+  it('clears a Linear branch override when its linked issue is removed', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRemoveLinkedWorkItem = useCallback',
+      'const handleNameValueChange = useCallback'
+    )
+
+    expect(section).toContain('const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)')
+    expect(section).toContain('if (removedLinearItem)')
+    expect(section).toContain('setBranchNameOverride(undefined)')
+    expect(section).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
   it('selects a project by its own host instead of pinning the current host', () => {
     // Regression: passing the current host as a hard `hostId` made picking a
     // project set up only on a different host a silent no-op. The current host
@@ -469,6 +501,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(githubApply).toContain('setLinkedGitLabIssue(null)')
     expect(githubApply).toContain('setLinkedGitLabMR(null)')
+    expect(githubApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(githubApply).toContain("branchAutoNameRef.current = ''")
 
     const gitlabApply = sourceBetween(
       HOOK_SOURCE,
@@ -477,6 +511,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(gitlabApply).toContain("setLinkedIssue('')")
     expect(gitlabApply).toContain('setLinkedPR(null)')
+    expect(gitlabApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(gitlabApply).toContain("branchAutoNameRef.current = ''")
 
     const projectGroupSmartHandlers = sourceBetween(
       HOOK_SOURCE,

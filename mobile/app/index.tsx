@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
-  Monitor,
   QrCode,
   Settings,
   ChevronRight,
@@ -25,7 +24,7 @@ import {
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { loadHosts, renameHost } from '../src/transport/host-store'
+import { loadHosts } from '../src/transport/host-store'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { pickResumeWorktree } from '../src/worktree/resume-worktree'
 import type { RpcClient } from '../src/transport/rpc-client'
@@ -35,14 +34,17 @@ import {
   useForceReconnect,
   usePrimeHosts
 } from '../src/transport/client-context'
-import { classifyConnection, verdictDisplayLabel } from '../src/transport/connection-health'
+import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
+import {
+  loadMobileOnboardingSteps,
+  mobileOnboardingDestination
+} from '../src/onboarding/mobile-onboarding-plan'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
-import { StatusDot } from '../src/components/StatusDot'
+import { MobileHostCard } from '../src/components/MobileHostCard'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
-import { TextInputModal } from '../src/components/TextInputModal'
 import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
@@ -124,10 +126,7 @@ function formatDuration(ms: number): string {
   return `${totalMinutes}m`
 }
 
-// Why: derive a stable per-instance identity for RpcClient so the wireUp
-// effect's dep key changes when forceReconnect swaps the underlying client
-// for a host (without this, listeners stay attached to the closed client
-// and notifications/accounts subs never re-attach).
+// Why: stable per-instance RpcClient identity so wireUp's dep key changes when forceReconnect swaps the client, re-attaching listeners.
 const clientIdentities = new WeakMap<RpcClient, number>()
 let nextClientIdentity = 1
 function clientKey(client: RpcClient): number {
@@ -165,11 +164,7 @@ function fetchWorktreeInfo(
   ) => void,
   disposed: () => boolean
 ) {
-  // Why: only seed an empty zeroed entry when this host has no prior info
-  // at all (e.g., first ever load before any cache hydration). On a
-  // transient failure for a host that already has cached data, leave the
-  // cached entry alone so the Resume card and host-meta line don't
-  // momentarily flip to "0 worktrees" / disappear during reconnects.
+  // Why: only seed a zeroed entry when the host has no prior info; keep cached data on transient failure so counts don't flip to 0 during reconnects.
   const markLoadedIfMissing = () => {
     setInfo((prev) => {
       if (prev[hostId]) {
@@ -188,8 +183,7 @@ function fetchWorktreeInfo(
   }
 
   client
-    // Why: worktree.ps defaults to 200 and silently truncates; request the full
-    // set so the host worktree count and active count are accurate.
+    // Why: worktree.ps defaults to 200 and silently truncates; request all so counts are accurate.
     .sendRequest('worktree.ps', { limit: 10000 })
     .then((response) => {
       if (disposed()) {
@@ -287,8 +281,7 @@ function fetchTaskProviders(
     })
 }
 
-// Why: repo names get a stable color derived from hashing, matching the
-// host detail page's colored dots for visual consistency.
+// Why: hash repo name to a stable color, matching the host detail page's dots.
 const REPO_COLORS = ['#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4']
 function repoColor(name: string): string {
   let hash = 0
@@ -301,12 +294,10 @@ function repoColor(name: string): string {
 export default function HomeScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  // Why: cap and center content on wide/tablet canvases so cards don't stretch
-  // edge-to-edge on iPad; on phones isWideLayout is false and layout is unchanged.
+  // Why: cap/center content on wide/tablet canvases so cards don't stretch edge-to-edge on iPad.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
-  const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
@@ -318,36 +309,34 @@ export default function HomeScreen() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
+  // Why: focus can fire repeatedly while an async gate is pending; one probe per
+  // mount avoids duplicate storage/permission reads and competing navigation.
+  const onboardingOptInCheckedRef = useRef(false)
 
-  // Why: read shared clients from the per-host store. Replaces the prior
-  // pattern of opening N independent WebSockets here. See
-  // docs/mobile-shared-client-per-host.md.
+  // Why: shared clients from the per-host store, not N independent WebSockets. See docs/mobile-shared-client-per-host.md.
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const allClients = useAllHostClients(hostIds)
+  const hostPaths = useMemo(
+    () => Object.fromEntries(allClients.map(({ hostId, path }) => [hostId, path])),
+    [allClients]
+  )
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
-  // Why: feed the loaded HostProfiles into the provider's prime cache as
-  // soon as we have them. This avoids a second Keychain pass inside
-  // openEntry on cold start (which serialised behind the first one and
-  // showed up as multi-second connect latency).
+  // Why: prime the cache with loaded HostProfiles to avoid a second serialized Keychain pass (multi-second connect latency) on cold start.
   useEffect(() => {
     if (hosts.length > 0) {
       primeHosts(hosts)
     }
   }, [hosts, primeHosts])
   const allClientsRef = useRef<Array<{ hostId: string; client: RpcClient }>>([])
-  // Why: the focus callback stays stable to avoid refetching on every
-  // client-store render, but it still needs the latest host clients.
+  // Why: keep the focus callback stable (no refetch per render) while still exposing the latest host clients.
   allClientsRef.current = allClients.map((entry) => ({
     hostId: entry.hostId,
     client: entry.client
   }))
 
-  // Why: hydrate the home page from a persisted snapshot on cold-start so
-  // Resume + Account-usage cards paint immediately with last-known data
-  // instead of flashing empty for ~1s while the WebSocket reconnects.
-  // Stream/list responses overwrite this seed in place when they arrive.
+  // Why: hydrate from a persisted snapshot on cold-start so Resume + Account cards paint immediately instead of flashing empty.
   const hydratedRef = useRef(false)
   useEffect(() => {
     if (hydratedRef.current) {
@@ -364,8 +353,7 @@ export default function HomeScreen() {
       for (const [hostId, info] of Object.entries(snap.worktreeInfo)) {
         const wt = info.lastActiveWorktree
         if (wt) {
-          // Why: also seed the in-memory worktree cache so resumeWorktree's
-          // lastVisited fast-path can find the cached worktree object.
+          // Why: seed the in-memory cache so resumeWorktree's lastVisited fast-path finds the worktree object.
           setCachedWorktrees(hostId, [wt])
         }
       }
@@ -375,9 +363,7 @@ export default function HomeScreen() {
     }
   }, [])
 
-  // Why: persist the merged snapshot whenever either piece updates so the
-  // next cold-start has fresh seed data. The cache module debounces writes
-  // internally so a flurry of streamed updates doesn't hammer disk.
+  // Why: persist the merged snapshot on each update so the next cold-start has fresh seed data (cache debounces writes).
   useEffect(() => {
     if (Object.keys(worktreeInfo).length === 0 && Object.keys(accountsByHost).length === 0) {
       return
@@ -392,9 +378,21 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadHosts().then((h) => {
-        if (!stale) {
-          setHosts(h)
+      void loadHosts().then(async (h) => {
+        if (stale) {
+          return
+        }
+        setHosts(h)
+        if (h.length === 0 || onboardingOptInCheckedRef.current) {
+          return
+        }
+        onboardingOptInCheckedRef.current = true
+        const onboardingSteps = await loadMobileOnboardingSteps()
+        if (stale) {
+          return
+        }
+        if (onboardingSteps.length > 0) {
+          router.replace(mobileOnboardingDestination(onboardingSteps))
         }
       })
       void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {
@@ -416,7 +414,7 @@ export default function HomeScreen() {
       return () => {
         stale = true
       }
-    }, [])
+    }, [router])
   )
 
   const sortedHosts = useMemo(
@@ -424,8 +422,7 @@ export default function HomeScreen() {
     [hosts]
   )
 
-  // Why: mirror per-host connection state into hostStates so existing
-  // render code (status dots, connecting indicators) keeps working.
+  // Why: mirror per-host connection state into hostStates so existing render code (status dots) keeps working.
   useEffect(() => {
     setHostAttempts((prev) => {
       const next: Record<string, number> = { ...prev }
@@ -461,11 +458,7 @@ export default function HomeScreen() {
           changed = true
         }
       }
-      // Why: when a paired host disappears from allClients (because the
-      // user tapped Disconnect, or the host record was invalid) the card
-      // must reflect that. We only force-update hosts whose state was
-      // already tracked — otherwise the initial-acquire frame (entry not
-      // yet materialised) would briefly flip every host to 'disconnected'.
+      // Why: reflect hosts that dropped from allClients, but only if already tracked — else the initial-acquire frame flips all to 'disconnected'.
       for (const host of hosts) {
         if (liveIds.has(host.id)) {
           continue
@@ -494,11 +487,7 @@ export default function HomeScreen() {
     })
   }, [allClients, hosts])
 
-  // Why: per-host streaming subscriptions (notifications + accounts) and
-  // one-shot stats fetches when each host transitions to 'connected'.
-  // Runs once per (hostId, client) pair and tears down when that pair
-  // changes. The provider keeps the underlying socket open across
-  // resubscription cycles so this is cheap.
+  // Per-host notif/accounts subs + one-shot stats on 'connected'; re-runs per (hostId, client) pair, socket stays open so it's cheap.
   useEffect(() => {
     const cleanups: Array<() => void> = []
     for (const entry of allClients) {
@@ -551,12 +540,7 @@ export default function HomeScreen() {
         c()
       }
     }
-    // Why: depend on the host-id set AND each entry's client identity, so
-    // resubscriptions don't fire on every render that produces a new
-    // array reference, but DO fire when forceReconnect swaps the
-    // underlying client for a host (otherwise wireUp would keep firing
-    // on a closed client and never re-attach to the fresh one, leaving
-    // notifications/accounts subs broken until the user navigates).
+    // Why: key on host-id set + each client's identity so resubs fire when forceReconnect swaps a host's client, not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allClients
@@ -565,22 +549,10 @@ export default function HomeScreen() {
       .join(',')
   ])
 
-  // Why: prefer the worktree the user last opened on this device so the
-  // "Resume" card reflects their mobile session history, not just the
-  // desktop's most-recently-outputting worktree.
-  // Why: rendering used to be gated on hostStates === 'connected', which
-  // caused the Resume card to vanish for ~1s on every cold-start /
-  // resume-from-background while the WebSocket reconnected, even though we
-  // had perfectly good cached worktree data. Now the card stays visible as
-  // long as we have a cached lastActiveWorktree for any known host; the
-  // tap target is still the same and a fresher snapshot from the live RPC
-  // overwrites the card's contents in place when it lands.
+  // Why: prefer the worktree last opened on this device so Resume reflects mobile session history.
+  // Why: don't gate on 'connected' so the card doesn't flash empty for ~1s on cold-start; cached data holds until fresh RPC lands.
   const resumeWorktree = useMemo(() => {
-    // Why: only surface Resume for hosts that are currently connected.
-    // Showing a stale cached worktree for a disconnected host is
-    // misleading — the user would tap into a session route that can't
-    // load anything until the host reconnects. Once the host reconnects,
-    // the card reappears with fresh data.
+    // Why: only surface Resume for connected hosts; a stale worktree taps into a route that can't load.
     if (lastVisited && hostStates[lastVisited.hostId] === 'connected') {
       const cached = getCachedWorktrees(lastVisited.hostId) as WorktreeSummary[] | null
       const match = cached?.find((w) => w.worktreeId === lastVisited.worktreeId)
@@ -600,9 +572,7 @@ export default function HomeScreen() {
     return null
   }, [sortedHosts, hostStates, worktreeInfo, lastVisited])
 
-  // Why: only show the Account usage section for hosts that are currently
-  // connected. Showing stale cached usage for a disconnected host implies
-  // live data; better to hide until the host reconnects and we can refresh.
+  // Why: only show Account usage for connected hosts; stale cached usage would imply live data.
   const accountsHosts = useMemo(() => {
     const items: Array<{ host: HostProfile; snapshot: AccountsSnapshot }> = []
     for (const host of sortedHosts) {
@@ -613,9 +583,7 @@ export default function HomeScreen() {
       if (!snap) {
         continue
       }
-      // Why: also show hosts whose only usage is the system-default login
-      // (no Orca-managed accounts but live rate-limit data for the active
-      // target), otherwise system-default users see no usage section at all.
+      // Why: also show hosts whose only usage is the system-default login, else those users see no usage section.
       if (hasRenderableUsage(snap, 'claude') || hasRenderableUsage(snap, 'codex')) {
         items.push({ host, snapshot: snap })
       }
@@ -694,19 +662,6 @@ export default function HomeScreen() {
     </Pressable>
   )
 
-  async function handleRename(newName: string) {
-    if (!renameTarget) {
-      return
-    }
-    try {
-      await renameHost(renameTarget.id, newName)
-      setRenameTarget(null)
-      setHosts(await loadHosts())
-    } catch {
-      setRenameTarget(null)
-    }
-  }
-
   async function handleRemove() {
     if (!confirmRemove) {
       return
@@ -717,8 +672,7 @@ export default function HomeScreen() {
       setConfirmRemove(null)
       setHosts(await loadHosts())
     } catch {
-      // Why: ConfirmModal closes on confirm; re-open for retry and surface the
-      // failure instead of silently leaving the host listed.
+      // Why: ConfirmModal closes on confirm; re-open for retry so the failure isn't silent.
       setConfirmRemove(hostToRemove)
       Alert.alert('Could not remove host', 'Please try again.')
     }
@@ -783,9 +737,7 @@ export default function HomeScreen() {
         <FlatList
           data={sortedHosts}
           keyExtractor={(h) => h.id}
-          // Why: edge-to-edge — let the list scroll under the system nav bar
-          // but reserve insets.bottom so the last row stays reachable above
-          // the Samsung 3-button nav / iOS home indicator.
+          // Why: reserve insets.bottom so the last row stays reachable above the system nav bar / home indicator.
           contentContainerStyle={[
             styles.list,
             { paddingBottom: spacing.xl + insets.bottom },
@@ -824,7 +776,6 @@ export default function HomeScreen() {
             const state = hostStates[item.id] ?? 'connecting'
             const attempts = hostAttempts[item.id] ?? 0
             const lastConnectedAt = hostLastConnected[item.id] ?? null
-            const connected = state === 'connected'
             const info = worktreeInfo[item.id]
             const verdict = classifyConnection({
               state,
@@ -832,45 +783,21 @@ export default function HomeScreen() {
               lastConnectedAt,
               endpoint: item.endpoint
             })
-            const isError =
-              verdict.kind === 'warning' ||
-              verdict.kind === 'unreachable' ||
-              verdict.kind === 'auth-failed'
             return (
-              <Pressable
-                style={({ pressed }) => [styles.hostCard, pressed && styles.hostCardPressed]}
+              <MobileHostCard
+                host={item}
+                state={state}
+                verdict={verdict}
+                path={hostPaths[item.id] ?? 'lan'}
+                worktreeCounts={
+                  info ? { total: info.totalWorktrees, active: info.activeCount } : undefined
+                }
                 onPress={() => router.push(`/h/${item.id}`)}
                 onLongPress={() => {
                   triggerMediumImpact()
                   setActionTarget(item)
                 }}
-                delayLongPress={400}
-              >
-                <View style={styles.hostIcon}>
-                  <Monitor
-                    size={20}
-                    color={connected ? colors.textPrimary : colors.textSecondary}
-                  />
-                </View>
-                <View style={styles.hostMain}>
-                  <Text
-                    style={[styles.hostName, !connected && { color: colors.textSecondary }]}
-                    numberOfLines={1}
-                  >
-                    {item.name}
-                  </Text>
-                  <View style={styles.hostMeta}>
-                    <StatusDot state={state} verdict={verdict} />
-                    <Text style={[styles.hostMetaItem, isError && { color: colors.statusRed }]}>
-                      {verdictDisplayLabel(verdict)}
-                      {connected && info
-                        ? ` · ${info.totalWorktrees} worktree${info.totalWorktrees !== 1 ? 's' : ''}${info.activeCount > 0 ? ` · ${info.activeCount} active` : ''}`
-                        : ''}
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight size={16} color={colors.textMuted} />
-              </Pressable>
+              />
             )
           }}
           ListFooterComponent={
@@ -987,10 +914,7 @@ export default function HomeScreen() {
                               ? snapshot.claude.accounts
                               : snapshot.codex.accounts
                           const limits = getActiveProviderRateLimits(snapshot, provider)
-                          // Why: with no managed accounts, still render a
-                          // "System default" row when the active target has
-                          // live usage data; the row label already falls back
-                          // to "System default" below.
+                          // Why: with no managed accounts, still render the row when the active target has live usage data.
                           if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
                             return null
                           }
@@ -1053,11 +977,7 @@ export default function HomeScreen() {
             state === 'connecting' ||
             state === 'handshaking' ||
             state === 'reconnecting'
-          // Why: "Reconnect" implies "you were connected, try again". If
-          // the client has never reached 'connected' this session (cold
-          // start, unreachable host, or after Disconnect) the action is
-          // functionally a fresh Connect — using the right verb makes
-          // the affordance match what tapping it actually does.
+          // Why: label "Connect" (not "Reconnect") when never connected this session, so the verb matches the action.
           const hasEverConnected = (hostLastConnected[host.id] ?? null) != null
           const items: ActionSheetAction[] = []
           items.push({
@@ -1079,34 +999,25 @@ export default function HomeScreen() {
             })
           }
           items.push({
-            label: 'Rename',
+            label: 'Edit host',
             icon: Edit3,
+            closeBeforePress: true,
             onPress: () => {
               setActionTarget(null)
-              setRenameTarget(host)
+              router.push(`/h/${host.id}/edit`)
             }
           })
           items.push({
             label: 'Remove',
             destructive: true,
+            closeBeforePress: true,
             onPress: () => {
-              setActionTarget(null)
               setConfirmRemove(host)
             }
           })
           return items
         })()}
         onClose={() => setActionTarget(null)}
-      />
-
-      <TextInputModal
-        visible={renameTarget != null}
-        title="Rename Host"
-        message="Enter a new name for this host."
-        defaultValue={renameTarget?.name ?? ''}
-        placeholder="Host name"
-        onSubmit={(name) => void handleRename(name)}
-        onCancel={() => setRenameTarget(null)}
       />
 
       <ConfirmModal
@@ -1244,62 +1155,8 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Host cards ─── */
-  hostCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   hostCardPressed: {
     backgroundColor: colors.bgRaised
-  },
-  hostIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14,
-    position: 'relative'
-  },
-  hostMain: {
-    flex: 1,
-    minWidth: 0,
-    marginRight: spacing.sm
-  },
-  hostName: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20
-  },
-  hostMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 3
-  },
-  hostMetaItem: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  hostMetaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.textMuted,
-    marginHorizontal: 8
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5
   },
 
   /* ─── Resume card ─── */
