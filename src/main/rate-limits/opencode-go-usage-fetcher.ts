@@ -1,12 +1,16 @@
-import { session, type Session } from 'electron'
+import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
+import type { NetworkProxySettings } from '../../shared/network-proxy'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import {
+  clearOpenCodeSessionCookies,
+  createOpenCodeRequestSession,
+  OPENCODE_BASE_URL
+} from './opencode-go-request-session'
 import { parseSubscriptionFromPageText } from './opencode-go-page-scraper'
 
-const OPENCODE_BASE_URL = 'https://opencode.ai'
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const API_TIMEOUT_MS = 15_000
-const OPENCODE_SESSION_PARTITION = 'orca-opencode-go-rate-limit-fetch'
 
 // Server-function hash for the workspaces endpoint — stable identifier used by
 // the opencode.ai SST/TanStack router server-fn protocol.
@@ -53,34 +57,6 @@ function parseAuthCookies(raw: string): { name: string; value: string }[] {
     .filter((pair): pair is { name: string; value: string } => pair !== null)
 }
 
-async function clearOpenCodeCookies(openCodeSession: Session): Promise<void> {
-  await openCodeSession.clearStorageData({ origin: OPENCODE_BASE_URL, storages: ['cookies'] })
-}
-
-async function createOpenCodeRequestSession(
-  authCookies: { name: string; value: string }[]
-): Promise<Session> {
-  const openCodeSession = session.fromPartition(OPENCODE_SESSION_PARTITION)
-  await clearOpenCodeCookies(openCodeSession)
-  try {
-    await Promise.all(
-      authCookies.map(({ name, value }) =>
-        openCodeSession.cookies.set({
-          url: OPENCODE_BASE_URL,
-          name,
-          value,
-          secure: true,
-          path: '/'
-        })
-      )
-    )
-    return openCodeSession
-  } catch (error) {
-    await clearOpenCodeCookies(openCodeSession).catch(() => undefined)
-    throw error
-  }
-}
-
 function parseWorkspaceIds(text: string): string[] {
   // Match id:"wrk_..." or id: "wrk_..." patterns in JS-serialized output.
   // Why: Workspace IDs follow a 'wrk_xxx' or 'wk_xxx' pattern. Using a
@@ -112,7 +88,8 @@ function makeWindow(
 
 export async function fetchOpenCodeGoRateLimits(
   cookie: string,
-  workspaceIdOverride?: string
+  workspaceIdOverride?: string,
+  networkProxySettings?: NetworkProxySettings
 ): Promise<ProviderRateLimits> {
   // Normalize before any guard — bare tokens become auth=<token>.
   const normalizedCookie = normalizeCookieInput(cookie)
@@ -147,7 +124,7 @@ export async function fetchOpenCodeGoRateLimits(
   // An isolated session jar lets its network stack attach auth normally.
   let openCodeSession: Session
   try {
-    openCodeSession = await createOpenCodeRequestSession(authCookies)
+    openCodeSession = await createOpenCodeRequestSession(authCookies, networkProxySettings)
   } catch (error) {
     return makeOpenCodeError(error)
   }
@@ -155,7 +132,7 @@ export async function fetchOpenCodeGoRateLimits(
   try {
     return await fetchOpenCodeGoRateLimitsWithSession(openCodeSession, workspaceIdOverride)
   } finally {
-    await clearOpenCodeCookies(openCodeSession).catch((error: unknown) => {
+    await clearOpenCodeSessionCookies(openCodeSession).catch((error: unknown) => {
       console.warn('[opencode-go] failed to clear session cookie jar after fetch', error)
     })
   }
