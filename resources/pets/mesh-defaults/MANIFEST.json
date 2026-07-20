@@ -1,0 +1,1531 @@
+{
+  "version": 1,
+  "description": "Operator-curated default pets shipped with mesh Orca fork",
+  "activeSlug": "mini-gandalf-the-grey",
+  "pets": [
+    {
+      "slug": "nous-girl",
+      "displayName": "Nous Girl",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "strike-freedom",
+      "displayName": "Strike Freedom Gundam",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "gojo",
+      "displayName": "Gojo",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "clank",
+      "displayName": "Clank",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "faye",
+      "displayName": "Faye",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "claw-crawler",
+      "displayName": "kuro-chan",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "apupepe",
+      "displayName": "Pepe",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "rubick",
+      "displayName": "Rubick",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "spike",
+      "displayName": "Spike",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "mini-gandalf-the-grey",
+      "displayName": "Mini Gandalf the Grey",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "teknium",
+      "displayName": "Teknium",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    },
+    {
+      "slug": "nezukocoder",
+      "displayName": "NezukoCoder",
+      "sprite": {
+        "frameWidth": 192,
+        "frameHeight": 208,
+        "columns": 8,
+        "rows": 9,
+        "sheetWidth": 1536,
+        "sheetHeight": 1872,
+        "fps": 8,
+        "defaultAnimation": "idle",
+        "animations": {
+          "idle": {
+            "row": 0,
+            "frames": 6,
+            "frameDurationsMs": [
+              1680,
+              660,
+              660,
+              840,
+              840,
+              1920
+            ]
+          },
+          "running-right": {
+            "row": 1,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "running-left": {
+            "row": 2,
+            "frames": 8,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "waving": {
+            "row": 3,
+            "frames": 4,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "jumping": {
+            "row": 4,
+            "frames": 5,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              280
+            ]
+          },
+          "failed": {
+            "row": 5,
+            "frames": 8,
+            "frameDurationsMs": [
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              140,
+              240
+            ]
+          },
+          "waiting": {
+            "row": 6,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              260
+            ]
+          },
+          "running": {
+            "row": 7,
+            "frames": 6,
+            "frameDurationsMs": [
+              120,
+              120,
+              120,
+              120,
+              120,
+              220
+            ]
+          },
+          "review": {
+            "row": 8,
+            "frames": 6,
+            "frameDurationsMs": [
+              150,
+              150,
+              150,
+              150,
+              150,
+              280
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

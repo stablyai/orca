@@ -7,12 +7,16 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CustomPet } from '../../shared/types'
 import {
   isPetdexAllowedUrl,
+  labelForStarterSlug,
+  PETDEX_DEFAULT_ACTIVE_SLUG,
   PETDEX_MANIFEST_URL,
+  PETDEX_STARTER_SLUGS,
   selectStarterEntries,
   type PetdexManifest,
   type PetdexManifestEntry
@@ -58,10 +62,18 @@ export async function fetchPetdexManifest(
   return data
 }
 
-export async function downloadPetdexSheet(
+/** Prefer shipped mesh-defaults sheet; fall back to Petdex CDN. */
+export async function loadSheetForSlug(
   entry: PetdexManifestEntry,
+  meshDefaultsDir: string | undefined,
   fetchImpl: FetchFn = fetch
 ): Promise<Buffer> {
+  if (meshDefaultsDir) {
+    const local = join(meshDefaultsDir, entry.slug, 'spritesheet.webp')
+    if (existsSync(local)) {
+      return await readFile(local)
+    }
+  }
   if (!isPetdexAllowedUrl(entry.spritesheetUrl)) {
     throw new PetdexConvertError(`refusing non-petdex sheet host for ${entry.slug}`)
   }
@@ -79,6 +91,14 @@ export async function downloadPetdexSheet(
   return Buffer.from(ab)
 }
 
+/** @deprecated use loadSheetForSlug */
+export async function downloadPetdexSheet(
+  entry: PetdexManifestEntry,
+  fetchImpl: FetchFn = fetch
+): Promise<Buffer> {
+  return loadSheetForSlug(entry, undefined, fetchImpl)
+}
+
 /**
  * Write one pet bundle under `customPetsDir/<uuid>/` and return the index row.
  * Atomic tmpdir + rename so a failed download never leaves a half-bundle.
@@ -86,9 +106,10 @@ export async function downloadPetdexSheet(
 export async function installPetdexEntry(
   entry: PetdexManifestEntry,
   customPetsDir: string,
-  fetchImpl: FetchFn = fetch
+  fetchImpl: FetchFn = fetch,
+  meshDefaultsDir?: string
 ): Promise<CustomPet> {
-  const sheetBuf = await downloadPetdexSheet(entry, fetchImpl)
+  const sheetBuf = await loadSheetForSlug(entry, meshDefaultsDir, fetchImpl)
   const dims = readWebpDimensionsFromBuffer(sheetBuf)
   if (!dims) {
     throw new PetdexConvertError(`could not decode webp dimensions for ${entry.slug}`)
@@ -100,16 +121,18 @@ export async function installPetdexEntry(
   await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
   await mkdir(tmpDir, { recursive: true })
 
+  const displayName = labelForStarterSlug(entry.slug, entry.displayName)
   const petJson = buildBundlePetJson({
     slug: entry.slug,
-    displayName: entry.displayName,
+    displayName,
     description: entry.kind
       ? `Petdex ${entry.kind}${entry.submittedBy ? ` by ${entry.submittedBy}` : ''}`
-      : undefined
+      : `Mesh default pet (${entry.slug})`
   })
-  // Provenance stamp for operators (not read by Orca runtime).
+  const fromBundle =
+    !!meshDefaultsDir && existsSync(join(meshDefaultsDir, entry.slug, 'spritesheet.webp'))
   const provenance = {
-    source: 'petdex',
+    source: fromBundle ? 'mesh-defaults' : 'petdex',
     slug: entry.slug,
     spritesheetUrl: entry.spritesheetUrl,
     petJsonUrl: entry.petJsonUrl,
@@ -130,33 +153,58 @@ export async function installPetdexEntry(
 
   return buildCustomPetRecord({
     id,
-    label: entry.displayName,
+    label: displayName,
     dims
   })
 }
 
-/** Install the curated starter pack. Continues on per-pet failures. */
+/** Install the curated mesh default pack. Continues on per-pet failures. */
 export async function installPetdexStarterPack(args: {
   customPetsDir: string
   fetchImpl?: FetchFn
   manifestUrl?: string
   slugs?: readonly string[]
+  meshDefaultsDir?: string
   onProgress?: (msg: string) => void
-}): Promise<PetdexInstallResult> {
+}): Promise<PetdexInstallResult & { defaultActiveSlug: string }> {
   const fetchImpl = args.fetchImpl ?? fetch
   const log = args.onProgress ?? (() => {})
-  log(`fetching Petdex manifest…`)
-  const manifest = await fetchPetdexManifest(fetchImpl, args.manifestUrl ?? PETDEX_MANIFEST_URL)
-  const entries = selectStarterEntries(manifest, args.slugs)
-  log(`manifest total=${manifest.total ?? manifest.pets.length}; starter hits=${entries.length}`)
+  const slugs = args.slugs ?? PETDEX_STARTER_SLUGS
+  const meshDefaultsDir = args.meshDefaultsDir
+
+  let entries: PetdexManifestEntry[] = []
+  let manifestTotal = 0
+  try {
+    log(`fetching Petdex manifest…`)
+    const manifest = await fetchPetdexManifest(fetchImpl, args.manifestUrl ?? PETDEX_MANIFEST_URL)
+    manifestTotal = manifest.total ?? manifest.pets.length
+    entries = selectStarterEntries(manifest, slugs)
+    log(`manifest total=${manifestTotal}; starter hits=${entries.length}`)
+  } catch (err) {
+    log(`manifest fetch failed (${err instanceof Error ? err.message : err}); using bundled defaults only`)
+  }
+
+  // Fill any missing slugs from local mesh-defaults (offline / deleted from Petdex).
+  const have = new Set(entries.map((e) => e.slug))
+  for (const slug of slugs) {
+    if (have.has(slug)) continue
+    if (meshDefaultsDir && existsSync(join(meshDefaultsDir, slug, 'spritesheet.webp'))) {
+      entries.push({
+        slug,
+        displayName: labelForStarterSlug(slug),
+        spritesheetUrl: `https://assets.petdex.dev/local-bundled/${slug}`
+      })
+      have.add(slug)
+    }
+  }
 
   const installed: CustomPet[] = []
   const skipped: { slug: string; reason: string }[] = []
 
   for (const entry of entries) {
     try {
-      log(`installing ${entry.slug} (${entry.displayName})…`)
-      const pet = await installPetdexEntry(entry, args.customPetsDir, fetchImpl)
+      log(`installing ${entry.slug} (${labelForStarterSlug(entry.slug, entry.displayName)})…`)
+      const pet = await installPetdexEntry(entry, args.customPetsDir, fetchImpl, meshDefaultsDir)
       installed.push(pet)
       log(`  → ${pet.id} ok`)
     } catch (err) {
@@ -169,6 +217,7 @@ export async function installPetdexStarterPack(args: {
   return {
     installed,
     skipped,
-    manifestTotal: manifest.total ?? manifest.pets.length
+    manifestTotal,
+    defaultActiveSlug: PETDEX_DEFAULT_ACTIVE_SLUG
   }
 }

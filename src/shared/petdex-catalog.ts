@@ -1,17 +1,12 @@
 /**
- * Curated Petdex starter pack for Orca.
+ * Mesh default pets for Orca fork.
  *
- * Hermes does not ship pet sprites in-repo — it fetches the public Petdex
- * gallery (`https://petdex.dev/api/manifest` → assets.petdex.dev). This
- * catalog is the mesh-quality shortlist we install into Orca's customPets
- * so the status-bar picker is not stuck on the three bundled webps.
+ * Source of truth for the shipped pack: operator-curated list after GUI
+ * install/delete (2026-07-20). Assets live under
+ * `resources/pets/mesh-defaults/<slug>/` (spritesheet.webp + pet.json) and
+ * are also installable from Petdex by the same slug.
  *
- * Selection criteria (operator bar):
- *  - creature / character preferred (not furniture "object" filler)
- *  - real Petdex slugs known to resolve at seed time
- *  - mix of mesh-adjacent (Nous / Claude / gremlin) + delightful creatures
- *  - labels ASCII-friendly where possible; non-ASCII display names kept as
- *    published by Petdex so attribution stays honest
+ * Do not re-add pets the operator removed without an explicit catalog edit.
  */
 
 export const PETDEX_MANIFEST_URL = 'https://petdex.dev/api/manifest'
@@ -36,25 +31,46 @@ export type PetdexManifest = {
 }
 
 /**
- * Ordered starter pack = operator-curated keepers on node-b (2026-07-20).
- * Do NOT re-add slugs the operator deleted from the Orca GUI — this list is
- * the source of truth for re-seed and node-e transfer. Full Petdex gallery
- * remains available via one-off import / future gallery UI, not this pack.
+ * Ordered default pack (status-bar order after seed).
+ * Labels: preferred UI names when they differ from Petdex displayName.
  */
 export const PETDEX_STARTER_SLUGS: readonly string[] = [
-  'blue-boba-axolotl',
   'nous-girl',
-  'glitchcat',
-  'belayer-cat',
-  'doc-volt',
-  'panam',
-  'jill-stingray',
-  'marcille-dungeon-meshi',
-  'heimerdinger',
   'strike-freedom',
-  'paperclip',
-  'batmeme'
+  'gojo',
+  'clank',
+  'faye',
+  'claw-crawler', // UI label: kuro-chan
+  'apupepe', // UI label: Pepe
+  'rubick',
+  'spike',
+  'mini-gandalf-the-grey',
+  'teknium',
+  'nezukocoder'
 ] as const
+
+/** Preferred status-bar labels (override Petdex displayName when set). */
+export const PETDEX_STARTER_LABELS: Readonly<Record<string, string>> = {
+  'nous-girl': 'Nous Girl',
+  'strike-freedom': 'Strike Freedom Gundam',
+  gojo: 'Gojo',
+  clank: 'Clank',
+  faye: 'Faye',
+  'claw-crawler': 'kuro-chan',
+  apupepe: 'Pepe',
+  rubick: 'Rubick',
+  spike: 'Spike',
+  'mini-gandalf-the-grey': 'Mini Gandalf the Grey',
+  teknium: 'Teknium',
+  nezukocoder: 'NezukoCoder'
+}
+
+/** Default active pet after seed (operator choice). */
+export const PETDEX_DEFAULT_ACTIVE_SLUG = 'mini-gandalf-the-grey'
+
+export function labelForStarterSlug(slug: string, fallback?: string): string {
+  return PETDEX_STARTER_LABELS[slug] ?? fallback ?? slug
+}
 
 export function isPetdexAllowedUrl(url: string): boolean {
   try {
@@ -78,7 +94,10 @@ export function selectStarterEntries(
     const entry = bySlug.get(slug)
     if (!entry) continue
     if (!isPetdexAllowedUrl(entry.spritesheetUrl)) continue
-    out.push(entry)
+    out.push({
+      ...entry,
+      displayName: labelForStarterSlug(slug, entry.displayName)
+    })
   }
   return out
 }

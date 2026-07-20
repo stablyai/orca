@@ -27,19 +27,36 @@ const REPO = join(__dirname, '..')
 // --- inlined catalog (keep in sync with src/shared/petdex-catalog.ts) ---
 const PETDEX_MANIFEST_URL = 'https://petdex.dev/api/manifest'
 const PETDEX_STARTER_SLUGS = [
-  'blue-boba-axolotl',
   'nous-girl',
-  'glitchcat',
-  'belayer-cat',
-  'doc-volt',
-  'panam',
-  'jill-stingray',
-  'marcille-dungeon-meshi',
-  'heimerdinger',
   'strike-freedom',
-  'paperclip',
-  'batmeme',
+  'gojo',
+  'clank',
+  'faye',
+  'claw-crawler',
+  'apupepe',
+  'rubick',
+  'spike',
+  'mini-gandalf-the-grey',
+  'teknium',
+  'nezukocoder',
 ]
+const PETDEX_STARTER_LABELS = {
+  'nous-girl': 'Nous Girl',
+  'strike-freedom': 'Strike Freedom Gundam',
+  'gojo': 'Gojo',
+  'clank': 'Clank',
+  'faye': 'Faye',
+  'claw-crawler': 'kuro-chan',
+  'apupepe': 'Pepe',
+  'rubick': 'Rubick',
+  'spike': 'Spike',
+  'mini-gandalf-the-grey': 'Mini Gandalf the Grey',
+  'teknium': 'Teknium',
+  'nezukocoder': 'NezukoCoder',
+}
+const PETDEX_DEFAULT_ACTIVE_SLUG = 'mini-gandalf-the-grey'
+const MESH_DEFAULTS_DIR = join(REPO, 'resources', 'pets', 'mesh-defaults')
+
 
 const CODEX_PET_FRAME = { width: 192, height: 208 }
 function appStateDurations(frames, frameMs, finalMs) {
@@ -166,13 +183,21 @@ async function main() {
   const skipped = []
 
   for (const slug of PETDEX_STARTER_SLUGS) {
-    const entry = bySlug.get(slug)
+    const localSheet = join(MESH_DEFAULTS_DIR, slug, 'spritesheet.webp')
+    let entry = bySlug.get(slug)
+    if (!entry && existsSync(localSheet)) {
+      entry = {
+        slug,
+        displayName: PETDEX_STARTER_LABELS[slug] || slug,
+        spritesheetUrl: 'https://assets.petdex.dev/local-bundled/' + slug
+      }
+    }
     if (!entry) {
-      skipped.push({ slug, reason: 'not in manifest' })
-      console.warn(`[seed] SKIP ${slug}: not in manifest`)
+      skipped.push({ slug, reason: 'not in manifest and no bundled sheet' })
+      console.warn(`[seed] SKIP ${slug}: not in manifest and no bundled sheet`)
       continue
     }
-    if (!isPetdexAllowedUrl(entry.spritesheetUrl)) {
+    if (!existsSync(localSheet) && !isPetdexAllowedUrl(entry.spritesheetUrl)) {
       skipped.push({ slug, reason: 'disallowed host' })
       continue
     }
@@ -182,12 +207,19 @@ async function main() {
     }
     try {
       process.stdout.write(`[seed] ${slug}… `)
-      const res = await fetch(entry.spritesheetUrl, {
-        headers: { 'User-Agent': 'orca-petdex-seed/1.0' },
-        redirect: 'follow'
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const buf = Buffer.from(await res.arrayBuffer())
+      const localSheet = join(MESH_DEFAULTS_DIR, slug, 'spritesheet.webp')
+      let buf
+      if (existsSync(localSheet)) {
+        buf = await readFile(localSheet)
+        process.stdout.write('(bundled) ')
+      } else {
+        const res = await fetch(entry.spritesheetUrl, {
+          headers: { 'User-Agent': 'orca-petdex-seed/1.0' },
+          redirect: 'follow'
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        buf = Buffer.from(await res.arrayBuffer())
+      }
       const dims = readWebpDimensionsFromBuffer(buf)
       if (!dims) throw new Error('bad webp dims')
       if (dims.width % CODEX_PET_FRAME.width || dims.height % CODEX_PET_FRAME.height) {
@@ -235,7 +267,7 @@ async function main() {
 
       const pet = {
         id,
-        label: String(entry.displayName || slug).slice(0, 40),
+        label: String(PETDEX_STARTER_LABELS[slug] || entry.displayName || slug).slice(0, 40),
         fileName: 'spritesheet.webp',
         mimeType: 'image/webp',
         kind: 'bundle',
@@ -251,6 +283,7 @@ async function main() {
           animations: { ...CODEX_PET_ANIMATIONS }
         }
       }
+      pet._slug = slug
       installed.push(pet)
       console.log(`ok → ${id.slice(0, 8)}… ${dims.width}x${dims.height}`)
     } catch (err) {
@@ -284,9 +317,10 @@ async function main() {
     // Dedupe by label for re-runs of the same seed.
     const labels = new Set(installed.map((p) => p.label))
     const kept = prev.filter((p) => !labels.has(p.label) || p.kind !== 'bundle')
-    data.ui.customPets = [...kept, ...installed]
-    if (opts.setActive && installed[0]) {
-      data.ui.petId = installed[0].id
+    data.ui.customPets = [...kept, ...installed.map(({ _slug, ...rest }) => rest)]
+    if (opts.setActive && installed.length) {
+      const preferred = installed.find((p) => p._slug === PETDEX_DEFAULT_ACTIVE_SLUG) || installed[0]
+      data.ui.petId = preferred.id
       data.ui.petVisible = true
     }
     await writeFile(dataPath, JSON.stringify(data, null, 2) + '\n')
