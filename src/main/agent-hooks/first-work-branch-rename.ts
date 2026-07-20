@@ -90,6 +90,13 @@ export function resetFirstWorkBranchRenameState(): void {
   settledWorktreeIds.clear()
 }
 
+async function readCurrentBranch(exec: GitExec): Promise<string> {
+  // Why: `rev-parse --abbrev-ref HEAD` dereferences HEAD and fails in unborn
+  // repos; symbolic-ref reads the branch ref without requiring a first commit.
+  const { stdout } = await exec(['symbolic-ref', '--quiet', '--short', 'HEAD'])
+  return stdout.trim()
+}
+
 function rememberSettledWorktreeId(worktreeId: string): void {
   // Why: the app can see unbounded worktree ids over a long session; evicting
   // oldest entries trades a rare re-probe for bounded process memory.
@@ -205,7 +212,7 @@ async function runAutoRename(
     ? (args) => provider.exec(args, worktreePath)
     : (args) => gitExecFileAsync(args, { cwd: worktreePath })
 
-  const currentBranch = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  const currentBranch = await readCurrentBranch(exec)
   if (!currentBranch || currentBranch === 'HEAD') {
     return retry(`no checked-out branch (${currentBranch || 'empty'})`)
   }
@@ -267,7 +274,7 @@ async function runAutoRename(
 
   // Re-validate after generation (it can take seconds): the branch must be the
   // same unpublished creature branch we started from, or we leave it alone.
-  const branchNow = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  const branchNow = await readCurrentBranch(exec)
   if (branchNow !== currentBranch) {
     return retry(`branch changed during generation (${currentBranch} -> ${branchNow})`)
   }

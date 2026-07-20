@@ -99,6 +99,47 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 
+  it('reads the current branch without dereferencing an unborn HEAD', async () => {
+    const unbornHeadError = new Error(
+      "fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree."
+    )
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
+        throw unbornHeadError
+      }
+      if (args[0] === 'symbolic-ref' && args[1] === '--quiet' && args[2] === '--short') {
+        return { stdout: 'you/Nautilus\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
+        throw noUpstreamError
+      }
+      if (args[0] === 'show-ref') {
+        throw new Error('not found')
+      }
+      if (args[0] === 'branch' && args[1] === '-m') {
+        return { stdout: '', stderr: '' }
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+
+    const { deps, onRenamed } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['rev-parse', '--abbrev-ref', 'HEAD'],
+      expect.anything()
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+      expect.objectContaining({ cwd: '/repo/wt' })
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '-m', 'you/fix-auth'],
+      expect.objectContaining({ cwd: '/repo/wt' })
+    )
+    expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
   it('asks to align the on-disk folder with the generated slug after renaming', async () => {
     const { deps, renameWorktreeFolder } = makeDeps()
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
@@ -455,7 +496,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   it('does not rename when the branch changes while generation is running', async () => {
     let branchReadCount = 0
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
+      if (args[0] === 'symbolic-ref') {
         branchReadCount += 1
         return { stdout: `${branchReadCount === 1 ? 'you/Nautilus' : 'you/manual'}\n`, stderr: '' }
       }
@@ -482,9 +523,6 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
   it('does not rename when the branch gains an upstream while generation is running', async () => {
     let upstreamReadCount = 0
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
-        return { stdout: 'you/Nautilus\n', stderr: '' }
-      }
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'you/Nautilus\n', stderr: '' }
       }
