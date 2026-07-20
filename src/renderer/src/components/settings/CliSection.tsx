@@ -317,7 +317,7 @@ export function CliSection({
             {translate(
               'auto.components.settings.CliSection.b0c310ab46',
               'Existing launcher target:'
-            )}
+            )}{' '}
             <code>{status.currentTarget}</code>
           </p>
         ) : null}

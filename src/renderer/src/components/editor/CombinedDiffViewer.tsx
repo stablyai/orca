@@ -2022,7 +2022,7 @@ export default function CombinedDiffViewer({
               {translate('auto.components.editor.CombinedDiffViewer.948a5fd6c8', 'Clear Notes')}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {translate('auto.components.editor.CombinedDiffViewer.84898c548d', 'Clear')}
+              {translate('auto.components.editor.CombinedDiffViewer.84898c548d', 'Clear')}{' '}
               {diffCommentCount}{' '}
               {diffCommentCount === 1
                 ? translate('auto.components.editor.CombinedDiffViewer.8ab3248fd8', 'note')
