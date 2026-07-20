@@ -400,9 +400,13 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
             })
         : undefined,
       setRenameError: (worktreeId, error, failureOutput) => {
-        // Refresh the local-only full-output capture before the dedupe below:
-        // a repeat of the same error string still comes from a fresh run.
-        rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
+        // Refresh the local-only full-output capture only when the persisted
+        // error actually changes (below). The rename-failed dialog refetches
+        // that capture on demand keyed on the persisted error string, so
+        // overwriting it on a deduped same-error retry would leave an already
+        // open dialog showing/copying the stale prior run's output.
+        const rememberFailureOutput = (): void =>
+          rememberBranchRenameFailureOutput(worktreeId, error === null ? null : failureOutput)
         // Skip the write + renderer push when nothing changes — benign skips
         // clear the error on every settled worktree, most of which never had one.
         const scope = parseWorkspaceKey(worktreeId)
@@ -413,6 +417,7 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
           if ((current ?? null) === (error ?? null)) {
             return
           }
+          rememberFailureOutput()
           currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
             firstAgentMessageRenameError: error
           })
@@ -423,6 +428,7 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         if ((current ?? null) === (error ?? null)) {
           return
         }
+        rememberFailureOutput()
         currentStore.setWorktreeMeta(worktreeId, { firstAgentMessageRenameError: error })
         // Push to the renderer so the badge updates — the hook only knows the
         // worktreeId, so derive the repoId the same way notifyBranchRenamed expects.
