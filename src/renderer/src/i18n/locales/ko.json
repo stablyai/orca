@@ -12290,6 +12290,11 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "보존된 HTML 인용을 잘라내려면 더 적은 콘텐츠를 선택하거나 코드 모드를 사용하세요."
+        },
+        "MermaidPreviewBlock": {
+          "98c6dc1f8b": "Open full size",
+          "907bf1c86a": "Full-size Mermaid diagram preview",
+          "3c6c89f5fb": "Press Esc to close"
         }
       },
       "diff": {

@@ -61,7 +61,7 @@ import {
 import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-internal-links'
 import { useLocalImageSrc } from './useLocalImageSrc'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
-import MermaidBlock from './MermaidBlock'
+import MermaidPreviewBlock from './MermaidPreviewBlock'
 import {
   applyMarkdownPreviewSearchHighlights,
   clearMarkdownPreviewSearchHighlights,
@@ -1677,7 +1677,11 @@ export default function MarkdownPreview({
       code: ({ className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
           return (
-            <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
+            <MermaidPreviewBlock
+              content={String(children).trimEnd()}
+              isDark={isDark}
+              htmlLabels={false}
+            />
           )
         }
         return (
@@ -1688,12 +1692,12 @@ export default function MarkdownPreview({
       },
       // Why: Wrap <pre> blocks with a positioned container so a copy button can
       // overlay the code block. Mermaid diagrams are detected and passed through
-      // unwrapped — MermaidBlock renders via useEffect/innerHTML, not React children,
+      // unwrapped — MermaidPreviewBlock renders MermaidBlock via useEffect/innerHTML, not React children,
       // so CodeBlockCopyButton's extractText() would copy an empty string, and a
       // <div> inside <pre> produces invalid HTML.
       pre: ({ node, children, ...props }) => {
         const child = React.Children.toArray(children)[0]
-        if (React.isValidElement(child) && child.type === MermaidBlock) {
+        if (React.isValidElement(child) && child.type === MermaidPreviewBlock) {
           return <>{children}</>
         }
         return wrapAnnotatedBlock(

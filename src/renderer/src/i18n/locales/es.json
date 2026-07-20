@@ -12290,6 +12290,11 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "Selecciona menos contenido o usa el modo de código para cortar citas HTML conservadas."
+        },
+        "MermaidPreviewBlock": {
+          "98c6dc1f8b": "Open full size",
+          "907bf1c86a": "Full-size Mermaid diagram preview",
+          "3c6c89f5fb": "Press Esc to close"
         }
       },
       "diff": {
