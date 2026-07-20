@@ -325,6 +325,92 @@ describe('getPiAgentStatusExtensionSource', () => {
     )
   })
 
+  it('redacts sensitive tool input before the status bridge persists it', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('tool_execution_start', {
+      toolName: 'read',
+      args: { path: '/home/test/.ssh/id_rsa:raw' }
+    })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+
+    await harness.callHook('tool_call', {
+      toolName: 'bash',
+      input: { command: 'cat ${HOME}/.omp/agent/.mcp-secrets.env' }
+    })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+
+    const payloads = harness.fetchMock.mock.calls.map(
+      ([_, init]) => JSON.parse(String(init?.body)).payload
+    )
+    expect(payloads).toEqual([
+      {
+        hook_event_name: 'tool_execution_start',
+        tool_name: 'read',
+        tool_input: { redacted: true }
+      },
+      {
+        hook_event_name: 'tool_call',
+        tool_name: 'bash',
+        tool_input: { redacted: true }
+      }
+    ])
+  })
+
+  it('redacts glob, Windows, and nested sensitive path references', async () => {
+    const harness = createHarness({ kind: 'omp' })
+    const inputs = [
+      { path: '~/.ssh*' },
+      { path: 'C:\\Users\\test\\.ssh\\id_rsa' },
+      { nested: { path: '/home/test/.ssh-mcp/.env' } },
+      { target: '/home/test/.omp-backups-archive/omp-bak-keyfile' }
+    ]
+
+    for (const [index, input] of inputs.entries()) {
+      await harness.callHook('tool_call', { toolName: 'custom', input })
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(index + 1))
+    }
+
+    expect(
+      harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload.tool_input)
+    ).toEqual(inputs.map(() => ({ redacted: true })))
+  })
+
+  it('fails closed for cyclic, getter-backed, and class-instance tool input', async () => {
+    const harness = createHarness({ kind: 'omp' })
+    const cyclic: Record<string, unknown> = { path: '/tmp/safe' }
+    cyclic.self = cyclic
+    const getter = vi.fn(() => '/tmp/safe')
+    const getterBacked: Record<string, unknown> = {}
+    Object.defineProperty(getterBacked, 'path', { get: getter })
+    class ToolInput {}
+    const inputs = [cyclic, getterBacked, new ToolInput()]
+
+    for (const [index, input] of inputs.entries()) {
+      await harness.callHook('tool_execution_start', { toolName: 'custom', args: input })
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(index + 1))
+    }
+
+    expect(getter).not.toHaveBeenCalled()
+    expect(
+      harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload.tool_input)
+    ).toEqual(inputs.map(() => ({ redacted: true })))
+  })
+
+  it('preserves sibling-prefix paths in status tool input', async () => {
+    const harness = createHarness({ kind: 'omp' })
+    const input = { path: '/tmp/.ssh-backup' }
+
+    await harness.callHook('tool_execution_start', {
+      toolName: 'read',
+      args: input
+    })
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+
+    const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.payload.tool_input).toEqual(input)
+  })
+
   it('routes an OMP executable through /hook/omp', async () => {
     const harness = createHarness({
       kind: 'pi',
