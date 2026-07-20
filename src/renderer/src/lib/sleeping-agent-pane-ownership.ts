@@ -78,6 +78,16 @@ function hasRestorableStablePanePty(
   )
 }
 
+function hasLiveStablePanePty(
+  tabId: string,
+  leafId: string,
+  ptyIdsByTabId: Record<string, string[] | undefined>,
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
+): boolean {
+  const leafPtyId = terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+  return Boolean(leafPtyId && ptyIdsByTabId[tabId]?.includes(leafPtyId))
+}
+
 function paneWillConnectOnActivation(
   worktreeId: string,
   tabId: string,
@@ -115,6 +125,13 @@ export function recordPaneIsOwnedByPreservedPane(
     const tab = worktreeTabs.find((candidate) => candidate.id === tabId) ?? null
     if (!tab || !hasMatchingStablePaneLayout(tabId, stable.leafId, state.terminalLayoutsByTabId)) {
       return false
+    }
+    // Why: hidden tabs do not mount during activation, but their exact pane PTY
+    // may still be alive and already own the provider session.
+    if (
+      hasLiveStablePanePty(tabId, stable.leafId, state.ptyIdsByTabId, state.terminalLayoutsByTabId)
+    ) {
+      return true
     }
     if (isPassiveCompletedHibernationEvidence(record)) {
       return true
