@@ -61,6 +61,7 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
+const GIT_STATUS_TIMEOUT_MS = 60_000
 const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
 const MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES = 512
 
@@ -307,6 +308,9 @@ async function runGetStatus(
       // terminal Git commands on `.git/worktrees/*/index.lock`.
       env: gitOptionalLocksDisabledEnv(),
       signal: options.signal,
+      // Why: Windows crash bundles show status scans taking tens of seconds.
+      // Bound true hangs while leaving slow-but-successful large repos room.
+      timeout: GIT_STATUS_TIMEOUT_MS,
       onStdout: (chunk) => parser.update(chunk, limit)
     })
     if (!stoppedEarly) {
