@@ -117,6 +117,45 @@ function renderField(onPlainEnter: () => void): HTMLInputElement {
   return input
 }
 
+function renderSmartField(spies: {
+  onValueChange: () => void
+  onBranchSelect: () => void
+  onPlainEnter: () => void
+}): HTMLInputElement {
+  act(() => {
+    root.render(
+      <SmartWorkspaceNameField
+        repos={[]}
+        repoId="repo-1"
+        onRepoChange={vi.fn()}
+        value="배포"
+        onValueChange={spies.onValueChange}
+        onGitHubItemSelect={vi.fn()}
+        onBranchSelect={spies.onBranchSelect}
+        onLinearIssueSelect={vi.fn()}
+        selectedSource={null}
+        onClearSelectedSource={vi.fn()}
+        onPlainEnter={spies.onPlainEnter}
+      />
+    )
+  })
+  const input = container.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
+  if (!input) {
+    throw new Error('workspace name input not rendered')
+  }
+  return input
+}
+
+// Why: the guard must short-circuit before the `open && rows.length > 0`
+// row-select branch, so drive the field into that state — smart mode with a
+// typed value synchronously yields a highlighted "use this name" row.
+function openSourcePopover(input: HTMLInputElement): void {
+  const event = new Event('pointerdown', { bubbles: true, cancelable: true })
+  act(() => {
+    input.dispatchEvent(event)
+  })
+}
+
 function pressEnter(
   input: HTMLInputElement,
   init?: KeyboardEventInit & { keyCode?: number }
@@ -161,5 +200,38 @@ describe('SmartWorkspaceNameField IME Enter guard', () => {
     pressEnter(input)
 
     expect(onPlainEnter).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not select the highlighted source row on an IME-composition Enter', () => {
+    const onValueChange = vi.fn()
+    const onBranchSelect = vi.fn()
+    const onPlainEnter = vi.fn()
+    const input = renderSmartField({ onValueChange, onBranchSelect, onPlainEnter })
+    openSourcePopover(input)
+
+    pressEnter(input, { isComposing: true })
+
+    // The guard runs before the row-select branch, so neither the row commit
+    // (onValueChange) nor the fall-through (onPlainEnter) should fire.
+    expect(onValueChange).not.toHaveBeenCalled()
+    expect(onBranchSelect).not.toHaveBeenCalled()
+    expect(onPlainEnter).not.toHaveBeenCalled()
+  })
+
+  it('selects the highlighted source row on a plain Enter (control for the guard)', () => {
+    const onValueChange = vi.fn()
+    const onBranchSelect = vi.fn()
+    const onPlainEnter = vi.fn()
+    const input = renderSmartField({ onValueChange, onBranchSelect, onPlainEnter })
+    openSourcePopover(input)
+
+    pressEnter(input)
+
+    // With the popover open and a highlighted "use this name" row, a plain
+    // Enter commits that row (onValueChange) and does NOT fall through to
+    // onPlainEnter — proving the composition case above was really suppressed
+    // at the row-select branch, not merely inert.
+    expect(onValueChange).toHaveBeenCalledWith('배포')
+    expect(onPlainEnter).not.toHaveBeenCalled()
   })
 })
