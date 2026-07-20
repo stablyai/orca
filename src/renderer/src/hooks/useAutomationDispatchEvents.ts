@@ -23,6 +23,7 @@ import {
 } from '@/components/automations/automation-run-output-snapshot'
 import { translate } from '@/i18n/i18n'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 const activeReuseDispatchTabIds = new Set<string>()
@@ -69,6 +70,17 @@ export function useAutomationDispatchEvents(): void {
         let dispatchWorkspaceDisplayName =
           automationWorktree?.displayName ?? run.workspaceDisplayName ?? null
         let precheckResult: AutomationPrecheckResult | null = null
+        let terminalOwnership: AutomationTerminalOwnership | null = null
+        const releaseTerminalOwnership = (): void => {
+          const ownership = terminalOwnership
+          terminalOwnership = null
+          ownership?.release()
+        }
+        const finalizeTerminalOwnership = (): void => {
+          const ownership = terminalOwnership
+          terminalOwnership = null
+          ownership?.finalize()
+        }
 
         if (!repo) {
           await markDispatchResult({
@@ -275,27 +287,52 @@ export function useAutomationDispatchEvents(): void {
             }
             completionMarked = true
             cleanupRunObservers()
-            await markDispatchResult({
-              runId: run.id,
-              status: 'completed',
-              workspaceId: worktree.id,
-              workspaceDisplayName: worktree.displayName,
-              outputSnapshot: getOutputSnapshot(),
-              precheckResult,
-              error: null
-            })
+            try {
+              await markDispatchResult({
+                runId: run.id,
+                status: 'completed',
+                workspaceId: worktree.id,
+                workspaceDisplayName: worktree.displayName,
+                outputSnapshot: getOutputSnapshot(),
+                precheckResult,
+                error: null
+              })
+            } catch (error) {
+              releaseTerminalOwnership()
+              throw error
+            }
+            finalizeTerminalOwnership()
           }
-          const markExitResult = (code: number): Promise<void> => {
+          const markExitResult = async (code: number): Promise<void> => {
+            if (completionMarked) {
+              return
+            }
+            completionMarked = true
             cleanupRunObservers()
-            return markDispatchResult({
-              runId: run.id,
-              status: code === 0 ? 'completed' : 'dispatch_failed',
-              workspaceId: worktree.id,
-              workspaceDisplayName: worktree.displayName,
-              outputSnapshot: getOutputSnapshot(),
-              precheckResult,
-              error: code === 0 ? null : `Automation process exited with code ${code}.`
-            })
+            try {
+              await markDispatchResult({
+                runId: run.id,
+                status: code === 0 ? 'completed' : 'dispatch_failed',
+                workspaceId: worktree.id,
+                workspaceDisplayName: worktree.displayName,
+                outputSnapshot: getOutputSnapshot(),
+                precheckResult,
+                error: code === 0 ? null : `Automation process exited with code ${code}.`
+              })
+            } catch (error) {
+              releaseTerminalOwnership()
+              throw error
+            }
+            if (code === 0) {
+              finalizeTerminalOwnership()
+            } else {
+              releaseTerminalOwnership()
+            }
+          }
+          const settleLateResult = (result: Promise<void>): void => {
+            // Why: status/exit callbacks have no awaitable caller; the result
+            // path already releases ownership before propagating persistence errors.
+            void result.catch(() => {})
           }
           const handleAgentDone = (): void => {
             if (completionMarked) {
@@ -305,7 +342,7 @@ export function useAutomationDispatchEvents(): void {
               pendingDone = true
               return
             }
-            void markCompletionResult()
+            settleLateResult(markCompletionResult())
           }
           const observeAgentStatus = (
             targetPaneKey: string,
@@ -392,7 +429,7 @@ export function useAutomationDispatchEvents(): void {
                           pendingExitCode = code
                           return
                         }
-                        void markExitResult(code)
+                        settleLateResult(markExitResult(code))
                       }
                     })
                     observeAgentStatus(reusableSession.paneKey, reuseCompletionStartedAt, {
@@ -449,11 +486,17 @@ export function useAutomationDispatchEvents(): void {
                 pendingExitCode = code
                 return
               }
-              void markExitResult(code)
+              settleLateResult(markExitResult(code))
             }
           })
           if (!result) {
             throw new Error('Unable to build an agent launch plan.')
+          }
+          terminalOwnership = result.terminalOwnership
+          if (automation.reuseSession) {
+            // Why: the first fresh launch is the seed for later reuse and must
+            // survive completion under the same policy as an already-reused tab.
+            releaseTerminalOwnership()
           }
           const launchedTabId = result.tabId
           observeAgentStatus(result.paneKey, dispatchStartedAt)
@@ -494,6 +537,7 @@ export function useAutomationDispatchEvents(): void {
             currentState.setActiveTabType(focusBeforeDispatch.activeTabType)
           }
         } catch (error) {
+          releaseTerminalOwnership()
           await markDispatchResult({
             runId: run.id,
             status: 'dispatch_failed',

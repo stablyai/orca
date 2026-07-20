@@ -37,8 +37,8 @@ function expectStablePaneSpawn(): string {
 }
 
 const state = {
-  activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
+  lastTerminalInputAtByPaneKey: {},
   settings: {
     agentCmdOverrides: {},
     activeRuntimeEnvironmentId: null as string | null,
@@ -83,7 +83,8 @@ const state = {
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => state
+    getState: () => state,
+    subscribe: vi.fn(() => () => {})
   }
 }))
 
@@ -119,8 +120,6 @@ describe('launchAgentBackgroundSession', () => {
       (args) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
     )
-    state.activeRepoId = 'repo-1'
-    state.activeWorktreeId = 'wt-1'
     state.settings = {
       agentCmdOverrides: {},
       activeRuntimeEnvironmentId: null,
@@ -849,7 +848,8 @@ describe('launchAgentBackgroundSession', () => {
     expect(result).toMatchObject({
       tabId: 'tab-1',
       paneKey: `tab-1:${leafId}`,
-      ptyId: 'remote:env-1@@terminal-1'
+      ptyId: 'remote:env-1@@terminal-1',
+      terminalOwnership: null
     })
   })
 
