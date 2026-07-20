@@ -7,6 +7,10 @@
 //     usernames/orgs),
 // (d) parseProjectPaste shorthand owner-only alphabet matches the renderer,
 // (e) project owner/capability caches stay bounded in long sessions.
+// Plus Phase 1b: normalizeItem hydrates row.content.subIssuesSummary /
+// trackedIssues / trackedInIssues from the linked Issue, and the new
+// 'issue-ref-list' union variant is a forward-compat stub that falls through
+// to the existing default: return null branch in normalizeFieldValue.
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   GITHUB_PROJECT_REF_INPUT_MAX_BYTES,
@@ -25,8 +29,15 @@ import {
   classifyProjectError,
   isValidOwnerSlug,
   isValidRepoSlug,
+  normalizeFieldValue,
+  normalizeItem,
   parseProjectPaste,
-  resolveProjectRef
+  resolveProjectRef,
+  FIELD_CONFIG_FRAGMENT,
+  FIELD_VALUES_SELECTION,
+  itemContentSelection,
+  type RawFieldValue,
+  type RawItem
 } from './project-view'
 
 describe('classifyProjectError', () => {
@@ -223,5 +234,190 @@ describe('project view owner caches', () => {
     expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-0\u0000organization')).toBe(false)
     expect(_hasProjectViewParentFieldRetriedForTests('owner-1\u0000organization')).toBe(true)
     expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-1\u0000organization')).toBe(true)
+  })
+})
+
+// Why: Phase 1b — sub-issue progress, tracked issues, and tracked-by issues
+// live on the linked Issue (Issue.subIssuesSummary / .trackedIssues /
+// .trackedInIssues), not on the ProjectV2 field-value union. The renderer
+// reads from row.content.* for these three columns. normalizeItem must
+// hydrate them defensively, preserving the empty-but-valid shape (vs null)
+// so the cell can distinguish "field exists with no value" from "field
+// was dropped".
+//
+// Test inputs are typed via the named types RawItem / RawFieldValue
+// (imported from project-view) cast through `unknown` at the test boundary —
+// the local RawContent shape is intentionally flexible (all fields optional)
+// so the test can construct only the fields it needs while the cast
+// documents which production type each input satisfies.
+describe('normalizeItem', () => {
+  function makeIssueItem(contentExtras: Record<string, unknown>): RawItem {
+    // Why: the production RawContent permits __typename / id / number / etc.
+    // The test only needs to vary the hierarchy fields; spread into a
+    // structurally-conforming object and cast at the boundary.
+    return {
+      id: 'item-1',
+      type: 'ISSUE',
+      content: { __typename: 'Issue', number: 1, title: 't', ...contentExtras },
+      fieldValues: { nodes: [] }
+    } as unknown as RawItem
+  }
+
+  it('hydrates subIssuesSummary from Issue.subIssuesSummary', () => {
+    const raw = makeIssueItem({
+      subIssuesSummary: { total: 7, completed: 3, percentCompleted: 43 }
+    })
+    const out = normalizeItem(raw, 0)
+    expect(out.ok).toBe(true)
+    if (!out.ok) {
+      return
+    }
+    expect(out.row.content.subIssuesSummary).toEqual({
+      total: 7,
+      completed: 3,
+      percentCompleted: 43
+    })
+  })
+
+  it('preserves subIssuesSummary as empty-but-valid when total is 0', () => {
+    const raw = makeIssueItem({
+      subIssuesSummary: { total: 0, completed: 0, percentCompleted: 0 }
+    })
+    const out = normalizeItem(raw, 0)
+    expect(out.ok).toBe(true)
+    if (!out.ok) {
+      return
+    }
+    expect(out.row.content.subIssuesSummary).toEqual({
+      total: 0,
+      completed: 0,
+      percentCompleted: 0
+    })
+  })
+
+  it('nulls subIssuesSummary when the Issue omits it', () => {
+    const raw = makeIssueItem({})
+    const out = normalizeItem(raw, 0)
+    expect(out.ok).toBe(true)
+    if (!out.ok) {
+      return
+    }
+    expect(out.row.content.subIssuesSummary).toBeNull()
+  })
+
+  it('hydrates trackedIssues from Issue.trackedIssues', () => {
+    const raw = makeIssueItem({
+      trackedIssues: {
+        nodes: [
+          { number: 1, title: 'a', url: 'https://github.com/acme/repo/issues/1' },
+          { number: 2, title: 'b', url: 'https://github.com/acme/repo/issues/2' }
+        ]
+      }
+    })
+    const out = normalizeItem(raw, 0)
+    expect(out.ok).toBe(true)
+    if (!out.ok) {
+      return
+    }
+    expect(out.row.content.trackedIssues).toHaveLength(2)
+    expect(out.row.content.trackedIssues[0]).toEqual({
+      number: 1,
+      title: 'a',
+      url: 'https://github.com/acme/repo/issues/1'
+    })
+    expect(out.row.content.trackedIssues[1]).toEqual({
+      number: 2,
+      title: 'b',
+      url: 'https://github.com/acme/repo/issues/2'
+    })
+  })
+
+  it('hydrates trackedInIssues from Issue.trackedInIssues', () => {
+    const raw = makeIssueItem({
+      trackedInIssues: {
+        nodes: [{ number: 3, title: 'c', url: 'https://github.com/acme/repo/issues/3' }]
+      }
+    })
+    const out = normalizeItem(raw, 0)
+    expect(out.ok).toBe(true)
+    if (!out.ok) {
+      return
+    }
+    expect(out.row.content.trackedInIssues).toHaveLength(1)
+    expect(out.row.content.trackedInIssues[0]).toEqual({
+      number: 3,
+      title: 'c',
+      url: 'https://github.com/acme/repo/issues/3'
+    })
+  })
+
+  it('drops trackedIssues sub-nodes that lack a number, keeps the well-formed ones', () => {
+    const raw = makeIssueItem({
+      trackedIssues: {
+        nodes: [
+          { number: 1, title: 'a', url: 'https://github.com/acme/repo/issues/1' },
+          { title: 'malformed', url: 'https://github.com/acme/repo/issues/2' },
+          { number: 3, title: 'c', url: 'https://github.com/acme/repo/issues/3' }
+        ]
+      }
+    })
+    const out = normalizeItem(raw, 0)
+    expect(out.ok).toBe(true)
+    if (!out.ok) {
+      return
+    }
+    expect(out.row.content.trackedIssues).toHaveLength(2)
+    expect(out.row.content.trackedIssues[0]?.number).toBe(1)
+    expect(out.row.content.trackedIssues[1]?.number).toBe(3)
+  })
+
+  // Why: the new 'issue-ref-list' union variant is a defensive forward-compat
+  // stub. No live GraphQL __typename currently maps to it (live __type
+  // introspection on 2026-07-14 confirmed the ProjectV2ItemFieldValue union
+  // has 12 members, none hierarchy-related). The normalizer's
+  // default: return null branch handles unknown typenames; this test
+  // locks that invariant for the future-typename case.
+  it('normalizeFieldValue returns null for an unknown __typename (forward-compat)', () => {
+    // Why: this is the contract that protects us from schema drift — when
+    // GitHub adds a new ProjectV2ItemField*Value member, normalizeFieldValue
+    // must silently drop it (return null) until we add an explicit case.
+    // This test passes today because the existing default branch handles
+    // the unknown typename; it is the regression guard.
+    const out = normalizeFieldValue({
+      __typename: 'ProjectV2ItemFieldSomeFutureValue',
+      field: { id: 'F', name: 'future', dataType: 'TEXT' }
+    } as unknown as RawFieldValue)
+    expect(out).toBeNull()
+  })
+})
+
+// Why: Bug 1 from the Phase 1b verification pass — a `//` (JS-style)
+// comment sitting inside the itemContentSelection GraphQL template literal
+// parsed fine in TypeScript but is invalid GraphQL syntax (only `#`
+// comments are supported), so every real fetch for a project with Issue
+// items failed with "Expected NAME, actual: UNKNOWN_CHAR" and looked
+// exactly like a permissions problem. normalizeItem's tests never caught
+// this because they feed hand-built RawItem objects directly — the query
+// string itself is never round-tripped through anything GraphQL-aware.
+// This is a cheap syntax-shape guard, not a full parser, but it locks the
+// specific failure mode that shipped.
+describe('GraphQL query fragment syntax', () => {
+  it('itemContentSelection has no JS-style // comments (invalid GraphQL)', () => {
+    expect(itemContentSelection(true)).not.toMatch(/\/\//)
+    expect(itemContentSelection(false)).not.toMatch(/\/\//)
+  })
+
+  it('FIELD_CONFIG_FRAGMENT and FIELD_VALUES_SELECTION have no // comments', () => {
+    expect(FIELD_CONFIG_FRAGMENT).not.toMatch(/\/\//)
+    expect(FIELD_VALUES_SELECTION).not.toMatch(/\/\//)
+  })
+
+  it('itemContentSelection keeps braces balanced (catches a stray extra `}`)', () => {
+    for (const includeParent of [true, false]) {
+      const text = itemContentSelection(includeParent)
+      const opens = (text.match(/\{/g) ?? []).length
+      const closes = (text.match(/\}/g) ?? []).length
+      expect(closes).toBe(opens)
+    }
   })
 })

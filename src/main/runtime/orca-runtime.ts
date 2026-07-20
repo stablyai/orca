@@ -609,7 +609,11 @@ import {
   updateIssueBySlug,
   updateIssueTypeBySlug,
   updateProjectItemFieldValue,
-  updatePullRequestBySlug
+  updatePullRequestBySlug,
+  getIssueHierarchy,
+  addSubIssueBySlug,
+  removeSubIssueBySlug,
+  reprioritizeSubIssueBySlug
 } from '../github/project-view'
 import type {
   ClearProjectItemFieldArgs,
@@ -621,7 +625,15 @@ import type {
   ProjectWorkItemDetailsBySlugArgs,
   ResolveProjectRefArgs,
   AddIssueCommentBySlugArgs,
+  AddSubIssueBySlugArgs,
+  AddSubIssueBySlugResult,
   DeleteIssueCommentBySlugArgs,
+  GetIssueHierarchyArgs,
+  GetIssueHierarchyResult,
+  RemoveSubIssueBySlugArgs,
+  RemoveSubIssueBySlugResult,
+  ReprioritizeSubIssueBySlugArgs,
+  ReprioritizeSubIssueBySlugResult,
   UpdateIssueBySlugArgs,
   UpdateIssueCommentBySlugArgs,
   UpdateIssueTypeBySlugArgs,
@@ -14961,6 +14973,30 @@ export class OrcaRuntimeService {
     args: UpdateIssueTypeBySlugArgs
   ): Promise<Awaited<ReturnType<typeof updateIssueTypeBySlug>>> {
     return updateIssueTypeBySlug(args)
+  }
+
+  // Why: Phase 2 — issue-level hierarchy read/write for the drawer's
+  // Sub-issues section, proxied the same way as the BySlug methods above so
+  // remote/SSH runtime targets (see AGENTS.md's SSH Use Case rule) reach the
+  // same project-view/hierarchy.ts functions as the local Electron path.
+  async getGitHubProjectIssueHierarchy(
+    args: GetIssueHierarchyArgs
+  ): Promise<GetIssueHierarchyResult> {
+    return getIssueHierarchy(args)
+  }
+
+  async addGitHubSubIssue(args: AddSubIssueBySlugArgs): Promise<AddSubIssueBySlugResult> {
+    return addSubIssueBySlug(args)
+  }
+
+  async removeGitHubSubIssue(args: RemoveSubIssueBySlugArgs): Promise<RemoveSubIssueBySlugResult> {
+    return removeSubIssueBySlug(args)
+  }
+
+  async reprioritizeGitHubSubIssue(
+    args: ReprioritizeSubIssueBySlugArgs
+  ): Promise<ReprioritizeSubIssueBySlugResult> {
+    return reprioritizeSubIssueBySlug(args)
   }
 
   async addGitHubIssueCommentBySlug(

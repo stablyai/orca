@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { MIN_COLUMN_WIDTH } from './column-widths'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
@@ -7,6 +6,8 @@ type Props = {
   nextFieldId: string
   currentWidth: number
   nextWidth: number
+  minWidth: number
+  nextMinWidth: number
   onResize: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
 }
 
@@ -22,6 +23,8 @@ export default function ColumnResizeHandle({
   nextFieldId,
   currentWidth,
   nextWidth,
+  minWidth,
+  nextMinWidth,
   onResize
 }: Props): React.JSX.Element {
   const [dragging, setDragging] = useState(false)
@@ -47,7 +50,7 @@ export default function ColumnResizeHandle({
         return
       }
       const proposedPxA = drag.startPxA + (e.clientX - drag.startX)
-      const newPxA = Math.max(MIN_COLUMN_WIDTH, Math.min(totalPx - MIN_COLUMN_WIDTH, proposedPxA))
+      const newPxA = Math.max(minWidth, Math.min(totalPx - nextMinWidth, proposedPxA))
       const newFrA = (drag.totalFr * newPxA) / totalPx
       const newFrB = drag.totalFr - newFrA
       onResize(fieldId, newFrA, nextFieldId, newFrB)
@@ -68,7 +71,7 @@ export default function ColumnResizeHandle({
       document.body.style.cursor = prevCursor
       document.body.style.userSelect = prevSelect
     }
-  }, [dragging, fieldId, nextFieldId, onResize])
+  }, [dragging, fieldId, minWidth, nextFieldId, nextMinWidth, onResize])
 
   return (
     <div

@@ -146,6 +146,19 @@ export type GitHubProjectFieldValue =
   | { kind: 'date'; fieldId: string; date: string }
   | { kind: 'labels'; fieldId: string; labels: GitHubProjectLabel[] }
   | { kind: 'users'; fieldId: string; users: GitHubProjectUser[] }
+  // Why: defensive forward-compat stub. No live GraphQL __typename currently
+  // maps to this variant (the ProjectV2ItemFieldValue union has 12 members
+  // as of 2026-07-14, none of them hierarchy-related). It exists so that
+  // IF GitHub ever exposes a ProjectV2ItemFieldTrackedIssuesValue-style
+  // member, the renderer can dispatch on it without a type-system rewrite.
+  // The live data path is row.content.trackedIssues / trackedInIssues; the
+  // normalizer's default: return null branch handles today's reality.
+  | {
+      kind: 'issue-ref-list'
+      fieldId: string
+      direction: 'tracks' | 'tracked-by'
+      issues: GitHubProjectParentIssue[]
+    }
 
 export type GitHubProjectRowItemType = 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE' | 'REDACTED'
 
@@ -172,6 +185,18 @@ export type GitHubProjectRow = {
     parentIssue: GitHubProjectParentIssue | null
     /** Issue.issueType when set; null on PRs/drafts/redacted or when unset. */
     issueType: GitHubIssueType | null
+    // Why: sub-issue progress, tracked issues, and tracked-in issues live on
+    // the linked Issue (Issue.subIssuesSummary / .trackedIssues /
+    // .trackedInIssues), not on the ProjectV2 field-value union — the live
+    // GraphQL __type introspection on 2026-07-14 confirmed no corresponding
+    // union members exist. These are the only places this data is reachable
+    // from a ProjectV2Item. The cell renderer reads from here, not from
+    // fieldValuesByFieldId, for these three columns.
+    subIssuesSummary: GitHubIssueSubIssuesSummary | null
+    /** Mirrors Issue.trackedIssues(first: 5). direction is 'tracks'. */
+    trackedIssues: GitHubProjectParentIssue[]
+    /** Mirrors Issue.trackedInIssues(first: 5). direction is 'tracked-by'. */
+    trackedInIssues: GitHubProjectParentIssue[]
   }
   fieldValuesByFieldId: Record<string, GitHubProjectFieldValue>
   updatedAt: string
@@ -430,3 +455,86 @@ export type ListProjectViewsArgs = {
   ownerType: GitHubProjectOwnerType
   projectNumber: number
 }
+
+// ─── Phase 2 — Issue-level hierarchy (drawer read/write) ────────────────
+// Why: distinct from the Phase 1b table-column data (row.content.*) —
+// this is a separate, on-demand fetch triggered by opening the work-item
+// drawer, not baked into the paginated table item fetch. See
+// docs/reference/2026-07-15-github-projects-hierarchy-phase2-plan.md.
+
+export type GitHubIssueSubIssuesSummary = {
+  total: number
+  completed: number
+  percentCompleted: number
+}
+
+// Why: recursive shape so the rollup utility can walk arbitrary fetched
+// depth without a second type — `subIssues` is empty when a branch wasn't
+// expanded past the fetch's depth cap, and the rollup trusts the node's own
+// `subIssuesSummary` as the terminal count for that unexpanded branch.
+export type GitHubIssueHierarchyNode = {
+  number: number
+  title: string
+  url: string
+  state: string
+  subIssuesSummary: GitHubIssueSubIssuesSummary | null
+  subIssues: GitHubIssueHierarchyNode[]
+}
+
+export type GetIssueHierarchyArgs = {
+  owner: string
+  repo: string
+  number: number
+}
+
+export type GetIssueHierarchyResult =
+  | {
+      ok: true
+      parent: GitHubProjectParentIssue | null
+      subIssuesSummary: GitHubIssueSubIssuesSummary | null
+      subIssues: GitHubIssueHierarchyNode[]
+      /** True when a child has more descendants than this fetch expanded —
+       *  the UI should offer "load more" rather than assume completeness. */
+      hasMoreChildren: boolean
+    }
+  | { ok: false; error: GitHubProjectViewError }
+
+// Why: v1 scope is same-repo sub-issues only (see plan's open question #3);
+// cross-repo/cross-org linking is a documented fast-follow, not a type-level
+// restriction — these args simply don't carry a second owner/repo yet.
+export type AddSubIssueBySlugArgs = {
+  owner: string
+  repo: string
+  number: number
+  subIssueNumber: number
+}
+
+export type AddSubIssueBySlugResult =
+  | { ok: true; subIssuesSummary: GitHubIssueSubIssuesSummary }
+  | { ok: false; error: GitHubProjectViewError }
+
+export type RemoveSubIssueBySlugArgs = {
+  owner: string
+  repo: string
+  number: number
+  subIssueNumber: number
+}
+
+export type RemoveSubIssueBySlugResult =
+  | { ok: true; subIssuesSummary: GitHubIssueSubIssuesSummary }
+  | { ok: false; error: GitHubProjectViewError }
+
+export type ReprioritizeSubIssueBySlugArgs = {
+  owner: string
+  repo: string
+  number: number
+  subIssueNumber: number
+  /** Same-repo sibling numbers; exactly one of these should be set — moving
+   *  to the end of the list is expressed by omitting both. */
+  beforeNumber?: number
+  afterNumber?: number
+}
+
+export type ReprioritizeSubIssueBySlugResult =
+  | { ok: true }
+  | { ok: false; error: GitHubProjectViewError }

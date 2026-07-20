@@ -282,6 +282,22 @@ const SlugIssueCommentDelete = z.object({
   commentId: z.number().int().positive()
 })
 
+// Why: Phase 2 — issue-level hierarchy read/write params, same-repo v1
+// scope (see docs/reference/2026-07-15-github-projects-hierarchy-phase2-plan.md).
+const GetIssueHierarchy = SlugRepo.extend({
+  number: z.number().int().positive()
+})
+
+const SubIssuePair = SlugRepo.extend({
+  number: z.number().int().positive(),
+  subIssueNumber: z.number().int().positive()
+})
+
+const ReprioritizeSubIssue = SubIssuePair.extend({
+  beforeNumber: z.number().int().positive().optional(),
+  afterNumber: z.number().int().positive().optional()
+})
+
 export const GITHUB_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'github.repoSlug',
@@ -621,5 +637,25 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.project.deleteIssueCommentBySlug',
     params: SlugIssueCommentDelete,
     handler: async (params, { runtime }) => runtime.deleteGitHubIssueCommentBySlug(params)
+  }),
+  defineMethod({
+    name: 'github.project.getIssueHierarchy',
+    params: GetIssueHierarchy,
+    handler: async (params, { runtime }) => runtime.getGitHubProjectIssueHierarchy(params)
+  }),
+  defineMethod({
+    name: 'github.project.addSubIssue',
+    params: SubIssuePair,
+    handler: async (params, { runtime }) => runtime.addGitHubSubIssue(params)
+  }),
+  defineMethod({
+    name: 'github.project.removeSubIssue',
+    params: SubIssuePair,
+    handler: async (params, { runtime }) => runtime.removeGitHubSubIssue(params)
+  }),
+  defineMethod({
+    name: 'github.project.reprioritizeSubIssue',
+    params: ReprioritizeSubIssue,
+    handler: async (params, { runtime }) => runtime.reprioritizeGitHubSubIssue(params)
   })
 ]

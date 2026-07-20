@@ -53,6 +53,7 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+import SubIssuesSection from '@/components/github-project/SubIssuesSection'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
@@ -7098,6 +7099,21 @@ export default function GitHubItemDialog({
 
   const isIssuePage = workItem?.type === 'issue'
   const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
+  const dialogRepoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, workItem?.repoId ?? null))
+  )
+  // Why: Sub-issues section needs the same SSH/remote-runtime dispatch as
+  // the rest of the drawer's window.api.gh.* calls (AGENTS.md SSH Use Case).
+  const subIssuesSourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...dialogRepoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof dialogRepoOwnerSettings)
+        : dialogRepoOwnerSettings,
+    [dialogRepoOwnerSettings, sourceContext]
+  )
   const issueStateBadgeTone =
     localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
 
@@ -7469,6 +7485,17 @@ export default function GitHubItemDialog({
                     onOpenOrUse={handleOpenOrUseIssueWorkspace}
                     attachedWorkspaceLabel={issueAttachedWorkspaceLabel}
                     layout="top-columns"
+                  />
+                </div>
+              )}
+              {ownerRepo && (canUseDetailsRepoContext || projectOrigin) && (
+                <div className="mb-5 border-b border-border/60 px-4 pb-5">
+                  <SubIssuesSection
+                    owner={ownerRepo.owner}
+                    repo={ownerRepo.repo}
+                    number={workItem.number}
+                    editable={Boolean(canUseDetailsRepoContext || projectOrigin)}
+                    sourceSettings={subIssuesSourceSettings}
                   />
                 </div>
               )}

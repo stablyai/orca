@@ -7,6 +7,7 @@
 import React, { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CircleDot, FileText, GitPullRequest, Lock, Plus } from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
@@ -103,10 +104,86 @@ export default function ProjectCell({
     )
   }
   if (field.dataType === 'PARENT_ISSUE') {
+    // Why: Phase 1b — make the existing parent-issue column a clickable link
+    // to the parent in the user's browser. Data is already fetched via
+    // itemContentSelection(includeParent) → content.parentIssue. Empty URL
+    // falls back to a plain #number text node (no <a>).
+    const parent = row.content.parentIssue
+    if (!parent) {
+      return <span />
+    }
+    if (!parent.url) {
+      return <span className="truncate text-xs text-muted-foreground">#{parent.number}</span>
+    }
     return (
-      <span className="truncate text-xs text-muted-foreground">
-        {row.content.parentIssue ? `#${row.content.parentIssue.number}` : ''}
-      </span>
+      <a
+        href={parent.url}
+        title={parent.title}
+        onClick={(e) => {
+          e.preventDefault()
+          void window.api.shell.openUrl(parent.url)
+        }}
+        className="truncate text-xs text-muted-foreground hover:underline"
+      >
+        #{parent.number}
+      </a>
+    )
+  }
+  if (field.dataType === 'SUB_ISSUES_PROGRESS') {
+    // Why: Phase 1b — sub-issue progress lives on Issue.subIssuesSummary
+    // (Issue-level, not a ProjectV2 field value), so we read from content
+    // rather than fieldValuesByFieldId. percentCompleted is treated as
+    // authoritative from GitHub; we don't recompute from total/completed.
+    const summary = row.content.subIssuesSummary
+    if (!summary) {
+      return <span />
+    }
+    if (summary.total === 0) {
+      return <span className="truncate text-xs text-muted-foreground">—</span>
+    }
+    const fgClass = summary.percentCompleted === 100 ? 'text-muted-foreground' : ''
+    return (
+      <div className={cn('flex items-center gap-1 truncate', fgClass)}>
+        <Progress value={summary.percentCompleted} className="h-1.5 w-8 shrink-0" />
+        <span className="shrink-0 text-xs">
+          {summary.completed}/{summary.total}
+        </span>
+      </div>
+    )
+  }
+  if (field.dataType === 'TRACKS' || field.dataType === 'TRACKED_BY') {
+    // Why: Phase 1b — Tracked / Tracked-by are read from Issue.trackedIssues
+    // / Issue.trackedInIssues (Issue-level fields, not field values). The
+    // ProjectV2 Tracked-by field was deprecated by GitHub in Feb 2025, but
+    // the underlying Issue.trackedInIssues still works, so the column stays
+    // functional for legacy projects.
+    const issues =
+      field.dataType === 'TRACKS' ? row.content.trackedIssues : row.content.trackedInIssues
+    if (issues.length === 0) {
+      return <span />
+    }
+    const visible = issues.slice(0, 3)
+    const tail = issues.length - visible.length
+    const prefix = field.dataType === 'TRACKS' ? '→' : '←'
+    return (
+      <div className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+        <span aria-hidden="true">{prefix}</span>
+        {visible.map((i) => (
+          <a
+            key={i.url}
+            href={i.url}
+            title={i.title}
+            onClick={(e) => {
+              e.preventDefault()
+              void window.api.shell.openUrl(i.url)
+            }}
+            className="hover:underline"
+          >
+            #{i.number}
+          </a>
+        ))}
+        {tail > 0 ? <span className="text-muted-foreground">+{tail}</span> : null}
+      </div>
     )
   }
 

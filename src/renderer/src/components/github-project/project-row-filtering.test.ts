@@ -33,7 +33,10 @@ function row(id: string, repository: string | null): GitHubProjectRow {
       assignees: [],
       labels: [],
       parentIssue: null,
-      issueType: null
+      issueType: null,
+      subIssuesSummary: null,
+      trackedIssues: [],
+      trackedInIssues: []
     },
     fieldValuesByFieldId: {},
     updatedAt: '2026-01-01T00:00:00Z',

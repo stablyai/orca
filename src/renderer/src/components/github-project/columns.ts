@@ -66,3 +66,41 @@ export function saveHiddenColumns(scopeKey: string, hidden: ReadonlySet<string>)
   }
   writeMap(map)
 }
+
+const HIERARCHY_MODE_STORAGE_KEY = 'orca.githubProject.hierarchyMode'
+
+type HierarchyModeMap = Record<string, boolean>
+
+function readHierarchyModeMap(): HierarchyModeMap {
+  try {
+    const raw = window.localStorage.getItem(HIERARCHY_MODE_STORAGE_KEY)
+    if (!raw) {
+      return {}
+    }
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as HierarchyModeMap) : {}
+  } catch {
+    return {}
+  }
+}
+
+// Why: Phase 3 — hierarchy (tree) mode is a per-view cosmetic preference,
+// scoped like hidden columns/widths so one view can be a tree while another
+// stays flat. Default false: zero visual change until a user opts in.
+export function loadHierarchyModePreference(scopeKey: string): boolean {
+  return readHierarchyModeMap()[scopeKey] === true
+}
+
+export function saveHierarchyModePreference(scopeKey: string, value: boolean): void {
+  const map = readHierarchyModeMap()
+  if (value) {
+    map[scopeKey] = true
+  } else {
+    delete map[scopeKey]
+  }
+  try {
+    window.localStorage.setItem(HIERARCHY_MODE_STORAGE_KEY, JSON.stringify(map))
+  } catch {
+    // localStorage may be disabled — hierarchy mode just won't persist this session.
+  }
+}

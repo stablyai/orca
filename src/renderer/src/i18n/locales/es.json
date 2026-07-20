@@ -2011,13 +2011,16 @@
           "ProjectRow": {
             "75b5d816e3": "Empezar a trabajar",
             "e12be8b4d4": "Abrir en GitHub",
-            "c3b81ddea2": "DRAFT_ISSUE"
+            "c3b81ddea2": "DRAFT_ISSUE",
+            "chevronCollapse": "Collapse sub-issues",
+            "chevronExpand": "Expand sub-issues"
           },
           "ProjectViewList": {
             "989f81dc2a": "Columnas",
             "f949f5b2b7": "Configurar columnas",
             "eddfc7a794": "Ordenar por {{value0}}",
-            "4f57d2e0b1": "Ningún elemento coincide con el filtro de esta vista."
+            "4f57d2e0b1": "Ningún elemento coincide con el filtro de esta vista.",
+            "hierarchyToggle": "Show hierarchy"
           },
           "ProjectViewWrapper": {
             "463f1205c0": "Cargando vista del proyecto",
@@ -2076,6 +2079,15 @@
                 "7c302f8174": "Sin título"
               }
             }
+          },
+          "SubIssuesSection": {
+            "loading": "Loading sub-issues…",
+            "parent": "Parent:",
+            "moveUp": "Move #{{value0}} up",
+            "moveDown": "Move #{{value0}} down",
+            "remove": "Remove #{{value0}}",
+            "addPlaceholder": "Issue number",
+            "add": "Add sub-issue"
           }
         },
         "GitHubMarkdownComposer": {

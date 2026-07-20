@@ -2491,6 +2491,10 @@ describe('web GitHub preload API', () => {
         'deleteIssueCommentBySlug',
         'diagnoseAuth',
         'enqueuePRRefresh',
+        'getIssueHierarchy',
+        'addSubIssue',
+        'removeSubIssue',
+        'reprioritizeSubIssue',
         'getProjectViewTable',
         'issue',
         'listAccessibleProjects',
@@ -2908,6 +2912,36 @@ describe('web GitHub preload API', () => {
         args: { owner: 'acme', repo: 'orca', number: 7, issueTypeId: 'it-1' },
         expectedMethod: 'github.project.updateIssueTypeBySlug',
         expectedParams: { owner: 'acme', repo: 'orca', number: 7, issueTypeId: 'it-1' }
+      },
+      {
+        key: 'getIssueHierarchy',
+        args: { owner: 'acme', repo: 'orca', number: 37 },
+        expectedMethod: 'github.project.getIssueHierarchy',
+        expectedParams: { owner: 'acme', repo: 'orca', number: 37 }
+      },
+      {
+        key: 'addSubIssue',
+        args: { owner: 'acme', repo: 'orca', number: 37, subIssueNumber: 44 },
+        expectedMethod: 'github.project.addSubIssue',
+        expectedParams: { owner: 'acme', repo: 'orca', number: 37, subIssueNumber: 44 }
+      },
+      {
+        key: 'removeSubIssue',
+        args: { owner: 'acme', repo: 'orca', number: 37, subIssueNumber: 44 },
+        expectedMethod: 'github.project.removeSubIssue',
+        expectedParams: { owner: 'acme', repo: 'orca', number: 37, subIssueNumber: 44 }
+      },
+      {
+        key: 'reprioritizeSubIssue',
+        args: { owner: 'acme', repo: 'orca', number: 37, subIssueNumber: 44, beforeNumber: 38 },
+        expectedMethod: 'github.project.reprioritizeSubIssue',
+        expectedParams: {
+          owner: 'acme',
+          repo: 'orca',
+          number: 37,
+          subIssueNumber: 44,
+          beforeNumber: 38
+        }
       }
     ]
 

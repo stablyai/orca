@@ -2011,13 +2011,16 @@
           "ProjectRow": {
             "75b5d816e3": "仕事を始める",
             "e12be8b4d4": "GitHub で開く",
-            "c3b81ddea2": "DRAFT_ISSUE"
+            "c3b81ddea2": "DRAFT_ISSUE",
+            "chevronCollapse": "Collapse sub-issues",
+            "chevronExpand": "Expand sub-issues"
           },
           "ProjectViewList": {
             "989f81dc2a": "コラム",
             "f949f5b2b7": "列を構成する",
             "eddfc7a794": "{{value0}} で並べ替え",
-            "4f57d2e0b1": "このビューのフィルターに一致する項目はありません。"
+            "4f57d2e0b1": "このビューのフィルターに一致する項目はありません。",
+            "hierarchyToggle": "Show hierarchy"
           },
           "ProjectViewWrapper": {
             "463f1205c0": "プロジェクトビューをロードしています",
@@ -2076,6 +2079,15 @@
                 "7c302f8174": "無題"
               }
             }
+          },
+          "SubIssuesSection": {
+            "loading": "Loading sub-issues…",
+            "parent": "Parent:",
+            "moveUp": "Move #{{value0}} up",
+            "moveDown": "Move #{{value0}} down",
+            "remove": "Remove #{{value0}}",
+            "addPlaceholder": "Issue number",
+            "add": "Add sub-issue"
           }
         },
         "GitHubMarkdownComposer": {

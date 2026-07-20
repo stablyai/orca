@@ -2011,13 +2011,16 @@
           "ProjectRow": {
             "75b5d816e3": "开始工作",
             "e12be8b4d4": "在 GitHub 中打开",
-            "c3b81ddea2": "DRAFT_ISSUE"
+            "c3b81ddea2": "DRAFT_ISSUE",
+            "chevronCollapse": "Collapse sub-issues",
+            "chevronExpand": "Expand sub-issues"
           },
           "ProjectViewList": {
             "989f81dc2a": "列",
             "f949f5b2b7": "配置列",
             "eddfc7a794": "按 {{value0}} 排序",
-            "4f57d2e0b1": "没有项目与此视图的筛选条件匹配。"
+            "4f57d2e0b1": "没有项目与此视图的筛选条件匹配。",
+            "hierarchyToggle": "Show hierarchy"
           },
           "ProjectViewWrapper": {
             "463f1205c0": "加载项目视图",
@@ -2076,6 +2079,15 @@
                 "7c302f8174": "无标题"
               }
             }
+          },
+          "SubIssuesSection": {
+            "loading": "Loading sub-issues…",
+            "parent": "Parent:",
+            "moveUp": "Move #{{value0}} up",
+            "moveDown": "Move #{{value0}} down",
+            "remove": "Remove #{{value0}}",
+            "addPlaceholder": "Issue number",
+            "add": "Add sub-issue"
           }
         },
         "GitHubMarkdownComposer": {

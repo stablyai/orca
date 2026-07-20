@@ -252,8 +252,12 @@ import type { ExecutionHostId } from '../shared/execution-host'
 import type { FeatureInteractionId } from '../shared/feature-interactions'
 import type {
   AddIssueCommentBySlugArgs,
+  AddSubIssueBySlugArgs,
+  AddSubIssueBySlugResult,
   ClearProjectItemFieldArgs,
   DeleteIssueCommentBySlugArgs,
+  GetIssueHierarchyArgs,
+  GetIssueHierarchyResult,
   GetProjectViewTableArgs,
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -269,6 +273,10 @@ import type {
   ListProjectViewsResult,
   ProjectWorkItemDetailsBySlugArgs,
   ProjectWorkItemDetailsBySlugResult,
+  RemoveSubIssueBySlugArgs,
+  RemoveSubIssueBySlugResult,
+  ReprioritizeSubIssueBySlugArgs,
+  ReprioritizeSubIssueBySlugResult,
   ResolveProjectRefArgs,
   ResolveProjectRefResult,
   UpdateIssueBySlugArgs,
@@ -1747,6 +1755,13 @@ export type PreloadApi = {
     ) => Promise<ListAssignableUsersBySlugResult>
     listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs) => Promise<ListIssueTypesBySlugResult>
     updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs) => Promise<GitHubProjectMutationResult>
+    // ── Phase 2 — issue-level hierarchy (work-item drawer) ───────────
+    getIssueHierarchy: (args: GetIssueHierarchyArgs) => Promise<GetIssueHierarchyResult>
+    addSubIssue: (args: AddSubIssueBySlugArgs) => Promise<AddSubIssueBySlugResult>
+    removeSubIssue: (args: RemoveSubIssueBySlugArgs) => Promise<RemoveSubIssueBySlugResult>
+    reprioritizeSubIssue: (
+      args: ReprioritizeSubIssueBySlugArgs
+    ) => Promise<ReprioritizeSubIssueBySlugResult>
   }
   hostedReview: {
     forBranch: (args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>

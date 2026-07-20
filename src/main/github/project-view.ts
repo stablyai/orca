@@ -9,6 +9,7 @@ import {
   classifyProjectError,
   driftError,
   errorsIndicateParentField,
+  normalizeParentIssue,
   rateLimitedError,
   runGraphql,
   isValidOwnerSlug,
@@ -25,6 +26,7 @@ import type {
   GitHubProjectIteration,
   GitHubProjectLabel,
   GitHubProjectOwnerType,
+  GitHubProjectParentIssue,
   GitHubProjectRow,
   GitHubProjectRowItemType,
   GitHubProjectSingleSelectOption,
@@ -68,6 +70,14 @@ export {
   updateIssueTypeBySlug,
   getWorkItemDetailsBySlug
 } from './project-view/mutations'
+// Why: Phase 2 — issue-level hierarchy read/write, distinct from the
+// Phase 1b table-column read path above (see project-view/hierarchy.ts).
+export { getIssueHierarchy } from './project-view/hierarchy'
+export {
+  addSubIssueBySlug,
+  removeSubIssueBySlug,
+  reprioritizeSubIssueBySlug
+} from './project-view/hierarchy-mutations'
 
 // ─── Constants ─────────────────────────────────────────────────────────
 
@@ -298,7 +308,11 @@ function normalizeLabel(raw: RawLabel | null | undefined): GitHubProjectLabel | 
   return { name: raw.name, color: raw.color ?? '' }
 }
 
-type RawFieldValue = {
+// Why: exported (named type at the owning module boundary, per AGENTS.md)
+// so the test file can construct hand-built inputs of this exact shape
+// without resorting to Parameters<typeof fn>[0]. The shape mirrors the
+// GraphQL field-value selection set; missing fields default to undefined.
+export type RawFieldValue = {
   __typename?: string
   field?: RawProjectV2Field
   name?: string
@@ -374,7 +388,14 @@ export function normalizeFieldValue(
   }
 }
 
-type RawContent = {
+// Why: exported (named type at the owning module boundary) so the test file
+// can construct hand-built content shapes without Parameters<typeof fn>[0].
+// Phase 1b — sub-issue progress / tracked issues / tracked-by issues live
+// on the linked Issue, not on the ProjectV2 field-value union. Live __type
+// introspection on 2026-07-14 confirmed no corresponding union members
+// exist. These fields are requested in itemContentSelection's ... on Issue
+// arm and hydrated by normalizeItem onto row.content.
+export type RawContent = {
   __typename?: string
   id?: string
   number?: number
@@ -394,9 +415,18 @@ type RawContent = {
     color?: string | null
     description?: string | null
   } | null
+  subIssuesSummary?: { total?: number; completed?: number; percentCompleted?: number } | null
+  trackedIssues?: {
+    nodes?: ({ number?: number; title?: string; url?: string } | null | undefined)[]
+  } | null
+  trackedInIssues?: {
+    nodes?: ({ number?: number; title?: string; url?: string } | null | undefined)[]
+  } | null
 }
 
-type RawItem = {
+// Why: exported (named type at the owning module boundary) so the test
+// file can construct hand-built inputs without Parameters<typeof fn>[0].
+export type RawItem = {
   id?: string
   type?: string
   updatedAt?: string
@@ -451,13 +481,7 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
   const labels = (content?.labels?.nodes ?? [])
     .map(normalizeLabel)
     .filter((l): l is GitHubProjectLabel => l !== null)
-  const parentIssue =
-    content?.parent &&
-    typeof content.parent.number === 'number' &&
-    typeof content.parent.title === 'string' &&
-    typeof content.parent.url === 'string'
-      ? { number: content.parent.number, title: content.parent.title, url: content.parent.url }
-      : null
+  const parentIssue = normalizeParentIssue(content?.parent)
   const issueType =
     content?.issueType &&
     typeof content.issueType.id === 'string' &&
@@ -470,6 +494,29 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
             typeof content.issueType.description === 'string' ? content.issueType.description : null
         }
       : null
+  // Why: preserve the empty-but-valid shape (total: 0, completed: 0,
+  // percentCompleted: 0) instead of coercing to null. The cell renderer
+  // needs to distinguish "field exists with no value" from "field was
+  // dropped by the normalizer"; same convention as
+  // ProjectV2ItemFieldLabelValue. percentCompleted is treated as
+  // authoritative from GitHub — do not recompute from total/completed.
+  const subIssuesSummary =
+    content?.subIssuesSummary &&
+    typeof content.subIssuesSummary.total === 'number' &&
+    typeof content.subIssuesSummary.completed === 'number' &&
+    typeof content.subIssuesSummary.percentCompleted === 'number'
+      ? {
+          total: content.subIssuesSummary.total,
+          completed: content.subIssuesSummary.completed,
+          percentCompleted: content.subIssuesSummary.percentCompleted
+        }
+      : null
+  const trackedIssues = (content?.trackedIssues?.nodes ?? [])
+    .map((n) => normalizeParentIssue(n ?? undefined))
+    .filter((i): i is GitHubProjectParentIssue => i !== null)
+  const trackedInIssues = (content?.trackedInIssues?.nodes ?? [])
+    .map((n) => normalizeParentIssue(n ?? undefined))
+    .filter((i): i is GitHubProjectParentIssue => i !== null)
   const fieldValuesByFieldId: Record<string, GitHubProjectFieldValue> = {}
   for (const fv of raw.fieldValues?.nodes ?? []) {
     const normalized = normalizeFieldValue(fv)
@@ -501,7 +548,10 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
       assignees,
       labels,
       parentIssue,
-      issueType
+      issueType,
+      subIssuesSummary,
+      trackedIssues,
+      trackedInIssues
     },
     fieldValuesByFieldId,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : '',
@@ -512,7 +562,11 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
 
 // ─── GraphQL query fragments ───────────────────────────────────────────
 
-const FIELD_CONFIG_FRAGMENT = `
+// Why: exported (test boundary) so a regression test can assert the
+// assembled query text is syntactically GraphQL-safe (e.g. no stray `//`
+// comments, which GraphQL doesn't support and previously broke every
+// real Issue fetch silently — see Phase 1b issue report).
+export const FIELD_CONFIG_FRAGMENT = `
 fragment FieldConfig on ProjectV2FieldConfiguration {
   __typename
   ... on ProjectV2Field { id name dataType }
@@ -534,7 +588,16 @@ fragment FieldConfig on ProjectV2FieldConfiguration {
 }
 `
 
-function itemContentSelection(includeParent: boolean): string {
+// Why: Phase 1b — sub-issue progress, tracked issues, and tracked-by issues
+// are read from the linked Issue, not from the field-value union (the union
+// has no corresponding members as of 2026-07-14).
+// TODO(github-projects-hierarchy): only `parent` has a schema-unsupported
+// retry-without path (see parentFieldRetriedByOwner below). subIssuesSummary/
+// trackedIssues/trackedInIssues have none, so an older GHES schema missing
+// any of them fails the whole item fetch instead of degrading. Flagged by
+// review; deferred as its own Phase 1b follow-up (shared retry machinery
+// for all four fields), not bundled into the Phase 3 hierarchy-tree PR.
+export function itemContentSelection(includeParent: boolean): string {
   const parentFrag = includeParent ? 'parent { number title url }' : ''
   return `
     __typename
@@ -550,6 +613,9 @@ function itemContentSelection(includeParent: boolean): string {
       labels(first:10) { nodes { name color } }
       issueType { id name color description }
       ${parentFrag}
+      subIssuesSummary { total completed percentCompleted }
+      trackedIssues(first: 5) { nodes { number title url } }
+      trackedInIssues(first: 5) { nodes { number title url } }
     }
     ... on PullRequest {
       id
@@ -566,7 +632,7 @@ function itemContentSelection(includeParent: boolean): string {
   `
 }
 
-const FIELD_VALUES_SELECTION = `
+export const FIELD_VALUES_SELECTION = `
   fieldValues(first:${FIELD_VALUES_PAGE_SIZE}) {
     pageInfo { hasNextPage }
     nodes {
@@ -933,7 +999,7 @@ async function fetchItemsPageWithRaw(args: {
         ok: false,
         error: { type: 'not_found', message: 'Project or view not found.' },
         rawErrors: [],
-        stderr
+        stderr: ''
       }
     }
     return { ok: true, page }
@@ -1683,7 +1749,10 @@ export async function listProjectViews(
     return { ok: false, error: numCheck.error }
   }
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
-    return { ok: false, error: { type: 'validation_error', message: 'Invalid ownerType.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Invalid ownerType.' }
+    }
   }
   const summaries: GitHubProjectViewSummary[] = []
   let cursor: string | null = null

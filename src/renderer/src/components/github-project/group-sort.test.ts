@@ -53,7 +53,10 @@ function makeRow(
       assignees: [],
       labels: [],
       parentIssue: null,
-      issueType: null
+      issueType: null,
+      subIssuesSummary: null,
+      trackedIssues: [],
+      trackedInIssues: []
     },
     fieldValuesByFieldId: values,
     updatedAt: '2026-01-01T00:00:00Z',

@@ -279,6 +279,10 @@ type WebGitHubRouteKey =
   | 'listAssignableUsersBySlug'
   | 'listIssueTypesBySlug'
   | 'updateIssueTypeBySlug'
+  | 'getIssueHierarchy'
+  | 'addSubIssue'
+  | 'removeSubIssue'
+  | 'reprioritizeSubIssue'
 type WebGitHubRuntimeMethod =
   | 'github.repoSlug'
   | 'github.repoUpstream'
@@ -327,6 +331,10 @@ type WebGitHubRuntimeMethod =
   | 'github.project.listAssignableUsersBySlug'
   | 'github.project.listIssueTypesBySlug'
   | 'github.project.updateIssueTypeBySlug'
+  | 'github.project.getIssueHierarchy'
+  | 'github.project.addSubIssue'
+  | 'github.project.removeSubIssue'
+  | 'github.project.reprioritizeSubIssue'
 type WebGitLabApi = NonNullable<PreloadApi['gl']>
 type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
 type WebGitLabRouteKey =
@@ -427,7 +435,11 @@ export const GITHUB_WEB_RPC_METHODS = {
   listLabelsBySlug: 'github.project.listLabelsBySlug',
   listAssignableUsersBySlug: 'github.project.listAssignableUsersBySlug',
   listIssueTypesBySlug: 'github.project.listIssueTypesBySlug',
-  updateIssueTypeBySlug: 'github.project.updateIssueTypeBySlug'
+  updateIssueTypeBySlug: 'github.project.updateIssueTypeBySlug',
+  getIssueHierarchy: 'github.project.getIssueHierarchy',
+  addSubIssue: 'github.project.addSubIssue',
+  removeSubIssue: 'github.project.removeSubIssue',
+  reprioritizeSubIssue: 'github.project.reprioritizeSubIssue'
 } as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
 
 export const GITLAB_WEB_RPC_METHODS = {
@@ -2253,6 +2265,17 @@ function createGitHubApi(): WebGitHubApi {
     updateIssueTypeBySlug: (args) =>
       route<WebGitHubResult<'updateIssueTypeBySlug'>>(
         GITHUB_WEB_RPC_METHODS.updateIssueTypeBySlug,
+        args
+      ),
+    getIssueHierarchy: (args) =>
+      route<WebGitHubResult<'getIssueHierarchy'>>(GITHUB_WEB_RPC_METHODS.getIssueHierarchy, args),
+    addSubIssue: (args) =>
+      route<WebGitHubResult<'addSubIssue'>>(GITHUB_WEB_RPC_METHODS.addSubIssue, args),
+    removeSubIssue: (args) =>
+      route<WebGitHubResult<'removeSubIssue'>>(GITHUB_WEB_RPC_METHODS.removeSubIssue, args),
+    reprioritizeSubIssue: (args) =>
+      route<WebGitHubResult<'reprioritizeSubIssue'>>(
+        GITHUB_WEB_RPC_METHODS.reprioritizeSubIssue,
         args
       )
   } satisfies WebGitHubApi

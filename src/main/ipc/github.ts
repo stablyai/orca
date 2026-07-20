@@ -86,18 +86,26 @@ import {
   listLabelsBySlug,
   listAssignableUsersBySlug,
   listIssueTypesBySlug,
-  updateIssueTypeBySlug
+  updateIssueTypeBySlug,
+  getIssueHierarchy,
+  addSubIssueBySlug,
+  removeSubIssueBySlug,
+  reprioritizeSubIssueBySlug
 } from '../github/project-view'
 import type {
   AddIssueCommentBySlugArgs,
+  AddSubIssueBySlugArgs,
   ClearProjectItemFieldArgs,
   DeleteIssueCommentBySlugArgs,
+  GetIssueHierarchyArgs,
   GetProjectViewTableArgs,
   ListAssignableUsersBySlugArgs,
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs,
   ListProjectViewsArgs,
   ProjectWorkItemDetailsBySlugArgs,
+  RemoveSubIssueBySlugArgs,
+  ReprioritizeSubIssueBySlugArgs,
   ResolveProjectRefArgs,
   UpdateIssueBySlugArgs,
   UpdateIssueCommentBySlugArgs,
@@ -1226,6 +1234,23 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:updateIssueTypeBySlug', (_event, args: UpdateIssueTypeBySlugArgs) =>
     updateIssueTypeBySlug(args)
+  )
+
+  // Why: Phase 2 — issue-level hierarchy read/write for the drawer's
+  // Sub-issues section, distinct from the Phase 1b table-column handlers
+  // above (gh:getProjectViewTable etc.).
+  ipcMain.handle('gh:getIssueHierarchy', (_event, args: GetIssueHierarchyArgs) =>
+    getIssueHierarchy(args)
+  )
+
+  ipcMain.handle('gh:addSubIssue', (_event, args: AddSubIssueBySlugArgs) => addSubIssueBySlug(args))
+
+  ipcMain.handle('gh:removeSubIssue', (_event, args: RemoveSubIssueBySlugArgs) =>
+    removeSubIssueBySlug(args)
+  )
+
+  ipcMain.handle('gh:reprioritizeSubIssue', (_event, args: ReprioritizeSubIssueBySlugArgs) =>
+    reprioritizeSubIssueBySlug(args)
   )
 
   // Why: issue-source preference writes go through the generic `repos:update`

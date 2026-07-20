@@ -87,6 +87,14 @@ function deriveStringValue(value: GitHubProjectRow['fieldValuesByFieldId'][strin
       return value.labels.map((l) => l.name).join(', ')
     case 'users':
       return value.users.map((u) => u.login).join(', ')
+    case 'issue-ref-list':
+      // Why: defensive forward-compat stub. No live GraphQL __typename
+      // maps to this variant as of 2026-07-14 (the ProjectV2ItemFieldValue
+      // union has 12 members, none hierarchy-related). Returns an empty
+      // grouping key rather than throwing so the switch stays exhaustive;
+      // the data path is the linked Issue (row.content.trackedIssues /
+      // trackedInIssues), not field values.
+      return ''
   }
 }
 

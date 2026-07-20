@@ -1,49 +1,35 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import ColumnResizeHandle from './ColumnResizeHandle'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import ProjectGroupHeader from './ProjectGroupHeader'
+import ProjectHeaderRow, { type SortOverride } from './ProjectHeaderRow'
 import ProjectRow from './ProjectRow'
 import { groupRows, sortRows } from '../../../../shared/github-project-group-sort'
-import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
-  ACTION_COLUMN_WIDTH,
+  buildProjectRowTree,
+  flattenProjectRowTree,
+  type ProjectRowTreeNode
+} from '../../../../shared/github-project-hierarchy-tree'
+import {
+  getAvailableColumns,
+  loadHiddenColumns,
+  loadHierarchyModePreference,
+  saveHiddenColumns,
+  saveHierarchyModePreference
+} from './columns'
+import {
+  buildProjectGridTemplate,
   loadColumnWidths,
   MIN_COLUMN_WIDTH,
-  resolveWidth,
+  minColumnWidthFor,
   saveColumnWidths
 } from './column-widths'
 import type {
   GitHubIssueType,
-  GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow,
-  GitHubProjectSortDirection,
   GitHubProjectTable
 } from '../../../../shared/github-project-types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-
-type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
-
-const PROJECT_FROZEN_COLUMN_HEADER_SURFACE_CLASS =
-  '[background:color-mix(in_srgb,var(--background)_95%,var(--muted))]'
-
-function buildProjectGridTemplate(
-  fields: GitHubProjectField[],
-  widths: Readonly<Record<string, number>>
-): string {
-  // Why: the first two columns are frozen during horizontal scroll, so their
-  // actual widths must be deterministic for the second sticky offset.
-  const cols = fields.map((field, index) =>
-    index < 2
-      ? `${resolveWidth(field, widths)}px`
-      : `minmax(${MIN_COLUMN_WIDTH}px, ${resolveWidth(field, widths)}fr)`
-  )
-  cols.push(`${ACTION_COLUMN_WIDTH}px`)
-  return cols.join(' ')
-}
 
 type Props = {
   table: GitHubProjectTable
@@ -103,20 +89,36 @@ export default function ProjectViewList({
   >({})
   const widths = widthsByScope[scopeKey] ?? persistedWidths
 
+  const persistedHierarchyMode = useMemo(() => loadHierarchyModePreference(scopeKey), [scopeKey])
+  const [hierarchyModeByScope, setHierarchyModeByScope] = useState<
+    Readonly<Record<string, boolean | undefined>>
+  >({})
+  const hierarchyMode = hierarchyModeByScope[scopeKey] ?? persistedHierarchyMode
+  // Why: row collapse state is transient — switching project/view starts
+  // fully expanded instead of carrying stale row ids from another table.
+  const [collapsedRows, setCollapsedRows] = useState<ReadonlySet<string>>(() => new Set())
+  useEffect(() => {
+    setCollapsedRows(new Set())
+  }, [scopeKey])
+
   const setColumnPair = useCallback(
     (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {
       setWidthsByScope((prev) => {
         const currentWidths = prev[scopeKey] ?? persistedWidths
+        const field = fields.find((f) => f.id === fieldId)
+        const nextField = fields.find((f) => f.id === nextFieldId)
+        const floor = field ? minColumnWidthFor(field) : MIN_COLUMN_WIDTH
+        const nextFloor = nextField ? minColumnWidthFor(nextField) : MIN_COLUMN_WIDTH
         const updated = {
           ...currentWidths,
-          [fieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(width)),
-          [nextFieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(nextWidth))
+          [fieldId]: Math.max(floor, Math.round(width)),
+          [nextFieldId]: Math.max(nextFloor, Math.round(nextWidth))
         }
         saveColumnWidths(scopeKey, updated)
         return { ...prev, [scopeKey]: updated }
       })
     },
-    [persistedWidths, scopeKey]
+    [fields, persistedWidths, scopeKey]
   )
 
   const gridTemplate = useMemo(() => buildProjectGridTemplate(fields, widths), [fields, widths])
@@ -167,6 +169,39 @@ export default function ProjectViewList({
     const sorted = sortRows(effectiveTable, effectiveTable.rows)
     return groupRows(effectiveTable, sorted)
   }, [effectiveTable])
+
+  const treeNodesByGroupKey = useMemo(() => {
+    if (!hierarchyMode) {
+      return null
+    }
+    const map = new Map<string, ProjectRowTreeNode[]>()
+    for (const g of groups) {
+      // Why: trees build per group bucket — a child grouped apart from its
+      // parent renders as an unindented root in its own group by design.
+      map.set(g.key, flattenProjectRowTree(buildProjectRowTree(g.rows), collapsedRows))
+    }
+    return map
+  }, [groups, hierarchyMode, collapsedRows])
+
+  const toggleRowCollapse = useCallback((rowId: string): void => {
+    setCollapsedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
+  }, [])
+
+  const toggleHierarchyMode = useCallback((): void => {
+    setHierarchyModeByScope((prev) => {
+      const next = !(prev[scopeKey] ?? persistedHierarchyMode)
+      saveHierarchyModePreference(scopeKey, next)
+      return { ...prev, [scopeKey]: next }
+    })
+  }, [scopeKey, persistedHierarchyMode])
 
   const handleSortClick = (fieldId: string): void => {
     setSortOverride((prev) => {
@@ -219,6 +254,8 @@ export default function ProjectViewList({
         widths={widths}
         gridTemplate={gridTemplate}
         onResizeColumn={setColumnPair}
+        hierarchyMode={hierarchyMode}
+        onToggleHierarchyMode={toggleHierarchyMode}
       />
       {groups.map((g) => {
         const expanded = !collapsed.has(g.key)
@@ -242,168 +279,55 @@ export default function ProjectViewList({
               />
             ) : null}
             {expanded
-              ? g.rows.map((row) => (
-                  <ProjectRow
-                    key={row.id}
-                    row={row}
-                    fields={fields}
-                    gridTemplate={gridTemplate}
-                    widths={widths}
-                    onResizeColumn={setColumnPair}
-                    editable
-                    onOpenDialog={() => onOpenDialog?.(row)}
-                    onEditField={(fieldId, value) => onEditField?.(row, fieldId, value)}
-                    onEditAssignees={(add, remove) => onEditAssignees?.(row, add, remove)}
-                    onEditLabels={(add, remove) => onEditLabels?.(row, add, remove)}
-                    onEditIssueType={(issueType) => onEditIssueType?.(row, issueType)}
-                    onStartWork={() => onStartWork?.(row)}
-                    onOpenInBrowser={() => onOpenInBrowser?.(row)}
-                    sourceSettings={sourceSettings}
-                  />
-                ))
+              ? hierarchyMode && treeNodesByGroupKey
+                ? (treeNodesByGroupKey.get(g.key) ?? []).map((node) => (
+                    <ProjectRow
+                      key={node.row.id}
+                      row={node.row}
+                      tree={{
+                        depth: node.depth,
+                        hasChildren: node.children.length > 0,
+                        expanded: !collapsedRows.has(node.row.id),
+                        onToggleExpand: () => toggleRowCollapse(node.row.id)
+                      }}
+                      fields={fields}
+                      gridTemplate={gridTemplate}
+                      widths={widths}
+                      onResizeColumn={setColumnPair}
+                      editable
+                      onOpenDialog={() => onOpenDialog?.(node.row)}
+                      onEditField={(fieldId, value) => onEditField?.(node.row, fieldId, value)}
+                      onEditAssignees={(add, remove) => onEditAssignees?.(node.row, add, remove)}
+                      onEditLabels={(add, remove) => onEditLabels?.(node.row, add, remove)}
+                      onEditIssueType={(issueType) => onEditIssueType?.(node.row, issueType)}
+                      onStartWork={() => onStartWork?.(node.row)}
+                      onOpenInBrowser={() => onOpenInBrowser?.(node.row)}
+                      sourceSettings={sourceSettings}
+                    />
+                  ))
+                : g.rows.map((row) => (
+                    <ProjectRow
+                      key={row.id}
+                      row={row}
+                      fields={fields}
+                      gridTemplate={gridTemplate}
+                      widths={widths}
+                      onResizeColumn={setColumnPair}
+                      editable
+                      onOpenDialog={() => onOpenDialog?.(row)}
+                      onEditField={(fieldId, value) => onEditField?.(row, fieldId, value)}
+                      onEditAssignees={(add, remove) => onEditAssignees?.(row, add, remove)}
+                      onEditLabels={(add, remove) => onEditLabels?.(row, add, remove)}
+                      onEditIssueType={(issueType) => onEditIssueType?.(row, issueType)}
+                      onStartWork={() => onStartWork?.(row)}
+                      onOpenInBrowser={() => onOpenInBrowser?.(row)}
+                      sourceSettings={sourceSettings}
+                    />
+                  ))
               : null}
           </div>
         )
       })}
-    </div>
-  )
-}
-
-function ProjectHeaderRow({
-  fields,
-  availableFields,
-  hidden,
-  onToggleColumn,
-  activeSort,
-  onSortClick,
-  widths,
-  gridTemplate,
-  onResizeColumn
-}: {
-  fields: GitHubProjectField[]
-  availableFields: GitHubProjectField[]
-  hidden: ReadonlySet<string>
-  onToggleColumn: (fieldId: string) => void
-  activeSort: SortOverride | null
-  onSortClick: (fieldId: string) => void
-  widths: Readonly<Record<string, number>>
-  gridTemplate: string
-  onResizeColumn: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
-}): React.JSX.Element {
-  // Why: matches GitHub Projects' fixed column header — sticky so it stays
-  // pinned while scrolling the rows beneath it. The trailing slot mirrors the
-  // hover-action column in ProjectRow so columns line up exactly.
-  return (
-    <div
-      className="sticky top-0 z-10 grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur"
-      style={{ gridTemplateColumns: gridTemplate }}
-    >
-      {fields.map((f, idx) => {
-        const isActive = activeSort?.fieldId === f.id
-        const Icon = isActive ? (activeSort.direction === 'ASC' ? ArrowUp : ArrowDown) : ArrowUpDown
-        // Why: only render a resize handle when there is a neighbor to
-        // borrow width from. The trailing field has no field neighbor on
-        // its right (the action column is fixed and not part of the
-        // user-resizable pair set), so omit its handle to keep the total
-        // table width invariant.
-        const next = fields[idx + 1]
-        const frozen = idx < 2
-        return (
-          <div
-            key={f.id}
-            className={cn(
-              'flex min-w-0 items-center',
-              !frozen && 'relative',
-              frozen &&
-                cn(
-                  'relative z-20 backdrop-blur before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
-                  PROJECT_FROZEN_COLUMN_HEADER_SURFACE_CLASS
-                ),
-              idx === 1 && 'border-r border-border/50'
-            )}
-            style={
-              frozen ? { transform: 'translateX(var(--project-scroll-left, 0px))' } : undefined
-            }
-          >
-            <button
-              type="button"
-              onClick={() => onSortClick(f.id)}
-              className={cn(
-                'group flex min-w-0 flex-1 items-center gap-1 truncate text-left uppercase tracking-wide hover:text-foreground',
-                isActive && 'text-foreground'
-              )}
-              aria-label={translate(
-                'auto.components.github.project.ProjectViewList.eddfc7a794',
-                'Sort by {{value0}}',
-                { value0: f.name }
-              )}
-            >
-              <span className="truncate">{f.name}</span>
-              <Icon
-                className={cn(
-                  'size-3 shrink-0 transition-opacity',
-                  isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
-                )}
-              />
-            </button>
-            {next ? (
-              <ColumnResizeHandle
-                fieldId={f.id}
-                nextFieldId={next.id}
-                currentWidth={resolveWidth(f, widths)}
-                nextWidth={resolveWidth(next, widths)}
-                onResize={onResizeColumn}
-              />
-            ) : null}
-          </div>
-        )
-      })}
-      <div className="flex items-center justify-end">
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label={translate(
-                'auto.components.github.project.ProjectViewList.f949f5b2b7',
-                'Configure columns'
-              )}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <Columns3 className="size-3.5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-56 p-1">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {translate('auto.components.github.project.ProjectViewList.989f81dc2a', 'Columns')}
-            </div>
-            {availableFields.map((f) => {
-              // Why: TITLE is the only column that anchors the row's identity
-              // and click target — disallow hiding it so users can't end up
-              // with a row of metadata they can't open.
-              const locked = f.dataType === 'TITLE'
-              const visible = !hidden.has(f.id)
-              return (
-                <label
-                  key={f.id}
-                  className={cn(
-                    'flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted/50',
-                    locked && 'cursor-not-allowed opacity-60'
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={visible}
-                    disabled={locked}
-                    onChange={() => onToggleColumn(f.id)}
-                    className="size-3.5"
-                  />
-                  <span className="truncate">{f.name}</span>
-                </label>
-              )
-            })}
-          </PopoverContent>
-        </Popover>
-      </div>
     </div>
   )
 }

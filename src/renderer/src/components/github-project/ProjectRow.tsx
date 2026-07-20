@@ -1,10 +1,10 @@
 import React from 'react'
-import { ExternalLink, Play } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Play } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import ColumnResizeHandle from './ColumnResizeHandle'
-import { resolveWidth } from './column-widths'
+import { minColumnWidthFor, resolveWidth } from './column-widths'
 import ProjectCell from './ProjectCell'
 import type {
   GitHubIssueType,
@@ -19,6 +19,18 @@ const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
 const PROJECT_FROZEN_COLUMN_HOVER_SURFACE_CLASS =
   'group-hover/project-row:[background:color-mix(in_srgb,var(--accent)_60%,var(--background))]'
+
+const PROJECT_TREE_INDENT_PX = 16
+const PROJECT_TREE_CHEVRON_SIZE_PX = 14
+
+// Why: Phase 3 hierarchy — when omitted the row renders exactly as before,
+// so every existing (flat) render path is untouched by tree mode.
+type ProjectRowTreeProps = {
+  depth: number
+  hasChildren: boolean
+  expanded: boolean
+  onToggleExpand: () => void
+}
 
 type Props = {
   row: GitHubProjectRowType
@@ -35,6 +47,7 @@ type Props = {
   onStartWork?: () => void
   onOpenInBrowser?: () => void
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  tree?: ProjectRowTreeProps
 }
 
 export default function ProjectRow({
@@ -51,7 +64,8 @@ export default function ProjectRow({
   onEditIssueType,
   onStartWork,
   onOpenInBrowser,
-  sourceSettings
+  sourceSettings,
+  tree
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
   // Why: design doc §Row actions — draft-issue rows have no URL or number, so
@@ -68,6 +82,7 @@ export default function ProjectRow({
         disabled && 'opacity-60'
       )}
       style={{ gridTemplateColumns: gridTemplate }}
+      data-depth={tree ? tree.depth : undefined}
     >
       {fields.map((f, idx) => {
         const next = fields[idx + 1]
@@ -90,6 +105,58 @@ export default function ProjectRow({
               frozen ? { transform: 'translateX(var(--project-scroll-left, 0px))' } : undefined
             }
           >
+            {idx === 0 && tree ? (
+              // Why: indentation must stay inside the identity cell — padding
+              // the outer grid row would desync every column from the sticky
+              // header and the frozen-column translateX trick.
+              <div
+                className="flex shrink-0 items-center"
+                style={{ paddingLeft: tree.depth * PROJECT_TREE_INDENT_PX }}
+              >
+                {tree.hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // Why: keep the toggle from bubbling into the title
+                      // cell's open-drawer click handling.
+                      e.stopPropagation()
+                      tree.onToggleExpand()
+                    }}
+                    aria-expanded={tree.expanded}
+                    aria-label={
+                      tree.expanded
+                        ? translate(
+                            'auto.components.github.project.ProjectRow.chevronCollapse',
+                            'Collapse sub-issues'
+                          )
+                        : translate(
+                            'auto.components.github.project.ProjectRow.chevronExpand',
+                            'Expand sub-issues'
+                          )
+                    }
+                    className="shrink-0 rounded p-0.5 hover:bg-muted"
+                  >
+                    {tree.expanded ? (
+                      <ChevronDown size={PROJECT_TREE_CHEVRON_SIZE_PX} />
+                    ) : (
+                      <ChevronRight size={PROJECT_TREE_CHEVRON_SIZE_PX} />
+                    )}
+                  </button>
+                ) : (
+                  // Why: childless rows get a same-footprint spacer so titles
+                  // align regardless of whether a sibling has a chevron.
+                  <span className="shrink-0 p-0.5" aria-hidden="true">
+                    <span
+                      className="block"
+                      style={{
+                        width: PROJECT_TREE_CHEVRON_SIZE_PX,
+                        height: PROJECT_TREE_CHEVRON_SIZE_PX
+                      }}
+                    />
+                  </span>
+                )}
+              </div>
+            ) : null}
             <div className="flex min-w-0 flex-1 items-stretch overflow-hidden">
               <ProjectCell
                 row={row}
@@ -109,6 +176,8 @@ export default function ProjectRow({
                 nextFieldId={next.id}
                 currentWidth={resolveWidth(f, widths)}
                 nextWidth={resolveWidth(next, widths)}
+                minWidth={minColumnWidthFor(f)}
+                nextMinWidth={minColumnWidthFor(next)}
                 onResize={onResizeColumn}
               />
             ) : null}
