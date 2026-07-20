@@ -122,10 +122,14 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       'set "ORCA_GROK_HOME=%GROK_HOME%"',
-      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME="`,
+      // Why: cmd expands %VAR:~n% on the whole line before evaluating `if`, so an
+      // empty GROK_HOME still syntax-errors unless we skip those lines entirely.
+      'if "%GROK_HOME%"=="" goto :orca_grok_home_ready',
+      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME=" & goto :orca_grok_home_ready`,
       // Why: a trailing backslash escapes curl's closing argv quote on Windows,
       // merging the payload option into grokHome and dropping the hook body.
       'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
+      ':orca_grok_home_ready',
       WINDOWS_GROK_HOOK_POST_COMMAND,
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),

@@ -89,10 +89,14 @@ describe('GrokHookService', () => {
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
       expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
+      // Why: empty GROK_HOME must goto-skip substring lines — cmd expands %VAR:~n%
+      // before evaluating a same-line `if`, which is a syntax error.
+      expect(script).toContain('if "%GROK_HOME%"=="" goto :orca_grok_home_ready')
       expect(script).toContain('%GROK_HOME:~4096,1%')
       expect(script).toContain(
         'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
       )
+      expect(script).toContain(':orca_grok_home_ready')
       expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
@@ -191,4 +195,38 @@ describe('GrokHookService', () => {
       )
     ).toBe(true)
   })
+
+  // Why: empty/unset GROK_HOME used to trip `%ORCA_GROK_HOME:~-1%` (cmd syntax
+  // error) before curl ran, so Native Chat never received sessionId on Windows.
+  it.skipIf(process.platform !== 'win32')(
+    'windows hook script survives unset GROK_HOME without cmd syntax error',
+    async () => {
+      expect(new GrokHookService().install().state).toBe('installed')
+      const scriptPath = join(homeDir, '.orca', 'agent-hooks', 'grok-hook.cmd')
+      const { spawnSync } = await import('node:child_process')
+      const result = spawnSync('cmd.exe', ['/d', '/c', scriptPath], {
+        encoding: 'utf8',
+        input: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          sessionId: 'test-session',
+          prompt: 'hi'
+        }),
+        env: {
+          ...process.env,
+          ORCA_AGENT_HOOK_PORT: '1',
+          ORCA_AGENT_HOOK_TOKEN: 'test-token',
+          ORCA_AGENT_HOOK_ENV: 'test',
+          ORCA_AGENT_HOOK_VERSION: '1',
+          ORCA_PANE_KEY:
+            'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          ORCA_TAB_ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          GROK_HOME: ''
+        },
+        windowsHide: true
+      })
+      const combined = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+      expect(combined).not.toMatch(/语法不正确|The syntax of the command is incorrect/i)
+      expect(result.status).toBe(0)
+    }
+  )
 })
