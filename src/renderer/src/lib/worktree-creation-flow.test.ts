@@ -255,7 +255,8 @@ describe('runBackgroundWorktreeCreation', () => {
       provisionId: 'creation-1',
       setupExistingFolder: store.setupProjectExistingFolder
     })
-    expect(store.createWorktree.mock.calls[0]?.[0]).toMatchObject({
+    const createOptions = store.createWorktree.mock.calls[0] as unknown as [unknown]
+    expect(createOptions[0]).toMatchObject({
       repoId: 'repo-runtime',
       name: 'feature',
       baseBranch: undefined,
@@ -307,7 +308,8 @@ describe('runBackgroundWorktreeCreation', () => {
     )
 
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
-    expect(store.createWorktree.mock.calls[0]?.[0]).toMatchObject({
+    const createOptions = store.createWorktree.mock.calls[0] as unknown as [unknown]
+    expect(createOptions[0]).toMatchObject({
       repoId: 'repo-runtime',
       baseBranch: 'abc123',
       compareBaseRef: 'refs/remotes/origin/main'
@@ -437,7 +439,8 @@ describe('staged background worktree creation', () => {
     )
     await Promise.resolve()
     expect(store.createWorktree).toHaveBeenCalledTimes(1)
-    expect(store.createWorktree.mock.calls[0]?.[0]).toMatchObject({
+    const createOptions = store.createWorktree.mock.calls[0] as unknown as [unknown]
+    expect(createOptions[0]).toMatchObject({
       repoId: 'repo-1',
       name: 'feature',
       setupDecision: 'run',
