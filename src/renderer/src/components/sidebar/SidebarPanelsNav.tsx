@@ -27,12 +27,6 @@ import {
   SortableTerminalPanelButton,
   SortableWebPanelButton
 } from './SidebarPanelRows'
-import {
-  QuickAddTerminalForm,
-  QuickAddTerminalPanelButton,
-  QuickAddWebForm,
-  QuickAddWebPanelButton
-} from './QuickAddPanelPopovers'
 import { NodeGroupBranch } from './SidebarNodeGroupBranch'
 
 /**
@@ -46,10 +40,6 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
-  // Why: quick-add forms mount only when open — never on the always-visible
-  // + buttons (React #185 at packaged boot with Popover+store on the rail).
-  const [webQuickAddOpen, setWebQuickAddOpen] = React.useState(false)
-  const [terminalQuickAddOpen, setTerminalQuickAddOpen] = React.useState(false)
   const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
   const activePinnedWebPanelId = useAppStore((s) => s.activePinnedWebPanelId)
   const pinnedWebPanels = useAppStore((s) => s.settings?.pinnedWebPanels)
@@ -272,9 +262,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                 )}
               </span>
             </button>
-            <QuickAddWebPanelButton open={webQuickAddOpen} onOpenChange={setWebQuickAddOpen} />
           </div>
-          {webQuickAddOpen ? <QuickAddWebForm onDone={() => setWebQuickAddOpen(false)} /> : null}
           {webPanelsCollapsed ? null : hasWebPanels ? (
             <SortableContext
               items={(pinnedWebPanels ?? []).map((panel) => panel.id)}
@@ -331,14 +319,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
             >
               <FolderPlus className="size-3.5" strokeWidth={2.25} />
             </Button>
-            <QuickAddTerminalPanelButton
-              open={terminalQuickAddOpen}
-              onOpenChange={setTerminalQuickAddOpen}
-            />
           </div>
-          {terminalQuickAddOpen ? (
-            <QuickAddTerminalForm onDone={() => setTerminalQuickAddOpen(false)} />
-          ) : null}
           {collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD) ? null : (
             <>
               {!hasTerminalPanels && !hasGroupedTerminals ? (
