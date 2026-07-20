@@ -58,6 +58,34 @@ export type RuntimeTerminalDriverState =
 
 export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
+// Why: advisory, untrusted server-supplied hint for the remote update advisor.
+// Every field is optional and validated client-side before it selects a guide
+// template or fills a placeholder — a compromised server must never widen what
+// the client renders into a copyable command.
+export type RuntimeUpdateInfo = {
+  currentVersion?: string | null
+  latestVersion?: string | null
+  updateAvailable?: boolean | null
+  installKind?: RuntimeInstallKind
+  restartKind?: RuntimeRestartKind
+  serviceName?: string | null
+  installPath?: string | null
+  hostArch?: string | null // process.arch, e.g. 'x64' | 'arm64'
+  docsUrl?: string
+}
+
+export type RuntimeInstallKind =
+  | 'mac-app'
+  | 'mac-homebrew'
+  | 'windows-installer'
+  | 'linux-appimage'
+  | 'linux-deb'
+  | 'linux-rpm'
+  | 'source'
+  | 'unknown'
+
+export type RuntimeRestartKind = 'desktop' | 'foreground-serve' | 'systemd' | 'unknown'
+
 export type RuntimeStatus = {
   runtimeId: string
   rendererGraphEpoch: number
@@ -74,6 +102,9 @@ export type RuntimeStatus = {
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
   terminalWindowsShell?: string | null
+  // Why: startup-cached, advisory install/restart shape for the update advisor.
+  // Omitted by servers older than this contract; all client handling is defensive.
+  updateInfo?: RuntimeUpdateInfo
   // Why: legacy or saved WebSocket pairings may not carry scope metadata, so
   // the server stamps the authenticated token scope here for status.get only.
   deviceScope?: DeviceScope

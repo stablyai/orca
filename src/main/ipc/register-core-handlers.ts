@@ -17,6 +17,7 @@ import { registerHostedReviewHandlers } from './hosted-review'
 import { registerLinearHandlers } from './linear'
 import { registerJiraHandlers } from './jira'
 import { registerFeedbackHandlers } from './feedback'
+import { registerRuntimeReleaseManifestHandlers } from './runtime-release-manifest'
 import { registerCrashReportingHandlers } from './crash-reporting'
 import { registerExportHandlers } from './export'
 import { registerStatsHandlers } from './stats'
@@ -138,6 +139,7 @@ export function registerCoreHandlers(
   registerLinearHandlers()
   registerJiraHandlers()
   registerFeedbackHandlers()
+  registerRuntimeReleaseManifestHandlers()
   if (crashReports) {
     registerCrashReportingHandlers(crashReports)
   }

@@ -1457,6 +1457,12 @@ export type PreloadApi = {
       githubEmail: string | null
     }) => Promise<{ ok: true } | { ok: false; status: number | null; error: string }>
   }
+  runtimeReleaseManifest: {
+    fetch: (args: {
+      platform?: string
+      arch?: 'x64' | 'arm64'
+    }) => Promise<{ ok: true; yaml: string } | { ok: false }>
+  }
   crashReports: {
     getLatestPending: () => Promise<CrashReportRecord | null>
     getLatestReport: () => Promise<CrashReportRecord | null>

@@ -11,6 +11,7 @@ const {
   registerOpenCodeUsageHandlersMock,
   registerGitHubHandlersMock,
   registerFeedbackHandlersMock,
+  registerRuntimeReleaseManifestHandlersMock,
   registerStatsHandlersMock,
   registerMemoryHandlersMock,
   registerNotebookHandlersMock,
@@ -73,6 +74,7 @@ const {
   registerOpenCodeUsageHandlersMock: vi.fn(),
   registerGitHubHandlersMock: vi.fn(),
   registerFeedbackHandlersMock: vi.fn(),
+  registerRuntimeReleaseManifestHandlersMock: vi.fn(),
   registerStatsHandlersMock: vi.fn(),
   registerMemoryHandlersMock: vi.fn(),
   registerNotebookHandlersMock: vi.fn(),
@@ -170,6 +172,10 @@ vi.mock('./opencode-usage', () => ({
 
 vi.mock('./github', () => ({
   registerGitHubHandlers: registerGitHubHandlersMock
+}))
+
+vi.mock('./runtime-release-manifest', () => ({
+  registerRuntimeReleaseManifestHandlers: registerRuntimeReleaseManifestHandlersMock
 }))
 
 vi.mock('./feedback', () => ({
@@ -487,6 +493,7 @@ describe('registerCoreHandlers', () => {
     expect(registerGitLabHandlersMock).toHaveBeenCalledWith(store)
     expect(registerHostedReviewHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerFeedbackHandlersMock).toHaveBeenCalled()
+    expect(registerRuntimeReleaseManifestHandlersMock).toHaveBeenCalled()
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
     expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotebookHandlersMock).toHaveBeenCalledWith(store)

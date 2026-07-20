@@ -377,6 +377,7 @@ import {
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
+import { getRuntimeUpdateInfo } from './runtime-install-detection'
 import { collectMemorySnapshot } from '../memory/collector'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
@@ -2684,6 +2685,9 @@ export class OrcaRuntimeService {
     }
   ) {
     this.store = store
+    // Why: prime the install-detection cache at startup so the one-time
+    // package-ownership probe never runs on the polled status.get path.
+    void getRuntimeUpdateInfo()
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -3179,6 +3183,9 @@ export class OrcaRuntimeService {
       capabilities,
       hostPlatform: process.platform,
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
+      // Why: startup-cached; the advisor's install/restart hint must never run a
+      // subprocess or read /proc on this polled status path.
+      updateInfo: getRuntimeUpdateInfo(),
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
     }

@@ -53,6 +53,8 @@ import {
   getWebRuntimeEnvironmentsSearchEntry
 } from './runtime-environments-search'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { RuntimeUpdateAdvisor, type RuntimeUpdateRecheckState } from './RuntimeUpdateAdvisor'
+import { parseEndpointPortHint } from './runtime-update-advisor-model'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -259,6 +261,9 @@ export function RuntimeEnvironmentsPane({
   const [switchingValue, setSwitchingValue] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [recheckStateById, setRecheckStateById] = useState<
+    Record<string, RuntimeUpdateRecheckState>
+  >({})
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const [addServerFormOpen, setAddServerFormOpen] = useState(false)
@@ -675,6 +680,56 @@ export function RuntimeEnvironmentsPane({
     }
   }
 
+  // "Check again" from the update advisor: re-read status through the raw,
+  // non-asserting RPC (unwrap only, never assertRuntimeStatusCompatible) so
+  // detection/versions keep rendering, then re-evaluate compatibility. On an ok
+  // verdict the blocked row clears back to the normal view; on continued
+  // incompatibility the advisor shows an inline "still out of date" note.
+  const recheckEnvironment = async (environment: PublicKnownRuntimeEnvironment): Promise<void> => {
+    setRecheckStateById((current) => ({ ...current, [environment.id]: 'checking' }))
+    try {
+      const response = await window.api.runtimeEnvironments.getStatus({
+        selector: environment.id,
+        timeoutMs: 15_000
+      })
+      const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+      const compatibility = evaluateHostDetails(runtimeStatus)
+      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
+        status: runtimeStatus,
+        checkedAt: Date.now()
+      })
+      if (!mountedRef.current) {
+        return
+      }
+      setDetailsByEnvironmentId((current) => ({
+        ...current,
+        [environment.id]: { status: 'ready', runtimeStatus, compatibility, error: null }
+      }))
+      setRecheckStateById((current) => ({
+        ...current,
+        [environment.id]: compatibility.kind === 'blocked' ? 'still-blocked' : 'idle'
+      }))
+    } catch (error) {
+      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
+        status: null,
+        checkedAt: Date.now()
+      })
+      if (!mountedRef.current) {
+        return
+      }
+      setDetailsByEnvironmentId((current) => ({
+        ...current,
+        [environment.id]: {
+          status: 'error',
+          runtimeStatus: null,
+          compatibility: null,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }))
+      setRecheckStateById((current) => ({ ...current, [environment.id]: 'idle' }))
+    }
+  }
+
   const switchToValue = async (value: string): Promise<boolean> => {
     if (value === NO_RUNTIME_VALUE) {
       return false
@@ -866,7 +921,7 @@ export function RuntimeEnvironmentsPane({
                 <div
                   key={environment.id}
                   data-settings-section={environment.id}
-                  className="flex items-center gap-3 px-4 py-3"
+                  className="px-4 py-3"
                 >
                   {(() => {
                     const details = detailsByEnvironmentId[environment.id]
@@ -875,6 +930,8 @@ export function RuntimeEnvironmentsPane({
                     const connectionState = getRuntimeServerConnectionState(details)
                     // A connected host exposes Disconnect; otherwise Connect.
                     const isReachable = connectionState === 'connected'
+                    const blockedVerdict =
+                      details?.compatibility?.kind === 'blocked' ? details.compatibility : null
                     const actionBusy =
                       connectingId === environment.id ||
                       switchingValue === environment.id ||
@@ -882,109 +939,119 @@ export function RuntimeEnvironmentsPane({
                       removingId === environment.id
                     return (
                       <>
-                        <Server className="size-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <div className="truncate text-sm font-medium">{environment.name}</div>
-                            <span
-                              className={cn(
-                                'size-2 shrink-0 rounded-full',
-                                getRuntimeServerDotClass(connectionState)
-                              )}
-                            />
-                            <span className="text-[11px] text-muted-foreground">
-                              {getRuntimeServerConnectionLabel(connectionState)}
-                            </span>
-                            {details?.compatibility?.kind === 'blocked' ? (
-                              <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-                            ) : details?.status === 'loading' ? (
-                              <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                        <div className="flex items-center gap-3">
+                          <Server className="size-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className="truncate text-sm font-medium">{environment.name}</div>
+                              <span
+                                className={cn(
+                                  'size-2 shrink-0 rounded-full',
+                                  getRuntimeServerDotClass(connectionState)
+                                )}
+                              />
+                              <span className="text-[11px] text-muted-foreground">
+                                {getRuntimeServerConnectionLabel(connectionState)}
+                              </span>
+                              {details?.compatibility?.kind === 'blocked' ? (
+                                <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
+                              ) : details?.status === 'loading' ? (
+                                <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                              ) : null}
+                            </div>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {isActive
+                                ? translate(
+                                    'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
+                                    'Active server for server-routed projects, terminals, and provider checks.'
+                                  )
+                                : getHostDetailsSummary(details)}
+                            </p>
+                            {/* Blocked hosts render the full advisor below the row,
+                              so the truncated line is kept only for error states. */}
+                            {detailsDescription && !blockedVerdict ? (
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                {detailsDescription}
+                              </p>
                             ) : null}
                           </div>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {isActive
-                              ? translate(
-                                  'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
-                                  'Active server for server-routed projects, terminals, and provider checks.'
-                                )
-                              : getHostDetailsSummary(details)}
-                          </p>
-                          {detailsDescription ? (
-                            <p
-                              className={cn(
-                                'mt-0.5 truncate text-xs',
-                                details?.compatibility?.kind === 'blocked'
-                                  ? 'text-destructive'
-                                  : 'text-muted-foreground'
-                              )}
-                            >
-                              {detailsDescription}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          {isReachable ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="xs"
-                              className="gap-1.5"
-                              onClick={() => void disconnectEnvironment(environment)}
-                              disabled={actionBusy}
-                            >
-                              {disconnectingId === environment.id ? (
-                                <Loader2 className="size-3 animate-spin" />
-                              ) : (
-                                <ServerOff className="size-3" />
-                              )}
-                              {translate(
-                                'auto.components.settings.RuntimeEnvironmentsPane.disconnect',
-                                'Disconnect'
-                              )}
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="xs"
-                              className="gap-1.5"
-                              onClick={() => void connectEnvironment(environment)}
-                              disabled={actionBusy || connectionState === 'checking'}
-                            >
-                              {connectingId === environment.id ? (
-                                <Loader2 className="size-3 animate-spin" />
-                              ) : (
-                                <Server className="size-3" />
-                              )}
-                              {translate(
-                                'auto.components.settings.RuntimeEnvironmentsPane.connect',
-                                'Connect'
-                              )}
-                            </Button>
-                          )}
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setRemoveError(null)
-                              setPendingRemove(environment)
-                            }}
-                            className="size-7 text-muted-foreground hover:text-red-400"
-                            disabled={isBusy}
-                            aria-label={translate(
-                              'auto.components.settings.RuntimeEnvironmentsPane.aeb26635d2',
-                              'Remove {{value0}}',
-                              { value0: environment.name }
-                            )}
-                          >
-                            {removingId === environment.id ? (
-                              <Loader2 className="size-3 animate-spin" />
+                          <div className="flex shrink-0 items-center gap-1">
+                            {isReachable ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                className="gap-1.5"
+                                onClick={() => void disconnectEnvironment(environment)}
+                                disabled={actionBusy}
+                              >
+                                {disconnectingId === environment.id ? (
+                                  <Loader2 className="size-3 animate-spin" />
+                                ) : (
+                                  <ServerOff className="size-3" />
+                                )}
+                                {translate(
+                                  'auto.components.settings.RuntimeEnvironmentsPane.disconnect',
+                                  'Disconnect'
+                                )}
+                              </Button>
                             ) : (
-                              <Trash2 className="size-3" />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                className="gap-1.5"
+                                onClick={() => void connectEnvironment(environment)}
+                                disabled={actionBusy || connectionState === 'checking'}
+                              >
+                                {connectingId === environment.id ? (
+                                  <Loader2 className="size-3 animate-spin" />
+                                ) : (
+                                  <Server className="size-3" />
+                                )}
+                                {translate(
+                                  'auto.components.settings.RuntimeEnvironmentsPane.connect',
+                                  'Connect'
+                                )}
+                              </Button>
                             )}
-                          </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setRemoveError(null)
+                                setPendingRemove(environment)
+                              }}
+                              className="size-7 text-muted-foreground hover:text-red-400"
+                              disabled={isBusy}
+                              aria-label={translate(
+                                'auto.components.settings.RuntimeEnvironmentsPane.aeb26635d2',
+                                'Remove {{value0}}',
+                                { value0: environment.name }
+                              )}
+                            >
+                              {removingId === environment.id ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="size-3" />
+                              )}
+                            </Button>
+                          </div>
                         </div>
+                        {blockedVerdict && details?.runtimeStatus ? (
+                          <RuntimeUpdateAdvisor
+                            verdict={blockedVerdict}
+                            status={details.runtimeStatus}
+                            portHint={parseEndpointPortHint(
+                              environment.endpoints.find(
+                                (candidate) => candidate.id === environment.preferredEndpointId
+                              )?.endpoint ?? environment.endpoints[0]?.endpoint
+                            )}
+                            recheckState={recheckStateById[environment.id] ?? 'idle'}
+                            onRecheck={() => void recheckEnvironment(environment)}
+                          />
+                        ) : null}
                       </>
                     )
                   })()}

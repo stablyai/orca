@@ -156,7 +156,11 @@ const electronMocks = vi.hoisted(() => {
     BrowserWindow: { fromId: vi.fn((_id: number): unknown => null) },
     webContents: { fromId: vi.fn((_id: number): unknown => null) },
     ipcMain,
-    app: { getPath: vi.fn(() => '/tmp') }
+    app: {
+      getPath: vi.fn(() => '/tmp'),
+      getVersion: vi.fn(() => '0.0.0-test'),
+      isPackaged: false
+    }
   }
 })
 

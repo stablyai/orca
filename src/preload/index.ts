@@ -1107,6 +1107,14 @@ const api = {
       ipcRenderer.invoke('feedback:submit', args)
   },
 
+  runtimeReleaseManifest: {
+    fetch: (args: {
+      platform?: string
+      arch?: 'x64' | 'arm64'
+    }): Promise<{ ok: true; yaml: string } | { ok: false }> =>
+      ipcRenderer.invoke('runtimeReleaseManifest:fetch', args)
+  },
+
   crashReports: {
     getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
     getLatestReport: () => ipcRenderer.invoke('crashReports:getLatestReport'),

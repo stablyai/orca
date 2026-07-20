@@ -9224,6 +9224,15 @@
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
+        },
+        "RuntimeUpdateAdvisor": {
+          "checkForUpdates": "Check for updates",
+          "downloadOrca": "Download the latest Orca",
+          "protocolLine": "Server protocol {{value0}}, this client requires {{value1}}.",
+          "serverVersion": "Server version {{value0}}.",
+          "latestVersion": "Latest version {{value0}}.",
+          "checkAgain": "Check again",
+          "stillOutOfDate": "Still out of date. Update the server, then check again."
         }
       },
       "right": {
