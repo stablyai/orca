@@ -6,13 +6,20 @@ import {
   type WorkItemsCacheError,
   type WorkItemsCacheSources
 } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
+import type {
+  GitHubWorkItem,
+  IssueSourcePreference,
+  LinearCollectionResult,
+  LinearIssue
+} from '../../../shared/types'
 
 export type TaskPageRepoCacheInput = {
   id: string
   path: string
   executionHostId?: string | null
   sourceCacheScope?: string | null
+  /** Part of the work-item cache key — upstream/origin entries coexist. */
+  issueSourcePreference?: IssueSourcePreference
 }
 
 export type TaskPageDialogWorkItemKey = {
@@ -58,7 +65,13 @@ export function selectTaskPageWorkItemsCacheEntries(
   return repos.map(
     (repo) =>
       workItemsCache[
-        workItemsCacheKey(repo.id, limit, query, repo.sourceCacheScope ?? repo.executionHostId)
+        workItemsCacheKey(
+          repo.id,
+          limit,
+          query,
+          repo.sourceCacheScope ?? repo.executionHostId,
+          repo.issueSourcePreference
+        )
       ]
   )
 }

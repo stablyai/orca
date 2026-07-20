@@ -289,7 +289,8 @@ function getWorkItemsCacheKeyForOwner(
     repoId,
     limit,
     query,
-    repo ? getGitHubFocusedRepoOwnerHostId(state.settings ?? null, repo) : undefined
+    repo ? getGitHubFocusedRepoOwnerHostId(state.settings ?? null, repo) : undefined,
+    repo?.issueSourcePreference
   )
 }
 
@@ -783,11 +784,19 @@ export function workItemsCacheKey(
   repoId: string,
   limit: number,
   query: string,
-  executionHostId?: string | null
+  executionHostId?: string | null,
+  preference?: IssueSourcePreference
 ): string {
   const scope = executionHostId?.trim() ?? ''
   const hostId = normalizeExecutionHostId(scope)
-  const owner = `${repoId}::${limit}::${query}`
+  // Why: cache identity is the effective source side, not the raw UI
+  // preference — 'auto' routes upstream-first exactly like an explicit
+  // 'upstream' pick, so both share one entry and pinning the already-active
+  // pill cannot trigger a spurious refetch. Upstream and origin results live
+  // in separate entries, so a source flip just reads the other side's key
+  // (served instantly while still fresh) instead of evicting shared state.
+  const side = preference === 'origin' ? 'origin' : 'upstream'
+  const owner = `${repoId}::${side}::${limit}::${query}`
   if (hostId) {
     return hostId !== LOCAL_EXECUTION_HOST_ID ? `${hostId}::${owner}` : owner
   }
@@ -896,7 +905,12 @@ function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
 }
 
 function matchesRepoCacheKey(key: string, prefixes: readonly string[]): boolean {
-  return prefixes.some((prefix) => key.startsWith(prefix))
+  // Why: task-source-scoped keys (`github:local:…::repoId::…`) and
+  // execution-host-scoped keys (`hostId::repoId::…`) embed the repo segment
+  // after a `::` join rather than at the start. Matching only bare prefixes
+  // silently skips every scoped entry, so preference flips and repo evictions
+  // leave stale-source data behind.
+  return prefixes.some((prefix) => key.startsWith(prefix) || key.includes(`::${prefix}`))
 }
 
 function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void {
@@ -2743,7 +2757,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const state = get()
     const key =
       sourceContext?.provider === 'github'
-        ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(sourceContext))
+        ? workItemsCacheKey(
+            repoId,
+            limit,
+            query,
+            getTaskSourceCacheScope(sourceContext),
+            findRepoForGitHubOwner(state, repoId, repoPath ?? '')?.issueSourcePreference
+          )
         : getWorkItemsCacheKeyForOwner(state, repoId, limit, query, repoPath)
     return get().workItemsCache[key]?.data ?? null
   },
@@ -2789,7 +2809,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     )
     const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, options?.sourceContext)
     const cacheScope = getGitHubWorkItemSourceCacheScope(requestState, repo, options?.sourceContext)
-    const key = workItemsCacheKey(repoId, limit, query, cacheScope)
+    const key = workItemsCacheKey(repoId, limit, query, cacheScope, repo?.issueSourcePreference)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
       return cached.data ?? []
@@ -2932,7 +2952,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   r.repoId,
                   perRepoLimit,
                   query,
-                  getTaskSourceCacheScope(r.sourceContext)
+                  getTaskSourceCacheScope(r.sourceContext),
+                  findRepoForGitHubOwner(get(), r.repoId, r.path)?.issueSourcePreference
                 )
               : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
           const cached = get().workItemsCache[key]?.data
@@ -3069,7 +3090,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
     const key =
       options?.sourceContext?.provider === 'github'
-        ? workItemsCacheKey(repoId, limit, query, getTaskSourceCacheScope(options.sourceContext))
+        ? workItemsCacheKey(
+            repoId,
+            limit,
+            query,
+            getTaskSourceCacheScope(options.sourceContext),
+            repo?.issueSourcePreference
+          )
         : getWorkItemsCacheKeyForOwner(requestState, repoId, limit, query, repoPath)
     const cached = get().workItemsCache[key]
     const requestSettings = getGitHubWorkItemSourceSettings(
@@ -4710,40 +4737,23 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       )
       // Why: the optimistic patch above may now disagree with disk. Resync
-      // rather than leave a lie on screen. We only refetch repos — the cache
-      // eviction below is still safe to run; worst case we trigger a
-      // harmless re-fetch of work items against the pre-flip preference.
+      // rather than leave a lie on screen — worst case a re-fetch runs
+      // against the pre-flip preference and lands in that preference's own
+      // cache entry.
       void get().fetchRepos()
     }
-    // Why: wipe in-flight dedupe entries for this repo BEFORE bumping the
-    // invalidation nonce. The bump triggers a re-run of TaskPage's fetch
-    // effect; if the inflight map still held a pre-flip entry, the new
-    // dispatch could collapse onto it and skip the source swap. Clearing
-    // first makes the "new fetch gets a fresh request" invariant impossible
-    // to trip on later refactors that change zustand or React flush timing.
+    // Why: defensive only — the preference is part of the work-item cache
+    // key, so a pre-flip in-flight request can no longer collide with the
+    // post-flip fetch. Clearing keeps the dedupe map from holding requests
+    // whose results nothing will read.
     clearInflightWorkItemsForRepo(repoId, repoPath)
-    // Why: evict every cache entry keyed on this repo AFTER the IPC
-    // resolves. If we evicted before awaiting, an overlapping fetch triggered
-    // by a different subscriber would hit main with the pre-flip persisted
-    // preference and repopulate the cache with stale-source data. Work-items
-    // cache keys are repo-scoped, but we also drop legacy path-scoped entries
-    // that may have been restored from older persisted cache data.
-    set((s) => {
-      const prefix = `${repoId}::`
-      const legacyPrefix = `${repoPath}::`
-      const next: Record<string, CacheEntry<GitHubWorkItem[]>> = {}
-      for (const [key, entry] of Object.entries(s.workItemsCache)) {
-        if (!key.startsWith(prefix) && !key.startsWith(legacyPrefix)) {
-          next[key] = entry
-        }
-      }
-      // Why: bump the invalidation nonce so the Tasks list's fetch effect
-      // — which keys on `[selectedRepos, appliedTaskSearch, taskRefreshNonce,
-      // taskSource, workItemsInvalidationNonce]` — re-runs and re-populates
-      // the just-evicted entries. Evicting alone wouldn't trigger the effect
-      // because it doesn't depend on the cache.
-      return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
-    })
+    // Why: no eviction — upstream and origin results live under separate
+    // preference-scoped keys, so flipping back serves the other side's
+    // still-fresh entries instantly. The nonce bump re-runs the Tasks fetch
+    // effect (which keys on `[selectedRepos, appliedTaskSearch,
+    // taskRefreshNonce, taskSource, workItemsInvalidationNonce]`) so the new
+    // preference's entries are read and refreshed.
+    set((s) => ({ workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }))
   },
 
   evictGitHubRepoCaches: (repoId, repoPath) => {
