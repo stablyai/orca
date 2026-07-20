@@ -17,6 +17,17 @@ type SelfHealRuntimeHostWorkspaceSessionsArgs = {
 }
 
 /**
+ * Whether the saved runtime-environment registry file exists on disk.
+ *
+ * Why: `listEnvironments` returns `[]` for a MISSING registry file (it only
+ * throws for a corrupt one), so the boot self-heal must distinguish a
+ * transiently-absent file from a genuinely empty one before it prunes anything.
+ */
+function runtimeEnvironmentStoreExists(userDataPath: string): boolean {
+  return existsSync(getEnvironmentStorePath(userDataPath))
+}
+
+/**
  * Boot self-heal: drop persisted terminal workspace-session partitions that
  * belong to runtime environments no longer in the saved store.
  *
@@ -33,16 +44,15 @@ export function selfHealRuntimeHostWorkspaceSessions({
   store,
   userDataPath,
   listKnownEnvironments = listEnvironments,
-  environmentStoreExists = (path) => existsSync(getEnvironmentStorePath(path)),
+  environmentStoreExists = runtimeEnvironmentStoreExists,
   log
 }: SelfHealRuntimeHostWorkspaceSessionsArgs): void {
-  // Why: listEnvironments returns [] for a MISSING registry file (it only throws
-  // for a corrupt one). A transiently-absent file at boot (e.g. a mount/sync
-  // race) must not be read as "zero saved environments" and permanently wipe
-  // every runtime host's terminal session — deleting a host session is not
-  // recoverable, unlike the focus id the sibling self-heal clears. So skip
-  // pruning entirely unless the registry file actually exists; a genuinely
-  // empty-but-present registry still prunes correctly.
+  // Why: a transiently-absent registry file at boot (e.g. a mount/sync race)
+  // must not be read as "zero saved environments" and permanently wipe every
+  // runtime host's terminal session — deleting a host session is not recoverable,
+  // unlike the focus id the sibling self-heal clears. So skip pruning entirely
+  // unless the registry file actually exists; a genuinely empty-but-present
+  // registry still prunes correctly.
   if (!environmentStoreExists(userDataPath)) {
     return
   }
@@ -56,7 +66,11 @@ export function selfHealRuntimeHostWorkspaceSessions({
     return
   }
 
-  const knownEnvironmentIds = new Set(environments.map((entry) => entry.id))
+  const knownEnvironmentIds = new Set<string>()
+  for (const environment of environments) {
+    knownEnvironmentIds.add(environment.id)
+  }
+
   const removed = store.pruneOrphanedRuntimeHostWorkspaceSessions(knownEnvironmentIds)
   if (removed.length > 0) {
     const writeLog = log ?? console.info
