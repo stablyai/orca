@@ -1,7 +1,7 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
+import type { PinnedWebPanel } from '../../../../shared/types'
 import {
   MAX_PINNED_WEB_PANELS,
   normalizePinnedWebPanels
@@ -13,21 +13,24 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { emptyDraft, panelFromDraft } from '@/components/settings/pinned-terminal-panel-drafts'
 
-// Why: zustand selectors must return stable references. `?? []` allocates a new
-// array every read when settings are still loading → React #185 max update depth
-// on mount (QuickAdd mounts in always-visible panel rails).
-const EMPTY_WEB_PANELS: PinnedWebPanel[] = []
-const EMPTY_TERMINAL_PANELS: PinnedTerminalPanel[] = []
-
-/** Compact + on User Panels: create a web panel without opening Settings. */
+/**
+ * Compact + on User Panels: create a web panel without opening Settings.
+ *
+ * Why no Tooltip wrapper: Tooltip+Popover asChild nesting was in the crash
+ * stack for React #185 (max update depth) at boot. Native title is enough.
+ * Why scalar store selectors: selecting `settings?.pinnedWebPanels ?? []`
+ * (even with a module EMPTY) still re-subscribed through full settings churn;
+ * only length/actions are read from the store during render.
+ */
 export function QuickAddWebPanelButton(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
-  const panels = useAppStore((s) => s.settings?.pinnedWebPanels ?? EMPTY_WEB_PANELS)
+  const atCap = useAppStore(
+    (s) => (s.settings?.pinnedWebPanels?.length ?? 0) >= MAX_PINNED_WEB_PANELS
+  )
   const [open, setOpen] = React.useState(false)
   const [title, setTitle] = React.useState('')
   const [url, setUrl] = React.useState('')
@@ -41,10 +44,12 @@ export function QuickAddWebPanelButton(): React.JSX.Element {
     }
   }, [url])
 
-  const atCap = panels.length >= MAX_PINNED_WEB_PANELS
-
   const submit = (): void => {
     if (!urlValid || atCap) {
+      return
+    }
+    const panels = useAppStore.getState().settings?.pinnedWebPanels ?? []
+    if (panels.length >= MAX_PINNED_WEB_PANELS) {
       return
     }
     const id = crypto.randomUUID()
@@ -67,34 +72,27 @@ export function QuickAddWebPanelButton(): React.JSX.Element {
     }
   }
 
+  const addLabel = translate(
+    'auto.components.sidebar.QuickAddPanelPopovers.addWebPanel',
+    'Add browser panel'
+  )
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="size-5 shrink-0 text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80"
-              disabled={atCap}
-              aria-label={translate(
-                'auto.components.sidebar.QuickAddPanelPopovers.addWebPanel',
-                'Add browser panel'
-              )}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <Plus className="size-3.5" strokeWidth={2.25} />
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={6}>
-          {translate(
-            'auto.components.sidebar.QuickAddPanelPopovers.addWebPanel',
-            'Add browser panel'
-          )}
-        </TooltipContent>
-      </Tooltip>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="size-5 shrink-0 text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80"
+          disabled={atCap}
+          aria-label={addLabel}
+          title={addLabel}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Plus className="size-3.5" strokeWidth={2.25} />
+        </Button>
+      </PopoverTrigger>
       <PopoverContent
         align="start"
         side="right"
@@ -142,20 +140,32 @@ export function QuickAddWebPanelButton(): React.JSX.Element {
 export function QuickAddTerminalPanelButton(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
-  const panels = useAppStore((s) => s.settings?.pinnedTerminalPanels ?? EMPTY_TERMINAL_PANELS)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const atCap = useAppStore(
+    (s) => (s.settings?.pinnedTerminalPanels?.length ?? 0) >= MAX_PINNED_TERMINAL_PANELS
+  )
+  // Why: Map identity can churn; only re-render when the label set changes.
+  const hostSuggestionsKey = useAppStore((s) => {
+    const labels = s.sshTargetLabels
+    if (!labels || labels.size === 0) {
+      return ''
+    }
+    return [...labels.values()].sort().join('\0')
+  })
   const [open, setOpen] = React.useState(false)
   const [draft, setDraft] = React.useState(emptyDraft)
 
   const hostSuggestions = React.useMemo(
-    () => [...new Set(sshTargetLabels.values())].sort(),
-    [sshTargetLabels]
+    () => (hostSuggestionsKey.length === 0 ? [] : hostSuggestionsKey.split('\0')),
+    [hostSuggestionsKey]
   )
-  const atCap = panels.length >= MAX_PINNED_TERMINAL_PANELS
   const canSubmit = draft.command.trim().length > 0 && !atCap
 
   const submit = (): void => {
     if (!canSubmit) {
+      return
+    }
+    const panels = useAppStore.getState().settings?.pinnedTerminalPanels ?? []
+    if (panels.length >= MAX_PINNED_TERMINAL_PANELS) {
       return
     }
     const id = crypto.randomUUID()
@@ -169,34 +179,27 @@ export function QuickAddTerminalPanelButton(): React.JSX.Element {
     }
   }
 
+  const addLabel = translate(
+    'auto.components.sidebar.QuickAddPanelPopovers.addTerminalPanel',
+    'Add node terminal'
+  )
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="size-5 shrink-0 text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80"
-              disabled={atCap}
-              aria-label={translate(
-                'auto.components.sidebar.QuickAddPanelPopovers.addTerminalPanel',
-                'Add node terminal'
-              )}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <Plus className="size-3.5" strokeWidth={2.25} />
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={6}>
-          {translate(
-            'auto.components.sidebar.QuickAddPanelPopovers.addTerminalPanel',
-            'Add node terminal'
-          )}
-        </TooltipContent>
-      </Tooltip>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="size-5 shrink-0 text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80"
+          disabled={atCap}
+          aria-label={addLabel}
+          title={addLabel}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Plus className="size-3.5" strokeWidth={2.25} />
+        </Button>
+      </PopoverTrigger>
       <PopoverContent
         align="start"
         side="right"

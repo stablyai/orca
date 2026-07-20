@@ -99,17 +99,26 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   )
 
   // Why: one-shot migration from legacy string `group` labels into first-class
-  // panelTreeGroups + groupId (L0 structure only — no PTY moves).
+  // panelTreeGroups + groupId (L0 structure only — no PTY moves). Ref-guard
+  // prevents a write→settings-churn→effect loop if migration deps keep new
+  // array identities (or if `group` is retained after groupId is assigned).
+  const legacyGroupMigrationAttempted = React.useRef(false)
   React.useEffect(() => {
+    if (legacyGroupMigrationAttempted.current) {
+      return
+    }
     const terms = pinnedTerminalPanelsSetting ?? []
     const webs = pinnedWebPanels ?? []
     const groups = panelTreeGroups ?? []
-    const needs =
-      terms.some((p) => Boolean(p.group) && !p.groupId) ||
-      (groups.length === 0 && terms.some((p) => Boolean(p.group)))
+    // Why: only panels still missing groupId need migration. Keeping the
+    // legacy `group` string after groupId is set is intentional for one-release
+    // readers — do NOT treat "has group label" alone as needs-migration (that
+    // re-fires forever after a successful migrate).
+    const needs = terms.some((p) => Boolean(p.group) && !p.groupId)
     if (!needs) {
       return
     }
+    legacyGroupMigrationAttempted.current = true
     const migrated = migrateLegacyPanelGroups({
       groups,
       terminalPanels: terms,
