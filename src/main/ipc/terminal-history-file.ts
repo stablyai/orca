@@ -5,7 +5,8 @@ import {
   ensureHistoryDir,
   hashWorktreeId,
   historyFilename,
-  resolveShellKind
+  resolveShellKind,
+  type ShellKind
 } from '../terminal-history'
 
 function isENOENT(error: unknown): boolean {
@@ -17,13 +18,33 @@ function isENOENT(error: unknown): boolean {
   )
 }
 
-/** Reads a worktree's persisted shell history file (raw content); null when the shell has no HISTFILE support yet (fish/pwsh/powershell/cmd) or nothing has been written yet. */
+/** Resolve the host's default login shell kind (matches LocalPtyProvider + the
+ *  daemon adapter, which both spawn `process.env.SHELL || '/bin/zsh'` on POSIX).
+ *  Windows has no POSIX-style shared default HISTFILE, so it has no default here. */
+function resolveDefaultLocalShellKind(): ShellKind {
+  if (process.platform === 'win32') {
+    return 'unknown'
+  }
+  return resolveShellKind(process.env.SHELL || '/bin/zsh')
+}
+
+/** Reads a worktree's persisted shell history file. Returns the raw content and the
+ *  resolved shell kind, or null when the shell has no HISTFILE support (fish/pwsh/
+ *  powershell/cmd) or nothing has been written yet.
+ *
+ *  When `shellPath` is omitted the host default login shell is resolved — this is the
+ *  dominant case (a plain terminal on the OS login shell), where the renderer has no
+ *  explicit shell override to report. An explicit `shellPath` is honored strictly (a
+ *  fish override reads no bash/zsh history), so the default only kicks in when absent.
+ *
+ *  Local-filesystem read only: SSH-hosted worktrees write their HISTFILE on the remote
+ *  host, so callers must skip this for remote worktrees (see task-10 report). */
 export async function readTerminalHistoryFile(args: {
   worktreeId: string
-  shellPath: string
+  shellPath?: string
   wslDistro?: string
-}): Promise<string | null> {
-  const shell = resolveShellKind(args.shellPath)
+}): Promise<{ content: string; shell: 'bash' | 'zsh' } | null> {
+  const shell = args.shellPath ? resolveShellKind(args.shellPath) : resolveDefaultLocalShellKind()
   const filename = historyFilename(shell)
   if (!filename) {
     return null
@@ -35,7 +56,9 @@ export async function readTerminalHistoryFile(args: {
   }
   const histFilePath = join(histDir, filename)
   try {
-    return await readFile(histFilePath, 'utf-8')
+    const content = await readFile(histFilePath, 'utf-8')
+    // filename is non-null only for bash/zsh, so the narrow is sound.
+    return { content, shell: shell as 'bash' | 'zsh' }
   } catch (error) {
     if (isENOENT(error)) {
       return null
@@ -47,8 +70,11 @@ export async function readTerminalHistoryFile(args: {
 export function registerTerminalHistoryFileHandlers(): void {
   ipcMain.handle(
     'terminal:readHistoryFile',
-    async (_event, args: { worktreeId: string; shellPath: string; wslDistro?: string }) => {
-      if (typeof args?.worktreeId !== 'string' || typeof args?.shellPath !== 'string') {
+    async (_event, args: { worktreeId: string; shellPath?: string; wslDistro?: string }) => {
+      if (typeof args?.worktreeId !== 'string') {
+        return null
+      }
+      if (args.shellPath !== undefined && typeof args.shellPath !== 'string') {
         return null
       }
       return readTerminalHistoryFile(args)

@@ -151,8 +151,7 @@ import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { createTerminalAutosuggestLineTracker } from './terminal-autosuggest-line-tracker'
 import {
   createTerminalAutosuggestSessionPool,
-  parseShellHistoryContent,
-  resolveParsableShellKindFromPath
+  parseShellHistoryContent
 } from './terminal-autosuggest-history-source'
 import {
   computeActiveAutosuggestState,
@@ -3224,28 +3223,27 @@ export function connectPanePty(
   const connectionId = worktreeConnectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
-  // Why: seed the autosuggest pool once from this worktree's persisted HISTFILE
-  // so a fresh session can suggest previously-run commands before any run again.
-  // Only the tab's explicit shell override identifies the shell in the renderer;
-  // when it is absent (OS default shell) or a non-parsable shell, we skip the
-  // seed and rely on session-run commands. Best-effort: failures degrade to
-  // session-only suggestions.
-  if (autosuggestEnabled) {
-    const parsableShellKind = shellOverride
-      ? resolveParsableShellKindFromPath(shellOverride)
-      : null
-    if (parsableShellKind) {
-      void window.api.terminal
-        .readHistoryFile({ worktreeId: deps.worktreeId, shellPath: shellOverride as string })
-        .then((content) => {
-          if (content && !disposed) {
-            autosuggestPersistedHistory = parseShellHistoryContent(content, parsableShellKind)
-          }
-        })
-        .catch(() => {
-          /* best-effort seed — session-run commands still populate the pool */
-        })
-    }
+  // Why: seed the autosuggest pool once from this worktree's persisted HISTFILE so a
+  // fresh session can suggest previously-run commands before any run again. Main resolves
+  // the shell: an explicit override is passed through; when absent (the common OS default
+  // login shell case) main resolves process.env.SHELL and returns the kind, so the renderer
+  // no longer needs to identify the shell itself. Skipped for SSH worktrees (connectionId):
+  // the remote HISTFILE isn't on this machine's filesystem (see task-10 report). Best-effort:
+  // failures degrade to session-only suggestions.
+  if (autosuggestEnabled && !connectionId) {
+    void window.api.terminal
+      .readHistoryFile({
+        worktreeId: deps.worktreeId,
+        ...(shellOverride ? { shellPath: shellOverride } : {})
+      })
+      .then((result) => {
+        if (result && !disposed) {
+          autosuggestPersistedHistory = parseShellHistoryContent(result.content, result.shell)
+        }
+      })
+      .catch(() => {
+        /* best-effort seed — session-run commands still populate the pool */
+      })
   }
   // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
   // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly

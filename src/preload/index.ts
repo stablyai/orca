@@ -1161,7 +1161,7 @@ const api = {
   },
 
   terminal: {
-    readHistoryFile: (args: { worktreeId: string; shellPath: string; wslDistro?: string }) =>
+    readHistoryFile: (args: { worktreeId: string; shellPath?: string; wslDistro?: string }) =>
       ipcRenderer.invoke('terminal:readHistoryFile', args)
   },
 
