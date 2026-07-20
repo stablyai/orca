@@ -102,9 +102,39 @@ async function resolveRepoWorktreesPath(
       return parentPath
     }
     return pathOps.join(resolvedRepoGitdirPath, 'worktrees')
-  } catch {
+  } catch (error) {
+    // Why: a bare repo has no `.git` entry at all; its linked-worktree admin
+    // dir lives directly at `<repo>/worktrees`.
+    if (isMissingPathError(error) && (await isBareRepoRootDirectory(repoPath, pathOps, statPath))) {
+      return pathOps.resolve(repoPath, 'worktrees')
+    }
     return null
   }
+}
+
+async function isBareRepoRootDirectory(
+  repoPath: string,
+  pathOps: PathOps,
+  statPath: StatPath
+): Promise<boolean> {
+  try {
+    const [headEntry, objectsEntry, refsEntry] = await Promise.all([
+      statPath(pathOps.join(repoPath, 'HEAD')),
+      statPath(pathOps.join(repoPath, 'objects')),
+      statPath(pathOps.join(repoPath, 'refs'))
+    ])
+    return isGitFileStat(headEntry) && isDirectoryStat(objectsEntry) && isDirectoryStat(refsEntry)
+  } catch {
+    return false
+  }
+}
+
+function isDirectoryStat(stat: unknown): boolean {
+  const dirStat =
+    stat && typeof stat === 'object'
+      ? (stat as { isDirectory?: () => boolean; type?: unknown })
+      : null
+  return !!dirStat && (dirStat.isDirectory?.() === true || dirStat.type === 'directory')
 }
 
 async function repoGitdirIsLinkedWorktreeAdminEntry(

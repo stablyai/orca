@@ -216,6 +216,42 @@ describe('computeWorktreePath', () => {
     ).toBe(posix.resolve('/projects/app/worktrees/feature'))
   })
 
+  it('resolves relative workspace directories beside a bare repo, not inside it', () => {
+    // Why: the bare repo path IS its git dir — a relative 'worktrees' root
+    // resolved inside it would collide with git's own admin dir.
+    expect(
+      computeWorkspaceRoot('/projects/app.git', { workspaceDir: 'worktrees', repoIsBare: true })
+    ).toBe(posix.resolve('/projects/worktrees'))
+    expect(
+      computeWorktreePath('feature', '/projects/app.git', {
+        nestWorkspaces: false,
+        workspaceDir: 'worktrees',
+        repoIsBare: true
+      })
+    ).toBe(posix.resolve('/projects/worktrees/feature'))
+  })
+
+  it('keeps absolute workspace directories unchanged for bare repos', () => {
+    expect(
+      computeWorkspaceRoot('/projects/app.git', { workspaceDir: '/workspaces', repoIsBare: true })
+    ).toBe('/workspaces')
+  })
+
+  it('stamps repoIsBare into worktree path settings from the repo', () => {
+    expect(
+      getWorktreePathSettings(
+        { path: '/projects/app.git', isBare: true },
+        { nestWorkspaces: false, workspaceDir: '/workspaces' }
+      )
+    ).toEqual({ nestWorkspaces: false, workspaceDir: '/workspaces', repoIsBare: true })
+    expect(
+      getWorktreePathSettings(
+        { path: '/projects/app' },
+        { nestWorkspaces: false, workspaceDir: '/workspaces' }
+      )
+    ).toEqual({ nestWorkspaces: false, workspaceDir: '/workspaces', repoIsBare: false })
+  })
+
   it('scopes the same relative repo override to each repo root', () => {
     const settings = { nestWorkspaces: false, workspaceDir: '/global/workspaces' }
     const repoA = { path: '/projects/a/repo', worktreeBasePath: '../worktrees' }

@@ -1429,10 +1429,14 @@ function sanitizeRepoUpdatesForPersistence<
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
+      | 'isBare'
     >
   >
 >(updates: T): T {
   const sanitized = { ...updates }
+  if ('isBare' in sanitized && typeof sanitized.isBare !== 'boolean') {
+    delete sanitized.isBare
+  }
   if ('badgeColor' in sanitized) {
     const badgeColor = normalizeRepoBadgeColor(sanitized.badgeColor)
     if (!badgeColor) {
@@ -4439,6 +4443,7 @@ export class Store {
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
+        | 'isBare'
         | 'executionHostId'
         | 'symlinkPaths'
         | 'issueSourcePreference'

@@ -9,6 +9,7 @@ import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-star
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { gitExecFileSync, promptGuardShellEnv } from './git/runner'
+import { hasValidBareRepoMarkerSync } from './git/repo'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import type {
   HookCommandSourcePolicy,
@@ -182,6 +183,11 @@ export function writeIssueCommand(repoPath: string, content: string): void {
  * directory is never accidentally committed.
  */
 function ensureOrcaDirIgnored(repoPath: string): void {
+  // Why: a bare repo path is its git dir — nothing there can be committed,
+  // and a .gitignore written into it is inert junk.
+  if (hasValidBareRepoMarkerSync(repoPath)) {
+    return
+  }
   const gitignorePath = join(repoPath, '.gitignore')
   try {
     if (existsSync(gitignorePath)) {

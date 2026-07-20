@@ -46,20 +46,24 @@ export function effectiveExternalWorktreeVisibility(
 
 export function buildKnownOrcaWorkspaceLayouts(
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>,
-  repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
+  repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath' | 'isBare'>
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
   const repoBasePath = getRepoWorktreeBasePath(repo)
+  // Why: creation resolves relative workspace dirs beside a bare repo's git
+  // dir (worktree-logic.ts); ownership classification must mirror that or
+  // bare-repo worktrees would read as external.
+  const repoIsBare = repo?.isBare === true
   if (repo && repoBasePath) {
     layouts.push({
-      path: resolveWorkspaceLayoutPath(repo.path, repoBasePath),
+      path: resolveWorkspaceLayoutPath(repo.path, repoBasePath, repoIsBare),
       nestWorkspaces: settings.nestWorkspaces
     })
   }
   if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
     layouts.push({
       path: repo
-        ? resolveWorkspaceLayoutPath(repo.path, settings.workspaceDir)
+        ? resolveWorkspaceLayoutPath(repo.path, settings.workspaceDir, repoIsBare)
         : settings.workspaceDir,
       nestWorkspaces: settings.nestWorkspaces
     })
@@ -69,7 +73,7 @@ export function buildKnownOrcaWorkspaceLayouts(
         .filter((layout) => shouldIncludeWorkspaceLayout(repo, layout.path))
         .map((layout) => ({
           ...layout,
-          path: repo ? resolveWorkspaceLayoutPath(repo.path, layout.path) : layout.path
+          path: repo ? resolveWorkspaceLayoutPath(repo.path, layout.path, repoIsBare) : layout.path
         }))
     )
   }
@@ -106,10 +110,15 @@ function getRepoWorktreeBasePath(
   return trimmed || undefined
 }
 
-function resolveWorkspaceLayoutPath(repoPath: string, layoutPath: string): string {
-  return isRuntimePathAbsoluteForRepo(repoPath, layoutPath)
-    ? normalizeRuntimePathSeparators(layoutPath)
-    : resolveRuntimePath(repoPath, layoutPath)
+function resolveWorkspaceLayoutPath(
+  repoPath: string,
+  layoutPath: string,
+  repoIsBare = false
+): string {
+  if (isRuntimePathAbsoluteForRepo(repoPath, layoutPath)) {
+    return normalizeRuntimePathSeparators(layoutPath)
+  }
+  return resolveRuntimePath(repoPath, repoIsBare ? `../${layoutPath}` : layoutPath)
 }
 
 function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: string): boolean {

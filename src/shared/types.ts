@@ -241,6 +241,9 @@ export type Repo = {
   upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
+  /** True when the repo is a bare git repository (no working tree at `path`);
+   *  the repo is a worktree hub only. Absent = non-bare or not yet probed. */
+  isBare?: boolean
   gitUsername?: string
   worktreeBaseRef?: string
   /** Optional repo-scoped workspace root override. Relative paths resolve from `path`. */

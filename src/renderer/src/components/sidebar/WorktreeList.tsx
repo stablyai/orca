@@ -201,6 +201,7 @@ import {
 } from './worktree-lineage-drag-drop'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import {
+  REPO_HEADER_ACTION_ALWAYS_VISIBLE_CLASS,
   REPO_HEADER_ACTION_BUTTON_CLASS,
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from './repo-header-action-button-class'
@@ -4727,7 +4728,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               <span
                                 className={cn(
                                   'inline-flex cursor-not-allowed transition-[margin,max-width,opacity]',
-                                  REPO_HEADER_ACTION_REVEAL_CLASS
+                                  REPO_HEADER_ACTION_REVEAL_CLASS,
+                                  row.count === 0 && REPO_HEADER_ACTION_ALWAYS_VISIBLE_CLASS
                                 )}
                                 data-repo-header-action=""
                                 tabIndex={0}
@@ -4752,7 +4754,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 type="button"
                                 variant="ghost"
                                 size="icon-xs"
-                                className={REPO_HEADER_ACTION_BUTTON_CLASS}
+                                className={cn(
+                                  REPO_HEADER_ACTION_BUTTON_CLASS,
+                                  row.count === 0 && REPO_HEADER_ACTION_ALWAYS_VISIBLE_CLASS
+                                )}
                                 data-repo-header-action=""
                                 aria-label={
                                   createState?.ariaLabel ??

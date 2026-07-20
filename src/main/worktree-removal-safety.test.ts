@@ -97,6 +97,41 @@ describe('getRegisteredDeletableWorktree', () => {
 })
 
 describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
+  it('accepts a linked worktree of a bare repo whose admin dir is <repo>/worktrees', async () => {
+    // Why: a bare repo has no `.git` entry; its linked-worktree admin dir
+    // lives directly under the repo path.
+    await expect(
+      canSafelyRemoveOrphanedWorktreeDirectory(
+        '/workspaces/orphan',
+        '/repo.git',
+        makeStatPath(
+          ['/workspaces/orphan/.git', '/repo.git/HEAD'],
+          ['/repo.git/objects', '/repo.git/refs']
+        ),
+        makeReadPath([
+          ['/workspaces/orphan/.git', 'gitdir: /repo.git/worktrees/orphan\n'],
+          ['/repo.git/worktrees/orphan/gitdir', '/workspaces/orphan/.git\n']
+        ])
+      )
+    ).resolves.toBe(true)
+  })
+
+  it('rejects a bare-style admin path when the repo dir lacks bare markers', async () => {
+    // Why: without HEAD/objects/refs at the repo path, `<repo>/worktrees`
+    // is just a directory name — not Git's linked-worktree admin dir.
+    await expect(
+      canSafelyRemoveOrphanedWorktreeDirectory(
+        '/workspaces/orphan',
+        '/repo.git',
+        makeStatPath(['/workspaces/orphan/.git']),
+        makeReadPath([
+          ['/workspaces/orphan/.git', 'gitdir: /repo.git/worktrees/orphan\n'],
+          ['/repo.git/worktrees/orphan/gitdir', '/workspaces/orphan/.git\n']
+        ])
+      )
+    ).resolves.toBe(false)
+  })
+
   it('accepts a linked worktree .git file that points at this repo worktrees entry', async () => {
     await expect(
       canSafelyRemoveOrphanedWorktreeDirectory(

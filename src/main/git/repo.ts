@@ -152,6 +152,29 @@ function probeGitRepo(path: string): GitRepoProbeResult {
   return sawFailure ? 'indeterminate' : 'not-repo'
 }
 
+/**
+ * True when `path` is the root of a bare git repository (no working tree).
+ * Why: bare repos are valid projects but must never be treated as a
+ * workspace; callers stamp Repo.isBare from this at add time.
+ */
+export function isBareGitRepo(path: string): boolean {
+  try {
+    const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
+      cwd: path
+    }).trim()
+    if (bareRepo === 'true') {
+      return true
+    }
+    if (bareRepo === 'false') {
+      return false
+    }
+  } catch {
+    // Why: mirror isGitRepo — a spawn/config failure is not a verdict; fall
+    // back to the filesystem marker so a genuine bare repo is still flagged.
+  }
+  return hasValidBareRepoMarkerSync(path)
+}
+
 export function getGitRepoRoot(path: string): string {
   try {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
@@ -368,7 +391,8 @@ function hasValidLinkedWorktreeGitDirectorySync(gitDir: string): boolean {
   }
 }
 
-function hasValidBareRepoMarkerSync(path: string): boolean {
+/** Filesystem-only bare-root check (no git spawn) for callers that must stay cheap. */
+export function hasValidBareRepoMarkerSync(path: string): boolean {
   return hasValidCommonGitDirectorySync(path) && !gitConfigDeclaresNonBare(path)
 }
 
@@ -517,7 +541,27 @@ export function getDefaultBaseRef(path: string): string | null {
       return returnAs
     }
   }
-  return null
+  return getHeadBranchBaseRef(path)
+}
+
+/**
+ * Last-resort default: HEAD's symbolic target. Bare clones populate neither
+ * refs/remotes/origin/* nor origin/HEAD, and a nonstandard default branch
+ * misses the main/master probes; HEAD still names the branch git itself
+ * treats as default. Unborn HEAD fails the ref verify and stays null.
+ */
+function getHeadBranchBaseRef(path: string): string | null {
+  try {
+    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'HEAD'], {
+      cwd: path
+    }).trim()
+    if (!ref.startsWith('refs/heads/') || !hasGitRef(path, ref)) {
+      return null
+    }
+    return ref.slice('refs/heads/'.length)
+  } catch {
+    return null
+  }
 }
 
 export async function getBaseRefDefault(
@@ -655,7 +699,25 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
   if (originHeadBaseRef) {
     return originHeadBaseRef
   }
-  return resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
+  const probed = await resolveDefaultBaseRefFromProbes((ref) => hasGitRefViaExec(exec, ref))
+  if (probed) {
+    return probed
+  }
+  return resolveHeadBranchBaseRefViaExec(exec)
+}
+
+/** Exec-callback twin of getHeadBranchBaseRef — keep the two in sync. */
+async function resolveHeadBranchBaseRefViaExec(exec: GitExec): Promise<string | null> {
+  try {
+    const { stdout } = await exec(['symbolic-ref', '--quiet', 'HEAD'])
+    const ref = stdout.trim()
+    if (!ref.startsWith('refs/heads/') || !(await hasGitRefViaExec(exec, ref))) {
+      return null
+    }
+    return ref.slice('refs/heads/'.length)
+  } catch {
+    return null
+  }
 }
 
 export function resolveDefaultBaseRefWithLocalGit(
