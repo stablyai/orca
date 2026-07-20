@@ -302,6 +302,7 @@ describe('createMainWindow', () => {
   it('keeps main-window background throttling enabled while repainting macOS visibility transitions', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    let windowSize: [number, number] = [1200, 800]
     const webContents = {
       on: vi.fn(),
       setZoomLevel: vi.fn(),
@@ -324,8 +325,10 @@ describe('createMainWindow', () => {
       isDestroyed: vi.fn(() => false),
       isMaximized: vi.fn(() => false),
       isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
+      getSize: vi.fn(() => windowSize),
+      setSize: vi.fn((width: number, height: number) => {
+        windowSize = [width, height]
+      }),
       maximize: vi.fn(),
       show: vi.fn(),
       loadFile: vi.fn(),
@@ -335,15 +338,11 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    createMainWindow(null)
+    withPlatform('darwin', () => createMainWindow(null))
 
     // Why: throttling-off pins visibilityState 'visible' and renders occluded
     // windows at full rate; this guards against reintroducing it.
     expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
-
-    if (process.platform !== 'darwin') {
-      return
-    }
 
     expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
     expect(windowHandlers.get('restore')).toHaveLength(1)
@@ -351,24 +350,26 @@ describe('createMainWindow', () => {
     expect(windowHandlers.get('focus')).toHaveLength(1)
 
     windowHandlers.get('show')?.[0]?.()
+    windowHandlers.get('restore')?.[0]?.()
 
-    expect(webContents.invalidate).toHaveBeenCalledTimes(1)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
     expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(1, 1201, 800)
+    expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(32)
     expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(2, 1200, 800)
 
     vi.advanceTimersByTime(217)
-    expect(webContents.invalidate).toHaveBeenCalledTimes(1)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
 
     vi.advanceTimersByTime(1)
-    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(3)
 
     // Focus covers occlusion-uncover with invalidate only — no setSize jiggle
     // that would resize terminals on every window focus.
     const setSizeCalls = browserWindowInstance.setSize.mock.calls.length
     windowHandlers.get('focus')?.[0]?.()
-    expect(webContents.invalidate).toHaveBeenCalledTimes(3)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(4)
     expect(browserWindowInstance.setSize.mock.calls.length).toBe(setSizeCalls)
   })
 

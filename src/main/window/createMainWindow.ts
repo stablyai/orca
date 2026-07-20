@@ -50,6 +50,10 @@ import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 
+// Why: show/restore/resume can overlap before the size nudge resets; never
+// capture the temporary width as the next repaint's baseline.
+const activeRepaintJiggles = new WeakSet<BrowserWindow>()
+
 function forceRepaint(window: BrowserWindow): void {
   // Why: webContents can be destroyed a beat before the BrowserWindow during
   // close, and this runs from timers/focus events that can land in that gap.
@@ -57,15 +61,17 @@ function forceRepaint(window: BrowserWindow): void {
     return
   }
   window.webContents.invalidate()
-  if (window.isMaximized() || window.isFullScreen()) {
+  if (window.isMaximized() || window.isFullScreen() || activeRepaintJiggles.has(window)) {
     return
   }
+  activeRepaintJiggles.add(window)
   const [width, height] = window.getSize()
   window.setSize(width + 1, height)
   setTimeout(() => {
     if (!window.isDestroyed()) {
       window.setSize(width, height)
     }
+    activeRepaintJiggles.delete(window)
   }, 32)
 }
 
