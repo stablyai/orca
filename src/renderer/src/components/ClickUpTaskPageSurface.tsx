@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, ExternalLink, Loader2, Plus, RefreshCw, Search, X } from 'lucide-react'
 import type {
@@ -30,6 +30,8 @@ import {
   clickUpTaskReference
 } from './clickup-task-page-model'
 
+const TASK_GRID_COLUMNS = 'grid-cols-[110px_minmax(0,2fr)_140px_140px_110px_64px]'
+
 export function ClickUpTaskPageSurface({
   sourceContext,
   onHide
@@ -55,6 +57,7 @@ export function ClickUpTaskPageSurface({
   const [selectedTask, setSelectedTask] = useState<ClickUpTask | null>(null)
   const [connectOpen, setConnectOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const forcedForNonceRef = useRef(-1)
 
   const workspaces = status.workspaces ?? []
   const selectedWorkspaceId =
@@ -74,9 +77,11 @@ export function ClickUpTaskPageSurface({
     let cancelled = false
     setLoading(true)
     setError(null)
+    const shouldForce = refreshNonce !== forcedForNonceRef.current
+    forcedForNonceRef.current = refreshNonce
     const request = appliedQuery.trim()
-      ? searchTasks(appliedQuery, 50, { force: refreshNonce > 0, sourceContext })
-      : listTasks(filter, 100, { force: refreshNonce > 0, sourceContext })
+      ? searchTasks(appliedQuery, 50, { force: shouldForce, sourceContext })
+      : listTasks(filter, 100, { force: shouldForce, sourceContext })
     void request
       .then((nextTasks) => {
         if (!cancelled) {
@@ -262,7 +267,9 @@ export function ClickUpTaskPageSurface({
         </Button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border bg-background shadow-sm">
-        <div className="grid grid-cols-[110px_minmax(0,2fr)_140px_140px_110px_64px] gap-3 border-b border-border bg-muted/35 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <div
+          className={`grid ${TASK_GRID_COLUMNS} gap-3 border-b border-border bg-muted/35 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground`}
+        >
           <span>{translate('auto.components.clickup.page.id', 'ID')}</span>
           <span>{translate('auto.components.clickup.page.name', 'Name')}</span>
           <span>{translate('auto.components.clickup.page.status', 'Status')}</span>
@@ -277,10 +284,7 @@ export function ClickUpTaskPageSurface({
           {loading && tasks.length === 0 ? (
             <div className="divide-y divide-border">
               {Array.from({ length: 8 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-[110px_minmax(0,2fr)_140px_140px_110px_64px] gap-3 px-3 py-3"
-                >
+                <div key={index} className={`grid ${TASK_GRID_COLUMNS} gap-3 px-3 py-3`}>
                   {Array.from({ length: 5 }).map((__, cell) => (
                     <div key={cell} className="h-3 animate-pulse rounded bg-muted" />
                   ))}
@@ -314,7 +318,7 @@ export function ClickUpTaskPageSurface({
                     setSelectedTask(task)
                   }
                 }}
-                className="grid cursor-pointer grid-cols-[110px_minmax(0,2fr)_140px_140px_110px_64px] gap-3 px-3 py-2 text-left hover:bg-accent"
+                className={`grid ${TASK_GRID_COLUMNS} cursor-pointer gap-3 px-3 py-2 text-left hover:bg-accent`}
               >
                 <span className="truncate font-mono text-xs text-muted-foreground">
                   {clickUpTaskReference(task)}

@@ -9236,7 +9236,11 @@
           "disconnect": "Disconnect ClickUp",
           "tokenScope": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
           "setupHelp": "Use a Personal API token from ClickUp Settings → Apps.",
-          "recheck": "Re-check"
+          "recheck": "Re-check",
+          "statusConnected": "Connected",
+          "statusNotConnected": "Not connected",
+          "connectedDescriptionSingular": "{{value0}} Workspace available",
+          "connectedDescriptionPlural": "{{value0}} Workspaces available"
         }
       },
       "right": {

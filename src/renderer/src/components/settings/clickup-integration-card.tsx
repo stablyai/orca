@@ -41,23 +41,38 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
     setTesting(true)
     setVerified(false)
     setTestError(null)
-    const result = await testConnection()
-    if (!mountedRef.current) {
-      return
-    }
-    setTesting(false)
-    if (result.ok) {
-      setVerified(true)
-    } else {
-      setTestError(result.error)
+    try {
+      const result = await testConnection()
+      if (!mountedRef.current) {
+        return
+      }
+      if (result.ok) {
+        setVerified(true)
+      } else {
+        setTestError(result.error)
+      }
+    } catch (cause: unknown) {
+      if (mountedRef.current) {
+        setTestError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setTesting(false)
+      }
     }
   }
 
   const handleDisconnect = async (): Promise<void> => {
-    await disconnect()
-    if (mountedRef.current) {
-      setVerified(false)
-      setTestError(null)
+    try {
+      await disconnect()
+    } catch (cause: unknown) {
+      if (mountedRef.current) {
+        setTestError(cause instanceof Error ? cause.message : String(cause))
+      }
+    } finally {
+      if (mountedRef.current) {
+        setVerified(false)
+      }
     }
   }
 
@@ -67,11 +82,17 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
       name="ClickUp"
       description={
         connected
-          ? translate(
-              'auto.components.settings.clickup.connectedDescription',
-              '{{value0}} Workspace{{value1}} available',
-              { value0: workspaces.length, value1: workspaces.length === 1 ? '' : 's' }
-            )
+          ? workspaces.length === 1
+            ? translate(
+                'auto.components.settings.clickup.connectedDescriptionSingular',
+                '{{value0}} Workspace available',
+                { value0: workspaces.length }
+              )
+            : translate(
+                'auto.components.settings.clickup.connectedDescriptionPlural',
+                '{{value0}} Workspaces available',
+                { value0: workspaces.length }
+              )
           : checking
             ? translate(
                 'auto.components.settings.clickup.checkingDescription',
@@ -84,7 +105,11 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate('auto.components.settings.clickup.statusConnected', 'Connected')
+          : translate('auto.components.settings.clickup.statusNotConnected', 'Not connected')
+      }
       actions={
         !checking ? (
           <Button

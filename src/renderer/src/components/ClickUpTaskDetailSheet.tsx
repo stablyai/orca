@@ -12,6 +12,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -28,9 +29,6 @@ import {
   SheetTitle
 } from '@/components/ui/sheet'
 import { translate } from '@/i18n/i18n'
-
-const textareaClassName =
-  'w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30'
 
 function dateInputValue(value: string | null | undefined): string {
   return value?.slice(0, 10) ?? ''
@@ -50,6 +48,7 @@ export function ClickUpTaskDetailSheet({
   onTaskChanged: (task: ClickUpTask) => void
 }): React.JSX.Element {
   const refreshTask = useAppStore((state) => state.fetchClickUpTask)
+  const patchTask = useAppStore((state) => state.patchClickUpTask)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState('')
@@ -124,6 +123,16 @@ export function ClickUpTaskDetailSheet({
       setError(result.error)
       return
     }
+    patchTask(
+      task.id,
+      {
+        name: name.trim(),
+        description,
+        status: { ...task.status, name: status },
+        dueDate: dueDate || null
+      },
+      sourceContext
+    )
     const refreshed = await refreshTask(task.id, task.workspaceId, {
       force: true,
       sourceContext
@@ -154,10 +163,15 @@ export function ClickUpTaskDetailSheet({
       setError(result.error)
       return
     }
-    const nextComments = await clickUpTaskComments(sourceContext, task.id, task.workspaceId)
-    setComments(nextComments)
-    setComment('')
-    setCommenting(false)
+    try {
+      const nextComments = await clickUpTaskComments(sourceContext, task.id, task.workspaceId)
+      setComments(nextComments)
+      setComment('')
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'Failed to reload comments.')
+    } finally {
+      setCommenting(false)
+    }
   }
 
   return (
@@ -188,12 +202,12 @@ export function ClickUpTaskDetailSheet({
                 <Label htmlFor="clickup-detail-description" className="text-xs">
                   {translate('auto.components.clickup.detail.description', 'Description')}
                 </Label>
-                <textarea
+                <Textarea
                   id="clickup-detail-description"
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   rows={8}
-                  className={textareaClassName}
+                  className="resize-y"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
@@ -260,11 +274,11 @@ export function ClickUpTaskDetailSheet({
                     {translate('auto.components.clickup.detail.comments', 'Comments')}
                   </h3>
                 </div>
-                <textarea
+                <Textarea
                   value={comment}
                   onChange={(event) => setComment(event.target.value)}
                   rows={3}
-                  className={textareaClassName}
+                  className="resize-y"
                   placeholder={translate(
                     'auto.components.clickup.detail.commentPlaceholder',
                     'Add a comment…'
