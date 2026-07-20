@@ -32,6 +32,7 @@ export function useImageViewerPanSurface(): ImageViewerPanSurfaceBindings {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
+      // 仅在指针位于图片面且无系统修饰键时接管空格，避免干扰全局快捷键。
       if (
         !isSpaceKey(event) ||
         event.altKey ||
