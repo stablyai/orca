@@ -20,6 +20,7 @@ import {
 
 const CLICKUP_API_BASE_URL = 'https://api.clickup.com/api/v2'
 const MAX_CONCURRENT = 4
+const CLICKUP_REQUEST_TIMEOUT_MS = 30_000
 
 let running = 0
 const queue: (() => void)[] = []
@@ -82,7 +83,11 @@ async function requestWithToken<T>(token: string, path: string, init?: RequestIn
   if (init?.body !== undefined) {
     headers.set('Content-Type', 'application/json')
   }
-  const response = await net.fetch(url, { ...init, headers })
+  const response = await net.fetch(url, {
+    ...init,
+    headers,
+    signal: init?.signal ?? AbortSignal.timeout(CLICKUP_REQUEST_TIMEOUT_MS)
+  })
   if (!response.ok) {
     throw new ClickUpApiError(await readApiError(response), response.status)
   }
@@ -112,7 +117,13 @@ export function getClients(
   if (!account) {
     return []
   }
-  const token = readClickUpToken()
+  let token: string | null
+  try {
+    token = readClickUpToken()
+  } catch {
+    // Why: credentials copied from another OS profile should behave as disconnected, not crash task reads.
+    return []
+  }
   if (!token) {
     return []
   }
@@ -122,6 +133,24 @@ export function getClients(
       ? account.workspaces
       : account.workspaces.filter((workspace) => workspace.id === selected)
   return workspaces.map((workspace) => ({ workspace, token }))
+}
+
+export function requireClickUpClient(workspaceId?: string): ClickUpClientForWorkspace {
+  const client = getClients(workspaceId)[0]
+  if (!client) {
+    throw new Error('Connect ClickUp and select a Workspace first.')
+  }
+  return client
+}
+
+export function requireClickUpClients(
+  workspaceId?: ClickUpWorkspaceSelection | null
+): ClickUpClientForWorkspace[] {
+  const clients = getClients(workspaceId)
+  if (clients.length === 0) {
+    throw new Error('Connect ClickUp and select a Workspace first.')
+  }
+  return clients
 }
 
 export function getStatus(): ClickUpConnectionStatus {
