@@ -79,27 +79,33 @@ function CreatePrHeaderButton({
   isCreatingPr: boolean
   onClick: () => void
 }): React.JSX.Element {
+  const button = (
+    <Button
+      type="button"
+      size="xs"
+      disabled={action.disabled}
+      onClick={onClick}
+      className="h-6 shrink-0 px-2 text-[11px]"
+    >
+      {isCreatePrIntentInFlight || isCreatingPr ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
+      )}
+      {action.label}
+    </Button>
+  )
+
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0">
-          <Button
-            type="button"
-            size="xs"
-            disabled={action.disabled}
-            onClick={onClick}
-            className="h-6 shrink-0 px-2 text-[11px]"
-            title={action.title}
-          >
-            {isCreatePrIntentInFlight || isCreatingPr ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-            )}
-            {action.label}
-          </Button>
-        </span>
-      </TooltipTrigger>
+      {action.disabled ? (
+        <TooltipTrigger asChild>
+          {/* Why: disabled buttons cannot own Radix hover events; only that state needs a wrapper. */}
+          <span className="inline-flex shrink-0 cursor-not-allowed">{button}</span>
+        </TooltipTrigger>
+      ) : (
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+      )}
       <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
         {action.title}
       </TooltipContent>
@@ -215,23 +221,29 @@ export function SourceControlHeaderToolbar({
               // Why: keep filter/overflow pinned right without stretching Create PR.
               <span className="min-w-0 flex-1" aria-hidden="true" />
             ) : null}
-            <button
-              type="button"
-              data-testid="source-control-filter-toggle"
-              className={cn(
-                'relative inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                normalizedFilter && 'bg-muted text-foreground'
-              )}
-              onClick={expandFilter}
-              aria-label={filterToggleTitle}
-              title={filterToggleTitle}
-              aria-expanded={false}
-            >
-              <Search className="size-3.5" />
-              {normalizedFilter ? (
-                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
-              ) : null}
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="source-control-filter-toggle"
+                  className={cn(
+                    'relative inline-flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                    normalizedFilter && 'bg-muted text-foreground'
+                  )}
+                  onClick={expandFilter}
+                  aria-label={filterToggleTitle}
+                  aria-expanded={false}
+                >
+                  <Search className="size-3.5" />
+                  {normalizedFilter ? (
+                    <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
+                  ) : null}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {filterToggleTitle}
+              </TooltipContent>
+            </Tooltip>
             {renderOverflowMenu(overflowProps)}
           </>
         ) : (
@@ -263,23 +275,29 @@ export function SourceControlHeaderToolbar({
                 )}
               />
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label={translate(
-                'auto.components.right.sidebar.SourceControl.d4f8c2a901',
-                'Clear and close filter'
-              )}
-              title={translate(
-                'auto.components.right.sidebar.SourceControl.d4f8c2a901',
-                'Clear and close filter'
-              )}
-              onClick={clearAndCollapseFilter}
-            >
-              <X className="size-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                  aria-label={translate(
+                    'auto.components.right.sidebar.SourceControl.d4f8c2a901',
+                    'Clear and close filter'
+                  )}
+                  onClick={clearAndCollapseFilter}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate(
+                  'auto.components.right.sidebar.SourceControl.d4f8c2a901',
+                  'Clear and close filter'
+                )}
+              </TooltipContent>
+            </Tooltip>
           </>
         )}
       </div>

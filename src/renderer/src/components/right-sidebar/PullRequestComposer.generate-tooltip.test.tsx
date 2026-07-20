@@ -10,13 +10,15 @@ type RenderPullRequestComposerOptions = {
   generating?: boolean
   generateDisabled?: boolean
   generateDisabledReason?: string
+  title?: string
 }
 
 function renderPullRequestComposer({
   aiGenerationEnabled = true,
   generating = false,
   generateDisabled = false,
-  generateDisabledReason
+  generateDisabledReason,
+  title = ''
 }: RenderPullRequestComposerOptions = {}): string {
   const sourceControlInputs = {
     stagedCount: 1,
@@ -38,7 +40,7 @@ function renderPullRequestComposer({
         branch="branch-login-issue"
         base="master"
         setBase={vi.fn()}
-        title=""
+        title={title}
         setTitle={vi.fn()}
         body=""
         setBody={vi.fn()}
@@ -74,6 +76,18 @@ function elementByLabel(markup: string, tagName: string, label: string): string 
 
   if (!element) {
     throw new Error(`${tagName} not found: ${label}`)
+  }
+
+  return element
+}
+
+function elementByText(markup: string, tagName: string, text: string): string {
+  const element = [...markup.matchAll(new RegExp(`<${tagName}\\b[\\s\\S]*?</${tagName}>`, 'g'))]
+    .map((match) => match[0])
+    .find((entry) => entry.includes(text))
+
+  if (!element) {
+    throw new Error(`${tagName} not found: ${text}`)
   }
 
   return element
@@ -121,5 +135,24 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
 
     expect(button).toContain('data-slot="tooltip-trigger"')
     expect(button).not.toContain('disabled=""')
+  })
+
+  it('keeps the enabled create control as the direct tooltip trigger', () => {
+    const markup = renderPullRequestComposer({ title: 'Ready for review' })
+    const button = elementByText(markup, 'button', 'Create')
+
+    expect(button).toContain('data-slot="tooltip-trigger"')
+    expect(button).not.toContain('disabled=""')
+  })
+
+  it('wraps only the disabled create control so its reason remains hoverable', () => {
+    const markup = renderPullRequestComposer()
+    const button = elementByText(markup, 'button', 'Create')
+
+    expect(button).not.toContain('data-slot="tooltip-trigger"')
+    expect(button).toContain('disabled=""')
+    expect(markup).toMatch(
+      /<span[^>]*data-slot="tooltip-trigger"[^>]*><button[^>]*disabled=""[\s\S]*?Create/
+    )
   })
 })

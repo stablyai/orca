@@ -76,4 +76,31 @@ describe('GitHistoryPanel', () => {
     expect(markup).toContain('Fix tab overflow')
     expect(markup).toContain('52ad492')
   })
+
+  it('shows commit and ref hints through tooltips instead of native titles', () => {
+    const result = makeHistoryResult()
+    result.items[0].references = [
+      { id: 'refs/heads/main', name: 'main', category: 'branches' },
+      { id: 'refs/remotes/origin/main', name: 'origin/main', category: 'remote branches' },
+      { id: 'refs/heads/feature', name: 'feature', category: 'branches' },
+      { id: 'refs/tags/v1.4.0', name: 'v1.4.0', category: 'tags' }
+    ]
+    const markup = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onOpenCommit={vi.fn()}
+      />
+    )
+
+    // Why: a native title on the row, subject, or ref pills duplicates the app
+    // tooltip on the same hover path (BUG-004).
+    expect(markup).not.toContain('title="Fix tab overflow"')
+    expect(markup).not.toContain('title="main"')
+    expect(markup).not.toContain('title="feature"')
+    expect(markup).not.toContain('title="v1.4.0"')
+    expect(markup).toContain('+1')
+  })
 })

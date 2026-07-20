@@ -164,6 +164,11 @@ export function CreateHostedReviewComposer({
   const generateTooltipLabel = generating
     ? stopGeneratingDetailsLabel
     : (generateDisabledReason ?? generateDetailsLabel)
+  const moreReviewAndRemoteActionsLabel = translate(
+    'auto.components.right.sidebar.SourceControl.c5e4175139',
+    'More {{value0}} and remote actions',
+    { value0: copy.reviewLabel }
+  )
   const generateButton = generating ? (
     <Button
       type="button"
@@ -195,6 +200,33 @@ export function CreateHostedReviewComposer({
   )
   const effectiveDropdownItems = dropdownItems ?? EMPTY_DROPDOWN_ITEMS
   const showDropdown = effectiveDropdownItems.length > 0 && onDropdownAction
+  const createButton = (
+    <Button
+      type="button"
+      size="xs"
+      disabled={createDisabled}
+      onClick={() => onPrimaryAction()}
+      className={cn(
+        'h-7 px-3 text-xs',
+        showDropdown && 'rounded-r-none',
+        RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS
+      )}
+    >
+      {isCreating ? (
+        <RefreshCw className="size-3.5 animate-spin" />
+      ) : (
+        <ReviewIcon className="size-3.5" />
+      )}
+      <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
+        {getCreateButtonLabel({
+          isCreating,
+          pushBeforeCreate,
+          draft,
+          shortLabel: copy.shortLabel
+        })}
+      </span>
+    </Button>
+  )
 
   return (
     <div className={cn('px-3 pb-2', className)}>
@@ -251,55 +283,41 @@ export function CreateHostedReviewComposer({
         />
 
         <div className={cn(RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS, 'pt-0.5')}>
-          <Button
-            type="button"
-            size="xs"
-            disabled={createDisabled}
-            onClick={() => onPrimaryAction()}
-            className={cn(
-              'h-7 px-3 text-xs',
-              showDropdown && 'rounded-r-none',
-              RIGHT_SIDEBAR_MORPHING_PRIMARY_BUTTON_CLASS
-            )}
-            title={createDisabledReason ?? primaryAction.title}
-          >
-            {isCreating ? (
-              <RefreshCw className="size-3.5 animate-spin" />
+          <Tooltip>
+            {createDisabled ? (
+              <TooltipTrigger asChild>
+                {/* Why: disabled buttons cannot own Radix hover events; only that state needs a wrapper. */}
+                <span className="inline-flex cursor-not-allowed">{createButton}</span>
+              </TooltipTrigger>
             ) : (
-              <ReviewIcon className="size-3.5" />
+              <TooltipTrigger asChild>{createButton}</TooltipTrigger>
             )}
-            <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
-              {getCreateButtonLabel({
-                isCreating,
-                pushBeforeCreate,
-                draft,
-                shortLabel: copy.shortLabel
-              })}
-            </span>
-          </Button>
+            <TooltipContent side="top" sideOffset={6} className="max-w-72">
+              {createDisabledReason ?? primaryAction.title}
+            </TooltipContent>
+          </Tooltip>
           {showDropdown ? (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  size="xs"
-                  className={cn(
-                    'h-7 rounded-l-none border-l border-primary-foreground/20 px-1.5 shrink-0',
-                    createDisabled && 'opacity-50'
-                  )}
-                  aria-label={translate(
-                    'auto.components.right.sidebar.SourceControl.c5e4175139',
-                    'More {{value0}} and remote actions',
-                    { value0: copy.reviewLabel }
-                  )}
-                  title={translate(
-                    'auto.components.right.sidebar.SourceControl.4d6e1fd7f3',
-                    'More actions'
-                  )}
-                >
-                  <ChevronDown className="size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      size="xs"
+                      className={cn(
+                        'h-7 rounded-l-none border-l border-primary-foreground/20 px-1.5 shrink-0',
+                        createDisabled && 'opacity-50'
+                      )}
+                      aria-label={moreReviewAndRemoteActionsLabel}
+                    >
+                      <ChevronDown className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {moreReviewAndRemoteActionsLabel}
+                </TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end" className="min-w-[14rem]">
                 {effectiveDropdownItems.map((entry, index) =>
                   entry.kind === 'separator' ? (

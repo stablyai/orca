@@ -461,7 +461,8 @@ describe('CommitArea', () => {
     expect(stageAllButton).toContain('lucide-plus')
     expect(stageAllButton).toContain('rounded-r-none')
     expect(markup).toContain('aria-label="More commit and remote actions"')
-    expect(markup).toContain('Stage all changes')
+    // Why: the action description moved from the native title to the app tooltip.
+    expect(stageAllButton).not.toContain('title=')
     expect(
       (markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []).some((button) =>
         button.includes('Commit</button>')

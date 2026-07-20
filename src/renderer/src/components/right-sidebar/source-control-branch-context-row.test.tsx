@@ -51,4 +51,18 @@ describe('SourceControlBranchContextRow', () => {
 
     expect(markup).toContain('aria-label="Open review page in browser"')
   })
+
+  it('shows the change-base hint through a tooltip instead of a native title', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={readySummary}
+        compareBaseRef={null}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('title=')
+    expect(markup).toContain('Change base ref')
+  })
 })

@@ -160,6 +160,8 @@ Tooltips exist to _name_ a control whose meaning isn't obvious from its appearan
 
 - **Use a tooltip when:** an icon-only button or compact chip needs a label. Toolbar icons, badges with abbreviations, truncated paths.
 - **Don't use a tooltip when:** the control already has a visible label, the content is interactive (links, buttons), or the message is critical (errors, blocking warnings — those go inline).
+- **Never combine `title` with `Tooltip`.** A `title` attribute on the trigger — or on an ancestor in the same hover path — renders a second, unstyled browser-native tooltip on top of the app one. When an element gets a `Tooltip`, strip its `title`; the accessible name comes from `aria-label` or the visible label, never from `title`.
+- **Interactive controls use `Tooltip`, not a bare `title`.** Native titles ignore the app's delay, theme, and text styling. Keep bare `title` only on non-interactive truncated text (read-only paths, long names) and convert it to `Tooltip` when you touch that code.
 - **Mounting:** the global `<TooltipProvider delayDuration={400}>` lives at the App root. Don't nest a second `TooltipProvider` unless you need a different delay for a tightly-scoped surface.
 - **Trigger pattern:** wrap the trigger element with `<TooltipTrigger asChild>` so the tooltip's accessibility props attach to the button (not a wrapper span). This is required for keyboard focus to surface the tooltip.
 - **Placement:** default `side="top" sideOffset={4}` — match the toolbar pattern in `sidebar/SidebarToolbar.tsx`. Pick a different side only when the default would clip against the viewport.

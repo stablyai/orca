@@ -23,14 +23,20 @@ function BaseRefButton({
   title: string
 }): React.JSX.Element {
   return (
-    <button
-      type="button"
-      className="min-w-0 max-w-full truncate rounded-sm border-0 bg-transparent p-0 text-left font-mono text-[10.5px] font-medium text-foreground/90 underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground"
-      onClick={onClick}
-      title={`${title} (${baseRef})`}
-    >
-      {baseRef}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="min-w-0 max-w-full truncate rounded-sm border-0 bg-transparent p-0 text-left font-mono text-[10.5px] font-medium text-foreground/90 underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground"
+          onClick={onClick}
+        >
+          {baseRef}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {title} ({baseRef})
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

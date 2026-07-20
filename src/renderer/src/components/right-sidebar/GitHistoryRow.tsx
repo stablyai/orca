@@ -20,7 +20,6 @@ function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.
             borderColor: itemRef.color ? graphColor(itemRef.color) : 'var(--border)',
             color: itemRef.color ? graphColor(itemRef.color) : 'var(--muted-foreground)'
           }}
-          title={itemRef.name}
         >
           {itemRef.name}
         </span>
@@ -90,9 +89,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
           )}
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="block min-w-0 flex-1 truncate text-foreground" title={rowTooltip}>
-                {item.subject}
-              </span>
+              <span className="block min-w-0 flex-1 truncate text-foreground">{item.subject}</span>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6} className="max-w-96 whitespace-pre-wrap">
               {rowTooltip}
@@ -107,10 +104,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
             {hiddenRefs.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span
-                    className="shrink-0 text-[10px] leading-none text-muted-foreground"
-                    title={hiddenRefs.map((ref) => ref.name).join(', ')}
-                  >
+                  <span className="shrink-0 text-[10px] leading-none text-muted-foreground">
                     +{hiddenRefs.length}
                   </span>
                 </TooltipTrigger>
@@ -130,7 +124,6 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
           {...rootProps}
           ref={ref as React.Ref<HTMLDivElement>}
           className={rowClassName}
-          title={rowTooltip}
           data-testid="git-history-row"
         >
           {rowContent}
@@ -152,7 +145,6 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
         ref={ref as React.Ref<HTMLButtonElement>}
         type="button"
         className={rowClassName}
-        title={rowTooltip}
         aria-expanded={canExpand ? expanded : undefined}
         aria-label={
           canExpand

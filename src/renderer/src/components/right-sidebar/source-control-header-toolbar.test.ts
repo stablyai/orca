@@ -1,8 +1,13 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   getNextSourceControlViewMode,
-  shouldShowSourceControlCompareUnavailableCard
+  shouldShowSourceControlCompareUnavailableCard,
+  SourceControlHeaderToolbar
 } from './source-control-header-toolbar'
+import type { PrimaryAction } from './source-control-primary-action'
 import type { GitBranchCompareSummary } from '../../../../shared/types'
 
 const readySummary: GitBranchCompareSummary = {
@@ -14,6 +19,53 @@ const readySummary: GitBranchCompareSummary = {
   changedFiles: 2,
   commitsAhead: 1,
   status: 'ready'
+}
+
+function renderCreatePrHeaderButton(disabled: boolean): string {
+  const action: PrimaryAction = {
+    kind: 'create_pr',
+    label: 'Create PR',
+    title: disabled ? 'Push the branch first' : 'Create pull request',
+    disabled
+  }
+  return renderToStaticMarkup(
+    createElement(
+      TooltipProvider,
+      null,
+      createElement(SourceControlHeaderToolbar, {
+        filterQuery: '',
+        filterExpanded: false,
+        onFilterQueryChange: () => undefined,
+        onFilterExpandedChange: () => undefined,
+        visibleCreatePrHeaderAction: action,
+        hostedReview: null,
+        isCreatePrIntentInFlight: false,
+        isCreatingPr: false,
+        onCreatePrHeaderClick: () => undefined,
+        onOpenHostedReviewInChecks: () => undefined,
+        sourceControlViewMode: 'list',
+        viewModeToggleDisabled: false,
+        onToggleViewMode: () => undefined,
+        onChangeBaseRef: () => undefined,
+        onRefreshBranchCompare: () => undefined,
+        branchCompareRefreshDisabled: false,
+        diffCommentCount: 0,
+        onExpandNotes: () => undefined,
+        branchSummary: null,
+        compareBaseRef: null
+      })
+    )
+  )
+}
+
+function buttonByText(markup: string, text: string): string {
+  const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .find((entry) => entry.includes(text))
+  if (!button) {
+    throw new Error(`Button not found: ${text}`)
+  }
+  return button
 }
 
 describe('source-control header toolbar helpers', () => {
@@ -62,5 +114,23 @@ describe('source-control header toolbar helpers', () => {
         false
       )
     ).toBe(false)
+  })
+
+  it('keeps the enabled Create PR header action as the direct tooltip trigger', () => {
+    const button = buttonByText(renderCreatePrHeaderButton(false), 'Create PR')
+
+    expect(button).toContain('data-slot="tooltip-trigger"')
+    expect(button).not.toContain('disabled=""')
+  })
+
+  it('wraps only the disabled Create PR header action so its reason remains hoverable', () => {
+    const markup = renderCreatePrHeaderButton(true)
+    const button = buttonByText(markup, 'Create PR')
+
+    expect(button).not.toContain('data-slot="tooltip-trigger"')
+    expect(button).toContain('disabled=""')
+    expect(markup).toMatch(
+      /<span[^>]*data-slot="tooltip-trigger"[^>]*><button[^>]*disabled=""[\s\S]*?Create PR/
+    )
   })
 })
