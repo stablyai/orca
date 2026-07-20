@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: SSH connection lifecycle, credential retries, reconnect policy, and transport fallback are intentionally co-located so state transitions stay auditable in one file. */
 import * as net from 'node:net'
+import { createHash } from 'node:crypto'
 import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'node:child_process'
 import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
@@ -82,6 +83,7 @@ export class SshConnection {
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
+  private hostKeyFingerprint: string | undefined
   private connectGeneration = 0
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
@@ -120,6 +122,11 @@ export class SshConnection {
   }
   getSystemSshResolvedConfig(): SshResolvedConfig | null {
     return cloneResolvedConfig(this.systemSshResolvedConfig)
+  }
+  getHostKeyFingerprint(): string | undefined {
+    // Why: system SSH does not expose its negotiated key; a fingerprint from a
+    // failed ssh2 attempt may identify a different load-balanced execution host.
+    return this.useSystemSshTransport ? undefined : this.hostKeyFingerprint
   }
 
   setCallbacks(callbacks: SshConnectionCallbacks): void {
@@ -1074,6 +1081,16 @@ export class SshConnection {
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
+
+      // Why: the relay uses the negotiated server key to isolate shared-home
+      // install locks without comparing PIDs from an unrelated SSH host.
+      config.hostVerifier = (key: Buffer): boolean => {
+        if (!this.disposed && connectGeneration === this.connectGeneration) {
+          const digest = createHash('sha256').update(key).digest('base64').replace(/=+$/, '')
+          this.hostKeyFingerprint = `SHA256:${digest}`
+        }
+        return true
+      }
 
       const cleanupStartupListeners = (): void => {
         client.off('ready', onReady)
