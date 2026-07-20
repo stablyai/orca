@@ -164,6 +164,8 @@ import {
   registerHeadlessPtyRuntime
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
+import { CodexBrowserUseBackend } from './browser/codex-browser-use-backend'
+import { OrcaCodexBrowserUseAdapter } from './browser/orca-codex-browser-use-adapter'
 import { EmulatorBridge } from './emulator/emulator-bridge'
 import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
@@ -232,6 +234,8 @@ let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let desktopRelayService: DesktopRelayService | null = null
 let desktopRelayStatus: RelayBrokerStatus = 'offline'
+let codexBrowserUseBackend: CodexBrowserUseBackend | null = null
+let codexBrowserUseAdapter: OrcaCodexBrowserUseAdapter | null = null
 // Why: set during early startup; gates whether headless serve installs the
 // offscreen browser backend (and thus advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
@@ -2093,11 +2097,26 @@ app.whenReady().then(async () => {
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
-  runtimeService.setAgentBrowserBridge(
-    new AgentBrowserBridge(browserManager, {
-      onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
-    })
+  const agentBrowserBridge = new AgentBrowserBridge(browserManager, {
+    onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+  })
+  runtimeService.setAgentBrowserBridge(agentBrowserBridge)
+  codexBrowserUseAdapter = new OrcaCodexBrowserUseAdapter(
+    agentBrowserBridge,
+    () => agentHookServer.getStatusSnapshot(),
+    (paneKey) => getPtyIdForPaneKey(paneKey) != null
   )
+  codexBrowserUseBackend = new CodexBrowserUseBackend(codexBrowserUseAdapter)
+  try {
+    await codexBrowserUseBackend.start()
+  } catch (error) {
+    console.warn(
+      `[codex-browser-use] backend unavailable; continuing without Browser plugin discovery: ${error instanceof Error ? error.message : String(error)}`
+    )
+    await codexBrowserUseAdapter.close()
+    codexBrowserUseBackend = null
+    codexBrowserUseAdapter = null
+  }
 
   // Emulator bridge (serve-sim). macOS-only feature (gated in CLI/runtime); always ship like agent-browser.
   // Why: only Orca-managed or explicitly attached helpers belong to a workspace;
@@ -2460,6 +2479,10 @@ app.on('will-quit', (e) => {
   automations?.stop()
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
+  const codexBrowserUseShutdown = (async () => {
+    await codexBrowserUseBackend?.stop()
+    await codexBrowserUseAdapter?.close()
+  })()
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children
   // deterministically instead of relying on stdio-pipe teardown.
   wslHookRelayManager.disposeAll()
@@ -2522,7 +2545,13 @@ app.on('will-quit', (e) => {
     // Why: normal quits preserve the detached daemon for warm reattach, but a
     // dev parent dying means the temp/dev profile has no owner left to reattach.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown])
+    Promise.allSettled([
+      daemonTeardown,
+      rpcStopAndClear,
+      watcherShutdown,
+      emulatorShutdown,
+      codexBrowserUseShutdown
+    ])
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
       .catch(() => {

@@ -398,6 +398,23 @@ export class BrowserManager {
     return renderer
   }
 
+  requestBrowserTabNavigation(browserTabId: string, rawUrl: string): boolean {
+    const renderer = this.resolveRendererForBrowserTab(browserTabId)
+    const url = normalizeBrowserNavigationUrl(rawUrl)
+    if (!renderer || !url) {
+      return false
+    }
+    // Why: the renderer owns the browser-page model and is the only layer that can
+    // update both the persisted URL and the mounted <webview>.src without creating
+    // a second tab or leaving the address bar stale.
+    renderer.send('browser:navigation-update', {
+      browserPageId: browserTabId,
+      url,
+      title: url
+    })
+    return true
+  }
+
   // Why: screenshot sessions target guest page ids, but Orca's visible browser
   // chrome is keyed by workspace ids. If we activate the page id directly, the
   // webview stays hidden under the terminal pane and Page.captureScreenshot

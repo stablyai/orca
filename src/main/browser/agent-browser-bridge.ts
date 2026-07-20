@@ -536,6 +536,7 @@ export class AgentBrowserBridge {
   // finishes can let the old teardown close the new daemon session.
   private readonly pendingSessionDestruction = new Map<string, Promise<void>>()
   private readonly cancelledProcesses = new WeakSet<ChildProcess>()
+  private readonly codexBrowserUseProcessSwapListeners = new Set<(browserPageId: string) => void>()
 
   constructor(
     private readonly browserManager: BrowserManager,
@@ -595,6 +596,40 @@ export class AgentBrowserBridge {
     }
   }
 
+  createCodexBrowserUseCdpProxy(worktreeId: string, browserPageId: string): CdpWsProxy {
+    const target = this.resolveCommandTarget(worktreeId, browserPageId, true)
+    const webContents = this.getWebContents(target.webContentsId)
+    if (!webContents) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${browserPageId} is no longer available`
+      )
+    }
+    // Why: Browser Use needs the same Electron-specific CDP fixes as agent-browser,
+    // while a dedicated proxy keeps concurrent Codex sessions from replacing clients.
+    return new CdpWsProxy(webContents)
+  }
+
+  async navigateCodexBrowserUseTab(
+    worktreeId: string,
+    browserPageId: string,
+    url: string
+  ): Promise<{ frameId: string }> {
+    this.resolveCommandTarget(worktreeId, browserPageId, true)
+    if (!this.browserManager.requestBrowserTabNavigation(browserPageId, url)) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${browserPageId} is no longer available`
+      )
+    }
+    return { frameId: 'orca-proxy-target' }
+  }
+
+  onCodexBrowserUseProcessSwap(listener: (browserPageId: string) => void): () => void {
+    this.codexBrowserUseProcessSwapListeners.add(listener)
+    return () => this.codexBrowserUseProcessSwapListeners.delete(listener)
+  }
+
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.activeWebContentsId = webContentsId
     if (worktreeId) {
@@ -637,6 +672,9 @@ export class AgentBrowserBridge {
     // Why: Electron process swaps give same browserPageId but new webContentsId.
     // Old proxy's webContents is destroyed, so destroy session and let next command recreate.
     const sessionName = `orca-tab-${browserPageId}`
+    for (const listener of this.codexBrowserUseProcessSwapListeners) {
+      listener(browserPageId)
+    }
     const session = this.sessions.get(sessionName)
     const oldWebContentsId = previousWebContentsId ?? session?.webContentsId
     const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)

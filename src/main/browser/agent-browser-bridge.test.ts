@@ -84,6 +84,7 @@ function mockBrowserManager(
     unregisterGuest: vi.fn(),
     ensureWebviewVisible: vi.fn(async () => () => {}),
     acquireAutomationVisibility: vi.fn(async () => () => {}),
+    requestBrowserTabNavigation: vi.fn(() => true),
     ...overrides
   } as unknown as BrowserManager
 }
@@ -306,6 +307,20 @@ describe('AgentBrowserBridge', () => {
     const args = execFileMock.mock.calls[0][1] as string[]
     expect(args).toContain('--session')
     expect(args[args.indexOf('--session') + 1]).toBe('orca-tab-tab-1')
+  })
+
+  it('routes Browser Use navigation through the renderer-owned tab model', async () => {
+    const requestNavigation = vi.fn(() => true)
+    const tabs = new Map([['tab-1', 100]])
+    const worktrees = new Map([['tab-1', 'worktree-1']])
+    const scopedBridge = new AgentBrowserBridge(
+      mockBrowserManager(tabs, worktrees, { requestBrowserTabNavigation: requestNavigation })
+    )
+
+    await expect(
+      scopedBridge.navigateCodexBrowserUseTab('worktree-1', 'tab-1', 'https://example.org/')
+    ).resolves.toEqual({ frameId: 'orca-proxy-target' })
+    expect(requestNavigation).toHaveBeenCalledWith('tab-1', 'https://example.org/')
   })
 
   // ── --cdp first-use only ──
