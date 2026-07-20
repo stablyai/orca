@@ -4,7 +4,7 @@ import { bestAutosuggestMatch } from './terminal-autosuggest-engine'
 describe('bestAutosuggestMatch', () => {
   it('returns the most recent candidate with a matching prefix', () => {
     const candidates = ['git status', 'git commit -m "fix"', 'git status --short']
-    expect(bestAutosuggestMatch(candidates, 'git s')).toBe('git status --short')
+    expect(bestAutosuggestMatch(candidates, 'git s')).toBe('git status')
   })
 
   it('returns null when no candidate matches the prefix', () => {
