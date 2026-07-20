@@ -17,17 +17,19 @@ function renderDotClassNames(status: Status): string[] {
 }
 
 describe('StatusIndicator', () => {
-  it('renders working as a stepped yellow spinner', () => {
-    const classNames = renderDotClassNames('working')
+  it('renders working as a clock-driven yellow spinner ring', () => {
+    const markup = renderMarkup('working')
 
-    expect(classNames).toContain('border-yellow-500')
-    expect(classNames).toContain('border-t-transparent')
-    expect(classNames).toContain('[animation:spin_1s_steps(12,end)_infinite]')
-    // Why: under reduced motion the spin is disabled and the top border filled,
-    // so the dot stays a complete static ring rather than freezing mid-rotation.
-    expect(classNames).toContain('motion-reduce:animate-none')
-    expect(classNames).toContain('motion-reduce:border-t-yellow-500')
-    expect(classNames).not.toContain('animate-spin')
+    expect(markup).toContain('border-yellow-500')
+    expect(markup).toContain('border-t-transparent')
+    // Why: rotation comes from the shared agent-spinner clock, not a
+    // per-element CSS animation that would keep the compositor awake.
+    expect(markup).toContain('data-agent-spinner')
+    // Why: under reduced motion the top border is filled so the static ring
+    // reads as a complete marker, not a broken partial spinner (#9515).
+    expect(markup).toContain('motion-reduce:border-t-yellow-500')
+    expect(markup).not.toContain('animate-spin')
+    expect(markup).not.toContain('animation:spin')
   })
 
   it('renders permission as an amber attention dot', () => {
