@@ -38,6 +38,7 @@ const runtimeEnvironmentTransportCallMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 const setPendingEditorRevealMock = vi.fn()
+const setMarkdownViewModeMock = vi.fn()
 
 const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
 const storeState = {
@@ -52,6 +53,8 @@ const storeState = {
   createBrowserTab: createBrowserTabMock,
   openFile: openFileMock,
   setPendingEditorReveal: setPendingEditorRevealMock,
+  setMarkdownViewMode: setMarkdownViewModeMock,
+  activeFileIdByWorktree: {} as Record<string, string | null>,
   worktreesByRepo: {} as Record<string, { id: string; path: string }[]>
 }
 
@@ -62,7 +65,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/language-detect', () => ({
-  detectLanguage: () => 'plaintext'
+  detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
 // Why: the real helper reads worktreesByRepo/activeRepoId/etc. from the store
@@ -108,6 +111,7 @@ beforeEach(() => {
   vi.mocked(getConnectionId).mockReturnValue(null)
   openFilePathMock.mockResolvedValue(true)
   storeState.settings = undefined
+  storeState.activeFileIdByWorktree = {}
   storeState.worktreesByRepo = {}
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
@@ -393,6 +397,28 @@ describe('handleOscLink', () => {
       matchLength: 0
     })
     expect(openFilePathMock).not.toHaveBeenCalled()
+  })
+
+  it('opens terminal markdown line links in source mode so Monaco can reveal the line', async () => {
+    setPlatform('Macintosh')
+    const filePath = '/tmp/docs/terminal-scroll-intent-architecture.md'
+    const fileId = 'editor:wt-1:runtime-1:terminal-scroll-intent-architecture.md'
+    openFileMock.mockImplementationOnce(() => {
+      storeState.activeFileIdByWorktree['wt-1'] = fileId
+    })
+
+    openDetectedFilePath(filePath, 230, null, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(setMarkdownViewModeMock).toHaveBeenCalledWith(fileId, 'source')
+    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith({
+      filePath,
+      fileId,
+      line: 230,
+      column: 1,
+      matchLength: 0
+    })
   })
 
   it('uses the system default app for shift+cmd/ctrl-click file paths', async () => {

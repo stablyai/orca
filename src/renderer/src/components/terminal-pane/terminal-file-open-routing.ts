@@ -183,12 +183,13 @@ export function openDetectedFilePath(
       activateAndRevealWorktree(worktreeId)
     }
 
+    const language = detectLanguage(mappedFilePath)
     store.openFile(
       {
         filePath: mappedFilePath,
         relativePath,
         worktreeId: worktreeId || '',
-        language: detectLanguage(mappedFilePath),
+        language,
         mode: 'edit',
         runtimeEnvironmentId
       },
@@ -196,6 +197,13 @@ export function openDetectedFilePath(
     )
 
     if (line !== null) {
+      let fileId: string | undefined
+      if (language === 'markdown') {
+        const openedStore = useAppStore.getState()
+        fileId = openedStore.activeFileIdByWorktree[worktreeId] ?? mappedFilePath
+        // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
+        openedStore.setMarkdownViewMode(fileId, 'source')
+      }
       const targetColumn = column ?? 1
       store.setPendingEditorReveal(null)
       schedulePendingEditorReveal(() => {
@@ -204,6 +212,7 @@ export function openDetectedFilePath(
         }
         store.setPendingEditorReveal({
           filePath: mappedFilePath,
+          ...(fileId ? { fileId } : {}),
           line,
           column: targetColumn,
           matchLength: 0
