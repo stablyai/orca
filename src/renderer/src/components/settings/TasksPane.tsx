@@ -67,11 +67,11 @@ const TASK_PROVIDER_OPTIONS: readonly {
   {
     id: 'clickup',
     get label() {
-      return translate('auto.components.settings.TasksPane.clickupLabel', 'ClickUp')
+      return translate('auto.components.settings.TasksPane.508a40fd27', 'ClickUp')
     },
     get description() {
       return translate(
-        'auto.components.settings.TasksPane.clickupDescription',
+        'auto.components.settings.TasksPane.dd563d4ddf',
         'Show ClickUp in the Tasks source picker and sidebar shortcuts.'
       )
     },

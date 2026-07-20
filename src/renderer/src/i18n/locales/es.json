@@ -1785,7 +1785,7 @@
         "jiraSortBy": "Ordenar por",
         "jiraToggleSortDirection": "Ordenar de forma {{value0}}",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
-        "clickupSource": "ClickUp"
+        "616cce0eda": "ClickUp"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -6740,8 +6740,8 @@
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "Muestra GitHub en el selector de fuentes de Tareas y en los accesos directos de la barra lateral.",
           "e14063e727": "GitHub",
-          "clickupLabel": "ClickUp",
-          "clickupDescription": "Show ClickUp in the Tasks source picker and sidebar shortcuts."
+          "508a40fd27": "ClickUp",
+          "dd563d4ddf": "Show ClickUp in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -9234,21 +9234,25 @@
           "notice": "Orca Relay is in beta."
         },
         "clickup": {
-          "connectedDescriptionSingular": "{{value0}} Workspace available",
-          "connectedDescriptionPlural": "{{value0}} Workspaces available",
-          "checkingDescription": "Checking ClickUp access before showing setup actions.",
-          "disconnectedDescription": "Browse, create, update, and link ClickUp tasks.",
-          "statusConnected": "Connected",
-          "statusNotConnected": "Not connected",
-          "replaceToken": "Replace token",
-          "connect": "Connect ClickUp",
-          "verified": "Verified",
-          "testing": "Testing…",
-          "test": "Test",
-          "disconnect": "Disconnect ClickUp",
-          "tokenScope": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
-          "setupHelp": "Use a Personal API token from ClickUp Settings → Apps.",
-          "recheck": "Re-check"
+          "integration": {
+            "card": {
+              "144aa3bdb4": "{{count}} Workspace available",
+              "f4febb8ab8": "{{count}} Workspaces available",
+              "e954702622": "Checking ClickUp access before showing setup actions.",
+              "613dab25ea": "Browse, create, update, and link ClickUp tasks.",
+              "06ec5973d0": "Connected",
+              "a0d9bbb00b": "Not connected",
+              "a9c42f04d2": "Replace token",
+              "5c20166014": "Connect ClickUp",
+              "f8a36a8fd1": "Verified",
+              "20cd559a37": "Testing…",
+              "954f7f9f58": "Test",
+              "5644fc2ebd": "Disconnect ClickUp",
+              "811f58f8c1": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
+              "d43866e406": "Use a Personal API token from ClickUp Settings → Apps.",
+              "7dcc728994": "Re-check"
+            }
+          }
         }
       },
       "right": {

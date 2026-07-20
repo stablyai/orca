@@ -123,7 +123,7 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
   },
   {
     id: 'clickup',
-    label: translate('auto.components.TaskPage.clickupSource', 'ClickUp'),
+    label: translate('auto.components.TaskPage.616cce0eda', 'ClickUp'),
     Icon: ({ className }) => <ClickUpIcon className={className} />
   },
   {

@@ -84,22 +84,22 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
         connected
           ? workspaces.length === 1
             ? translate(
-                'auto.components.settings.clickup.connectedDescriptionSingular',
-                '{{value0}} Workspace available',
-                { value0: workspaces.length }
+                'auto.components.settings.clickup.integration.card.144aa3bdb4',
+                '{{count}} Workspace available',
+                { count: workspaces.length }
               )
             : translate(
-                'auto.components.settings.clickup.connectedDescriptionPlural',
-                '{{value0}} Workspaces available',
-                { value0: workspaces.length }
+                'auto.components.settings.clickup.integration.card.f4febb8ab8',
+                '{{count}} Workspaces available',
+                { count: workspaces.length }
               )
           : checking
             ? translate(
-                'auto.components.settings.clickup.checkingDescription',
+                'auto.components.settings.clickup.integration.card.e954702622',
                 'Checking ClickUp access before showing setup actions.'
               )
             : translate(
-                'auto.components.settings.clickup.disconnectedDescription',
+                'auto.components.settings.clickup.integration.card.613dab25ea',
                 'Browse, create, update, and link ClickUp tasks.'
               )
       }
@@ -107,8 +107,11 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
       statusTone={connected ? 'connected' : 'attention'}
       statusLabel={
         connected
-          ? translate('auto.components.settings.clickup.statusConnected', 'Connected')
-          : translate('auto.components.settings.clickup.statusNotConnected', 'Not connected')
+          ? translate('auto.components.settings.clickup.integration.card.06ec5973d0', 'Connected')
+          : translate(
+              'auto.components.settings.clickup.integration.card.a0d9bbb00b',
+              'Not connected'
+            )
       }
       actions={
         !checking ? (
@@ -118,8 +121,14 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
             onClick={() => setDialogOpen(true)}
           >
             {connected
-              ? translate('auto.components.settings.clickup.replaceToken', 'Replace token')
-              : translate('auto.components.settings.clickup.connect', 'Connect ClickUp')}
+              ? translate(
+                  'auto.components.settings.clickup.integration.card.a9c42f04d2',
+                  'Replace token'
+                )
+              : translate(
+                  'auto.components.settings.clickup.integration.card.5c20166014',
+                  'Connect ClickUp'
+                )}
           </Button>
         ) : null
       }
@@ -147,7 +156,10 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
               {verified ? (
                 <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
                   <CheckCircle2 className="size-3.5" />
-                  {translate('auto.components.settings.clickup.verified', 'Verified')}
+                  {translate(
+                    'auto.components.settings.clickup.integration.card.f8a36a8fd1',
+                    'Verified'
+                  )}
                 </span>
               ) : null}
               <Button
@@ -159,10 +171,13 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
                 {testing ? (
                   <>
                     <Loader2 className="animate-spin" />
-                    {translate('auto.components.settings.clickup.testing', 'Testing…')}
+                    {translate(
+                      'auto.components.settings.clickup.integration.card.20cd559a37',
+                      'Testing…'
+                    )}
                   </>
                 ) : (
-                  translate('auto.components.settings.clickup.test', 'Test')
+                  translate('auto.components.settings.clickup.integration.card.954f7f9f58', 'Test')
                 )}
               </Button>
               <Button
@@ -170,7 +185,7 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
                 size="icon-sm"
                 onClick={() => void handleDisconnect()}
                 aria-label={translate(
-                  'auto.components.settings.clickup.disconnect',
+                  'auto.components.settings.clickup.integration.card.5644fc2ebd',
                   'Disconnect ClickUp'
                 )}
               >
@@ -180,7 +195,7 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
             {testError ? <p className="text-xs text-destructive">{testError}</p> : null}
             <p className="text-[11px] text-muted-foreground/70">
               {translate(
-                'auto.components.settings.clickup.tokenScope',
+                'auto.components.settings.clickup.integration.card.811f58f8c1',
                 'One token grants access to the Workspaces listed above and is stored by the active runtime.'
               )}
             </p>
@@ -189,12 +204,15 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
           <div className="flex items-center gap-2">
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
               {translate(
-                'auto.components.settings.clickup.setupHelp',
+                'auto.components.settings.clickup.integration.card.d43866e406',
                 'Use a Personal API token from ClickUp Settings → Apps.'
               )}
             </p>
             <Button variant="ghost" size="sm" onClick={() => void checkConnection(true)}>
-              {translate('auto.components.settings.clickup.recheck', 'Re-check')}
+              {translate(
+                'auto.components.settings.clickup.integration.card.7dcc728994',
+                'Re-check'
+              )}
             </Button>
           </div>
         ) : null}
