@@ -18,11 +18,13 @@ const {
   fsWriteFileMock,
   fsStatMock,
   clipboardReadTextMock,
+  clipboardReadMock,
   clipboardWriteTextMock,
   clipboardReadImageMock,
   clipboardWriteImageMock,
   clipboardWriteBufferMock,
   nativeImageCreateFromBufferMock,
+  nativeImageCreateFromPathMock,
   randomUUIDMock,
   getSshFilesystemProviderMock,
   callRuntimeEnvironmentMock
@@ -49,11 +51,13 @@ const {
   fsWriteFileMock: vi.fn(),
   fsStatMock: vi.fn(),
   clipboardReadTextMock: vi.fn(),
+  clipboardReadMock: vi.fn(),
   clipboardWriteTextMock: vi.fn(),
   clipboardReadImageMock: vi.fn(),
   clipboardWriteImageMock: vi.fn(),
   clipboardWriteBufferMock: vi.fn(),
   nativeImageCreateFromBufferMock: vi.fn(),
+  nativeImageCreateFromPathMock: vi.fn(),
   randomUUIDMock: vi.fn(() => '00000000-0000-4000-8000-000000000000'),
   getSshFilesystemProviderMock: vi.fn(),
   callRuntimeEnvironmentMock: vi.fn()
@@ -91,6 +95,7 @@ vi.mock('electron', () => ({
   },
   clipboard: {
     readText: clipboardReadTextMock,
+    read: clipboardReadMock,
     writeText: clipboardWriteTextMock,
     readImage: clipboardReadImageMock,
     writeImage: clipboardWriteImageMock,
@@ -101,7 +106,8 @@ vi.mock('electron', () => ({
     handle: handleMock
   },
   nativeImage: {
-    createFromBuffer: nativeImageCreateFromBufferMock
+    createFromBuffer: nativeImageCreateFromBufferMock,
+    createFromPath: nativeImageCreateFromPathMock
   }
 }))
 
@@ -189,11 +195,14 @@ describe('registerClipboardHandlers', () => {
     fsStatMock.mockReset()
     fsStatMock.mockResolvedValue({})
     clipboardReadTextMock.mockReset()
+    clipboardReadMock.mockReset()
+    clipboardReadMock.mockReturnValue('')
     clipboardWriteTextMock.mockReset()
     clipboardReadImageMock.mockReset()
     clipboardWriteImageMock.mockReset()
     clipboardWriteBufferMock.mockReset()
     nativeImageCreateFromBufferMock.mockReset()
+    nativeImageCreateFromPathMock.mockReset()
     randomUUIDMock.mockReset()
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     getSshFilesystemProviderMock.mockReset()
@@ -543,6 +552,39 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toBe(expectedPath)
     expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('saves image files copied from Windows Explorer as clipboard images', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const png = Buffer.from([4, 3, 2, 1])
+    const sourcePath = 'C:\\Users\\alice\\Pictures\\copied-image.png'
+    const expectedPath = join(
+      '/tmp',
+      'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+    )
+    clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
+    clipboardReadMock.mockReturnValue(`${sourcePath}\0`)
+    fsStatMock.mockResolvedValue({ isFile: () => true, size: png.byteLength })
+    nativeImageCreateFromPathMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
+      isEmpty: () => false,
+      toPNG: () => png
+    })
+
+    try {
+      registerClipboardHandlers({} as never)
+
+      const handlers = getRegisteredHandlers()
+      await expect(
+        handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
+      ).resolves.toBe(expectedPath)
+      expect(clipboardReadMock).toHaveBeenCalledWith('FileNameW')
+      expect(fsStatMock).toHaveBeenCalledWith(sourcePath)
+      expect(nativeImageCreateFromPathMock).toHaveBeenCalledWith(sourcePath)
+      expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('saves clipboard images through the selected remote runtime host', async () => {
