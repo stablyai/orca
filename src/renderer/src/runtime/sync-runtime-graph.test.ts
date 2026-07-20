@@ -1381,7 +1381,8 @@ describe('buildMobileSessionTabSnapshots', () => {
     expect(tab).toMatchObject({
       type: 'terminal',
       id: `term-1::${leafId}`,
-      title: 'Pinned'
+      title: 'Pinned',
+      customTitle: 'Pinned'
     })
     expect(tab).not.toHaveProperty('agentStatus')
   })
