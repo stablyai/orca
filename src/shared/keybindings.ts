@@ -113,6 +113,7 @@ export type KeybindingActionId =
   | 'terminal.splitRight'
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
+  | 'terminal.acceptAutosuggest'
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>
 
@@ -967,6 +968,15 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+K'])
   },
   {
+    id: 'terminal.acceptAutosuggest',
+    title: 'Accept command autosuggestion',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['autosuggest', 'autocomplete', 'suggestion', 'accept'],
+    defaultBindings: platformBindings(['ArrowRight', 'End']),
+    allowBareKeybindings: true
+  },
+  {
     id: 'terminal.focusNextPane',
     title: 'Focus next pane',
     group: 'Terminal Panes',
@@ -1229,6 +1239,7 @@ function normalizeKeyToken(token: string): string | null {
     DOWN: 'ArrowDown',
     PAGEUP: 'PageUp',
     PAGEDOWN: 'PageDown',
+    END: 'End',
     BACKSPACE: 'Backspace',
     DELETE: 'Delete',
     DEL: 'Delete',
@@ -1414,7 +1425,8 @@ function isSafeBareKey(parsed: ParsedKeybinding): boolean {
       'ArrowUp',
       'ArrowDown',
       'PageUp',
-      'PageDown'
+      'PageDown',
+      'End'
     ].includes(parsed.key)
   )
 }
