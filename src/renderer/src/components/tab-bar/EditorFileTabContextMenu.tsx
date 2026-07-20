@@ -21,6 +21,7 @@ import { useAppStore } from '@/store'
 import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
+import type { KeybindingActionId } from '../../../../shared/keybindings'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
@@ -55,6 +56,7 @@ type EditorFileTabContextMenuProps = {
   onTogglePin: () => void
   onClose: () => void
   onCloseAll: () => void
+  closeAllShortcutActionId?: KeybindingActionId
   onCloseToRight: () => void
   onOpenMarkdownPreview: (
     file: {
@@ -88,12 +90,13 @@ export function EditorFileTabContextMenu({
   onTogglePin,
   onClose,
   onCloseAll,
+  closeAllShortcutActionId = 'tab.closeAll',
   onCloseToRight,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
-  const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const closeAllShortcut = useOptionalShortcutLabel(closeAllShortcutActionId)
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>

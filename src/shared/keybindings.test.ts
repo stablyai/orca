@@ -613,6 +613,54 @@ describe('keybindings', () => {
     })
   })
 
+  it('binds close-all editor tabs in group to Mod+Alt+Shift+W', () => {
+    expect(getEffectiveKeybindingsForAction('tab.closeAllInGroup', 'darwin')).toEqual([
+      'Mod+Alt+Shift+W'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.closeAllInGroup', 'linux')).toEqual([
+      'Mod+Alt+Shift+W'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.closeAllInGroup', 'win32')).toEqual([
+      'Mod+Alt+Shift+W'
+    ])
+    expect(formatKeybindingList(['Mod+Alt+Shift+W'], 'darwin')).toBe('⌘⌥⇧W')
+    expect(formatKeybindingList(['Mod+Alt+Shift+W'], 'linux')).toBe('Ctrl+Alt+Shift+W')
+
+    const macComposedCloseAllInGroup = {
+      key: '„',
+      code: 'KeyW',
+      meta: true,
+      control: false,
+      alt: true,
+      shift: true
+    }
+    const macCloseAll = {
+      key: '∑',
+      code: 'KeyW',
+      meta: true,
+      control: false,
+      alt: true,
+      shift: false
+    }
+    expect(
+      keybindingMatchesAction('tab.closeAllInGroup', macComposedCloseAllInGroup, 'darwin')
+    ).toBe(true)
+    expect(keybindingMatchesAction('tab.closeAllInGroup', macCloseAll, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.closeAll', macComposedCloseAllInGroup, 'darwin')).toBe(
+      false
+    )
+
+    const definition = getKeybindingDefinition('tab.closeAllInGroup')
+    expect(definition?.group).toBe('Tabs')
+    expect(definition?.scope).toBe('tabs')
+    expect(
+      findKeybindingConflicts('darwin', { 'tab.closeAllInGroup': ['Mod+Alt+W'] })
+    ).toContainEqual({
+      binding: 'Mod+Alt+W',
+      actionIds: expect.arrayContaining(['tab.closeAll', 'tab.closeAllInGroup'])
+    })
+  })
+
   it('keeps equalize pane sizes unassigned until users customize it', () => {
     expect(getEffectiveKeybindingsForAction('terminal.equalizePaneSizes', 'darwin')).toEqual([])
     expect(

@@ -24,6 +24,7 @@ import type {
   TuiAgent,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import type { KeybindingActionId } from '../../../../shared/keybindings'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
@@ -145,6 +146,7 @@ type TabBarProps = {
   onCloseBrowserTab?: (tabId: string) => void
   onDuplicateBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
+  closeAllShortcutActionId?: KeybindingActionId
   onMakePreviewFilePermanent?: (fileId: string, tabId?: string) => void
   onPinFile?: (fileId: string, tabId?: string) => void
   tabBarOrder?: string[]
@@ -270,6 +272,7 @@ function TabBarInner({
   onCloseBrowserTab,
   onDuplicateBrowserTab,
   onCloseAllFiles,
+  closeAllShortcutActionId = 'tab.closeAll',
   onMakePreviewFilePermanent,
   onPinFile,
   tabBarOrder,
@@ -1214,6 +1217,7 @@ function TabBarInner({
                     onClose={() => onCloseFile?.(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
                     onCloseAll={() => onCloseAllFiles?.()}
+                    closeAllShortcutActionId={closeAllShortcutActionId}
                     onMakePermanent={() => {}}
                     onTogglePin={() => togglePinned(item)}
                     dragData={dragData}
@@ -1237,6 +1241,7 @@ function TabBarInner({
                   onClose={() => onCloseFile?.(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}
+                  closeAllShortcutActionId={closeAllShortcutActionId}
                   onMakePermanent={() =>
                     onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)
                   }

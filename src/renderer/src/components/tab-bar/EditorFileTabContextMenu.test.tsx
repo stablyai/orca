@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { KeybindingActionId } from '../../../../shared/keybindings'
 
 const shortcutLabelMock = vi.hoisted(() => vi.fn())
 
@@ -196,7 +197,9 @@ function extractText(node: unknown): string {
   return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
-async function renderMenu(): Promise<unknown> {
+async function renderMenu({
+  closeAllShortcutActionId
+}: { closeAllShortcutActionId?: KeybindingActionId } = {}): Promise<unknown> {
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -227,6 +230,7 @@ async function renderMenu(): Promise<unknown> {
     onTogglePin: vi.fn(),
     onClose: vi.fn(),
     onCloseAll: vi.fn(),
+    closeAllShortcutActionId,
     onCloseToRight: vi.fn(),
     onOpenMarkdownPreview: vi.fn()
   })
@@ -240,6 +244,8 @@ function assignedShortcutLabel(actionId: string): string | null {
       return '⌘W'
     case 'tab.closeAll':
       return '⌘⌥W'
+    case 'tab.closeAllInGroup':
+      return '⌘⌥⇧W'
     default:
       return null
   }
@@ -297,5 +303,18 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(closeAllItem).toBeTruthy()
     expect(findElementsByType(closeAllItem, 'DropdownMenuShortcut')).toHaveLength(0)
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(0)
+  })
+
+  it('renders the group close-all shortcut chip when requested', async () => {
+    const tree = expandNode(await renderMenu({ closeAllShortcutActionId: 'tab.closeAllInGroup' }))
+
+    const closeAllItem = findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+      extractText(item.props.children).includes('Close All Editor Tabs')
+    )
+
+    expect(closeAllItem).toBeTruthy()
+    const shortcut = findElementsByType(closeAllItem, 'DropdownMenuShortcut')
+    expect(shortcut).toHaveLength(1)
+    expect(extractText(shortcut[0].props.children)).toBe('⌘⌥⇧W')
   })
 })

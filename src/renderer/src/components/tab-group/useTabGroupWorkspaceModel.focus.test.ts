@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import {
+  CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT,
+  TOGGLE_TERMINAL_PANE_EXPAND_EVENT
+} from '@/constants/terminal'
 
 const mocks = vi.hoisted(() => ({
   activateTab: vi.fn(),
@@ -32,6 +35,9 @@ const mocks = vi.hoisted(() => ({
   setTabCustomTitle: vi.fn()
 }))
 
+const effectCleanups = vi.hoisted(() => [] as (() => void)[])
+const windowListeners = vi.hoisted(() => new Map<string, Set<(event: Event) => void>>())
+
 const storeBox = vi.hoisted(() => ({
   state: null as Record<string, unknown> | null
 }))
@@ -41,6 +47,12 @@ vi.mock('react', async () => {
   return {
     ...actual,
     useCallback: <T>(callback: T) => callback,
+    useEffect: (effect: () => void | (() => void)) => {
+      const cleanup = effect()
+      if (typeof cleanup === 'function') {
+        effectCleanups.push(cleanup)
+      }
+    },
     useMemo: <T>(factory: () => T) => factory()
   }
 })
@@ -169,12 +181,30 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       callback(0)
       return 1
     })
+    windowListeners.clear()
+    mocks.dispatchEvent.mockImplementation((event: Event) => {
+      for (const listener of windowListeners.get(event.type) ?? []) {
+        listener(event)
+      }
+      return true
+    })
     vi.stubGlobal('window', {
-      dispatchEvent: mocks.dispatchEvent
+      addEventListener: vi.fn((type: string, listener: (event: Event) => void) => {
+        const listeners = windowListeners.get(type) ?? new Set<(event: Event) => void>()
+        listeners.add(listener)
+        windowListeners.set(type, listeners)
+      }),
+      dispatchEvent: mocks.dispatchEvent,
+      removeEventListener: vi.fn((type: string, listener: (event: Event) => void) => {
+        windowListeners.get(type)?.delete(listener)
+      })
     })
   })
 
   afterEach(() => {
+    while (effectCleanups.length > 0) {
+      effectCleanups.pop()?.()
+    }
     vi.unstubAllGlobals()
   })
 
@@ -527,5 +557,125 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       expect.objectContaining({ worktreeId: 'wt-1', tabId: 'browser-unified-1' })
     )
     expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
+  })
+
+  it('closes all editor tabs only for the matching group event', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'editor-unified-1',
+            tabOrder: ['editor-unified-1']
+          }
+        ]
+      },
+      openFiles: [
+        {
+          id: 'file-1',
+          filePath: '/repo/foo.ts',
+          relativePath: 'foo.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ],
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'editor-unified-1',
+            entityId: 'file-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'editor',
+            label: 'foo.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    window.dispatchEvent(
+      new CustomEvent(CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT, {
+        detail: { groupId: 'group-2' }
+      })
+    )
+
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+
+    window.dispatchEvent(
+      new CustomEvent(CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT, {
+        detail: { groupId: 'group-1' }
+      })
+    )
+
+    expect(mocks.closeFile).toHaveBeenCalledWith('file-1')
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('editor-unified-1')
+  })
+
+  it('removes the close-all-in-group event listener on unmount', async () => {
+    storeBox.state = {
+      ...storeBox.state,
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'editor-unified-1',
+            tabOrder: ['editor-unified-1']
+          }
+        ]
+      },
+      openFiles: [
+        {
+          id: 'file-1',
+          filePath: '/repo/foo.ts',
+          relativePath: 'foo.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ],
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'editor-unified-1',
+            entityId: 'file-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'editor',
+            label: 'foo.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    while (effectCleanups.length > 0) {
+      effectCleanups.pop()?.()
+    }
+    window.dispatchEvent(
+      new CustomEvent(CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT, {
+        detail: { groupId: 'group-1' }
+      })
+    )
+
+    expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
   })
 })

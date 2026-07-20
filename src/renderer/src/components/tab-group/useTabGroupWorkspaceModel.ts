@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the split-group workspace model intentionally keeps
    group-scoped activation, close, split, and tab-order rules together so the extracted
    controller cannot drift from the TabGroupPanel surface it coordinates. */
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
 import type {
@@ -15,7 +15,10 @@ import { useAppStore } from '../../store'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import {
+  CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT,
+  TOGGLE_TERMINAL_PANE_EXPAND_EVENT
+} from '@/constants/terminal'
 import {
   activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
@@ -520,6 +523,19 @@ export function useTabGroupWorkspaceModel({
       }
     }
   }, [closeItem, groupTabs])
+
+  useEffect(() => {
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<{ groupId?: string }>).detail
+      // Why: every mounted group listens to this global event; only the
+      // focused target group should run its dirty/pinned-safe close command.
+      if (detail?.groupId === groupId) {
+        closeAllEditorTabsInGroup()
+      }
+    }
+    window.addEventListener(CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT, handler)
+    return () => window.removeEventListener(CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT, handler)
+  }, [closeAllEditorTabsInGroup, groupId])
 
   const closeOthers = useCallback(
     (itemId: string) => {

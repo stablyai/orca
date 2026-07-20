@@ -1,6 +1,7 @@
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
+export const CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT = 'orca-close-all-editor-tabs-in-group'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
 export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'

@@ -160,6 +160,7 @@ export default function TabGroupPanel({
       }}
       onDuplicateBrowserTab={commands.duplicateBrowserTab}
       onCloseAllFiles={commands.closeAllEditorTabsInGroup}
+      closeAllShortcutActionId={hasSplitGroups ? 'tab.closeAllInGroup' : 'tab.closeAll'}
       onMakePreviewFilePermanent={(_fileId, tabId) => {
         if (!tabId) {
           return

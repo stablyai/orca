@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
+  CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
@@ -1941,6 +1942,30 @@ function Terminal(): React.JSX.Element | null {
         notifyTerminalCapture('tab.closeAll')
         handleCloseAllFiles()
         return
+      }
+
+      // Cmd/Ctrl+Alt+Shift+W - close every editor tab in the focused split group only.
+      // Why: dispatch to the per-group hook, which owns pinned/dirty-safe close
+      // behavior, via the focused groupId instead of duplicating close logic here.
+      if (!e.repeat && matchShortcut('tab.closeAllInGroup')) {
+        const state = useAppStore.getState()
+        const worktreeId = state.activeWorktreeId
+        // Why: activeGroupIdByWorktree can be undefined after cold restore before
+        // first pane focus; the first group is the established fallback target.
+        const focusedGroupId = worktreeId
+          ? (state.activeGroupIdByWorktree[worktreeId] ??
+            state.groupsByWorktree[worktreeId]?.[0]?.id)
+          : undefined
+        if (focusedGroupId) {
+          e.preventDefault()
+          notifyTerminalCapture('tab.closeAllInGroup')
+          window.dispatchEvent(
+            new CustomEvent(CLOSE_ALL_EDITOR_TABS_IN_GROUP_EVENT, {
+              detail: { groupId: focusedGroupId }
+            })
+          )
+          return
+        }
       }
 
       // Ctrl+Tab - quick-toggle to the previously focused tab in this group.
