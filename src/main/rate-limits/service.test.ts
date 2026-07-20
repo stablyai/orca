@@ -561,6 +561,224 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('waits out Retry-After before automated Claude refetches, then recovers', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+          usageMetadata: { failureKind: 'rate-limited', retryAtMs: Date.now() + 40 * 60 * 1000 }
+        }))
+        .mockImplementation(async () => okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // Activations that would normally retry immediately must respect the server's Retry-After.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // The 15- and 30-minute poll cycles land inside the 40-minute window: other providers refresh, Claude is skipped.
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(1)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // The 45-minute poll cycle is past the window and refetches Claude.
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lets a user-directed refresh bypass the Claude Retry-After gate', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => ({
+          ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+          usageMetadata: { failureKind: 'rate-limited', retryAtMs: Date.now() + 40 * 60 * 1000 }
+        }))
+        .mockImplementation(async () => okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+
+      await service.refresh()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('error')
+
+      await service.refresh()
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.status).toBe('ok')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps last-known usage through a rate-limited window past the generic stale threshold', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => okProvider('claude', 18))
+        .mockImplementation(async () => ({
+          ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+          usageMetadata: { failureKind: 'rate-limited' }
+        }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+
+      await service.refresh()
+      expect(service.getState().claude?.status).toBe('ok')
+
+      // 31 minutes later the generic 30-minute stale policy would drop the snapshot; rate-limited failures keep it.
+      await vi.advanceTimersByTimeAsync(31 * 60 * 1000)
+      await service.refresh()
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('error')
+      expect(claude?.error).toBe('Claude usage is rate limited right now.')
+      expect(claude?.session?.usedPercent).toBe(18)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ingests statusline usage, clears errors, and skips OAuth polls while the live feed is fresh', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockImplementation(async () => ({
+        ...errorProvider('claude', 'Claude usage is rate limited right now.'),
+        usageMetadata: { failureKind: 'rate-limited' }
+      }))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+      expect(service.getState().claude?.status).toBe('error')
+
+      // A live session reports usage 12 minutes in; the error state clears without any OAuth call.
+      await vi.advanceTimersByTimeAsync(12 * 60 * 1000 - 1000)
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5, resets_at: Math.floor(Date.now() / 1000) + 3600 },
+        sevenDay: { used_percentage: 41.2 }
+      })
+
+      const claude = service.getState().claude
+      expect(claude?.status).toBe('ok')
+      expect(claude?.error).toBeNull()
+      expect(claude?.session?.usedPercent).toBe(23.5)
+      expect(claude?.weekly?.usedPercent).toBe(41.2)
+      expect(claude?.usageMetadata?.source).toBe('live-session')
+
+      // The 15-minute poll cycle lands inside the live-feed freshness window: other providers refresh, Claude's OAuth fetch is skipped.
+      const codexCallsBeforePoll = vi.mocked(fetchCodexRateLimits).mock.calls.length
+      await vi.advanceTimersByTimeAsync(3 * 60 * 1000)
+      expect(vi.mocked(fetchCodexRateLimits).mock.calls.length).toBeGreaterThan(
+        codexCallsBeforePoll
+      )
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      // Once the live feed goes stale, automated refetches resume.
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000)
+      expect(vi.mocked(fetchClaudeRateLimits).mock.calls.length).toBeGreaterThan(1)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops statusline posts before attribution is known or from a mismatched config dir', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+
+      // No fetch cycle has captured the selected account's config dir yet.
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 50 },
+        sevenDay: null
+      })
+      expect(service.getState().claude).toBeNull()
+
+      await service.refresh()
+      expect(service.getState().claude?.session?.usedPercent).toBe(18)
+
+      // A managed-account session must not overwrite the system-default bar.
+      service.ingestLiveClaudeRateLimits({
+        configDir: '/some/managed/dir',
+        fiveHour: { used_percentage: 99 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(18)
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 33 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(33)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('dedupes identical statusline posts within the throttle window', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+
+      const event = {
+        configDir: null,
+        fiveHour: { used_percentage: 20, resets_at: 1738425600 },
+        sevenDay: null
+      }
+      service.ingestLiveClaudeRateLimits(event)
+      const firstUpdatedAt = service.getState().claude?.updatedAt
+
+      await vi.advanceTimersByTimeAsync(1000)
+      service.ingestLiveClaudeRateLimits(event)
+      expect(service.getState().claude?.updatedAt).toBe(firstUpdatedAt)
+
+      // A changed window updates immediately despite the throttle.
+      service.ingestLiveClaudeRateLimits({
+        ...event,
+        fiveHour: { used_percentage: 21, resets_at: 1738425600 }
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(21)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps a settled error chip settled during background refetches instead of flashing fetching', async () => {
     vi.useFakeTimers()
     try {

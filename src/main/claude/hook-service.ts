@@ -17,8 +17,10 @@ import {
   buildWindowsHookStdinDrainEpilogue,
   WINDOWS_HOOK_STDIN_DRAIN_LABEL
 } from '../agent-hooks/hook-stdin-contract'
+import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
+  applyManagedStatusLine,
   CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
@@ -26,9 +28,13 @@ import {
   getManagedCommand,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
+  getPosixStatusLineScriptFileName,
   getRemoteConfigPath,
   getRemoteManagedCommand,
+  getStatusLineScriptFileName,
+  getStatusLineScriptPath,
   removeManagedHooks,
+  removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
 
@@ -175,7 +181,7 @@ export class ClaudeHookService {
     }
 
     const command = getManagedCommand(scriptPath)
-    const nextConfig = applyManagedHooks(
+    let nextConfig = applyManagedHooks(
       config,
       command,
       getManagedScriptFileName(this.options.settings)
@@ -184,6 +190,16 @@ export class ClaudeHookService {
       scriptPath,
       getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
     )
+    // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+    if (this.options.agent === 'claude') {
+      const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
+      writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
+      nextConfig = applyManagedStatusLine(
+        nextConfig,
+        getManagedCommand(statusLineScriptPath),
+        getStatusLineScriptFileName(this.options.settings)
+      )
+    }
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
@@ -209,7 +225,7 @@ export class ClaudeHookService {
 
       // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
       const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      let nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write script before settings — a mid-install failure then leaves a harmless orphan script, not settings.json pointing at a missing one.
       // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from the local OS.
@@ -218,6 +234,21 @@ export class ClaudeHookService {
         remoteScriptPath,
         getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
       )
+      // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+      if (this.options.agent === 'claude') {
+        const remoteStatusLineFileName = getPosixStatusLineScriptFileName(this.options.settings)
+        const remoteStatusLinePath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteStatusLineFileName}`
+        await writeManagedScriptRemote(
+          sftp,
+          remoteStatusLinePath,
+          getManagedStatusLineScript('posix')
+        )
+        nextConfig = applyManagedStatusLine(
+          nextConfig,
+          getRemoteManagedCommand(remoteStatusLinePath),
+          remoteStatusLineFileName
+        )
+      }
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {
@@ -250,11 +281,15 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    const { config: nextConfig, changed } = removeManagedHooks(
+    const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
       config,
       getManagedScriptFileName(this.options.settings)
     )
-    if (changed) {
+    const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
+      hooksRemoved,
+      getStatusLineScriptFileName(this.options.settings)
+    )
+    if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
     }
     return this.getStatus()
