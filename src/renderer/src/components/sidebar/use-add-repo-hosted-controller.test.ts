@@ -85,12 +85,57 @@ describe('useAddRepoHostedController', () => {
       onOpenChange,
       onProjectAdded
     })
-    await finishProjectAdd?.('repo-1')
+    await finishProjectAdd?.('repo-1', 'local_folder_picker')
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedRepo')
     expect(onProjectAdded).toHaveBeenCalledWith('repo-1')
     // Why: closing before selection keeps the composer visible under the
     // dialog's close animation while the new project lands in the picker.
     expect(order).toEqual(['close', 'added'])
+  })
+
+  it('hands an imported group to the host instead of one member project', async () => {
+    const onProjectAdded = vi.fn()
+    const onProjectGroupImported = vi.fn(() => true)
+    const { finishProjectAdd } = useAddRepoHostedController({
+      open: true,
+      onOpenChange: vi.fn(),
+      onProjectAdded,
+      onProjectGroupImported
+    })
+    await finishProjectAdd?.('repo-1', 'local_folder_picker', {
+      importedProjectGroupId: 'group-1'
+    })
+    expect(onProjectGroupImported).toHaveBeenCalledWith('group-1')
+    // Why: the user asked to import as a group, so a member project is not
+    // the target they chose.
+    expect(onProjectAdded).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the project when the imported group is not selectable', async () => {
+    const onProjectAdded = vi.fn()
+    const { finishProjectAdd } = useAddRepoHostedController({
+      open: true,
+      onOpenChange: vi.fn(),
+      onProjectAdded,
+      onProjectGroupImported: vi.fn(() => false)
+    })
+    await finishProjectAdd?.('repo-1', 'local_folder_picker', {
+      importedProjectGroupId: 'group-1'
+    })
+    expect(onProjectAdded).toHaveBeenCalledWith('repo-1')
+  })
+
+  it('falls back to the project when the host cannot select groups', async () => {
+    const onProjectAdded = vi.fn()
+    const { finishProjectAdd } = useAddRepoHostedController({
+      open: true,
+      onOpenChange: vi.fn(),
+      onProjectAdded
+    })
+    await finishProjectAdd?.('repo-1', 'local_folder_picker', {
+      importedProjectGroupId: 'group-1'
+    })
+    expect(onProjectAdded).toHaveBeenCalledWith('repo-1')
   })
 
   it('SSH settings navigation closes both hosted dialog and composer modal', () => {

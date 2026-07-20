@@ -53,7 +53,8 @@ import type {
   WorktreeMeta,
   WorkspaceStatus,
   WorkspaceCreateTelemetrySource,
-  ProjectGroup
+  ProjectGroup,
+  Repo
 } from '../../../shared/types'
 import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
@@ -394,6 +395,10 @@ export type UseComposerStateResult = {
   /** Selects the repo a nested Add Project flow just added, clearing any
    *  folder-group target so the composer lands on the new project. */
   selectAddedProjectRepo: (repoId: string) => void
+  /** Selects the project group a nested folder import just created. Returns
+   *  false when the group is no longer selectable, so the caller can fall back
+   *  to the single-project handoff. */
+  selectAddedProjectGroup: (projectGroupId: string) => boolean
 }
 
 export type InitialWorkspaceRunSeedInput = {
@@ -535,6 +540,30 @@ export function getInitialAutoManagedWorkspaceName({
   const candidateName = draftName ?? initialName
   const seedName = getLinkedWorkItemSeedName(draftLinkedWorkItem ?? initialLinkedWorkItem)
   return candidateName && seedName && candidateName === seedName ? candidateName : ''
+}
+
+export function resolveProjectGroupComposerTarget({
+  projectGroupId,
+  projectGroups,
+  repos
+}: {
+  projectGroupId: string
+  projectGroups: readonly ProjectGroup[]
+  repos: readonly Repo[]
+}): { projectGroup: ProjectGroup; sourceRepoId: string } | null {
+  // Why: only folder-backed groups are composer targets, and the group can
+  // already be gone by selection time (deleted while a handoff was in flight;
+  // an all-failed import never reaches this — the flow stops with a toast).
+  const projectGroup = projectGroups.find(
+    (group) => group.id === projectGroupId && Boolean(group.parentPath?.trim())
+  )
+  if (!projectGroup) {
+    return null
+  }
+  return {
+    projectGroup,
+    sourceRepoId: getFolderSourceRepos(repos, projectGroups, projectGroup)[0]?.id ?? ''
+  }
 }
 
 // Why: both the full-page TaskPage composer and the Cmd+J modal can be
@@ -2742,15 +2771,45 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [handleRepoChange, projectHostSetupOptions]
   )
+  const applyProjectGroupSelection = useCallback(
+    (nextProjectGroup: ProjectGroup, nextSourceRepoId: string): void => {
+      setSelectedProjectGroupId(nextProjectGroup.id)
+      setProjectError(null)
+      setRepoId(nextSourceRepoId)
+      setLinkedIssue('')
+      setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      const linkedProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
+      if (linkedWorkItem && linkedProvider !== 'linear' && linkedProvider !== 'jira') {
+        setLinkedWorkItem(null)
+      }
+      setSparseEnabled(false)
+      setSparseDirectories('')
+      setSparseSelectedPresetId(null)
+      setBaseBranch(undefined)
+      setPushTarget(undefined)
+      setBranchNameOverride(undefined)
+      // Why (#5181): clear branch-scoped reuse state on a project switch too.
+      setBranchNameOverridePreservesNameEdits(false)
+      setReuseEligibleBranch(null)
+      setReuseSelectedBranch(false)
+      setForkPushWarning(null)
+      setStartFromResetHint(null)
+    },
+    [linkedWorkItem, setRepoId]
+  )
   const handleProjectChange = useCallback(
     (projectId: string): void => {
       initialProjectGroupAppliedRef.current = true
       const projectGroupId = getProjectGroupIdFromNewWorkspaceOptionId(projectId)
       if (projectGroupId) {
-        const nextProjectGroup = projectGroups.find(
-          (group) => group.id === projectGroupId && Boolean(group.parentPath?.trim())
-        )
-        if (!nextProjectGroup) {
+        const selection = resolveProjectGroupComposerTarget({
+          projectGroupId,
+          projectGroups,
+          repos
+        })
+        if (!selection) {
           setSelectedProjectGroupId(null)
           setProjectError(
             translate(
@@ -2760,30 +2819,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           )
           return
         }
-        const nextSourceRepo = getFolderSourceRepos(repos, projectGroups, nextProjectGroup)[0]
-        setSelectedProjectGroupId(nextProjectGroup.id)
-        setProjectError(null)
-        setRepoId(nextSourceRepo?.id ?? '')
-        setLinkedIssue('')
-        setLinkedPR(null)
-        setLinkedGitLabIssue(null)
-        setLinkedGitLabMR(null)
-        const linkedProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
-        if (linkedWorkItem && linkedProvider !== 'linear' && linkedProvider !== 'jira') {
-          setLinkedWorkItem(null)
-        }
-        setSparseEnabled(false)
-        setSparseDirectories('')
-        setSparseSelectedPresetId(null)
-        setBaseBranch(undefined)
-        setPushTarget(undefined)
-        setBranchNameOverride(undefined)
-        // Why (#5181): clear branch-scoped reuse state on a project switch too.
-        setBranchNameOverridePreservesNameEdits(false)
-        setReuseEligibleBranch(null)
-        setReuseSelectedBranch(false)
-        setForkPushWarning(null)
-        setStartFromResetHint(null)
+        applyProjectGroupSelection(selection.projectGroup, selection.sourceRepoId)
         return
       }
 
@@ -2809,15 +2845,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
     },
     [
+      applyProjectGroupSelection,
       eligibleRepos,
       handleRepoChange,
       isProjectGroupTarget,
-      linkedWorkItem,
       projectGroups,
       projectHostSetups,
       projects,
       repos,
-      setRepoId,
       selectedWorkspaceTarget,
       workspaceHostScope
     ]
@@ -2833,6 +2868,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       handleRepoChange(nextRepoId)
     },
     [handleRepoChange]
+  )
+  const selectAddedProjectGroup = useCallback(
+    (projectGroupId: string): boolean => {
+      // Why: the group and its projects were created by the import this call
+      // is completing, so the render-time `projectGroups`/`repos` closures are
+      // still behind the store and would not find either.
+      const state = useAppStore.getState()
+      const selection = resolveProjectGroupComposerTarget({
+        projectGroupId,
+        projectGroups: state.projectGroups,
+        repos: state.repos
+      })
+      if (!selection) {
+        return false
+      }
+      initialProjectGroupAppliedRef.current = true
+      applyProjectGroupSelection(selection.projectGroup, selection.sourceRepoId)
+      return true
+    },
+    [applyProjectGroupSelection]
   )
 
   const showProjectRequiredError = useCallback((): void => {
@@ -4457,6 +4512,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     submit,
     submitQuick,
     createDisabled,
-    selectAddedProjectRepo
+    selectAddedProjectRepo,
+    selectAddedProjectGroup
   }
 }

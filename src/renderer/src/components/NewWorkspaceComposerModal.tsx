@@ -129,7 +129,8 @@ function QuickTabBody({
     nameInputRef,
     submitQuick,
     createDisabled,
-    selectAddedProjectRepo
+    selectAddedProjectRepo,
+    selectAddedProjectGroup
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
     // Why: the modal is quick-create only now, so prompt-prefill state is
@@ -207,6 +208,11 @@ function QuickTabBody({
     },
     [selectAddedProjectRepo]
   )
+  const handleProjectGroupImported = useCallback(
+    (projectGroupId: string): boolean => selectAddedProjectGroup(projectGroupId),
+    [selectAddedProjectGroup]
+  )
+
   const handleAddProjectCloseAutoFocus = useCallback(
     (event: Event): void => {
       // Why: after adding a project the next step is naming the worktree.
@@ -223,9 +229,10 @@ function QuickTabBody({
       open: addProjectOpen,
       onOpenChange: setAddProjectOpen,
       onProjectAdded: handleProjectAdded,
+      onProjectGroupImported: handleProjectGroupImported,
       onCloseAutoFocus: handleAddProjectCloseAutoFocus
     }),
-    [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded]
+    [addProjectOpen, handleAddProjectCloseAutoFocus, handleProjectAdded, handleProjectGroupImported]
   )
   const selectedProjectOption = cardProps.projectOptions.find(
     (option) => option.id === cardProps.selectedProjectId

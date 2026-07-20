@@ -10,6 +10,7 @@ import {
   type NestedRepoTelemetryRuntimeKind
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
+import type { CompleteGitRepoAdd } from './use-complete-git-repo-add'
 import type { NestedRepoScanResult, ProjectGroupImportResult } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -50,7 +51,7 @@ export function useAddRepoNestedImportFlow({
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
-  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
+  onGitRepoReady: CompleteGitRepoAdd
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
@@ -198,7 +199,9 @@ export function useAddRepoNestedImportFlow({
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(repo.id, source)
+          // Why: "import as group" chose the group as the target, so the
+          // handoff must offer it instead of one arbitrary member project.
+          await onGitRepoReady(repo.id, source, { importedProjectGroupId: result.group?.id })
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {
