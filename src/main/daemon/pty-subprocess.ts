@@ -66,6 +66,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import type { TuiAgent } from '../../shared/types'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 
+const MIMOCODE_GUEST_CONFIG_ENV = 'MIMOCODE_CONFIG_DIR'
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
   'ORCA_TAB_ID',
@@ -556,8 +557,12 @@ function spawnDaemonPtyWithWindowsFallback(args: {
  */
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
+  const inheritedEnv = { ...process.env }
+  for (const key of opts.envToDelete ?? []) {
+    delete inheritedEnv[key]
+  }
   const env: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(process.env, opts.env),
+    ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
@@ -576,7 +581,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   } as Record<string, string>
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   for (const key of opts.envToDelete ?? []) {
-    delete env[key]
+    if (key !== MIMOCODE_GUEST_CONFIG_ENV || opts.env?.[key] === undefined) {
+      delete env[key]
+    }
   }
   if (opts.env?.TERM) {
     env.TERM = opts.env.TERM
@@ -744,7 +751,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: relay-side launch modes can ask for host defaults to stay scrubbed
     // even after environment normalization above.
     for (const key of opts.envToDelete ?? []) {
-      delete env[key]
+      if (key !== MIMOCODE_GUEST_CONFIG_ENV || opts.env?.[key] === undefined) {
+        delete env[key]
+      }
     }
     if (opts.env?.TERM) {
       env.TERM = opts.env.TERM
@@ -779,7 +788,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellLaunch =
         env.ORCA_ATTRIBUTION_SHIM_DIR ||
         env.ORCA_OPENCODE_CONFIG_DIR ||
-        env.ORCA_MIMOCODE_HOME ||
+        env.ORCA_MIMOCODE_CONFIG_DIR ||
         env.ORCA_OMP_STATUS_EXTENSION ||
         env.ORCA_CODEX_HOME ||
         env.ORCA_AGENT_TEAMS_SHIM_DIR

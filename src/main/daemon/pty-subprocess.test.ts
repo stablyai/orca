@@ -82,7 +82,7 @@ import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_ATTRIBUTION_SHIM_DIR',
   'ORCA_OPENCODE_CONFIG_DIR',
-  'ORCA_MIMOCODE_HOME',
+  'ORCA_MIMOCODE_CONFIG_DIR',
   'ORCA_PI_CODING_AGENT_DIR',
   'ORCA_OMP_CODING_AGENT_DIR',
   'ORCA_CODEX_HOME'
@@ -1689,7 +1689,7 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell wrapper when MiMo home must survive shell startup', () => {
+  it('uses shell wrapper when MiMo config must survive shell startup', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1702,8 +1702,8 @@ describe('createPtySubprocess', () => {
         rows: 24,
         env: {
           SHELL: '/bin/zsh',
-          MIMOCODE_HOME: '/tmp/orca-mimocode-overlay',
-          ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
+          MIMOCODE_CONFIG_DIR: '/tmp/orca-mimocode-overlay',
+          ORCA_MIMOCODE_CONFIG_DIR: '/tmp/orca-mimocode-overlay'
         }
       })
     } finally {
@@ -1936,6 +1936,49 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
     expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
     expect(lastCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+  })
+
+  it('deletes daemon-inherited MiMo host paths without deleting an explicit guest primary', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const previous = {
+      MIMOCODE_CONFIG_DIR: process.env.MIMOCODE_CONFIG_DIR,
+      ORCA_MIMOCODE_CONFIG_DIR: process.env.ORCA_MIMOCODE_CONFIG_DIR,
+      ORCA_MIMOCODE_SOURCE_CONFIG_DIR: process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
+    }
+    process.env.MIMOCODE_CONFIG_DIR = 'C:\\host\\overlay'
+    process.env.ORCA_MIMOCODE_CONFIG_DIR = 'C:\\host\\overlay'
+    process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR = 'C:\\host\\source'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/bash',
+          MIMOCODE_CONFIG_DIR: '/home/guest/.config/mimocode'
+        },
+        envToDelete: [
+          'MIMOCODE_CONFIG_DIR',
+          'ORCA_MIMOCODE_CONFIG_DIR',
+          'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
+        ]
+      })
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)![2].env
+    expect(spawnEnv.MIMOCODE_CONFIG_DIR).toBe('/home/guest/.config/mimocode')
+    expect(spawnEnv.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+    expect(spawnEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
   })
 
   it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {

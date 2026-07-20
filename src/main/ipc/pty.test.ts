@@ -46,6 +46,7 @@ const {
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   mimoCodeBuildPtyEnvMock,
+  mimoCodeClearPtyMock,
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
@@ -77,6 +78,7 @@ const {
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   mimoCodeBuildPtyEnvMock: vi.fn(),
+  mimoCodeClearPtyMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
@@ -147,7 +149,8 @@ vi.mock('../opencode/hook-service', () => ({
 
 vi.mock('../mimo/hook-service', () => ({
   mimoCodeHookService: {
-    buildPtyEnv: mimoCodeBuildPtyEnvMock
+    buildPtyEnv: mimoCodeBuildPtyEnvMock,
+    clearPty: mimoCodeClearPtyMock
   }
 }))
 
@@ -201,6 +204,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import {
   registerPtyHandlers,
+  buildPtyHostEnv,
   registerSshPtyProvider,
   clearProviderPtyState,
   deletePtyOwnership,
@@ -288,6 +292,9 @@ describe('registerPtyHandlers', () => {
   const savedOpenCodeConfigDir = process.env.OPENCODE_CONFIG_DIR
   const savedOrcaOpenCodeConfigDir = process.env.ORCA_OPENCODE_CONFIG_DIR
   const savedOrcaOpenCodeSourceConfigDir = process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+  const savedMimoCodeConfigDir = process.env.MIMOCODE_CONFIG_DIR
+  const savedOrcaMimoCodeConfigDir = process.env.ORCA_MIMOCODE_CONFIG_DIR
+  const savedOrcaMimoCodeSourceConfigDir = process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
   const savedPiAgentDir = process.env.PI_CODING_AGENT_DIR
   const savedOrcaPiAgentDir = process.env.ORCA_PI_CODING_AGENT_DIR
   const savedOrcaPiSourceAgentDir = process.env.ORCA_PI_SOURCE_AGENT_DIR
@@ -314,6 +321,9 @@ describe('registerPtyHandlers', () => {
     delete process.env.OPENCODE_CONFIG_DIR
     delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
     delete process.env.ORCA_OPENCODE_CONFIG_DIR
+    delete process.env.MIMOCODE_CONFIG_DIR
+    delete process.env.ORCA_MIMOCODE_CONFIG_DIR
+    delete process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     delete process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
     delete process.env.PI_CODING_AGENT_DIR
@@ -340,6 +350,7 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
+    mimoCodeClearPtyMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
@@ -405,8 +416,10 @@ describe('registerPtyHandlers', () => {
         ? '/tmp/orca-opencode-overlay'
         : '/tmp/orca-opencode-config'
     }))
-    mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingHome?: string) => ({
-      MIMOCODE_HOME: existingHome ? '/tmp/orca-mimocode-overlay' : '/tmp/orca-mimocode-shared'
+    mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
+      MIMOCODE_CONFIG_DIR: existingConfigDir
+        ? '/tmp/orca-mimocode-overlay'
+        : '/tmp/orca-mimocode-shared'
     }))
     buildAgentHookEnvMock.mockReturnValue({
       ORCA_AGENT_HOOK_PORT: '5678',
@@ -482,6 +495,21 @@ describe('registerPtyHandlers', () => {
       process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = savedOrcaOpenCodeSourceConfigDir
     } else {
       delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    }
+    if (savedMimoCodeConfigDir !== undefined) {
+      process.env.MIMOCODE_CONFIG_DIR = savedMimoCodeConfigDir
+    } else {
+      delete process.env.MIMOCODE_CONFIG_DIR
+    }
+    if (savedOrcaMimoCodeConfigDir !== undefined) {
+      process.env.ORCA_MIMOCODE_CONFIG_DIR = savedOrcaMimoCodeConfigDir
+    } else {
+      delete process.env.ORCA_MIMOCODE_CONFIG_DIR
+    }
+    if (savedOrcaMimoCodeSourceConfigDir !== undefined) {
+      process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR = savedOrcaMimoCodeSourceConfigDir
+    } else {
+      delete process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
     }
     if (savedPiAgentDir !== undefined) {
       process.env.PI_CODING_AGENT_DIR = savedPiAgentDir
@@ -1029,12 +1057,20 @@ describe('registerPtyHandlers', () => {
     })
 
     it('injects MiMo overlay env only when launch command is mimo', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'mimo')
+      const env = await spawnAndGetEnv(
+        { MIMOCODE_HOME: '/tmp/user-mimocode-home' },
+        undefined,
+        undefined,
+        undefined,
+        'mimo'
+      )
 
       expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
-      expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-      expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-      expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined)
+      expect(env.MIMOCODE_HOME).toBe('/tmp/user-mimocode-home')
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
     })
 
     it.each(['/usr/local/bin/mimo --prompt hi', '"C:\\Program Files\\MiMo\\mimo.cmd" --prompt hi'])(
@@ -1043,8 +1079,8 @@ describe('registerPtyHandlers', () => {
         const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, launchCommand)
 
         expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
-        expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-        expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+        expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+        expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
       }
     )
 
@@ -1058,8 +1094,8 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
-      expect(env.MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
-      expect(env.ORCA_MIMOCODE_HOME).toBe('/tmp/orca-mimocode-shared')
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBe('/tmp/orca-mimocode-shared')
     })
 
     it('does not inject MiMo overlay for non-mimo launches', async () => {
@@ -1068,12 +1104,166 @@ describe('registerPtyHandlers', () => {
       expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
     })
 
-    it('restores user MiMo home when agent status hooks are disabled in a nested Orca shell', async () => {
+    it.each([
+      ['host overlay primary', 'C:\\host\\overlay', true],
+      ['host source primary', 'C:\\host\\source', true],
+      ['explicit guest primary with markers', '/home/guest/.config/mimocode', false],
+      ['explicit guest primary without markers', '/home/guest/custom-mimocode', false]
+    ])('does not build a host MiMo overlay for WSL and handles %s', (_, primary, removed) => {
+      const withMarkers = primary !== '/home/guest/custom-mimocode'
+      const env = buildPtyHostEnv(
+        'wsl-mimo-pty',
+        {
+          MIMOCODE_HOME: 'C:\\Users\\test\\.mimocode',
+          MIMOCODE_CONFIG_DIR: primary,
+          ...(withMarkers
+            ? {
+                ORCA_MIMOCODE_CONFIG_DIR: 'C:\\host\\overlay',
+                ORCA_MIMOCODE_SOURCE_CONFIG_DIR: 'C:\\host\\source'
+              }
+            : {})
+        },
+        {
+          isPackaged: true,
+          userDataPath: 'C:\\Users\\test\\AppData\\Roaming\\Orca',
+          selectedCodexHomePath: null,
+          githubAttributionEnabled: false,
+          launchCommand: 'mimo',
+          isWsl: true,
+          agentStatusHooksEnabled: true
+        }
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.MIMOCODE_HOME).toBe('C:\\Users\\test\\.mimocode')
+      expect(env.MIMOCODE_CONFIG_DIR).toBe(removed ? undefined : primary)
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('uses the recorded MiMo source config before inherited and process config dirs', async () => {
       const env = await spawnAndGetEnv(
         {
-          MIMOCODE_HOME: '/tmp/parent-orca-mimocode-overlay',
-          ORCA_MIMOCODE_HOME: '/tmp/parent-orca-mimocode-overlay',
-          ORCA_MIMOCODE_SOURCE_HOME: '/tmp/user-mimocode-home'
+          ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/tmp/base-source-config',
+          MIMOCODE_CONFIG_DIR: '/tmp/base-config'
+        },
+        {
+          ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/tmp/process-source-config',
+          MIMOCODE_CONFIG_DIR: '/tmp/process-config'
+        },
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/base-source-config'
+      )
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBe('/tmp/base-source-config')
+    })
+
+    it('uses process MiMo source config before base and process config dirs', async () => {
+      await spawnAndGetEnv(
+        { MIMOCODE_CONFIG_DIR: '/tmp/base-config' },
+        {
+          ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/tmp/process-source-config',
+          MIMOCODE_CONFIG_DIR: '/tmp/process-config'
+        },
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/process-source-config'
+      )
+    })
+
+    it('uses base MiMo config before process config dir', async () => {
+      await spawnAndGetEnv(
+        { MIMOCODE_CONFIG_DIR: '/tmp/base-config' },
+        { MIMOCODE_CONFIG_DIR: '/tmp/process-config' },
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/base-config')
+    })
+
+    it('uses process MiMo config when no source or base config dir exists', async () => {
+      await spawnAndGetEnv(
+        undefined,
+        { MIMOCODE_CONFIG_DIR: '/tmp/process-config' },
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/tmp/process-config'
+      )
+    })
+
+    it('does not treat an inherited Orca MiMo overlay as source without a recorded source', async () => {
+      await spawnAndGetEnv(
+        {
+          MIMOCODE_CONFIG_DIR: '/tmp/parent-orca-mimocode-overlay',
+          ORCA_MIMOCODE_CONFIG_DIR: '/tmp/parent-orca-mimocode-overlay'
+        },
+        undefined,
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined)
+    })
+
+    it('does not mark the source as an Orca overlay when MiMo overlay creation falls back', async () => {
+      mimoCodeBuildPtyEnvMock.mockReturnValue({
+        MIMOCODE_CONFIG_DIR: '/tmp/user-mimocode-config'
+      })
+
+      const env = await spawnAndGetEnv(
+        { MIMOCODE_CONFIG_DIR: '/tmp/user-mimocode-config' },
+        undefined,
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/user-mimocode-config')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('does not add overlay markers when MiMo overlay creation returns no override', async () => {
+      mimoCodeBuildPtyEnvMock.mockReturnValue({})
+
+      const env = await spawnAndGetEnv(
+        { MIMOCODE_CONFIG_DIR: '/tmp/user-mimocode-config' },
+        undefined,
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/user-mimocode-config')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('restores user MiMo config without changing home when hooks are disabled', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          MIMOCODE_HOME: '/tmp/user-mimocode-home',
+          MIMOCODE_CONFIG_DIR: '/tmp/parent-orca-mimocode-overlay',
+          ORCA_MIMOCODE_CONFIG_DIR: '/tmp/parent-orca-mimocode-overlay',
+          ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/tmp/user-mimocode-config'
         },
         undefined,
         undefined,
@@ -1083,8 +1273,9 @@ describe('registerPtyHandlers', () => {
 
       expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
       expect(env.MIMOCODE_HOME).toBe('/tmp/user-mimocode-home')
-      expect(env.ORCA_MIMOCODE_HOME).toBeUndefined()
-      expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
+      expect(env.MIMOCODE_CONFIG_DIR).toBe('/tmp/user-mimocode-config')
+      expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
     })
 
     posixOnlyIt(
@@ -1120,6 +1311,33 @@ describe('registerPtyHandlers', () => {
         expect(env.OPENCODE_CONFIG_DIR).not.toBe(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR)
       }
     )
+
+    posixOnlyIt('discovers GUI-only MiMo config from shell startup files', async () => {
+      readFileSyncMock.mockImplementation((path: string) =>
+        path.endsWith('.zshrc')
+          ? 'export MIMOCODE_CONFIG_DIR="$HOME/company/mimocode-config"\n'
+          : ''
+      )
+
+      const env = await spawnAndGetEnv(
+        undefined,
+        {
+          HOME: '/home/pim',
+          SHELL: '/bin/zsh',
+          MIMOCODE_CONFIG_DIR: undefined,
+          ORCA_MIMOCODE_SOURCE_CONFIG_DIR: undefined
+        },
+        undefined,
+        undefined,
+        'mimo'
+      )
+
+      expect(mimoCodeBuildPtyEnvMock).toHaveBeenCalledWith(
+        expect.any(String),
+        '/home/pim/company/mimocode-config'
+      )
+      expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBe('/home/pim/company/mimocode-config')
+    })
 
     it('installs Pi managed extensions without redirecting Orca terminal PTY homes', async () => {
       const env = await spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
@@ -1747,6 +1965,33 @@ describe('registerPtyHandlers', () => {
             value: originalPlatform
           })
         }
+      })
+
+      it('scrubs daemon-inherited MiMo host paths for WSL while preserving an explicit guest primary', async () => {
+        await withWin32Platform(async () => {
+          const spawnOptions = await daemonSpawnAndGetOptions(
+            { MIMOCODE_CONFIG_DIR: '/home/guest/.config/mimocode' },
+            undefined,
+            undefined,
+            {
+              MIMOCODE_CONFIG_DIR: 'C:\\host\\overlay',
+              ORCA_MIMOCODE_CONFIG_DIR: 'C:\\host\\overlay',
+              ORCA_MIMOCODE_SOURCE_CONFIG_DIR: 'C:\\host\\source'
+            },
+            { shellOverride: 'wsl.exe', command: 'mimo' }
+          )
+
+          expect(spawnOptions.env.MIMOCODE_CONFIG_DIR).toBe('/home/guest/.config/mimocode')
+          expect(spawnOptions.env.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+          expect(spawnOptions.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+          expect(spawnOptions.envToDelete).toEqual(
+            expect.arrayContaining([
+              'MIMOCODE_CONFIG_DIR',
+              'ORCA_MIMOCODE_CONFIG_DIR',
+              'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
+            ])
+          )
+        })
       })
 
       it('prepends the bare-orca CLI shim dir to PATH for packaged Linux spawns', async () => {
@@ -2378,6 +2623,7 @@ describe('registerPtyHandlers', () => {
           handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
         ).rejects.toThrow(/spawn boom/)
         expect(openCodeClearPtyMock).toHaveBeenCalled()
+        expect(mimoCodeClearPtyMock).toHaveBeenCalled()
         expect(piClearPtyMock).toHaveBeenCalled()
         expect(runtime.preparePtyExecutionContext).toHaveBeenLastCalledWith(
           expect.any(String),
@@ -2475,10 +2721,17 @@ describe('registerPtyHandlers', () => {
           store as never
         )
         const leafId = '11111111-1111-4111-8111-111111111111'
-        await handlers.get('pty:spawn')!(null, {
+        const spawnHandler = handlers.get('pty:spawn')!
+        await spawnHandler(null, {
           cols: 80,
           rows: 24,
-          env: { FOO: 'bar', ORCA_PANE_KEY: makePaneKey('tab-1', leafId) },
+          env: {
+            FOO: 'bar',
+            ORCA_PANE_KEY: makePaneKey('tab-1', leafId),
+            MIMOCODE_CONFIG_DIR: '/tmp/host-mimocode-overlay',
+            ORCA_MIMOCODE_CONFIG_DIR: '/tmp/host-mimocode-overlay',
+            ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/remote/user/mimocode-config'
+          },
           connectionId: 'ssh-1',
           worktreeId: 'wt-1',
           tabId: 'tab-1',
@@ -2497,9 +2750,9 @@ describe('registerPtyHandlers', () => {
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
-        expect(env.MIMOCODE_HOME).toBeUndefined()
-        expect(env.ORCA_MIMOCODE_HOME).toBeUndefined()
-        expect(env.ORCA_MIMOCODE_SOURCE_HOME).toBeUndefined()
+        expect(env.MIMOCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
         expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
@@ -2512,6 +2765,47 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.tabId).toBe('tab-1')
         expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
         expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+
+        await spawnHandler(null, {
+          cols: 80,
+          rows: 24,
+          env: {
+            MIMOCODE_CONFIG_DIR: '/remote/user/explicit-mimocode-config',
+            ORCA_MIMOCODE_CONFIG_DIR: '/tmp/host-mimocode-overlay',
+            ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/tmp/host-mimocode-source'
+          },
+          connectionId: 'ssh-1'
+        })
+        const explicitRemoteEnv = sshSpawn.mock.calls.at(-1)![0].env
+        expect(explicitRemoteEnv.MIMOCODE_CONFIG_DIR).toBe('/remote/user/explicit-mimocode-config')
+        expect(explicitRemoteEnv.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+        expect(explicitRemoteEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+
+        await spawnHandler(null, {
+          cols: 80,
+          rows: 24,
+          env: {
+            MIMOCODE_CONFIG_DIR: '/tmp/host-mimocode-overlay',
+            ORCA_MIMOCODE_CONFIG_DIR: '/tmp/host-mimocode-overlay'
+          },
+          connectionId: 'ssh-1'
+        })
+        const inheritedOverlayEnv = sshSpawn.mock.calls.at(-1)![0].env
+        expect(inheritedOverlayEnv.MIMOCODE_CONFIG_DIR).toBeUndefined()
+        expect(inheritedOverlayEnv.ORCA_MIMOCODE_CONFIG_DIR).toBeUndefined()
+
+        await spawnHandler(null, {
+          cols: 80,
+          rows: 24,
+          env: {
+            MIMOCODE_CONFIG_DIR: '/tmp/host-mimocode-source',
+            ORCA_MIMOCODE_SOURCE_CONFIG_DIR: '/tmp/host-mimocode-source'
+          },
+          connectionId: 'ssh-1'
+        })
+        const inheritedSourceEnv = sshSpawn.mock.calls.at(-1)![0].env
+        expect(inheritedSourceEnv.MIMOCODE_CONFIG_DIR).toBeUndefined()
+        expect(inheritedSourceEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR).toBeUndefined()
         expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
           expect.objectContaining({
             targetId: 'ssh-1',
@@ -2548,6 +2842,50 @@ describe('registerPtyHandlers', () => {
         expect(store.upsertSshRemotePtyLease.mock.calls[0]?.[0]).not.toHaveProperty('leafId')
         expect(store.persistPtyBinding).not.toHaveBeenCalled()
       })
+
+      it.each([
+        [
+          'OpenCode',
+          'OPENCODE_CONFIG_DIR',
+          'ORCA_OPENCODE_CONFIG_DIR',
+          'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+        ]
+      ] as const)(
+        'preserves an explicit remote %s primary while stripping host overlay markers',
+        async (_agent, primary, overlay, source) => {
+          const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+            id: 'ssh-pty'
+          }))
+          registerSshPtyProvider('ssh-1', {
+            spawn: sshSpawn,
+            write: vi.fn(),
+            resize: vi.fn(),
+            shutdown: vi.fn(),
+            onData: vi.fn(() => () => {}),
+            onExit: vi.fn(() => () => {}),
+            listProcesses: vi.fn(async () => []),
+            getForegroundProcess: vi.fn(async () => null)
+          } as never)
+          handlers.clear()
+          registerPtyHandlers(mainWindow as never)
+
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              [primary]: '/remote/explicit',
+              [overlay]: '/host/overlay',
+              [source]: '/recorded/source'
+            },
+            connectionId: 'ssh-1'
+          })
+
+          const env = sshSpawn.mock.calls[0]![0].env
+          expect(env[primary]).toBe('/remote/explicit')
+          expect(env[overlay]).toBeUndefined()
+          expect(env[source]).toBeUndefined()
+        }
+      )
 
       it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
         const sshSpawn = vi.fn(async () => {
