@@ -565,7 +565,7 @@ describe('useComposerState host-context boundaries', () => {
   it('preserves Jira linked items when switching from repo target to folder target', () => {
     const section = sourceBetween(
       HOOK_SOURCE,
-      'const handleProjectChange = useCallback',
+      'const applyProjectGroupSelection = useCallback',
       'const handleSmartGitHubItemSelect'
     )
     expect(section).toContain("linkedProvider !== 'linear' && linkedProvider !== 'jira'")
