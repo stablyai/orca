@@ -4795,6 +4795,7 @@ export default function SessionScreen() {
             ) : activeFileTab ? (
               <View style={styles.markdownFrame}>
                 <FileReader
+                  key={activeFileTab.id}
                   doc={fileDocs.get(activeFileTab.id)}
                   title={activeFileTab.title || 'File'}
                   relativePath={activeFileTab.relativePath}
