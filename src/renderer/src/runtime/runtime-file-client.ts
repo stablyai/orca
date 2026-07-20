@@ -382,6 +382,17 @@ export async function writeRuntimeFile(
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
+    // Why: an external file (e.g. a floating-workspace markdown doc picked from
+    // outside all allowed roots) is authorized once at open time, but that grant
+    // is held in a bounded LRU set in the main process and can be evicted during
+    // a long session. Re-authorize right before the local write — mirroring the
+    // read-side self-heal in useEditorPanelContentState — so a save cannot fail
+    // with PATH_ACCESS_DENIED after the pick-time grant ages out. Skip paths
+    // inside the worktree: they are covered by allowed roots and must not consume
+    // eviction slots in the external-path set.
+    if (getRelativePathInsideWorktree(context.worktreePath, filePath) === null) {
+      await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+    }
     await window.api.fs.writeFile({ filePath, content, connectionId: context.connectionId })
     return
   }

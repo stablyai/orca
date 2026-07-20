@@ -20,6 +20,7 @@ import {
   searchRuntimeFiles,
   statRuntimePath,
   subscribeRuntimeFileChanges,
+  writeRuntimeFile,
   type RuntimeReadableFileContent
 } from './runtime-file-client'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
@@ -48,6 +49,8 @@ const fsFinishDownloadedFile = vi.fn()
 const fsCancelDownloadedFile = vi.fn()
 const fsImportExternalPaths = vi.fn()
 const fsStageExternalPathsForRuntimeUpload = vi.fn()
+const fsWriteFile = vi.fn()
+const fsAuthorizeExternalPath = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 const runtimeEnvironmentSubscribe = vi.fn()
@@ -77,6 +80,8 @@ beforeEach(() => {
   fsCancelDownloadedFile.mockReset()
   fsImportExternalPaths.mockReset()
   fsStageExternalPathsForRuntimeUpload.mockReset()
+  fsWriteFile.mockReset()
+  fsAuthorizeExternalPath.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentSubscribe.mockReset()
@@ -117,7 +122,9 @@ beforeEach(() => {
         finishDownloadedFile: fsFinishDownloadedFile,
         cancelDownloadedFile: fsCancelDownloadedFile,
         importExternalPaths: fsImportExternalPaths,
-        stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload
+        stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload,
+        writeFile: fsWriteFile,
+        authorizeExternalPath: fsAuthorizeExternalPath
       },
       runtime: { call: runtimeCall },
       runtimeEnvironments: {
@@ -2040,5 +2047,64 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.unwatch' })
     )
+  })
+
+  describe('writeRuntimeFile local re-authorization', () => {
+    it('re-authorizes an external path before the local write so a bounded-LRU eviction cannot deny the save', async () => {
+      // Regression: a floating-workspace markdown doc lives outside the
+      // worktree, so its pick-time authorization can be LRU-evicted during a
+      // long session. The write must re-authorize the path (mirroring the
+      // read-side self-heal) so fs:writeFile's resolveAuthorizedPath does not
+      // throw PATH_ACCESS_DENIED.
+      const order: string[] = []
+      fsAuthorizeExternalPath.mockImplementation(async () => {
+        order.push('authorize')
+      })
+      fsWriteFile.mockImplementation(async () => {
+        order.push('write')
+      })
+
+      await writeRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'floating-terminal-workspace',
+          worktreePath: '/home/user/.orca/floating',
+          connectionId: undefined
+        },
+        '/somewhere/else/notes.md',
+        '# edited'
+      )
+
+      expect(fsAuthorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/somewhere/else/notes.md' })
+      expect(fsWriteFile).toHaveBeenCalledWith({
+        filePath: '/somewhere/else/notes.md',
+        content: '# edited',
+        connectionId: undefined
+      })
+      // Re-authorization must precede the write.
+      expect(order).toEqual(['authorize', 'write'])
+    })
+
+    it('does not re-authorize paths inside the worktree (already covered by allowed roots)', async () => {
+      fsWriteFile.mockResolvedValue(undefined)
+
+      await writeRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: undefined
+        },
+        '/repo/src/readme.md',
+        'hello'
+      )
+
+      expect(fsAuthorizeExternalPath).not.toHaveBeenCalled()
+      expect(fsWriteFile).toHaveBeenCalledWith({
+        filePath: '/repo/src/readme.md',
+        content: 'hello',
+        connectionId: undefined
+      })
+    })
   })
 })
