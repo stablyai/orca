@@ -47,9 +47,10 @@ export type WorkspaceIntentWorkItem = {
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider?: 'github' | 'gitlab' | 'linear' | 'clickup' | 'jira'
   linearIdentifier?: string
   jiraIdentifier?: string
+  clickUpTaskId?: string
 }
 
 export type WorkspaceIntentName = {
@@ -141,7 +142,7 @@ function escapeRegExp(input: string): string {
 }
 
 function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.clickUpTaskId
   let withoutPrefix = title
     .trim()
     .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
@@ -166,6 +167,9 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
   if (item.jiraIdentifier) {
     return item.jiraIdentifier.toUpperCase()
   }
+  if (item.clickUpTaskId) {
+    return item.clickUpTaskId.toUpperCase()
+  }
   if (item.type === 'pr') {
     return `PR ${item.number}`
   }
@@ -178,7 +182,7 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
 export function getLinkedWorkItemWorkspaceName(
   item: WorkspaceIntentWorkItem
 ): WorkspaceIntentName | null {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.clickUpTaskId
   let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   if (identifier) {
     subject = subject

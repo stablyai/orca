@@ -120,6 +120,9 @@ Computer Use:
 Linear:
   linear                    Read Linear ticket context for agents
 
+ClickUp:
+  clickup                   Read and update ClickUp tasks for agents
+
 Mobile Emulator (iOS Simulator):
   emulator list             List available/running emulators (Orca-managed + raw serve-sim)
   emulator attach <device>  Attach/start helper and make active for the worktree
@@ -206,10 +209,10 @@ Common Commands:
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
+  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--clickup-task <id-or-url>] [--clickup-workspace <id>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
-  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
+  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--clickup-task <id-or-url|null>] [--clickup-workspace <id>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca file open <path> [--worktree <selector>] [--json]
@@ -498,6 +501,9 @@ export function formatFlagHelp(flag: string): string {
     issue: '--issue <number|null>  Linked GitHub issue number',
     'linear-issue':
       '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
+    'clickup-task':
+      '--clickup-task <id|url|null> Linked ClickUp task ID or URL; null clears on set',
+    'clickup-workspace': '--clickup-workspace <id> ClickUp Workspace that owns the linked task',
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',

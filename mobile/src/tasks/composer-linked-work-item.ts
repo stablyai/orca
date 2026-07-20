@@ -1,4 +1,9 @@
-import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../src/shared/types'
+import type {
+  ClickUpTask,
+  GitHubWorkItem,
+  GitLabWorkItem,
+  LinearIssue
+} from '../../../src/shared/types'
 import { getLinearIssueWorkspaceName } from '../../../src/shared/workspace-name'
 import {
   buildGitHubWorkspaceSource,
@@ -45,6 +50,19 @@ export function buildLinearLinkedWorkItem(issue: {
   return buildLinearWorkspaceSource(issue)
 }
 
+export function buildClickUpLinkedWorkItem(task: ClickUpTask): MobileLinkedWorkItem {
+  const reference = task.customId ?? task.id
+  return {
+    provider: 'clickup',
+    type: 'issue',
+    number: 0,
+    title: `${reference} ${task.name}`,
+    url: task.url,
+    clickUpTaskId: task.id,
+    clickUpWorkspaceId: task.workspaceId
+  }
+}
+
 // Faithful port of desktop applyLinkedWorkItem's name gate: the derived name
 // replaces the current field only when it's empty, still the last auto-name, or
 // a lookup query — never a name the user deliberately typed.
@@ -56,7 +74,7 @@ export function resolveWorkItemAutoName(item: {
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
-  provider: 'github' | 'gitlab' | 'linear'
+  provider: 'github' | 'gitlab' | 'linear' | 'clickup'
   linearIdentifier?: string
 }): string {
   return getWorkspaceSourceName({ ...item, url: '' }).seedName
@@ -73,6 +91,13 @@ export function buildSmartNameSelection(args: {
   baseBranch: string | undefined
 }): SmartNameSelection | null {
   return buildWorkspaceSourceSelection(args) as SmartNameSelection | null
+}
+
+export function buildSmartNameSelectionFor(
+  linkedWorkItem: MobileLinkedWorkItem | null,
+  baseBranch: string | undefined
+): SmartNameSelection | null {
+  return buildSmartNameSelection({ linkedWorkItem, baseBranch })
 }
 
 // Derives the create-time selection from composer state: a linked work item wins
@@ -150,4 +175,4 @@ export function resolveComposerBranchPick(args: {
   }
 }
 
-export type { GitHubWorkItem, GitLabWorkItem, LinearIssue }
+export type { ClickUpTask, GitHubWorkItem, GitLabWorkItem, LinearIssue }

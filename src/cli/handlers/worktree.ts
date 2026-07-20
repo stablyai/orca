@@ -33,6 +33,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import { getOptionalClickUpTaskLinkFlag } from './worktree-clickup-task-link'
 
 type HookWarningResult = {
   warning?: string
@@ -229,12 +230,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const clickUpTaskLink = getOptionalClickUpTaskLinkFlag(flags)
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
+      ...clickUpTaskLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
       activate:
@@ -262,11 +265,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
+    const clickUpTaskLink = getOptionalClickUpTaskLinkFlag(flags, { allowNull: true })
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
       ...linearIssueLink,
+      ...clickUpTaskLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),

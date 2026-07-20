@@ -8,7 +8,7 @@ import {
 } from './execution-host'
 import type { GlobalSettings, ProjectProviderIdentity, Repo } from './types'
 
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'clickup' | 'jira'
 
 export type GitHubTaskProviderIdentity = ProjectProviderIdentity & {
   provider: 'github'
@@ -37,10 +37,19 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type ClickUpTaskProviderIdentity = {
+  provider: 'clickup'
+  workspaceId?: string | null
+  workspaceName?: string | null
+  listId?: string | null
+  listName?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
+  | ClickUpTaskProviderIdentity
   | JiraTaskProviderIdentity
 
 export type TaskSourceContext = {
@@ -181,6 +190,7 @@ function normalizeTaskProvider(value: string): TaskProvider | null {
     case 'github':
     case 'gitlab':
     case 'linear':
+    case 'clickup':
     case 'jira':
       return value
     default:
@@ -214,6 +224,8 @@ function providerIdentityCachePart(identity: TaskProviderIdentity | null | undef
       return identity.projectId ?? [identity.namespace, identity.project].filter(Boolean).join('/')
     case 'linear':
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
+    case 'clickup':
+      return [identity.workspaceId, identity.listId].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
   }

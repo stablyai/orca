@@ -5,7 +5,7 @@ import type { MrStateFilter, SmartNameMode } from './mobile-composer-source-type
 // icons.
 export type SmartModeIcon =
   | { type: 'lucide'; name: 'sparkles' | 'git-branch' | 'case-sensitive' }
-  | { type: 'provider'; provider: 'github' | 'gitlab' | 'linear' }
+  | { type: 'provider'; provider: 'github' | 'gitlab' | 'linear' | 'clickup' }
 
 export type SmartModeOption = {
   id: SmartNameMode
@@ -14,11 +14,12 @@ export type SmartModeOption = {
 }
 
 // Order + labels + icons mirror desktop getSmartWorkspaceNameModes():
-// Smart · GitHub · Linear · GitLab · Branch · Name.
+// Smart · GitHub · Linear · ClickUp · GitLab · Branch · Name.
 export const SMART_MODE_OPTIONS: readonly SmartModeOption[] = [
   { id: 'smart', label: 'Smart', icon: { type: 'lucide', name: 'sparkles' } },
   { id: 'github', label: 'GitHub', icon: { type: 'provider', provider: 'github' } },
   { id: 'linear', label: 'Linear', icon: { type: 'provider', provider: 'linear' } },
+  { id: 'clickup', label: 'ClickUp', icon: { type: 'provider', provider: 'clickup' } },
   { id: 'gitlab', label: 'GitLab', icon: { type: 'provider', provider: 'gitlab' } },
   { id: 'branches', label: 'Branch', icon: { type: 'lucide', name: 'git-branch' } },
   { id: 'text', label: 'Name', icon: { type: 'lucide', name: 'case-sensitive' } }
@@ -31,6 +32,7 @@ export type SmartModeAvailabilityInput = {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  clickUpAvailable: boolean
 }
 
 // Faithful port of the desktop availableModes filter. Non-git repos collapse to
@@ -51,6 +53,8 @@ export function resolveAvailableSmartModes(input: SmartModeAvailabilityInput): S
         return input.tasksSupported && input.hasRepo && input.gitlabAvailable
       case 'linear':
         return input.tasksSupported && input.linearAvailable
+      case 'clickup':
+        return input.tasksSupported && input.clickUpAvailable
       case 'branches':
         return input.hasRepo
       case 'text':

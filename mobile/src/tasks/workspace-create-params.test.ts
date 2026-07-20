@@ -150,4 +150,31 @@ describe('task workspace create params', () => {
       createdWithAgent: 'grok'
     })
   })
+
+  it('creates ClickUp workspaces in the selected repo and preserves runtime routing', () => {
+    expect(
+      buildTaskWorkspaceCreateParams({
+        item: {
+          provider: 'clickup',
+          source: {
+            taskId: '86abc123',
+            title: 'CU-42 Ship mobile parity',
+            url: 'https://app.clickup.com/t/86abc123',
+            workspaceId: 'team-1'
+          }
+        },
+        targetRepoId: 'repo-clickup',
+        setupDecision: 'inherit',
+        agent: 'codex'
+      })
+    ).toMatchObject({
+      repo: 'id:repo-clickup',
+      name: '86abc123',
+      displayName: 'CU-42 Ship mobile parity',
+      linkedClickUpTaskId: '86abc123',
+      linkedClickUpWorkspaceId: 'team-1',
+      startupDraft: 'https://app.clickup.com/t/86abc123',
+      createdWithAgent: 'codex'
+    })
+  })
 })

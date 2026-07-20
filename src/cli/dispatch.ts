@@ -23,6 +23,7 @@ import { DIAGNOSTICS_HANDLERS } from './handlers/diagnostics'
 import { INTROSPECTION_HANDLERS } from './handlers/introspection'
 import { EMULATOR_HANDLERS } from './handlers/emulator'
 import { LINEAR_HANDLERS } from './handlers/linear'
+import { CLICKUP_HANDLERS } from './handlers/clickup'
 import { VM_HANDLERS } from './handlers/vm'
 import { SKILL_HANDLERS } from './handlers/skills'
 
@@ -62,6 +63,7 @@ function buildHandlers(): Map<string, CommandHandler> {
     INTROSPECTION_HANDLERS,
     ENVIRONMENT_HANDLERS,
     LINEAR_HANDLERS,
+    CLICKUP_HANDLERS,
     VM_HANDLERS,
     SKILL_HANDLERS
   ]

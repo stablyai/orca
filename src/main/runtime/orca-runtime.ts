@@ -124,6 +124,10 @@ import type {
   JiraIssueFilter,
   JiraIssueUpdate,
   JiraSiteSelection,
+  ClickUpCreateTaskArgs,
+  ClickUpTaskFilter,
+  ClickUpTaskUpdate,
+  ClickUpWorkspaceSelection,
   LinearIssueUpdate,
   LinearProjectSummary,
   LinearWorkspaceSelection,
@@ -588,6 +592,25 @@ import {
   searchIssues as searchJiraIssues,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+import {
+  connect as connectClickUp,
+  disconnect as disconnectClickUp,
+  getStatus as getClickUpStatus,
+  selectWorkspace as selectClickUpWorkspace,
+  testConnection as testClickUpConnection
+} from '../clickup/client'
+import {
+  addTaskComment as addClickUpTaskComment,
+  createTask as createClickUpTask,
+  getTask as getClickUpTask,
+  getTaskComments as getClickUpTaskComments,
+  listLists as listClickUpLists,
+  listTasks as listClickUpTasks,
+  listWorkspaceMembers as listClickUpWorkspaceMembers,
+  listWorkspaceTags as listClickUpWorkspaceTags,
+  searchTasks as searchClickUpTasks,
+  updateTask as updateClickUpTask
+} from '../clickup/tasks'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -1636,6 +1659,8 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedLinearIssue: meta.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
+    linkedClickUpTaskId: meta.linkedClickUpTaskId ?? null,
+    linkedClickUpWorkspaceId: meta.linkedClickUpWorkspaceId ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
@@ -12319,6 +12344,8 @@ export class OrcaRuntimeService {
         linkedIssue: worktree.linkedIssue,
         linkedPR,
         linkedLinearIssue: meta?.linkedLinearIssue ?? null,
+        linkedClickUpTaskId: meta?.linkedClickUpTaskId ?? null,
+        linkedClickUpWorkspaceId: meta?.linkedClickUpWorkspaceId ?? null,
         linkedGitLabMR: meta?.linkedGitLabMR ?? null,
         linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
         comment: meta?.comment ?? '',
@@ -12367,6 +12394,8 @@ export class OrcaRuntimeService {
         linkedIssue: worktree.linkedIssue ?? null,
         linkedPR: null,
         linkedLinearIssue: worktree.linkedLinearIssue ?? null,
+        linkedClickUpTaskId: worktree.linkedClickUpTaskId ?? null,
+        linkedClickUpWorkspaceId: worktree.linkedClickUpWorkspaceId ?? null,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null,
         linkedGitLabIssue: worktree.linkedGitLabIssue ?? null,
         comment: worktree.comment,
@@ -15982,6 +16011,8 @@ export class OrcaRuntimeService {
     linkedLinearIssue?: string
     linkedLinearIssueWorkspaceId?: string | null
     linkedLinearIssueOrganizationUrlKey?: string | null
+    linkedClickUpTaskId?: string
+    linkedClickUpWorkspaceId?: string | null
     linkedGitLabMR?: number | null
     linkedGitLabIssue?: number | null
     linkedBitbucketPR?: number | null
@@ -16072,6 +16103,12 @@ export class OrcaRuntimeService {
           : {}),
         ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
           ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+          : {}),
+        ...(args.linkedClickUpTaskId !== undefined
+          ? { linkedClickUpTaskId: args.linkedClickUpTaskId }
+          : {}),
+        ...(args.linkedClickUpWorkspaceId !== undefined
+          ? { linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId }
           : {}),
         ...(args.linkedGitLabIssue !== undefined
           ? { linkedGitLabIssue: args.linkedGitLabIssue }
@@ -16650,6 +16687,12 @@ export class OrcaRuntimeService {
       ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
         ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
         : {}),
+      ...(args.linkedClickUpTaskId !== undefined
+        ? { linkedClickUpTaskId: args.linkedClickUpTaskId }
+        : {}),
+      ...(args.linkedClickUpWorkspaceId !== undefined
+        ? { linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId }
+        : {}),
       ...(args.linkedGitLabIssue !== undefined
         ? { linkedGitLabIssue: args.linkedGitLabIssue }
         : {}),
@@ -16974,6 +17017,8 @@ export class OrcaRuntimeService {
       linkedLinearIssue?: string
       linkedLinearIssueWorkspaceId?: string | null
       linkedLinearIssueOrganizationUrlKey?: string | null
+      linkedClickUpTaskId?: string
+      linkedClickUpWorkspaceId?: string | null
       linkedGitLabMR?: number | null
       linkedGitLabIssue?: number | null
       linkedBitbucketPR?: number | null
@@ -17027,6 +17072,12 @@ export class OrcaRuntimeService {
           : {}),
         ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
           ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+          : {}),
+        ...(args.linkedClickUpTaskId !== undefined
+          ? { linkedClickUpTaskId: args.linkedClickUpTaskId }
+          : {}),
+        ...(args.linkedClickUpWorkspaceId !== undefined
+          ? { linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId }
           : {}),
         ...(args.linkedGitLabMR != null ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
         ...(args.linkedGitLabIssue != null ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
@@ -25725,6 +25776,90 @@ export class OrcaRuntimeService {
 
   linearTeamMembers(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamMembers> {
     return getLinearTeamMembers(teamId, workspaceId)
+  }
+
+  // ── ClickUp integration ──
+
+  clickUpConnect(apiToken: string): ReturnType<typeof connectClickUp> {
+    return connectClickUp(apiToken)
+  }
+
+  clickUpDisconnect(): { ok: true } {
+    disconnectClickUp()
+    return { ok: true }
+  }
+
+  clickUpSelectWorkspace(
+    workspaceId: ClickUpWorkspaceSelection
+  ): ReturnType<typeof getClickUpStatus> {
+    return selectClickUpWorkspace(workspaceId)
+  }
+
+  clickUpStatus(): ReturnType<typeof getClickUpStatus> {
+    return getClickUpStatus()
+  }
+
+  clickUpTestConnection(): ReturnType<typeof testClickUpConnection> {
+    return testClickUpConnection()
+  }
+
+  clickUpSearchTasks(
+    query: string,
+    limit = 20,
+    workspaceId?: ClickUpWorkspaceSelection
+  ): ReturnType<typeof searchClickUpTasks> {
+    return searchClickUpTasks(query, Math.min(Math.max(1, limit), 100), workspaceId)
+  }
+
+  clickUpListTasks(
+    filter?: ClickUpTaskFilter,
+    limit = 50,
+    workspaceId?: ClickUpWorkspaceSelection
+  ): ReturnType<typeof listClickUpTasks> {
+    return listClickUpTasks(filter, Math.min(Math.max(1, limit), 100), workspaceId)
+  }
+
+  clickUpGetTask(taskId: string, workspaceId?: string): ReturnType<typeof getClickUpTask> {
+    return getClickUpTask(taskId, workspaceId)
+  }
+
+  clickUpCreateTask(args: ClickUpCreateTaskArgs): ReturnType<typeof createClickUpTask> {
+    return createClickUpTask(args)
+  }
+
+  clickUpUpdateTask(
+    taskId: string,
+    updates: ClickUpTaskUpdate,
+    workspaceId?: string
+  ): ReturnType<typeof updateClickUpTask> {
+    return updateClickUpTask(taskId, updates, workspaceId)
+  }
+
+  clickUpAddTaskComment(
+    taskId: string,
+    body: string,
+    workspaceId?: string
+  ): ReturnType<typeof addClickUpTaskComment> {
+    return addClickUpTaskComment(taskId, body, workspaceId)
+  }
+
+  clickUpTaskComments(
+    taskId: string,
+    workspaceId?: string
+  ): ReturnType<typeof getClickUpTaskComments> {
+    return getClickUpTaskComments(taskId, workspaceId)
+  }
+
+  clickUpListLists(workspaceId?: ClickUpWorkspaceSelection): ReturnType<typeof listClickUpLists> {
+    return listClickUpLists(workspaceId)
+  }
+
+  clickUpListMembers(workspaceId?: string): ReturnType<typeof listClickUpWorkspaceMembers> {
+    return listClickUpWorkspaceMembers(workspaceId)
+  }
+
+  clickUpListTags(workspaceId?: string): ReturnType<typeof listClickUpWorkspaceTags> {
+    return listClickUpWorkspaceTags(workspaceId)
   }
 
   // ── Jira integration ──

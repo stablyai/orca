@@ -138,35 +138,35 @@ async function executeWorktreeCreation(
 
   let result: CreateWorktreeResult
   try {
-    result = await useAppStore
-      .getState()
-      .createWorktree(
-        preparedRequest.repoId,
-        preparedRequest.name,
-        preparedRequest.baseBranch,
-        preparedRequest.setupDecision,
-        preparedRequest.sparseCheckout,
-        preparedRequest.telemetrySource,
-        preparedRequest.displayName,
-        preparedRequest.linkedIssue,
-        preparedRequest.linkedPR,
-        preparedRequest.pushTarget,
-        preparedRequest.agent ?? undefined,
-        preparedRequest.linkedLinearIssue,
-        preparedRequest.branchNameOverride,
-        preparedRequest.workspaceStatus,
-        preparedRequest.linkedGitLabMR,
-        preparedRequest.linkedGitLabIssue,
-        preparedRequest.startup,
-        preparedRequest.pendingFirstAgentMessageRename,
-        creationId,
-        preparedRequest.linkedLinearIssueWorkspaceId,
-        preparedRequest.linkedLinearIssueOrganizationUrlKey,
-        preparedRequest.linkedBitbucketPR,
-        preparedRequest.linkedAzureDevOpsPR,
-        preparedRequest.linkedGiteaPR,
-        preparedRequest.compareBaseRef
-      )
+    result = await useAppStore.getState().createWorktree({
+      repoId: preparedRequest.repoId,
+      name: preparedRequest.name,
+      baseBranch: preparedRequest.baseBranch,
+      setupDecision: preparedRequest.setupDecision,
+      sparseCheckout: preparedRequest.sparseCheckout,
+      telemetrySource: preparedRequest.telemetrySource,
+      displayName: preparedRequest.displayName,
+      linkedIssue: preparedRequest.linkedIssue,
+      linkedPR: preparedRequest.linkedPR,
+      pushTarget: preparedRequest.pushTarget,
+      createdWithAgent: preparedRequest.agent ?? undefined,
+      linkedLinearIssue: preparedRequest.linkedLinearIssue,
+      branchNameOverride: preparedRequest.branchNameOverride,
+      workspaceStatus: preparedRequest.workspaceStatus,
+      linkedGitLabMR: preparedRequest.linkedGitLabMR,
+      linkedGitLabIssue: preparedRequest.linkedGitLabIssue,
+      startup: preparedRequest.startup,
+      pendingFirstAgentMessageRename: preparedRequest.pendingFirstAgentMessageRename,
+      creationId,
+      linkedLinearIssueWorkspaceId: preparedRequest.linkedLinearIssueWorkspaceId,
+      linkedLinearIssueOrganizationUrlKey: preparedRequest.linkedLinearIssueOrganizationUrlKey,
+      linkedBitbucketPR: preparedRequest.linkedBitbucketPR,
+      linkedAzureDevOpsPR: preparedRequest.linkedAzureDevOpsPR,
+      linkedGiteaPR: preparedRequest.linkedGiteaPR,
+      compareBaseRef: preparedRequest.compareBaseRef,
+      linkedClickUpTaskId: preparedRequest.linkedClickUpTaskId,
+      linkedClickUpWorkspaceId: preparedRequest.linkedClickUpWorkspaceId
+    })
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
     // silently rather than surfacing an error for work they already dismissed.

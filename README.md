@@ -219,6 +219,7 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 - Or grab a build directly: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/download/v1.4.147-rc.4/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [All builds](https://github.com/stablyai/orca/releases/latest)
 - **Windows users:** use the [latest RC (`v1.4.147-rc.4`)](https://github.com/stablyai/orca/releases#release-v1.4.147-rc.4) — it includes Windows-specific bug fixes not yet in stable.
 - Running `orca serve` on a headless Linux server? See the [headless Linux server guide](docs/reference/headless-linux-server.md).
+- Using ClickUp for task context? See the [ClickUp integration guide](docs/reference/clickup-integration.md).
 
 _Or via a package manager:_
 
@@ -266,6 +267,7 @@ Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTIN
 </p>
 
 ## Signed Builds
+
 Windows code signing sponored/provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 ## License

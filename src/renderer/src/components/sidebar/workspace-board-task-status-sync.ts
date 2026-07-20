@@ -12,7 +12,13 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../shared/types'
-import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
+import type { RuntimeClickUpSettings } from '@/runtime/runtime-clickup-client'
+import {
+  DEFAULT_WORKSPACE_BOARD_CLICKUP_STATUS_SYNC_DEPS,
+  syncClickUpWorktreeStatus,
+  type WorkspaceBoardClickUpStatusSyncDependencies
+} from './workspace-board-clickup-status-sync'
+export { getWorkspaceBoardTaskStatusSyncRequest } from './workspace-board-task-status-sync-request'
 
 export type WorkspaceBoardTaskStatusSyncResult = {
   updated: number
@@ -22,14 +28,14 @@ export type WorkspaceBoardTaskStatusSyncResult = {
 }
 
 export type WorkspaceBoardTaskStatusSyncMessage =
-  | { kind: 'issue-read-failed'; issueIdentifier: string }
+  | { kind: 'issue-read-failed'; issueIdentifier: string; provider?: 'ClickUp' }
   | { kind: 'missing-workflow-state'; statusLabel: string }
   | { kind: 'ambiguous-workflow-state'; statusLabel: string }
-  | { kind: 'update-failed'; issueIdentifier: string; detail?: string }
-  | { kind: 'provider-error'; issueIdentifier: string; detail?: string }
+  | { kind: 'update-failed'; issueIdentifier: string; detail?: string; provider?: 'ClickUp' }
+  | { kind: 'provider-error'; issueIdentifier: string; detail?: string; provider?: 'ClickUp' }
   | { kind: 'unexpected-error'; detail?: string }
 
-type WorkspaceBoardTaskStatusSyncDependencies = {
+type WorkspaceBoardTaskStatusSyncDependencies = WorkspaceBoardClickUpStatusSyncDependencies & {
   getIssue: typeof linearGetIssue
   teamStates: typeof linearTeamStates
   updateIssue: typeof linearUpdateIssue
@@ -40,47 +46,25 @@ export type SyncWorkspaceBoardTaskStatusesArgs = {
   targetStatus: WorkspaceStatusDefinition
   worktreesById: ReadonlyMap<
     string,
-    Pick<Worktree, 'linkedLinearIssue' | 'linkedLinearIssueWorkspaceId'>
+    Pick<
+      Worktree,
+      | 'linkedLinearIssue'
+      | 'linkedLinearIssueWorkspaceId'
+      | 'linkedClickUpTaskId'
+      | 'linkedClickUpWorkspaceId'
+    >
   >
-  settings?: RuntimeLinearSettings
-  getSettingsForWorktree?: (worktreeId: string) => RuntimeLinearSettings
+  settings?: RuntimeLinearSettings | RuntimeClickUpSettings
+  getSettingsForWorktree?: (worktreeId: string) => RuntimeLinearSettings | RuntimeClickUpSettings
   getLatestWorkspaceStatus: (worktreeId: string) => WorkspaceStatus | null | undefined
   deps?: Partial<WorkspaceBoardTaskStatusSyncDependencies>
-}
-
-export type WorkspaceBoardTaskStatusSyncRequest = {
-  worktreeIds: string[]
-  targetStatus: WorkspaceStatusDefinition
-}
-
-export function getWorkspaceBoardTaskStatusSyncRequest(args: {
-  enabled: boolean
-  worktreeIds: readonly string[]
-  status: WorkspaceStatus
-  worktreesById: ReadonlyMap<string, Pick<Worktree, 'workspaceStatus'>>
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-}): WorkspaceBoardTaskStatusSyncRequest | null {
-  if (!args.enabled || args.worktreeIds.length === 0) {
-    return null
-  }
-  const targetStatus = args.workspaceStatuses.find((item) => item.id === args.status)
-  if (!targetStatus) {
-    return null
-  }
-  const changedWorktreeIds = [...new Set(args.worktreeIds)].filter((worktreeId) => {
-    const worktree = args.worktreesById.get(worktreeId)
-    return worktree ? getWorkspaceStatus(worktree, args.workspaceStatuses) !== args.status : false
-  })
-  if (changedWorktreeIds.length === 0) {
-    return null
-  }
-  return { worktreeIds: changedWorktreeIds, targetStatus }
 }
 
 const defaultDeps: WorkspaceBoardTaskStatusSyncDependencies = {
   getIssue: linearGetIssue,
   teamStates: linearTeamStates,
-  updateIssue: linearUpdateIssue
+  updateIssue: linearUpdateIssue,
+  ...DEFAULT_WORKSPACE_BOARD_CLICKUP_STATUS_SYNC_DEPS
 }
 
 const worktreeSyncQueues = new Map<string, Promise<unknown>>()
@@ -246,6 +230,31 @@ async function syncLinearWorktreeStatus(
   }
 }
 
+async function syncWorktreeTaskStatuses(
+  args: SyncWorkspaceBoardTaskStatusesArgs,
+  worktreeId: string,
+  deps: WorkspaceBoardTaskStatusSyncDependencies
+): Promise<WorkspaceBoardTaskStatusSyncResult> {
+  const worktree = args.worktreesById.get(worktreeId)
+  if (!worktree?.linkedLinearIssue && !worktree?.linkedClickUpTaskId) {
+    return { updated: 0, skipped: 1, failed: 0, messages: [] }
+  }
+  const aggregate: WorkspaceBoardTaskStatusSyncResult = {
+    updated: 0,
+    skipped: 0,
+    failed: 0,
+    messages: []
+  }
+  const results = await Promise.all([
+    ...(worktree.linkedLinearIssue ? [syncLinearWorktreeStatus(args, worktreeId, deps)] : []),
+    ...(worktree.linkedClickUpTaskId ? [syncClickUpWorktreeStatus(args, worktreeId, deps)] : [])
+  ])
+  for (const result of results) {
+    mergeResult(aggregate, result)
+  }
+  return aggregate
+}
+
 export async function syncWorkspaceBoardTaskStatuses(
   args: SyncWorkspaceBoardTaskStatusesArgs
 ): Promise<WorkspaceBoardTaskStatusSyncResult> {
@@ -261,7 +270,7 @@ export async function syncWorkspaceBoardTaskStatuses(
   await Promise.all(
     [...uniqueIds].map(async (worktreeId) => {
       const item = await enqueueWorktreeSync(worktreeId, () =>
-        syncLinearWorktreeStatus(args, worktreeId, deps)
+        syncWorktreeTaskStatuses(args, worktreeId, deps)
       )
       mergeResult(aggregate, item)
     })

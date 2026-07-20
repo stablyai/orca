@@ -23592,6 +23592,8 @@ describe('OrcaRuntimeService', () => {
           linkedIssue: 123,
           linkedPR: null,
           linkedLinearIssue: null,
+          linkedClickUpTaskId: null,
+          linkedClickUpWorkspaceId: null,
           linkedGitLabMR: null,
           linkedGitLabIssue: null,
           comment: '',

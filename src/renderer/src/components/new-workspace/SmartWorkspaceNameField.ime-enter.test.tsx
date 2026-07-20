@@ -9,17 +9,22 @@ vi.mock('@/store', () => {
   const state = {
     repos: [],
     addRepo: vi.fn(),
+    checkClickUpConnection: vi.fn(),
     checkLinearConnection: vi.fn(),
+    clickUpStatus: { connected: false },
+    clickUpStatusChecked: true,
     fetchWorkItems: vi.fn(),
     fetchWorkItemsAcrossRepos: vi.fn(),
     getCachedWorkItems: vi.fn(() => null),
     linearStatus: { connected: false },
     linearStatusChecked: false,
+    listClickUpTasks: vi.fn(),
     listLinearIssues: vi.fn(),
     preflightStatus: null,
     preflightStatusChecked: false,
     preflightStatusContextKey: null,
     refreshPreflightStatus: vi.fn(),
+    searchClickUpTasks: vi.fn(),
     searchLinearIssues: vi.fn(),
     settings: null
   }

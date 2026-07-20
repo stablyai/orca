@@ -350,6 +350,12 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'orca terminal create --worktree active --command "codex"'
     )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      '[--clickup-task <id-or-url>] [--clickup-workspace <id>]'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      '[--clickup-task <id-or-url|null>] [--clickup-workspace <id>]'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 

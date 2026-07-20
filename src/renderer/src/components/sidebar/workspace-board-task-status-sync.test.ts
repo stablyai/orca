@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  ClickUpMutationResult,
+  ClickUpTask,
   LinearIssue,
   LinearWorkflowState,
   WorkspaceStatusDefinition,
@@ -35,6 +37,25 @@ function state(overrides: Partial<LinearWorkflowState> = {}): LinearWorkflowStat
     type: 'started',
     color: '#111',
     position: 1,
+    ...overrides
+  }
+}
+
+function clickUpTask(overrides: Partial<ClickUpTask> = {}): ClickUpTask {
+  return {
+    id: 'task-1',
+    customId: 'CU-1',
+    workspaceId: 'clickup-workspace-1',
+    workspaceName: 'Orca',
+    name: 'Sync the board',
+    url: 'https://app.clickup.com/t/task-1',
+    status: { name: 'Todo', type: 'custom', color: '#999', orderIndex: 1 },
+    priority: null,
+    assignees: [],
+    tags: [],
+    list: { id: 'list-1', name: 'Backlog' },
+    createdAt: '2026-06-15T00:00:00.000Z',
+    updatedAt: '2026-06-15T00:00:00.000Z',
     ...overrides
   }
 }
@@ -117,6 +138,106 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
       { stateId: 'state-review' },
       'workspace-1'
     )
+  })
+
+  it('updates a linked ClickUp task using the exact board status label', async () => {
+    const item = worktree({
+      linkedLinearIssue: null,
+      linkedLinearIssueWorkspaceId: null,
+      linkedClickUpTaskId: 'task-1',
+      linkedClickUpWorkspaceId: 'clickup-workspace-1'
+    })
+    const getClickUpTask = vi.fn().mockResolvedValue(clickUpTask())
+    const updateClickUpTask = vi
+      .fn<() => Promise<ClickUpMutationResult>>()
+      .mockResolvedValue({ ok: true })
+
+    await expect(
+      syncWorkspaceBoardTaskStatuses({
+        worktreeIds: [item.id],
+        targetStatus: targetStatus(),
+        worktreesById: new Map([[item.id, item]]),
+        settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+        getLatestWorkspaceStatus: () => 'in-review',
+        deps: { getClickUpTask, updateClickUpTask }
+      })
+    ).resolves.toEqual({ updated: 1, skipped: 0, failed: 0, messages: [] })
+
+    expect(getClickUpTask).toHaveBeenCalledWith(
+      { activeRuntimeEnvironmentId: 'runtime-1' },
+      'task-1',
+      'clickup-workspace-1'
+    )
+    expect(updateClickUpTask).toHaveBeenCalledWith(
+      { activeRuntimeEnvironmentId: 'runtime-1' },
+      'task-1',
+      { status: 'In review' },
+      'clickup-workspace-1'
+    )
+  })
+
+  it('routes ClickUp sync to the local runtime when settings are omitted', async () => {
+    const item = worktree({
+      linkedLinearIssue: null,
+      linkedLinearIssueWorkspaceId: null,
+      linkedClickUpTaskId: 'task-1',
+      linkedClickUpWorkspaceId: 'clickup-workspace-1'
+    })
+    const getClickUpTask = vi.fn().mockResolvedValue(clickUpTask())
+    const updateClickUpTask = vi
+      .fn<() => Promise<ClickUpMutationResult>>()
+      .mockResolvedValue({ ok: true })
+
+    await syncWorkspaceBoardTaskStatuses({
+      worktreeIds: [item.id],
+      targetStatus: targetStatus(),
+      worktreesById: new Map([[item.id, item]]),
+      getLatestWorkspaceStatus: () => 'in-review',
+      deps: { getClickUpTask, updateClickUpTask }
+    })
+
+    expect(getClickUpTask).toHaveBeenCalledWith(undefined, 'task-1', 'clickup-workspace-1')
+    expect(updateClickUpTask).toHaveBeenCalledWith(
+      undefined,
+      'task-1',
+      { status: 'In review' },
+      'clickup-workspace-1'
+    )
+  })
+
+  it('reports ClickUp status update failures with provider context', async () => {
+    const item = worktree({
+      linkedLinearIssue: null,
+      linkedClickUpTaskId: 'task-1',
+      linkedClickUpWorkspaceId: null
+    })
+    const getClickUpTask = vi.fn().mockResolvedValue(clickUpTask())
+    const updateClickUpTask = vi
+      .fn<() => Promise<ClickUpMutationResult>>()
+      .mockResolvedValue({ ok: false, error: 'Unknown status' })
+
+    await expect(
+      syncWorkspaceBoardTaskStatuses({
+        worktreeIds: [item.id],
+        targetStatus: targetStatus(),
+        worktreesById: new Map([[item.id, item]]),
+        settings: null,
+        getLatestWorkspaceStatus: () => 'in-review',
+        deps: { getClickUpTask, updateClickUpTask }
+      })
+    ).resolves.toEqual({
+      updated: 0,
+      skipped: 0,
+      failed: 1,
+      messages: [
+        {
+          kind: 'update-failed',
+          issueIdentifier: 'CU-1',
+          detail: 'Unknown status',
+          provider: 'ClickUp'
+        }
+      ]
+    })
   })
 
   it('uses the fetched issue workspace for state reads and writes when the link lacks one', async () => {

@@ -134,7 +134,9 @@ function skippedReason(locations: readonly SkillLocationRow[]): string {
         'auto.components.skills.SkillFreshnessRow.skippedReasonBrokenLink',
         'This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.'
       )
-    default:
+    case undefined:
+    case 'current':
+    case 'duplicate':
       return translate(
         'auto.components.skills.SkillFreshnessRow.cantUpdateReason',
         'Orca left this skill out of the update command.'

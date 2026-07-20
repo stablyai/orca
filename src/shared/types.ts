@@ -337,13 +337,15 @@ export type FolderWorkspace = {
 }
 
 export type FolderWorkspaceLinkedTask = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'clickup' | 'jira'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
   url: string
   linearIdentifier?: string
   jiraIdentifier?: string
+  clickUpTaskId?: string
+  clickUpWorkspaceId?: string
   repoId?: string
 }
 
@@ -477,6 +479,8 @@ export type Worktree = {
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedClickUpTaskId?: string | null
+  linkedClickUpWorkspaceId?: string | null
   // Why: parallel slots for non-GitHub work-item references. Kept as separate
   // fields (rather than reusing linkedIssue / linkedPR with a provider
   // discriminator) so the persistence layer is unambiguous when a user
@@ -589,6 +593,8 @@ export type WorktreeMeta = {
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedClickUpTaskId?: string | null
+  linkedClickUpWorkspaceId?: string | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabMR. */
   linkedGitLabMR?: number | null
   /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */
@@ -1933,6 +1939,27 @@ export type {
   JiraViewer
 } from './jira-types'
 
+export type {
+  ClickUpComment,
+  ClickUpCommentResult,
+  ClickUpConnectionStatus,
+  ClickUpCreateTaskArgs,
+  ClickUpCreateTaskResult,
+  ClickUpList,
+  ClickUpMutationResult,
+  ClickUpPriority,
+  ClickUpStatus,
+  ClickUpTag,
+  ClickUpTask,
+  ClickUpTaskChild,
+  ClickUpTaskFilter,
+  ClickUpTaskUpdate,
+  ClickUpUser,
+  ClickUpViewer,
+  ClickUpWorkspace,
+  ClickUpWorkspaceSelection
+} from './clickup-types'
+
 /**
  * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
  * see remaining budget before they hit the wall. `core` = REST (5000/hr),
@@ -2155,6 +2182,8 @@ export type CreateWorktreeArgs = {
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedClickUpTaskId?: string
+  linkedClickUpWorkspaceId?: string | null
   linkedGitLabIssue?: number
   linkedGitLabMR?: number
   linkedBitbucketPR?: number | null
@@ -2783,6 +2812,8 @@ export type GlobalSettings = {
   visibleTaskProviders: TaskProvider[]
   /** Why: one-shot guard to make Jira visible for existing profiles once, without re-adding after a later opt-out. */
   visibleTaskProvidersDefaultedForJira: boolean
+  /** Why: one-shot guard makes ClickUp visible for existing profiles without overriding a later opt-out. */
+  visibleTaskProvidersDefaultedForClickUp: boolean
   /** Persisted repo selection (cross-repo tasks view). null = sticky-all (includes future-added repos);
    *  string[] = frozen curated subset (ineligible ids dropped on load; empty after drop is treated as null). */
   defaultRepoSelection: string[] | null

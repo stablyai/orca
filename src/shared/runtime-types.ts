@@ -624,6 +624,8 @@ export type RuntimeWorktreePsSummary = {
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null
+  linkedClickUpTaskId?: string | null
+  linkedClickUpWorkspaceId?: string | null
   linkedGitLabMR: number | null
   linkedGitLabIssue: number | null
   comment: string

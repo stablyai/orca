@@ -50,10 +50,21 @@ type WorkspaceCreateLinearItem = {
   }
 }
 
+type WorkspaceCreateClickUpItem = {
+  provider: 'clickup'
+  source: {
+    taskId: string
+    title: string
+    url: string
+    workspaceId?: string
+  }
+}
+
 export type WorkspaceCreateTaskItem =
   | WorkspaceCreateGitHubItem
   | WorkspaceCreateGitLabItem
   | WorkspaceCreateLinearItem
+  | WorkspaceCreateClickUpItem
 
 export type WorkspaceCreateParams = Record<string, unknown>
 
@@ -104,8 +115,22 @@ export function buildTaskWorkspaceCreateParams(args: {
           url: item.source.url,
           linearIdentifier: item.source.identifier
         })
-      : getWorkspaceSourceName({ provider: item.provider, ...item.source })
-  const displayName = nameIsAutoManaged ? { displayName: sourceName.displayName } : {}
+      : item.provider === 'clickup'
+        ? getWorkspaceSourceName({
+            provider: 'clickup',
+            type: 'issue',
+            number: 0,
+            title: item.source.title,
+            url: item.source.url,
+            clickUpTaskId: item.source.taskId,
+            clickUpWorkspaceId: item.source.workspaceId
+          })
+        : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+  const displayName = nameIsAutoManaged
+    ? {
+        displayName: item.provider === 'clickup' ? item.source.title.trim() : sourceName.displayName
+      }
+    : {}
   const common = {
     setupDecision,
     activate: true,
@@ -142,6 +167,20 @@ export function buildTaskWorkspaceCreateParams(args: {
       ...(item.source.type === 'issue'
         ? { linkedGitLabIssue: item.source.number }
         : { linkedGitLabMR: item.source.number })
+    }
+  }
+
+  if (item.provider === 'clickup') {
+    return {
+      repo: `id:${targetRepoId}`,
+      name: resolveMobileWorkspaceCreateName({
+        draft: workspaceName,
+        fallback: item.source.taskId.toLowerCase()
+      }),
+      ...displayName,
+      linkedClickUpTaskId: item.source.taskId,
+      ...(item.source.workspaceId ? { linkedClickUpWorkspaceId: item.source.workspaceId } : {}),
+      ...common
     }
   }
 

@@ -157,6 +157,7 @@ import {
   LinearProjectTable
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
+import { ClickUpTaskPageSurface } from '@/components/ClickUpTaskPageSurface'
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
 import {
   getSingleJiraProjectScope,
@@ -3096,6 +3097,7 @@ export default function TaskPage(): React.JSX.Element {
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const clickUpStatus = useAppStore((s) => s.clickUpStatus)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   providerRuntimeContextKeyRef.current = providerRuntimeContextKey
@@ -3188,6 +3190,16 @@ export default function TaskPage(): React.JSX.Element {
   const selectedJiraSite =
     selectedJiraSiteId && selectedJiraSiteId !== 'all'
       ? (jiraSites.find((site) => site.id === selectedJiraSiteId) ?? null)
+      : null
+  const clickUpWorkspaces = clickUpStatus.workspaces ?? []
+  const selectedClickUpWorkspaceId =
+    clickUpStatus.selectedWorkspaceId ??
+    clickUpStatus.activeWorkspaceId ??
+    clickUpWorkspaces[0]?.id ??
+    null
+  const selectedClickUpWorkspace =
+    selectedClickUpWorkspaceId && selectedClickUpWorkspaceId !== 'all'
+      ? (clickUpWorkspaces.find((workspace) => workspace.id === selectedClickUpWorkspaceId) ?? null)
       : null
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
@@ -3481,8 +3493,32 @@ export default function TaskPage(): React.JSX.Element {
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
+  const clickUpTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'clickup',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: {
+          provider: 'clickup',
+          workspaceId:
+            selectedClickUpWorkspaceId && selectedClickUpWorkspaceId !== 'all'
+              ? selectedClickUpWorkspaceId
+              : null,
+          workspaceName: selectedClickUpWorkspace?.name ?? null
+        },
+        accountLabel: selectedClickUpWorkspace?.name ?? clickUpStatus.viewer?.username ?? null
+      }),
+    [
+      accountBackedTaskSourceHostId,
+      clickUpStatus.viewer?.username,
+      fallbackTaskSourceProjectId,
+      selectedClickUpWorkspace,
+      selectedClickUpWorkspaceId
+    ]
+  )
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'clickup' && taskSource !== 'jira') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -3549,6 +3585,13 @@ export default function TaskPage(): React.JSX.Element {
           hostLabelById,
           hostAvailability: accountAvailability
         }) ?? undefined,
+      clickup:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('clickup'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
+        }) ?? undefined,
       jira:
         getTaskSourceAvailabilityNotice({
           providerLabel: labelFor('jira'),
@@ -3576,7 +3619,7 @@ export default function TaskPage(): React.JSX.Element {
       providerLabel,
       repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'clickup' || taskSource === 'jira'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -3584,9 +3627,13 @@ export default function TaskPage(): React.JSX.Element {
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
+      clickUpWorkspaceName:
+        selectedClickUpWorkspace?.name ?? clickUpStatus.viewer?.username ?? null,
       jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
     })
   }, [
+    clickUpStatus.viewer?.username,
+    selectedClickUpWorkspace,
     selectedJiraSite,
     selectedLinearWorkspace,
     selectedRepos.length,
@@ -3604,11 +3651,11 @@ export default function TaskPage(): React.JSX.Element {
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'clickup' || taskSource === 'jira'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'clickup' || taskSource === 'jira'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById
@@ -9750,6 +9797,11 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               </div>
             </div>
+          ) : taskSource === 'clickup' ? (
+            <ClickUpTaskPageSurface
+              sourceContext={clickUpTaskSourceContext}
+              onHide={() => hideTaskSource('clickup', 'ClickUp')}
+            />
           ) : taskSource === 'jira' ? (
             !jiraStatusReady ? (
               <div className="mt-4 flex items-center justify-center py-14">

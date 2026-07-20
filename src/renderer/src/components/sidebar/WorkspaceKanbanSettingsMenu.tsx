@@ -90,8 +90,8 @@ export default function WorkspaceKanbanSettingsMenu({
               </span>
               <span className="block text-[11px] leading-4 text-muted-foreground">
                 {translate(
-                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.4c2eaa78cc',
-                  'Moving a linked workspace updates its Linear issue status when a matching workflow state exists.'
+                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.taskTrackerSyncDescription',
+                  'Moving a linked workspace updates its Linear or ClickUp task when a matching status exists.'
                 )}
               </span>
             </span>

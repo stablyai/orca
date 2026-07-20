@@ -70,6 +70,21 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
       }
     }
   }
+  if (item.provider === 'clickup') {
+    const taskId = item.clickUpTaskId?.trim()
+    if (!taskId) {
+      throw new Error('The ClickUp workspace source is missing its task ID.')
+    }
+    return {
+      provider: 'clickup',
+      source: {
+        taskId,
+        title: item.title,
+        url: item.url,
+        ...(item.clickUpWorkspaceId ? { workspaceId: item.clickUpWorkspaceId } : {})
+      }
+    }
+  }
   return {
     provider: 'linear',
     source: {
@@ -105,7 +120,11 @@ async function createWorkItemWorkspace(args: {
   let compareBaseRef = selection.compareBaseRef
   let pushTarget = selection.pushTarget
   let branchNameOverride = selection.branchNameOverride
-  if (!baseBranch && item.provider !== 'linear' && (item.type === 'pr' || item.type === 'mr')) {
+  if (
+    !baseBranch &&
+    (item.provider === 'github' || item.provider === 'gitlab') &&
+    (item.type === 'pr' || item.type === 'mr')
+  ) {
     const repoId = item.repoId ?? targetRepoId
     const resolved =
       item.type === 'pr'

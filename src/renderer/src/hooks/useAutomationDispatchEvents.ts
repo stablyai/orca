@@ -176,43 +176,21 @@ export function useAutomationDispatchEvents(): void {
           const automationWorkspaceCreateRequestId = createBrowserUuid()
           const createResult =
             automation.workspaceMode === 'new_per_run'
-              ? await useAppStore
-                  .getState()
-                  .createWorktree(
-                    runRepoId,
-                    buildAutomationWorkspaceName(run.title, run.scheduledFor),
-                    automation.baseBranch ?? undefined,
-                    automation.setupDecision ?? 'skip',
-                    undefined,
-                    'unknown',
-                    run.title,
-                    undefined,
-                    undefined,
-                    undefined,
-                    automation.agentId,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    {
-                      automationProvenanceRequest: {
-                        automationId: automation.id,
-                        automationRunId: run.id,
-                        dispatchToken,
-                        createRequestId: automationWorkspaceCreateRequestId
-                      }
-                    }
-                  )
+              ? await useAppStore.getState().createWorktree({
+                  repoId: runRepoId,
+                  name: buildAutomationWorkspaceName(run.title, run.scheduledFor),
+                  baseBranch: automation.baseBranch ?? undefined,
+                  setupDecision: automation.setupDecision ?? 'skip',
+                  telemetrySource: 'unknown',
+                  displayName: run.title,
+                  createdWithAgent: automation.agentId,
+                  automationProvenanceRequest: {
+                    automationId: automation.id,
+                    automationRunId: run.id,
+                    dispatchToken,
+                    createRequestId: automationWorkspaceCreateRequestId
+                  }
+                })
               : null
           const worktree = createResult
             ? createResult.worktree

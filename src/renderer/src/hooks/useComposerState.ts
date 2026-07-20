@@ -35,6 +35,7 @@ import {
   type TaskSourceContext
 } from '../../../shared/task-source-context'
 import type {
+  ClickUpTask,
   GitHubWorkItem,
   GitHubPrStartPoint,
   GitPushTarget,
@@ -258,6 +259,7 @@ export type ComposerCardProps = {
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  onSmartClickUpTaskSelect: (task: ClickUpTask) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** GitLab parallel of onBaseBranchPrSelect. */
   onBaseBranchMrSelect?: (
@@ -3078,6 +3080,55 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [isProjectGroupTarget, name]
   )
 
+  const handleSmartClickUpTaskSelect = useCallback(
+    (task: ClickUpTask): void => {
+      const reference = task.customId ?? task.id
+      const linkedItem: LinkedWorkItemSummary = {
+        provider: 'clickup',
+        type: 'issue',
+        number: 0,
+        title: `${reference} ${task.name}`,
+        url: task.url,
+        clickUpTaskId: task.id,
+        clickUpWorkspaceId: task.workspaceId,
+        linkedContext: {
+          provider: 'clickup',
+          version: 1,
+          renderedText: [
+            `ClickUp task: ${reference} — ${task.name}`,
+            `Status: ${task.status.name}`,
+            task.description ? `Description:\n${task.description}` : '',
+            task.url
+          ]
+            .filter(Boolean)
+            .join('\n')
+        }
+      }
+      setLinkedIssue('')
+      setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      setLinkedWorkItem(linkedItem)
+      const suggestedName =
+        getLinkedWorkItemWorkspaceName(linkedItem)?.displayName ?? `${reference} ${task.name}`
+      if (
+        shouldApplyWorkspaceSourceAutoName({
+          currentName: name,
+          lastAutoName: lastAutoNameRef.current
+        }) ||
+        name.trim().toLowerCase() === reference.toLowerCase()
+      ) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+      setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      setForkPushWarning(null)
+      branchAutoNameRef.current = ''
+    },
+    [name]
+  )
+
   const handleClearSmartNameSelection = useCallback((): void => {
     smartGitHubPrStartPointSelectionRef.current = null
     setLinkedIssue('')
@@ -3403,6 +3454,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
           ? submitLinkedWorkItem.linearOrganizationUrlKey
           : undefined
+      const linkedClickUpTaskId =
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+          ? submitLinkedWorkItem.clickUpTaskId
+          : undefined
+      const linkedClickUpWorkspaceId =
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+          ? submitLinkedWorkItem.clickUpWorkspaceId
+          : undefined
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride: submitBranchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -3470,38 +3529,39 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           )
         )
       }
-      const result = await createWorktree(
+      const result = await createWorktree({
         repoId,
-        workspaceName,
-        selectedRepoIsGit ? submitBaseBranch : undefined,
-        effectiveSetupDecision,
-        selectedRepoIsGit && sparseEnabled
-          ? {
-              directories: normalizedSparseDirectories,
-              ...(effectivePresetId ? { presetId: effectivePresetId } : {})
-            }
-          : undefined,
+        name: workspaceName,
+        baseBranch: selectedRepoIsGit ? submitBaseBranch : undefined,
+        setupDecision: effectiveSetupDecision,
+        sparseCheckout:
+          selectedRepoIsGit && sparseEnabled
+            ? {
+                directories: normalizedSparseDirectories,
+                ...(effectivePresetId ? { presetId: effectivePresetId } : {})
+              }
+            : undefined,
         telemetrySource,
-        createDisplayName,
-        submitLinkedIssueNumber ?? undefined,
-        submitLinkedPR ?? undefined,
-        submitPushTarget,
-        tuiAgent,
+        displayName: createDisplayName,
+        linkedIssue: submitLinkedIssueNumber ?? undefined,
+        linkedPR: submitLinkedPR ?? undefined,
+        pushTarget: submitPushTarget,
+        createdWithAgent: tuiAgent,
         linkedLinearIssue,
-        effectiveBranchNameOverride,
-        resolvedInitialWorkspaceStatus,
-        smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
-        smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
-        backendStartup,
+        branchNameOverride: effectiveBranchNameOverride,
+        workspaceStatus: resolvedInitialWorkspaceStatus,
+        linkedGitLabMR:
+          smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
+        linkedGitLabIssue:
+          smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
+        startup: backendStartup,
         pendingFirstAgentMessageRename,
-        undefined,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
-        undefined,
-        undefined,
-        undefined,
-        submitCompareBaseRef
-      )
+        compareBaseRef: submitCompareBaseRef,
+        linkedClickUpTaskId,
+        linkedClickUpWorkspaceId
+      })
       const worktree = result.worktree
 
       const trimmedNote = note.trim()
@@ -3807,6 +3867,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
             ? submitLinkedWorkItem.linearOrganizationUrlKey
             : undefined
+        const linkedClickUpTaskId =
+          submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+            ? submitLinkedWorkItem.clickUpTaskId
+            : undefined
+        const linkedClickUpWorkspaceId =
+          submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+            ? submitLinkedWorkItem.clickUpWorkspaceId
+            : undefined
         const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
           branchNameOverride: submitBranchNameOverride,
           branchAutoName: branchAutoNameRef.current,
@@ -3991,6 +4059,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ...(linkedLinearIssueOrganizationUrlKey !== undefined
             ? { linkedLinearIssueOrganizationUrlKey }
             : {}),
+          ...(linkedClickUpTaskId ? { linkedClickUpTaskId } : {}),
+          ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
           ...(effectiveBranchNameOverride
             ? { branchNameOverride: effectiveBranchNameOverride }
             : {}),
@@ -4138,6 +4208,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onSmartBranchSelect: isProjectGroupTarget ? () => {} : handleSmartBranchSelect,
     onSmartNameModeChange: setSmartNameMode,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
+    onSmartClickUpTaskSelect: handleSmartClickUpTaskSelect,
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,

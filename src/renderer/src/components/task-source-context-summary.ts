@@ -1,6 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { getExecutionHostLabel } from '../../../shared/execution-host'
-import type { ExecutionHostScope } from '../../../shared/execution-host'
+import { getExecutionHostLabel, type ExecutionHostScope } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskProvider } from '../../../shared/types'
@@ -44,6 +43,7 @@ export function getTaskSourceContextSummary(args: {
   accountHostId?: ExecutionHostScope | null
   selectedRepoCount?: number
   linearWorkspaceName?: string | null
+  clickUpWorkspaceName?: string | null
   jiraSiteName?: string | null
 }): TaskSourceContextSummary {
   switch (args.provider) {
@@ -51,15 +51,15 @@ export function getTaskSourceContextSummary(args: {
     case 'gitlab':
       return getRepoBackedTaskSourceSummary(args)
     case 'linear':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
+    case 'clickup':
     case 'jira':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
+        accountLabel:
+          args.provider === 'linear'
+            ? args.linearWorkspaceName
+            : args.provider === 'clickup'
+              ? args.clickUpWorkspaceName
+              : args.jiraSiteName,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
@@ -196,6 +196,8 @@ function getProviderIdentityLabel(
         : (identity.projectId ?? null)
     case 'linear':
       return identity.workspaceName ?? identity.workspaceId ?? null
+    case 'clickup':
+      return identity.listName ?? identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
   }

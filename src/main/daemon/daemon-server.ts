@@ -759,6 +759,11 @@ export class DaemonServer {
         this.cancelPendingPtySpawnPreparations(request.payload.sessionId)
         return {}
 
+      case 'closeStartupQueryAuthority':
+        return {
+          appliedSeq: this.host.closeStartupQueryAuthority(request.payload.sessionId)
+        }
+
       case 'write':
         try {
           this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())

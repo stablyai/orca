@@ -507,7 +507,10 @@ describe('killAllProcessesForWorktree', () => {
             // The daemon never replies; the request only rejects when its own
             // timeout elapses, exactly like the real client.
             return new Promise((_resolve, reject) => {
-              setTimeout(() => reject(new Error(`Request kill timed out after ${timeoutMs}ms`)), timeoutMs)
+              setTimeout(
+                () => reject(new Error(`Request kill timed out after ${timeoutMs}ms`)),
+                timeoutMs
+              )
             })
           }
           return Promise.resolve({})

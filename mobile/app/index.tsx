@@ -102,10 +102,15 @@ type HomeLinearStatus = {
   connected?: boolean
 }
 
+type HomeClickUpStatus = {
+  connected?: boolean
+}
+
 const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
-  linear: 'Linear'
+  linear: 'Linear',
+  clickup: 'ClickUp'
 }
 
 function formatDuration(ms: number): string {
@@ -247,9 +252,10 @@ function fetchTaskProviders(
   Promise.all([
     client.sendRequest('settings.get'),
     client.sendRequest('preflight.check'),
-    client.sendRequest('linear.status')
+    client.sendRequest('linear.status'),
+    client.sendRequest('clickup.status')
   ])
-    .then(([settingsResponse, preflightResponse, linearResponse]) => {
+    .then(([settingsResponse, preflightResponse, linearResponse, clickUpResponse]) => {
       if (disposed()) {
         return
       }
@@ -261,11 +267,13 @@ function fetchTaskProviders(
         ? (preflightResponse.result as HomePreflightStatus)
         : null
       const linear = linearResponse.ok ? (linearResponse.result as HomeLinearStatus) : null
+      const clickUp = clickUpResponse.ok ? (clickUpResponse.result as HomeClickUpStatus) : null
       const providers = filterAvailableTaskProviders(
         normalizeVisibleTaskProviders(settings.visibleTaskProviders),
         {
           gitlabInstalled: preflight?.glab?.installed === true,
-          linearConnected: linear?.connected === true
+          linearConnected: linear?.connected === true,
+          clickUpConnected: clickUp?.connected === true
         }
       )
       setProviders((prev) => ({ ...prev, [hostId]: providers }))

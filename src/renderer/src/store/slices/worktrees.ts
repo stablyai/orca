@@ -2891,7 +2891,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  createWorktree: async (
+  createWorktree: async ({
     repoId,
     name,
     baseBranch,
@@ -2917,9 +2917,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedAzureDevOpsPR,
     linkedGiteaPR,
     compareBaseRef,
-    options
-  ) => {
-    const automationProvenanceRequest = options?.automationProvenanceRequest
+    automationProvenanceRequest,
+    linkedClickUpTaskId,
+    linkedClickUpWorkspaceId
+  }) => {
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = getClientWorktreeCreateCandidate(name, attempt)
@@ -2959,6 +2960,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedLinearIssueOrganizationUrlKey !== undefined
               ? { linkedLinearIssueOrganizationUrlKey }
               : {}),
+            ...(linkedClickUpTaskId !== undefined ? { linkedClickUpTaskId } : {}),
+            ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(parentWorkspace ? { parentWorkspace } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
@@ -3004,6 +3007,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedLinearIssueOrganizationUrlKey !== undefined
                       ? { linkedLinearIssueOrganizationUrlKey }
                       : {}),
+                    ...(linkedClickUpTaskId !== undefined ? { linkedClickUpTaskId } : {}),
+                    ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(parentWorkspace ? { parentWorkspace } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),

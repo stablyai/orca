@@ -38,9 +38,7 @@ export function isSshPtyIdentityMismatchError(err: unknown): boolean {
 // timeout — convert only here, at the RPC itself, so sequential relay calls share
 // the remaining budget (undefined keeps the multiplexer default timeout).
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
-  return deadlineMs === undefined
-    ? undefined
-    : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
+  return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
 }
 
 /**

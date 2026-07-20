@@ -51,6 +51,38 @@ export type WorktreeRenameRequest = {
   rowKey?: string
 }
 
+export type CreateWorktreeOptions = {
+  repoId: string
+  name: string
+  baseBranch?: string
+  setupDecision?: SetupDecision
+  sparseCheckout?: CreateSparseCheckoutRequest
+  telemetrySource?: WorkspaceCreateTelemetrySource
+  displayName?: string
+  linkedIssue?: number
+  linkedPR?: number
+  pushTarget?: GitPushTarget
+  createdWithAgent?: TuiAgent
+  linkedLinearIssue?: string
+  branchNameOverride?: string
+  workspaceStatus?: WorkspaceStatus
+  linkedGitLabMR?: number
+  linkedGitLabIssue?: number
+  startup?: WorktreeStartupLaunch
+  pendingFirstAgentMessageRename?: boolean
+  creationId?: string
+  linkedLinearIssueWorkspaceId?: string | null
+  linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
+  compareBaseRef?: string
+  // Why: only automation dispatch may request host-minted provenance.
+  automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
+  linkedClickUpTaskId?: string
+  linkedClickUpWorkspaceId?: string | null
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -125,41 +157,7 @@ export type WorktreeSlice = {
     args: { parentWorktreeId?: string; noParent?: boolean }
   ) => Promise<void>
   assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
-  createWorktree: (
-    repoId: string,
-    name: string,
-    baseBranch?: string,
-    setupDecision?: SetupDecision,
-    sparseCheckout?: CreateSparseCheckoutRequest,
-    /** Telemetry-only: which renderer surface initiated this create. Optional
-     *  so existing callers default to `unknown`; specify when the surface
-     *  matters for the activation funnel. */
-    telemetrySource?: WorkspaceCreateTelemetrySource,
-    displayName?: string,
-    linkedIssue?: number,
-    linkedPR?: number,
-    pushTarget?: GitPushTarget,
-    createdWithAgent?: TuiAgent,
-    linkedLinearIssue?: string,
-    branchNameOverride?: string,
-    workspaceStatus?: WorkspaceStatus,
-    linkedGitLabMR?: number,
-    linkedGitLabIssue?: number,
-    startup?: WorktreeStartupLaunch,
-    pendingFirstAgentMessageRename?: boolean,
-    /** When set, correlates the backend's `createWorktree:progress` events to a
-     *  renderer pending creation. Synchronous callers omit it. */
-    creationId?: string,
-    linkedLinearIssueWorkspaceId?: string | null,
-    linkedLinearIssueOrganizationUrlKey?: string | null,
-    linkedBitbucketPR?: number | null,
-    linkedAzureDevOpsPR?: number | null,
-    linkedGiteaPR?: number | null,
-    compareBaseRef?: string,
-    // Why: reserved for automation-dispatch flows so host-side provenance can
-    // be minted securely; regular create callers should omit this.
-    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
-  ) => Promise<CreateWorktreeResult>
+  createWorktree: (options: CreateWorktreeOptions) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */

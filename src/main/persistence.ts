@@ -2899,11 +2899,22 @@ export class Store {
         })
         const visibleTaskProvidersDefaultedForJira =
           parsed.settings?.visibleTaskProvidersDefaultedForJira === true
-        const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
+        const visibleTaskProvidersWithJira = visibleTaskProvidersDefaultedForJira
           ? rawTaskProviderSettings.visibleTaskProviders
           : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
             ? rawTaskProviderSettings.visibleTaskProviders
             : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+        const visibleTaskProvidersDefaultedForClickUp =
+          parsed.settings?.visibleTaskProvidersDefaultedForClickUp === true
+        const migratedVisibleTaskProviders =
+          visibleTaskProvidersDefaultedForClickUp ||
+          visibleTaskProvidersWithJira.includes('clickup')
+            ? visibleTaskProvidersWithJira
+            : [
+                ...visibleTaskProvidersWithJira.filter((provider) => provider !== 'jira'),
+                'clickup' as const,
+                ...visibleTaskProvidersWithJira.filter((provider) => provider === 'jira')
+              ]
         const taskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: migratedVisibleTaskProviders,
           defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
@@ -2924,7 +2935,7 @@ export class Store {
         if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
           this.loadNeedsSave = true
         }
-        if (!visibleTaskProvidersDefaultedForJira) {
+        if (!visibleTaskProvidersDefaultedForJira || !visibleTaskProvidersDefaultedForClickUp) {
           this.loadNeedsSave = true
         }
         const claudeAgentTeamsDefaultDisabledMigrated =
@@ -3059,6 +3070,7 @@ export class Store {
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
+            visibleTaskProvidersDefaultedForClickUp: true,
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
@@ -5066,6 +5078,7 @@ export class Store {
       sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
       if ('visibleTaskProviders' in updates) {
         sanitizedUpdates.visibleTaskProvidersDefaultedForJira = true
+        sanitizedUpdates.visibleTaskProvidersDefaultedForClickUp = true
       }
     }
     if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {

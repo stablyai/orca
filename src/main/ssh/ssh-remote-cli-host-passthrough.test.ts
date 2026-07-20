@@ -164,6 +164,32 @@ describe('runHostOrcaCliPassthrough', () => {
     expect(child.stdin.end).toHaveBeenCalledWith('comment body')
   })
 
+  it('forwards ClickUp commands and current-worktree context through SSH', async () => {
+    const child = createFakeChild()
+    const spawn = vi.fn(() => child)
+
+    const resultPromise = runHostOrcaCliPassthrough(
+      {
+        argv: ['clickup', 'task', '--current', '--json'],
+        cwd: '/home/alice/wt',
+        env: { ORCA_WORKTREE_ID: 'repo::/home/alice/wt' }
+      },
+      { ...BASE_OPTIONS, spawn: spawn as never }
+    )
+
+    await Promise.resolve()
+    child.emit('close', 0)
+    await resultPromise
+
+    const [, args, options] = spawn.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv }
+    ]
+    expect(args).toEqual(['/host/app/out/cli/index.js', 'clickup', 'task', '--current', '--json'])
+    expect(options.env.ORCA_WORKTREE_ID).toBe('repo::/home/alice/wt')
+  })
+
   it('propagates non-zero exit codes', async () => {
     const child = createFakeChild()
     const spawn = vi.fn(() => child)

@@ -8,6 +8,7 @@ import {
 import { cn } from '@/lib/utils'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -62,6 +63,19 @@ const TASK_PROVIDER_OPTIONS: readonly {
       )
     },
     Icon: ({ className }) => <LinearIcon className={className} />
+  },
+  {
+    id: 'clickup',
+    get label() {
+      return translate('auto.components.settings.TasksPane.508a40fd27', 'ClickUp')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.dd563d4ddf',
+        'Show ClickUp in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
+    Icon: ({ className }) => <ClickUpIcon className={className} />
   },
   {
     id: 'jira',
@@ -121,6 +135,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
             'github',
             'gitlab',
             'linear',
+            'clickup',
             'jira',
             'atlassian',
             'display',
