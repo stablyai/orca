@@ -22,7 +22,6 @@ import {
   getDiffCommentPopoverLeft,
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
-import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { DiffSectionHeader } from './DiffSectionHeader'
 import type { DiffSection } from './diff-section-types'
 import type { DiffComment } from '../../../../shared/types'
@@ -33,6 +32,7 @@ import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { disposeUnattachedMonacoModelPaths } from './diff-monaco-model-disposal'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
 import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
+import { useDiffEditorOptionOverrides } from './useDiffEditorOptionOverrides'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 
 export function DiffSectionItem({
@@ -127,7 +127,8 @@ export function DiffSectionItem({
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const sectionBodyRef = useRef<HTMLDivElement | null>(null)
-  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const { bindDiffEditorOptionOverrides, disposeDiffEditorOptionOverrides } =
+    useDiffEditorOptionOverrides(diffEditorRef, sideBySide, settings?.diffWordWrap)
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
@@ -230,19 +231,6 @@ export function DiffSectionItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modifiedEditor, popover?.lineNumber])
 
-  useEffect(() => {
-    const diffEditor = diffEditorRef.current
-    if (!diffEditor) {
-      return
-    }
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
-    return () => {
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = null
-    }
-  }, [sideBySide])
-
   const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
       return
@@ -275,8 +263,7 @@ export function DiffSectionItem({
 
   const handleMount: DiffOnMount = (editor, _monaco) => {
     diffEditorRef.current = editor
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
+    bindDiffEditorOptionOverrides(editor)
     const modified = editor.getModifiedEditor()
 
     // Why: measuring before Monaco computes hidden unchanged regions records
@@ -328,8 +315,7 @@ export function DiffSectionItem({
         window.cancelAnimationFrame(pendingHeightFrame)
         pendingHeightFrame = null
       }
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = null
+      disposeDiffEditorOptionOverrides()
       diffEditorRef.current = null
       if (modifiedEditorsRef.current.get(index) === modified) {
         modifiedEditorsRef.current.delete(index)

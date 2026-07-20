@@ -13,7 +13,6 @@ import {
   getDiffCommentPopoverLeft,
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
-import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
@@ -24,6 +23,7 @@ import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecyc
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import { useDiffEditorOptionOverrides } from './useDiffEditorOptionOverrides'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 
@@ -74,7 +74,8 @@ export default function DiffViewer({
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
   const diffBodyRef = useRef<HTMLDivElement | null>(null)
-  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
+  const { bindDiffEditorOptionOverrides, disposeDiffEditorOptionOverrides } =
+    useDiffEditorOptionOverrides(diffEditorRef, sideBySide, settings?.diffWordWrap)
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
   const [popover, setPopover] = useState<{
     lineNumber: number
@@ -244,8 +245,7 @@ export default function DiffViewer({
   const handleEnterLargeDiffFallback = useCallback(() => {
     // Why: when a tab transitions to the safety fallback, stale Monaco refs
     // must not keep comment decorators or save handlers talking to disposed UI.
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = null
+    disposeDiffEditorOptionOverrides()
     // Why: capture before nulling so we unregister the exact instance the
     // navigator may still hold (identity guard no-ops a stale dispose).
     const fallenBackEditor = diffEditorRef.current
@@ -255,7 +255,7 @@ export default function DiffViewer({
     }
     setModifiedEditor(null)
     setPopover(null)
-  }, [unregisterDiffEditor])
+  }, [disposeDiffEditorOptionOverrides, unregisterDiffEditor])
 
   const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
@@ -317,8 +317,7 @@ export default function DiffViewer({
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
       registerDiffEditor(diffEditor)
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+      bindDiffEditorOptionOverrides(diffEditor)
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
@@ -371,15 +370,23 @@ export default function DiffViewer({
       // Why: clear modifiedEditor on dispose so decorator effects (scroll-to-note,
       // popover position) don't invoke methods on a disposed Monaco editor.
       diffEditor.onDidDispose(() => {
-        lineNumberOptionsSubRef.current?.dispose()
-        lineNumberOptionsSubRef.current = null
+        disposeDiffEditorOptionOverrides()
         diffEditorRef.current = null
         unregisterDiffEditor(diffEditor)
         setModifiedEditor(null)
         setPopover(null)
       })
     },
-    [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
+    [
+      editable,
+      setupCopy,
+      modelKey,
+      filePath,
+      bindDiffEditorOptionOverrides,
+      disposeDiffEditorOptionOverrides,
+      registerDiffEditor,
+      unregisterDiffEditor
+    ]
   )
 
   // Why: VS Code snapshots diff view state on deactivation, not on scroll events.
@@ -396,19 +403,6 @@ export default function DiffViewer({
       }
     }
   }, [modelKey])
-
-  useEffect(() => {
-    const diffEditor = diffEditorRef.current
-    if (!diffEditor) {
-      return
-    }
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
-    return () => {
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = null
-    }
-  }, [sideBySide])
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
