@@ -1,5 +1,4 @@
-// xterm.js WebView document + default Tokyonight theme. Extracted from
-// TerminalWebView.tsx to keep that file within the max-lines budget.
+// xterm.js WebView document + default Tokyonight theme; extracted from TerminalWebView.tsx for the max-lines budget.
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
@@ -38,15 +37,7 @@ const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   brightWhite: '#c0caf5'
 }
 
-// Why: TUI apps (Claude Code / Ink) emit escape codes with absolute cursor
-// positioning designed for the desktop's terminal dimensions (~150+ cols).
-// We initialize xterm at the desktop's exact cols/rows so those escape codes
-// render correctly, then use a measured CSS transform: scale() to fit the
-// canvas into the phone viewport. The scale is computed after xterm opens
-// by measuring the rendered surface width, not hardcoded, so it adapts to
-// any terminal column count (80, 150, 200+). All touch gestures (scroll,
-// pinch-to-zoom, pan) are handled by custom JS rather than native WebView
-// behavior, so they work correctly with the CSS scale transform.
+// Why: TUI escape codes assume the desktop's cols/rows, so init xterm at those dims and fit the phone via a measured CSS scale() instead of resizing.
 export const XTERM_HTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -1892,6 +1883,5 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
 </body>
 </html>`
 
-// Why: WebView treats source identity as page identity on some platforms; keep
-// parent/session re-renders from reloading xterm and forcing fresh snapshots.
+// Why: some WebViews treat source identity as page identity; keep this stable so re-renders don't reload xterm.
 export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }
