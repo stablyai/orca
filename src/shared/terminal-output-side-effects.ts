@@ -71,6 +71,10 @@ export type TerminalTitleTrackerCallbacks = {
    * semantics so the fact path drops stale agent rows exactly like byte mode.
    */
   onCommandFinished?: (bestEffortExitCode: number | null) => void
+  /** Fired once per complete OSC 133;C — the shell exec'd a command. */
+  onCommandStarted?: () => void
+  /** Fired once per complete OSC 133;B — the shell finished drawing its prompt. */
+  onPromptEnd?: () => void
   /** Fired once per newly observed GitHub PR URL (chunk-boundary-safe,
    *  deduplicated per tracker like the renderer detector). */
   onPrLink?: (link: TerminalGitHubPRLink) => void
@@ -124,15 +128,22 @@ export function createTerminalTitleTracker(
     onAgentExited,
     onBell,
     onCommandFinished,
+    onCommandStarted,
+    onPromptEnd,
     onPrLink,
     onMode2031Subscribe
   } = callbacks
   const bellDetector = onBell ? createBellDetector() : null
-  // Why: created only when a consumer exists (like the bell detector) so
-  // headless serve never pays the per-chunk 133/URL scans.
-  const commandFinishedScanner = onCommandFinished
-    ? createOsc133CommandFinishedScanner(onCommandFinished)
-    : null
+  // Why: created when any of the three OSC133 callbacks exist, not just
+  // onCommandFinished — command-started/prompt-end now ride the same scanner.
+  const commandFinishedScanner =
+    onCommandFinished || onCommandStarted || onPromptEnd
+      ? createOsc133CommandFinishedScanner(
+          onCommandFinished ?? (() => {}),
+          onCommandStarted,
+          onPromptEnd
+        )
+      : null
   let prLinkDetector = onPrLink ? createTerminalGitHubPRLinkDetector() : null
   let transientFactScanningSuppressed = false
   // Why: a DECSET 2031 subscribe can be split across PTY chunks; carry a

@@ -6738,6 +6738,12 @@ export class OrcaRuntimeService {
               onCommandFinished: (exitCode: number | null) => {
                 this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
               },
+              onCommandStarted: () => {
+                this.recordTerminalSideEffectFact(ptyId, { kind: 'command-started' })
+              },
+              onPromptEnd: () => {
+                this.recordTerminalSideEffectFact(ptyId, { kind: 'prompt-end' })
+              },
               onPrLink: (link: TerminalGitHubPRLink) => {
                 this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link })
               },
