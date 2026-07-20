@@ -1227,6 +1227,9 @@ function buildMobileTerminalSurfaceTabs(
   systemPrefersDark: boolean,
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
+  const unifiedTab = unifiedTabId
+    ? state.unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === unifiedTabId)
+    : undefined
   const registered = registeredTabs.get(terminal.id)
   const isDesktopTabActive = unifiedTabId
     ? state.groupsByWorktree[worktreeId]?.some(
@@ -1310,6 +1313,10 @@ function buildMobileTerminalSurfaceTabs(
       ...(terminalTheme ? { terminalTheme } : {}),
       ...(agentStatus ? { agentStatus } : {}),
       ...(terminal.launchAgent ? { launchAgent: terminal.launchAgent } : {}),
+      color: unifiedTab?.color ?? terminal.color ?? null,
+      // Why: main adjudicates generation-bound closes after an async refresh,
+      // so the renderer's current pin state must travel in the same snapshot.
+      isPinned: unifiedTab ? unifiedTab.isPinned === true : terminal.isPinned === true,
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }

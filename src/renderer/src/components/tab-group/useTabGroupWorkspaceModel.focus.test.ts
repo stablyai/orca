@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   closeTab: vi.fn(),
   closeUnifiedTab: vi.fn(),
   closeWebRuntimeSessionTab: vi.fn(),
+  closeWebRuntimeTerminalTab: vi.fn(),
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createTab: vi.fn(),
@@ -70,6 +71,7 @@ vi.mock('../../lib/focus-terminal-tab-surface', () => ({
 vi.mock('../../runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab,
+  closeWebRuntimeTerminalTab: mocks.closeWebRuntimeTerminalTab,
   createWebRuntimeSessionBrowserTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive,
@@ -134,7 +136,11 @@ function resetStore(): void {
     reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
     settings: { activeRuntimeEnvironmentId: null },
     tabsByWorktree: { 'wt-1': [terminalTab] },
+    ptyIdsByTabId: { 'terminal-1': ['pty-1'] },
     terminalLayoutsByTabId: {},
+    lastKnownRelayPtyIdByTabId: {},
+    deferredSshSessionIdsByTabId: {},
+    pendingReconnectPtyIdByTabId: {},
     unifiedTabsByWorktree: { 'wt-1': [unifiedTab] },
     activateTab: mocks.activateTab,
     closeBrowserTab: mocks.closeBrowserTab,
@@ -293,10 +299,10 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       'terminal-2',
       expect.objectContaining({ remoteCloseOwnedByHost: true })
     )
-    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
+    expect(mocks.closeWebRuntimeTerminalTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
-      tabId: 'terminal-2',
-      environmentId: 'env-1'
+      environmentId: 'env-1',
+      terminal: 'pty-2'
     })
   })
 

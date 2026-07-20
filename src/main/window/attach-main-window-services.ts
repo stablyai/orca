@@ -356,8 +356,10 @@ function registerRuntimeWindowLifecycle(
         baseVersion,
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
-    closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
-    closeTerminalTab: (tabId) => requestTerminalTabCloseFromRenderer(mainWindow, tabId),
+    closeTerminal: (tabId, paneRuntimeId, options) =>
+      send('ui:closeTerminal', { tabId, paneRuntimeId, ...options }),
+    closeTerminalTab: (tabId, options) =>
+      requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>

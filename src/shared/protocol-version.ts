@@ -17,9 +17,13 @@
 // this client build requires a newer server. Exact app-version equality is
 // never required; these numbers define the supported compatibility window.
 
-export const RUNTIME_PROTOCOL_VERSION = 3
-export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
-export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
+// Why: protocol <=3 clients can turn mirror teardown into an ambiguous
+// reasonless terminal close, which a host cannot distinguish from user intent.
+export const RUNTIME_PROTOCOL_VERSION = 4
+export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 4
+// Why: protocol <=3 hosts close by mutable tab id after async refresh; a v4
+// handle cannot safely fall back without reopening the destructive TOCTOU.
+export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 4
 
 export const PROJECT_HOST_SETUP_RUNTIME_CAPABILITY = 'project-host-setup.v1' as const
 export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' as const

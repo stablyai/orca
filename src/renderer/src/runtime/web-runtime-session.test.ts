@@ -2,9 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
+import {
   activateWebRuntimeSessionWorktree,
   activateWebRuntimeSessionTab,
   closeWebRuntimeTerminal,
+  closeWebRuntimeTerminalTab,
   closeWebRuntimeSessionTab,
   consumePendingWebRuntimeSplitMirrorTelemetry,
   createWebRuntimeSessionBrowserTab,
@@ -14,6 +19,10 @@ import {
   setWebRuntimeTabProps,
   splitWebRuntimeTerminal
 } from './web-runtime-session'
+import {
+  clearRuntimeCompatibilityCacheForTests,
+  markRuntimeEnvironmentCompatible
+} from './runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -24,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   focusBrowserTabInWorktree: vi.fn(),
   applyFreshWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
+  acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn()
 }))
@@ -37,6 +47,7 @@ vi.mock('../store', () => ({
 
 vi.mock('./web-session-tabs-sync', () => ({
   applyFreshWebSessionTabsSnapshot: mocks.applyFreshWebSessionTabsSnapshot,
+  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) =>
     mocks.setState(buildPatch),
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
@@ -53,6 +64,15 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 const ENVIRONMENT_ID = 'web-env-1'
 const WORKTREE_ID = 'repo::/worktree'
 
+beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
+  markRuntimeEnvironmentCompatible(ENVIRONMENT_ID)
+})
+
+afterEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
+})
+
 function makeSnapshot(): RuntimeMobileSessionTabsResult {
   return {
     worktree: WORKTREE_ID,
@@ -62,6 +82,19 @@ function makeSnapshot(): RuntimeMobileSessionTabsResult {
     activeTabId: null,
     activeTabType: null,
     tabs: []
+  }
+}
+
+function makeCompatibleStatusResponse() {
+  return {
+    id: 'status',
+    ok: true,
+    result: {
+      runtimeId: 'remote-runtime',
+      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+    },
+    _meta: { runtimeId: 'remote-runtime' }
   }
 }
 
@@ -807,23 +840,16 @@ describe('web runtime session tab actions', () => {
   })
 
   it('maps mirrored local browser unified ids for activate and close', async () => {
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'activate',
+    const runtimeCall = vi.fn(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve(makeCompatibleStatusResponse())
+      }
+      return Promise.resolve({
+        id: method,
         ok: true,
-        result: {}
+        result: method === 'session.tabs.list' ? makeSnapshot() : {}
       })
-      .mockResolvedValueOnce({
-        id: 'close',
-        ok: true,
-        result: {}
-      })
-      .mockResolvedValueOnce({
-        id: 'list',
-        ok: true,
-        result: makeSnapshot()
-      })
+    })
 
     vi.stubGlobal('window', {
       api: {
@@ -857,14 +883,20 @@ describe('web runtime session tab actions', () => {
     })
     expect(runtimeCall).toHaveBeenNthCalledWith(2, {
       selector: ENVIRONMENT_ID,
-      method: 'session.tabs.close',
-      params: {
-        worktree: `id:${WORKTREE_ID}`,
-        tabId: 'host-browser-unified'
-      },
+      method: 'status.get',
       timeoutMs: 15_000
     })
     expect(runtimeCall).toHaveBeenNthCalledWith(3, {
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.close',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        tabId: 'host-browser-unified',
+        intent: 'user'
+      },
+      timeoutMs: 15_000
+    })
+    expect(runtimeCall).toHaveBeenNthCalledWith(4, {
       selector: ENVIRONMENT_ID,
       method: 'session.tabs.list',
       params: {
@@ -994,16 +1026,21 @@ describe('closeWebRuntimeTerminal', () => {
   })
 
   it('delegates remote pane close to the host runtime', async () => {
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'close',
-      ok: true,
-      result: {
-        close: {
-          handle: 'terminal-1',
-          tabId: 'tab-1',
-          ptyKilled: true
-        }
+    const runtimeCall = vi.fn(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve(makeCompatibleStatusResponse())
       }
+      return Promise.resolve({
+        id: 'close',
+        ok: true,
+        result: {
+          close: {
+            handle: 'terminal-1',
+            tabId: 'tab-1',
+            ptyKilled: true
+          }
+        }
+      })
     })
     vi.stubGlobal('window', {
       api: {
@@ -1015,7 +1052,7 @@ describe('closeWebRuntimeTerminal', () => {
 
     expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(true)
 
-    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
     expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'web-env-1',
       method: 'terminal.close',
@@ -1024,6 +1061,125 @@ describe('closeWebRuntimeTerminal', () => {
       },
       timeoutMs: 15_000
     })
+  })
+
+  it('blocks a saved v4 client from closing through an older host contract', async () => {
+    clearRuntimeCompatibilityCacheForTests()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'old-runtime',
+        runtimeProtocolVersion: 3,
+        minCompatibleRuntimeClientVersion: 2
+      },
+      _meta: { runtimeId: 'old-runtime' }
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    expect(closeWebRuntimeTerminal('remote:web-env-1@@stale-terminal')).toBe(true)
+
+    await vi.waitFor(() => expect(warnSpy).toHaveBeenCalled())
+    expect(runtimeCall.mock.calls.map((call) => call[0].method)).toEqual(['status.get'])
+  })
+
+  it('delegates explicit whole-tab close through the generation-bound handle', async () => {
+    const runtimeCall = vi.fn(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve(makeCompatibleStatusResponse())
+      }
+      return Promise.resolve({
+        id: 'close-tab',
+        ok: true,
+        result: {
+          close: {
+            handle: 'terminal-1',
+            tabId: 'tab-1',
+            closeMode: 'tab',
+            ptyKilled: false
+          }
+        }
+      })
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    expect(
+      closeWebRuntimeTerminalTab({
+        environmentId: 'web-env-1',
+        worktreeId: WORKTREE_ID,
+        terminal: 'terminal-1'
+      })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'web-env-1',
+      method: 'terminal.closeTab',
+      params: { terminal: 'terminal-1' },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('restores the authoritative mirror when a generation-bound tab close is stale', async () => {
+    const snapshot = makeSnapshot()
+    const runtimeCall = vi.fn(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve(makeCompatibleStatusResponse())
+      }
+      if (method === 'terminal.closeTab') {
+        return Promise.reject(new Error('terminal_handle_stale'))
+      }
+      return Promise.resolve({ id: 'list', ok: true, result: snapshot })
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+    mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'restored' })
+    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
+      updater({ state: 'locally-pruned' })
+    })
+
+    expect(
+      closeWebRuntimeTerminalTab({
+        environmentId: 'web-env-1',
+        worktreeId: WORKTREE_ID,
+        terminal: 'terminal-stale'
+      })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(3))
+    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      'web-env-1',
+      WORKTREE_ID
+    )
+    expect(runtimeCall).toHaveBeenNthCalledWith(3, {
+      selector: 'web-env-1',
+      method: 'session.tabs.list',
+      params: { worktree: `id:${WORKTREE_ID}` },
+      timeoutMs: 15_000
+    })
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      { state: 'locally-pruned' },
+      snapshot,
+      'web-env-1'
+    )
   })
 
   it('ignores local panes but delegates remote runtime panes from desktop or web clients', async () => {

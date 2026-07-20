@@ -131,6 +131,10 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import {
+  buildTerminalTabRetirementPlan,
+  collectCurrentTerminalPtyIdsForTab
+} from '@/store/slices/terminal-tab-retirement'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
@@ -1910,7 +1914,27 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId }) => {
+      window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId, mirrorOnly, expectedPtyIds = [] }) => {
+        if (mirrorOnly) {
+          const state = useAppStore.getState()
+          const retirementPlan = buildTerminalTabRetirementPlan(state, tabId)
+          const currentPtyIds = new Set(collectCurrentTerminalPtyIdsForTab(state, tabId))
+          if (
+            currentPtyIds.size !== expectedPtyIds.length ||
+            expectedPtyIds.some((ptyId) => !currentPtyIds.has(ptyId))
+          ) {
+            return
+          }
+          // Why: main already committed the generation-checked provider
+          // teardown; renderer only prunes the matching local mirror.
+          closeTerminalTab(tabId, {
+            reason: 'pty-exit',
+            captureRecentlyClosed: false,
+            localPtyTeardownOwnedExternally: true,
+            precomputedRetirementPlan: retirementPlan
+          })
+          return
+        }
         if (paneRuntimeId != null) {
           // Why: route pane closes via the lifecycle hook for sibling promotion (falls through to closeTab on the last pane).
           const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
@@ -1924,33 +1948,53 @@ export function useIpcEvents(): void {
     // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
     if (window.api.ui.onTerminalTabCloseRequest) {
       unsubs.push(
-        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
-          let responded = false
-          const respond = (error?: string): void => {
-            if (responded) {
+        window.api.ui.onTerminalTabCloseRequest(
+          ({ requestId, tabId, validateOnly, expectedPtyIds = [] }) => {
+            let responded = false
+            const respond = (error?: string): void => {
+              if (responded) {
+                return
+              }
+              responded = true
+              window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+            }
+            if (validateOnly) {
+              const state = useAppStore.getState()
+              const retirementPlan = buildTerminalTabRetirementPlan(state, tabId)
+              const currentPtyIds = new Set(collectCurrentTerminalPtyIdsForTab(state, tabId))
+              if (!retirementPlan.worktreeId) {
+                respond('terminal_tab_not_found')
+              } else if (
+                currentPtyIds.size !== expectedPtyIds.length ||
+                expectedPtyIds.some((ptyId) => !currentPtyIds.has(ptyId))
+              ) {
+                respond('terminal_handle_stale')
+              } else if (isPinnedSessionTab(state, retirementPlan.worktreeId, tabId)) {
+                respond('terminal_tab_pinned')
+              } else {
+                respond()
+              }
               return
             }
-            responded = true
-            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+            closeTerminalTab(tabId, {
+              rejectPinned: true,
+              onCancel: () => respond('terminal_tab_pinned'),
+              onClosed: () => {
+                void (async () => {
+                  const state = useAppStore.getState()
+                  await persistWorkspaceSessionByHost(
+                    window.api.session,
+                    buildWorkspaceSessionPayload(state),
+                    state
+                  )
+                  respond()
+                })().catch((error: unknown) => {
+                  respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+                })
+              }
+            })
           }
-          closeTerminalTab(tabId, {
-            rejectPinned: true,
-            onCancel: () => respond('terminal_tab_pinned'),
-            onClosed: () => {
-              void (async () => {
-                const state = useAppStore.getState()
-                await persistWorkspaceSessionByHost(
-                  window.api.session,
-                  buildWorkspaceSessionPayload(state),
-                  state
-                )
-                respond()
-              })().catch((error: unknown) => {
-                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
-              })
-            }
-          })
-        })
+        )
       )
     }
 

@@ -428,10 +428,12 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not close host-owned terminal handles attached from session snapshots', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
-      leafId: 'pane:1'
+      leafId: 'pane:1',
+      onPtyExit
     })
 
     transport.attach({
@@ -450,14 +452,17 @@ describe('createRemoteRuntimePtyTransport', () => {
         method: 'terminal.close'
       })
     )
+    expect(onPtyExit).not.toHaveBeenCalled()
   })
 
   it('detaches laptop-created remote runtime terminals without closing the server session', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
-      leafId: 'pane:1'
+      leafId: 'pane:1',
+      onPtyExit
     })
 
     await transport.connect({ url: '', callbacks: {} })
@@ -471,6 +476,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         method: 'terminal.close'
       })
     )
+    expect(onPtyExit).not.toHaveBeenCalled()
   })
 
   it('keeps the regular TUI and draft through inventory failure and stale-handle reconnect', async () => {

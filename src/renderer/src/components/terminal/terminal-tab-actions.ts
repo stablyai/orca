@@ -5,15 +5,17 @@ import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import {
   activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
+  closeWebRuntimeTerminalTab,
   isWebRuntimeSessionActive,
   toHostSessionTabId
 } from '@/runtime/web-runtime-session'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
-import type {
-  TerminalTabCloseReason,
-  TerminalTabRetirementPlan
+import {
+  buildTerminalTabRetirementPlan,
+  type TerminalTabCloseReason,
+  type TerminalTabRetirementPlan
 } from '@/store/slices/terminal-tab-retirement'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 import {
@@ -96,15 +98,17 @@ export function closeTerminalTab(
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: a remote-owned worktree's tabs are host-authoritative, so the close
-    // MUST reach the host or its next snapshot re-adds the tab (the "close then
-    // snaps back" bug). When the local→host map has no entry, decode the id
-    // itself (toHostSessionTabId is a no-op for non-mirrored host ids like plain
-    // UUIDs) — mirroring what activate/move do. The old
-    // `isWebTerminalSurfaceTabId ? id : null` gate returned null for plain-UUID
-    // host tabs, so close silently fell back to a local-only prune and the host's
-    // next snapshot re-added the tab. A truly local id the host doesn't know is
-    // harmless: the host close no-ops and the local prune still stands.
+    const retirementPlan =
+      options?.precomputedRetirementPlan?.tabId === terminalTabId
+        ? options.precomputedRetirementPlan
+        : buildTerminalTabRetirementPlan(state, terminalTabId)
+    const runtimeTerminal =
+      retirementPlan.runtimeTerminals.find(
+        (terminal) => !terminal.environmentId || terminal.environmentId === runtimeEnvironmentId
+      ) ?? retirementPlan.runtimeTerminals[0]
+    // Why: pending surfaces have no generation-bound terminal handle yet. A
+    // user close may still dismiss them by host tab id, but lifecycle exits
+    // never send either destructive RPC.
     const hostBackedTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {
         environmentId: runtimeEnvironmentId,
@@ -122,15 +126,23 @@ export function closeTerminalTab(
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
         : {}),
-      ...(options?.precomputedRetirementPlan
-        ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
-        : {})
+      precomputedRetirementPlan: retirementPlan
     })
-    void closeWebRuntimeSessionTab({
-      worktreeId: owningWorktreeId,
-      tabId: hostBackedTabId,
-      environmentId: runtimeEnvironmentId
-    })
+    if (options?.reason !== 'pty-exit') {
+      if (runtimeTerminal) {
+        closeWebRuntimeTerminalTab({
+          environmentId: runtimeTerminal.environmentId ?? runtimeEnvironmentId,
+          worktreeId: owningWorktreeId,
+          terminal: runtimeTerminal.handle
+        })
+      } else {
+        void closeWebRuntimeSessionTab({
+          worktreeId: owningWorktreeId,
+          tabId: hostBackedTabId,
+          environmentId: runtimeEnvironmentId
+        })
+      }
+    }
     options?.onClosed?.()
     return
   }
@@ -213,13 +225,7 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
         continue
       }
       if (closeHostTerminalTabs) {
-        // Why: paired web tabs are host-owned; local-only bulk close leaves
-        // the host to re-publish the supposedly closed terminal tabs.
-        void closeWebRuntimeSessionTab({
-          worktreeId: activeWorktreeId,
-          tabId: tab.id,
-          environmentId: runtimeEnvironmentId
-        })
+        closeTerminalTab(tab.id)
       } else {
         state.closeTab(tab.id)
       }
@@ -256,13 +262,7 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
     }
     if (terminalIdSet.has(id)) {
       if (closeHostTerminalTabs) {
-        // Why: paired web tabs are host-owned; local-only bulk close leaves
-        // the host to re-publish the supposedly closed terminal tabs.
-        void closeWebRuntimeSessionTab({
-          worktreeId: activeWorktreeId,
-          tabId: id,
-          environmentId: runtimeEnvironmentId
-        })
+        closeTerminalTab(id)
       } else {
         state.closeTab(id)
       }

@@ -2910,7 +2910,12 @@ export type PreloadApi = {
     ) => () => void
     respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse) => void
     onCloseTerminal: (
-      callback: (data: { tabId: string; paneRuntimeId?: number }) => void
+      callback: (data: {
+        tabId: string
+        paneRuntimeId?: number
+        mirrorOnly?: boolean
+        expectedPtyIds?: string[]
+      }) => void
     ) => () => void
     onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
     respondTerminalTabClose: (response: TerminalTabCloseResponse) => void

@@ -76,6 +76,22 @@ function collectPtyIdsForTab(
   return [...ids]
 }
 
+export function collectCurrentTerminalPtyIdsForTab(
+  state: TerminalTabRetirementState,
+  tabId: string
+): string[] {
+  const owner = collectLiveTerminalTabs(state).get(tabId)
+  const ids = new Set<string>()
+  for (const ptyId of state.ptyIdsByTabId[tabId] ?? []) {
+    appendPtyId(ids, ptyId)
+  }
+  appendPtyId(ids, owner?.rowPtyId)
+  for (const ptyId of Object.values(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})) {
+    appendPtyId(ids, ptyId)
+  }
+  return [...ids]
+}
+
 function collectLiveTerminalTabs(
   state: TerminalTabRetirementState
 ): Map<string, { worktreeId: string; rowPtyId: string | null }> {

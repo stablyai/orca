@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import {
   ActivateTab,
+  CloseTab,
   CreateTerminalTab,
   MoveTab,
   SaveMarkdownTab,
@@ -34,7 +35,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'session.tabs.close',
-    params: ActivateTab,
+    params: CloseTab,
     handler: async (params, { runtime }) =>
       runtime.closeMobileSessionTab(params.worktree, params.tabId)
   }),

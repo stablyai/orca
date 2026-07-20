@@ -3,6 +3,7 @@ import type { Repo } from '../../../../shared/types'
 import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { createTestStore } from './store-test-helpers'
 
 const remoteRepo: Repo = {
@@ -21,21 +22,16 @@ const runtimeEnvironmentTransportCall = vi.fn()
 let runtimeCapabilities: string[] = []
 
 function runtimeStatusWithoutProjectHostSetup() {
+  const response = createCompatibleRuntimeStatusResponse('runtime-remote')
+  if (!response.ok) {
+    throw new Error('compatible runtime fixture must succeed')
+  }
   return {
-    id: 'status',
-    ok: true,
+    ...response,
     result: {
-      runtimeId: 'runtime-remote',
-      rendererGraphEpoch: 0,
-      graphStatus: 'ready',
-      authoritativeWindowId: null,
-      liveTabCount: 0,
-      liveLeafCount: 0,
-      runtimeProtocolVersion: 3,
-      minCompatibleRuntimeClientVersion: 2,
+      ...response.result,
       capabilities: runtimeCapabilities
-    },
-    _meta: { runtimeId: 'runtime-remote' }
+    }
   }
 }
 

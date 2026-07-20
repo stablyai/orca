@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../../shared/protocol-version'
+import {
   buildSidebarHostOptions,
   buildSidebarHostScopeOptions,
   getSidebarHostVisibilityLabel,
@@ -155,8 +159,8 @@ describe('sidebar host options', () => {
               authoritativeWindowId: null,
               liveTabCount: 0,
               liveLeafCount: 0,
-              runtimeProtocolVersion: 3,
-              minCompatibleRuntimeClientVersion: 3
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
           }
         ]

@@ -876,14 +876,12 @@ export function createRemoteRuntimePtyTransport(
       }
       connected = false
       clearPendingViewportClaim()
-      const id = remotePtyId
       closeMultiplexedStream()
       handle = null
       remotePtyId = null
       storedCallbacks.onDisconnect?.()
-      if (id) {
-        onPtyExit?.(id)
-      }
+      // Why: this transport only owns a viewer. Runtime switches and pane
+      // unmounts must unsubscribe without masquerading as host PTY exit.
     },
 
     detach() {

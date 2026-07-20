@@ -2818,9 +2818,19 @@ describe('useIpcEvents browser tab close routing', () => {
     worktreeId?: string
   }) => void
   type CloseActiveTabListener = () => void
-  type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
+  type CloseTerminalListener = (data: {
+    tabId: string
+    paneRuntimeId?: number | null
+    mirrorOnly?: boolean
+    expectedPtyIds?: string[]
+  }) => void
   type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
-  type TerminalTabCloseRequestListener = (data: { requestId: string; tabId: string }) => void
+  type TerminalTabCloseRequestListener = (data: {
+    requestId: string
+    tabId: string
+    validateOnly?: boolean
+    expectedPtyIds?: string[]
+  }) => void
 
   async function useIpcEventsForCloseRouting({
     closeActiveTabListenerRef,
@@ -3130,6 +3140,147 @@ describe('useIpcEvents browser tab close routing', () => {
     closeTerminalListenerRef.current?.({ tabId: 'terminal-1' })
 
     expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('prunes only the exact renderer mirror after main commits terminal teardown', async () => {
+    const closeTerminalListenerRef: { current: CloseTerminalListener | null } = { current: null }
+    await useIpcEventsForCloseRouting({
+      closeTerminalListenerRef,
+      getState: () => ({
+        settings: { activeRuntimeEnvironmentId: null, terminalFontSize: 13 },
+        tabsByWorktree: { 'wt-1': [{ id: 'terminal-1', ptyId: 'pty-1' }] },
+        ptyIdsByTabId: { 'terminal-1': ['pty-1'] },
+        terminalLayoutsByTabId: { 'terminal-1': { ptyIdsByLeafId: { leaf: 'pty-1' } } },
+        lastKnownRelayPtyIdByTabId: { 'terminal-1': 'pty-retained-alias' },
+        deferredSshSessionIdsByTabId: {},
+        pendingReconnectPtyIdByTabId: {}
+      })
+    })
+
+    closeTerminalListenerRef.current?.({
+      tabId: 'terminal-1',
+      mirrorOnly: true,
+      expectedPtyIds: ['pty-1']
+    })
+
+    expect(closeTerminalTabMock).toHaveBeenCalledWith(
+      'terminal-1',
+      expect.objectContaining({
+        reason: 'pty-exit',
+        captureRecentlyClosed: false,
+        localPtyTeardownOwnedExternally: true
+      })
+    )
+  })
+
+  it('ignores a mirror prune after the renderer binding has changed', async () => {
+    const closeTerminalListenerRef: { current: CloseTerminalListener | null } = { current: null }
+    await useIpcEventsForCloseRouting({
+      closeTerminalListenerRef,
+      getState: () => ({
+        settings: { activeRuntimeEnvironmentId: null, terminalFontSize: 13 },
+        tabsByWorktree: { 'wt-1': [{ id: 'terminal-1', ptyId: 'pty-replacement' }] },
+        ptyIdsByTabId: { 'terminal-1': ['pty-replacement'] },
+        terminalLayoutsByTabId: {
+          'terminal-1': { ptyIdsByLeafId: { leaf: 'pty-replacement' } }
+        },
+        lastKnownRelayPtyIdByTabId: { 'terminal-1': 'pty-retained-alias' },
+        deferredSshSessionIdsByTabId: {},
+        pendingReconnectPtyIdByTabId: {}
+      })
+    })
+
+    closeTerminalListenerRef.current?.({
+      tabId: 'terminal-1',
+      mirrorOnly: true,
+      expectedPtyIds: ['pty-old']
+    })
+
+    expect(closeTerminalTabMock).not.toHaveBeenCalled()
+  })
+
+  it('validates an exact unpinned terminal binding without mutating renderer state', async () => {
+    const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+    const respondTerminalTabClose = vi.fn()
+    await useIpcEventsForCloseRouting({
+      getState: () => ({
+        tabsByWorktree: { 'wt-1': [{ id: 'terminal-1', ptyId: 'pty-1' }] },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'unified-terminal-1',
+              entityId: 'terminal-1',
+              contentType: 'terminal',
+              isPinned: false
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'terminal-1': ['pty-1'] },
+        terminalLayoutsByTabId: {
+          'terminal-1': { ptyIdsByLeafId: { leaf: 'pty-1' } }
+        },
+        lastKnownRelayPtyIdByTabId: { 'terminal-1': 'pty-retained-alias' },
+        deferredSshSessionIdsByTabId: {},
+        pendingReconnectPtyIdByTabId: {}
+      }),
+      terminalTabCloseRequestListenerRef: listenerRef,
+      respondTerminalTabClose,
+      persistWorkspaceSession
+    })
+
+    listenerRef.current?.({
+      requestId: 'validate-1',
+      tabId: 'terminal-1',
+      validateOnly: true,
+      expectedPtyIds: ['pty-1']
+    })
+
+    expect(respondTerminalTabClose).toHaveBeenCalledWith({ requestId: 'validate-1' })
+    expect(closeTerminalTabMock).not.toHaveBeenCalled()
+    expect(persistWorkspaceSession).not.toHaveBeenCalled()
+  })
+
+  it('rejects validation when the renderer terminal binding has changed', async () => {
+    const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    const respondTerminalTabClose = vi.fn()
+    await useIpcEventsForCloseRouting({
+      getState: () => ({
+        tabsByWorktree: { 'wt-1': [{ id: 'terminal-1', ptyId: 'pty-replacement' }] },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'unified-terminal-1',
+              entityId: 'terminal-1',
+              contentType: 'terminal',
+              isPinned: false
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'terminal-1': ['pty-replacement'] },
+        terminalLayoutsByTabId: {
+          'terminal-1': { ptyIdsByLeafId: { leaf: 'pty-replacement' } }
+        },
+        lastKnownRelayPtyIdByTabId: {},
+        deferredSshSessionIdsByTabId: {},
+        pendingReconnectPtyIdByTabId: {}
+      }),
+      terminalTabCloseRequestListenerRef: listenerRef,
+      respondTerminalTabClose
+    })
+
+    listenerRef.current?.({
+      requestId: 'validate-stale',
+      tabId: 'terminal-1',
+      validateOnly: true,
+      expectedPtyIds: ['pty-old']
+    })
+
+    expect(respondTerminalTabClose).toHaveBeenCalledWith({
+      requestId: 'validate-stale',
+      error: 'terminal_handle_stale'
+    })
+    expect(closeTerminalTabMock).not.toHaveBeenCalled()
   })
 
   it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {

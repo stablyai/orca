@@ -155,6 +155,7 @@ import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
+import { retireTerminalLeafInWorkspaceSession } from '../../shared/workspace-session-terminal-leaf-retirement'
 import type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,
@@ -1445,8 +1446,15 @@ type RuntimeNotifier = {
     baseVersion: string,
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
-  closeTerminal(tabId: string, paneRuntimeId?: number): void
-  closeTerminalTab?(tabId: string): Promise<void>
+  closeTerminal(
+    tabId: string,
+    paneRuntimeId?: number,
+    options?: { mirrorOnly?: boolean; expectedPtyIds?: string[] }
+  ): void
+  closeTerminalTab?(
+    tabId: string,
+    options?: { validateOnly?: boolean; expectedPtyIds?: string[] }
+  ): Promise<void>
   sleepWorktree(worktreeId: string): void
   // Why: a phone opening a worktree wakes its slept agents by asking the host
   // renderer to run its own navigation-free wake (experimental agent sleep);
@@ -1478,6 +1486,18 @@ type TerminalHandleRecord = {
   leafId: string
   ptyId: string | null
   ptyGeneration: number
+}
+
+type RuntimeOwnedPtyExitCandidate = {
+  ptyId: string
+  worktreeId: string
+  parentTabId: string
+  leafId: string
+  lifecycleGeneration: number
+}
+
+type RuntimeTerminalTabCloseExpectation = RuntimeOwnedPtyExitCandidate & {
+  handle: string
 }
 
 type TerminalWaiter = {
@@ -2265,6 +2285,7 @@ export class OrcaRuntimeService {
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
+  private retiredRuntimeOwnedTerminalBindings = new Map<string, RuntimeOwnedPtyExitCandidate>()
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
@@ -3370,7 +3391,7 @@ export class OrcaRuntimeService {
     }
 
     this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
-    this.syncMobileSessionTabs(graph.mobileSessionTabs)
+    this.syncMobileSessionTabs(graph.mobileSessionTabs, graph.leaves)
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()
 
@@ -4846,12 +4867,19 @@ export class OrcaRuntimeService {
     })
   }
 
-  async closeMobileSessionTab(worktreeSelector: string, tabId: string): Promise<{ closed: true }> {
+  async closeMobileSessionTab(
+    worktreeSelector: string,
+    tabId: string,
+    expected?: RuntimeTerminalTabCloseExpectation
+  ): Promise<{ closed: true }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     await this.refreshMobileSessionPtyRecords()
+    if (expected) {
+      this.assertCurrentTerminalTabCloseExpectation(expected)
+    }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab =
       snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
@@ -4869,6 +4897,61 @@ export class OrcaRuntimeService {
         (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
       ).length
       const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      if (closingWholeParent && expected) {
+        if (
+          snapshot!.tabs.some(
+            (candidate) =>
+              candidate.type === 'terminal' &&
+              candidate.parentTabId === tab.parentTabId &&
+              candidate.isPinned
+          )
+        ) {
+          throw new Error('terminal_tab_pinned')
+        }
+        const expectedBindings = this.captureTerminalParentCloseBindings(
+          worktreeId,
+          snapshot!,
+          tab.parentTabId
+        )
+        if (!expectedBindings.some((binding) => binding.ptyId === expected.ptyId)) {
+          throw new Error('terminal_handle_stale')
+        }
+        this.assertCurrentTerminalParentCloseBindings(expectedBindings)
+        if (this.tabs.has(tab.parentTabId) && this.notifier?.closeTerminalTab) {
+          // Why: renderer validation reads the live pin and exact mirror set but
+          // mutates nothing; main remains the sole destructive transaction owner.
+          await this.notifier.closeTerminalTab(tab.parentTabId, {
+            validateOnly: true,
+            expectedPtyIds: expectedBindings.map((binding) => binding.ptyId)
+          })
+          await this.refreshMobileSessionPtyRecords()
+          this.assertCurrentTerminalParentCloseBindings(expectedBindings)
+          this.closeHeadlessMobileTerminalTab(
+            worktreeId,
+            snapshot!,
+            tab,
+            expectedBindings.map((binding) => binding.ptyId)
+          )
+          this.notifyRendererOfHeadlessTerminalClose(
+            tab.parentTabId,
+            expectedBindings.map((binding) => binding.ptyId)
+          )
+          return { closed: true }
+        }
+        // Why: generation authority lives in main. Headless tabs have no live
+        // renderer transaction, so main commits durability before provider teardown.
+        this.closeHeadlessMobileTerminalTab(
+          worktreeId,
+          snapshot!,
+          tab,
+          expectedBindings.map((binding) => binding.ptyId)
+        )
+        this.notifyRendererOfHeadlessTerminalClose(
+          tab.parentTabId,
+          expectedBindings.map((binding) => binding.ptyId)
+        )
+        return { closed: true }
+      }
       // Why: a runtime-owned headless tab is absent from renderer state, so the
       // closeTerminalTab relay below would ack success without killing its PTY,
       // and syncMobileSessionTabs would republish the "closed" tab. Only bypass
@@ -4877,7 +4960,6 @@ export class OrcaRuntimeService {
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
         this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
-        this.store?.flushOrThrow?.()
         return { closed: true }
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
@@ -4891,12 +4973,10 @@ export class OrcaRuntimeService {
       if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
         this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
-        this.store?.flushOrThrow?.()
         return { closed: true }
       }
       if (!this.notifier?.closeTerminal) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
-        this.store?.flushOrThrow?.()
         return { closed: true }
       }
       if (tab.id === tabId) {
@@ -4923,11 +5003,105 @@ export class OrcaRuntimeService {
     return { closed: true }
   }
 
-  private notifyRendererOfHeadlessTerminalClose(parentTabId: string): void {
+  private captureTerminalParentCloseBindings(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    parentTabId: string
+  ): RuntimeOwnedPtyExitCandidate[] {
+    const bindings = new Map<string, RuntimeOwnedPtyExitCandidate>()
+    for (const tab of snapshot.tabs) {
+      if (tab.type !== 'terminal' || tab.parentTabId !== parentTabId) {
+        continue
+      }
+      const liveLeaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
+      const pty =
+        liveLeaf?.connected && liveLeaf.ptyId
+          ? (this.ptysById.get(liveLeaf.ptyId) ?? null)
+          : this.findPtyForMobileTerminalTab(worktreeId, tab)
+      const pane = parsePaneKey(pty?.paneKey ?? '')
+      if (!pty?.connected || !pane || pane.tabId !== parentTabId || pane.leafId !== tab.leafId) {
+        continue
+      }
+      const binding: RuntimeOwnedPtyExitCandidate = {
+        ptyId: pty.ptyId,
+        worktreeId,
+        parentTabId,
+        leafId: tab.leafId,
+        lifecycleGeneration: this.getPtyLifecycleGeneration(pty.ptyId)
+      }
+      const prior = bindings.get(pty.ptyId)
+      if (prior && prior.leafId !== binding.leafId) {
+        throw new Error('terminal_handle_stale')
+      }
+      bindings.set(pty.ptyId, binding)
+    }
+    return [...bindings.values()]
+  }
+
+  private assertCurrentTerminalParentCloseBindings(
+    expectedBindings: readonly RuntimeOwnedPtyExitCandidate[]
+  ): void {
+    const expectedKeys = new Set(
+      expectedBindings.map((binding) =>
+        JSON.stringify([binding.ptyId, binding.leafId, binding.lifecycleGeneration])
+      )
+    )
+    for (const expected of expectedBindings) {
+      const pty = this.ptysById.get(expected.ptyId)
+      const pane = parsePaneKey(pty?.paneKey ?? '')
+      if (
+        !pty?.connected ||
+        pty.worktreeId !== expected.worktreeId ||
+        pty.tabId !== expected.parentTabId ||
+        pane?.tabId !== expected.parentTabId ||
+        pane.leafId !== expected.leafId ||
+        this.getPtyLifecycleGeneration(expected.ptyId) !== expected.lifecycleGeneration
+      ) {
+        throw new Error('terminal_handle_stale')
+      }
+    }
+    const first = expectedBindings[0]
+    if (!first) {
+      throw new Error('terminal_handle_stale')
+    }
+    const currentKeys = new Set<string>()
+    for (const pty of this.ptysById.values()) {
+      if (
+        !pty.connected ||
+        pty.worktreeId !== first.worktreeId ||
+        pty.tabId !== first.parentTabId
+      ) {
+        continue
+      }
+      const pane = parsePaneKey(pty.paneKey ?? '')
+      if (!pane || pane.tabId !== first.parentTabId) {
+        throw new Error('terminal_handle_stale')
+      }
+      currentKeys.add(
+        JSON.stringify([pty.ptyId, pane.leafId, this.getPtyLifecycleGeneration(pty.ptyId)])
+      )
+    }
+    if (currentKeys.size !== expectedKeys.size) {
+      throw new Error('terminal_handle_stale')
+    }
+    for (const key of currentKeys) {
+      if (!expectedKeys.has(key)) {
+        throw new Error('terminal_handle_stale')
+      }
+    }
+  }
+
+  private notifyRendererOfHeadlessTerminalClose(
+    parentTabId: string,
+    expectedPtyIds: string[] = []
+  ): void {
     // Why: this relay is advisory after main owns teardown; renderer failure must
     // not prevent the authoritative session flush or turn the close into failure.
     try {
-      this.notifier?.closeTerminal(parentTabId)
+      this.notifier?.closeTerminal(parentTabId, undefined, {
+        mirrorOnly: true,
+        expectedPtyIds
+      })
     } catch (error) {
       console.warn('[runtime] failed to notify renderer after headless terminal close', {
         parentTabId,
@@ -5026,14 +5200,35 @@ export class OrcaRuntimeService {
   private closeHeadlessMobileTerminalTab(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    authoritativePtyIds: readonly string[] = []
   ): void {
     const closedParentTabId = tab.parentTabId
+    const priorSession = this.store?.getWorkspaceSession?.()
     const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
+    try {
+      this.store?.flushOrThrow?.()
+    } catch (error) {
+      // Why: provider teardown must never outrun durable explicit-close state.
+      // Restore the in-memory session when the flush refuses the transaction.
+      if (priorSession) {
+        this.store?.setWorkspaceSession?.(priorSession)
+      }
+      throw error
+    }
     // Why: local provider ids can be reused after restart, so a dormant
     // persisted id is not kill authority. SSH relay ids remain durable exact
     // identities even before pane metadata reconnects.
-    const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
+    const exclusiveAuthoritativePtyIds = authoritativePtyIds.filter(
+      (ptyId) =>
+        !this.terminalPtyHasOtherOwner(priorSession, snapshot, worktreeId, closedParentTabId, ptyId)
+    )
+    const exclusiveProjectedSshPtyIds = projectedPtyIds.filter(
+      (ptyId) =>
+        parseAppSshPtyId(ptyId) &&
+        !this.terminalPtyHasOtherOwner(priorSession, snapshot, worktreeId, closedParentTabId, ptyId)
+    )
+    const ptyIdsToKill = new Set([...exclusiveAuthoritativePtyIds, ...exclusiveProjectedSshPtyIds])
     for (const candidate of snapshot.tabs) {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         continue
@@ -5056,12 +5251,57 @@ export class OrcaRuntimeService {
     for (const ptyId of ptyIdsToKill) {
       this.ptyController?.kill(ptyId)
     }
-    const nextTabs = snapshot.tabs.filter((candidate) => {
-      if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
-        return true
-      }
+    this.removeTerminalParentFromMobileSnapshot(worktreeId, snapshot, closedParentTabId)
+  }
+
+  private terminalPtyHasOtherOwner(
+    session: WorkspaceSessionState | undefined,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    worktreeId: string,
+    parentTabId: string,
+    ptyId: string
+  ): boolean {
+    if (
+      snapshot.tabs.some(
+        (tab) =>
+          tab.type === 'terminal' &&
+          tab.parentTabId !== parentTabId &&
+          (tab.ptyId === ptyId ||
+            Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).includes(ptyId))
+      )
+    ) {
+      return true
+    }
+    if (!session) {
       return false
-    })
+    }
+    for (const [ownerWorktreeId, tabs] of Object.entries(session.tabsByWorktree)) {
+      for (const tab of tabs) {
+        if (ownerWorktreeId === worktreeId && tab.id === parentTabId) {
+          continue
+        }
+        if (
+          tab.ptyId === ptyId ||
+          session.remoteSessionIdsByTabId?.[tab.id] === ptyId ||
+          Object.values(session.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).includes(
+            ptyId
+          )
+        ) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+
+  private removeTerminalParentFromMobileSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    parentTabId: string
+  ): void {
+    const nextTabs = snapshot.tabs.filter(
+      (candidate) => candidate.type !== 'terminal' || candidate.parentTabId !== parentTabId
+    )
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
@@ -9244,7 +9484,156 @@ export class OrcaRuntimeService {
     }
   }
 
+  private getRuntimeOwnedTerminalBindingKey(
+    binding: Pick<RuntimeOwnedPtyExitCandidate, 'worktreeId' | 'parentTabId' | 'leafId' | 'ptyId'>
+  ): string {
+    return JSON.stringify([binding.worktreeId, binding.parentTabId, binding.leafId, binding.ptyId])
+  }
+
+  private captureRuntimeOwnedPtyExitCandidate(ptyId: string): RuntimeOwnedPtyExitCandidate | null {
+    const pty = this.ptysById.get(ptyId)
+    const pane = parsePaneKey(pty?.paneKey ?? '')
+    const parentTabId = pty?.tabId ?? pane?.tabId ?? null
+    if (!pty || !pane || !parentTabId || pane.tabId !== parentTabId) {
+      return null
+    }
+    const persistedLayout = this.store?.getWorkspaceSession?.()?.terminalLayoutsByTabId[parentTabId]
+    if (persistedLayout?.ptyIdsByLeafId?.[pane.leafId] !== ptyId) {
+      return null
+    }
+    const snapshotTab = this.mobileSessionTabsByWorktree
+      .get(pty.worktreeId)
+      ?.tabs.find(
+        (tab): tab is RuntimeMobileSessionTerminalTab =>
+          tab.type === 'terminal' &&
+          tab.parentTabId === parentTabId &&
+          tab.leafId === pane.leafId &&
+          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[pane.leafId] === ptyId)
+      )
+    const runtimeOwned = snapshotTab
+      ? this.isRuntimeOwnedHeadlessMobileTab(pty.worktreeId, snapshotTab)
+      : this.isServeOrSshOwnedPtyId(ptyId) || !this.tabs.has(parentTabId)
+    if (!runtimeOwned) {
+      return null
+    }
+    return {
+      ptyId,
+      worktreeId: pty.worktreeId,
+      parentTabId,
+      leafId: pane.leafId,
+      lifecycleGeneration: this.getPtyLifecycleGeneration(ptyId)
+    }
+  }
+
+  private retireRuntimeOwnedPtyExit(candidate: RuntimeOwnedPtyExitCandidate): boolean {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return false
+    }
+    const retirement = retireTerminalLeafInWorkspaceSession(session, candidate.worktreeId, {
+      parentTabId: candidate.parentTabId,
+      leafId: candidate.leafId,
+      expectedPtyId: candidate.ptyId
+    })
+    if (!retirement.retired) {
+      return false
+    }
+    try {
+      this.store.setWorkspaceSession(retirement.session)
+      this.store.flushOrThrow?.()
+    } catch (error) {
+      // Why: publication must never outrun durable headless ownership; restore
+      // the prior in-memory session when persistence refuses the retirement.
+      this.store.setWorkspaceSession(session)
+      throw error
+    }
+    this.retiredRuntimeOwnedTerminalBindings.set(
+      this.getRuntimeOwnedTerminalBindingKey(candidate),
+      candidate
+    )
+    if (this.retiredRuntimeOwnedTerminalBindings.size > 512) {
+      const oldest = this.retiredRuntimeOwnedTerminalBindings.keys().next().value
+      if (oldest) {
+        this.retiredRuntimeOwnedTerminalBindings.delete(oldest)
+      }
+    }
+
+    const snapshot = this.mobileSessionTabsByWorktree.get(candidate.worktreeId)
+    if (!snapshot) {
+      return true
+    }
+    const isExitedSurface = (tab: RuntimeMobileSessionSnapshotTab): boolean =>
+      tab.type === 'terminal' &&
+      tab.parentTabId === candidate.parentTabId &&
+      tab.leafId === candidate.leafId &&
+      (tab.ptyId === candidate.ptyId ||
+        tab.parentLayout?.ptyIdsByLeafId?.[candidate.leafId] === candidate.ptyId)
+    const removedWasActive = snapshot.tabs.some(
+      (tab) => isExitedSurface(tab) && tab.id === snapshot.activeTabId
+    )
+    const persistedLayout = retirement.session.terminalLayoutsByTabId[candidate.parentTabId]
+    let nextTabs = snapshot.tabs
+      .filter((tab) => !isExitedSurface(tab))
+      .map((tab) =>
+        tab.type === 'terminal' && tab.parentTabId === candidate.parentTabId && persistedLayout
+          ? { ...tab, parentLayout: this.cloneTerminalLayoutSnapshot(persistedLayout) }
+          : tab
+      )
+    const active =
+      (!removedWasActive
+        ? nextTabs.find((tab) => tab.id === snapshot.activeTabId)
+        : nextTabs.find(
+            (tab) => tab.type === 'terminal' && tab.parentTabId === candidate.parentTabId
+          )) ??
+      nextTabs.find((tab) => tab.isActive) ??
+      nextTabs[0] ??
+      null
+    nextTabs = nextTabs.map((tab) => ({ ...tab, isActive: tab.id === active?.id }))
+    const parentStillPresent = nextTabs.some(
+      (tab) => tab.type === 'terminal' && tab.parentTabId === candidate.parentTabId
+    )
+    const tabGroups = (snapshot.tabGroups ?? [])
+      .map((group) => {
+        const tabOrder = parentStillPresent
+          ? group.tabOrder
+          : group.tabOrder.filter((id) => id !== candidate.parentTabId)
+        return {
+          ...group,
+          tabOrder,
+          activeTabId:
+            group.activeTabId && tabOrder.includes(group.activeTabId)
+              ? group.activeTabId
+              : (tabOrder[0] ?? null)
+        }
+      })
+      .filter((group) => group.tabOrder.length > 0)
+    const pureHeadless =
+      snapshot.publicationEpoch.startsWith('headless:') ||
+      snapshot.publicationEpoch.startsWith('headless-hydrated:')
+    const preservedTabs = nextTabs.filter(
+      (tab) => tab.type === 'terminal' && this.hasServeOwnedPtyBinding(tab)
+    )
+    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
+      ...snapshot,
+      publicationEpoch: pureHeadless
+        ? `headless:${Date.now().toString(36)}`
+        : this.getMergedMobileSessionPublicationEpoch(snapshot, preservedTabs),
+      snapshotVersion: pureHeadless ? snapshot.snapshotVersion + 1 : snapshot.snapshotVersion,
+      activeGroupId: tabGroups.some((group) => group.id === snapshot.activeGroupId)
+        ? snapshot.activeGroupId
+        : (tabGroups[0]?.id ?? null),
+      activeTabId: active?.id ?? null,
+      activeTabType: active?.type ?? null,
+      tabGroups,
+      tabs: nextTabs
+    }
+    this.mobileSessionTabsByWorktree.set(candidate.worktreeId, nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    return true
+  }
+
   onPtyExit(ptyId: string, exitCode: number): void {
+    const runtimeOwnedExit = this.captureRuntimeOwnedPtyExitCandidate(ptyId)
     this.advancePtyLifecycleGeneration(ptyId)
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
@@ -9326,7 +9715,6 @@ export class OrcaRuntimeService {
       pty.lastExitCode = exitCode
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
-      this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     }
 
     for (const leaf of this.getLeavesForPty(ptyId)) {
@@ -9336,6 +9724,26 @@ export class OrcaRuntimeService {
       leaf.lastExitCode = exitCode
       this.resolveExitWaiters(leaf)
       this.failActiveDispatchOnExit(leaf, exitCode)
+    }
+    if (runtimeOwnedExit) {
+      try {
+        this.retireRuntimeOwnedPtyExit(runtimeOwnedExit)
+      } catch (error) {
+        console.warn('[runtime] failed to retire exited headless terminal leaf:', error)
+      }
+    } else {
+      for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
+        const containsExitedPty = snapshot.tabs.some(
+          (tab) =>
+            tab.type === 'terminal' &&
+            (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+        )
+        if (containsExitedPty) {
+          // Why: renderer graph versions remain source-owned. The exit event
+          // may refresh derived readiness, but must not forge a newer revision.
+          this.emitMobileSessionTabsSnapshot(snapshot)
+        }
+      }
     }
     this.pruneDisconnectedPtyRecords()
   }
@@ -20121,10 +20529,20 @@ export class OrcaRuntimeService {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const tabId = pty.pty.tabId
-      if (!tabId) {
-        throw new Error('terminal_tab_not_found')
+      const pane = parsePaneKey(pty.pty.paneKey ?? '')
+      if (!tabId || !pane || pane.tabId !== tabId) {
+        throw new Error('terminal_handle_stale')
       }
-      await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId)
+      const expected: RuntimeTerminalTabCloseExpectation = {
+        handle,
+        ptyId: pty.pty.ptyId,
+        worktreeId: pty.pty.worktreeId,
+        parentTabId: tabId,
+        leafId: pane.leafId,
+        lifecycleGeneration: pty.record.ptyGeneration
+      }
+      this.assertCurrentTerminalTabCloseExpectation(expected)
+      await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, expected)
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       return { handle, tabId, closeMode: 'tab', ptyKilled: false }
     }
@@ -20133,6 +20551,43 @@ export class OrcaRuntimeService {
     await this.closeMobileSessionTab(`id:${leaf.worktreeId}`, leaf.tabId)
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     return { handle, tabId: leaf.tabId, closeMode: 'tab', ptyKilled: false }
+  }
+
+  private assertCurrentTerminalTabCloseExpectation(
+    expected: RuntimeTerminalTabCloseExpectation
+  ): void {
+    const record = this.handles.get(expected.handle)
+    const pty = this.ptysById.get(expected.ptyId)
+    const pane = parsePaneKey(pty?.paneKey ?? '')
+    const snapshot = this.mobileSessionTabsByWorktree.get(expected.worktreeId)
+    const surface = snapshot?.tabs.find(
+      (tab): tab is RuntimeMobileSessionTerminalTab =>
+        tab.type === 'terminal' &&
+        tab.parentTabId === expected.parentTabId &&
+        tab.leafId === expected.leafId
+    )
+    const publicSurface =
+      snapshot && surface
+        ? this.toMobileSessionTabsResult({ ...snapshot, tabs: [surface] }).tabs[0]
+        : null
+    if (
+      !record ||
+      record.ptyId !== expected.ptyId ||
+      record.ptyGeneration !== expected.lifecycleGeneration ||
+      !pty?.connected ||
+      pty.worktreeId !== expected.worktreeId ||
+      pty.tabId !== expected.parentTabId ||
+      pane?.tabId !== expected.parentTabId ||
+      pane.leafId !== expected.leafId ||
+      this.getPtyLifecycleGeneration(expected.ptyId) !== expected.lifecycleGeneration ||
+      publicSurface?.type !== 'terminal' ||
+      publicSurface.status !== 'ready' ||
+      publicSurface.terminal !== expected.handle
+    ) {
+      // Why: a disconnected generation can retain the same tab/leaf names
+      // after a replacement binds there; whole-tab close must fail closed.
+      throw new Error('terminal_handle_stale')
+    }
   }
 
   async splitTerminal(
@@ -22008,7 +22463,10 @@ export class OrcaRuntimeService {
     }
   }
 
-  private syncMobileSessionTabs(snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined): void {
+  private syncMobileSessionTabs(
+    snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined,
+    incomingLeaves: readonly RuntimeSyncedLeaf[]
+  ): void {
     if (snapshots === undefined) {
       return
     }
@@ -22021,7 +22479,12 @@ export class OrcaRuntimeService {
     for (const snapshot of snapshots) {
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
-      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(snapshot, existing)
+      const filteredSnapshot = this.filterRetiredRuntimeOwnedTerminalTabs(
+        snapshot,
+        existing,
+        incomingLeaves
+      )
+      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(filteredSnapshot, existing)
       if (
         !existing ||
         nextSnapshot.publicationEpoch !== existing.publicationEpoch ||
@@ -22044,6 +22507,140 @@ export class OrcaRuntimeService {
         }
       }
     }
+  }
+
+  private filterRetiredRuntimeOwnedTerminalTabs(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    existing: RuntimeMobileSessionTabsSnapshot | undefined,
+    incomingLeaves: readonly RuntimeSyncedLeaf[]
+  ): RuntimeMobileSessionTabsSnapshot {
+    const incomingRendererBindings = new Set(
+      incomingLeaves
+        .filter((leaf) => leaf.worktreeId === snapshot.worktree && leaf.ptyId)
+        .map((leaf) =>
+          this.getRuntimeOwnedTerminalBindingKey({
+            worktreeId: leaf.worktreeId,
+            parentTabId: leaf.tabId,
+            leafId: leaf.leafId,
+            ptyId: leaf.ptyId!
+          })
+        )
+    )
+    const authoritativePersistedPtyByPane = new Map<string, string>()
+    for (const tab of existing?.tabs ?? []) {
+      if (tab.type !== 'terminal') {
+        continue
+      }
+      const ptyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? null
+      if (!ptyId) {
+        continue
+      }
+      const binding = {
+        worktreeId: snapshot.worktree,
+        parentTabId: tab.parentTabId,
+        leafId: tab.leafId,
+        ptyId
+      }
+      if (
+        this.isLivePersistedTerminalBinding(binding) ||
+        this.isPersistedRuntimeOwnedTerminalBinding(binding)
+      ) {
+        authoritativePersistedPtyByPane.set(JSON.stringify([tab.parentTabId, tab.leafId]), ptyId)
+      }
+    }
+    const tabs = snapshot.tabs.filter((tab) => {
+      if (tab.type !== 'terminal') {
+        return true
+      }
+      const boundPtyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? null
+      const authoritativePersistedPtyId = authoritativePersistedPtyByPane.get(
+        JSON.stringify([tab.parentTabId, tab.leafId])
+      )
+      const incomingBindingKey = boundPtyId
+        ? this.getRuntimeOwnedTerminalBindingKey({
+            worktreeId: snapshot.worktree,
+            parentTabId: tab.parentTabId,
+            leafId: tab.leafId,
+            ptyId: boundPtyId
+          })
+        : null
+      if (
+        authoritativePersistedPtyId &&
+        authoritativePersistedPtyId !== boundPtyId &&
+        (!incomingBindingKey || !incomingRendererBindings.has(incomingBindingKey))
+      ) {
+        // Why: after host restart or tombstone eviction, a stale renderer P1
+        // must not shadow durable P2, while an exact live graph P3 can publish
+        // before the renderer's debounced persistence catches up.
+        return false
+      }
+      if (!boundPtyId) {
+        return true
+      }
+      const incomingBinding = {
+        worktreeId: snapshot.worktree,
+        parentTabId: tab.parentTabId,
+        leafId: tab.leafId,
+        ptyId: boundPtyId
+      }
+      for (const [key, retired] of this.retiredRuntimeOwnedTerminalBindings) {
+        if (
+          retired.worktreeId === snapshot.worktree &&
+          retired.parentTabId === tab.parentTabId &&
+          retired.leafId === tab.leafId &&
+          (retired.ptyId !== boundPtyId ||
+            retired.lifecycleGeneration !== this.getPtyLifecycleGeneration(boundPtyId)) &&
+          this.isLivePersistedTerminalBinding(incomingBinding)
+        ) {
+          // Why: only a live, durably rebound P2 can retire the P1 tombstone;
+          // an unverified renderer graph is not proof of replacement ownership.
+          this.retiredRuntimeOwnedTerminalBindings.delete(key)
+        }
+      }
+      return !this.retiredRuntimeOwnedTerminalBindings.has(
+        this.getRuntimeOwnedTerminalBindingKey(incomingBinding)
+      )
+    })
+    if (tabs.length === snapshot.tabs.length) {
+      return snapshot
+    }
+    const active =
+      tabs.find((tab) => tab.id === snapshot.activeTabId) ??
+      tabs.find((tab) => tab.isActive) ??
+      tabs[0] ??
+      null
+    return {
+      ...snapshot,
+      activeTabId: active?.id ?? null,
+      activeTabType: active?.type ?? null,
+      tabs: tabs.map((tab) => ({ ...tab, isActive: tab.id === active?.id }))
+    }
+  }
+
+  private isLivePersistedTerminalBinding(
+    binding: Pick<RuntimeOwnedPtyExitCandidate, 'worktreeId' | 'parentTabId' | 'leafId' | 'ptyId'>
+  ): boolean {
+    const pty = this.ptysById.get(binding.ptyId)
+    const pane = parsePaneKey(pty?.paneKey ?? '')
+    return (
+      pty?.connected === true &&
+      pty.worktreeId === binding.worktreeId &&
+      pty.tabId === binding.parentTabId &&
+      pane?.tabId === binding.parentTabId &&
+      pane.leafId === binding.leafId &&
+      this.store?.getWorkspaceSession?.()?.terminalLayoutsByTabId[binding.parentTabId]
+        ?.ptyIdsByLeafId?.[binding.leafId] === binding.ptyId
+    )
+  }
+
+  private isPersistedRuntimeOwnedTerminalBinding(
+    binding: Pick<RuntimeOwnedPtyExitCandidate, 'worktreeId' | 'parentTabId' | 'leafId' | 'ptyId'>
+  ): boolean {
+    return (
+      this.isServeOrSshOwnedPtyId(binding.ptyId) &&
+      this.store?.getWorkspaceSession?.()?.terminalLayoutsByTabId[binding.parentTabId]
+        ?.ptyIdsByLeafId?.[binding.leafId] === binding.ptyId
+    )
   }
 
   private mergePreservedHeadlessMobileSessionTabs(
@@ -22080,7 +22677,9 @@ export class OrcaRuntimeService {
         snapshot,
         normalizedPreservedTabs
       ),
-      snapshotVersion: Math.max(snapshot.snapshotVersion, existing.snapshotVersion),
+      // Why: preserved host-owned tabs alter the publication epoch signature,
+      // not the renderer-owned source revision used to order graph ingestion.
+      snapshotVersion: snapshot.snapshotVersion,
       activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
       activeTabId: activeTab?.id ?? null,
       activeTabType: activeTab?.type ?? null,
@@ -23217,7 +23816,10 @@ export class OrcaRuntimeService {
     if (!pty || pty.ptyId !== record.ptyId) {
       return null
     }
-    // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
+    if (record.ptyGeneration !== this.getPtyLifecycleGeneration(record.ptyId) && pty.connected) {
+      throw new Error('terminal_handle_stale')
+    }
+    // Why: renderer adoption can race with CLI reads; retain the valid synthetic handle so summaries don't mint a duplicate.
     this.handleByPtyId.set(record.ptyId, handle)
     return { record, pty }
   }
@@ -23311,6 +23913,7 @@ export class OrcaRuntimeService {
   }
 
   private issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    const ptyGeneration = this.getPtyLifecycleGeneration(pty.ptyId)
     const existingHandle =
       this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
     if (existingHandle) {
@@ -23318,14 +23921,18 @@ export class OrcaRuntimeService {
       if (
         existingRecord &&
         existingRecord.runtimeId === this.runtimeId &&
-        existingRecord.ptyId === pty.ptyId
+        existingRecord.ptyId === pty.ptyId &&
+        existingRecord.ptyGeneration === ptyGeneration
       ) {
         this.handleByPtyId.set(pty.ptyId, existingHandle)
         return existingHandle
       }
     }
 
-    const handle = existingHandle ?? `term_${randomUUID()}`
+    // Why: a reused provider PTY id is a new destructive-control identity;
+    // never let its replacement inherit a handle from the exited generation.
+    const handle =
+      existingHandle && !this.handles.has(existingHandle) ? existingHandle : `term_${randomUUID()}`
     const syntheticId = `pty:${pty.ptyId}`
     this.handles.set(handle, {
       handle,
@@ -23335,7 +23942,7 @@ export class OrcaRuntimeService {
       tabId: syntheticId,
       leafId: syntheticId,
       ptyId: pty.ptyId,
-      ptyGeneration: 0
+      ptyGeneration
     })
     this.handleByPtyId.set(pty.ptyId, handle)
     return handle

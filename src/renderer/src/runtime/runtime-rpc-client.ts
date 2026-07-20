@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/types'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
@@ -8,6 +8,9 @@ import {
   callAbortableRuntimeEnvironment,
   createRuntimeRpcAbortError
 } from './abortable-runtime-environment-call'
+import { RuntimeRpcCallError } from './runtime-rpc-call-error'
+
+export { RuntimeRpcCallError, isRuntimeScopeForbiddenError } from './runtime-rpc-call-error'
 
 export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
 
@@ -21,30 +24,12 @@ type RuntimeCompatibilityCacheEntry = {
   failedAt: number | null
   // False while probing so recovery can drop a doomed pending compatibility check.
   provenCompatible: boolean
+  freshProbe: boolean
   status: RuntimeStatus | null
   statusCheckedAt: number | null
 }
 
 const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
-
-export class RuntimeRpcCallError extends Error {
-  readonly code: string
-  readonly response: RuntimeRpcFailure
-
-  constructor(response: RuntimeRpcFailure) {
-    super(response.error.message)
-    this.name = 'RuntimeRpcCallError'
-    this.code = response.error.code
-    this.response = response
-  }
-}
-
-// Why: mobile-scope device tokens are denied non-allowlisted runtime methods
-// with code 'forbidden'. Callers use this to surface one scope-mismatch banner
-// instead of silently swallowing the failure into empty/retry-looping UI.
-export function isRuntimeScopeForbiddenError(error: unknown): boolean {
-  return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
-}
 
 export function getActiveRuntimeTarget(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
@@ -75,6 +60,7 @@ export async function callRuntimeRpc<TResult>(
     timeoutMs?: number
     suppressFeatureInteraction?: boolean
     reuseRecentCompatibilityFailure?: boolean
+    forceCompatibilityRefresh?: boolean
     signal?: AbortSignal
   } = {}
 ): Promise<TResult> {
@@ -107,10 +93,24 @@ export async function callRuntimeRpc<TResult>(
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }
 
-async function ensureRuntimeEnvironmentCompatible(
+export async function ensureRuntimeEnvironmentCompatible(
   environmentId: string,
-  options: { timeoutMs?: number; reuseRecentCompatibilityFailure?: boolean } = {}
+  options: {
+    timeoutMs?: number
+    reuseRecentCompatibilityFailure?: boolean
+    forceCompatibilityRefresh?: boolean
+  } = {}
 ): Promise<void> {
+  if (options.forceCompatibilityRefresh) {
+    // Why: destructive closes are cold-path operations; re-probe so a host
+    // rollback/replacement cannot reuse an indefinitely cached safe verdict.
+    const cached = runtimeCompatibilityChecks.get(environmentId)
+    const canShareInFlightFreshProbe =
+      cached?.freshProbe === true && !cached.provenCompatible && cached.failedAt === null
+    if (!canShareInFlightFreshProbe) {
+      runtimeCompatibilityChecks.delete(environmentId)
+    }
+  }
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
     await cached.check
@@ -120,6 +120,7 @@ async function ensureRuntimeEnvironmentCompatible(
     check: Promise.resolve(),
     failedAt: null,
     provenCompatible: false,
+    freshProbe: options.forceCompatibilityRefresh === true,
     status: null,
     statusCheckedAt: null
   }
@@ -224,6 +225,7 @@ export function markRuntimeEnvironmentCompatible(environmentId: string): void {
     check: Promise.resolve(),
     failedAt: null,
     provenCompatible: true,
+    freshProbe: false,
     status: null,
     statusCheckedAt: null
   })
@@ -238,6 +240,7 @@ export async function getRuntimeEnvironmentStatus(
     check: Promise.resolve(),
     failedAt: null,
     provenCompatible: false,
+    freshProbe: false,
     status: null,
     statusCheckedAt: null
   }
@@ -328,9 +331,7 @@ export async function assertRuntimeEnvironmentCapability(
   }
 }
 
-export function clearRuntimeCompatibilityCacheForTests(): void {
-  clearRuntimeCompatibilityCache()
-}
+export const clearRuntimeCompatibilityCacheForTests = clearRuntimeCompatibilityCache
 
 export function unwrapRuntimeRpcResult<TResult>(response: RuntimeRpcResponse<TResult>): TResult {
   if (response.ok === false) {

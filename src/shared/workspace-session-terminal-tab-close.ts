@@ -156,14 +156,18 @@ function deriveActiveSurface(
 export function closeTerminalTabInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
-  tabId: string
+  tabId: string,
+  options: { allowPinnedRetirement?: boolean } = {}
 ): WorkspaceSessionTerminalTabCloseResult {
   const terminalRow = session.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
   const unifiedTerminalTabs = findUnifiedTerminalTabs(session, worktreeId, tabId)
   if (!terminalRow && unifiedTerminalTabs.length === 0) {
     return { session, ptyIdsToKill: [], closed: false, pinned: false }
   }
-  if (terminalRow?.isPinned || unifiedTerminalTabs.some((tab) => tab.isPinned)) {
+  if (
+    options.allowPinnedRetirement !== true &&
+    (terminalRow?.isPinned || unifiedTerminalTabs.some((tab) => tab.isPinned))
+  ) {
     return { session, ptyIdsToKill: [], closed: false, pinned: true }
   }
 

@@ -3607,11 +3607,21 @@ const api = {
       ipcRenderer.send('ui:mobileMarkdownResponse', response)
     },
     onCloseTerminal: (
-      callback: (data: { tabId: string; paneRuntimeId?: number }) => void
+      callback: (data: {
+        tabId: string
+        paneRuntimeId?: number
+        mirrorOnly?: boolean
+        expectedPtyIds?: string[]
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { tabId: string; paneRuntimeId?: number }
+        data: {
+          tabId: string
+          paneRuntimeId?: number
+          mirrorOnly?: boolean
+          expectedPtyIds?: string[]
+        }
       ) => callback(data)
       ipcRenderer.on('ui:closeTerminal', listener)
       return () => ipcRenderer.removeListener('ui:closeTerminal', listener)

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
+import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
 import { getAutomationTargetAvailability } from './automation-target-availability'
@@ -78,8 +82,8 @@ function makeRuntimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatu
     authoritativeWindowId: null,
     liveTabCount: 0,
     liveLeafCount: 0,
-    runtimeProtocolVersion: 3,
-    minCompatibleRuntimeClientVersion: 2,
+    runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+    minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
     ...overrides
   }
 }

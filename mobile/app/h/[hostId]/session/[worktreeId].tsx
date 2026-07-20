@@ -4099,7 +4099,8 @@ export default function SessionScreen() {
     try {
       const response = await client.sendRequest('session.tabs.close', {
         worktree: `id:${worktreeId}`,
-        tabId: tab.id
+        tabId: tab.id,
+        intent: 'user'
       })
       if (response.ok) {
         if (tab.type === 'terminal' && typeof tab.terminal === 'string') {

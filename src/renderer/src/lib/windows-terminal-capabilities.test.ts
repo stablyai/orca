@@ -4,6 +4,10 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../shared/protocol-version'
+import {
   getCachedWindowsTerminalCapabilities,
   getWindowsTerminalCapabilityOwnerKey,
   hasCachedWindowsTerminalCapabilities,
@@ -216,8 +220,8 @@ describe('windows terminal capabilities', () => {
       const resultByMethod: Record<string, unknown> = {
         'status.get': {
           hostPlatform: 'win32',
-          runtimeProtocolVersion: 3,
-          minCompatibleRuntimeClientVersion: 2
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
         },
         'host.wsl.isAvailable': true,
         'host.wsl.listDistros': ['Ubuntu'],
@@ -391,8 +395,8 @@ describe('windows terminal capabilities', () => {
       const resultByMethod: Record<string, unknown> = {
         'status.get': {
           hostPlatform: 'linux',
-          runtimeProtocolVersion: 3,
-          minCompatibleRuntimeClientVersion: 2
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
         },
         'preflight.detectRemoteWindowsTerminalCapabilities': {
           wslAvailable: true,

@@ -554,6 +554,62 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 })
 
 describe('buildMobileSessionTabSnapshots', () => {
+  it('publishes live terminal color and pin state from the unified tab', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'terminal-tab-1',
+            tabOrder: ['terminal-tab-1'],
+            recentTabIds: ['terminal-tab-1']
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'terminal-tab-1',
+            entityId: 'term-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'terminal',
+            label: 'Pinned terminal',
+            customLabel: null,
+            color: '#3b82f6',
+            sortOrder: 0,
+            createdAt: 1,
+            isPreview: false,
+            isPinned: true
+          }
+        ]
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        parentTabId: 'term-1',
+        color: '#3b82f6',
+        isPinned: true
+      }
+    ])
+  })
+
   it('publishes browser and editor color + pin state from unified tabs', () => {
     const fileId = '/repo/README.md'
     const state = makeState({

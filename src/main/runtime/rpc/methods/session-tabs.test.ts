@@ -9,6 +9,33 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('session tab RPC methods', () => {
+  it('rejects ambiguous legacy closes before they reach the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      closeMobileSessionTab: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const legacyResponse = await dispatcher.dispatch(
+      makeRequest('session.tabs.close', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1'
+      })
+    )
+    const explicitResponse = await dispatcher.dispatch(
+      makeRequest('session.tabs.close', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        intent: 'user'
+      })
+    )
+
+    expect(legacyResponse.ok).toBe(false)
+    expect(explicitResponse.ok).toBe(true)
+    expect(runtime.closeMobileSessionTab).toHaveBeenCalledTimes(1)
+    expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1')
+  })
+
   it('routes mobile-only activation without notifying desktop clients', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

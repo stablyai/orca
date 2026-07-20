@@ -25,6 +25,12 @@ export const ActivateTab = WorktreeTabSelector.extend({
   notifyClients: OptionalBoolean
 })
 
+export const CloseTab = ActivateTab.extend({
+  // Why: protocol-v3 clients cannot distinguish user closes from mirror exits;
+  // requiring explicit intent makes their ambiguous destructive call fail safe.
+  intent: z.literal('user')
+})
+
 export type TerminalPaneLayoutNodeInput =
   | { type: 'leaf'; leafId: string }
   | {

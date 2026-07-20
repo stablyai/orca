@@ -1,5 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  TERMINAL_TAB_CLOSE_RENDERER_TIMEOUT_MS,
+  TERMINAL_TAB_CLOSE_RUNTIME_RPC_TIMEOUT_MS
+} from '../../shared/terminal-tab-close'
 
 const ipcEmitter = new EventEmitter()
 const ipcMainMock = {
@@ -20,16 +24,32 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     ipcMainMock.removeListener.mockClear()
   })
 
+  it('keeps the outer runtime RPC budget above renderer adjudication', () => {
+    expect(TERMINAL_TAB_CLOSE_RUNTIME_RPC_TIMEOUT_MS).toBeGreaterThan(
+      TERMINAL_TAB_CLOSE_RENDERER_TIMEOUT_MS
+    )
+  })
+
   it('waits for the targeted renderer durability acknowledgement', async () => {
     const { requestTerminalTabCloseFromRenderer } =
       await import('./terminal-tab-close-request-relay')
     const webContents = { isDestroyed: () => false, send: vi.fn() }
     const otherWebContents = {}
     const mainWindow = { isDestroyed: () => false, webContents }
-    const pending = requestTerminalTabCloseFromRenderer(mainWindow as never, 'tab-1')
-    const request = webContents.send.mock.calls[0]?.[1] as { requestId: string; tabId: string }
+    const pending = requestTerminalTabCloseFromRenderer(mainWindow as never, 'tab-1', {
+      validateOnly: true,
+      expectedPtyIds: ['pty-1']
+    })
+    const request = webContents.send.mock.calls[0]?.[1] as {
+      requestId: string
+      tabId: string
+      validateOnly?: boolean
+      expectedPtyIds?: string[]
+    }
 
     expect(request.tabId).toBe('tab-1')
+    expect(request.validateOnly).toBe(true)
+    expect(request.expectedPtyIds).toEqual(['pty-1'])
     ipcEmitter.emit(
       'ui:terminalTabCloseResponse',
       { sender: otherWebContents },

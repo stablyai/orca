@@ -1,5 +1,4 @@
 /* eslint-disable max-lines */
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   BrowserTabCreateResult,
   RuntimeMobileSessionCreateTerminalResult,
@@ -13,10 +12,11 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
+import { TERMINAL_TAB_CLOSE_RUNTIME_RPC_TIMEOUT_MS } from '../../../shared/terminal-tab-close'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { callRuntimeRpc } from './runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
@@ -71,10 +71,10 @@ export async function createWebRuntimeSessionTerminal(args: {
     selectWebRuntimeSessionWorktree(args.worktreeId)
   }
   try {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'session.tabs.createTerminal',
-      params: {
+    const createdTerminal = await callRuntimeRpc<RuntimeMobileSessionCreateTerminalResult>(
+      { kind: 'environment', environmentId },
+      'session.tabs.createTerminal',
+      {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
@@ -88,10 +88,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         ...(args.viewMode ? { viewMode: args.viewMode } : {}),
         activate: args.activate !== false
       },
-      timeoutMs: 15_000
-    })
-    const createdTerminal = unwrapRuntimeRpcResult(
-      response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
+      { timeoutMs: 15_000 }
     )
     if (args.activate !== false) {
       // Why: record focus intent so the reconcile follows to this new terminal instead of sticky-keeping the prior tab.
@@ -130,10 +127,10 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     selectWebRuntimeSessionWorktree(args.worktreeId)
   }
   try {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'browser.tabCreate',
-      params: {
+    const created = await callRuntimeRpc<BrowserTabCreateResult>(
+      { kind: 'environment', environmentId },
+      'browser.tabCreate',
+      {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
         url: args.url,
         profileId: args.profileId ?? undefined,
@@ -144,9 +141,8 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         // Why: web clients need the local tab now; waiting for host webview registration makes the workspace appear to close.
         waitForRegistration: false
       },
-      timeoutMs: 15_000
-    })
-    const created = unwrapRuntimeRpcResult(response as RuntimeRpcResponse<BrowserTabCreateResult>)
+      { timeoutMs: 15_000 }
+    )
     // Why: record focus intent (tab id === browserPageId on a headless host) so the reconcile follows to the new browser tab.
     recordWebSessionFocusIntent(args.worktreeId, created.browserPageId)
     stageWebRuntimeBrowserTab({
@@ -245,16 +241,11 @@ async function refreshWebRuntimeSessionTabsSnapshot(
   worktreeId: string
 ): Promise<void> {
   try {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'session.tabs.list',
-      params: {
-        worktree: toRuntimeWorktreeSelector(worktreeId)
-      },
-      timeoutMs: 15_000
-    })
-    const snapshot = unwrapRuntimeRpcResult(
-      response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
+    const snapshot = await callRuntimeRpc<RuntimeMobileSessionTabsResult>(
+      { kind: 'environment', environmentId },
+      'session.tabs.list',
+      { worktree: toRuntimeWorktreeSelector(worktreeId) },
+      { timeoutMs: 15_000 }
     )
     const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
       await import('./web-session-tabs-sync')
@@ -286,16 +277,15 @@ export async function activateWebRuntimeSessionWorktree(args: {
   }
 
   try {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'worktree.activate',
-      params: {
+    await callRuntimeRpc(
+      { kind: 'environment', environmentId },
+      'worktree.activate',
+      {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
         notifyClients: args.notifyDesktop !== false
       },
-      timeoutMs: 15_000
-    })
-    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<unknown>)
+      { timeoutMs: 15_000 }
+    )
     return true
   } catch (error) {
     console.warn(
@@ -400,13 +390,12 @@ export async function moveWebRuntimeSessionTab(
               // Why: web groups can contain local-only tabs, so host insertion indexes count only the filtered host-backed order.
               index: targetHostIndex
             }
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'session.tabs.move',
-      params: move,
-      timeoutMs: 15_000
-    })
-    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeMobileSessionTabMoveResult>)
+    await callRuntimeRpc<RuntimeMobileSessionTabMoveResult>(
+      { kind: 'environment', environmentId },
+      'session.tabs.move',
+      move,
+      { timeoutMs: 15_000 }
+    )
     return true
   } catch (error) {
     console.warn(
@@ -451,16 +440,19 @@ async function callWebRuntimeSessionTabMethod(
       // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
       recordWebSessionCloseIntent(args.worktreeId, hostTabId, Date.now())
     }
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
+    await callRuntimeRpc(
+      { kind: 'environment', environmentId },
       method,
-      params: {
+      {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        tabId: hostTabId
+        tabId: hostTabId,
+        ...(method === 'session.tabs.close' ? { intent: 'user' as const } : {})
       },
-      timeoutMs: 15_000
-    })
-    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<unknown>)
+      {
+        timeoutMs: 15_000,
+        forceCompatibilityRefresh: method === 'session.tabs.close'
+      }
+    )
     if (method === 'session.tabs.close') {
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
     }
@@ -495,27 +487,22 @@ export function splitWebRuntimeTerminal(
     direction,
     pendingMirrorSuppressionId
   )
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'terminal.split',
-      params: {
-        terminal: remote.handle,
-        direction,
-        telemetrySource
-      },
-      timeoutMs: 15_000
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>)
-    })
-    .catch((error) => {
-      releasePendingMirrorSuppression()
-      console.warn(
-        '[web-runtime-session] failed to split terminal:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
+  void callRuntimeRpc<{ split: RuntimeTerminalSplit }>(
+    { kind: 'environment', environmentId },
+    'terminal.split',
+    {
+      terminal: remote.handle,
+      direction,
+      telemetrySource
+    },
+    { timeoutMs: 15_000 }
+  ).catch((error) => {
+    releasePendingMirrorSuppression()
+    console.warn(
+      '[web-runtime-session] failed to split terminal:',
+      error instanceof Error ? error.message : String(error)
+    )
+  })
   return true
 }
 
@@ -605,28 +592,55 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
   }
 
   // Why: host owns the real pane graph; close the host terminal first so later snapshots can't resurrect the removed pane.
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'terminal.close',
-      params: {
-        terminal: remote.handle
-      },
-      timeoutMs: 15_000
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>)
-    })
-    .catch((error) => {
-      console.warn(
-        '[web-runtime-session] failed to close terminal pane:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
+  void callRuntimeRpc<{ close: RuntimeTerminalClose }>(
+    { kind: 'environment', environmentId },
+    'terminal.close',
+    { terminal: remote.handle },
+    { timeoutMs: 15_000, forceCompatibilityRefresh: true }
+  ).catch((error) => {
+    console.warn(
+      '[web-runtime-session] failed to close terminal pane:',
+      error instanceof Error ? error.message : String(error)
+    )
+  })
   return true
 }
 
-// Why: pane geometry is host-authoritative for remote tabs; local-only changes revert on next snapshot, so push to host.
+export function closeWebRuntimeTerminalTab(args: {
+  environmentId: string
+  worktreeId: string
+  terminal: string
+}): boolean {
+  const environmentId = args.environmentId.trim()
+  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+
+  // Why: a ready remote terminal handle is generation-bound; explicit tab
+  // closes must not authorize a mutable snapshot/tab id that may have rebound.
+  void callRuntimeRpc<{ close: RuntimeTerminalClose }>(
+    { kind: 'environment', environmentId },
+    'terminal.closeTab',
+    { terminal: args.terminal },
+    {
+      timeoutMs: TERMINAL_TAB_CLOSE_RUNTIME_RPC_TIMEOUT_MS,
+      forceCompatibilityRefresh: true
+    }
+  ).catch(async (error) => {
+    console.warn(
+      '[web-runtime-session] failed to close terminal tab:',
+      error instanceof Error ? error.message : String(error)
+    )
+    const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
+    // Why: the optimistic local prune may have targeted an obsolete handle;
+    // accept the host's unchanged snapshot so its live replacement reappears.
+    acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
+    await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
+  })
+  return true
+}
+
+// Why: pane geometry is host-authoritative for remote tabs; local-only changes revert on the next snapshot.
 export async function updateWebRuntimePaneLayout(args: {
   worktreeId: string
   tabId: string
@@ -643,19 +657,18 @@ export async function updateWebRuntimePaneLayout(args: {
     ? toHostSessionTabId(args.tabId)
     : args.tabId
   try {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'session.tabs.updatePaneLayout',
-      params: {
+    await callRuntimeRpc<{ updated: true }>(
+      { kind: 'environment', environmentId },
+      'session.tabs.updatePaneLayout',
+      {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
         tabId: hostTabId,
         root: args.root,
         expandedLeafId: args.expandedLeafId,
         ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
       },
-      timeoutMs: 15_000
-    })
-    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
+      { timeoutMs: 15_000 }
+    )
     return true
   } catch (error) {
     console.warn(
@@ -688,21 +701,18 @@ export function setWebRuntimeTabProps(args: {
           worktreeId: args.worktreeId,
           tabId: args.tabId
         }) ?? (isWebTerminalSurfaceTabId(args.tabId) ? toHostSessionTabId(args.tabId) : args.tabId)
-      return window.api.runtimeEnvironments.call({
-        selector: environmentId,
-        method: 'session.tabs.setTabProps',
-        params: {
+      return callRuntimeRpc<{ updated: true }>(
+        { kind: 'environment', environmentId },
+        'session.tabs.setTabProps',
+        {
           worktree: toRuntimeWorktreeSelector(args.worktreeId),
           tabId: hostTabId,
           ...(args.color !== undefined ? { color: args.color } : {}),
           ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
           ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
         },
-        timeoutMs: 15_000
-      })
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
+        { timeoutMs: 15_000 }
+      )
     })
     .catch((error) => {
       console.warn(
@@ -723,21 +733,16 @@ export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined):
   if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
-  void window.api.runtimeEnvironments
-    .call({
-      selector: environmentId,
-      method: 'terminal.clearBuffer',
-      params: { terminal: remote.handle },
-      timeoutMs: 15_000
-    })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ clear: unknown }>)
-    })
-    .catch((error) => {
-      console.warn(
-        '[web-runtime-session] failed to clear terminal buffer:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
+  void callRuntimeRpc<{ clear: unknown }>(
+    { kind: 'environment', environmentId },
+    'terminal.clearBuffer',
+    { terminal: remote.handle },
+    { timeoutMs: 15_000 }
+  ).catch((error) => {
+    console.warn(
+      '[web-runtime-session] failed to clear terminal buffer:',
+      error instanceof Error ? error.message : String(error)
+    )
+  })
   return true
 }

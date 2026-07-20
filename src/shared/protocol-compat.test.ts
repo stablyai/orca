@@ -167,6 +167,36 @@ describe('evaluateRuntimeCompat', () => {
     expect(verdict).toMatchObject({ kind: 'ok' })
   })
 
+  it('blocks pre-ownership-fix clients from current terminal hosts', () => {
+    const verdict = evaluateRuntimeCompat({
+      clientProtocolVersion: RUNTIME_PROTOCOL_VERSION - 1,
+      minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+      serverProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      serverMinCompatibleClientProtocolVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+    })
+
+    expect(verdict).toMatchObject({
+      kind: 'blocked',
+      reason: 'client-too-old',
+      requiredClientProtocolVersion: RUNTIME_PROTOCOL_VERSION
+    })
+  })
+
+  it('blocks current clients from hosts without generation-safe explicit close', () => {
+    const verdict = evaluateRuntimeCompat({
+      clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
+      serverProtocolVersion: RUNTIME_PROTOCOL_VERSION - 1,
+      serverMinCompatibleClientProtocolVersion: 2
+    })
+
+    expect(verdict).toMatchObject({
+      kind: 'blocked',
+      reason: 'server-too-old',
+      requiredServerProtocolVersion: RUNTIME_PROTOCOL_VERSION
+    })
+  })
+
   it('allows client and server app versions to skew when protocol ranges overlap', () => {
     const verdict = evaluateRuntimeCompat({
       clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
