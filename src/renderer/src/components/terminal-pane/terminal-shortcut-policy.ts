@@ -43,6 +43,7 @@ export type TerminalShortcutAction =
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
   | { type: 'switchInputSource' }
+  | { type: 'acceptAutosuggest' }
 
 /** Kitty keyboard protocol modifier field: 1 + shift(1) + alt(2). */
 function kittyAltModifiers(shiftKey: boolean): number {
@@ -94,9 +95,25 @@ export function resolveTerminalShortcutAction(
   getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
   // Why: keybindings follow the client OS, but terminal byte protocols follow
   // the PTY host. They differ for macOS clients attached to Windows runtimes.
-  isWindowsTerminalHost: () => boolean = () => isWindows
+  isWindowsTerminalHost: () => boolean = () => isWindows,
+  // Why: lazily reports whether a ghost-text command suggestion is showing at
+  // end-of-line for the active pane, gating bare RightArrow/End accept.
+  hasActiveAutosuggestAtEndOfLine?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+
+  // Why: must win over word-nav/EOL handling below, but only when unmodified
+  // so Alt+Arrow word-nav and Cmd+Arrow EOL jumps are unaffected.
+  if (
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    (event.key === 'ArrowRight' || event.key === 'End') &&
+    hasActiveAutosuggestAtEndOfLine?.()
+  ) {
+    return { type: 'acceptAutosuggest' }
+  }
 
   // Why: native-only chords must be captured even on repeat without blocking
   // the OS default that performs the input-source switch.

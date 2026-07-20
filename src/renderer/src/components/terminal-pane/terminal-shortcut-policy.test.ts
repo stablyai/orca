@@ -890,3 +890,81 @@ describe('kitty keyboard protocol panes', () => {
     })
   })
 })
+
+describe('resolveTerminalShortcutAction — accept autosuggest', () => {
+  it('returns acceptAutosuggest for a bare RightArrow when a suggestion is active', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight' }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).toEqual({ type: 'acceptAutosuggest' })
+  })
+
+  it('returns acceptAutosuggest for a bare End when a suggestion is active', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'End' }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).toEqual({ type: 'acceptAutosuggest' })
+  })
+
+  it('returns null for a bare RightArrow when no suggestion is active', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight' }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => false
+      )
+    ).toBeNull()
+  })
+
+  it('does not intercept RightArrow with a modifier held, even with an active suggestion', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight', altKey: true }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).not.toEqual({ type: 'acceptAutosuggest' })
+  })
+})
