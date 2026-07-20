@@ -185,8 +185,8 @@ describe('registerPetHandlers', () => {
 
   it('imports repeat and settleTo so app states can settle into idle', async () => {
     const bundleDir = await writeSpriteBundle({
-      idle: { row: 0, frames: 2 },
-      running: { row: 0, frames: 2, repeat: 3, settleTo: 'idle' }
+      idle: { row: 0, frames: 2, frameDurationsMs: [1680, 1920] },
+      running: { row: 0, frames: 2, frameDurationsMs: [120, 220], repeat: 3, settleTo: 'idle' }
     })
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
 
@@ -195,9 +195,49 @@ describe('registerPetHandlers', () => {
     expect(result.sprite?.animations?.running).toEqual({
       row: 0,
       frames: 2,
+      frameDurationsMs: [120, 220],
       repeat: 3,
       settleTo: 'idle'
     })
+  })
+
+  it('rejects settle declarations the renderer would silently ignore', async () => {
+    const invalid: [Record<string, Parameters<typeof writeSpriteBundle>[0][string]>, string][] = [
+      // repeat without settleTo
+      [
+        { idle: { row: 0, frames: 2, frameDurationsMs: [100, 200], repeat: 3 } },
+        'needs both repeat and settleTo'
+      ],
+      // settling into itself
+      [
+        {
+          idle: { row: 0, frames: 2, frameDurationsMs: [100, 200], repeat: 3, settleTo: 'idle' }
+        },
+        'cannot settle to itself'
+      ],
+      // no durations on the settling row
+      [
+        {
+          idle: { row: 0, frames: 2, frameDurationsMs: [100, 200] },
+          running: { row: 0, frames: 2, repeat: 3, settleTo: 'idle' }
+        },
+        'must both carry frameDurationsMs'
+      ],
+      // no durations on the settle target
+      [
+        {
+          idle: { row: 0, frames: 2 },
+          running: { row: 0, frames: 2, frameDurationsMs: [120, 220], repeat: 3, settleTo: 'idle' }
+        },
+        'must both carry frameDurationsMs'
+      ]
+    ]
+    for (const [animations, message] of invalid) {
+      const bundleDir = await writeSpriteBundle(animations)
+      showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
+
+      await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(message)
+    }
   })
 
   it('rejects a settleTo that names a missing animation', async () => {

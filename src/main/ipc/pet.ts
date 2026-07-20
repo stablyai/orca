@@ -417,6 +417,26 @@ export function registerPetHandlers(): void {
               `Animation "${name}" repeats ${anim.repeat}x${anim.frames} frames, exceeding the 512 keyframe cap.`
             )
           }
+          // Why: the renderer only settles complete declarations (both fields,
+          // explicit durations on both rows) and would silently loop otherwise,
+          // so reject the partial forms at import.
+          if (anim.repeat !== undefined || anim.settleTo !== undefined) {
+            if (anim.repeat === undefined || anim.settleTo === undefined) {
+              throw new Error(`Animation "${name}" needs both repeat and settleTo to settle.`)
+            }
+            if (anim.settleTo === name) {
+              throw new Error(`Animation "${name}" cannot settle to itself.`)
+            }
+            const settleTarget = manifest.animations[anim.settleTo]
+            if (
+              anim.frameDurationsMs === undefined ||
+              settleTarget.frameDurationsMs === undefined
+            ) {
+              throw new Error(
+                `Animation "${name}" declares repeat/settleTo, so "${name}" and "${anim.settleTo}" must both carry frameDurationsMs.`
+              )
+            }
+          }
         }
         if (manifest.defaultAnimation && !manifest.animations[manifest.defaultAnimation]) {
           throw new Error(`defaultAnimation "${manifest.defaultAnimation}" not in animations.`)

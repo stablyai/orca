@@ -36,6 +36,14 @@ export function DetectedSpriteFrame({
     return { footprintW: Math.max(1, Math.round(w)), footprintH: Math.max(1, Math.round(h)) }
   }, [detected, maxSize])
 
+  // Why: reset playback only when the sprite itself changes so a new animation
+  // starts from frame 0. The draw effect below also reruns on animate/footprint
+  // toggles (pause, resize, drag holds), and those must resume, not snap back.
+  useEffect(() => {
+    frameIndexRef.current = 0
+    lastTimeRef.current = 0
+  }, [detected])
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) {
@@ -47,10 +55,6 @@ export function DetectedSpriteFrame({
     }
     canvas.width = footprintW
     canvas.height = footprintH
-    // Why: reset playback when the underlying sprite changes so the new
-    // animation starts from frame 0 rather than wherever the prior one stopped.
-    frameIndexRef.current = 0
-    lastTimeRef.current = 0
     if (detected.frames.length === 0) {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       return
