@@ -281,4 +281,199 @@ describe('GitHub PR refresh owner-host routing', () => {
       timeoutMs: 30_000
     })
   })
+
+  it('routes a paired-host visible refresh through the runtime repo owner', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 26 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoId = 'repo-paired'
+    const branch = 'feature/paired-visible'
+    const fetchPRForBranch = store.getState().fetchPRForBranch
+    const fetchPRForBranchSpy = vi.fn((...args: Parameters<typeof fetchPRForBranch>) =>
+      fetchPRForBranch(...args)
+    )
+    store.setState({ fetchPRForBranch: fetchPRForBranchSpy })
+    seed(store, {
+      repos: [
+        makeRepo({ id: repoId, path: '/local/repo' }),
+        makeRepo({
+          id: repoId,
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {
+        [repoId]: [
+          {
+            ...makeWorktree(repoId, branch, 'wt-runtime'),
+            hostId: 'runtime:env-1'
+          }
+        ]
+      }
+    })
+
+    store.getState().reportVisibleGitHubPRRefreshCandidates(['wt-runtime'], 124)
+
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(fetchPRForBranchSpy).toHaveBeenCalledWith('/runtime/repo', branch, {
+      repoId,
+      hostId: 'runtime:env-1',
+      worktreeId: 'wt-runtime',
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      fallbackPRSource: null
+    })
+    expect(reportVisiblePRRefreshCandidates).toHaveBeenCalledWith({
+      candidates: [],
+      generation: 124
+    })
+    expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+    expect(store.getState().prCache[`runtime:env-1::${repoId}::${branch}`]?.data).toMatchObject({
+      number: 26
+    })
+  })
+
+  it('does not re-resolve an exact runtime path to the first same-id repo', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 28 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoId = 'repo-paired'
+    const branch = 'feature/exact-runtime-path'
+    seed(store, {
+      repos: [
+        makeRepo({ id: repoId, path: '/local/repo' }),
+        makeRepo({
+          id: repoId,
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {}
+    })
+
+    await store.getState().fetchPRForBranch('/runtime/repo', branch, { repoId })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.prForBranch',
+      params: { repo: repoId, branch, linkedPRNumber: null, currentHeadOid: null },
+      timeoutMs: 30_000
+    })
+    expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+    expect(store.getState().prCache[`runtime:env-1::${repoId}::${branch}`]?.data).toMatchObject({
+      number: 28
+    })
+  })
+
+  it('routes a paired-host active refresh through the runtime repo owner', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: makePR({ number: 27 }),
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    const repoId = 'repo-paired'
+    const branch = 'feature/paired-active'
+    const fetchPRForBranch = store.getState().fetchPRForBranch
+    const fetchPRForBranchSpy = vi.fn((...args: Parameters<typeof fetchPRForBranch>) =>
+      fetchPRForBranch(...args)
+    )
+    store.setState({ fetchPRForBranch: fetchPRForBranchSpy })
+    seed(store, {
+      repos: [
+        makeRepo({ id: repoId, path: '/local/repo' }),
+        makeRepo({
+          id: repoId,
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {
+        [repoId]: [
+          {
+            ...makeWorktree(repoId, branch, 'wt-runtime'),
+            hostId: 'runtime:env-1'
+          }
+        ]
+      }
+    })
+
+    store.getState().refreshGitHubForWorktreeIfStale('wt-runtime')
+
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+    expect(fetchPRForBranchSpy).toHaveBeenCalledWith('/runtime/repo', branch, {
+      force: true,
+      repoId,
+      hostId: 'runtime:env-1',
+      worktreeId: 'wt-runtime',
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      fallbackPRSource: null
+    })
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+    expect(store.getState().prCache[`runtime:env-1::${repoId}::${branch}`]?.data).toMatchObject({
+      number: 27
+    })
+  })
+
+  it('keeps the focused-host fallback for legacy worktrees without host identity', () => {
+    const store = createTestStore()
+    const repoId = 'repo-paired'
+    const branch = 'feature/legacy-local'
+    seed(store, {
+      repos: [
+        makeRepo({ id: repoId, path: '/local/repo' }),
+        makeRepo({
+          id: repoId,
+          path: '/runtime/repo',
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      worktreesByRepo: {
+        [repoId]: [makeWorktree(repoId, branch, 'wt-legacy')]
+      }
+    })
+
+    store.getState().refreshGitHubForWorktreeIfStale('wt-legacy')
+
+    expect(enqueuePRRefresh).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        repoId,
+        repoPath: '/local/repo',
+        cacheKey: `${repoId}::${branch}`
+      }),
+      reason: 'active',
+      priority: 80
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when a legacy worktree has duplicate owners on its focused host', () => {
+    const store = createTestStore()
+    const repoId = 'repo-ambiguous'
+    seed(store, {
+      repos: [
+        makeRepo({ id: repoId, path: '/local/repo-a' }),
+        makeRepo({ id: repoId, path: '/local/repo-b' })
+      ],
+      worktreesByRepo: {
+        [repoId]: [makeWorktree(repoId, 'feature/ambiguous', 'wt-ambiguous')]
+      }
+    })
+
+    store.getState().refreshGitHubForWorktreeIfStale('wt-ambiguous')
+
+    expect(enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
 })
