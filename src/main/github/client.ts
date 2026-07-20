@@ -105,6 +105,7 @@ import {
   mapPRState,
   deriveCheckStatus
 } from './mappers'
+import { latestCheckDetailsByName, latestRollupEntriesByName } from './check-run-dedup'
 import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './comment-reactions'
 import {
   getRateLimit,
@@ -622,7 +623,8 @@ function checkRollupEntries(value: unknown): unknown[] {
 }
 
 function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
-  const entries = checkRollupEntries(value)
+  // Collapse superseded runs so a stale CANCELLED/FAILURE doesn't inflate `failed`.
+  const entries = latestRollupEntriesByName(checkRollupEntries(value))
   if (entries.length === 0) {
     return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
   }
@@ -3334,9 +3336,13 @@ function mapGraphQLPRChecksResponse(
 
   const contexts = commit.statusCheckRollup?.contexts?.nodes ?? []
   const checkRunContexts = contexts.filter(isGraphQLCheckRunContext)
-  const checkRuns = checkRunContexts
-    .map(mapGraphQLCheckRunContext)
-    .filter((check): check is PRCheckDetail => check !== null)
+  // Collapse superseded re-runs (same name, higher checkRunId wins) so a stale
+  // CANCELLED run doesn't linger as a failed step next to its fresh SUCCESS.
+  const checkRuns = latestCheckDetailsByName(
+    checkRunContexts
+      .map(mapGraphQLCheckRunContext)
+      .filter((check): check is PRCheckDetail => check !== null)
+  )
   const checkRunNames = new Set(checkRuns.map((check) => check.name))
   const checkSuiteIdsWithRuns = new Set(
     checkRunContexts
@@ -3393,7 +3399,9 @@ async function getPRChecksViaRestFallback(
     const checkRunData = JSON.parse(stdout) as {
       check_runs?: RestCheckRun[]
     }
-    const checkRuns = (checkRunData.check_runs ?? []).map(mapRestCheckRun)
+    const checkRuns = latestCheckDetailsByName(
+      (checkRunData.check_runs ?? []).map(mapRestCheckRun)
+    )
     const checkRunNames = new Set(checkRuns.map((check) => check.name))
 
     let legacyStatuses: PRCheckDetail[] = []

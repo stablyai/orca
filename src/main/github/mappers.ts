@@ -1,4 +1,5 @@
 import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import { latestRollupEntriesByName } from './check-run-dedup'
 
 // ── REST API check-runs mapping ───────────────────────────────────────
 // The REST check-runs endpoint returns separate status + conclusion fields
@@ -150,7 +151,9 @@ export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckSt
   let hasFailure = false
   let hasPending = false
 
-  for (const check of rollup as { status?: string; conclusion?: string; state?: string }[]) {
+  // Collapse superseded runs first so a stale CANCELLED/FAILURE doesn't outvote a later SUCCESS.
+  const latest = latestRollupEntriesByName(rollup)
+  for (const check of latest as { status?: string; conclusion?: string; state?: string }[]) {
     const conclusion = check.conclusion?.toUpperCase()
     const status = check.status?.toUpperCase()
     const state = check.state?.toUpperCase()
