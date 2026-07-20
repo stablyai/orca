@@ -13,6 +13,8 @@ import {
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
 import { PetBubble } from './pet-bubble'
+import { clampPositionToViewport, type Position } from './pet-roam'
+import { usePetRoam } from './usePetRoam'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -235,20 +237,8 @@ const SIZE = 180
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
 const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
-export type Position = { x: number; y: number }
-
-export function clampPositionToViewport(
-  pos: Position,
-  size: number,
-  viewport: { width: number; height: number }
-): Position {
-  const maxX = Math.max(0, viewport.width - size)
-  const maxY = Math.max(0, viewport.height - size)
-  return {
-    x: Math.min(Math.max(0, pos.x), maxX),
-    y: Math.min(Math.max(0, pos.y), maxY)
-  }
-}
+export type { Position }
+export { clampPositionToViewport }
 
 function clampToViewport(pos: Position, size: number = SIZE): Position {
   if (typeof window === 'undefined') {
@@ -355,6 +345,27 @@ export function PetOverlay(): React.JSX.Element {
     (next) => setPosition(clampToViewport(next, size))
   )
 
+  const motionAllowed = documentVisible && !reducedMotion
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  void agentStatusEpoch
+  const agentEntries = useMemo(
+    () => Object.values(agentStatusByPaneKey),
+    [agentStatusByPaneKey]
+  )
+  // Why: roam only when the document is visible and motion is allowed — matches
+  // sprite/bob pause rules so a hidden tab does not burn rAF.
+  usePetRoam({
+    enabled: motionAllowed,
+    position,
+    setPosition,
+    size,
+    dragging,
+    entries: agentEntries,
+    now: Date.now,
+    staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
+  })
+
   useEffect(() => {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
     window.addEventListener('resize', onResize)
@@ -372,7 +383,6 @@ export function PetOverlay(): React.JSX.Element {
     }
   }, [dragging, position])
 
-  const motionAllowed = documentVisible && !reducedMotion
   // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
