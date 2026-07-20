@@ -480,9 +480,13 @@ export function useDiffCommentDecorator({
         return
       }
       entry.delegate.heightInPx = measured
+      const scrollTop = editor.getScrollTop()
       editor.changeViewZones((acc) => {
         acc.layoutZone(entry.zoneId)
       })
+      // Why: prevent Monaco from automatically scrolling/jumping the viewport
+      // to keep the anchor line in view when the comment card's height changes.
+      editor.setScrollTop(scrollTop)
     }
 
     // Why: one-shot scroll resolver. Called by both the request-arrives-late

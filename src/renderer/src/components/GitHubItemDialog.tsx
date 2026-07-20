@@ -3112,6 +3112,7 @@ function ConversationTab({
   const authorLabel = item.author ?? 'unknown'
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const [commentsCollapsed, setCommentsCollapsed] = useState(false)
   const [bodyDraft, setBodyDraft] = useState(body)
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
@@ -3730,7 +3731,18 @@ function ConversationTab({
 
         {detailsLoaded ? (
           <>
-            <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              className="flex items-center gap-2 pt-1 text-left"
+              aria-expanded={!commentsCollapsed}
+              onClick={() => setCommentsCollapsed((c) => !c)}
+            >
+              <ChevronDown
+                className={cn(
+                  'size-3 shrink-0 text-muted-foreground transition-transform',
+                  commentsCollapsed && '-rotate-90'
+                )}
+              />
               {item.type === 'issue' ? (
                 <FolderKanban className="size-4 text-muted-foreground" />
               ) : (
@@ -3746,56 +3758,60 @@ function ConversationTab({
                   {comments.length + (item.type === 'issue' ? resolvedTimelineItems.length : 0)}
                 </span>
               )}
-            </div>
+            </button>
 
-            {item.type === 'pr' && comments.length > 0 && (
-              <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
-                {getPrCommentAudienceFilters().map((filter) => {
-                  const isActive = commentFilter === filter.value
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      className={cn(
-                        'flex h-8 items-center justify-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground transition-colors',
-                        isActive && 'bg-muted text-foreground'
+            {!commentsCollapsed && (
+              <>
+                {item.type === 'pr' && comments.length > 0 && (
+                  <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
+                    {getPrCommentAudienceFilters().map((filter) => {
+                      const isActive = commentFilter === filter.value
+                      return (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          className={cn(
+                            'flex h-8 items-center justify-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground transition-colors',
+                            isActive && 'bg-muted text-foreground'
+                          )}
+                          aria-pressed={isActive}
+                          onClick={() => setCommentFilter(filter.value)}
+                        >
+                          <span>{filter.label}</span>
+                          <span className="tabular-nums">{commentCounts[filter.value]}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {item.type === 'issue' ? (
+                  issueConversationEntries.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
+                      {translate(
+                        'auto.components.GitHubItemDialog.timeline.noActivity',
+                        'No activity yet.'
                       )}
-                      aria-pressed={isActive}
-                      onClick={() => setCommentFilter(filter.value)}
-                    >
-                      <span>{filter.label}</span>
-                      <span className="tabular-nums">{commentCounts[filter.value]}</span>
-                    </button>
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 flex-col gap-3">
+                      {issueConversationEntries.map(renderIssueConversationEntry)}
+                    </div>
                   )
-                })}
-              </div>
-            )}
-
-            {item.type === 'issue' ? (
-              issueConversationEntries.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-                  {translate(
-                    'auto.components.GitHubItemDialog.timeline.noActivity',
-                    'No activity yet.'
-                  )}
-                </div>
-              ) : (
-                <div className="flex min-w-0 flex-col gap-3">
-                  {issueConversationEntries.map(renderIssueConversationEntry)}
-                </div>
-              )
-            ) : comments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-                {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
-              </div>
-            ) : visibleComments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
-                {getPRCommentAudienceEmptyLabel(commentFilter)}
-              </div>
-            ) : (
-              <div className="flex min-w-0 flex-col gap-3">
-                {visibleCommentGroups.map(renderCommentGroup)}
-              </div>
+                ) : comments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
+                    {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
+                  </div>
+                ) : visibleComments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+                    {getPRCommentAudienceEmptyLabel(commentFilter)}
+                  </div>
+                ) : (
+                  <div className="flex min-w-0 flex-col gap-3">
+                    {visibleCommentGroups.map(renderCommentGroup)}
+                  </div>
+                )}
+              </>
             )}
           </>
         ) : null}

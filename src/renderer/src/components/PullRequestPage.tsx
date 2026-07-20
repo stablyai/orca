@@ -3219,6 +3219,7 @@ function ConversationTab({
   const authorLabel = item.author ?? 'unknown'
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const [commentsCollapsed, setCommentsCollapsed] = useState(false)
   const [bodyDraft, setBodyDraft] = useState(body)
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
@@ -3741,7 +3742,18 @@ function ConversationTab({
 
         {detailsLoaded ? (
           <>
-            <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              className="flex items-center gap-2 pt-1 text-left"
+              aria-expanded={!commentsCollapsed}
+              onClick={() => setCommentsCollapsed((c) => !c)}
+            >
+              <ChevronDown
+                className={cn(
+                  'size-3 shrink-0 text-muted-foreground transition-transform',
+                  commentsCollapsed && '-rotate-90'
+                )}
+              />
               <MessageSquare className="size-4 text-muted-foreground" />
               <span className="text-[13px] font-medium text-foreground">
                 {translate('auto.components.PullRequestPage.3463d10a63', 'Comments')}
@@ -3751,43 +3763,47 @@ function ConversationTab({
                   {comments.length}
                 </span>
               )}
-            </div>
+            </button>
 
-            {item.type === 'pr' && comments.length > 0 && (
-              <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
-                {getPrCommentAudienceFilters().map((filter) => {
-                  const isActive = commentFilter === filter.value
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      className={cn(
-                        'flex h-8 items-center justify-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground transition-colors',
-                        isActive && 'bg-muted text-foreground'
-                      )}
-                      aria-pressed={isActive}
-                      onClick={() => setCommentFilter(filter.value)}
-                    >
-                      <span>{filter.label}</span>
-                      <span className="tabular-nums">{commentCounts[filter.value]}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+            {!commentsCollapsed && (
+              <>
+                {item.type === 'pr' && comments.length > 0 && (
+                  <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
+                    {getPrCommentAudienceFilters().map((filter) => {
+                      const isActive = commentFilter === filter.value
+                      return (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          className={cn(
+                            'flex h-8 items-center justify-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground transition-colors',
+                            isActive && 'bg-muted text-foreground'
+                          )}
+                          aria-pressed={isActive}
+                          onClick={() => setCommentFilter(filter.value)}
+                        >
+                          <span>{filter.label}</span>
+                          <span className="tabular-nums">{commentCounts[filter.value]}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
 
-            {comments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
-                {translate('auto.components.PullRequestPage.d2d589556c', 'No comments yet.')}
-              </div>
-            ) : visibleComments.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
-                {getPRCommentAudienceEmptyLabel(commentFilter)}
-              </div>
-            ) : (
-              <div className="flex min-w-0 flex-col gap-3">
-                {visibleCommentGroups.map(renderCommentGroup)}
-              </div>
+                {comments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
+                    {translate('auto.components.PullRequestPage.d2d589556c', 'No comments yet.')}
+                  </div>
+                ) : visibleComments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+                    {getPRCommentAudienceEmptyLabel(commentFilter)}
+                  </div>
+                ) : (
+                  <div className="flex min-w-0 flex-col gap-3">
+                    {visibleCommentGroups.map(renderCommentGroup)}
+                  </div>
+                )}
+              </>
             )}
           </>
         ) : null}

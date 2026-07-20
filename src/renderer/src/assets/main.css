@@ -3256,6 +3256,37 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   min-width: 0;
 }
 
+/* Collapse chevron button — small icon at start of comment card header */
+.orca-diff-comment-collapse-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted-foreground);
+  opacity: 0.55;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
+}
+
+.orca-diff-comment-collapse-btn:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.orca-diff-comment-collapse-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
 /* Meta Group (Name, line, timestamp) */
 .orca-diff-comment-meta-group {
   display: flex;

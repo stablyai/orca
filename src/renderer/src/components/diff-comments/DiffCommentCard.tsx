@@ -1,9 +1,10 @@
-import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
+import { ChevronDown, CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -53,6 +54,7 @@ export function DiffCommentCard({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [submitting, setSubmitting] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const resizeAfterCloseRef = useRef(false)
@@ -86,6 +88,18 @@ export function DiffCommentCard({
     el.setSelectionRange(el.value.length, el.value.length)
     onContentResizeRef.current?.()
   }, [editing])
+
+  const isMounted = useRef(false)
+
+  // Why: resize the Monaco view zone when the card is collapsed/expanded so the
+  // editor lines flow naturally without leaving a blank gap. Skip on mount.
+  useLayoutEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true
+      return
+    }
+    onContentResizeRef.current?.()
+  }, [collapsed])
 
   const scheduleContentResizeAfterClose = (): void => {
     // Why: closing edit mode removes the textarea/footer before Monaco can
@@ -142,10 +156,37 @@ export function DiffCommentCard({
       <div className="orca-diff-comment-content-col">
         {/* Header Row */}
         <div className="orca-diff-comment-header">
+          {/* Collapse toggle chevron */}
+          <button
+            type="button"
+            className="orca-diff-comment-collapse-btn"
+            aria-expanded={!collapsed}
+            aria-label={
+              collapsed
+                ? translate(
+                    'auto.components.diff.comments.DiffCommentCard.expand',
+                    'Expand comment'
+                  )
+                : translate(
+                    'auto.components.diff.comments.DiffCommentCard.collapse',
+                    'Collapse comment'
+                  )
+            }
+            onClick={(ev) => {
+              ev.preventDefault()
+              ev.stopPropagation()
+              setCollapsed((c) => !c)
+            }}
+          >
+            <ChevronDown
+              className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
+            />
+          </button>
+
           <div className="orca-diff-comment-meta-group">{metaText}</div>
 
-          {/* Action buttons pill (only shown if not editing) */}
-          {!editing && (
+          {/* Action buttons pill (only shown if not editing and not collapsed) */}
+          {!editing && !collapsed && (
             <div
               className="orca-diff-comment-actions-pill"
               onMouseDown={(ev) => ev.stopPropagation()}
@@ -229,68 +270,69 @@ export function DiffCommentCard({
           )}
         </div>
 
-        {/* Quote Block */}
-        {quote ? (
+        {/* Quote Block — hidden when collapsed */}
+        {!collapsed && quote ? (
           <div className="orca-diff-comment-quote">
             <div className="orca-diff-comment-quote-text">{quote}</div>
           </div>
         ) : null}
 
-        {/* Body or Edit Mode */}
-        {editing ? (
-          <div className="flex flex-col gap-2 mt-1">
-            <textarea
-              ref={textareaRef}
-              className="orca-diff-comment-popover-textarea"
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value)
-                const el = e.currentTarget
-                el.style.height = 'auto'
-                el.style.height = `${Math.min(el.scrollHeight, 240)}px`
-                onContentResizeRef.current?.()
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.preventDefault()
-                  handleCancel()
-                  return
-                }
-                if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
-                  e.preventDefault()
-                  if (!canSubmit) {
+        {/* Body or Edit Mode — hidden when collapsed */}
+        {!collapsed &&
+          (editing ? (
+            <div className="flex flex-col gap-2 mt-1">
+              <textarea
+                ref={textareaRef}
+                className="orca-diff-comment-popover-textarea"
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value)
+                  const el = e.currentTarget
+                  el.style.height = 'auto'
+                  el.style.height = `${Math.min(el.scrollHeight, 240)}px`
+                  onContentResizeRef.current?.()
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    handleCancel()
                     return
                   }
-                  void handleSubmit()
-                }
-              }}
-              rows={3}
-            />
-            <div className="orca-diff-comment-popover-footer">
-              <Button variant="ghost" size="sm" onClick={handleCancel} disabled={submitting}>
-                {translate('auto.components.diff.comments.DiffCommentCard.0203bed775', 'Cancel')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => void handleSubmit()}
-                disabled={!canSubmit}
-                title={
-                  submitting
-                    ? translate(
-                        'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
-                        'Saving…'
-                      )
-                    : undefined
-                }
-              >
-                {translate('auto.components.diff.comments.DiffCommentCard.109a791e7b', 'Save')}
-                <CornerDownLeft className="ml-1 size-3 opacity-70" />
-              </Button>
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
+                    e.preventDefault()
+                    if (!canSubmit) {
+                      return
+                    }
+                    void handleSubmit()
+                  }
+                }}
+                rows={3}
+              />
+              <div className="orca-diff-comment-popover-footer">
+                <Button variant="ghost" size="sm" onClick={handleCancel} disabled={submitting}>
+                  {translate('auto.components.diff.comments.DiffCommentCard.0203bed775', 'Cancel')}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void handleSubmit()}
+                  disabled={!canSubmit}
+                  title={
+                    submitting
+                      ? translate(
+                          'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
+                          'Saving…'
+                        )
+                      : undefined
+                  }
+                >
+                  {translate('auto.components.diff.comments.DiffCommentCard.109a791e7b', 'Save')}
+                  <CornerDownLeft className="ml-1 size-3 opacity-70" />
+                </Button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="orca-diff-comment-body">{body}</div>
-        )}
+          ) : (
+            <div className="orca-diff-comment-body">{body}</div>
+          ))}
       </div>
     </div>
   )
