@@ -124,3 +124,75 @@ describe('createTerminalAutosuggestLineTracker', () => {
     expect(tracker.getCurrentInputLine()).toBeNull()
   })
 })
+
+describe('isCursorAtEndOfInputLine', () => {
+  it('returns false before any prompt-end has been observed', () => {
+    const tracker = createTerminalAutosuggestLineTracker(makeFakeTerminal('$ git st', 8))
+    expect(tracker.isCursorAtEndOfInputLine()).toBe(false)
+  })
+
+  it('returns true when the cursor sits exactly at the end of the typed input', () => {
+    const { terminal, state } = makeMutableFakeTerminal({ lineText: '$ ', cursorX: 2 })
+    const tracker = createTerminalAutosuggestLineTracker(terminal)
+    tracker.onPromptEndFact()
+    state.lineText = '$ git status'
+    state.cursorX = 12
+    expect(tracker.isCursorAtEndOfInputLine()).toBe(true)
+  })
+
+  it('returns false when the cursor is mid-edit (typed text to the right of it)', () => {
+    const { terminal, state } = makeMutableFakeTerminal({ lineText: '$ ', cursorX: 2 })
+    const tracker = createTerminalAutosuggestLineTracker(terminal)
+    tracker.onPromptEndFact()
+    // Full input is "git status" (cols 2..12) but the cursor sits at col 8.
+    state.lineText = '$ git status'
+    state.cursorX = 8
+    expect(tracker.isCursorAtEndOfInputLine()).toBe(false)
+  })
+
+  it('returns false when the cursor is further right than the typed input', () => {
+    const { terminal, state } = makeMutableFakeTerminal({ lineText: '$ ', cursorX: 2 })
+    const tracker = createTerminalAutosuggestLineTracker(terminal)
+    tracker.onPromptEndFact()
+    // Only "git" was typed (cols 2..5) but the cursor navigated to col 7.
+    state.lineText = '$ git'
+    state.cursorX = 7
+    expect(tracker.isCursorAtEndOfInputLine()).toBe(false)
+  })
+
+  it('returns false once the buffer row no longer matches the captured row', () => {
+    const { terminal, state } = makeMutableFakeTerminal({ lineText: '$ ', cursorX: 2 })
+    const tracker = createTerminalAutosuggestLineTracker(terminal)
+    tracker.onPromptEndFact()
+    state.lineText = '$ git'
+    state.cursorX = 5
+    expect(tracker.isCursorAtEndOfInputLine()).toBe(true)
+    state.cursorY = 1
+    expect(tracker.isCursorAtEndOfInputLine()).toBe(false)
+  })
+})
+
+describe('onChange', () => {
+  it('notifies subscribers when prompt-end and command-started change tracked state', () => {
+    const tracker = createTerminalAutosuggestLineTracker(makeFakeTerminal('$ ', 2))
+    let calls = 0
+    tracker.onChange(() => {
+      calls += 1
+    })
+    tracker.onPromptEndFact()
+    tracker.onCommandStartedFact()
+    expect(calls).toBe(2)
+  })
+
+  it('stops notifying after the returned unsubscribe is called', () => {
+    const tracker = createTerminalAutosuggestLineTracker(makeFakeTerminal('$ ', 2))
+    let calls = 0
+    const unsubscribe = tracker.onChange(() => {
+      calls += 1
+    })
+    tracker.onPromptEndFact()
+    unsubscribe()
+    tracker.onCommandStartedFact()
+    expect(calls).toBe(1)
+  })
+})

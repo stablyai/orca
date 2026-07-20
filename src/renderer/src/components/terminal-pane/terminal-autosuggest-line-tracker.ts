@@ -20,6 +20,12 @@ export type TerminalAutosuggestLineTracker = {
   onCommandStartedFact: () => void
   /** Current typed-but-unsubmitted input line, or null if not at a tracked prompt. */
   getCurrentInputLine: () => string | null
+  /** True iff the cursor sits exactly at the end of the tracked input (not
+   *  mid-edit, not navigated right into trailing whitespace/empty cells). */
+  isCursorAtEndOfInputLine: () => boolean
+  /** Subscribe to tracked-state transitions (prompt-end/command-started).
+   *  Returns an unsubscribe function. */
+  onChange: (listener: () => void) => () => void
   dispose: () => void
 }
 
@@ -28,16 +34,26 @@ export function createTerminalAutosuggestLineTracker(
 ): TerminalAutosuggestLineTracker {
   let promptEndColumn: number | null = null
   let promptRow: number | null = null
+  const changeListeners = new Set<() => void>()
+
+  const emitChange = (): void => {
+    // Copy first so a listener that unsubscribes mid-iteration can't skip peers.
+    for (const listener of Array.from(changeListeners)) {
+      listener()
+    }
+  }
 
   const capturePromptEnd = (): void => {
     const buffer = terminal.buffer.active
     promptEndColumn = buffer.cursorX
     promptRow = buffer.baseY + buffer.cursorY
+    emitChange()
   }
 
   const reset = (): void => {
     promptEndColumn = null
     promptRow = null
+    emitChange()
   }
 
   return {
@@ -67,6 +83,36 @@ export function createTerminalAutosuggestLineTracker(
       }
       return line.translateToString(true, promptEndColumn, buffer.cursorX)
     },
-    dispose: reset
+    isCursorAtEndOfInputLine: () => {
+      if (promptEndColumn === null || promptRow === null) {
+        return false
+      }
+      const buffer = terminal.buffer.active
+      const currentRow = buffer.baseY + buffer.cursorY
+      if (currentRow !== promptRow) {
+        return false
+      }
+      const line = buffer.getLine(currentRow)
+      if (!line) {
+        return false
+      }
+      // Why: read the full tracked input (prompt boundary → end of typed text,
+      // trailing whitespace trimmed) and require the cursor to sit exactly at
+      // its end — excludes mid-edit (text to the right) and right-navigation
+      // into trailing whitespace/empty cells, both of which would misplace the
+      // ghost overlay over real characters.
+      const fullInput = line.translateToString(true, promptEndColumn)
+      return buffer.cursorX === promptEndColumn + fullInput.length
+    },
+    onChange: (listener) => {
+      changeListeners.add(listener)
+      return () => {
+        changeListeners.delete(listener)
+      }
+    },
+    dispose: () => {
+      reset()
+      changeListeners.clear()
+    }
   }
 }
