@@ -79,6 +79,25 @@ describe('orca clickup CLI handlers', () => {
     })
   })
 
+  it('normalizes a ClickUp task URL before sending a mutation', async () => {
+    call.mockResolvedValueOnce({ result: { ok: true } })
+
+    await CLICKUP_HANDLERS['clickup status set']({
+      flags: new Map([
+        ['id', 'https://app.clickup.com/t/86abc123/fix-auth'],
+        ['to', 'in review']
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('clickup.updateTask', {
+      taskId: '86abc123',
+      updates: { status: 'in review' }
+    })
+  })
+
   it('creates a task with the selected List and Workspace', async () => {
     call.mockResolvedValueOnce({ result: { ok: false, error: 'No access' } })
 
@@ -197,5 +216,17 @@ describe('orca clickup CLI handlers', () => {
         json: true
       })
     ).rejects.toMatchObject({ code: 'selector_not_found' })
+  })
+
+  it('rejects a task URL from a lookalike host', async () => {
+    await expect(
+      CLICKUP_HANDLERS['clickup task']({
+        flags: new Map([['id', 'https://app.clickup.com.evil.example/t/86abc123']]),
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(call).not.toHaveBeenCalled()
   })
 })

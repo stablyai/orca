@@ -7,6 +7,7 @@ import type {
   ClickUpTaskFilter
 } from '../../shared/types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import { parseClickUpTaskReference } from '../clickup-task-reference'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {
@@ -40,7 +41,14 @@ async function resolveTaskTarget({
   }
   const explicitWorkspaceId = getOptionalStringFlag(flags, 'workspace')
   if (input) {
-    return { taskId: input, ...(explicitWorkspaceId ? { workspaceId: explicitWorkspaceId } : {}) }
+    const taskId = parseClickUpTaskReference(input)
+    if (!taskId) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Pass a ClickUp task ID or an https://app.clickup.com/t URL.'
+      )
+    }
+    return { taskId, ...(explicitWorkspaceId ? { workspaceId: explicitWorkspaceId } : {}) }
   }
   if (!current) {
     throw new RuntimeClientError('invalid_argument', 'Pass a ClickUp task id or --current.')

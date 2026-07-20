@@ -1,17 +1,5 @@
 import { RuntimeClientError } from '../runtime-client'
-
-function parseClickUpTaskInput(value: string): string | null {
-  try {
-    const url = new URL(value)
-    if (url.hostname === 'app.clickup.com') {
-      const match = url.pathname.match(/^\/t\/([^/]+)/)
-      return match?.[1] ? decodeURIComponent(match[1]) : null
-    }
-  } catch {
-    // Plain task IDs are handled below.
-  }
-  return /^[A-Za-z0-9_-]+$/.test(value) ? value : null
-}
+import { parseClickUpTaskReference } from '../clickup-task-reference'
 
 export function getOptionalClickUpTaskLinkFlag(
   flags: Map<string, string | boolean>,
@@ -37,7 +25,7 @@ export function getOptionalClickUpTaskLinkFlag(
     }
     return { linkedClickUpTaskId: null, linkedClickUpWorkspaceId: null }
   }
-  const taskId = parseClickUpTaskInput(raw.trim())
+  const taskId = parseClickUpTaskReference(raw)
   if (!taskId) {
     throw new RuntimeClientError(
       'invalid_argument',

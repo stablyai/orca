@@ -5,7 +5,7 @@ export const CLICKUP_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['clickup', 'task'],
     summary: 'Read a ClickUp task',
-    usage: 'orca clickup task [<id>] [--current] [--workspace <id>] [--json]',
+    usage: 'orca clickup task [<id-or-url>] [--current] [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca clickup task 86abc123 --json', 'orca clickup task --current --json']
@@ -43,7 +43,8 @@ export const CLICKUP_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['clickup', 'status', 'set'],
     summary: 'Set a ClickUp task status',
-    usage: 'orca clickup status set [<id>] [--current] --to <status> [--workspace <id>] [--json]',
+    usage:
+      'orca clickup status set [<id-or-url>] [--current] --to <status> [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'to', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca clickup status set --current --to "in review" --json']
@@ -52,7 +53,7 @@ export const CLICKUP_COMMAND_SPECS: CommandSpec[] = [
     path: ['clickup', 'priority', 'set'],
     summary: 'Set a ClickUp task priority',
     usage:
-      'orca clickup priority set [<id>] [--current] --to urgent|high|normal|low [--workspace <id>] [--json]',
+      'orca clickup priority set [<id-or-url>] [--current] --to urgent|high|normal|low [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'to', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca clickup priority set 86abc123 --to high --json']
@@ -60,7 +61,7 @@ export const CLICKUP_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['clickup', 'priority', 'clear'],
     summary: 'Clear a ClickUp task priority',
-    usage: 'orca clickup priority clear [<id>] [--current] [--workspace <id>] [--json]',
+    usage: 'orca clickup priority clear [<id-or-url>] [--current] [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca clickup priority clear --current --json']
@@ -69,7 +70,7 @@ export const CLICKUP_COMMAND_SPECS: CommandSpec[] = [
     path: ['clickup', 'due-date', 'set'],
     summary: 'Set a ClickUp task due date',
     usage:
-      'orca clickup due-date set [<id>] [--current] --to <yyyy-mm-dd> [--workspace <id>] [--json]',
+      'orca clickup due-date set [<id-or-url>] [--current] --to <yyyy-mm-dd> [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'to', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca clickup due-date set --current --to 2026-07-31 --json']
@@ -77,7 +78,7 @@ export const CLICKUP_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['clickup', 'due-date', 'clear'],
     summary: 'Clear a ClickUp task due date',
-    usage: 'orca clickup due-date clear [<id>] [--current] [--workspace <id>] [--json]',
+    usage: 'orca clickup due-date clear [<id-or-url>] [--current] [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca clickup due-date clear --current --json']
@@ -85,7 +86,8 @@ export const CLICKUP_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['clickup', 'comment', 'add'],
     summary: 'Add a comment to a ClickUp task',
-    usage: 'orca clickup comment add [<id>] [--current] --body <text> [--workspace <id>] [--json]',
+    usage:
+      'orca clickup comment add [<id-or-url>] [--current] --body <text> [--workspace <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'body', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca clickup comment add --current --body "Ready for review." --json']
