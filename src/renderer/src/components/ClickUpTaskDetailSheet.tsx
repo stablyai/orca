@@ -139,6 +139,7 @@ export function ClickUpTaskDetailSheet({
     }).catch(() => null)
     setSaving(false)
     if (refreshed) {
+      patchTask(task.id, refreshed, sourceContext)
       onTaskChanged(refreshed)
     }
   }
