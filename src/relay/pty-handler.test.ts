@@ -1,4 +1,5 @@
 /* oxlint-disable max-lines */
+import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1378,6 +1379,45 @@ describe('PtyHandler', () => {
       data: 'last words'
     })
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('confirms a sender-binding generation when the PTY is already absent', async () => {
+    const senderBindingGeneration = randomUUID()
+
+    await expect(
+      dispatcher.callRequest('pty.shutdown', {
+        id: 'missing-pty',
+        immediate: true,
+        senderBindingGeneration
+      })
+    ).resolves.toEqual({ senderBindingGeneration, senderBindingState: 'absent' })
+  })
+
+  it('confirms the same sender-binding generation only after physical PTY exit', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: vi.fn(),
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+    const senderBindingGeneration = randomUUID()
+
+    const shutdown = dispatcher.callRequest('pty.shutdown', {
+      id: 'pty-1',
+      immediate: true,
+      senderBindingGeneration
+    })
+    onExitCb!({ exitCode: 137 })
+
+    await expect(shutdown).resolves.toEqual({
+      senderBindingGeneration,
+      senderBindingState: 'exited'
+    })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 137 })
   })
 
   it('notifies pty.exit when graceful shutdown falls back to SIGKILL', async () => {

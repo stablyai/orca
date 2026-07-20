@@ -55,8 +55,8 @@ const SendParams = z
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,
     payload: OptionalString,
-    // Why: the sender's pane key is the remint-stable identity used to verify
-    // worker_done/heartbeat ownership; the from handle stays routing metadata.
+    senderCapability: OptionalString,
+    // Kept for ordinary messages; lifecycle authority never trusts this claim.
     senderPaneKey: OptionalString,
     devMode: OptionalBoolean
   })
@@ -208,10 +208,21 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: SendParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const from = params.from ?? 'unknown'
-      // Why: older live shells may lack ORCA_PANE_KEY, but the runtime still
-      // knows the pane behind their resolved handle; persist that authority.
-      const senderPaneKey = params.senderPaneKey ?? runtime.getTerminalPaneKey(from) ?? undefined
+      const claimedFrom = params.from ?? 'unknown'
+      const isLifecycle = params.type === 'worker_done' || params.type === 'heartbeat'
+      const authenticatedSender = isLifecycle
+        ? runtime.resolveAuthenticatedOrchestrationSender(params.senderCapability)
+        : null
+      if (authenticatedSender && claimedFrom !== authenticatedSender.canonicalHandle) {
+        throw new Error('orchestration_sender_claim_mismatch')
+      }
+      const from = authenticatedSender?.canonicalHandle ?? claimedFrom
+      // Why: only the runtime-minted capability chooses lifecycle identity.
+      const senderPaneKey =
+        authenticatedSender?.canonicalPaneKey ??
+        params.senderPaneKey ??
+        runtime.getTerminalPaneKey(from) ??
+        undefined
 
       if (!isGroupAddress(params.to)) {
         // Point-to-point — existing single-recipient behavior

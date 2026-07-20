@@ -2,6 +2,7 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { userInfo } from 'node:os'
 import { delimiter, join, posix } from 'node:path'
 import {
@@ -233,6 +234,7 @@ import {
 } from '../providers/ssh-pty-provider'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 const POWERSHELL_OSC133_ARGS = [
   '-NoLogo',
@@ -1423,9 +1425,13 @@ describe('registerPtyHandlers', () => {
             env: Record<string, string>
             sessionId?: string
             isNewSession?: boolean
+            senderBindingGeneration?: string
           }) => ({
             id: options.sessionId ?? 'daemon-pty',
-            ...(reportedWslDistro !== undefined ? { wslDistro: reportedWslDistro } : {})
+            ...(reportedWslDistro !== undefined ? { wslDistro: reportedWslDistro } : {}),
+            ...(options.senderBindingGeneration
+              ? { senderBindingGeneration: options.senderBindingGeneration }
+              : {})
           })
         )
         setLocalPtyProvider({
@@ -1447,6 +1453,9 @@ describe('registerPtyHandlers', () => {
         env: Record<string, string>
         envToDelete?: string[]
         isNewSession?: boolean
+        restartExistingSessionForSenderBinding?: boolean
+        senderBindingGeneration?: string
+        sessionId?: string
         shellOverride?: string
         terminalWindowsWslDistro?: string | null
         terminalWindowsPowerShellImplementation?: string
@@ -2258,6 +2267,179 @@ describe('registerPtyHandlers', () => {
         expect(daemonSpawn.mock.calls.at(-1)![0].sessionId).toBe('user-session-42')
         expect(daemonSpawn.mock.calls.at(-1)![0].isNewSession).toBeUndefined()
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined, 'pi')
+      })
+
+      it('binds a reused daemon session to a runtime-minted capability and generation', async () => {
+        const daemonSpawn = setupDaemonAdapter()
+        const senderCapability = randomUUID()
+        const runtime = {
+          setPtyController: vi.fn(),
+          createPreAllocatedTerminalHandle: vi.fn(() => 'term_daemon'),
+          issueOrchestrationSenderCapability: vi.fn(() => senderCapability),
+          issuePendingOrchestrationSenderCapability: vi.fn(() => senderCapability),
+          registerPreAllocatedHandleForPty: vi.fn(),
+          registerPty: vi.fn(),
+          getDriver: vi.fn(() => ({ kind: 'host' })),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const leafId = '33333333-3333-4333-8333-333333333333'
+
+        const rendererResult = await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID() },
+          sessionId: 'persisted-daemon-session',
+          preAllocatedHandle: 'term_daemon',
+          tabId: 'tab-daemon',
+          leafId
+        })
+
+        const spawnOptions = daemonSpawn.mock.calls.at(-1)![0] as DaemonSpawnCall
+        expect(spawnOptions).toMatchObject({
+          sessionId: 'persisted-daemon-session',
+          restartExistingSessionForSenderBinding: true,
+          senderBindingGeneration: expect.any(String)
+        })
+        expect(spawnOptions.env[ORCHESTRATION_SENDER_CAPABILITY_ENV] === senderCapability).toBe(
+          true
+        )
+        expect(runtime.issuePendingOrchestrationSenderCapability).toHaveBeenCalledWith(
+          `tab-daemon:${leafId}`,
+          'term_daemon'
+        )
+        expect(rendererResult).not.toHaveProperty('senderBindingGeneration')
+        expect(rendererResult).not.toHaveProperty('senderCapability')
+        expect(rendererResult).not.toHaveProperty(ORCHESTRATION_SENDER_CAPABILITY_ENV)
+      })
+
+      it('rejects a reused daemon session when the provider acknowledges a stale generation', async () => {
+        const shutdown = vi.fn()
+        setLocalPtyProvider({
+          spawn: vi.fn(async (options: { sessionId?: string }) => ({
+            id: options.sessionId ?? 'missing-session',
+            senderBindingGeneration: randomUUID()
+          })),
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          shutdown,
+          onData: vi.fn(() => vi.fn()),
+          onExit: vi.fn(() => vi.fn()),
+          listProcesses: vi.fn(async () => []),
+          getForegroundProcess: vi.fn(async () => null)
+        } as never)
+        const senderCapability = randomUUID()
+        const runtime = {
+          setPtyController: vi.fn(),
+          createPreAllocatedTerminalHandle: vi.fn(() => 'term_stale_generation'),
+          issueOrchestrationSenderCapability: vi.fn(() => senderCapability),
+          issuePendingOrchestrationSenderCapability: vi.fn(() => senderCapability),
+          revokeOrchestrationSenderCapability: vi.fn(),
+          registerPreAllocatedHandleForPty: vi.fn(),
+          registerPty: vi.fn(),
+          getDriver: vi.fn(() => ({ kind: 'host' })),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+
+        await expect(
+          handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {},
+            sessionId: 'persisted-stale-session',
+            preAllocatedHandle: 'term_stale_generation',
+            tabId: 'tab-stale-generation',
+            leafId: '44444444-4444-4444-8444-444444444444'
+          })
+        ).rejects.toThrow('orchestration_sender_binding_generation_unacknowledged')
+
+        expect(shutdown).toHaveBeenCalledWith('persisted-stale-session', { immediate: true })
+        expect(runtime.revokeOrchestrationSenderCapability).toHaveBeenCalledTimes(1)
+        expect(
+          runtime.revokeOrchestrationSenderCapability.mock.calls[0]?.[0] === senderCapability
+        ).toBe(true)
+      })
+
+      it('consumes only the exact tagged old-child exit during same-id replacement', async () => {
+        let emitExit:
+          | ((payload: {
+              id: string
+              code: number
+              replacedBySenderBindingGeneration?: string
+            }) => void)
+          | undefined
+        const daemonSpawn = vi.fn(
+          async (options: { sessionId?: string; senderBindingGeneration?: string }) => {
+            emitExit?.({
+              id: options.sessionId ?? 'missing-session',
+              code: 137,
+              replacedBySenderBindingGeneration: options.senderBindingGeneration
+            })
+            return {
+              id: options.sessionId ?? 'missing-session',
+              senderBindingGeneration: options.senderBindingGeneration
+            }
+          }
+        )
+        setLocalPtyProvider({
+          spawn: daemonSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          shutdown: vi.fn(),
+          onData: vi.fn(() => vi.fn()),
+          onExit: vi.fn((listener) => {
+            emitExit = listener
+            return vi.fn()
+          }),
+          listProcesses: vi.fn(async () => []),
+          getForegroundProcess: vi.fn(async () => null)
+        } as never)
+        const runtime = {
+          setPtyController: vi.fn(),
+          createPreAllocatedTerminalHandle: vi.fn(() => 'term_same_id'),
+          issueOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+          issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+          revokeOrchestrationSenderCapability: vi.fn(),
+          registerPreAllocatedHandleForPty: vi.fn(),
+          registerPty: vi.fn(),
+          getDriver: vi.fn(() => ({ kind: 'host' })),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const sessionId = 'same-daemon-session'
+
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: {},
+          sessionId,
+          preAllocatedHandle: 'term_same_id',
+          tabId: 'tab-same-id',
+          leafId: '55555555-5555-4555-8555-555555555555'
+        })
+
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([])
+
+        emitExit?.({ id: sessionId, code: 42 })
+        expect(runtime.onPtyExit).toHaveBeenCalledWith(sessionId, 42)
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([['pty:exit', { id: sessionId, code: 42 }]])
       })
 
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
@@ -4740,6 +4922,7 @@ describe('registerPtyHandlers', () => {
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
+    const leafId = '99999999-9999-4999-8999-999999999999'
     const spawn = vi.fn(async () => ({ id: 'remote-pty' }))
     registerSshPtyProvider('ssh-1', {
       spawn,
@@ -4766,6 +4949,7 @@ describe('registerPtyHandlers', () => {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       registerPreAllocatedHandleForPty: vi.fn()
     }
 
@@ -4774,6 +4958,8 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       connectionId: 'ssh-1',
+      tabId: 'tab-remote',
+      leafId,
       env: { EXISTING: '1' }
     })
 
@@ -4796,6 +4982,8 @@ describe('registerPtyHandlers', () => {
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
+      issueOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
         env: {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
@@ -4884,7 +5072,8 @@ describe('registerPtyHandlers', () => {
     const leafId = '88888888-8888-4888-8888-888888888888'
     const runtime = {
       setPtyController: vi.fn(),
-      preAllocateHandleForPty: vi.fn(() => 'term_seam'),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_seam'),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
@@ -4955,6 +5144,8 @@ describe('registerPtyHandlers', () => {
     const runtime = {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
+      issueOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
         env: {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
@@ -5150,6 +5341,8 @@ describe('registerPtyHandlers', () => {
       }),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      issueOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -5239,6 +5432,8 @@ describe('registerPtyHandlers', () => {
       }),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      issueOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       onPtySpawned: vi.fn(),
@@ -5354,6 +5549,8 @@ describe('registerPtyHandlers', () => {
       }),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      issueOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
       onPtySpawned: vi.fn(),
@@ -5501,6 +5698,8 @@ describe('registerPtyHandlers', () => {
       }),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      issueOrchestrationSenderCapability: vi.fn(() => randomUUID()),
+      issuePendingOrchestrationSenderCapability: vi.fn(() => randomUUID()),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn().mockImplementationOnce(() => {
         throw new Error('boom: runtime registration failed')

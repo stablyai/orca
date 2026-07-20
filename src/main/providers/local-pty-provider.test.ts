@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { delimiter } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type * as MacosTccLoginShell from './macos-tcc-login-shell'
 
 const {
@@ -114,6 +115,7 @@ import {
 } from './local-pty-provider'
 import { isRootLikePath } from './pty-path-safety'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
@@ -235,6 +237,67 @@ describe('LocalPtyProvider', () => {
         isReattach: true
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('acknowledges a fresh bound generation when a stored local child is absent', async () => {
+      const generation = randomUUID()
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'stored-local-session',
+        restartExistingSessionForSenderBinding: true,
+        senderBindingGeneration: generation,
+        env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID() }
+      })
+
+      expect(result).toMatchObject({
+        id: 'stored-local-session',
+        sessionExpired: true,
+        senderBindingGeneration: generation
+      })
+      expect(result.isReattach).toBeUndefined()
+    })
+
+    it('replaces a live local child only after its tagged physical exit', async () => {
+      const appExit = vi.fn()
+      provider.configure({ onExit: appExit })
+      const exits: { replacedBySenderBindingGeneration?: string }[] = []
+      provider.onExit((payload) => exits.push(payload))
+      await provider.spawn({ cols: 80, rows: 24, sessionId: 'stored-local-session' })
+      const generation = randomUUID()
+      spawnMock.mockClear()
+
+      const result = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: 'stored-local-session',
+        restartExistingSessionForSenderBinding: true,
+        senderBindingGeneration: generation,
+        env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID() }
+      })
+
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(appExit).not.toHaveBeenCalled()
+      expect(exits).toEqual([
+        expect.objectContaining({ replacedBySenderBindingGeneration: generation })
+      ])
+      expect(result.senderBindingGeneration).toBe(generation)
+    })
+
+    it('fails closed when a local replacement lacks a capability', async () => {
+      spawnMock.mockClear()
+
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'stored-local-session',
+          restartExistingSessionForSenderBinding: true,
+          senderBindingGeneration: randomUUID()
+        })
+      ).rejects.toThrow('orchestration_sender_binding_restart_missing_capability_generation')
+
       expect(spawnMock).not.toHaveBeenCalled()
     })
 

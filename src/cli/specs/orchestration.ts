@@ -1,28 +1,17 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import {
+  ORCHESTRATION_SEND_ALLOWED_FLAGS,
+  ORCHESTRATION_SEND_COMMAND_PATH
+} from '../../shared/orchestration-cli-contract'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
-    path: ['orchestration', 'send'],
+    path: ORCHESTRATION_SEND_COMMAND_PATH,
     summary: 'Send an inter-agent message',
     usage:
       'orca orchestration send --to <handle> --subject <text> [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'to',
-      'from',
-      'subject',
-      'body',
-      'type',
-      'priority',
-      'thread-id',
-      'payload',
-      'task-id',
-      'dispatch-id',
-      'files-modified',
-      'report-path',
-      'phase'
-    ],
+    allowedFlags: ORCHESTRATION_SEND_ALLOWED_FLAGS,
     notes: [
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       'worker_done and heartbeat must target a concrete coordinator terminal handle; use status for broadcast updates.',

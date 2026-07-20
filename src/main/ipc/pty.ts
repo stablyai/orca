@@ -57,6 +57,7 @@ import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtyExitPayload } from '../providers/pty-sender-binding'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import {
   SSH_SESSION_EXPIRED_ERROR,
@@ -162,6 +163,7 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -172,6 +174,89 @@ type FreshLocalFallbackProvider = IPtyProvider & {
   routesFreshSpawnsToLocalProvider?: true
 }
 const sshProviders = new Map<string, IPtyProvider>()
+// Why: only an exit tagged with the exact fresh generation may skip teardown.
+const pendingSenderBindingReplacementGenerations = new Set<string>()
+
+type SenderBindingSpawnAttempt = {
+  capability: string
+  generation: string | null
+}
+
+function issueSenderBindingSpawnAttempt(args: {
+  runtime: OrcaRuntimeService | undefined
+  paneKey: string | null
+  handle: string | null | undefined
+  sessionId: string | undefined
+  isMintedSessionId: boolean
+  env: Record<string, string>
+}): SenderBindingSpawnAttempt | null {
+  if (!args.runtime || !args.paneKey || !args.handle) {
+    return null
+  }
+  const capability = args.runtime.issuePendingOrchestrationSenderCapability(
+    args.paneKey,
+    args.handle
+  )
+  args.env[ORCHESTRATION_SENDER_CAPABILITY_ENV] = capability
+  const generation = args.sessionId !== undefined && !args.isMintedSessionId ? randomUUID() : null
+  if (generation) {
+    pendingSenderBindingReplacementGenerations.add(generation)
+  }
+  return { capability, generation }
+}
+
+function applySenderBindingSpawnAttempt(
+  spawnOptions: PtySpawnOptions,
+  attempt: SenderBindingSpawnAttempt | null
+): void {
+  if (!attempt?.generation) {
+    return
+  }
+  spawnOptions.restartExistingSessionForSenderBinding = true
+  spawnOptions.senderBindingGeneration = attempt.generation
+}
+
+async function verifySenderBindingSpawnAttempt(
+  provider: IPtyProvider,
+  result: PtySpawnResult,
+  attempt: SenderBindingSpawnAttempt | null
+): Promise<void> {
+  if (!attempt?.generation) {
+    return
+  }
+  if (result.senderBindingGeneration !== attempt.generation) {
+    try {
+      await provider.shutdown(result.id, { immediate: true })
+    } catch {
+      // The spawn attempt still owns exact capability cleanup below.
+    }
+    throw new Error('orchestration_sender_binding_generation_unacknowledged')
+  }
+  pendingSenderBindingReplacementGenerations.delete(attempt.generation)
+}
+
+function cleanupSenderBindingSpawnAttempt(
+  runtime: OrcaRuntimeService | undefined,
+  attempt: SenderBindingSpawnAttempt | null
+): void {
+  if (!attempt) {
+    return
+  }
+  if (attempt.generation) {
+    pendingSenderBindingReplacementGenerations.delete(attempt.generation)
+  }
+  runtime?.revokeOrchestrationSenderCapability(attempt.capability)
+}
+
+export function consumeSenderBindingReplacementExit(payload: PtyExitPayload): boolean {
+  const generation = payload.replacedBySenderBindingGeneration
+  if (!generation || !pendingSenderBindingReplacementGenerations.has(generation)) {
+    return false
+  }
+  pendingSenderBindingReplacementGenerations.delete(generation)
+  return true
+}
+
 const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
 // Why: producer flow control changes terminal physics — a flooding shell now
 // blocks on write instead of buffering in main. Kill switch: flip this one
@@ -1612,6 +1697,7 @@ export function registerPtyHandlers(
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.()
         })
+        delete env[ORCHESTRATION_SENDER_CAPABILITY_ENV]
         // Why: agents need their own terminal handle at process start so they
         // can self-identify in orchestration messages without an extra RPC.
         const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
@@ -1624,6 +1710,14 @@ export function registerPtyHandlers(
         }
         if (preAllocatedHandle) {
           env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
+        }
+        const canonicalPaneKey = parseValidPaneKey(baseEnv.ORCA_PANE_KEY)
+        if (runtime && preAllocatedHandle && canonicalPaneKey) {
+          env[ORCHESTRATION_SENDER_CAPABILITY_ENV] = runtime.issueOrchestrationSenderCapability(
+            makePaneKey(canonicalPaneKey.tabId, canonicalPaneKey.leafId),
+            preAllocatedHandle,
+            id
+          )
         }
         if (ctx?.isWsl === true) {
           addOrcaWslInteropEnv(env)
@@ -2782,6 +2876,9 @@ export function registerPtyHandlers(
       }
     })
     localExitUnsub = localProvider.onExit((payload) => {
+      if (consumeSenderBindingReplacementExit(payload)) {
+        return
+      }
       if (consumeSyntheticKillExit(payload.id)) {
         return
       }
@@ -3084,6 +3181,10 @@ export function registerPtyHandlers(
       let env: Record<string, string> | undefined = claudeAuth
         ? { ...sshScopedEnv, ...claudeAuth.envPatch }
         : sshScopedEnv
+      if (env) {
+        env = { ...env }
+        delete env[ORCHESTRATION_SENDER_CAPABILITY_ENV]
+      }
       const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID ? env.PATH : undefined
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
@@ -3193,8 +3294,8 @@ export function registerPtyHandlers(
           : undefined
       }
 
-      const existingPaneSpawn = materializedPaneKey
-        ? paneSpawnReservationsByPaneKey.get(materializedPaneKey)
+      const existingPaneSpawn = spawnIdentityPaneKey
+        ? paneSpawnReservationsByPaneKey.get(spawnIdentityPaneKey)
         : undefined
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
@@ -3204,13 +3305,29 @@ export function registerPtyHandlers(
         cwd,
         args.connectionId
       )
-      const paneSpawnReservation = materializedPaneKey
-        ? reservePaneSpawn(materializedPaneKey)
+      const paneSpawnReservation = spawnIdentityPaneKey
+        ? reservePaneSpawn(spawnIdentityPaneKey)
         : null
       let result: PtySpawnResult
       let preparedProvisionalExecutionContext = false
+      let senderBindingAttempt: SenderBindingSpawnAttempt | null = null
       try {
         try {
+          const originalSpawnEnv = spawnOptions.env
+          const authenticatedSpawnEnv = { ...originalSpawnEnv }
+          delete authenticatedSpawnEnv[ORCHESTRATION_SENDER_CAPABILITY_ENV]
+          senderBindingAttempt = issueSenderBindingSpawnAttempt({
+            runtime,
+            paneKey: spawnIdentityPaneKey,
+            handle: args.preAllocatedHandle,
+            sessionId: spawnOptions.sessionId,
+            isMintedSessionId,
+            env: authenticatedSpawnEnv
+          })
+          if (senderBindingAttempt || originalSpawnEnv) {
+            spawnOptions.env = authenticatedSpawnEnv
+          }
+          applySenderBindingSpawnAttempt(spawnOptions, senderBindingAttempt)
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
           }
@@ -3226,6 +3343,7 @@ export function registerPtyHandlers(
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
           result = await provider.spawn(spawnOptions)
+          await verifySenderBindingSpawnAttempt(provider, result, senderBindingAttempt)
           if (result.providerSequence) {
             runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
@@ -3412,15 +3530,16 @@ export function registerPtyHandlers(
           })
         }
         const response = { id: result.id }
-        return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
+        return resolvePaneSpawnReservation(spawnIdentityPaneKey, paneSpawnReservation, response)
       } catch (err) {
+        cleanupSenderBindingSpawnAttempt(runtime, senderBindingAttempt)
         // Why: once the reservation is created, any later throw — spawn
         // failure, persist failure, or a post-spawn helper such as
         // registerPty/rememberPaneKeyForPty/track — must settle it. Otherwise
         // it lingers in paneSpawnReservationsByPaneKey and every future spawn
         // for this pane awaits a promise that never resolves. reject is a
         // no-op once the reservation has already resolved.
-        rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
+        rejectPaneSpawnReservation(spawnIdentityPaneKey, paneSpawnReservation, err)
         throw err
       } finally {
         finishTerminalInstall()
@@ -3946,6 +4065,9 @@ export function registerPtyHandlers(
           : null
       const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
       let baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      if (baseEnv) {
+        delete baseEnv[ORCHESTRATION_SENDER_CAPABILITY_ENV]
+      }
       const shouldRefreshAgentTeamsEnv =
         !args.connectionId &&
         runtime !== undefined &&
@@ -3955,10 +4077,9 @@ export function registerPtyHandlers(
           launchConfig: args.launchConfig
         })
       let effectiveLaunchConfig = args.launchConfig
+      const senderBindingPaneKey = metadataPaneKey ?? stablePaneKey
       const shouldPreAllocateTerminalHandle =
-        runtime !== undefined &&
-        ((!(provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(provider)) ||
-          shouldRefreshAgentTeamsEnv)
+        runtime !== undefined && (senderBindingPaneKey !== null || shouldRefreshAgentTeamsEnv)
       const preAllocatedHandle = shouldPreAllocateTerminalHandle
         ? runtime.createPreAllocatedTerminalHandle()
         : null
@@ -4197,8 +4318,24 @@ export function registerPtyHandlers(
       }
       let result: PtySpawnResult
       let preparedProvisionalExecutionContext = false
+      let senderBindingAttempt: SenderBindingSpawnAttempt | null = null
       try {
         try {
+          const originalSpawnEnv = spawnOptions.env
+          const authenticatedSpawnEnv = { ...originalSpawnEnv }
+          delete authenticatedSpawnEnv[ORCHESTRATION_SENDER_CAPABILITY_ENV]
+          senderBindingAttempt = issueSenderBindingSpawnAttempt({
+            runtime,
+            paneKey: reservationPaneKey,
+            handle: preAllocatedHandle,
+            sessionId: spawnOptions.sessionId,
+            isMintedSessionId,
+            env: authenticatedSpawnEnv
+          })
+          if (senderBindingAttempt || originalSpawnEnv) {
+            spawnOptions.env = authenticatedSpawnEnv
+          }
+          applySenderBindingSpawnAttempt(spawnOptions, senderBindingAttempt)
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)
           }
@@ -4223,6 +4360,7 @@ export function registerPtyHandlers(
             ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
             : 0
           result = await provider.spawn(spawnOptions)
+          await verifySenderBindingSpawnAttempt(provider, result, senderBindingAttempt)
           if (result.providerSequence) {
             runtime?.synchronizePtyOutputSequenceFromProvider?.(
               result.id,
@@ -4624,8 +4762,10 @@ export function registerPtyHandlers(
           // session id, and a reattach must never claim its cwd was remapped.
           ...(startupCwdFallback && !result.isReattach ? { startupCwdFallback } : {})
         }
+        delete response.senderBindingGeneration
         return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
       } catch (err) {
+        cleanupSenderBindingSpawnAttempt(runtime, senderBindingAttempt)
         // Why: once the reservation is created, any later throw —
         // spawn failure, persist failure, or a post-spawn helper such as
         // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise

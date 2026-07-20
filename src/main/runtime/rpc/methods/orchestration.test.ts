@@ -1,11 +1,13 @@
 /* eslint-disable max-lines -- Why: orchestration tests share a mock runtime factory; splitting by method would duplicate 40 lines of setup per file without improving clarity. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { RpcDispatcher } from '../dispatcher'
 import { buildRegistry, type RpcContext, type RpcRequest } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
@@ -76,6 +78,19 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.send', () => {
+    function authenticateLifecycleSender(handle: string, paneKey: string): string {
+      const capability = randomUUID()
+      vi.spyOn(runtime, 'resolveAuthenticatedOrchestrationSender').mockImplementation(
+        (candidate) => {
+          if (candidate !== capability) {
+            throw new Error('orchestration_sender_unauthenticated')
+          }
+          return { canonicalHandle: handle, canonicalPaneKey: paneKey }
+        }
+      )
+      return capability
+    }
+
     it('sends a message', async () => {
       setup()
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
@@ -120,7 +135,7 @@ describe('orchestration RPC methods', () => {
       expect(db.getMessageById(result.message.id)?.sender_pane_key).toBe('tab_worker:leaf_worker')
     })
 
-    it('completes an identity-less injected send through its explicit worker handle', async () => {
+    it('rejects a lifecycle send that has no runtime-authenticated sender binding', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
@@ -129,11 +144,55 @@ describe('orchestration RPC methods', () => {
       )
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: 'term_coord',
+          subject: 'Done',
+          type: 'worker_done',
+          payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+        })
+      ).rejects.toThrow('orchestration_sender_unauthenticated')
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('rejects an unknown lifecycle capability before persistence', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: 'term_coord',
+          subject: 'Done',
+          type: 'worker_done',
+          senderCapability: randomUUID(),
+          payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+        })
+      ).rejects.toThrow('orchestration_sender_unauthenticated')
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('completes a lifecycle send through its authenticated worker binding', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
       await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'Done',
         type: 'worker_done',
+        senderCapability: capability,
         payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
       })
 
@@ -141,62 +200,164 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
     })
 
-    it('rejects an identity-less lifecycle send resolved through the coordinator handle', async () => {
+    it('uses canonical runtime identity instead of a caller-supplied pane claim', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      const dependent = db.createTask({ spec: 'dependent', deps: [task.id] })
       const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-        handle === 'term_coord' ? 'tab_coord:leaf_coord' : null
-      )
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
       await call('orchestration.send', {
-        from: 'term_coord',
-        to: 'term_coord',
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
-      })
-
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-      expect(db.getTask(dependent.id)?.status).toBe('pending')
-    })
-
-    it('does not replace a foreign sender pane with its claimed assignee handle pane', async () => {
-      setup()
-      const task = db.createTask({ spec: 'work' })
-      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
-      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-
-      const result = (await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'Done',
         type: 'worker_done',
+        senderCapability: capability,
         senderPaneKey: 'tab_foreign:leaf_foreign',
         payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
-      })) as {
-        message: { id: string; type: string; subject: string }
-        lifecycle: { action: string; code: string; reason: string }
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getUnreadMessages('term_coord')[0]?.sender_pane_key).toBe('tab_worker:leaf_worker')
+    })
+
+    it('completes an assigned split after its live PTY and stable leaf move to another tab', async () => {
+      setup()
+      const ptyId = 'pty-assigned-split'
+      const leafId = '77777777-7777-4777-8777-777777777777'
+      const oldTabId = 'tab-split-before-breakout'
+      const newTabId = 'tab-split-after-breakout'
+      const oldPaneKey = makePaneKey(oldTabId, leafId)
+      const newPaneKey = makePaneKey(newTabId, leafId)
+      const handle = runtime.preAllocateHandleForPty(ptyId)
+      const syncPane = (tabId: string): void => {
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId,
+              worktreeId: 'worktree-split',
+              title: 'Split',
+              activeLeafId: leafId,
+              layout: null
+            }
+          ],
+          leaves: [
+            {
+              tabId,
+              worktreeId: 'worktree-split',
+              leafId,
+              paneRuntimeId: 1,
+              ptyId,
+              paneTitle: null
+            }
+          ]
+        })
       }
+      runtime.attachWindow(1)
+      syncPane(oldTabId)
+      const capability = runtime.issueOrchestrationSenderCapability(oldPaneKey, handle)
+      syncPane(newTabId)
+      const task = db.createTask({ spec: 'split work' })
+      const dispatch = db.createDispatchContext(task.id, handle, newPaneKey)
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await call('orchestration.send', {
+        from: handle,
+        to: 'term_coord',
+        subject: 'Done',
+        type: 'worker_done',
+        senderCapability: capability,
+        senderPaneKey: oldPaneKey,
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      })
+
+      expect(db.getTask(task.id)?.status).toBe('completed')
+      expect(db.getUnreadMessages('term_coord')[0]?.sender_pane_key).toBe(newPaneKey)
+    })
+
+    it('rejects adjacent live-pane authority even when it claims the assigned split strings', async () => {
+      setup()
+      const tabId = 'tab-neighboring-splits'
+      const assignedLeafId = '88888888-8888-4888-8888-888888888888'
+      const neighborLeafId = '99999999-9999-4999-8999-999999999999'
+      const assignedPaneKey = makePaneKey(tabId, assignedLeafId)
+      const neighborPaneKey = makePaneKey(tabId, neighborLeafId)
+      const assignedHandle = runtime.preAllocateHandleForPty('pty-assigned-split')
+      const neighborHandle = runtime.preAllocateHandleForPty('pty-neighbor-split')
+      runtime.registerPty('pty-assigned-split', 'worktree-split', null, {
+        tabId,
+        leafId: assignedLeafId
+      })
+      runtime.registerPty('pty-neighbor-split', 'worktree-split', null, {
+        tabId,
+        leafId: neighborLeafId
+      })
+      runtime.issueOrchestrationSenderCapability(assignedPaneKey, assignedHandle)
+      const neighborCapability = runtime.issueOrchestrationSenderCapability(
+        neighborPaneKey,
+        neighborHandle
+      )
+      const task = db.createTask({ spec: 'assigned split work' })
+      const dispatch = db.createDispatchContext(task.id, assignedHandle, assignedPaneKey)
+
+      await expect(
+        call('orchestration.send', {
+          from: assignedHandle,
+          to: 'term_coord',
+          subject: 'Forged done',
+          type: 'worker_done',
+          senderCapability: neighborCapability,
+          senderPaneKey: assignedPaneKey,
+          payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+        })
+      ).rejects.toThrow('orchestration_sender_claim_mismatch')
 
       expect(db.getTask(task.id)?.status).toBe('dispatched')
-      expect(result.lifecycle).toMatchObject({
-        action: 'rejected',
-        code: 'sender_not_assignee',
-        reason: expect.stringContaining('expected handle term_worker')
-      })
-      expect(result.message).toMatchObject({
-        type: 'worker_done',
-        subject: 'Rejected worker_done: Done'
-      })
-      expect(db.getUnreadMessages('term_coord')).toEqual([
-        expect.objectContaining({ id: result.message.id, type: 'worker_done' })
-      ])
-      expect(runtime.notifyMessageArrived).toHaveBeenCalledWith('term_coord', 'worker_done')
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('rejects a foreign live terminal that claims the assignee handle and pane', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const capability = authenticateLifecycleSender('term_foreign', 'tab_foreign:leaf_foreign')
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: 'term_coord',
+          subject: 'Forged done',
+          type: 'worker_done',
+          senderCapability: capability,
+          senderPaneKey: 'tab_worker:leaf_worker',
+          payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+        })
+      ).rejects.toThrow('orchestration_sender_claim_mismatch')
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('rejects an old-suffix handle claim against a current capability', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker_old',
+          to: 'term_coord',
+          subject: 'Stale done',
+          type: 'worker_done',
+          senderCapability: capability,
+          payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+        })
+      ).rejects.toThrow('orchestration_sender_claim_mismatch')
+
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
     })
 
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {
@@ -204,6 +365,7 @@ describe('orchestration RPC methods', () => {
       const task = db.createTask({ spec: 'work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker')
       db.updateTaskStatus(task.id, 'completed')
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
 
@@ -212,6 +374,7 @@ describe('orchestration RPC methods', () => {
         to: 'term_coord',
         subject: 'alive',
         type: 'heartbeat',
+        senderCapability: capability,
         payload: JSON.stringify({ dispatchId: dispatch.id })
       })) as { message: { id: string } }
 
@@ -223,6 +386,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
 
@@ -231,6 +395,7 @@ describe('orchestration RPC methods', () => {
         to: 'term_coord',
         subject: 'alive',
         type: 'heartbeat',
+        senderCapability: capability,
         payload: JSON.stringify({ dispatchId: dispatch.id })
       })
 
@@ -402,12 +567,14 @@ describe('orchestration RPC methods', () => {
 
     it('continues to send worker_done to a concrete terminal handle', async () => {
       setup()
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
 
       const result = (await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'done',
         type: 'worker_done',
+        senderCapability: capability,
         payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' })
       })) as { message: { to_handle: string; type: string; payload: string | null } }
 
@@ -543,6 +710,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'lock-release work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
 
       // Why: assert lock is already gone at delivery time, not just after the call.
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {
@@ -554,6 +722,7 @@ describe('orchestration RPC methods', () => {
         to: 'term_coord',
         subject: 'done',
         type: 'worker_done',
+        senderCapability: capability,
         payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
       })) as { message: { type: string } }
 
@@ -570,6 +739,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'heartbeat work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      const capability = authenticateLifecycleSender('term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
       await call('orchestration.send', {
@@ -577,6 +747,7 @@ describe('orchestration RPC methods', () => {
         to: 'term_coord',
         subject: 'alive',
         type: 'heartbeat',
+        senderCapability: capability,
         payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
       })
 
@@ -1012,6 +1183,11 @@ describe('orchestration RPC methods', () => {
 
     it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
       setup()
+      const capability = randomUUID()
+      vi.spyOn(runtime, 'resolveAuthenticatedOrchestrationSender').mockReturnValue({
+        canonicalHandle: 'worker',
+        canonicalPaneKey: 'tab_worker:leaf_worker'
+      })
 
       const waitPromise = call('orchestration.check', {
         terminal: 'coord',
@@ -1025,7 +1201,8 @@ describe('orchestration RPC methods', () => {
         from: 'worker',
         to: 'coord',
         subject: 'alive',
-        type: 'heartbeat'
+        type: 'heartbeat',
+        senderCapability: capability
       })
 
       const early = await Promise.race([
@@ -1038,7 +1215,8 @@ describe('orchestration RPC methods', () => {
         from: 'worker',
         to: 'coord',
         subject: 'done',
-        type: 'worker_done'
+        type: 'worker_done',
+        senderCapability: capability
       })
 
       const result = await waitPromise

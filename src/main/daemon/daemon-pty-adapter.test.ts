@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
@@ -14,6 +15,7 @@ import type { SubprocessHandle } from './session'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -147,6 +149,59 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('uses worktreeId as session prefix when provided', async () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       expect(result.id).toContain('wt-1')
+    })
+
+    it('acknowledges a fresh bound generation for an absent daemon child', async () => {
+      const generation = randomUUID()
+      const result = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'sender-binding-absent',
+        restartExistingSessionForSenderBinding: true,
+        senderBindingGeneration: generation,
+        env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID() }
+      })
+
+      expect(result.senderBindingGeneration).toBe(generation)
+      expect(result.sessionExpired).toBe(true)
+      expect(result.isReattach).toBeUndefined()
+    })
+
+    it('observes the old daemon child exit before exposing a fresh generation', async () => {
+      const sessionId = 'sender-binding-restart'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      const generation = randomUUID()
+      const exits: { replacedBySenderBindingGeneration?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+
+      const result = await adapter.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId,
+        restartExistingSessionForSenderBinding: true,
+        senderBindingGeneration: generation,
+        env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID() }
+      })
+
+      expect(exits).toEqual([
+        expect.objectContaining({ replacedBySenderBindingGeneration: generation })
+      ])
+      expect(result.senderBindingGeneration).toBe(generation)
+      expect(result.isReattach).toBeUndefined()
+    })
+
+    it('fails closed before daemon creation when the capability is missing', async () => {
+      await expect(
+        adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'sender-binding-missing',
+          restartExistingSessionForSenderBinding: true,
+          senderBindingGeneration: randomUUID()
+        })
+      ).rejects.toThrow('orchestration_sender_binding_restart_missing_capability_generation')
+
+      expect(lastSpawnOpts).toBeNull()
     })
 
     it('keeps a reattached native UNC session native despite a conflicting WSL preference', async () => {

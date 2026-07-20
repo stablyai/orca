@@ -65,13 +65,14 @@ import {
 } from '../git/repo-clone-path'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
+import type { AuthenticatedOrchestrationSender } from '../../shared/orchestration-sender-capability'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   Automation,
@@ -1048,6 +1049,12 @@ type RuntimePtyWorktreeRecord = {
   waitBlockedAt: number | null
   // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
   tailWaitState?: TerminalTailWaitState
+}
+
+type OrchestrationSenderCapabilityRecord = AuthenticatedOrchestrationSender & {
+  ptyId: string | null
+  leafId: string
+  ptyGeneration: number | null
 }
 
 type TerminalCreateOptions = {
@@ -2255,6 +2262,9 @@ export class OrcaRuntimeService {
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
+  private orchestrationSenderCapabilities = new Map<string, OrchestrationSenderCapabilityRecord>()
+  private orchestrationSenderCapabilityByPaneKey = new Map<string, string>()
+  private orchestrationSenderGenerationByPtyId = new Map<string, number>()
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
@@ -3378,13 +3388,16 @@ export class OrcaRuntimeService {
       })
 
       if (leaf.ptyId) {
+        const nextPaneKey = this.makeRuntimePaneKey(leaf)
+        const previousPaneKey = existingPty?.paneKey ?? null
         this.recordPtyWorktree(leaf.ptyId, leaf.worktreeId, {
           connected: true,
           lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,
           preview: existing?.ptyId === leaf.ptyId ? existing.preview : '',
           tabId: leaf.tabId,
-          paneKey: this.makeRuntimePaneKey(leaf)
+          paneKey: nextPaneKey
         })
+        this.reconcileOrchestrationSenderPaneKey(leaf.ptyId, previousPaneKey, nextPaneKey)
       }
 
       if (existing && (existing.ptyId !== ptyId || existing.ptyGeneration !== ptyGeneration)) {
@@ -5932,6 +5945,176 @@ export class OrcaRuntimeService {
     }
   }
 
+  issueOrchestrationSenderCapability(
+    canonicalPaneKey: string,
+    canonicalHandle: string,
+    ptyId?: string
+  ): string {
+    return this.createOrchestrationSenderCapability(canonicalPaneKey, canonicalHandle, { ptyId })
+  }
+
+  issuePendingOrchestrationSenderCapability(
+    canonicalPaneKey: string,
+    canonicalHandle: string
+  ): string {
+    return this.createOrchestrationSenderCapability(canonicalPaneKey, canonicalHandle, {
+      deferPtyBinding: true
+    })
+  }
+
+  private createOrchestrationSenderCapability(
+    canonicalPaneKey: string,
+    canonicalHandle: string,
+    opts: { ptyId?: string; deferPtyBinding?: boolean }
+  ): string {
+    const parsedPaneKey = parsePaneKey(canonicalPaneKey)
+    if (!parsedPaneKey || !canonicalHandle.startsWith('term_')) {
+      throw new Error('orchestration_sender_identity_invalid')
+    }
+    this.revokeOrchestrationSenderCapabilityForPaneKey(canonicalPaneKey)
+    // Why: this isolates adjacent panes; hostile same-UID capability theft remains out of scope.
+    const capability = randomBytes(32).toString('base64url')
+    const sender: OrchestrationSenderCapabilityRecord = {
+      canonicalPaneKey,
+      canonicalHandle,
+      ptyId: null,
+      leafId: parsedPaneKey.leafId,
+      ptyGeneration: null
+    }
+    this.orchestrationSenderCapabilities.set(capability, sender)
+    this.orchestrationSenderCapabilityByPaneKey.set(canonicalPaneKey, capability)
+    const currentPty =
+      typeof opts.ptyId === 'string'
+        ? this.ptysById.get(opts.ptyId)
+        : this.getPtyRecordForPaneKey(canonicalPaneKey)
+    const resolvedPtyId = opts.deferPtyBinding ? undefined : (opts.ptyId ?? currentPty?.ptyId)
+    if (resolvedPtyId && this.handleByPtyId.get(resolvedPtyId) === canonicalHandle) {
+      this.bindOrchestrationSenderCapabilityToPty(capability, resolvedPtyId)
+    }
+    return capability
+  }
+
+  resolveAuthenticatedOrchestrationSender(
+    capability: string | undefined
+  ): AuthenticatedOrchestrationSender {
+    const sender = capability ? this.orchestrationSenderCapabilities.get(capability) : undefined
+    if (!sender) {
+      throw new Error('orchestration_sender_unauthenticated')
+    }
+    const currentPty = sender.ptyId ? this.ptysById.get(sender.ptyId) : undefined
+    const canonicalPty = this.getPtyRecordForPaneKey(sender.canonicalPaneKey)
+    const currentPaneKey = currentPty?.paneKey
+    const currentPane = currentPaneKey ? parsePaneKey(currentPaneKey) : null
+    const currentHandle = currentPty?.connected ? this.handleByPtyId.get(currentPty.ptyId) : null
+    if (
+      !currentPty ||
+      canonicalPty?.ptyId !== sender.ptyId ||
+      !currentPane ||
+      currentPane.leafId !== sender.leafId ||
+      currentPaneKey !== sender.canonicalPaneKey ||
+      currentHandle !== sender.canonicalHandle ||
+      this.orchestrationSenderCapabilityByPaneKey.get(sender.canonicalPaneKey) !== capability ||
+      sender.ptyGeneration === null ||
+      this.orchestrationSenderGenerationByPtyId.get(currentPty.ptyId) !== sender.ptyGeneration
+    ) {
+      throw new Error('orchestration_sender_unauthenticated')
+    }
+    return {
+      canonicalHandle: sender.canonicalHandle,
+      canonicalPaneKey: sender.canonicalPaneKey
+    }
+  }
+
+  revokeOrchestrationSenderCapability(capability: string): void {
+    const sender = this.orchestrationSenderCapabilities.get(capability)
+    if (!sender) {
+      return
+    }
+    this.orchestrationSenderCapabilities.delete(capability)
+    if (this.orchestrationSenderCapabilityByPaneKey.get(sender.canonicalPaneKey) === capability) {
+      this.orchestrationSenderCapabilityByPaneKey.delete(sender.canonicalPaneKey)
+    }
+  }
+
+  private revokeOrchestrationSenderCapabilityForPaneKey(paneKey: string): void {
+    const capability = this.orchestrationSenderCapabilityByPaneKey.get(paneKey)
+    if (capability) {
+      this.revokeOrchestrationSenderCapability(capability)
+    }
+  }
+
+  private revokeOrchestrationSenderCapabilityForPty(ptyId: string): void {
+    this.orchestrationSenderGenerationByPtyId.set(
+      ptyId,
+      (this.orchestrationSenderGenerationByPtyId.get(ptyId) ?? 0) + 1
+    )
+    for (const [capability, sender] of this.orchestrationSenderCapabilities) {
+      if (sender.ptyId === ptyId) {
+        this.revokeOrchestrationSenderCapability(capability)
+      }
+    }
+    const paneKey = this.ptysById.get(ptyId)?.paneKey
+    if (paneKey) {
+      const pendingCapability = this.orchestrationSenderCapabilityByPaneKey.get(paneKey)
+      if (pendingCapability) {
+        this.revokeOrchestrationSenderCapability(pendingCapability)
+      }
+    }
+  }
+
+  private bindOrchestrationSenderCapabilityToPty(capability: string, ptyId: string): void {
+    const sender = this.orchestrationSenderCapabilities.get(capability)
+    if (!sender || sender.ptyId === ptyId) {
+      return
+    }
+    if (sender.ptyId !== null || this.handleByPtyId.get(ptyId) !== sender.canonicalHandle) {
+      this.revokeOrchestrationSenderCapability(capability)
+      return
+    }
+    const generation = (this.orchestrationSenderGenerationByPtyId.get(ptyId) ?? 0) + 1
+    this.orchestrationSenderGenerationByPtyId.set(ptyId, generation)
+    sender.ptyId = ptyId
+    sender.ptyGeneration = generation
+  }
+
+  private bindPendingOrchestrationSenderCapability(paneKey: string, ptyId: string): void {
+    const capability = this.orchestrationSenderCapabilityByPaneKey.get(paneKey)
+    if (capability) {
+      this.bindOrchestrationSenderCapabilityToPty(capability, ptyId)
+    }
+  }
+
+  private reconcileOrchestrationSenderPaneKey(
+    ptyId: string,
+    previousPaneKey: string | null,
+    nextPaneKey: string | null
+  ): void {
+    if (!previousPaneKey || previousPaneKey === nextPaneKey) {
+      return
+    }
+    const capability = this.orchestrationSenderCapabilityByPaneKey.get(previousPaneKey)
+    if (!capability) {
+      return
+    }
+    const sender = this.orchestrationSenderCapabilities.get(capability)
+    const nextPane = nextPaneKey ? parsePaneKey(nextPaneKey) : null
+    if (
+      !sender ||
+      sender.ptyId !== ptyId ||
+      !nextPane ||
+      nextPane.leafId !== sender.leafId ||
+      !nextPaneKey ||
+      this.orchestrationSenderCapabilityByPaneKey.has(nextPaneKey)
+    ) {
+      this.revokeOrchestrationSenderCapability(capability)
+      return
+    }
+    // Why: tab break-out changes only the tab half; the live PTY and stable leaf remain authority.
+    this.orchestrationSenderCapabilityByPaneKey.delete(previousPaneKey)
+    this.orchestrationSenderCapabilityByPaneKey.set(nextPaneKey, capability)
+    sender.canonicalPaneKey = nextPaneKey
+  }
+
   private adoptControllerTerminalHandle(ptyId: string, handle: string | undefined): void {
     const trimmed = handle?.trim()
     if (!trimmed || !trimmed.startsWith('term_')) {
@@ -5994,20 +6177,30 @@ export class OrcaRuntimeService {
   ): void {
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
-    const paneKey =
+    const validBinding =
       binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
-        ? makePaneKey(binding.tabId, binding.leafId)
+        ? binding
         : null
+    const currentLeaf = validBinding
+      ? this.getLeavesForPty(ptyId).find((leaf) => leaf.leafId === validBinding.leafId)
+      : undefined
+    // Why: graph re-keying is authoritative; a late spawn registration can carry the old tab.
+    const canonicalTabId = currentLeaf?.tabId ?? validBinding?.tabId
+    const paneKey =
+      validBinding && canonicalTabId ? makePaneKey(canonicalTabId, validBinding.leafId) : null
     this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,
       connectionId,
       ...(isWsl !== undefined ? { isWsl } : {}),
-      ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {})
+      ...(canonicalTabId && paneKey ? { tabId: canonicalTabId, paneKey } : {})
     })
+    if (paneKey) {
+      this.bindPendingOrchestrationSenderCapability(paneKey, ptyId)
+    }
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
-    if (binding && paneKey) {
-      this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+    if (canonicalTabId && paneKey) {
+      this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, canonicalTabId)
     }
   }
 
@@ -9195,6 +9388,7 @@ export class OrcaRuntimeService {
 
   onPtyExit(ptyId: string, exitCode: number): void {
     this.advancePtyLifecycleGeneration(ptyId)
+    this.revokeOrchestrationSenderCapabilityForPty(ptyId)
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
@@ -20182,7 +20376,12 @@ export class OrcaRuntimeService {
     }
     const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
     const parentTabId = pty.tabId?.trim()
-    if (!parentTabId || !parsedPaneKey) {
+    if (
+      !parentTabId ||
+      !isValidTerminalTabId(parentTabId) ||
+      !parsedPaneKey ||
+      parsedPaneKey.tabId !== parentTabId
+    ) {
       throw new Error('terminal_handle_stale')
     }
     const direction = opts.direction ?? 'horizontal'
@@ -20200,18 +20399,19 @@ export class OrcaRuntimeService {
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
-      preAllocatedHandle
+      preAllocatedHandle,
+      tabId: parentTabId,
+      leafId
     })
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
     if (result.wslDistro) {
       this.preparePtyExecutionContext(result.id, result.wslDistro)
     }
-    this.registerPty(result.id, workspace.id, workspace.connectionId)
+    this.registerPty(result.id, workspace.id, workspace.connectionId, {
+      tabId: parentTabId,
+      leafId
+    })
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
-    if (createdPty) {
-      createdPty.tabId = parentTabId
-      createdPty.paneKey = paneKey
-    }
 
     try {
       await this.notifier?.revealTerminalSession?.(workspace.id, {
@@ -21925,6 +22125,7 @@ export class OrcaRuntimeService {
   private dropDisconnectedPtyRecord(ptyId: string): void {
     // Why: pruning can remove a PTY without the normal exit callback.
     this.advancePtyLifecycleGeneration(ptyId)
+    this.revokeOrchestrationSenderCapabilityForPty(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)

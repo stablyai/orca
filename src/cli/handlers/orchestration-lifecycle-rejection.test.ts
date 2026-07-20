@@ -1,4 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 const callMock = vi.fn()
 const originalExitCode = process.exitCode
@@ -10,6 +12,7 @@ import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 afterEach(() => {
   process.exitCode = originalExitCode
+  vi.unstubAllEnvs()
 })
 
 it('prints a lifecycle rejection and exits unsuccessfully', async () => {
@@ -24,6 +27,8 @@ it('prints a lifecycle rejection and exits unsuccessfully', async () => {
     }
   }
   callMock.mockResolvedValueOnce(response)
+  vi.stubEnv('ORCA_TERMINAL_HANDLE', 'term_foreign')
+  vi.stubEnv(ORCHESTRATION_SENDER_CAPABILITY_ENV, randomUUID())
 
   await ORCHESTRATION_HANDLERS['orchestration send']({
     flags: new Map([

@@ -22,6 +22,7 @@ import {
   logHistoryInjection
 } from '../terminal-history'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type { PtyExitPayload } from './pty-sender-binding'
 import {
   ensureNodePtySpawnHelperExecutable,
   validateWorkingDirectory,
@@ -68,12 +69,14 @@ import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-defau
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  ORCHESTRATION_SENDER_CAPABILITY_ENV
 ] as const
 
 let ptyCounter = 0
@@ -106,6 +109,7 @@ const ptyInitialCwd = new Map<string, string>()
 // Why: reattach requests carry current settings, not the live process's launch
 // context. Keep the first creator's WSL/native identity for the PTY incarnation.
 const ptyWslDistroById = new Map<string, string | null>()
+const senderBindingReplacementBySessionId = new Map<string, string>()
 // Why: node-pty callbacks must be disposed before environment teardown, but
 // onExit separately owns physical process-exit proof during termination.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
@@ -123,7 +127,7 @@ let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
 
 type DataCallback = (payload: { id: string; data: string }) => void
-type ExitCallback = (payload: { id: string; code: number }) => void
+type ExitCallback = (payload: PtyExitPayload) => void
 
 const dataListeners = new Set<DataCallback>()
 const exitListeners = new Set<ExitCallback>()
@@ -515,24 +519,58 @@ export class LocalPtyProvider implements IPtyProvider {
    */
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     const reattachId = normalizeLocalCallerSessionId(args.sessionId)
+    const senderBindingGeneration = args.restartExistingSessionForSenderBinding
+      ? args.senderBindingGeneration
+      : undefined
+    if (
+      args.restartExistingSessionForSenderBinding &&
+      (!args.env?.[ORCHESTRATION_SENDER_CAPABILITY_ENV] || !senderBindingGeneration)
+    ) {
+      throw new Error('orchestration_sender_binding_restart_missing_capability_generation')
+    }
     if (reattachId) {
       const pendingShutdown = ptyShutdownOperations.get(reattachId)
       if (pendingShutdown) {
-        await pendingShutdown.promise
+        if (senderBindingGeneration) {
+          senderBindingReplacementBySessionId.set(reattachId, senderBindingGeneration)
+        }
+        try {
+          await pendingShutdown.promise
+        } catch (error) {
+          senderBindingReplacementBySessionId.delete(reattachId)
+          throw error
+        }
+        if (senderBindingGeneration && senderBindingReplacementBySessionId.delete(reattachId)) {
+          throw new Error('orchestration_sender_binding_restart_exit_not_observed')
+        }
       }
       const existing = ptyProcesses.get(reattachId)
       if (existing) {
         const existingWslDistro = ptyWslDistroById.get(reattachId)
-        try {
-          existing.resize(args.cols, args.rows)
-        } catch {
-          /* Existing PTY may reject resize during teardown; still return the live handle. */
-        }
-        return {
-          id: reattachId,
-          pid: existing.pid,
-          ...(ptyWslDistroById.has(reattachId) ? { wslDistro: existingWslDistro ?? null } : {}),
-          isReattach: true
+        if (senderBindingGeneration) {
+          // Why: a live child cannot receive a new bearer capability.
+          senderBindingReplacementBySessionId.set(reattachId, senderBindingGeneration)
+          try {
+            await this.shutdown(reattachId, { immediate: true })
+          } catch (error) {
+            senderBindingReplacementBySessionId.delete(reattachId)
+            throw error
+          }
+          if (senderBindingReplacementBySessionId.delete(reattachId)) {
+            throw new Error('orchestration_sender_binding_restart_exit_not_observed')
+          }
+        } else {
+          try {
+            existing.resize(args.cols, args.rows)
+          } catch {
+            /* Existing PTY may reject resize during teardown; still return the live handle. */
+          }
+          return {
+            id: reattachId,
+            pid: existing.pid,
+            ...(ptyWslDistroById.has(reattachId) ? { wslDistro: existingWslDistro ?? null } : {}),
+            isReattach: true
+          }
         }
       }
     }
@@ -990,6 +1028,10 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const onExitDisposable = proc.onExit(({ exitCode }) => {
+      const replacementGeneration = senderBindingReplacementBySessionId.get(id)
+      if (replacementGeneration) {
+        senderBindingReplacementBySessionId.delete(id)
+      }
       const wasTerminationRequested = ptyTerminationMode.has(id)
       ptyPhysicalExits.get(id)?.markExited()
       // Why: neutralize proc.kill the instant the child is reaped, before any
@@ -1014,9 +1056,17 @@ export class LocalPtyProvider implements IPtyProvider {
       // this, a shell that exits cleanly (the common case) never releases its
       // fd until the next GC. See docs/fix-pty-fd-leak.md.
       destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
-      this.opts.onExit?.(id, exitCode)
+      if (!replacementGeneration) {
+        this.opts.onExit?.(id, exitCode)
+      }
       for (const cb of exitListeners) {
-        cb({ id, code: exitCode })
+        cb({
+          id,
+          code: exitCode,
+          ...(replacementGeneration
+            ? { replacedBySenderBindingGeneration: replacementGeneration }
+            : {})
+        })
       }
     })
     if (onExitDisposable) {
@@ -1050,7 +1100,8 @@ export class LocalPtyProvider implements IPtyProvider {
     return {
       id,
       pid,
-      ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
+      ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {}),
+      ...(senderBindingGeneration ? { sessionExpired: true, senderBindingGeneration } : {})
     }
   }
 
@@ -1440,6 +1491,7 @@ export class LocalPtyProvider implements IPtyProvider {
   /** Kill all in-process local PTYs. Call on app quit. */
   killAll(): void {
     cancelAllPendingLocalPtySpawns()
+    senderBindingReplacementBySessionId.clear()
     for (const [id, proc] of ptyProcesses) {
       runPtyCleanup(id)
       disposePtyListeners(id)
@@ -1468,5 +1520,6 @@ export function _resetLocalPtyProviderStateForTest(): void {
   for (const id of ptyProcesses.keys()) {
     clearPtyState(id)
   }
+  senderBindingReplacementBySessionId.clear()
   loadGeneration = 0
 }

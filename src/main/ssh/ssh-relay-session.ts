@@ -40,6 +40,7 @@ import {
   getPtyIdsForConnection,
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
+  consumeSenderBindingReplacementExit,
   deletePtyOwnership,
   setPtyOwnership,
   answerStartupTerminalColorQueriesForPty
@@ -1163,6 +1164,9 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onExit((payload) => {
+      if (consumeSenderBindingReplacementExit(payload)) {
+        return
+      }
       const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
       clearProviderPtyState(payload.id)
       deletePtyOwnership(payload.id)

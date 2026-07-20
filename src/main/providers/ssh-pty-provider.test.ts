@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { SshPtyProvider } from './ssh-pty-provider'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -322,6 +324,67 @@ describe('SshPtyProvider', () => {
         isReattach: true,
         replay: 'buffered-output'
       })
+    })
+
+    it('waits for the tagged SSH exit before spawning a fresh bound generation', async () => {
+      const generation = randomUUID()
+      const capability = randomUUID()
+      const notification = mux.onNotification.mock.calls[0][0]
+      mux.request.mockImplementation(async (method: string) => {
+        if (method === 'pty.shutdown') {
+          notification('pty.exit', { id: 'pty-old', code: 0 })
+          return { senderBindingGeneration: generation, senderBindingState: 'exited' }
+        }
+        return { id: 'pty-new' }
+      })
+      const exits: { replacedBySenderBindingGeneration?: string }[] = []
+      provider.onExit((payload) => exits.push(payload))
+
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'pty-old',
+        restartExistingSessionForSenderBinding: true,
+        senderBindingGeneration: generation,
+        env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: capability }
+      })
+
+      expect(mux.request).toHaveBeenNthCalledWith(
+        1,
+        'pty.shutdown',
+        expect.objectContaining({ id: 'pty-old', senderBindingGeneration: generation })
+      )
+      expect(mux.request).toHaveBeenNthCalledWith(
+        2,
+        'pty.spawn',
+        expect.objectContaining({
+          env: expect.objectContaining({
+            [ORCHESTRATION_SENDER_CAPABILITY_ENV]: expect.any(String)
+          })
+        })
+      )
+      expect(exits).toEqual([
+        expect.objectContaining({ replacedBySenderBindingGeneration: generation })
+      ])
+      expect(result).toMatchObject({
+        id: 'ssh:conn-1@@pty-new',
+        sessionExpired: true,
+        senderBindingGeneration: generation
+      })
+    })
+
+    it('fails closed when an SSH replacement lacks a capability', async () => {
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'pty-old',
+          restartExistingSessionForSenderBinding: true,
+          senderBindingGeneration: randomUUID()
+        })
+      ).rejects.toThrow('SSH_SENDER_BINDING_RESTART_FAILED')
+
+      expect(mux.request).not.toHaveBeenCalled()
     })
 
     it('reattaches scoped app ids using raw relay ids', async () => {

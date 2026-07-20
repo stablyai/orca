@@ -25,6 +25,7 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 import type { PtySpawnResult } from './pty-spawn-result'
+import type * as SenderBinding from './pty-sender-binding'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ export type PtySpawnOptions = {
    *  through spawn options keeps local PTY and daemon PTY semantics aligned
    *  without promoting pwsh into a separate shell family. */
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
-}
+} & SenderBinding.PtySenderBindingSpawnOptions
 
 export type { PtySpawnResult }
 
@@ -184,7 +185,7 @@ export type IPtyProvider = {
     callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
   ): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void
+  onExit(callback: (payload: SenderBinding.PtyExitPayload) => void): () => void
 }
 
 // ─── Filesystem Provider ────────────────────────────────────────────

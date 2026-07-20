@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
@@ -13,6 +14,7 @@ vi.mock('../persistence', () => ({
 
 import { OrchestrationDb } from '../runtime/orchestration/db'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
 import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 
@@ -179,6 +181,13 @@ describe('runRemoteOrcaCli', () => {
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     const task = db.createTask({ spec: 'remote work' })
     const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+    const senderCapability = randomUUID()
+    const resolveSender = vi
+      .spyOn(runtime, 'resolveAuthenticatedOrchestrationSender')
+      .mockReturnValue({
+        canonicalHandle: 'term_ssh',
+        canonicalPaneKey: 'tab_foreign:leaf_foreign'
+      })
 
     try {
       const result = await runRemoteOrcaCli(
@@ -200,7 +209,11 @@ describe('runRemoteOrcaCli', () => {
             '--json'
           ],
           cwd: '/home/alice/repo',
-          env: { ORCA_PANE_KEY: 'tab_foreign:leaf_foreign' }
+          env: {
+            ORCA_TERMINAL_HANDLE: 'term_ssh',
+            ORCA_PANE_KEY: 'tab_foreign:leaf_foreign',
+            [ORCHESTRATION_SENDER_CAPABILITY_ENV]: senderCapability
+          }
         },
         LEGACY_FALLBACK_OPTIONS
       )
@@ -214,6 +227,8 @@ describe('runRemoteOrcaCli', () => {
         }
       })
       expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(resolveSender).toHaveBeenCalledTimes(1)
+      expect(resolveSender.mock.calls[0]?.[0] === senderCapability).toBe(true)
     } finally {
       db.close()
     }
@@ -227,6 +242,13 @@ describe('runRemoteOrcaCli', () => {
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     const task = db.createTask({ spec: 'remote work' })
     const dispatch = db.createDispatchContext(task.id, 'term_ssh', 'tab_owner:leaf_owner')
+    const senderCapability = randomUUID()
+    const resolveSender = vi
+      .spyOn(runtime, 'resolveAuthenticatedOrchestrationSender')
+      .mockReturnValue({
+        canonicalHandle: 'term_ssh',
+        canonicalPaneKey: 'tab_owner:leaf_owner'
+      })
 
     try {
       const result = await runRemoteOrcaCli(
@@ -252,7 +274,8 @@ describe('runRemoteOrcaCli', () => {
           cwd: '/home/alice/repo',
           env: {
             ORCA_TERMINAL_HANDLE: 'term_ssh',
-            ORCA_PANE_KEY: 'tab_owner:leaf_owner'
+            ORCA_PANE_KEY: 'tab_owner:leaf_owner',
+            [ORCHESTRATION_SENDER_CAPABILITY_ENV]: senderCapability
           }
         },
         LEGACY_FALLBACK_OPTIONS
@@ -263,6 +286,8 @@ describe('runRemoteOrcaCli', () => {
         status: 'completed',
         result: expect.stringContaining('src/a.ts')
       })
+      expect(resolveSender).toHaveBeenCalledTimes(1)
+      expect(resolveSender.mock.calls[0]?.[0] === senderCapability).toBe(true)
     } finally {
       db.close()
     }
@@ -297,6 +322,130 @@ describe('runRemoteOrcaCli', () => {
       error: { code: 'no_active_sender_terminal' }
     })
     expect(db.insertMessage).not.toHaveBeenCalled()
+  })
+
+  it.each(['unknown', 'revoked'] as const)(
+    'rejects a %s runtime capability in the legacy lifecycle fallback',
+    async (mode) => {
+      const db = new OrchestrationDb(':memory:')
+      const runtime = new OrcaRuntimeService()
+      runtime.setOrchestrationDb(db)
+      vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+      const ptyId = `pty-legacy-${mode}`
+      const tabId = `tab-legacy-${mode}`
+      const leafId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      const paneKey = `${tabId}:${leafId}`
+      const handle = runtime.preAllocateHandleForPty(ptyId)
+      runtime.registerPty(ptyId, 'worktree-legacy', null, { tabId, leafId })
+      const issuedCapability = runtime.issueOrchestrationSenderCapability(paneKey, handle)
+      if (mode === 'revoked') {
+        runtime.revokeOrchestrationSenderCapability(issuedCapability)
+      }
+      const capability = mode === 'unknown' ? randomUUID() : issuedCapability
+      const task = db.createTask({ spec: 'remote work' })
+      const dispatch = db.createDispatchContext(task.id, handle, paneKey)
+
+      try {
+        const result = await runRemoteOrcaCli(
+          runtime,
+          {
+            argv: [
+              'orchestration',
+              'send',
+              '--to',
+              'term_coord',
+              '--subject',
+              'Done',
+              '--type',
+              'worker_done',
+              '--task-id',
+              task.id,
+              '--dispatch-id',
+              dispatch.id,
+              '--json'
+            ],
+            cwd: '/home/alice/repo',
+            env: {
+              ORCA_TERMINAL_HANDLE: handle,
+              ORCA_PANE_KEY: paneKey,
+              [ORCHESTRATION_SENDER_CAPABILITY_ENV]: capability
+            }
+          },
+          LEGACY_FALLBACK_OPTIONS
+        )
+
+        expect(result.exitCode).toBe(1)
+        expect(db.getTask(task.id)?.status).toBe('dispatched')
+        expect(db.getInbox(100)).toHaveLength(0)
+      } finally {
+        db.close()
+      }
+    }
+  )
+
+  it('rejects a valid neighboring sender that claims the assignee in the legacy fallback', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+    vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    const assignedLeafId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const foreignLeafId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const assignedPaneKey = `tab-legacy-neighbors:${assignedLeafId}`
+    const foreignPaneKey = `tab-legacy-neighbors:${foreignLeafId}`
+    const assignedHandle = runtime.preAllocateHandleForPty('pty-legacy-assigned')
+    const foreignHandle = runtime.preAllocateHandleForPty('pty-legacy-foreign')
+    runtime.registerPty('pty-legacy-assigned', 'worktree-legacy', null, {
+      tabId: 'tab-legacy-neighbors',
+      leafId: assignedLeafId
+    })
+    runtime.registerPty('pty-legacy-foreign', 'worktree-legacy', null, {
+      tabId: 'tab-legacy-neighbors',
+      leafId: foreignLeafId
+    })
+    const foreignCapability = runtime.issueOrchestrationSenderCapability(
+      foreignPaneKey,
+      foreignHandle
+    )
+    const task = db.createTask({ spec: 'remote work' })
+    const dispatch = db.createDispatchContext(task.id, assignedHandle, assignedPaneKey)
+
+    try {
+      const result = await runRemoteOrcaCli(
+        runtime,
+        {
+          argv: [
+            'orchestration',
+            'send',
+            '--to',
+            'term_coord',
+            '--subject',
+            'Forged done',
+            '--type',
+            'worker_done',
+            '--task-id',
+            task.id,
+            '--dispatch-id',
+            dispatch.id,
+            '--json'
+          ],
+          cwd: '/home/alice/repo',
+          env: {
+            ORCA_TERMINAL_HANDLE: assignedHandle,
+            ORCA_PANE_KEY: assignedPaneKey,
+            [ORCHESTRATION_SENDER_CAPABILITY_ENV]: foreignCapability
+          }
+        },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(1)
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getInbox(100)).toHaveLength(0)
+    } finally {
+      db.close()
+    }
   })
 
   it('rejects mixed raw and structured payload flags in the legacy fallback', async () => {

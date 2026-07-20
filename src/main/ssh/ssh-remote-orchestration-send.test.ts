@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { randomUUID } from 'node:crypto'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 import {
   getRemoteOrchestrationPayload,
   hasRemoteLifecycleRejection,
-  resolveRemoteOrchestrationSender
+  resolveRemoteOrchestrationSender,
+  resolveRemoteOrchestrationSenderCapability
 } from './ssh-remote-orchestration-send'
 
 describe('remote orchestration send compatibility', () => {
@@ -13,20 +16,71 @@ describe('remote orchestration send compatibility', () => {
     expect(hasRemoteLifecycleRejection(null)).toBe(false)
   })
 
-  it('prefers an explicit sender over the remote terminal environment', () => {
-    expect(
+  it('rejects an explicit lifecycle sender that differs from the bound terminal', () => {
+    expect(() =>
       resolveRemoteOrchestrationSender(
         new Map([['from', 'term_explicit']]),
-        { ORCA_TERMINAL_HANDLE: 'term_env' },
+        {
+          ORCA_TERMINAL_HANDLE: 'term_env',
+          [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID()
+        },
         'worker_done'
       )
-    ).toBe('term_explicit')
+    ).toThrowError(expect.objectContaining({ code: 'invalid_argument' }))
+  })
+
+  it('uses the bound terminal for lifecycle sends when the explicit claim matches', () => {
+    expect(
+      resolveRemoteOrchestrationSender(
+        new Map([['from', 'term_env']]),
+        {
+          ORCA_TERMINAL_HANDLE: 'term_env',
+          [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID()
+        },
+        'worker_done'
+      )
+    ).toBe('term_env')
   })
 
   it.each(['worker_done', 'heartbeat'])('fails closed for an identity-less %s', (type) => {
     expect(() => resolveRemoteOrchestrationSender(new Map(), {}, type)).toThrowError(
       expect.objectContaining({ code: 'no_active_sender_terminal' })
     )
+  })
+
+  it('fails closed when a lifecycle terminal handle has no capability', () => {
+    expect(() =>
+      resolveRemoteOrchestrationSender(new Map(), { ORCA_TERMINAL_HANDLE: 'term_env' }, 'heartbeat')
+    ).toThrowError(expect.objectContaining({ code: 'no_active_sender_terminal' }))
+  })
+
+  it('forwards the runtime-bound capability only for the lifecycle request', () => {
+    const senderCapability = randomUUID()
+    const resolved = resolveRemoteOrchestrationSenderCapability(
+      { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: senderCapability },
+      'worker_done'
+    )
+
+    expect(resolved === senderCapability).toBe(true)
+  })
+
+  it('does not attach the bearer capability to an ordinary message', () => {
+    expect(
+      resolveRemoteOrchestrationSenderCapability(
+        { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID() },
+        'status'
+      )
+    ).toBeUndefined()
+  })
+
+  it('preserves explicit sender compatibility for non-lifecycle messages', () => {
+    expect(
+      resolveRemoteOrchestrationSender(
+        new Map([['from', 'term_explicit']]),
+        { ORCA_TERMINAL_HANDLE: 'term_env' },
+        'status'
+      )
+    ).toBe('term_explicit')
   })
 
   it('preserves the legacy unknown sender for non-lifecycle messages', () => {

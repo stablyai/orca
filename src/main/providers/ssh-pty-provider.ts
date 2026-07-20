@@ -1,11 +1,16 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type { PtyExitPayload } from './pty-sender-binding'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
+import {
+  requireSshSenderBindingGeneration,
+  restartSshPtyForSenderBinding
+} from './ssh-sender-binding-restart'
 
 type DataCallback = (payload: { id: string; data: string }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
-type ExitCallback = (payload: { id: string; code: number }) => void
+type ExitCallback = (payload: PtyExitPayload) => void
 type RemoteCliBridgeEnv = {
   binDir: string
   relayDir: string
@@ -16,6 +21,7 @@ type RemoteCliBridgeEnv = {
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
+export { SSH_SENDER_BINDING_RESTART_FAILED_ERROR } from './ssh-sender-binding-restart'
 
 export function isSshPtyNotFoundError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
@@ -38,6 +44,7 @@ export class SshPtyProvider implements IPtyProvider {
   private dataListeners = new Set<DataCallback>()
   private replayListeners = new Set<ReplayCallback>()
   private exitListeners = new Set<ExitCallback>()
+  private senderBindingReplacementByRelayPtyId = new Map<string, string>()
   // Why: store the unsubscribe handle so dispose() can detach from the
   // multiplexer. Without this, notification callbacks keep firing after
   // the provider is torn down on disconnect, routing events to stale state.
@@ -66,11 +73,23 @@ export class SshPtyProvider implements IPtyProvider {
           }
           break
 
-        case 'pty.exit':
+        case 'pty.exit': {
+          const relayPtyId = params.id as string
+          const replacementGeneration = this.senderBindingReplacementByRelayPtyId.get(relayPtyId)
+          if (replacementGeneration) {
+            this.senderBindingReplacementByRelayPtyId.delete(relayPtyId)
+          }
           for (const cb of this.exitListeners) {
-            cb({ id: this.toAppPtyId(params.id as string), code: params.code as number })
+            cb({
+              id: this.toAppPtyId(relayPtyId),
+              code: params.code as number,
+              ...(replacementGeneration
+                ? { replacedBySenderBindingGeneration: replacementGeneration }
+                : {})
+            })
           }
           break
+        }
       }
     })
   }
@@ -83,6 +102,7 @@ export class SshPtyProvider implements IPtyProvider {
     this.dataListeners.clear()
     this.replayListeners.clear()
     this.exitListeners.clear()
+    this.senderBindingReplacementByRelayPtyId.clear()
   }
 
   getConnectionId(): string {
@@ -98,10 +118,28 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    const senderBindingGeneration = requireSshSenderBindingGeneration(opts)
+    let senderBindingRestarted = false
+    if (opts.sessionId) {
+      const relaySessionId = this.toRelayPtyId(opts.sessionId)
+      // Why: attach cannot update the existing remote child environment.
+      senderBindingRestarted = await restartSshPtyForSenderBinding({
+        opts,
+        relaySessionId,
+        pendingByRelayPtyId: this.senderBindingReplacementByRelayPtyId,
+        shutdown: () =>
+          this.mux.request('pty.shutdown', {
+            id: relaySessionId,
+            immediate: true,
+            keepHistory: true,
+            senderBindingGeneration: opts.senderBindingGeneration
+          })
+      })
+    }
     // Why: when sessionId is present, the caller is requesting reattach to an
     // existing relay PTY (persisted across app restart). pty.attach replays
     // the buffered output the relay kept alive during the grace window.
-    if (opts.sessionId) {
+    if (opts.sessionId && !senderBindingRestarted) {
       const relaySessionId = this.toRelayPtyId(opts.sessionId)
       console.warn(
         `[ssh-pty] spawn() called with sessionId=${opts.sessionId}, attempting pty.attach`
@@ -172,7 +210,8 @@ export class SshPtyProvider implements IPtyProvider {
     return {
       ...(result as PtySpawnResult),
       id: this.toAppPtyId((result as PtySpawnResult).id),
-      ...(opts.sessionId ? { sessionExpired: true } : {})
+      ...(senderBindingRestarted ? { sessionExpired: true } : {}),
+      ...(senderBindingGeneration ? { senderBindingGeneration } : {})
     }
   }
 

@@ -9,6 +9,7 @@ import { spawn as nodeSpawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getCanonicalUserDataPath } from '../persistence'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 export type RemoteOrcaCliRequest = {
   argv: string[]
@@ -46,7 +47,8 @@ const REMOTE_CONTEXT_ENV_VARS = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_WORKTREE_ID',
   'ORCA_PANE_KEY',
-  'ORCA_WORKSPACE_ID'
+  'ORCA_WORKSPACE_ID',
+  ORCHESTRATION_SENDER_CAPABILITY_ENV
 ] as const
 
 // Why: bound captured output so a runaway command cannot balloon the relay
@@ -87,6 +89,8 @@ export function buildHostCliEnv(args: {
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...args.hostEnv }
   for (const key of REMOTE_CONTEXT_ENV_VARS) {
+    // Why: a dev host may itself run inside a different Orca terminal.
+    delete env[key]
     const value = args.remoteEnv[key]
     if (typeof value === 'string' && value.length > 0) {
       env[key] = value

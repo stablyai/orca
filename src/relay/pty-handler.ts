@@ -39,6 +39,7 @@ import {
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
+import type { SshSenderBindingShutdownReceipt } from '../shared/orchestration-sender-capability'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
@@ -1031,12 +1032,30 @@ export class PtyHandler {
     }
   }
 
-  private async shutdown(params: Record<string, unknown>): Promise<void> {
+  private async shutdown(
+    params: Record<string, unknown>
+  ): Promise<SshSenderBindingShutdownReceipt | void> {
     const id = params.id as string
     const immediate = params.immediate as boolean
+    const rawGeneration = params.senderBindingGeneration
+    const senderBindingGeneration =
+      typeof rawGeneration === 'string' && rawGeneration.length > 0 && rawGeneration.length <= 128
+        ? rawGeneration
+        : null
+    if (rawGeneration !== undefined && !senderBindingGeneration) {
+      throw new Error('Invalid sender-binding shutdown generation')
+    }
+    if (senderBindingGeneration && !immediate) {
+      throw new Error('Sender-binding shutdown requires an immediate physical-exit boundary')
+    }
     const managed = this.ptys.get(id)
     if (!managed) {
-      return
+      if (senderBindingGeneration && this.pendingReviveIds.has(id)) {
+        throw new Error(`PTY "${id}" is pending revival`)
+      }
+      return senderBindingGeneration
+        ? { senderBindingGeneration, senderBindingState: 'absent' }
+        : undefined
     }
 
     if (immediate) {
@@ -1047,6 +1066,9 @@ export class PtyHandler {
       // an uninterruptible child. Timeout rejects but deliberately keeps the
       // map entry so a later onExit or retry retains the physical owner.
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+      return senderBindingGeneration
+        ? { senderBindingGeneration, senderBindingState: 'exited' }
+        : undefined
     } else {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'force-kill')

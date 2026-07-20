@@ -15,7 +15,8 @@ import { getRemoteLinearHelp, tryDispatchRemoteLinearCli } from './ssh-remote-li
 import {
   getRemoteOrchestrationPayload,
   hasRemoteLifecycleRejection,
-  resolveRemoteOrchestrationSender
+  resolveRemoteOrchestrationSender,
+  resolveRemoteOrchestrationSenderCapability
 } from './ssh-remote-orchestration-send'
 
 export type { RemoteOrcaCliRequest, RemoteOrcaCliResult } from './ssh-remote-cli-host-passthrough'
@@ -188,8 +189,7 @@ async function dispatchRemoteCli(
         priority: optionalString(parsed.flags, 'priority'),
         threadId: optionalString(parsed.flags, 'thread-id'),
         payload: getRemoteOrchestrationPayload(parsed.flags),
-        // Why: the legacy in-process bridge must preserve the same pane
-        // authority as the full host CLI passthrough.
+        senderCapability: resolveRemoteOrchestrationSenderCapability(env, type),
         senderPaneKey: env.ORCA_PANE_KEY || undefined
       })
     }

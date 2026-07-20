@@ -1,5 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/types'
+import type { PtySenderBindingSpawnResult } from './pty-sender-binding'
 
 export type PtySpawnResult = {
   /** App-facing PTY id. Remote providers must return globally routable ids,
@@ -56,4 +57,4 @@ export type PtySpawnResult = {
     rows?: number
     oscLinks?: TerminalOscLinkRange[]
   }
-}
+} & PtySenderBindingSpawnResult

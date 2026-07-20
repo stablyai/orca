@@ -1,3 +1,5 @@
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
+
 const WSLENV_ENTRY_SEPARATOR = ':'
 
 function parseWslenvEntries(value: string | undefined): string[] {
@@ -29,6 +31,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
+    `${ORCHESTRATION_SENDER_CAPABILITY_ENV}/u`,
     'ORCA_AGENT_HOOK_PORT/u',
     'ORCA_AGENT_HOOK_TOKEN/u',
     'ORCA_AGENT_HOOK_ENV/u',

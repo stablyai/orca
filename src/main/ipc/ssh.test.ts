@@ -157,6 +157,7 @@ vi.mock('../providers/ssh-filesystem-provider', () => ({
 vi.mock('./pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
+  consumeSenderBindingReplacementExit: vi.fn(() => false),
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),

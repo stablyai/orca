@@ -231,7 +231,7 @@ async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
   const requestId = 1
 
   const sendRequest = (): void => {
-    const env = pickRemoteCliEnv(process.env)
+    const env = pickRemoteCliEnv(process.env, argv)
     const frame = encodeJsonRpcFrame(
       {
         jsonrpc: '2.0',

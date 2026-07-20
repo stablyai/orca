@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { randomUUID } from 'node:crypto'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 import { addOrcaWslInteropEnv } from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
@@ -18,6 +20,16 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
 
     expect(env.WSLENV).toBe('FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p')
+  })
+
+  it('marks the runtime sender capability for Windows to WSL env import', () => {
+    const env: Record<string, string> = {
+      [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID()
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV).toBe(`${ORCHESTRATION_SENDER_CAPABILITY_ENV}/u`)
   })
 
   it('marks OMP status and hook env for Windows to WSL import', () => {

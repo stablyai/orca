@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 vi.mock('electron', () => ({
   app: {
@@ -56,6 +58,7 @@ describe('resolveHostCliEntryPath', () => {
 
 describe('buildHostCliEnv', () => {
   it('forwards only Orca terminal-context vars from the remote env', () => {
+    const senderCapability = randomUUID()
     const env = buildHostCliEnv({
       hostEnv: { PATH: '/host/bin', NODE_OPTIONS: '--inspect' },
       remoteEnv: {
@@ -63,6 +66,7 @@ describe('buildHostCliEnv', () => {
         ORCA_WORKTREE_ID: 'repo::/home/alice/wt',
         ORCA_PANE_KEY: 'pane-9',
         ORCA_WORKSPACE_ID: 'ws-1',
+        [ORCHESTRATION_SENDER_CAPABILITY_ENV]: senderCapability,
         // Why: these are remote-machine paths and must not leak into the host
         // subprocess (PATH would break host binary lookup; user-data would
         // retarget the CLI at a different local instance).
@@ -77,12 +81,27 @@ describe('buildHostCliEnv', () => {
     expect(env.ORCA_WORKTREE_ID).toBe('repo::/home/alice/wt')
     expect(env.ORCA_PANE_KEY).toBe('pane-9')
     expect(env.ORCA_WORKSPACE_ID).toBe('ws-1')
+    expect(env[ORCHESTRATION_SENDER_CAPABILITY_ENV] === senderCapability).toBe(true)
     expect(env.PATH).toBe('/host/bin')
     expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
     expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')
     expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(env.NODE_OPTIONS).toBeUndefined()
     expect(env.ORCA_NODE_OPTIONS).toBe('--inspect')
+  })
+
+  it('does not inherit an unrelated host sender capability when the remote omits it', () => {
+    const env = buildHostCliEnv({
+      hostEnv: {
+        PATH: '/host/bin',
+        [ORCHESTRATION_SENDER_CAPABILITY_ENV]: randomUUID()
+      },
+      remoteEnv: { ORCA_TERMINAL_HANDLE: 'term_remote' },
+      userDataPath: '/host/user-data',
+      remoteCwd: '/home/alice/wt'
+    })
+
+    expect(env[ORCHESTRATION_SENDER_CAPABILITY_ENV]).toBeUndefined()
   })
 })
 

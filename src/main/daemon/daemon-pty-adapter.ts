@@ -29,6 +29,7 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import type { PtyExitPayload } from '../providers/pty-sender-binding'
 import { isShellProcess } from '../../shared/agent-detection'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
@@ -36,6 +37,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 type ColdRestorePayload = {
   scrollback: string
@@ -106,7 +108,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     data: string
     sequenceChars?: number
   }) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private exitListeners: ((payload: PtyExitPayload) => void)[] = []
+  private senderBindingReplacementBySessionId = new Map<string, string>()
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   private removeEventListener: (() => void) | null = null
   private initialCwds = new Map<string, string>()
@@ -302,8 +305,39 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ...(historySeed ? { historySeed } : {})
       })
 
+    const senderBindingGeneration = opts.restartExistingSessionForSenderBinding
+      ? opts.senderBindingGeneration
+      : undefined
+    if (
+      opts.restartExistingSessionForSenderBinding &&
+      (!opts.env?.[ORCHESTRATION_SENDER_CAPABILITY_ENV] || !senderBindingGeneration)
+    ) {
+      // Why: an attach-shaped request may create before any later validation.
+      throw new Error('orchestration_sender_binding_restart_missing_capability_generation')
+    }
+
     let scrollback = restoreInfo ? getRecoveredHistorySeed(restoreInfo) : null
     let result = await createOrAttach(scrollback)
+    let senderBindingCreatedFresh = result.isNew && senderBindingGeneration !== undefined
+    if (!result.isNew && senderBindingGeneration) {
+      // Why: createOrAttach cannot update a live child's environment.
+      this.senderBindingReplacementBySessionId.set(sessionId, senderBindingGeneration)
+      try {
+        await this.client.request('kill', { sessionId, immediate: true })
+      } catch (error) {
+        this.senderBindingReplacementBySessionId.delete(sessionId)
+        throw error
+      }
+      if (this.senderBindingReplacementBySessionId.has(sessionId)) {
+        this.senderBindingReplacementBySessionId.delete(sessionId)
+        throw new Error('orchestration_sender_binding_restart_exit_not_observed')
+      }
+      result = await createOrAttach(scrollback)
+      if (!result.isNew) {
+        throw new Error('orchestration_sender_binding_restart_not_fresh')
+      }
+      senderBindingCreatedFresh = true
+    }
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Why: explicit null from a current daemon overrides the caller's WSL
     // preference; undefined preserves compatibility with older daemons.
@@ -315,6 +349,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     const launchIdentity = (): { launchAgent?: NonNullable<typeof result.launchAgent> } =>
       result.launchAgent ? { launchAgent: result.launchAgent } : {}
+    const senderBindingIdentity = (): {
+      sessionExpired?: true
+      senderBindingGeneration?: string
+    } =>
+      senderBindingCreatedFresh && senderBindingGeneration
+        ? { sessionExpired: true, senderBindingGeneration }
+        : {}
 
     if (effectiveCwd) {
       this.initialCwds.set(sessionId, effectiveCwd)
@@ -342,6 +383,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
+        ...senderBindingIdentity(),
         coldRestore: cachedRestore,
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(!result.isNew ? { isReattach: true } : {})
@@ -415,6 +457,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           id: sessionId,
           pid,
           ...launchIdentity(),
+          ...senderBindingIdentity(),
           coldRestore,
           ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
           ...(providerSequence ? { providerSequence } : {}),
@@ -425,6 +468,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
+        ...senderBindingIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {})
       }
@@ -465,6 +509,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
+        ...senderBindingIdentity(),
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
         ...(providerSequence ? { providerSequence } : {}),
         ...(isReattach ? { isReattach: true } : {})
@@ -485,6 +530,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       id: sessionId,
       pid,
       ...launchIdentity(),
+      ...senderBindingIdentity(),
       ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
@@ -950,7 +996,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return () => {}
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(callback: (payload: PtyExitPayload) => void): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -961,6 +1007,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   dispose(): void {
+    this.senderBindingReplacementBySessionId.clear()
     this.respawnAdoptionClosed = true
     this.releasePendingRespawnAdoptionLease()
     this.stopCheckpointTimer()
@@ -999,6 +1046,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // We write a final checkpoint before disconnecting so that if the daemon
   // later crashes while Orca is closed, checkpoint.json has recovery data.
   async disconnectOnly(): Promise<void> {
+    this.senderBindingReplacementBySessionId.clear()
     this.respawnAdoptionClosed = true
     this.releasePendingRespawnAdoptionLease()
     this.stopCheckpointTimer()
@@ -1511,9 +1559,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
         this.initialCwds.delete(event.sessionId)
         this.wslDistrosBySessionId.delete(event.sessionId)
+        const replacementGeneration = this.senderBindingReplacementBySessionId.get(event.sessionId)
+        if (replacementGeneration) {
+          this.senderBindingReplacementBySessionId.delete(event.sessionId)
+        }
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.exitListeners]) {
-          listener({ id: event.sessionId, code: event.payload.code })
+          listener({
+            id: event.sessionId,
+            code: event.payload.code,
+            ...(replacementGeneration
+              ? { replacedBySenderBindingGeneration: replacementGeneration }
+              : {})
+          })
         }
       }
     })

@@ -9,6 +9,7 @@ import {
 import { RuntimeClientError } from '../runtime-client'
 import { getTerminalHandle } from '../selectors'
 import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 // Why: 15 s is well under Claude Code's empirical ~2 min Bash-tool silence
 // budget and generates only ~40 lines per 10 min wait — enough to assure the
@@ -320,6 +321,14 @@ function throwNoActiveSenderTerminal(): never {
   )
 }
 
+function throwNoAuthenticatedLifecycleSenderTerminal(): never {
+  throw new RuntimeClientError(
+    'no_active_sender_terminal',
+    'Could not authenticate the sender terminal for this orchestration lifecycle command. ' +
+      'Run it inside the currently dispatched Orca terminal.'
+  )
+}
+
 function isDevCliInvocation(): boolean {
   return process.env.ORCA_USER_DATA_PATH?.includes('orca-dev') ?? false
 }
@@ -355,16 +364,22 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration send': async ({ flags, client, cwd, json }) => {
     const to = getRequiredStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
+    const explicitFrom = getOptionalStringFlag(flags, 'from')
+    const isLifecycle = type === 'worker_done' || type === 'heartbeat'
     rejectLifecycleGroupRecipient(type, to)
 
     if (
-      (type === 'worker_done' || type === 'heartbeat') &&
-      !getOptionalStringFlag(flags, 'from') &&
-      !process.env.ORCA_TERMINAL_HANDLE
+      isLifecycle &&
+      (!process.env.ORCA_TERMINAL_HANDLE || !process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV])
     ) {
-      // Why: focus is not lifecycle authority; injected dispatches carry an
-      // explicit worker handle so an identity-less subprocess must fail closed.
-      throwNoActiveSenderTerminal()
+      // Why: lifecycle identity fields are claims; only the per-PTY runtime capability authorizes them.
+      throwNoAuthenticatedLifecycleSenderTerminal()
+    }
+    if (isLifecycle && explicitFrom && explicitFrom !== process.env.ORCA_TERMINAL_HANDLE) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Lifecycle --from must exactly match the current authenticated Orca terminal handle.'
+      )
     }
 
     // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness
@@ -383,9 +398,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
-      // Why: the pane key is the remint-stable sender identity the runtime
-      // verifies lifecycle ownership against; older runtimes strip it.
-      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      ...(isLifecycle
+        ? { senderCapability: process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV] }
+        : {}),
+      ...(process.env.ORCA_PANE_KEY ? { senderPaneKey: process.env.ORCA_PANE_KEY } : {}),
       devMode: isDevCliInvocation()
     })
     if ('message' in result.result && result.result.lifecycle?.action === 'rejected') {

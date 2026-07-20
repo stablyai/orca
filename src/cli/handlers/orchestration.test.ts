@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { randomUUID } from 'node:crypto'
+import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
+const originalSenderCapability = process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV]
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
 }
@@ -45,6 +48,11 @@ afterEach(() => {
     delete process.env.ORCA_PANE_KEY
   } else {
     process.env.ORCA_PANE_KEY = originalPaneKey
+  }
+  if (originalSenderCapability === undefined) {
+    delete process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV]
+  } else {
+    process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV] = originalSenderCapability
   }
 })
 
@@ -92,7 +100,8 @@ describe('orchestration send structured payload flags', () => {
   beforeEach(() => {
     callMock.mockReset().mockResolvedValue({ result: { message: { id: 'msg_1' } } })
     getTerminalHandleMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV] = randomUUID()
     delete process.env.ORCA_PANE_KEY
   })
 
@@ -132,6 +141,7 @@ describe('orchestration send structured payload flags', () => {
         filesModified: ['src/a.ts', 'src/b.ts'],
         reportPath: 'reports/done.md'
       }),
+      senderCapability: expect.any(String),
       devMode: false
     })
   })
@@ -225,6 +235,7 @@ describe('orchestration send structured payload flags', () => {
       priority: undefined,
       threadId: undefined,
       payload: undefined,
+      senderCapability: expect.any(String),
       devMode: false
     })
   })
@@ -250,6 +261,7 @@ describe('orchestration send structured payload flags', () => {
       priority: undefined,
       threadId: undefined,
       payload: undefined,
+      senderCapability: expect.any(String),
       devMode: false
     })
   })
@@ -298,10 +310,9 @@ describe('orchestration send structured payload flags', () => {
     )
   })
 
-  it('reports sender resolution failure instead of raw no_active_terminal', async () => {
-    getTerminalHandleMock.mockRejectedValue(
-      new RuntimeClientError('no_active_terminal', 'no_active_terminal')
-    )
+  it('reports a missing authenticated lifecycle sender without probing focus', async () => {
+    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV]
 
     await expect(
       invokeSend(
@@ -313,7 +324,7 @@ describe('orchestration send structured payload flags', () => {
       )
     ).rejects.toMatchObject({
       code: 'no_active_sender_terminal',
-      message: expect.stringContaining('Pass --from')
+      message: expect.stringContaining('authenticate')
     })
     expect(callMock).not.toHaveBeenCalled()
   })
@@ -321,6 +332,8 @@ describe('orchestration send structured payload flags', () => {
   it.each(['worker_done', 'heartbeat'] as const)(
     'does not resolve an identity-less %s sender from the active terminal',
     async (type) => {
+      delete process.env.ORCA_TERMINAL_HANDLE
+      delete process.env[ORCHESTRATION_SENDER_CAPABILITY_ENV]
       getTerminalHandleMock.mockResolvedValue('term_active_coordinator')
 
       await expect(

@@ -11187,15 +11187,28 @@ describe('OrcaRuntimeService', () => {
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
 
-    await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
+    const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
+    expect(split).toMatchObject({
       handle: expect.stringMatching(/^term_/),
       tabId: sourceEnv.ORCA_TAB_ID,
       paneRuntimeId: -1
     })
 
-    const splitEnv =
-      (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const splitCall = spawn.mock.calls[1]?.[0] as
+      | {
+          env?: Record<string, string>
+          tabId?: string
+          leafId?: string
+          preAllocatedHandle?: string
+        }
+      | undefined
+    const splitEnv = splitCall?.env ?? {}
     const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    expect(splitCall).toMatchObject({
+      tabId: sourceEnv.ORCA_TAB_ID,
+      leafId: splitLeafId,
+      preAllocatedHandle: split.handle
+    })
     expect(splitTerminal).not.toHaveBeenCalled()
     expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
     expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
@@ -11222,6 +11235,22 @@ describe('OrcaRuntimeService', () => {
     for (const surface of siblingSurfaces) {
       expect(surface.parentLayout?.root).toMatchObject({ type: 'split', direction: 'vertical' })
     }
+  })
+
+  it('fails closed when a runtime-created split lacks stable parent pane metadata', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-unbound' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const handle = runtime.preAllocateHandleForPty('pty-unbound')
+    runtime.registerPty('pty-unbound', TEST_WORKTREE_ID)
+
+    await expect(runtime.splitTerminal(handle)).rejects.toThrow('terminal_handle_stale')
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('splits folder workspace pty-backed terminal sessions with folder cwd and env', async () => {
@@ -15044,6 +15073,206 @@ describe('OrcaRuntimeService', () => {
     const read = await runtime.readTerminal(handle)
     expect(read.handle).toBe(handle)
     expect(read.tail).toEqual(['ready'])
+  })
+
+  it('binds orchestration sender authority to the exact live pane and handle', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = 'pty-sender'
+    const tabId = 'tab-sender'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `${tabId}:${leafId}`
+    const handle = runtime.preAllocateHandleForPty(ptyId)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, { tabId, leafId })
+
+    const capability = runtime.issueOrchestrationSenderCapability(paneKey, handle)
+    expect(runtime.resolveAuthenticatedOrchestrationSender(capability)).toEqual({
+      canonicalHandle: handle,
+      canonicalPaneKey: paneKey
+    })
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(undefined)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(randomUUID())).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+  })
+
+  it('expires stale, revoked, and exited sender generations', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = 'pty-sender-generation'
+    const tabId = 'tab-sender-generation'
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const paneKey = `${tabId}:${leafId}`
+    const handle = runtime.preAllocateHandleForPty(ptyId)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, { tabId, leafId })
+
+    const staleCapability = runtime.issueOrchestrationSenderCapability(paneKey, handle)
+    const revokedCapability = runtime.issueOrchestrationSenderCapability(paneKey, handle)
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(staleCapability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+
+    runtime.revokeOrchestrationSenderCapability(staleCapability)
+    expect(runtime.resolveAuthenticatedOrchestrationSender(revokedCapability).canonicalHandle).toBe(
+      handle
+    )
+    runtime.revokeOrchestrationSenderCapability(revokedCapability)
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(revokedCapability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+
+    const exitedCapability = runtime.issueOrchestrationSenderCapability(paneKey, handle)
+    runtime.onPtyExit(ptyId, 0)
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(exitedCapability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+  })
+
+  it('migrates a live capability across a same-leaf tab re-key and revokes it on exit', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = 'pty-rekeyed-sender'
+    const oldTabId = 'tab-before-breakout'
+    const newTabId = 'tab-after-breakout'
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    const oldPaneKey = makePaneKey(oldTabId, leafId)
+    const newPaneKey = makePaneKey(newTabId, leafId)
+    const handle = runtime.preAllocateHandleForPty(ptyId)
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId: oldTabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Before',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: oldTabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId,
+          paneTitle: null
+        }
+      ]
+    })
+    const capability = runtime.issueOrchestrationSenderCapability(oldPaneKey, handle)
+
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId: newTabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'After',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: newTabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId,
+          paneTitle: null
+        }
+      ]
+    })
+
+    expect(runtime.resolveAuthenticatedOrchestrationSender(capability)).toEqual({
+      canonicalHandle: handle,
+      canonicalPaneKey: newPaneKey
+    })
+    expect(runtime.getTerminalPaneKey(handle)).toBe(newPaneKey)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, { tabId: oldTabId, leafId })
+    expect(runtime.resolveAuthenticatedOrchestrationSender(capability).canonicalPaneKey).toBe(
+      newPaneKey
+    )
+    runtime.onPtyExit(ptyId, 0)
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(capability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+  })
+
+  it('rejects a re-keyed capability after the canonical pane receives another PTY', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const originalPtyId = 'pty-original-incarnation'
+    const replacementPtyId = 'pty-replacement-incarnation'
+    const oldTabId = 'tab-original-incarnation'
+    const newTabId = 'tab-replacement-incarnation'
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const handle = runtime.preAllocateHandleForPty(originalPtyId)
+    runtime.attachWindow(TEST_WINDOW_ID)
+    const syncPane = (tabId: string, ptyId: string): void => {
+      runtime.syncWindowGraph(TEST_WINDOW_ID, {
+        tabs: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Terminal',
+            activeLeafId: leafId,
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId,
+            paneRuntimeId: 1,
+            ptyId,
+            paneTitle: null
+          }
+        ]
+      })
+    }
+    syncPane(oldTabId, originalPtyId)
+    const capability = runtime.issueOrchestrationSenderCapability(
+      makePaneKey(oldTabId, leafId),
+      handle
+    )
+    syncPane(newTabId, originalPtyId)
+
+    runtime.preAllocateHandleForPty(replacementPtyId)
+    syncPane(newTabId, replacementPtyId)
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(capability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+  })
+
+  it('mints distinct authority for adjacent live panes', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const tabId = 'tab-adjacent-senders'
+    const leftLeafId = '55555555-5555-4555-8555-555555555555'
+    const rightLeafId = '66666666-6666-4666-8666-666666666666'
+    const leftPaneKey = makePaneKey(tabId, leftLeafId)
+    const rightPaneKey = makePaneKey(tabId, rightLeafId)
+    const leftHandle = runtime.preAllocateHandleForPty('pty-left-sender')
+    const rightHandle = runtime.preAllocateHandleForPty('pty-right-sender')
+    runtime.registerPty('pty-left-sender', TEST_WORKTREE_ID, null, {
+      tabId,
+      leafId: leftLeafId
+    })
+    runtime.registerPty('pty-right-sender', TEST_WORKTREE_ID, null, {
+      tabId,
+      leafId: rightLeafId
+    })
+
+    const leftCapability = runtime.issueOrchestrationSenderCapability(leftPaneKey, leftHandle)
+    const rightCapability = runtime.issueOrchestrationSenderCapability(rightPaneKey, rightHandle)
+    expect(leftCapability).not.toBe(rightCapability)
+    expect(runtime.resolveAuthenticatedOrchestrationSender(leftCapability)).toEqual({
+      canonicalHandle: leftHandle,
+      canonicalPaneKey: leftPaneKey
+    })
+    expect(runtime.resolveAuthenticatedOrchestrationSender(rightCapability)).toEqual({
+      canonicalHandle: rightHandle,
+      canonicalPaneKey: rightPaneKey
+    })
   })
 
   it('recovers exported ORCA_TERMINAL_HANDLE from discovered live PTY sessions', async () => {
