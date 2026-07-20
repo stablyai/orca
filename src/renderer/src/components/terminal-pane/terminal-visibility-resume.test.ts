@@ -21,7 +21,7 @@ vi.mock('./pane-helpers', () => ({
   focusActivePane: vi.fn()
 }))
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery: vi.fn()
+  scheduleTabRevealWebglAtlasRecovery: vi.fn()
 }))
 
 type FakeManager = {

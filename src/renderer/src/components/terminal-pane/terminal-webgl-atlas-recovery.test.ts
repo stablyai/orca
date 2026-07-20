@@ -5,6 +5,7 @@ import {
 } from '@/lib/pane-manager/pane-manager-registry'
 import {
   scheduleImagePasteWebglAtlasRecovery,
+  scheduleTabRevealWebglAtlasRecovery,
   scheduleTerminalWebglAtlasRecovery
 } from './terminal-webgl-atlas-recovery'
 
@@ -28,6 +29,7 @@ describe('terminal WebGL atlas recovery', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+    vi.clearAllTimers()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -145,7 +147,28 @@ describe('terminal WebGL atlas recovery', () => {
     expect(manager.refreshAllPanes).not.toHaveBeenCalled()
   })
 
-  it('coalesces terminal-output atlas recovery across a redraw burst', () => {
+  it('runs tab-reveal recovery immediately without an output-settle timer', () => {
+    vi.useFakeTimers()
+    const rafCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback: FrameRequestCallback) => {
+        rafCallbacks.push(callback)
+        return rafCallbacks.length
+      })
+    )
+    const manager = registerManager()
+
+    scheduleTabRevealWebglAtlasRecovery()
+
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    rafCallbacks[0]?.(0)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(500)
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
+  })
+  it('rate-limits output recovery independently of terminal throughput', () => {
     vi.useFakeTimers()
     vi.stubGlobal(
       'requestAnimationFrame',
@@ -158,24 +181,15 @@ describe('terminal WebGL atlas recovery', () => {
 
     scheduleTerminalWebglAtlasRecovery()
     scheduleTerminalWebglAtlasRecovery()
-    scheduleTerminalWebglAtlasRecovery()
-
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
-    vi.advanceTimersByTime(120)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(2)
-    scheduleTerminalWebglAtlasRecovery()
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
-    vi.advanceTimersByTime(380)
+    vi.advanceTimersByTime(500)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(3)
 
+    vi.advanceTimersByTime(29_499)
+    scheduleTerminalWebglAtlasRecovery()
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(3)
+
+    vi.advanceTimersByTime(1)
     scheduleTerminalWebglAtlasRecovery()
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(4)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(4)
-    vi.advanceTimersByTime(500)
-    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(6)
-    expect(manager.refreshAllPanes).toHaveBeenCalledTimes(6)
   })
 })

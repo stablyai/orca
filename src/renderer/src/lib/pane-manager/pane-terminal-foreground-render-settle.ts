@@ -20,9 +20,14 @@ type ForegroundTerminalWriteOptions = {
   onParsed?: () => void
 }
 
+type PendingViewportRefresh = {
+  followup: boolean
+  handle?: { kind: 'raf'; id: number } | { kind: 'timeout'; id: ReturnType<typeof setTimeout> }
+}
+
 const pendingViewportSettleRefreshByTerminal = new WeakMap<
   ForegroundTerminalOutputTarget,
-  { kind: 'raf'; id: number } | { kind: 'timeout'; id: ReturnType<typeof setTimeout> }
+  PendingViewportRefresh
 >()
 
 type ViewportSnapshot = {
@@ -34,18 +39,15 @@ function refreshVisibleRowsNow(terminal: ForegroundTerminalOutputTarget): void {
   if (typeof terminal.rows !== 'number' || terminal.rows < 1) {
     return
   }
-
-  const start = 0
   const end = Math.max(0, terminal.rows - 1)
   try {
-    // Why: xterm's DOM renderer batches row paints; Windows ConPTY CR-style
-    // rewrites can leave stale CJK glyph cells until a resize unless we paint
-    // the parsed foreground state before Chromium's next frame.
+    // Why: forced refreshes cover arbitrary cursor-addressed and screen-wide
+    // controls, so cursor movement cannot safely narrow the invalidated rows.
     if (typeof terminal._core?.refresh === 'function') {
-      terminal._core.refresh(start, end, true)
+      terminal._core.refresh(0, end, true)
       return
     }
-    terminal.refresh?.(start, end)
+    terminal.refresh?.(0, end)
   } catch {
     // Ignore disposed terminals; PTY output can race pane teardown.
   }
@@ -79,31 +81,53 @@ function cancelScheduledViewportSettleRefresh(terminal: ForegroundTerminalOutput
     return
   }
   pendingViewportSettleRefreshByTerminal.delete(terminal)
-  if (pending.kind === 'raf') {
+  if (pending.handle?.kind === 'raf') {
     if (typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(pending.id)
+      cancelAnimationFrame(pending.handle.id)
     }
     return
   }
-  clearTimeout(pending.id)
+  if (pending.handle) {
+    clearTimeout(pending.handle.id)
+  }
 }
 
-function scheduleViewportSettleRefresh(terminal: ForegroundTerminalOutputTarget): void {
-  cancelScheduledViewportSettleRefresh(terminal)
-  if (typeof requestAnimationFrame === 'function') {
-    const id = requestAnimationFrame(() => {
+function scheduleViewportRefreshFrame(
+  terminal: ForegroundTerminalOutputTarget,
+  pending: PendingViewportRefresh
+): void {
+  const run = (): void => {
+    if (pendingViewportSettleRefreshByTerminal.get(terminal) !== pending) {
+      return
+    }
+    refreshVisibleRowsNow(terminal)
+    if (!pending.followup) {
       pendingViewportSettleRefreshByTerminal.delete(terminal)
-      refreshVisibleRowsNow(terminal)
-    })
-    pendingViewportSettleRefreshByTerminal.set(terminal, { kind: 'raf', id })
-    return
+      return
+    }
+    pending.followup = false
+    scheduleViewportRefreshFrame(terminal, pending)
   }
 
-  const id = setTimeout(() => {
-    pendingViewportSettleRefreshByTerminal.delete(terminal)
-    refreshVisibleRowsNow(terminal)
-  }, 16)
-  pendingViewportSettleRefreshByTerminal.set(terminal, { kind: 'timeout', id })
+  if (typeof requestAnimationFrame === 'function') {
+    pending.handle = { kind: 'raf', id: requestAnimationFrame(run) }
+    return
+  }
+  pending.handle = { kind: 'timeout', id: setTimeout(run, 16) }
+}
+
+function scheduleViewportSettleRefresh(
+  terminal: ForegroundTerminalOutputTarget,
+  followup: boolean
+): void {
+  const pending = pendingViewportSettleRefreshByTerminal.get(terminal)
+  if (pending) {
+    pending.followup ||= followup
+    return
+  }
+  const next: PendingViewportRefresh = { followup }
+  pendingViewportSettleRefreshByTerminal.set(terminal, next)
+  scheduleViewportRefreshFrame(terminal, next)
 }
 
 function settleForegroundRender(
@@ -111,16 +135,19 @@ function settleForegroundRender(
   beforeWriteViewport: ViewportSnapshot,
   options: ForegroundTerminalWriteOptions
 ): void {
-  refreshVisibleRowsNow(terminal)
-  // Why: when output advances the viewport, Chromium can paint the freshly
-  // scrolled top row one frame later than xterm finishes parsing. Repaint once
-  // more after the scroll settles so the user doesn't need to jiggle the window.
-  if (
-    options.followupViewportRefresh ||
-    viewportChangedDuringWrite(terminal, beforeWriteViewport)
-  ) {
-    scheduleViewportSettleRefresh(terminal)
+  // Why: PTY chunks can arrive much faster than the display can paint. xterm
+  // parses them continuously; collapse corrective full-viewport repaints to
+  // the next animation frame without assuming cursor motion bounds mutations.
+  const followup =
+    options.followupViewportRefresh || viewportChangedDuringWrite(terminal, beforeWriteViewport)
+  if (typeof requestAnimationFrame !== 'function') {
+    refreshVisibleRowsNow(terminal)
+    if (followup) {
+      scheduleViewportSettleRefresh(terminal, false)
+    }
+    return
   }
+  scheduleViewportSettleRefresh(terminal, followup)
 }
 
 export function writeForegroundTerminalChunk(
