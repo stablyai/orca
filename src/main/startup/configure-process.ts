@@ -344,4 +344,16 @@ export function enableMainProcessGpuFeatures(): void {
   if (features) {
     app.commandLine.appendSwitch('enable-features', features)
   }
+
+  const existingDisabledFeatures = app.commandLine.getSwitchValue('disable-features')
+  // Why: with main-window background throttling on, Chromium's intensive mode
+  // clamps hidden-page timers to 1/min after 5 minutes, delaying agent-done and
+  // bell notifications by up to 60s. Keep the normal 1s hidden clamp (rAF and
+  // rendering still stop) but opt out of the 1/min tier. Callers skip this
+  // function under GPU fallback (win32-only today); if throttling ever extends
+  // to Windows, this opt-out must move out of the GPU-gated path.
+  const disabledFeatures = ['IntensiveWakeUpThrottling', existingDisabledFeatures]
+    .filter(Boolean)
+    .join(',')
+  app.commandLine.appendSwitch('disable-features', disabledFeatures)
 }

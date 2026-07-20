@@ -1766,7 +1766,11 @@ app.whenReady().then(async () => {
     }
   )
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
-  app.setName(devInstanceIdentity.name)
+  // Why: setName drives the macOS safeStorage Keychain item name. Use the stable
+  // appName (not the per-branch `name`) so dev branches share one key and don't
+  // re-prompt per branch; the per-branch label still shows via window title,
+  // renderer identity, and the app-menu label passed to registerAppMenu below.
+  app.setName(devInstanceIdentity.appName)
 
   // Why: managed WSL launchers live outside the Windows app bundle, so keep
   // their launcher and bridge contract synchronized across app updates.
@@ -2138,6 +2142,7 @@ app.whenReady().then(async () => {
   logStartupMilestone('i18n-ready')
 
   registerAppMenu({
+    appMenuLabel: devInstanceIdentity.name,
     onCheckForUpdates: (options) => runUserInitiatedUpdateCheck(options),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {

@@ -50,21 +50,63 @@ import { buildEditableContextMenuTemplate } from './editable-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 
+// Why: show/restore/resume can overlap before the size nudge resets; never
+// capture the temporary width as the next repaint's baseline.
+const activeRepaintJiggles = new WeakSet<BrowserWindow>()
+
 function forceRepaint(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
+  // Why: webContents can be destroyed a beat before the BrowserWindow during
+  // close, and this runs from timers/focus events that can land in that gap.
+  if (window.isDestroyed() || window.webContents.isDestroyed()) {
     return
   }
   window.webContents.invalidate()
-  if (window.isMaximized() || window.isFullScreen()) {
+  if (window.isMaximized() || window.isFullScreen() || activeRepaintJiggles.has(window)) {
     return
   }
+  activeRepaintJiggles.add(window)
   const [width, height] = window.getSize()
   window.setSize(width + 1, height)
   setTimeout(() => {
     if (!window.isDestroyed()) {
       window.setSize(width, height)
     }
+    activeRepaintJiggles.delete(window)
   }, 32)
+}
+
+function installMacosVisibilityRepaint(window: BrowserWindow): void {
+  let delayedRepaintTimer: ReturnType<typeof setTimeout> | null = null
+  const repaintAfterVisibilityTransition = (): void => {
+    forceRepaint(window)
+    if (delayedRepaintTimer) {
+      clearTimeout(delayedRepaintTimer)
+    }
+    // Why: macOS can finish restoring webview compositor layers after Electron's
+    // show/restore event, so a second paint catches late black-surface recovery.
+    delayedRepaintTimer = setTimeout(() => {
+      delayedRepaintTimer = null
+      forceRepaint(window)
+    }, 250)
+  }
+  const clearDelayedRepaint = (): void => {
+    if (delayedRepaintTimer) {
+      clearTimeout(delayedRepaintTimer)
+      delayedRepaintTimer = null
+    }
+  }
+
+  window.on('restore', repaintAfterVisibilityTransition)
+  window.on('show', repaintAfterVisibilityTransition)
+  // Why: occlusion-uncover fires neither restore nor show; focus is the only
+  // signal. Invalidate only — the setSize jiggle would SIGWINCH every terminal
+  // on each Cmd+Tab.
+  window.on('focus', () => {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+      window.webContents.invalidate()
+    }
+  })
+  window.on('closed', clearDelayedRepaint)
 }
 
 function isMacAppPasteInput(input: Electron.Input): boolean {
@@ -293,18 +335,13 @@ export function createMainWindow(
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   if (process.platform === 'darwin') {
-    // Why: persistent browser webviews use separate compositor layers, and on
-    // recent macOS releases those layers can fail to repaint after occlusion or
-    // restore. Disabling main-window throttling and forcing a repaint on
-    // visibility transitions hardens Orca against black-surface failures during
-    // browser-tab restore and tab switching.
-    mainWindow.webContents.setBackgroundThrottling(false)
-    mainWindow.on('restore', () => {
-      forceRepaint(mainWindow)
-    })
-    mainWindow.on('show', () => {
-      forceRepaint(mainWindow)
-    })
+    // Why: browser-guest surfaces are kept alive by their own per-guest
+    // unthrottle (browser-manager attach), so the main window can throttle
+    // normally while hidden/occluded instead of rendering at full rate.
+    // Toggling must happen only while visible: flipping it on a hidden window
+    // desyncs Chromium's frame evictor and blanks the surface (electron#42378).
+    mainWindow.webContents.setBackgroundThrottling(true)
+    installMacosVisibilityRepaint(mainWindow)
   }
 
   // Why: a focus-preserving system/display wake fires no window focus or
