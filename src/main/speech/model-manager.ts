@@ -6,6 +6,7 @@ import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './mod
 import type { SpeechModelDownload } from './model-download-catalog'
 import { downloadSileroVadInBackground, speechModelDownload } from './speech-vad-model'
 import { hasCloudSpeechCredentials } from './cloud-transcription-target'
+import { getSupportedSpeechModels } from './speech-platform-support'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -80,9 +81,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
     throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 
-  async getModelStates(): Promise<SpeechModelState[]> {
+  async getModelStates(os = process.platform, cpu = process.arch): Promise<SpeechModelState[]> {
     const states: SpeechModelState[] = []
-    for (const manifest of SPEECH_MODEL_CATALOG) {
+    for (const manifest of getSupportedSpeechModels(SPEECH_MODEL_CATALOG, os, cpu)) {
       const state = await this.getModelState(manifest.id)
       states.push(state)
     }

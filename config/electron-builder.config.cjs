@@ -74,6 +74,7 @@ const {
   verifySkillsCliRuntime
 } = require('./scripts/runtime-verification/skills-cli/verify-skills-cli-runtime.cjs')
 const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
+const { getWindowsInstallerArtifactName } = require('./windows-package-architecture.cjs')
 const {
   verifyStaticAppImagePackage
 } = require('./scripts/desktop-distribution/appimage/static-appimage-package-contract.cjs')
@@ -583,7 +584,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: 'orca-windows-setup.${ext}',
+    artifactName: getWindowsInstallerArtifactName(),
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',

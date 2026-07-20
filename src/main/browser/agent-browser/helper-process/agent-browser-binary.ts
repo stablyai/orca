@@ -3,10 +3,10 @@ import { app } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureDependencyBinaryExecutable } from './agent-browser-dependency-binary'
+import { getAgentBrowserBinaryName } from '../../agent-browser-binary-name'
 
 export function agentBrowserNativeName(): string {
-  const ext = process.platform === 'win32' ? '.exe' : ''
-  return `agent-browser-${platform()}-${arch()}${ext}`
+  return getAgentBrowserBinaryName(platform(), arch())
 }
 
 export function resolveAgentBrowserBinary(): string {
