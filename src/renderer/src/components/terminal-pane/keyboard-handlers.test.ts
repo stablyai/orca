@@ -110,6 +110,25 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
       )
     ).toEqual({ type: 'sendInput', data: '\x1b\r' })
   })
+
+  it('resolves acceptAutosuggest for a bare RightArrow with an active suggestion', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'ArrowRight' }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).toEqual({ type: 'acceptAutosuggest' })
+  })
 })
 
 describe('runTerminalSearchNavigation', () => {
