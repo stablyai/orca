@@ -10,6 +10,7 @@ import { parseOpenCodeSqliteSessionViaWorker } from './session-scanner-opencode-
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
+import { parseWebChatSqliteSession } from './session-scanner-webchat-sqlite'
 import {
   parseCopilotSessionFile,
   parseCursorSessionFile,
@@ -76,5 +77,23 @@ export async function parseAgentSessionFile(
       return parseDevinSessionFile(candidate.file, platform)
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform)
+    case 'chatgpt':
+    case 'claude-web':
+    case 'gemini-web': {
+      // Why: web candidates carry a synthetic <dbPath>#<source>/<externalId> path
+      // (built by listWebChatCandidates); recover the parts to read the row back.
+      const hashIndex = candidate.file.path.lastIndexOf('#')
+      const dbPath = candidate.file.path.slice(0, hashIndex)
+      const convId = candidate.file.path.slice(hashIndex + 1)
+      const slashIndex = convId.indexOf('/')
+      const source = convId.slice(0, slashIndex)
+      const externalId = convId.slice(slashIndex + 1)
+      return parseWebChatSqliteSession({
+        dbPath,
+        sessionId: externalId,
+        source: source as 'CHATGPT' | 'CLAUDE' | 'GEMINI',
+        platform
+      })
+    }
   }
 }

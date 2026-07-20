@@ -34,6 +34,8 @@ import type {
   SessionParseResult
 } from './session-scanner-types'
 import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { chatImportDbPath } from '../chat-import/chat-import-paths'
+import { listWebChatCandidates } from './session-scanner-webchat-sources'
 
 const DEFAULT_LIMIT = 1000
 const DEFAULT_SCAN_LIMIT_PER_AGENT = 1000
@@ -70,8 +72,17 @@ export async function scanAiVaultSessions(
     await ensureSessionParseCacheLoaded()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
 
-    const candidates = discoveries
-      .flatMap((discovery) =>
+    // Why: unlike file-based discoveries (one agent per rootDir), each web chat
+    // conversation carries its own agent (chatgpt/claude-web/gemini-web), so
+    // listWebChatCandidates builds candidates directly instead of going through
+    // a single-agent SessionFileDiscovery.
+    const webchatCandidates = listWebChatCandidates({
+      dbPath: options.webchatDbPath ?? chatImportDbPath(),
+      issues
+    })
+
+    const candidates = [
+      ...discoveries.flatMap((discovery) =>
         discovery.files.map(
           (file): SessionFileCandidate => ({
             agent: discovery.agent,
@@ -86,8 +97,9 @@ export async function scanAiVaultSessions(
                 : undefined
           })
         )
-      )
-      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+      ),
+      ...webchatCandidates
+    ].sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
 
     const parsedSessions = await parseSessionCandidates({
       candidates,

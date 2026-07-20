@@ -51,7 +51,10 @@ function isolatedScanRoots(root: string) {
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     kimiSessionsDir: join(root, 'kimi-sessions'),
-    ompSessionsDir: join(root, 'omp-sessions')
+    ompSessionsDir: join(root, 'omp-sessions'),
+    // Why: keep the scan off the real chat-import chats.db (same concern as
+    // opencodeDbPaths above).
+    webchatDbPath: join(root, 'webchat', 'chats.db')
   }
 }
 

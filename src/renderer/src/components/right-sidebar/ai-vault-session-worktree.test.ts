@@ -34,6 +34,7 @@ const baseSession: AiVaultSession = {
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
   resumeCommand: "codex resume 'session-1'",
+  readOnly: false,
   subagent: null
 }
 

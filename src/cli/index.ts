@@ -8,6 +8,7 @@ import {
   specPaths,
   validateCommandAndFlags
 } from './args'
+import { isChatImportHostRun } from './chat-import-host/chat-import-host-argv'
 import { dispatch } from './dispatch'
 import { reportCliError } from './format'
 import { printHelp } from './help'
@@ -25,7 +26,8 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
-    commandPath[0] === 'agent-context'
+    commandPath[0] === 'agent-context' ||
+    commandPath[0] === 'chat-import-host'
   )
 }
 
@@ -48,6 +50,14 @@ export async function main(
   }
   if (argv[0] === 'claude-teams') {
     await runClaudeTeams(argv.slice(1), cwd)
+    return
+  }
+  // Why: Chrome appends the extension origin (and, on Windows,
+  // --parent-window) to the launch argv, which the normal parser mistakes
+  // for an unknown subcommand/flag — route straight to the handler and skip
+  // parsing those args entirely, mirroring the claude-teams passthrough above.
+  if (isChatImportHostRun(argv)) {
+    await runChatImportHostLaunch(cwd)
     return
   }
   const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
@@ -121,6 +131,24 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
     })
   } catch (error) {
     reportCliError(error, false, { commandPath: ['claude-teams'] })
+    process.exitCode = 1
+  }
+}
+
+async function runChatImportHostLaunch(cwd: string): Promise<void> {
+  try {
+    // Why: the host owns stdin/stdout as the native-messaging channel and
+    // never resolves a remote runtime, so pairing-code/environment selection
+    // must stay suppressed here just like the ordinary dispatch path.
+    const client = new RuntimeClient(undefined, undefined, null, null)
+    await dispatch(['chat-import-host'], {
+      flags: new Map(),
+      client,
+      cwd,
+      json: false
+    })
+  } catch (error) {
+    reportCliError(error, false, { commandPath: ['chat-import-host'] })
     process.exitCode = 1
   }
 }

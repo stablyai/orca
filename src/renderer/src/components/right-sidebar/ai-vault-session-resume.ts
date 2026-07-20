@@ -208,9 +208,13 @@ function resolveAiVaultResumeTargetState(args: {
 // copying the command stays available for blocked-but-real sessions, so the copy
 // affordance is gated on content alone.
 export function aiVaultSessionRowResumeGating(
-  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages'>,
+  session: Pick<AiVaultSession, 'messageCount' | 'previewMessages' | 'readOnly'>,
   state: Pick<AiVaultSessionResumeState, 'blocked'> | null
 ): { resumeDisabled: boolean; canCopyResumeCommand: boolean } {
+  // Why: 읽기전용 웹 대화는 CLI 이어하기가 불가하고 resume 명령도 없다 — 이어하기·복사 모두 숨김.
+  if (session.readOnly) {
+    return { resumeDisabled: true, canCopyResumeCommand: false }
+  }
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   return {
     resumeDisabled: (state?.blocked ?? true) || !hasResumableContent,
