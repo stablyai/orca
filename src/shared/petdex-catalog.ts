@@ -36,42 +36,24 @@ export type PetdexManifest = {
 }
 
 /**
- * Ordered starter pack. Order is the status-bar list order after seed.
- * Keep this list intentional — do not auto-append the full 3k+ gallery.
+ * Ordered starter pack = operator-curated keepers on node-b (2026-07-20).
+ * Do NOT re-add slugs the operator deleted from the Orca GUI — this list is
+ * the source of truth for re-seed and node-e transfer. Full Petdex gallery
+ * remains available via one-off import / future gallery UI, not this pack.
  */
 export const PETDEX_STARTER_SLUGS: readonly string[] = [
   'blue-boba-axolotl',
   'nous-girl',
-  'spike-gremlin',
-  'claude-spectacles-3',
   'glitchcat',
   'belayer-cat',
-  'mofu-2',
-  'avocadouaena',
   'doc-volt',
-  'astro-ops',
-  'ostrom',
-  'humboldt',
   'panam',
   'jill-stingray',
-  'maisenpai',
   'marcille-dungeon-meshi',
-  'artoria-saber',
   'heimerdinger',
   'strike-freedom',
-  'koharu',
-  'pearl-houzuki-2',
-  'maruko',
-  'ray-2',
-  'dylan-harper',
   'paperclip',
-  'dalek',
-  'batmeme',
-  'homelander',
-  'mecha-xiaobai',
-  'lulu-capybara-2',
-  'shuangsheng-linger',
-  'erii-2'
+  'batmeme'
 ] as const
 
 export function isPetdexAllowedUrl(url: string): boolean {

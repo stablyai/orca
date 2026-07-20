@@ -8,7 +8,7 @@ import {
 
 describe('petdex-catalog', () => {
   it('pins starter pack to a non-empty intentional list', () => {
-    expect(PETDEX_STARTER_SLUGS.length).toBeGreaterThanOrEqual(20)
+    expect(PETDEX_STARTER_SLUGS.length).toBeGreaterThanOrEqual(10)
     expect(new Set(PETDEX_STARTER_SLUGS).size).toBe(PETDEX_STARTER_SLUGS.length)
   })
 
