@@ -109,6 +109,30 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'node')).resolves.toBe('codex')
   })
 
+  it('recognizes env-prefixed agent relaunches after restart', async () => {
+    // Why: #8808 — after runtime restart, workers relaunch via `terminal send`
+    // with leading env assignments. The live ps command column can retain them.
+    mockPs(['101 100 S+   CLAUDE_CONFIG_DIR=~/.claude_sub claude --model sonnet'].join('\n'))
+
+    await expect(resolveAgentForegroundProcess(100, 'zsh')).resolves.toBe('claude')
+  })
+
+  it('recognizes multi-env-prefixed and path-qualified agent relaunches', async () => {
+    mockPs(
+      [
+        '101 100 S+   TERM=x CLAUDE_CONFIG_DIR=~/.claude_sub /usr/local/bin/claude --model sonnet'
+      ].join('\n')
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'bash')).resolves.toBe('claude')
+  })
+
+  it('does not treat env-prefixed non-agents as foreground agents', async () => {
+    mockPs(['101 100 S+   NODE_ENV=test npm test'].join('\n'))
+
+    await expect(resolveAgentForegroundProcess(100, 'zsh')).resolves.toBe('zsh')
+  })
+
   it('treats a fresh POSIX snapshot missing the PTY root as unavailable', async () => {
     mockPs('101 999 S+ node /Users/dev/.nvm/versions/node/bin/codex')
 

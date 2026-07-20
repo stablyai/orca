@@ -137,6 +137,12 @@ function tokenizeCommandLine(commandLine: string): string[] {
   return tokens
 }
 
+// Why: shells accept leading `KEY=value` words before the executable
+// (`CLAUDE_CONFIG_DIR=… claude …`). Process listings sometimes preserve that
+// full command string; without stripping, the first token is the assignment
+// and agent recognition fails after in-shell relaunches (#8808).
+const POSIX_ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*=/
+
 function tokenLooksExecutable(token: string, index: number, firstNormalized: string): boolean {
   if (index === 0) {
     return true
@@ -288,11 +294,12 @@ export function recognizeAgentProcessFromCommandLine(
   // one-shot agent can't answer a prompt either.
   options?: { includeHeadlessOneShot?: boolean }
 ): RecognizedAgentProcess | null {
-  if (!commandLine) {
-    return null
-  }
   const keep = options?.includeHeadlessOneShot === true
-  const tokens = tokenizeCommandLine(commandLine)
+  const tokens = tokenizeCommandLine(commandLine ?? '')
+  // Drop contiguous leading POSIX assignment words so env-prefixed relaunches
+  // still resolve to the real executable head.
+  const firstExecutableIndex = tokens.findIndex((token) => !POSIX_ASSIGNMENT_WORD_RE.test(token))
+  tokens.splice(0, firstExecutableIndex < 0 ? tokens.length : firstExecutableIndex)
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizeAgentProcess(tokens[0])
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.

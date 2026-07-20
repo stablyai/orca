@@ -198,6 +198,70 @@ describe('agent process recognition', () => {
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
   })
 
+  it('recognizes agent CLIs prefixed with POSIX env-variable assignments', () => {
+    // Why: after runtime restart, workers relaunch with env prefixes typed into
+    // the surviving shell (`CLAUDE_CONFIG_DIR=… claude …`). Process listings can
+    // preserve those leading assignment words (#8808).
+    expect(
+      recognizeAgentProcessFromCommandLine('CLAUDE_CONFIG_DIR=~/.claude_sub claude --model sonnet')
+    ).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'TERM=x CLAUDE_CONFIG_DIR=~/.claude_sub claude --model sonnet'
+      )
+    ).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(
+      recognizeAgentProcessFromCommandLine('CLAUDE_CONFIG_DIR= FOO=a=b claude --resume ses_1')
+    ).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`CLAUDE_CONFIG_DIR=C:\Users\dev\.claude_sub C:\Users\dev\AppData\Roaming\npm\claude.exe --model sonnet`
+      )
+    ).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`CLAUDE_CONFIG_DIR=/home/dev/.claude_sub /home/dev/.local/bin/claude --model sonnet`
+      )
+    ).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(recognizeAgentProcessFromCommandLine('PYTHONPATH=/opt/lib python3 -m aider')).toEqual({
+      agent: 'aider',
+      processName: 'aider'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'NODE_OPTIONS=--no-warnings node /Users/dev/.nvm/versions/node/bin/codex'
+      )
+    ).toEqual({ agent: 'codex', processName: 'codex' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`TERM=xterm-256color node C:\Users\dev\AppData\Roaming\npm\gemini.cmd`
+      )
+    ).toEqual({ agent: 'gemini', processName: 'gemini' })
+    expect(
+      recognizeAgentProcessFromCommandLine('FACTORY_API_KEY=secret droid --model factory-1')
+    ).toEqual({ agent: 'droid', processName: 'droid' })
+    // Headless one-shots stay filtered even when env-prefixed.
+    expect(
+      recognizeAgentProcessFromCommandLine('CLAUDE_CONFIG_DIR=~/.claude_sub claude -p summarize')
+    ).toBeNull()
+    // Non-agents, assignment-only lines, and invalid assignment spellings.
+    expect(recognizeAgentProcessFromCommandLine('NODE_ENV=test npm test')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        "PROMPT='claude --model sonnet' printf '%s\\n' \"$PROMPT\""
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('BAD-NAME=value claude --model sonnet')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('CLAUDE_CONFIG_DIR=~/.claude_sub')).toBeNull()
+    // Why: `env VAR=value cmd` is a different argv shape; do not treat `env` as
+    // an assignment word or invent agent identity from nested text.
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'env CLAUDE_CONFIG_DIR=~/.claude_sub claude --model sonnet'
+      )
+    ).toBeNull()
+  })
+
   it('recognizes only the agent subcommand of the generic Orca CLI', () => {
     expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
       agent: 'claude-agent-teams',
