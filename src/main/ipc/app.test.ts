@@ -10,7 +10,8 @@ const {
   destroySystemTrayMock,
   relaunchAppMock,
   showOpenDialogMock,
-  grantFloatingWorkspaceDirectoryMock
+  grantFloatingWorkspaceDirectoryMock,
+  registerRendererShutdownCheckpointHandlerMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -20,7 +21,8 @@ const {
   destroySystemTrayMock: vi.fn(),
   relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
-  grantFloatingWorkspaceDirectoryMock: vi.fn()
+  grantFloatingWorkspaceDirectoryMock: vi.fn(),
+  registerRendererShutdownCheckpointHandlerMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -103,6 +105,10 @@ vi.mock('./floating-workspace-directory', () => ({
   resolveFloatingTerminalCwd: vi.fn()
 }))
 
+vi.mock('./renderer-shutdown-checkpoint', () => ({
+  registerRendererShutdownCheckpointHandler: registerRendererShutdownCheckpointHandlerMock
+}))
+
 import { registerAppHandlers } from './app'
 
 describe('registerAppHandlers', () => {
@@ -123,6 +129,7 @@ describe('registerAppHandlers', () => {
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
     showOpenDialogMock.mockReset()
     grantFloatingWorkspaceDirectoryMock.mockReset()
+    registerRendererShutdownCheckpointHandlerMock.mockReset()
     processKillSpy = vi.spyOn(process, 'kill').mockReturnValue(true)
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
@@ -131,6 +138,14 @@ describe('registerAppHandlers', () => {
     processKillSpy.mockRestore()
     vi.useRealTimers()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('registers the combined renderer shutdown checkpoint', () => {
+    const store = {}
+
+    registerAppHandlers(store as never)
+
+    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store)
   })
 
   it('marks relaunch as expected shutdown before exiting', async () => {

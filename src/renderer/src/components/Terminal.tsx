@@ -34,6 +34,7 @@ import {
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { Tab, TabContentType, TabGroupLayoutNode, TuiAgent } from '../../../shared/types'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
@@ -448,39 +449,48 @@ function Terminal(): React.JSX.Element | null {
   // dirty, so an immediate confirm would leave the window open with no UI.
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
 
-  const proceedToNativeWindowClose = useCallback((isQuitting: boolean) => {
-    // Why: defer this synthetic unload until we are actually ready to close so
-    // a dirty-tab preventDefault() does not fire during the initial quit IPC
-    // (that path can emit will-prevent-unload and clear isQuitting in main).
-    window.dispatchEvent(new Event('beforeunload'))
-    if (!isQuitting) {
-      const state = useAppStore.getState()
-      const localPtyIds = Object.entries(state.tabsByWorktree).flatMap(
-        ([worktreeId, worktreeTabs]) => {
-          const connectionId = getConnectionId(worktreeId)
-          if (connectionId !== null) {
-            return []
-          }
-          return worktreeTabs
-            .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
-            .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
-        }
-      )
-      if (localPtyIds.length > 0) {
-        void Promise.all(localPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
-          (results) => {
-            if (results.some(Boolean)) {
-              setWindowCloseDialogOpen(true)
-            } else {
-              window.api.ui.confirmWindowClose()
-            }
-          }
-        )
-        return
-      }
+  const confirmNativeWindowClose = useCallback(() => {
+    // Why: capture only after every close guard has committed. A canceled child-
+    // process prompt must not consume App's synthetic/native unload guard.
+    const accepted = window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
+    if (!accepted) {
+      return
     }
     window.api.ui.confirmWindowClose()
   }, [])
+
+  const proceedToNativeWindowClose = useCallback(
+    (isQuitting: boolean) => {
+      if (!isQuitting) {
+        const state = useAppStore.getState()
+        const localPtyIds = Object.entries(state.tabsByWorktree).flatMap(
+          ([worktreeId, worktreeTabs]) => {
+            const connectionId = getConnectionId(worktreeId)
+            if (connectionId !== null) {
+              return []
+            }
+            return worktreeTabs
+              .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+              .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
+          }
+        )
+        if (localPtyIds.length > 0) {
+          void Promise.all(localPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
+            (results) => {
+              if (results.some(Boolean)) {
+                setWindowCloseDialogOpen(true)
+              } else {
+                confirmNativeWindowClose()
+              }
+            }
+          )
+          return
+        }
+      }
+      confirmNativeWindowClose()
+    },
+    [confirmNativeWindowClose]
+  )
 
   const waitForFileClosed = useCallback((fileId: string, timeoutMs: number): Promise<boolean> => {
     if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
@@ -2061,7 +2071,7 @@ function Terminal(): React.JSX.Element | null {
       }
       const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
       if (dirtyFiles.length > 0) {
-        e.preventDefault()
+        preventUnloadAndScheduleShutdownCheckpointReset(e, window)
       }
     }
     window.addEventListener('beforeunload', handler)
@@ -2545,7 +2555,7 @@ function Terminal(): React.JSX.Element | null {
               autoFocus
               onClick={() => {
                 setWindowCloseDialogOpen(false)
-                window.api.ui.confirmWindowClose()
+                confirmNativeWindowClose()
               }}
             >
               {translate('auto.components.Terminal.73768427cf', 'Close')}
