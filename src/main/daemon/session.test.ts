@@ -106,12 +106,14 @@ describe('Session', () => {
     cols?: number
     rows?: number
     launchAgent?: TuiAgent
+    wslDistro?: string
   }): Session {
     session = new Session({
       sessionId: 'test-session',
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
       ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      wslDistro: opts?.wslDistro,
       subprocess,
       shellReadySupported: opts?.shellReadySupported ?? false,
       ...(opts?.shellReadyTimeoutMs !== undefined
@@ -665,6 +667,13 @@ describe('Session', () => {
   })
 
   describe('snapshot', () => {
+    it('parses live OSC-7 output in the session WSL distro', () => {
+      createSession({ wslDistro: 'Ubuntu' })
+
+      subprocess.simulateData('\x1b]7;file://DESKTOP-ORCA/home/jin/repo\x07')
+
+      expect(session.getCwd()).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+    })
     it('returns a terminal snapshot', async () => {
       createSession()
       subprocess.simulateData('$ hello\r\n')

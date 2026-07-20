@@ -3255,6 +3255,9 @@ export type PreloadApi = {
           pairingUrl: string
           endpoint: string
           deviceId: string
+          /** Mode the QR actually encodes; 'local-only' when an automatic
+           *  request degraded because Relay could not be attached. */
+          connectionMode: MobilePairingConnectionMode
         }
     >
     getWindowsFirewallStatus: (args?: { address?: string }) => Promise<

@@ -636,14 +636,31 @@ export class OrcaRuntimeRpcServer {
     connectionMode?: MobilePairingConnectionMode
     name?: string
     rotate?: boolean
-  }): Promise<ReturnType<OrcaRuntimeRpcServer['createPairingOffer']>> {
+  }): Promise<
+    | { available: false }
+    | {
+        available: true
+        pairingUrl: string
+        endpoint: string
+        deviceId: string
+        webClientUrl: string | null
+        /** Mode the returned offer actually encodes — 'local-only' when an
+         *  automatic request degraded because Relay could not be attached. */
+        connectionMode: MobilePairingConnectionMode
+      }
+  > {
     // Why: the renderer is outside the trust boundary; only the explicit
     // local-only value may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
     const pending = this.deviceRegistry?.getPendingDevice('mobile')
-    const switchingPendingToLocal =
-      connectionMode === 'local-only' && pending?.relayBinding !== undefined
-    if (args.rotate || switchingPendingToLocal) {
+    // Why: an offer's connection policy is part of its credential. Rotating on
+    // any policy switch here (not in the renderer) means a QR displayed under
+    // the old policy cannot pair under the new one, and windows reminting after
+    // a preference sync converge on one token instead of racing rotations.
+    const switchingPendingMode =
+      pending != null &&
+      this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
+    if (args.rotate || switchingPendingMode) {
       if (pending?.relayBinding) {
         // Why: the durable cloud revoke is recorded before rotating the local
         // token, so a previously displayed relay invite cannot outlive the QR.
@@ -652,7 +669,7 @@ export class OrcaRuntimeRpcServer {
     }
     const direct = this.createPairingOffer({
       ...args,
-      rotate: args.rotate || switchingPendingToLocal,
+      rotate: args.rotate || switchingPendingMode,
       scope: 'mobile'
     })
     if (!direct.available) {
@@ -660,21 +677,22 @@ export class OrcaRuntimeRpcServer {
     }
     this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode)
     if (connectionMode === 'local-only' || !this.mobileRelayPairingProvider) {
-      return direct
+      return { ...direct, connectionMode: 'local-only' }
     }
     const device = this.deviceRegistry?.getDevice(direct.deviceId)
     const publicKeyB64 = this.getE2EEPublicKey()
     if (!device || !publicKeyB64) {
-      return direct
+      return { ...direct, connectionMode: 'local-only' }
     }
     try {
       const relayPairing = await this.mobileRelayPairingProvider.createPairingRelay(device.deviceId)
       if (!this.deviceRegistry?.setRelayBinding(device.deviceId, relayPairing.binding)) {
-        return direct
+        return { ...direct, connectionMode: 'local-only' }
       }
       this.mobileRelayPairingProvider.onDemandStateChanged?.()
       return {
         ...direct,
+        connectionMode: 'automatic',
         pairingUrl: encodePairingOffer({
           v: PAIRING_OFFER_VERSION,
           endpoint: direct.endpoint,
@@ -687,7 +705,7 @@ export class OrcaRuntimeRpcServer {
     } catch {
       // Why: relay is additive. A transient auth/director/control outage must
       // still yield the valid LAN/Tailscale pairing offer.
-      return direct
+      return { ...direct, connectionMode: 'local-only' }
     }
   }
 

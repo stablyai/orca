@@ -1,4 +1,4 @@
-import { fileUriToFilesystemPath } from '../../../../shared/file-uri-path'
+import { fileUriToFilesystemPath } from './file-uri-path'
 
 export type TerminalFileUrlTarget = {
   filePath: string

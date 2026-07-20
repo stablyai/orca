@@ -5955,12 +5955,16 @@
           "aa1263e881": "Keep at phone size (default)",
           "6436e56546": "QR Code for mobile pairing",
           "1b1b70279a": "No devices paired yet.",
-          "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app."
+          "1592afcc7a": "No devices paired yet. Scan the QR code with the Orca mobile app.",
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
           "b0088412a1": "or the Android APK from",
           "b5a2ed83ff": "App Store",
+          "installIntro": "Install Orca Mobile from the",
+          "installOutro": ", then pair below.",
+          "androidApkLabel": "Android APK",
           "c8491c17ef": "Control Orca from your phone by scanning a QR code. Beta / early preview - expect bugs and breaking changes. Get the iOS app from the",
           "e7a3ae8c4e": "Mobile",
           "174f4a3c6d": "Control terminals and agents from your phone.",
@@ -8100,7 +8104,9 @@
               "671eb4173c": "Control terminals and agents from your phone.",
               "ffd52a96e4": "Mobile",
               "1de96ec8a6": "Show Orca Mobile Button",
-              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar."
+              "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
+              "e4f4daea0e": "relay",
+              "5d5af8e041": "iphone"
             }
           }
         },
@@ -9192,28 +9198,26 @@
           "available": "Available",
           "reconnecting": "Reconnecting",
           "unavailable": "Unavailable",
-          "title": "How should the new phone connect?",
-          "anywhere": "Connect with Orca Relay",
-          "recommended": "Recommended",
-          "automaticDescription": "Orca uses a direct connection when available and Relay otherwise.",
-          "signInDescription": "Sign in on this desktop to use Orca Relay.",
+          "pathGroup": "How the phone reaches this computer",
+          "anywhereTitle": "Orca Relay",
+          "anywhereDescription": "Phone can be on cellular or any Wi‑Fi. Sign-in required.",
+          "signInRequired": "Sign in to use Orca Mobile Relay.",
+          "relayUnavailable": "Orca Relay isn’t available in this build. Use Local network.",
           "signIn": "Sign in",
-          "localOnly": "Local network only",
-          "localShort": "LAN or Tailscale",
-          "localDescription": "Uses LAN or Tailscale without connecting this phone through Orca Relay."
+          "signInAgain": "Sign in again",
+          "localTitle": "Local network",
+          "localDescription": "Phone must be on this Wi‑Fi or your Tailscale. No sign-in."
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",
-          "automaticDescription": "The pairing code includes direct access and encrypted Orca Relay fallback.",
-          "localDescription": "The pairing code connects only through the local network address below.",
-          "regenerate": "Regenerate",
-          "generate": "Generate QR Code",
-          "localSettings": "Local connection settings",
-          "localAddressDescription": "Choose the LAN or private-network address that Orca Mobile can use to reach this computer directly.",
-          "refresh": "Refresh network interfaces",
-          "tailnet": "Connect with your own tailnet",
-          "tailnetDescription": "Install Tailscale on this computer and your phone, sign in to the same tailnet, then select its 100.x.y.z address above.",
-          "getTailscale": "Get Tailscale"
+          "overview": "Generate a QR code, then scan it in Orca Mobile under Pair Desktop.",
+          "step1Title": "Connection",
+          "step2Title": "This computer’s address",
+          "step2RelayDescription": "Used for a faster direct path when nearby. Relay covers remote access.",
+          "step2LocalDescription": "The phone must be able to reach this address on Wi‑Fi or Tailscale.",
+          "regenerate": "Regenerate QR code",
+          "generate": "Generate QR code",
+          "refresh": "Refresh network interfaces"
         },
         "MobileRelayBetaAvailability": {
           "about": "About the Orca Relay beta",
@@ -9238,6 +9242,9 @@
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
+        },
+        "MobileRelayBetaNotice": {
+          "notice": "Orca Relay is in beta."
         }
       },
       "right": {
@@ -9285,7 +9292,16 @@
             "f273f2271c": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
             "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, skipped {{value1}}, failed {{value2}}.",
             "495b2f8c4b": "Started the agent, but could not mark the selected comments resolved.",
-            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host."
+            "3c3ad3a1d2": "Started the agent. No selected comments can be marked resolved on the host.",
+            "review": {
+              "auto_retry": "Orca will retry at {{time}}.",
+              "open_review": "Open Review",
+              "retry": "Retry"
+            },
+            "sync": {
+              "pending": "Syncing…",
+              "branch": "Sync Branch"
+            }
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -9693,6 +9709,7 @@
             "createPrIntentPublishing": "Publishing branch…",
             "createPrIntentForcePushing": "Force pushing with lease…",
             "createPrIntentPushing": "Pushing commits…",
+            "createPrIntentFastForwarding": "Updating branch…",
             "createPrIntentRemoteFailed": "Could not update the remote branch. Retry Create PR.",
             "createPrIntentGeneratingDetails": "Generating review details…",
             "createPrIntentBranchChangedDuringDetails": "Branch changed while generating review details. Retry Create PR.",
@@ -9725,9 +9742,7 @@
               "a9bf7c171a": "Push Failed",
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
-            },
-            "createPrIntentSyncConflicts": "Sync hit conflicts. Resolve them, then retry Create PR.",
-            "createPrIntentSyncing": "Syncing branch…"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -9900,6 +9915,136 @@
                   "05e4aec17b": "{{value0}} checks will be available after the operation completes",
                   "d77c513c1e": "{{value0}} in progress",
                   "b597440265": "Refresh GitHub status for this branch to load checks and review."
+                }
+              },
+              "review": {
+                "detail": {
+                  "positive": "Orca also has saved {{reviewLabel}} information that it could not verify.",
+                  "rate_limited": "Orca also could not check {{reviewLabel}} status because {{provider}} is temporarily limiting requests.",
+                  "network": "Orca also could not check {{reviewLabel}} status because this environment could not reach {{provider}}.",
+                  "untyped": "Orca also could not confirm whether this branch already has a {{reviewLabel}}."
+                },
+                "positive": {
+                  "title": "{{reviewLabelCap}} details unavailable",
+                  "body": "Orca has saved {{reviewLabel}} information for this branch but could not confirm its current status."
+                },
+                "no_review": {
+                  "title": "No {{reviewLabel}} found",
+                  "body": "Create a {{reviewLabel}} to start checks and review."
+                },
+                "active": {
+                  "title": "Checking {{reviewLabel}} status",
+                  "body": "Orca is checking {{provider}} for a {{reviewLabel}} on this branch."
+                },
+                "git_loading": {
+                  "title": "Checking branch status",
+                  "body": "Orca is checking this branch before showing create or publish actions."
+                },
+                "git_error": {
+                  "title": "Could not check branch status",
+                  "body": "Orca could not confirm this branch's upstream from this environment. Retry before publishing or creating a {{reviewLabel}}."
+                },
+                "unknown": {
+                  "title": "{{reviewLabelCap}} status unavailable",
+                  "body": "Orca has not confirmed the {{reviewLabel}} status for this branch. Retry to check again."
+                },
+                "paused": {
+                  "title": "{{provider}} refresh paused",
+                  "body": "{{provider}} is temporarily limiting requests. This can happen even when the displayed API quota is not exhausted."
+                },
+                "network": {
+                  "title": "Could not reach {{provider}}",
+                  "body": "This environment could not reach {{provider}}. Check its connection, then retry."
+                },
+                "unknown_error": {
+                  "title": "Could not check {{reviewLabel}} status",
+                  "body": "The lookup failed, so Orca could not confirm whether this branch already has a {{reviewLabel}}."
+                },
+                "untyped": {
+                  "title": "{{reviewLabelCap}} status unavailable",
+                  "body": "Orca could not confirm whether this branch already has a {{reviewLabel}}. Retry to check again."
+                },
+                "auth": {
+                  "title": "{{provider}} authentication failed",
+                  "body": "{{provider}} could not authenticate the credentials available in this environment. Check the {{provider}} login or environment token, then retry."
+                },
+                "permission": {
+                  "title": "{{provider}} access denied",
+                  "body": "The current {{provider}} credentials cannot read this repository's {{reviewLabel}}s. Check the account, token scopes, and repository access, then retry."
+                },
+                "repo": {
+                  "title": "{{provider}} repository unavailable",
+                  "body": "{{provider}} could not resolve or access the repository for the current remote and account. Check the remote and repository access, then retry."
+                },
+                "cli": {
+                  "title": "{{provider}} CLI unavailable",
+                  "body": "Orca could not run {{provider}} CLI in this environment. Set it up here, then retry."
+                },
+                "skipped": {
+                  "disconnected": {
+                    "title": "Host disconnected",
+                    "body": "This repository's execution host is disconnected, so Orca cannot refresh {{reviewLabel}} status."
+                  },
+                  "bare": {
+                    "title": "Bare repository",
+                    "body": "This repository is bare, so {{reviewLabel}} status is not available here."
+                  },
+                  "archived": {
+                    "title": "Repository archived",
+                    "body": "This repository is archived, so Orca is not refreshing {{reviewLabel}} status."
+                  },
+                  "not_git": {
+                    "title": "Not a Git repository",
+                    "body": "Orca could not treat this folder as a Git repository for {{reviewLabel}} status."
+                  },
+                  "remote": {
+                    "title": "Remote-only context",
+                    "body": "Orca could not refresh {{reviewLabel}} status for this remote context. Retry after the host is available."
+                  }
+                },
+                "no_upstream": {
+                  "title": "No upstream configured",
+                  "body": "Publish this branch to set its upstream before creating a {{reviewLabel}}."
+                },
+                "needs_sync": {
+                  "title": "Branch needs to sync",
+                  "body": "Sync this branch with its upstream before creating a {{reviewLabel}}."
+                },
+                "auth_required": {
+                  "title": "Connect {{provider}}",
+                  "body": "{{provider}} must be connected in this environment before Orca can create a {{reviewLabel}}."
+                },
+                "needs_push": {
+                  "title": "Branch has unpushed commits",
+                  "body": "Push the latest commits before creating a {{reviewLabel}}."
+                },
+                "existing": {
+                  "title": "{{reviewLabelCap}} already exists",
+                  "body": "Orca found an existing {{reviewLabel}} for this branch."
+                },
+                "detached": {
+                  "title": "No current branch",
+                  "body": "Check out a branch before creating a {{reviewLabel}}."
+                },
+                "dirty": {
+                  "title": "Commit changes first",
+                  "body": "Commit or stash your changes before creating a {{reviewLabel}}."
+                },
+                "default_branch": {
+                  "title": "On the default branch",
+                  "body": "Switch to a feature branch before creating a {{reviewLabel}}."
+                },
+                "fork": {
+                  "title": "Fork head unsupported",
+                  "body": "Orca cannot create a {{reviewLabel}} from this fork head here."
+                },
+                "base_missing": {
+                  "title": "Base branch not on remote",
+                  "body": "This branch's base is not on the remote yet, so a {{reviewLabel}} cannot target it."
+                },
+                "unsupported": {
+                  "title": "{{reviewLabelCap}} not supported here",
+                  "body": "This repository provider does not support creating a {{reviewLabel}} from Orca."
                 }
               }
             }
@@ -10096,6 +10241,13 @@
               "control": {
                 "ai": {
                   "cfafa92509": "No unresolved conflicts to send."
+                }
+              }
+            },
+            "hosted": {
+              "review": {
+                "actions": {
+                  "e475c29b17": "This will merge the {{value0}}."
                 }
               }
             }
@@ -10745,7 +10897,8 @@
             "group": "Release channel",
             "preview": "Preview",
             "stable": "Stable"
-          }
+          },
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -12030,7 +12183,9 @@
                 "2f9d6b4e10": "Toggle H3",
                 "8c1a3e7d52": "Create a collapsible section with a small heading summary.",
                 "5e0b9c2a71": "Toggle H4",
-                "d4f16a8b39": "Create a collapsible section with a nested heading summary."
+                "d4f16a8b39": "Create a collapsible section with a nested heading summary.",
+                "21d8c463e5": "Toggle H5",
+                "dc239b41ad": "Create a collapsible section with a deep heading summary."
               }
             }
           }

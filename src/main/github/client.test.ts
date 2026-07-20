@@ -1268,6 +1268,34 @@ describe('getPRForBranch', () => {
     )
   })
 
+  it('propagates a Retry-After cooldown into the rate-limited retry schedule', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: null
+    })
+    // gh puts the diagnostic on `.stderr`; a secondary limit carries Retry-After.
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('gh exited with 1.'), {
+          stderr: 'HTTP 403: You have exceeded a secondary rate limit\nRetry-After: 120'
+        })
+      )
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+
+    const before = Date.now()
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+    expect(outcome.kind).toBe('upstream-error')
+    if (outcome.kind !== 'upstream-error') {
+      throw new Error('expected upstream-error')
+    }
+    expect(outcome.errorType).toBe('rate_limited')
+    // ~120s cooldown surfaced as both the manual gate and the auto-retry time.
+    expect(outcome.retryDisabledUntil).toBeDefined()
+    expect(outcome.nextAutoRetryAt).toBe(outcome.retryDisabledUntil)
+    expect(outcome.retryDisabledUntil ?? 0).toBeGreaterThanOrEqual(before + 119_000)
+    expect(outcome.retryDisabledUntil ?? 0).toBeLessThanOrEqual(Date.now() + 121_000)
+  })
+
   it('reports no PR when fallback branch discovery cleanly misses', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [{ owner: 'stablyai', repo: 'orca' }],

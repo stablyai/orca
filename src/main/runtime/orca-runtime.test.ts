@@ -193,6 +193,7 @@ const {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   getPRForBranchMock,
+  getPRForBranchOutcomeMock,
   getRepoSlugMock,
   getRepoUpstreamMock,
   getGitHubWorkItemMock,
@@ -298,6 +299,7 @@ const {
     getHostedReviewCreationEligibilityMock: vi.fn(),
     getHostedReviewForBranchMock: vi.fn(),
     getPRForBranchMock: vi.fn().mockResolvedValue(null),
+    getPRForBranchOutcomeMock: vi.fn().mockResolvedValue({ kind: 'no-pr', fetchedAt: 0 }),
     getRepoSlugMock: vi.fn().mockResolvedValue(null),
     getRepoUpstreamMock: vi.fn().mockResolvedValue(null),
     getGitHubWorkItemMock: vi.fn(),
@@ -463,6 +465,7 @@ vi.mock('../github/client', async (importOriginal) => {
   return {
     ...actual,
     getPRForBranch: getPRForBranchMock,
+    getPRForBranchOutcome: getPRForBranchOutcomeMock,
     getRepoSlug: getRepoSlugMock,
     getRepoUpstream: getRepoUpstreamMock,
     getWorkItem: getGitHubWorkItemMock,
@@ -671,6 +674,8 @@ function resetRuntimeTestMocks(): void {
   getHostedReviewForBranchMock.mockResolvedValue(null)
   getPRForBranchMock.mockReset()
   getPRForBranchMock.mockResolvedValue(null)
+  getPRForBranchOutcomeMock.mockReset()
+  getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 0 })
   getRepoSlugMock.mockReset()
   getRepoSlugMock.mockResolvedValue(null)
   getRepoUpstreamMock.mockReset()
@@ -5572,9 +5577,16 @@ describe('OrcaRuntimeService', () => {
       prRepo
     })
 
-    expect(getPRForBranchMock).toHaveBeenCalledWith(TEST_REPO_PATH, 'feature/wsl', 42, null, null, {
-      localGitExecOptions: localGitOptions
-    })
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      'feature/wsl',
+      42,
+      null,
+      null,
+      {
+        localGitExecOptions: localGitOptions
+      }
+    )
     expect(getGitHubWorkItemMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       42,
@@ -8648,6 +8660,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps SSH OSC7 cwd POSIX when the desktop runtime is on Windows', async () => {
     setPlatform('win32')
     const runtime = new OrcaRuntimeService(store)
+    runtime.preparePtyExecutionContext('pty-ssh', 'Ubuntu', { resetIncarnation: true })
     runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-conn-1')
 
     runtime.onPtyData('pty-ssh', '\x1b]7;file://remote-host/home/me/repo/src\x07', 123)
@@ -8655,9 +8668,164 @@ describe('OrcaRuntimeService', () => {
     const internals = runtime as unknown as {
       terminalCwdByPtyId: Map<string, string>
       terminalFileUriHostnameByPtyId: Map<string, string>
+      wslDistroByPtyId: Map<string, string>
     }
     expect(internals.terminalCwdByPtyId.get('pty-ssh')).toBe('/home/me/repo/src')
     expect(internals.terminalFileUriHostnameByPtyId.get('pty-ssh')).toBe('remote-host')
+    expect(internals.wslDistroByPtyId.has('pty-ssh')).toBe(false)
+  })
+
+  it('uses per-incarnation WSL context before registration and across simultaneous distros', () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.preparePtyExecutionContext('pty-ubuntu', 'Ubuntu', { resetIncarnation: true })
+    runtime.preparePtyExecutionContext('pty-debian', 'Debian', { resetIncarnation: true })
+    runtime.registerPty('pty-ubuntu', TEST_WORKTREE_ID)
+    runtime.registerPty('pty-debian', TEST_WORKTREE_ID)
+
+    runtime.onPtyData('pty-ubuntu', '\x1b]7;file://DESKTOP/home/me/repo\x07', 1)
+    runtime.onPtyData('pty-debian', '\x1b]7;file://DESKTOP/home/me/repo\x07', 1)
+
+    const cwds = (runtime as unknown as { terminalCwdByPtyId: Map<string, string> })
+      .terminalCwdByPtyId
+    expect(cwds.get('pty-ubuntu')).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
+    expect(cwds.get('pty-debian')).toBe('\\\\wsl.localhost\\Debian\\home\\me\\repo')
+  })
+
+  it('does not retain WSL context when a PTY id is reused', () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.preparePtyExecutionContext('pty-reused', 'Ubuntu', { resetIncarnation: true })
+    runtime.registerPty('pty-reused', TEST_WORKTREE_ID)
+    runtime.onPtyExit('pty-reused', 0)
+
+    runtime.preparePtyExecutionContext('pty-reused', null, { resetIncarnation: true })
+    runtime.registerPty('pty-reused', TEST_WORKTREE_ID)
+    runtime.onPtyData('pty-reused', '\x1b]7;file://server/share/repo\x07', 1)
+
+    const cwds = (runtime as unknown as { terminalCwdByPtyId: Map<string, string> })
+      .terminalCwdByPtyId
+    expect(cwds.get('pty-reused')).toBe('\\\\server\\share\\repo')
+  })
+
+  it('preserves immutable context while a live daemon attach is unresolved', () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.preparePtyExecutionContext('pty-attached', 'Ubuntu', { resetIncarnation: true })
+    runtime.registerPty('pty-attached', TEST_WORKTREE_ID)
+
+    const changed = runtime.preparePtyExecutionContext('pty-attached', 'Debian', {
+      preserveExisting: true
+    })
+    runtime.onPtyData('pty-attached', '\x1b]7;file://DESKTOP/home/me/repo\x07', 1)
+
+    const cwd = (
+      runtime as unknown as { terminalCwdByPtyId: Map<string, string> }
+    ).terminalCwdByPtyId.get('pty-attached')
+    expect(changed).toBe(false)
+    expect(cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
+  })
+
+  it('replaces a cwd parsed before late WSL context with the provider cwd', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = 'pty-late-wsl-context'
+    const providerCwd = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => ({ cols: 80, rows: 24 }),
+      serializeProviderBuffer: vi.fn().mockResolvedValue({
+        data: 'restored screen',
+        cols: 80,
+        rows: 24,
+        cwd: providerCwd,
+        seq: 1,
+        source: 'headless'
+      })
+    })
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID)
+    runtime.seedHeadlessTerminal(ptyId, '\x1b]7;file://DESKTOP/home/me/repo\x07')
+
+    const internals = runtime as unknown as {
+      headlessTerminals: Map<string, { writeChain: Promise<void> }>
+      terminalCwdByPtyId: Map<string, string>
+    }
+    await internals.headlessTerminals.get(ptyId)?.writeChain
+    expect(internals.terminalCwdByPtyId.get(ptyId)).toBe('\\\\desktop\\home\\me\\repo')
+
+    runtime.preparePtyExecutionContext(ptyId, 'Ubuntu')
+    await internals.headlessTerminals.get(ptyId)?.writeChain
+
+    expect(internals.terminalCwdByPtyId.get(ptyId)).toBe(providerCwd)
+  })
+
+  it('keeps a live WSL cwd that arrives during late-context snapshot recovery', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = 'pty-late-wsl-context-race'
+    type ProviderSnapshot = {
+      data: string
+      cols: number
+      rows: number
+      cwd: string
+      seq: number
+      source: 'headless'
+    }
+    let resolveProviderSnapshot: ((snapshot: ProviderSnapshot) => void) | undefined
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => ({ cols: 80, rows: 24 }),
+      serializeProviderBuffer: vi.fn(
+        () =>
+          new Promise<ProviderSnapshot>((resolve) => {
+            resolveProviderSnapshot = resolve
+          })
+      )
+    })
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID)
+    runtime.seedHeadlessTerminal(ptyId, '\x1b]7;file://DESKTOP/home/me/old\x07')
+    const internals = runtime as unknown as {
+      headlessTerminals: Map<string, { writeChain: Promise<void> }>
+      terminalCwdByPtyId: Map<string, string>
+    }
+    await internals.headlessTerminals.get(ptyId)?.writeChain
+
+    runtime.preparePtyExecutionContext(ptyId, 'Ubuntu')
+    await vi.waitFor(() => expect(resolveProviderSnapshot).toBeDefined())
+    runtime.onPtyData(ptyId, '\x1b]7;file://DESKTOP/home/me/live\x07', 1)
+    resolveProviderSnapshot?.({
+      data: 'older restored screen',
+      cols: 80,
+      rows: 24,
+      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\old',
+      seq: 1,
+      source: 'headless'
+    })
+    await internals.headlessTerminals.get(ptyId)?.writeChain
+
+    expect(internals.terminalCwdByPtyId.get(ptyId)).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\home\\me\\live'
+    )
+  })
+
+  it('infers local reconstructed WSL context from a WSL UNC worktree', () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty(
+      'pty-reconstructed',
+      `${TEST_REPO_ID}::\\\\wsl.localhost\\Ubuntu\\home\\me\\repo`
+    )
+
+    runtime.onPtyData('pty-reconstructed', '\x1b]7;file://DESKTOP/home/me/repo/src\x07', 1)
+
+    const cwd = (
+      runtime as unknown as { terminalCwdByPtyId: Map<string, string> }
+    ).terminalCwdByPtyId.get('pty-reconstructed')
+    expect(cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\src')
   })
 
   it('clears stale terminal file URI hostnames after empty-host OSC7 cwd updates', () => {

@@ -141,23 +141,25 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
   await expect
     .poll(
       () =>
-        page.evaluate(async (repoId) => {
-          const store = window.__store
-          if (!store) {
-            return false
-          }
-          // Why: repos.add emits a concurrent refresh whose generation can
-          // supersede this fetch; poll until either refresh publishes the repo.
-          await store.getState().fetchRepos()
-          const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
-          if (!repo) {
-            return false
-          }
-          // Why: this restart fixture uses the global e2e repo, whose seeded Git
-          // worktree is external to Orca's workspace root after the visibility rollout.
-          await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
-          return true
-        }, repoId),
+        readRestartRendererState(() =>
+          page.evaluate(async (repoId) => {
+            const store = window.__store
+            if (!store) {
+              return false
+            }
+            // Why: repos.add emits a concurrent refresh whose generation can
+            // supersede this fetch; poll until either refresh publishes the repo.
+            await store.getState().fetchRepos()
+            const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+            if (!repo) {
+              return false
+            }
+            // Why: this restart fixture uses the global e2e repo, whose seeded Git
+            // worktree is external to Orca's workspace root after the visibility rollout.
+            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+            return true
+          }, repoId)
+        ),
       {
         timeout: 30_000,
         message: `attachRepoAndOpenTerminal: expected e2e repo to be loaded: ${repoPath}`
@@ -178,14 +180,16 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
   await expect
     .poll(
       async () =>
-        page.evaluate(async (repoId) => {
-          const store = window.__store
-          if (!store) {
-            return false
-          }
-          await store.getState().fetchWorktrees(repoId)
-          return (store.getState().worktreesByRepo[repoId]?.length ?? 0) > 0
-        }, repoId),
+        readRestartRendererState(() =>
+          page.evaluate(async (repoId) => {
+            const store = window.__store
+            if (!store) {
+              return false
+            }
+            await store.getState().fetchWorktrees(repoId)
+            return (store.getState().worktreesByRepo[repoId]?.length ?? 0) > 0
+          }, repoId)
+        ),
       {
         timeout: 15_000,
         message: 'attachRepoAndOpenTerminal: seeded worktree never surfaced in the store'
@@ -215,6 +219,19 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
   }
 
   return worktreeId
+}
+
+export async function readRestartRendererState<T>(read: () => Promise<T>): Promise<T | null> {
+  try {
+    return await read()
+  } catch (error) {
+    // Why: initial hydration can replace the renderer document; the enclosing
+    // state poll must retry that transition without hiding other failures.
+    if (error instanceof Error && error.message.includes('Execution context was destroyed')) {
+      return null
+    }
+    throw error
+  }
 }
 
 function isValidGitRepo(repoPath: string): boolean {

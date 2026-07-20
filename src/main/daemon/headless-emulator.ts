@@ -35,6 +35,7 @@ export type HeadlessEmulatorOptions = {
   onQueryReply?: (reply: string) => void
   pathFlavor?: 'posix' | 'win32'
   remotePosixFileUriAuthority?: boolean
+  wslDistro?: string
 }
 
 export type HeadlessEmulatorWriteOptions = {
@@ -93,7 +94,8 @@ export class HeadlessEmulator {
     this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
     this.oscText = new TerminalOscCwdTitleScanner({
       pathFlavor: this.pathFlavor,
-      remotePosixAuthority: this.remotePosixFileUriAuthority
+      remotePosixAuthority: this.remotePosixFileUriAuthority,
+      wslDistro: opts.wslDistro
     })
     this.terminal = new Terminal({
       cols: opts.cols,

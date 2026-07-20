@@ -12,7 +12,9 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
-  PRRefreshUpstreamErrorType,
+  GitHubPRRefreshSkippedReason,
+  PRRefreshErrorType,
+  PRRefreshOutcome,
   GitHubCommentResult,
   IssueInfo,
   PRCheckDetail,
@@ -676,10 +678,11 @@ export type PRRefreshState = {
   updatedAt: number
   pausedUntil?: number
   message?: string
-  // Why: lets error surfaces render translated, GitHub-attributed copy keyed on
-  // the failure kind (e.g. a 5xx outage vs. a rate limit) rather than showing
-  // the main process's English `message` verbatim.
-  errorType?: PRRefreshUpstreamErrorType
+  // Why: classified errors drive stable copy without exposing raw upstream messages.
+  errorType?: PRRefreshErrorType
+  skippedReason?: GitHubPRRefreshSkippedReason
+  nextAutoRetryAt?: number
+  retryDisabledUntil?: number
 }
 
 export type PRRefreshStateClearToken = {
@@ -2171,6 +2174,24 @@ export type GitHubSlice = {
   patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
 }
 
+/**
+ * Normalizes the `github.prForBranch` runtime RPC result into a
+ * {@link PRRefreshOutcome}. Current hosts return the full outcome (with a
+ * `kind`), so a runtime `upstream-error` is preserved instead of collapsing to a
+ * false accepted "no PR". A legacy host that still returns `PRInfo | null` is
+ * mapped to `found` / `no-pr` to preserve backward behavior on that host only.
+ */
+function normalizeRuntimePRForBranchOutcome(
+  result: PRRefreshOutcome | PRInfo | null
+): PRRefreshOutcome {
+  if (result && typeof result === 'object' && 'kind' in result) {
+    return result
+  }
+  return result
+    ? { kind: 'found', pr: result, fetchedAt: Date.now() }
+    : { kind: 'no-pr', fetchedAt: Date.now() }
+}
+
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
   prCache: {},
   issueCache: {},
@@ -3202,7 +3223,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : null
         const requestHeadOid = candidateWorktree?.head ?? null
         const outcome = runtimeRepo
-          ? await callRuntimeRpc<PRInfo | null>(
+          ? await callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
               runtimeRepo.target,
               'github.prForBranch',
               {
@@ -3215,11 +3236,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   : {})
               },
               { timeoutMs: 30_000 }
-            ).then((pr) =>
-              pr
-                ? ({ kind: 'found', pr, fetchedAt: Date.now() } as const)
-                : ({ kind: 'no-pr', fetchedAt: Date.now() } as const)
-            )
+            ).then((result) => normalizeRuntimePRForBranchOutcome(result))
           : await (async () => {
               const candidate: GitHubPRRefreshCandidate = {
                 repoId: repoId ?? '',
@@ -3263,6 +3280,27 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         const pr: PRInfo | null =
           outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
         if (outcome.kind === 'upstream-error') {
+          // Why: the runtime RPC path does not flow through the coordinator
+          // broadcast that populates prRefreshStates on native execution, so a
+          // runtime/SSH gh failure would otherwise show generic "checking" copy.
+          // Record the classified error + schedule here so the Checks panel shows
+          // the same classified failure copy as native (design criterion 2).
+          if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {
+            set((s) => {
+              const nextStates = { ...s.prRefreshStates }
+              delete nextStates[cacheKey]
+              nextStates[cacheKey] = {
+                status: 'error',
+                reason: 'swr',
+                updatedAt: Date.now(),
+                message: outcome.message,
+                errorType: outcome.errorType,
+                nextAutoRetryAt: outcome.nextAutoRetryAt,
+                retryDisabledUntil: outcome.retryDisabledUntil
+              }
+              return { prRefreshStates: nextStates }
+            })
+          }
           return cached?.data ?? null
         }
         if (prRequestGenerations.get(cacheKey) === generation) {
@@ -4155,7 +4193,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               reason: event.reason,
               updatedAt: Date.now(),
               message: event.outcome.message,
-              errorType: event.outcome.errorType
+              errorType: event.outcome.errorType,
+              nextAutoRetryAt: event.outcome.nextAutoRetryAt,
+              retryDisabledUntil: event.outcome.retryDisabledUntil
             }
             continue
           }
@@ -4347,11 +4387,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           // Why: delete-then-set moves this key to the end of insertion order so
           // capRecordByInsertionOrder evicts genuinely idle keys, not active ones.
           delete nextStates[alias.cacheKey]
+          const isPaused = event.status === 'paused'
           nextStates[alias.cacheKey] = {
             status: event.status,
             reason: event.reason,
             updatedAt: Date.now(),
-            pausedUntil: event.pausedUntil
+            pausedUntil: event.pausedUntil,
+            skippedReason: event.skippedReason,
+            // Why: a paused refresh is a rate-limit gate. Map its pausedUntil into
+            // the unified schedule so the panel shows the auto-retry time and
+            // disables manual Retry until the limit resets.
+            nextAutoRetryAt: isPaused ? event.pausedUntil : undefined,
+            retryDisabledUntil: isPaused ? event.pausedUntil : undefined
           }
         }
       }

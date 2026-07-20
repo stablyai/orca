@@ -1202,9 +1202,13 @@ export type PRInfo = {
   conflictSummary?: PRConflictSummary
 }
 
-// server_error covers GitHub-side HTTP 5xx outages (githubstatus.com incidents),
-// distinct from a transport-level `network` failure or a `rate_limited` budget.
-export type PRRefreshUpstreamErrorType =
+/**
+ * Discriminates a classified GitHub PR-refresh failure. The renderer maps these
+ * to stable, non-destructive empty-state copy; a `hard` subset (auth, permission,
+ * repo_unavailable, gh_unavailable) means the existing-review lookup is currently
+ * impossible and must hide the Create composer.
+ */
+export type PRRefreshErrorType =
   | 'rate_limited'
   | 'auth'
   | 'network'
@@ -1214,14 +1218,23 @@ export type PRRefreshUpstreamErrorType =
   | 'server_error'
   | 'unknown'
 
+// Backward-compatible name used by outage-copy consumers added on main.
+export type PRRefreshUpstreamErrorType = PRRefreshErrorType
+
 export type PRRefreshOutcome =
   | { kind: 'found'; pr: PRInfo; fetchedAt: number }
   | { kind: 'no-pr'; fetchedAt: number }
   | {
       kind: 'upstream-error'
-      errorType: PRRefreshUpstreamErrorType
+      errorType: PRRefreshErrorType
       message: string
       fetchedAt: number
+      // Unified retry schedule (see docs/reference/pr-panel-refresh-guidance.md).
+      // `nextAutoRetryAt`: earliest time main expects to auto-retry this key.
+      // `retryDisabledUntil`: earliest time a manual Retry / refreshPRNow is
+      // accepted (rate-limit gates only, never ordinary network/auth backoff).
+      nextAutoRetryAt?: number
+      retryDisabledUntil?: number
     }
 
 export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr'
@@ -2966,6 +2979,10 @@ export type GlobalSettings = {
    *  on read into [5_000ms, 60min] to defend against bad config.
    *  See docs/mobile-fit-hold.md. */
   mobileAutoRestoreFitMs: number | null
+  /** Preferred mobile pairing path for new QR codes: Anywhere (Orca Relay +
+   *  local) or same-network only. Missing/undefined defaults to Anywhere.
+   *  An explicit `local-only` means the user already chose that path. */
+  mobilePairingConnectionMode?: 'automatic' | 'local-only'
   /** Experimental: floating animated pet (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the
