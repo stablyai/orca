@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: web session-tab sync reconciles terminal,
- * unified-tab, group, and PTY maps atomically so host-published surfaces don't
- * leave the web client in a split-brain tab state. */
+/* eslint-disable max-lines -- web session-tab sync reconciles terminal, unified-tab, group, and PTY maps atomically to avoid split-brain tab state */
 import { useEffect } from 'react'
 import type { AppState } from '../store'
 import { useAppStore } from '../store'
@@ -178,11 +176,7 @@ export function getLastKnownHostTerminalTabCount(
   )
 }
 
-// Why: a post-reconnect subscription replay re-emits the current snapshot with
-// an unchanged epoch/version; dropping the freshness entry lets the monotonic
-// gate accept that replay as authoritative instead of freezing the mirror
-// (#7718). Normal-operation ordering protection is untouched — this only runs
-// for responses the connection tagged as reconnect replays.
+// Why: a post-reconnect replay re-emits the snapshot with unchanged epoch/version; dropping the freshness entry lets the monotonic gate accept it instead of freezing the mirror (#7718).
 export function acceptReplayedWebSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string
@@ -196,31 +190,18 @@ export function shouldApplyWebSessionTabsSnapshot(
 ): boolean {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   if ((snapshot as { removed?: unknown }).removed === true) {
-    // Why: removed worktrees can stop publishing snapshots, so their
-    // freshness/mapping entries need explicit cleanup instead of waiting for
-    // a later replacement snapshot that may never arrive.
+    // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
     return true
   }
   if (snapshot.worktree === FLOATING_TERMINAL_WORKTREE_ID) {
-    // Why: the floating workspace is a local synthetic terminal. A focused
-    // remote runtime can publish an empty same-id snapshot while the user has a
-    // local ssh/tmux tab open; treating that as authoritative deletes the local
-    // floating tabs.
+    // Why: the floating workspace is a local synthetic terminal; a remote empty same-id snapshot would delete the user's local floating tabs.
     return false
   }
   rememberHostTerminalTabCount(environmentId, snapshot)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
-  // Why: snapshotVersion is monotonic only WITHIN one host generation; it resets
-  // when the host restarts, and each restart produces a different publicationEpoch.
-  // So only treat a frame as stale when it shares the current epoch and isn't
-  // newer — a different epoch is a new generation (or a restart) and must apply,
-  // even if its version is lower. (A cross-stream out-of-order frame with a
-  // different epoch may briefly apply, but the next snapshot's higher version
-  // self-heals it; rejecting on version alone would instead permanently drop a
-  // post-restart snapshot, since the client's tracking survives transparent
-  // transport reconnects.)
+  // Why: snapshotVersion is monotonic only within one publicationEpoch (resets on host restart); reject as stale only within the same epoch, since a different epoch is a new generation and must apply.
   if (
     current &&
     current.publicationEpoch === snapshot.publicationEpoch &&
@@ -232,8 +213,7 @@ export function shouldApplyWebSessionTabsSnapshot(
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
   })
-  // Why: a mounted mirror that exhausted bounded polling needs fresh host
-  // evidence without subscribing to every application-store write.
+  // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return true
 }
@@ -437,8 +417,7 @@ function chooseRemoteTerminalLayout(
       ])
     : undefined
   const activeLeafId =
-    // Why: host title/status snapshots may still mark an agent pane active
-    // after this client selected a different split pane.
+    // Why: host title/status snapshots may still mark an agent pane active after this client selected a different split pane.
     (existingLayout?.activeLeafId && knownLeafIds.has(existingLayout.activeLeafId)
       ? existingLayout.activeLeafId
       : null) ??
@@ -453,9 +432,7 @@ function chooseRemoteTerminalLayout(
       ? parentLayout.expandedLeafId
       : null
   return {
-    // Why: the host's parentLayout is authoritative (carries the real split
-    // direction); only if it doesn't cover the current leaves do we keep the
-    // prior client tree, then degenerate — never re-guess a direction.
+    // Why: host parentLayout is authoritative for split direction; else keep the prior client tree, then degenerate — never re-guess a direction.
     root: resolveTerminalLayoutRoot({
       authoritativeRoot: parentLayout?.root,
       existingRoot: existingLayout?.root,
@@ -468,9 +445,7 @@ function chooseRemoteTerminalLayout(
     activeLeafId,
     expandedLeafId,
     ptyIdsByLeafId,
-    // Why: surface.title is the tab/PTY label ("Terminal 2", agent title,
-    // etc.). Restoring it as a pane title makes the web client render a fake
-    // title bar above xterm. Only host layout titles are real user pane titles.
+    // Why: surface.title is the tab/PTY label, not a pane title; restoring it as one renders a fake title bar. Only host layout titles are real pane titles.
     ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})
   }
 }
@@ -487,14 +462,11 @@ function shouldReplaceTerminalTab(
     !isMirroredTerminalSurfaceId(tab.id) &&
     nextMirroredLaunchAgents.has(tab.launchAgent)
   ) {
-    // Why: paired web agent quick-launch used to create local-only tabs before
-    // the host snapshot landed. Retire only the matching agent's stale row.
+    // Why: agent quick-launch created a local-only tab before the host snapshot landed; retire only the matching agent's stale row.
     return true
   }
   if (isMirroredTerminalSurfaceId(tab.id)) {
-    // Why: host session snapshots are authoritative for host-mirrored tabs.
-    // Replace old mirrors even when the next surface is still waiting on a
-    // stream handle, otherwise paired web keeps stale handles or drops parity.
+    // Why: host snapshots are authoritative for mirrored tabs; replace old mirrors even when the next surface still awaits a stream handle, else parity drifts.
     return true
   }
   if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
@@ -503,9 +475,7 @@ function shouldReplaceTerminalTab(
   if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
     return false
   }
-  // Why: web-created remote tabs use local UUIDs until the host publishes the
-  // corresponding session surface. Only retire them once their PTY is present
-  // in the host snapshot, while always pruning prior mirrored surface IDs.
+  // Why: web-created remote tabs use local UUIDs until the host publishes their surface; only retire them once their PTY appears in the snapshot.
   return (
     tab.ptyId !== null &&
     (nextRemotePtyIds.has(tab.ptyId) ||
@@ -513,10 +483,7 @@ function shouldReplaceTerminalTab(
   )
 }
 
-/**
- * Constructs mirrored terminal tabs from the mobile session status payload,
- * normalising Pi-compatible agent titles under launch ownership.
- */
+/** Constructs mirrored terminal tabs from the mobile session status payload, normalising Pi-compatible agent titles under launch ownership. */
 function buildMirroredTerminalTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -571,23 +538,16 @@ function buildMirroredTerminalTabs(
       activeSurface.quickCommandLabel?.trim() ||
       surfaces.find((surface) => surface.quickCommandLabel?.trim())?.quickCommandLabel?.trim() ||
       existing?.quickCommandLabel?.trim()
-    // Why: startup cwd is host-owned launch metadata; once the host omits it,
-    // mirrored clients must not resurrect stale subdirectory intent.
+    // Why: startupCwd is host-owned launch metadata; once the host omits it, don't resurrect stale subdirectory intent.
     const startupCwd =
       activeSurface.startupCwd || surfaces.find((surface) => surface.startupCwd)?.startupCwd
-    // Why: tab color/pin echo back through host snapshots, so prefer the client's
-    // own record (kept authoritative in tabsByWorktree by the pin/color setters)
-    // and fall back to the host value only when this client has no prior tab —
-    // e.g. first reconcile or a change made on another client. Mirrors how
-    // customTitle always prefers the client value to avoid echo-window reverts.
+    // Why: color/pin echo back through host snapshots, so prefer the client's own record and fall back to host only without a prior tab (avoids echo-window reverts).
     const hostColorSurface = surfaces.find((surface) => surface.color != null)
     const color = existing ? (existing.color ?? null) : (hostColorSurface?.color ?? null)
     const isPinned = existing
       ? existing.isPinned === true
       : surfaces.some((surface) => surface.isPinned)
-    // Why: viewMode echoes back through host snapshots like color/pin, so prefer
-    // the client's own record during the optimistic echo window and adopt the host
-    // value only when this client has no prior tab (first reconcile / other client).
+    // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
     const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
     const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
     return {
@@ -605,8 +565,7 @@ function buildMirroredTerminalTabs(
         ...(viewMode ? { viewMode } : {}),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
-        // Why: launchAgent is host-owned lifecycle metadata. If the host stops
-        // publishing it, mirrored clients must not resurrect stale startup intent.
+        // Why: launchAgent is host-owned lifecycle metadata; once the host omits it, don't resurrect stale startup intent.
         ...(launchAgent ? { launchAgent } : {})
       },
       hostTabId: parentTabId,
@@ -623,10 +582,7 @@ function toMirroredPaneKey(surface: TerminalSurface): string | null {
   return makePaneKey(toWebTerminalSurfaceTabId(surface.parentTabId), surface.leafId)
 }
 
-/**
- * Normalises and mirrors agent status updates from the host payload,
- * preserving authoritative ownership metadata.
- */
+/** Normalises and mirrors agent status updates from the host payload, preserving ownership metadata. */
 function remapHostAgentStatus(surface: TerminalSurface): AgentStatusEntry | null {
   if (!surface.agentStatus) {
     return null
@@ -650,10 +606,7 @@ function isMirroredAgentPaneKeyForTabs(paneKey: string, tabIds: ReadonlySet<stri
   return parsed !== null && tabIds.has(parsed.tabId)
 }
 
-/**
- * Generates a state patch for mirrored agent statuses, merging host
- * status entries with client overrides defensively.
- */
+/** Generates a state patch for mirrored agent statuses, merging host entries with client overrides. */
 function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
@@ -681,9 +634,7 @@ function buildMirroredAgentStatusPatch(
       continue
     }
     const existing = state.agentStatusByPaneKey[entry.paneKey]
-    // Why: active web streams can report a fresher OSC 9999 status for the same
-    // mirrored pane before the next host snapshot arrives. Do not rewind that
-    // row with an older host publication.
+    // Why: an active web stream can report a fresher OSC 9999 status before the next host snapshot, so don't rewind it with an older host publication.
     const nextEntry =
       existing && existing.updatedAt > entry.updatedAt
         ? normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType)
@@ -748,10 +699,7 @@ function buildMirroredAgentStatusPatch(
 function buildTerminalUnifiedTab(
   tab: TerminalTab,
   groupId: string,
-  // Why: viewMode (terminal vs native chat) is host-tracked, but the client's
-  // optimistic toggle must win during the echo window. Callers pass the reconciled
-  // value (host value falling back to the captured client value) so toggling to
-  // chat doesn't revert when the next session-graph sync rebuilds tabs.
+  // Why: viewMode is host-tracked but the client's optimistic toggle must win during the echo window; callers pass the reconciled value.
   viewMode?: Tab['viewMode']
 ): Tab {
   return {
@@ -871,8 +819,7 @@ function buildMirroredEditorTabs(
       runtimeEnvironmentId: environmentId,
       mode: tab.type === 'markdown' ? tab.mode : 'edit',
       markdownPreviewSourceFileId: sourceFileId,
-      // Why: marks this tab as host-owned so a later snapshot that omits it can
-      // cull it. Locally opened web tabs lack this flag and survive syncs.
+      // Why: marks this tab host-owned so a later snapshot that omits it can cull it; locally opened tabs lack this flag and survive.
       mirroredFromRuntimeSession: true
     }
     return {
@@ -1006,8 +953,7 @@ function chooseTargetGroupId(
         group.id === state.activeGroupIdByWorktree[snapshot.worktree] && inRenderedLayout(group.id)
     ) ??
     groups.find((group) => inRenderedLayout(group.id))
-  // Why: host snapshots can reference desktop-only group ids. The web layout's
-  // rendered group is the only safe CSS anchor target for mirrored panes.
+  // Why: host snapshots can reference desktop-only group ids; the rendered group is the only safe CSS anchor for mirrored panes.
   const firstRenderedLayoutGroupId = layoutGroupIds.values().next().value as string | undefined
   return (
     preferred?.id ??
@@ -1233,8 +1179,7 @@ function buildMirroredHostGroups({
       ...(existing?.tabOrder.filter((tabId) => !localHostOrder.includes(tabId)) ?? []),
       ...localHostOrder
     ]
-    // Why: a pending client reorder for this group wins over a stale pre-move
-    // host order until the host echoes the move (or membership changes).
+    // Why: a pending client reorder wins over a stale pre-move host order until the host echoes the move (or membership changes).
     const tabOrder = resolveWebSessionReorderedOrder(worktreeId, hostGroup.id, hostTabOrder, now)
     if (tabOrder.length === 0) {
       continue
@@ -1680,15 +1625,8 @@ export function applyWebSessionTabsSnapshot(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return state
   }
-  // Why: a remote close prunes the local mirror immediately, but an in-flight
-  // pre-close snapshot can still list the tab and flash it back. Drop any tab
-  // the client is closing until the host confirms removal; reconcile the intents
-  // against the full snapshot first so confirmed (absent) closes clear.
-  // Why: must match the id the close path records as the intent. The close RPC
-  // resolves to the host session tab id (terminal parentTabId; otherwise tab.id)
-  // — keying browser on browserPageId instead never matched, so browser closes
-  // were never suppressed and reconcile cleared the intent on the still-present
-  // snapshot. The host also addresses tabs by session id, not page id.
+  // Why: an in-flight pre-close snapshot can flash a closing tab back, so drop tabs the client is closing until the host confirms removal.
+  // Why: key close intents by host session tab id (terminal parentTabId else tab.id), not browserPageId, or browser closes never get suppressed.
   const snapshotHostTabId = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): string =>
     tab.type === 'terminal' ? tab.parentTabId : tab.id
   reconcileWebSessionCloseIntents(
@@ -1705,11 +1643,7 @@ export function applyWebSessionTabsSnapshot(
         )
       }
     : rawSnapshot
-  // Why: only follow the snapshot's active tab over the user's current focus when
-  // the client itself initiated this activation (a create/activate it recorded).
-  // An unsolicited server-active (e.g. an agent "thinking" echo) must not steal
-  // focus — that's the #5435 contract. Intent matches by the host active tab id
-  // (terminal session id, or browserPageId for browser tabs); consume it once.
+  // Why: follow the snapshot's active tab over the user's focus only when this client initiated the activation; unsolicited server-active must not steal focus (#5435).
   const focusIntentHostTabId = peekWebSessionFocusIntent(worktreeId)
   const honorSnapshotActiveFocus =
     focusIntentHostTabId !== null &&
@@ -1830,9 +1764,7 @@ export function applyWebSessionTabsSnapshot(
           file.worktreeId === worktreeId &&
           file.runtimeEnvironmentId === environmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
-          // Why: only cull tabs that came from the host mirror. Files the web
-          // user opened locally have no host counterpart, so a snapshot that
-          // omits them is not a signal to close them.
+          // Why: only cull host-mirrored tabs; locally opened files have no host counterpart, so their omission isn't a close signal.
           file.mirroredFromRuntimeSession === true &&
           !mirroredEditorFileIds.has(file.id)
       )
@@ -1882,8 +1814,6 @@ export function applyWebSessionTabsSnapshot(
     buildTerminalUnifiedTab(
       entry.tab,
       hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId,
-      // Prefer the reconciled mirrored value (already client-wins during the echo
-      // window); fall back to the captured client value when the entry omits it.
       entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
     )
   )
@@ -1935,8 +1865,7 @@ export function applyWebSessionTabsSnapshot(
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
       ? state.activeTabIdByWorktree[worktreeId]
       : null
-  // Why: when the client initiated this activation (honorSnapshotActiveFocus),
-  // the snapshot's active terminal wins over the sticky current focus.
+  // Why: on a client-initiated activation (honorSnapshotActiveFocus), the snapshot's active terminal wins over sticky current focus.
   const intentTerminalId =
     honorSnapshotActiveFocus && snapshot.activeTabType === 'terminal'
       ? activeMirroredTerminalId
@@ -1983,8 +1912,7 @@ export function applyWebSessionTabsSnapshot(
     worktreeId,
     nextUnifiedTabs
   })
-  // Why: a client-initiated activation also drives the visible unified tab,
-  // overriding the sticky current-visible tab.
+  // Why: a client-initiated activation also drives the visible unified tab, overriding the sticky current-visible tab.
   const intentUnifiedTabId = honorSnapshotActiveFocus
     ? snapshot.activeTabType === 'browser'
       ? activeMirroredBrowserTabId
@@ -2103,9 +2031,7 @@ export function applyWebSessionTabsSnapshot(
         next.push(tabId)
       }
     }
-    // Why: remote snapshots can arrive after the client staged local browser
-    // tabs. Preserve the user's visible mixed order and only append new host
-    // tabs; otherwise terminal-browser-terminal can collapse to browser-terminal-terminal.
+    // Why: snapshots can arrive after the client staged local browser tabs, so preserve visible order and only append new host tabs.
     for (const tabId of current) {
       push(tabId)
     }
@@ -2260,8 +2186,7 @@ export function applyWebSessionTabsSnapshot(
     sameGroups
   )
   const nextActiveGroupId =
-    // Why: remote status/title snapshots carry the host's last active tab; a
-    // client that already switched panes must keep its local group focus.
+    // Why: status/title snapshots carry the host's last active tab; a client that already switched panes keeps its local group focus.
     nextGroups?.find((group) => group.activeTabId === nextActiveUnifiedTabId)?.id ??
     nextGroups?.find((group) => group.id === snapshot.activeGroupId)?.id ??
     nextGroups?.[0]?.id ??
@@ -2363,10 +2288,7 @@ export function applyWebSessionTabsSnapshot(
           : nextActiveEditorFileId
             ? ('editor' as const)
             : ('terminal' as const)
-  // Why: an empty/closed host snapshot has no active host tab, but the web
-  // client must not keep pointing global shortcuts at a removed browser/editor.
-  // A client-initiated activation (honorSnapshotActiveFocus) makes the snapshot's
-  // type win, so a create can switch the visible pane (e.g. terminal -> browser).
+  // Why: don't keep pointing shortcuts at a removed browser/editor; a client-initiated activation lets the snapshot's type switch the visible pane.
   const nextVisibleTabType = honorSnapshotActiveFocus
     ? (snapshotVisibleTabType ?? currentVisibleTabTypeStillValid ?? fallbackVisibleTabType)
     : (currentVisibleTabTypeStillValid ?? snapshotVisibleTabType ?? fallbackVisibleTabType)
@@ -2520,8 +2442,7 @@ export function applyWebSessionTabsStorePatch(
       patch !== state && Object.prototype.hasOwnProperty.call(patch, 'agentStatusByPaneKey')
     return patch
   })
-  // Why: paired-web snapshots bypass setAgentStatus, so they must explicitly
-  // arm the same stale-boundary timer as local hook events.
+  // Why: paired-web snapshots bypass setAgentStatus, so arm the stale-boundary timer explicitly like local hook events do.
   if (mirroredAgentStatusChanged) {
     useAppStore.getState().scheduleAgentStatusFreshness()
   }
@@ -2541,20 +2462,15 @@ export function useWebSessionTabsSync(): void {
     const environmentIds = runtimeSessionMirrorEnvironmentKey
       ? runtimeSessionMirrorEnvironmentKey.split('\u0000').filter((id) => id.trim())
       : []
-    // Why: startup hydration writes browser-local session state; applying the
-    // host snapshot before that point gets clobbered and leaves the sidebar stale.
-    // Selectedness is not liveness: desktop and web clients both mirror the
-    // runtime's session bindings so background worktrees do not look asleep.
+    // Why: mirror all paired runtimes' sessions, not just the selected worktree, so background worktrees don't look asleep (selectedness isn't liveness).
+    // Why: applying the host snapshot before startup hydration writes browser-local session state clobbers it and leaves the sidebar stale.
     if (!workspaceSessionReady || environmentIds.length === 0) {
       return
     }
 
     let disposed = false
     const unsubscribes: (() => void)[] = []
-    // Why: the streaming RPC emits an initial snapshots event, but startup can
-    // render a paired web session before that event is applied. A one-shot
-    // fetch makes initial parity deterministic; the stream remains the live
-    // update path afterward.
+    // Why: the stream's initial snapshot can land after first render, so a one-shot fetch makes initial parity deterministic.
     for (const environmentId of environmentIds) {
       if (
         !shouldSyncAllRuntimeSessionTabs({
@@ -2667,8 +2583,7 @@ export function useWebSessionTabsSync(): void {
       for (const unsubscribe of unsubscribes) {
         unsubscribe()
       }
-      // Why: environment ids can churn as paired runtimes reconnect or switch;
-      // stale freshness/mapping entries should not live for the renderer lifetime.
+      // Why: environment ids churn as paired runtimes reconnect; don't leak stale tracking for the renderer lifetime.
       for (const environmentId of environmentIds) {
         clearWebSessionTabsTrackingForEnvironment(environmentId)
       }
@@ -2758,8 +2673,7 @@ export function useWebSessionTabsSync(): void {
               beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
             ) {
               requestedRespawnAfterWake = true
-              // Why: wake recovery must recreate the terminal without changing
-              // selected worktree to avoid re-triggering activation churn.
+              // Why: recreate the terminal without changing selected worktree to avoid re-triggering activation churn.
               void createWebRuntimeSessionTerminal({
                 worktreeId: activeWorktreeId,
                 environmentId,

@@ -195,18 +195,13 @@ import {
   subscribeBackgroundTerminalWorktreeMountRequests
 } from './components/terminal/background-terminal-worktree-mount'
 
-// Why: agents alive during a hard kill (crash, forced update install) need a
-// reasonably fresh resume record on disk; one minute bounds the lost window
-// without measurable per-tick cost (the capture skips unchanged records).
+// Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
-// Why: Windows and Linux both run with the native title bar removed (Windows
-// via titleBarStyle: 'hidden', Linux via frame: false), so the renderer draws
-// its own logo/menu anchor and min/max/close controls on both. Paired web
-// clients run in a browser tab, so they must not render desktop window chrome.
+// Why: Windows and Linux remove the native title bar so the renderer draws its own chrome; paired web clients run in a browser tab and must not.
 const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
   platform: shortcutPlatform,
   isWebClient: isPairedWebClientWindow()
@@ -229,9 +224,7 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
     : 'app'
 }
 
-// Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so a
-// single dispatch path serves both. KeybindingInput-compatible (key/code +
-// modifier flags) so it flows straight into keybindingMatchesAction.
+// Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so one dispatch path serves both; KeybindingInput-compatible.
 type ShortcutDispatchInput = {
   key?: string
   code?: string
@@ -245,16 +238,11 @@ type ShortcutDispatchInput = {
   preventDefault: () => void
 }
 
-// Why: Windows ('hidden' titleBarStyle) and Linux (frame: false) both remove
-// the native OS title bar, so we render our own minimize/maximize/close
-// buttons. These SVG icons match the Fluent/Win11 style: thin 10×10 paths on a
-// 40×30 hit area.
+// Why: Windows and Linux both remove the native title bar, so we render our own min/max/close buttons (Fluent/Win11-style SVGs).
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
-    // Why: window:maximize-changed only fires on transitions, so a window
-    // restored to a maximized state at startup would render the wrong icon
-    // until the user first clicks the button. Seed from main on mount.
+    // Why: maximize-changed only fires on transitions; seed from main on mount so a startup-maximized window shows the right icon.
     let cancelled = false
     void window.api.ui.isMaximized().then((value) => {
       if (!cancelled) {
@@ -302,10 +290,7 @@ function WindowControls(): React.JSX.Element {
       <button
         className="window-controls-btn window-controls-close"
         aria-label={translate('auto.App.e960d18540', 'Close')}
-        // Why: IPC to main so the BrowserWindow 'close' event fires, which
-        // sends 'window:close-requested' back to the renderer and keeps the
-        // terminal-running confirmation guard active. window.close() is
-        // unreliable in sandboxed renderers.
+        // Why: route close through main so the 'close' event fires the terminal-running confirmation guard; window.close() is unreliable in sandboxed renderers.
         onClick={() => window.api.ui.requestClose()}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
@@ -374,12 +359,9 @@ const FloatingTerminalPanel = lazy(() =>
     default: module.FloatingTerminalPanel
   }))
 )
-// Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
-// the user opts into the experimental flag.
+// Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
-// Why: lazy so onboarding's step modules + assets aren't fetched for users
-// past first-launch. The gate `shouldShowOnboarding` lives in its own tiny
-// module so no eager import path pulls OnboardingFlow into the main chunk.
+// Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
 const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
 
 function applyRemoteWorkspacePatchStatus(
@@ -433,10 +415,7 @@ function App(): React.JSX.Element {
     recordFeatureInteractionForTour: boolean
   } | null>(null)
 
-  // Why: Zustand actions are referentially stable, but each individual
-  // useAppStore(s => s.someAction) still registers a subscription that React
-  // must check on every store mutation. Consolidating action refs into one
-  // useShallow subscription means one equality check instead of many.
+  // Why: consolidate action refs into one useShallow subscription so React runs one equality check per store mutation instead of one per action.
   const actions = useAppStore(
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
@@ -496,16 +475,13 @@ function App(): React.JSX.Element {
     effectiveActiveTabExpanded
   } = useAppStore(useShallow(selectActiveTerminalChromeState))
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
-  // Why: the creation surface owns the tab strip from the first pending frame.
-  // Gating it on the delayed loader flag made the tab bar swap in mid-create.
+  // Why: the creation surface owns the tab strip from the first pending frame; gating on the delayed loader flag swapped the tab bar mid-create.
   const activePendingCreationExists = useAppStore(
     (s) =>
       s.activePendingCreationId !== null &&
       s.pendingWorktreeCreations[s.activePendingCreationId] !== undefined
   )
-  // Why: App swaps the sidebar between workspace and landing layouts when the
-  // active workspace is slept/deleted. Keep virtualized scroll memory above
-  // that remount so the left workspace list doesn't restart at scrollTop 0.
+  // Why: keep virtualized scroll memory above the sidebar's workspace/landing remount so the left list doesn't restart at scrollTop 0.
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
@@ -534,16 +510,12 @@ function App(): React.JSX.Element {
   if (activeWorktreeId !== null || backgroundTerminalMountRequested) {
     hasMountedTerminalWorkbenchRef.current = true
   }
-  // Why: skip the terminal bundle on the no-workspace landing path, but once a
-  // workspace has mounted, keep Terminal-owned hidden panes alive through sleep
-  // and shutdown transitions where activeWorktreeId can briefly become null.
+  // Why: skip the terminal bundle on the landing path, but once mounted keep hidden panes alive through sleep/shutdown when activeWorktreeId briefly goes null.
   const shouldMountTerminalWorkbench =
     activeWorktreeId !== null ||
     backgroundTerminalMountRequested ||
     hasMountedTerminalWorkbenchRef.current
-  // Why: visible worktree creation owns its faux tab strip from start to finish;
-  // the previous workspace must stay mounted for retention without rendering
-  // real chrome.
+  // Why: visible worktree creation owns its faux tab strip start to finish; keep the previous workspace mounted for retention without real chrome.
   const creationLayoutActive = shouldShowWorktreeCreationSurface({
     activeView,
     activePendingCreationId,
@@ -553,13 +525,10 @@ function App(): React.JSX.Element {
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   const terminalWorkbenchVisible =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
-  // Why: a closed empty floating workspace is not startup-critical. Once it owns
-  // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
-  // retain their local state.
+  // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor panes retain local state.
   const shouldMountFloatingTerminalPanel =
     floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
-  // Why: the floating workspace is a transient overlay; hotkey minimize should
-  // return keyboard focus to the surface the user was working in before it.
+  // Why: floating workspace is a transient overlay; hotkey minimize returns focus to the surface the user came from.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
   const floatingTerminalReturnFocusFrameRef = useRef<number | null>(null)
 
@@ -617,8 +586,7 @@ function App(): React.JSX.Element {
     (nextOpen: SetStateAction<boolean>): void => {
       const resolvedOpen =
         typeof nextOpen === 'function' ? nextOpen(floatingTerminalOpen) : nextOpen
-      // Why: recordFeatureInteraction updates Zustand subscribers; doing it
-      // inside React's state updater logs a render-phase update warning.
+      // Why: recordFeatureInteraction updates Zustand subscribers; running it inside the state updater logs a render-phase update warning.
       if (resolvedOpen && !floatingTerminalOpen) {
         const state = useAppStore.getState()
         floatingWorkspaceTourInteractionSnapshotRef.current =
@@ -709,8 +677,7 @@ function App(): React.JSX.Element {
   const onboardingSettingsDetourActive =
     onboardingSettingsDetour && activeView === 'settings' && shouldRenderOnboarding
   if (onboardingSettingsDetour && !onboardingSettingsDetourActive) {
-    // Why: the settings detour is valid only while Settings is onscreen; clear
-    // it during render so onboarding can resume without a follow-up Effect pass.
+    // Why: the detour is valid only while Settings is onscreen; clear it during render so onboarding resumes without an extra Effect pass.
     setOnboardingSettingsDetour(false)
   }
 
@@ -724,8 +691,7 @@ function App(): React.JSX.Element {
       return
     }
     if (shouldMountAddRepoDialog && !unmountAddRepoDialogTimerRef.current) {
-      // Why: AddRepoDialog's close effect aborts in-flight clone/nested work.
-      // Keep one closed render, then remove hidden SSH/remote subscriptions.
+      // Why: AddRepoDialog's close effect aborts in-flight clone work; keep one closed render before unmounting hidden SSH/remote subscriptions.
       unmountAddRepoDialogTimerRef.current = setTimeout(() => {
         setShouldMountAddRepoDialog(false)
         unmountAddRepoDialogTimerRef.current = null
@@ -742,28 +708,10 @@ function App(): React.JSX.Element {
   // Subscribe to IPC push events
   useIpcEvents()
   useAutomationDispatchEvents()
-  // Why: retention must run at App level so the inline per-card agents list
-  // always sees retained entries. If retention ran inside the sidebar-card
-  // subtree, "done" agents would vanish any time the user collapsed a card's
-  // inline agents section. The retention hooks are hosted inside
-  // <RetainedAgentsSyncGate /> (a leaf component that renders null) rather
-  // than being called inline here so its high-churn store subscriptions
-  // (agentStatusByPaneKey ticks at PTY event frequency)
-  // do not re-render the App tree on every agent status update.
-  // Why: git conflict-operation state also drives the worktree cards. Polling
-  // cannot live under RightSidebar because App unmounts that subtree when the
-  // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
-  // until some unrelated view remount happens to refresh them.
-  // Why: visible-window polling runs immediately on mount. Wait until the
-  // workspace session has hydrated so git status work cannot compete with the
-  // first window becoming usable.
+  // Why: retention runs at App level (in <RetainedAgentsSyncGate />, a null leaf) so "done" agents survive card collapse and its high-churn subscriptions don't re-render App.
+  // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
   useGitStatusPolling({ enabled: workspaceSessionReady })
-  // Why: the editor must hear external filesystem changes regardless of
-  // which right-sidebar panel is visible (Explorer unmounts when the user
-  // switches to Source Control or Checks). Wiring this at App level mirrors
-  // VSCode's workbench-scoped `TextFileEditorModelManager`, which reloads
-  // clean models from a single always-on file-change subscription instead
-  // of tying reloads to the Explorer UI lifecycle.
+  // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
   useGlobalFileDrop()
   useAutoAckViewedAgent()
@@ -773,9 +721,7 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    // Why: `onboarding === null` is the startup loading state. Suppress
-    // contextual tours until the persisted onboarding state is known so a
-    // first-run user cannot have a tour marked seen before onboarding appears.
+    // Why: suppress tours until onboarding state is known (null = loading) so a first-run user can't mark a tour seen before onboarding appears.
     const suppressTours = !onboardingLoaded || shouldShowOnboarding(onboarding)
     actions.setContextualToursOnboardingVisible(suppressTours)
   }, [actions, onboarding, onboardingLoaded])
@@ -784,8 +730,7 @@ function App(): React.JSX.Element {
     if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
       return
     }
-    // Why: this rollout is for users who are still in first-run onboarding.
-    // Existing profiles are locally classified once and never auto-toured.
+    // Why: rollout targets first-run onboarding users; existing profiles are classified once and never auto-toured.
     actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
   }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
 
@@ -828,8 +773,7 @@ function App(): React.JSX.Element {
     })
 
     if (featureTipsDecision.kind === 'suppress-for-onboarding') {
-      // Why: first-download users should finish onboarding without a second
-      // education modal appearing later in the same first-run session.
+      // Why: first-run users should finish onboarding without a second education modal in the same session.
       featureTipsSuppressedByOnboardingThisSessionRef.current = true
       return
     }
@@ -844,8 +788,7 @@ function App(): React.JSX.Element {
     } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
       trackCmdJPaletteFeatureTipShown('app_open')
     }
-    // Why: once a tip is visible, app quit/crash should not make it reappear
-    // on the next launch just because the user never clicked a dismiss button.
+    // Why: mark seen on show so a quit/crash before dismiss doesn't reappear it next launch.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
     actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
   }, [
@@ -863,13 +806,7 @@ function App(): React.JSX.Element {
     setOnboardingSettingsDetour(true)
   }, [])
 
-  // Why: sidebar open/close flips width instantaneously. useLayoutEffect
-  // runs synchronously after React commits the DOM but before paint, so
-  // dispatching SYNC_FIT_PANES_EVENT here lets the terminal reflow in the
-  // same frame as the width change — no "wrongly-sized terminal" transient
-  // and no delayed snap. The later ResizeObserver rAF and 150ms debounced
-  // fit both become no-ops because proposeDimensions() will match the
-  // already-fitted cols/rows.
+  // Why: useLayoutEffect fires before paint, so dispatching SYNC_FIT_PANES_EVENT reflows the terminal in the same frame as the width change — no wrongly-sized transient.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
   }, [sidebarOpen, rightSidebarOpen])
@@ -877,56 +814,28 @@ function App(): React.JSX.Element {
   // Fetch initial data + hydrate GitHub cache from disk
   useEffect(() => {
     let cancelled = false
-    // Why: AbortController must be declared outside the async block so the
-    // cleanup function can abort it. Under StrictMode the effect runs twice;
-    // without this, the first (unmounted) pass would keep spawning PTYs.
+    // Why: declared outside the async block so cleanup can abort it — under StrictMode the first (unmounted) pass would otherwise keep spawning PTYs.
     const abortController = new AbortController()
 
-    // Why (issue #1158): hydrate persisted UI immediately after ui.get()
-    // succeeds, before any later session step can throw. The UI writer is
-    // gated only on persistedUIReady, so falling back to defaults after a
-    // successful ui.get() would serialize those defaults back to disk.
+    // Why (issue #1158): hydrate persisted UI right after ui.get() succeeds; the UI writer is gated only on persistedUIReady, so later default fallback would serialize defaults to disk.
     let uiHydrated = false
-    // Why (issue #1158): track whether the success-path call to
-    // reconnectPersistedTerminals started so the catch path doesn't run it a
-    // second time. Reconnect mutates store state via per-tab set() blocks
-    // inside its loops (populating tabsByWorktree / ptyIdsByTabId); re-entering
-    // it on partially-mutated state would double-set ptyIds and drain pending*
-    // maps twice. If the success-path call started and threw mid-loop, those
-    // per-tab set() blocks may have populated tabsByWorktree / ptyIdsByTabId
-    // for some tabs but did NOT reach the tail set() that flips
-    // workspaceSessionReady — so we still need to force the flag true so the
-    // UI mounts.
+    // Why (issue #1158): track whether success-path reconnect started so the catch doesn't re-run it — re-entering on partially-mutated state would double-set ptyIds and drain pending* twice.
     let reconnectStarted = false
     void (async () => {
       const startupStartedAt = performance.now()
       logRendererStartupDiagnostic('startup-chain-start')
       try {
-        // Why: profile state only feeds the switcher and the add-project
-        // advisory — nothing in the hydration chain reads it synchronously,
-        // so it must not add a serial IPC round-trip before fetchSettings.
+        // Why: nothing in the hydration chain reads profile state synchronously, so don't let it add a serial IPC round-trip before fetchSettings.
         void actions.fetchOrcaProfiles()
-        // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
-        // Load settings first so a persisted remote runtime does not boot against
-        // the local filesystem and then hydrate stale local workspace state.
+        // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId; load settings first so a persisted remote runtime doesn't hydrate stale local state.
         await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
-        // Why here: hidden-at-launch PTYs (background terminal reconnects,
-        // agent sessions) can query OSC 10/11 before any terminal pane mounts
-        // and main's responder is silent-until-first-push. Publish composed
-        // view attributes as soon as settings exist, before any spawn below.
+        // Why: hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; publish view attributes as soon as settings exist so main's silent-until-push responder has data.
         publishTerminalViewAttributesAtAppStart(
           useAppStore.getState().settings,
           getSystemPrefersDark()
         )
-        // Why: keybindings + onboarding are main-side reads with no dependency
-        // on the catalog/session steps below, so start them now and await them
-        // at their original positions — the round-trips overlap the local
-        // catalog scans instead of queuing after them. Browser session profiles
-        // are deliberately NOT started early: on a remote runtime they route
-        // through a runtime RPC that may not be connected this early, and a
-        // failed fetch clears the profile list. The floating .catch marks the
-        // rejection handled if an earlier awaited step throws first; each await
-        // still rethrows its own failure.
+        // Why: start keybindings + onboarding now so their IPC overlaps the local catalog scans; await them at their original spots. The .catch marks rejections handled if an earlier await throws first.
+        // Why: browser session profiles are NOT started early — on a remote runtime the RPC may be unconnected and a failed fetch clears the list.
         const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
           actions.fetchKeybindings()
         )
@@ -935,10 +844,7 @@ function App(): React.JSX.Element {
           window.api.onboarding.get()
         )
         onboardingPromise.catch(() => {})
-        // Why: hydrate persisted UI immediately after ui.get() so first paint
-        // reflects saved view settings before the catalog scans below. ui.get()
-        // is awaited (not overlapped) because the hydrate must land before the
-        // local-first catalog/session steps run.
+        // Why: await ui.get() (not overlap) so persisted view settings hydrate before the local catalog/session steps and first paint reflects them.
         const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
           hydratePersistedUIAfterStartupRead({
@@ -951,9 +857,7 @@ function App(): React.JSX.Element {
           'list-runtime-session-hosts',
           listRuntimeSessionHostIdsForStartup
         )
-        // Why: first paint needs local data and persisted view settings, but
-        // saved remote runtimes can spend the full connect timeout. Load only
-        // the local catalog here; remotes refresh after hydration below.
+        // Why: saved remote runtimes can spend the full connect timeout; load only the local catalog for first paint and refresh remotes after hydration.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
         )
@@ -966,10 +870,7 @@ function App(): React.JSX.Element {
         await timeRendererStartupStep('fetch-worktrees', () =>
           actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
         )
-        // Why: runtime-owned worktree slices live in per-host partitions.
-        // Remote catalogs now load after first paint, so include saved runtime
-        // host ids from local settings to restore their persisted session slices
-        // without waiting on network reachability. Unreadable partitions skip.
+        // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
         const sessionRead = await timeRendererStartupStep('session-get', () =>
           fetchWorkspaceSessionWithRuntimeHostOwners(
             window.api.session,
@@ -991,13 +892,7 @@ function App(): React.JSX.Element {
             actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
             actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
           })
-          // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
-          // no longer exist. Must run AFTER hydration — before this point,
-          // async repo loads may not have populated worktreesByRepo yet and
-          // pruning would delete timestamps for worktrees that are about to
-          // appear. Seed the restored active worktree's timestamp if missing
-          // so users upgrading from a pre-feature build don't see the active
-          // worktree sink in the empty-query list.
+          // Why: prune visit timestamps AFTER hydration (earlier, worktreesByRepo may be empty and prune would drop entries for worktrees about to appear); seed the active worktree if missing.
           // See docs/cmd-j-empty-query-ordering.md.
           timeRendererStartupSyncStep('visit-timestamp-prune', () => {
             actions.pruneLastVisitedTimestamps()
@@ -1012,15 +907,8 @@ function App(): React.JSX.Element {
             setOnboardingLoaded(true)
           }
 
-          // Why: SSH connections must be re-established BEFORE terminal
-          // reconnect so that reconnectPersistedTerminals can route SSH-backed
-          // tabs through pty.attach on the relay. Passphrase-protected targets
-          // are deferred to tab focus to avoid stacking credential dialogs at
-          // startup before the user has context.
-          // Why: runtime-owned (ephemeral-VM) targets must never be dialed from
-          // the renderer — ssh.connect would dispose the runtime layer's live
-          // relay session. Main's windowless-promotion path can persist such
-          // ids into this list, so filter at the consumption boundary too.
+          // Why: re-establish SSH before terminal reconnect so SSH-backed tabs route through pty.attach; passphrase targets defer to tab focus to avoid stacked credential dialogs.
+          // Why: never dial runtime-owned (ephemeral-VM) targets from the renderer — ssh.connect would dispose the runtime layer's live relay session; filter them out here too.
           const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(
             (targetId) => !isRuntimeOwnedSshTargetId(targetId)
           )
@@ -1043,12 +931,7 @@ function App(): React.JSX.Element {
                 actions.setDeferredSshReconnectTargets(deferredTargets.map((t) => t.targetId))
               }
 
-              // Why: track which eager targets timed out so we can treat them
-              // as deferred — the underlying ssh.connect() keeps running in the
-              // main process, but reconnectPersistedTerminals won't see them as
-              // connected. Adding them to the deferred list ensures PTYs get
-              // reattached when the user focuses the tab (by which time the
-              // slow connect will likely have succeeded).
+              // Why: treat timed-out eager targets as deferred so their PTYs reattach on tab focus (ssh.connect keeps running in main and likely finishes by then).
               const timedOutTargets: string[] = []
               await timeRendererStartupStep(
                 'ssh-reconnect',
@@ -1081,9 +964,7 @@ function App(): React.JSX.Element {
                 ])
               }
 
-              // Why: connect's returned state is published above, but older or
-              // wrapped providers may return no state. Poll main once as a
-              // compatibility fallback before terminal restoration.
+              // Why: older/wrapped providers may return no state from connect; poll main once as a compatibility fallback before terminal restoration.
               for (const { targetId } of eagerTargets) {
                 if (timedOutTargets.includes(targetId)) {
                   continue
@@ -1107,9 +988,7 @@ function App(): React.JSX.Element {
             logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
-          // Why: main overlaps daemon/hook startup with renderer hydration for
-          // first paint, but restored terminals still need those services ready
-          // before they mount and spawn/reconnect PTYs.
+          // Why: main overlaps daemon/hook startup with hydration, but restored terminals need those services ready before they spawn/reconnect PTYs.
           await timeRendererStartupStep('first-window-services-await', () =>
             window.api.app.awaitFirstWindowStartupServices()
           )
@@ -1118,13 +997,7 @@ function App(): React.JSX.Element {
             actions.reconnectPersistedTerminals(abortController.signal)
           )
           syncZoomCSSVar()
-          // Why (issue #1158): unlock the debounced session writer only after
-          // hydration AND all dependent startup steps (SSH reconnect, terminal
-          // reconnect) completed without throwing. If this flag flipped earlier
-          // and a later step threw, the catch path's reconnectPersistedTerminals
-          // would flip workspaceSessionReady=true with the gate already open,
-          // and the writer would serialize a partially-mutated store back to
-          // disk — the exact data-loss mode this PR fixes.
+          // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
@@ -1148,13 +1021,7 @@ function App(): React.JSX.Element {
           })()
         }
       } catch (error) {
-        // Why (issue #1158): previously this catch called hydrateWorkspaceSession
-        // with empty defaults, which overwrote the in-memory tab map. The
-        // debounced session writer then serialized that empty state back to
-        // orca-data.json, silently erasing the user's saved tabs. The fix is
-        // to leave in-memory state untouched and keep hydrationSucceeded
-        // false so the writer stays gated. We still ensure persistedUIReady and
-        // workspaceSessionReady flip so the UI can mount without a session.
+        // Why (issue #1158): leave in-memory state untouched and keep hydrationSucceeded false (default-hydrating here once erased saved tabs); still flip the ready flags so the UI mounts.
         const stepLabel = error instanceof Error && error.message ? error.message : String(error)
         console.error(
           '[startup] Workspace session hydration failed; leaving disk state untouched:',
@@ -1162,21 +1029,12 @@ function App(): React.JSX.Element {
           error
         )
         if (!cancelled) {
-          // Why (issue #1158): only hydrate UI with defaults if ui.get() never
-          // produced persisted data. If the real UI hydrate already ran and a
-          // later session step threw, defaults would flow through the debounced
-          // UI writer and clobber ui.json (sidebar width, sort, filters, etc.).
+          // Why (issue #1158): only apply default UI if ui.get() never hydrated; otherwise defaults would clobber ui.json via the debounced writer.
           const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
           if (fallbackUI) {
             actions.hydratePersistedUI(fallbackUI, 'startup')
           }
-          // Why (issue #1158): surface a sticky, dismissible toast so the
-          // user knows they're in degraded "no-save" mode. Without this, every
-          // new tab/file/browse becomes silently ephemeral — `hydrationSucceeded`
-          // stays false for the rest of the process and the session writer is
-          // a no-op. The "Restart now" action calls app.relaunch (defined in
-          // src/main/ipc/app.ts) so the user can recover with one click instead
-          // of having to find a quit/relaunch path themselves.
+          // Why (issue #1158): sticky toast so the user knows they're in degraded "no-save" mode (hydrationSucceeded stays false); "Restart now" calls app.relaunch to recover.
           toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
             description: translate(
               'auto.App.0a9e810705',
@@ -1191,11 +1049,7 @@ function App(): React.JSX.Element {
               }
             }
           })
-          // Why: reconnectPersistedTerminals flips workspaceSessionReady so the
-          // UI mounts; auto-tab-creation becomes unblocked. hydrationSucceeded
-          // is intentionally NOT set — the session writer must stay a no-op
-          // until the user gets a clean restart, so we don't overwrite the
-          // on-disk file we failed to load.
+          // Why: reconnect flips workspaceSessionReady so the UI mounts, but hydrationSucceeded stays false so the session writer can't overwrite the file we failed to load.
           if (!reconnectStarted) {
             try {
               await window.api.app.awaitFirstWindowStartupServices()
@@ -1205,25 +1059,9 @@ function App(): React.JSX.Element {
                 '[startup] reconnectPersistedTerminals failed in error path:',
                 reconnectErr
               )
-              // Why (issue #1158): re-check !cancelled before mutating store
-              // state. The await above may have run while the effect was being
-              // torn down (StrictMode pass 1 cleanup) — in that case the
-              // second pass owns hydration and we must not stomp its work
-              // from a cancelled run.
+              // Why (issue #1158): the await may have run during StrictMode teardown; re-check !cancelled so a cancelled pass 1 doesn't stomp pass 2's hydration.
               if (!cancelled) {
-                // Why (issue #1158): this is already the recovery path from a
-                // failed hydration. If the recovery itself throws, the async IIFE
-                // rejects as an unhandled promise and workspaceSessionReady never
-                // flips — leaving the user staring at a blank window. Forcing the
-                // flag true lets the app shell mount with an empty session, which
-                // is strictly better than a non-functional UI.
-                //
-                // Also clear pendingReconnect* maps because reconnectPersistedTerminals
-                // normally drains them as part of its post-conditions
-                // (see terminals.ts post-loop cleanup). Bypassing that drain by
-                // flipping only the flag would leave stale reconnect data in
-                // memory — any later reader of pending* maps could trigger
-                // phantom reconnect attempts on PTYs that no longer exist.
+                // Why (issue #1158): recovery threw too; force the flag so the shell still mounts, and clear pending* maps (normally drained by reconnect) to avoid phantom reconnects on dead PTYs.
                 useAppStore.setState({
                   workspaceSessionReady: true,
                   pendingReconnectWorktreeIds: [],
@@ -1233,15 +1071,7 @@ function App(): React.JSX.Element {
               }
             }
           } else {
-            // Why (issue #1158): the success-path call to
-            // reconnectPersistedTerminals already started; its per-tab set()
-            // blocks may have populated tabsByWorktree / ptyIdsByTabId for
-            // some tabs but did NOT reach the tail set() that flips
-            // workspaceSessionReady (that runs after the loop completes).
-            // Don't re-run reconnect over partially-mutated state — doing so
-            // would double-set ptyIds and drain pending* maps twice. Force
-            // the flag true so the UI mounts. The same pending* clear applies
-            // here for the same reason as above.
+            // Why (issue #1158): reconnect already started; re-running over its partially-mutated state would double-set ptyIds and drain pending* twice — force the flag, clear pending*.
             useAppStore.setState({
               workspaceSessionReady: true,
               pendingReconnectWorktreeIds: [],
@@ -1270,16 +1100,9 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      // Why: this subscriber fires on every store mutation (PTY/agent-status
-      // ticks). Read the cached prefers-dark snapshot — kept fresh by the shared
-      // listener that useSystemPrefersDark() below already mounts — instead of
-      // allocating a throwaway MediaQueryList via matchMedia on every tick,
-      // before the skip-gate even runs.
+      // Why: this fires on every store mutation; read the cached prefers-dark snapshot instead of allocating a throwaway MediaQueryList via matchMedia each tick.
       const systemPrefersDark = getSystemPrefersDarkSnapshot()
-      // Why: skip the key build entirely when every input field is unchanged
-      // by reference. Mirrors every field used by
-      // getRuntimeMobileSessionSyncKey so this gate covers every "could the
-      // key have changed?" case.
+      // Why: skip the key build when every input is reference-unchanged; the gate mirrors every field getRuntimeMobileSessionSyncKey uses.
       if (
         canSkipRuntimeMobileSessionSyncKeyBuild(
           state,
@@ -1313,18 +1136,14 @@ function App(): React.JSX.Element {
     }
   }, [workspaceSessionReady])
 
-  // Why: session persistence never drives JSX — it only writes to disk.
-  // Using a Zustand subscribe() outside React removes ~15 subscriptions from
-  // App's render cycle, eliminating re-renders on every tab/file/browser change.
+  // Why: session persistence only writes to disk; a Zustand subscribe() outside React drops ~15 render-cycle subscriptions and their re-renders on every tab/file/browser change.
   useEffect(() => {
     return createSessionWriteSubscriber({
       store: useAppStore,
       shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
       persist: ({ patch }) => {
         const state = useAppStore.getState()
-        // Why: route each runtime host's worktree-scoped slice to its own
-        // partition; the returned promise is the local write so the
-        // remote-workspace upload chain below keeps its ordering.
+        // Why: route each host's worktree-scoped slice to its own partition; return the local write so the remote-workspace upload chain below keeps its ordering.
         const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
         void localWrite
         const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
@@ -1408,12 +1227,7 @@ function App(): React.JSX.Element {
     }
   }, [])
 
-  // Why: beforeunload never fires on a hard kill (crash, forced update
-  // install, TerminateProcess), so agents alive at that moment would leave no
-  // resume record. This periodic capture stores only agent session ids — not
-  // scrollback, see the no-periodic-scrollback note below — and the store
-  // action skips unchanged records, so idle ticks write nothing; real changes
-  // flow through the debounced session-write subscriber.
+  // Why: beforeunload never fires on a hard kill (crash, forced update, TerminateProcess), so periodically capture agent session ids (not scrollback) so live agents keep a resume record.
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
@@ -1424,27 +1238,12 @@ function App(): React.JSX.Element {
     return () => window.clearInterval(timer)
   }, [])
 
-  // Own the single window-close-request subscription at the always-mounted App
-  // root. Why: the rich confirmation flow lives in Terminal, which is not
-  // mounted on the no-workspace landing page (and is lazy-loaded elsewhere), so
-  // subscribing there left File → Exit / Ctrl+Q with no listener and the window
-  // never closed (#5144). dispatchWindowCloseRequest delegates to Terminal's
-  // handler when present, else confirms the close directly.
+  // Why: subscribe at the always-mounted App root — Terminal owns the confirm flow but isn't mounted on the landing page, so subscribing there left File→Exit / Ctrl+Q with no listener (#5144).
   useEffect(() => {
     return window.api.ui.onWindowCloseRequested(dispatchWindowCloseRequest)
   }, [])
 
-  // Why there is no periodic scrollback save: PR #461 added a 3-minute
-  // setInterval that re-serialized every mounted TerminalPane's scrollback
-  // so a crash wouldn't lose in-session output. With many panes of
-  // accumulated output, each tick blocked the renderer main thread for
-  // several seconds (serialize is synchronous and does a binary search on
-  // >512KB buffers), causing visible input lag across the whole app.
-  // The durable replacement is the out-of-process terminal daemon
-  // (PR #729), which preserves buffers across renderer crashes with no
-  // main-thread work. Non-daemon users lose in-session scrollback on an
-  // unexpected exit — an acceptable tradeoff vs. periodic UI stalls, and
-  // in line with how most terminal apps behave.
+  // Why no periodic scrollback save: the old 3-min re-serialize (#461) stalled the main thread for seconds; the out-of-process daemon (#729) is the durable replacement, non-daemon users lose in-session scrollback on unexpected exit.
 
   useEffect(() => {
     if (!persistedUIReady) {
@@ -1529,8 +1328,7 @@ function App(): React.JSX.Element {
       applyDocumentTheme('system')
       const handler = (): void => {
         applyDocumentTheme('system')
-        // Why: system theme changes do not mutate the store, so mobile
-        // terminal colors need an explicit graph republish.
+        // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
         scheduleRuntimeGraphSync()
       }
       mq.addEventListener('change', handler)
@@ -1561,28 +1359,23 @@ function App(): React.JSX.Element {
 
   const hasTabBar = tabCount >= 2
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
-  // Why: Activity and Space are full-page navigation surfaces — same
-  // treatment as Settings — so the worktree sidebar is removed for those views.
+  // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
     activeView !== 'settings' &&
     activeView !== 'activity' &&
     activeView !== 'space' &&
     activeView !== 'skills'
-  // Why: Tasks/Landing keep the full titlebar only when the sidebar is
-  // collapsed; with it open, mirror workspace view so titlebar-left sits flush
-  // above nav. Creation layout suppresses the full-width titlebar.
+  // Tasks/Landing show the full titlebar only when the sidebar is collapsed; open, they mirror workspace view (creation suppresses it).
   const stackedSidebarOpen =
     !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
-  // Why: visible creation keeps only the top-left window chrome; workspace tabs
-  // and right-sidebar chrome remain gated by workspaceChromeActive.
+  // Visible creation keeps only the top-left window chrome; tabs and right-sidebar chrome stay gated by workspaceChromeActive.
   const leftTitlebarChromeLayout = resolveLeftTitlebarChromeLayout({
     workspaceChromeActive,
     stackedSidebarOpen,
     creationLayoutActive,
     sidebarOpen
   })
-  // Why: suppress right sidebar controls on full-page navigation surfaces
-  // since those surfaces intentionally own the full content area.
+  // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.
   const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
   const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
   const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
@@ -1611,8 +1404,7 @@ function App(): React.JSX.Element {
     workspaceChromeActive,
     creationLayoutActive
   })
-  // Why: window key listeners are global and long-lived; keep one registration
-  // while letting the handler read current shortcut state on each key event.
+  // Window key listeners are global and long-lived: one registration, but the handler reads current shortcut state each key event.
   globalShortcutStateRef.current = {
     activeView,
     activeWorktreeId,
@@ -1645,15 +1437,11 @@ function App(): React.JSX.Element {
         creationLayoutActive
       } = globalShortcutStateRef.current
 
-      // Why: child-component handlers (e.g. terminal search Cmd+G / Cmd+Shift+G)
-      // register on the same window capture phase and fire first. If they already
-      // called preventDefault, this handler must not also act on the event —
-      // otherwise both actions execute (e.g. search navigation AND sidebar open).
+      // Child handlers (e.g. terminal search) share this window capture phase and fire first; bail if they already preventDefault'd so both don't act.
       if (input.defaultPrevented) {
         return
       }
-      // Why: the Settings recorder intentionally captures existing app
-      // shortcuts, so global handlers must not fire while its button has focus.
+      // The Settings shortcut recorder captures existing shortcuts, so global handlers must not fire while its button has focus.
       if (
         input.target instanceof Element &&
         input.target.closest('[data-shortcut-recorder-active]') !== null
@@ -1662,10 +1450,7 @@ function App(): React.JSX.Element {
       }
       const context = getKeybindingContext(input.target)
 
-      // Note: some app-level shortcuts are also intercepted via
-      // before-input-event in createMainWindow.ts so they still work when a
-      // browser guest has focus. The renderer keeps matching handlers for
-      // local-focus cases and to preserve the same guards in one place.
+      // Note: some shortcuts are also intercepted in createMainWindow.ts before-input-event (for browser-guest focus); the renderer keeps handlers for local focus.
 
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, shortcutPlatform, keybindings, {
@@ -1690,9 +1475,7 @@ function App(): React.JSX.Element {
       }
 
       if (matchShortcut('sidebar.search.toggle') && canRevealRightSidebar) {
-        // Why: when focus is inside the file explorer and a folder is selected,
-        // Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern
-        // with that folder instead of treating the chord as a text-search seed.
+        // With a folder selected in the explorer, Cmd/Ctrl+Shift+F means "Find in Folder" — seed the include pattern with it, not a text search.
         const selectedFolderRelativePath =
           document.activeElement instanceof Element
             ? selectedExplorerFolderRelativePath(document.activeElement)
@@ -1715,8 +1498,7 @@ function App(): React.JSX.Element {
         }
       }
 
-      // Why: an empty floating workspace has no tab to close; Cmd/Ctrl+W
-      // should hide that transient overlay before underlying app surfaces act.
+      // An empty floating workspace has no tab to close, so Cmd/Ctrl+W hides the overlay before other surfaces act.
       if (
         keybindingMatchesAction('tab.close', input, shortcutPlatform, keybindings, {
           context: 'app'
@@ -1731,11 +1513,7 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Why: when the floating workspace is closed, its own keydown handler is
-      // unmounted and cannot claim Cmd+Opt+Shift+A. Honor the maximize chord
-      // here by opening the panel with a one-shot intent so it mounts straight
-      // into the maximized state. While the panel is open, this is a no-op: the
-      // panel's handler owns the maximize/restore toggle.
+      // Floating panel closed → its keydown handler is gone, so honor the maximize chord here by opening it pre-maximized (no-op while it's open).
       if (
         !floatingTerminalOpen &&
         matchShortcut('floatingWorkspace.maximize') &&
@@ -1747,29 +1525,19 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
-      // window-level handler *not* toggling the sidebar when focus lives in an
-      // editable surface. The main-process before-input-event already carves out
-      // Cmd+B for the markdown editor (see createMainWindow.ts +
-      // docs/markdown-cmd-b-bold-design.md), but this renderer-side fallback
-      // still covers the blur→press IPC race and any non-carved editable surface.
+      // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
       if (isEditableTarget(input.target)) {
         return
       }
 
-      // Why: xterm's helper textarea is intentionally not a generic editable
-      // target, but floating-terminal SSH/tmux control chords must still reach
-      // the terminal instead of app-level chrome shortcuts.
+      // Let floating-terminal SSH/tmux control chords reach the terminal (xterm's helper textarea isn't a generic editable target).
       if (isFloatingWorkspaceTerminalInputTarget(input.target)) {
         return
       }
 
-      // Cmd/Ctrl+Alt+Arrow — worktree history back/forward. This stays before
-      // right-sidebar shortcuts because it is navigation, not sidebar reveal.
+      // Cmd/Ctrl+Alt+Arrow worktree history — kept before right-sidebar shortcuts because it's navigation, not sidebar reveal.
       if (matchShortcut('worktree.history.back') || matchShortcut('worktree.history.forward')) {
-        // Why: Back/Forward traverse mixed worktree + page visits, so the
-        // shortcut is active wherever the titlebar button cluster is (terminal
-        // or stack-backed pages). Still suppressed in Settings.
+        // Back/Forward is live wherever the titlebar cluster shows (worktree + page visits), but suppressed in Settings.
         if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
           return
         }
@@ -1783,11 +1551,7 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Why: only short-circuit chords the floating panel's own keydown
-      // handler claims (Cmd/Ctrl+T, Cmd/Ctrl+W, Cmd/Ctrl+Shift+B/M). Other
-      // app-level mod shortcuts (B, L, Shift+E/F/G) have no panel-level
-      // counterpart, so suppressing them here would silently no-op when
-      // focus lives inside the floating panel.
+      // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       if (floatingWorkspaceFocused) {
         if (
@@ -1808,9 +1572,7 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Toggle the "show sleeping workspaces" sidebar filter without opening the
-      // filters menu (issue #5209). When revealing them, open the left sidebar
-      // so the now-visible sleeping worktrees are actually reachable.
+      // Toggle the sleeping-workspaces filter without the filters menu (issue #5209); open the sidebar when revealing so they're reachable.
       if (matchShortcut('sidebar.sleepingWorkspaces.toggle')) {
         input.preventDefault()
         notifyTerminalCapture('sidebar.sleepingWorkspaces.toggle')
@@ -1823,10 +1585,7 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Why: rename the active terminal tab. Cmd+R is free in the app/terminal
-      // focus zone because the browser pane owns its own Cmd+R reload and that
-      // focus never reaches this renderer-window handler. Only terminal tabs
-      // have an inline title editor, so other active tab types fall through.
+      // Cmd+R renames the active terminal tab — free here because the browser pane owns its own reload; non-terminal tabs fall through (no inline title editor).
       if (workspaceChromeActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
         const store = useAppStore.getState()
         if (store.activeTabType === 'terminal' && store.activeTabId) {
@@ -1837,9 +1596,7 @@ function App(): React.JSX.Element {
         }
       }
 
-      // Why: open the active worktree's inline title editor. Open/reveal it
-      // first so the card is mounted and visible even when sidebar filters or
-      // collapse state would otherwise hide it.
+      // Open/reveal the worktree card first so its inline title editor is mounted even when filters or collapse state would hide it.
       if (
         workspaceChromeActive &&
         !floatingWorkspaceFocused &&
@@ -1863,14 +1620,9 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Why: Cmd/Ctrl+N is handled via the main-process before-input-event
-      // allowlist (see window-shortcut-policy.ts / useIpcEvents.ts) so it works
-      // globally — including when focus lives inside the markdown rich editor
-      // (contentEditable) or a browser guest webContents, both of which bypass
-      // this renderer-side window keydown listener.
+      // Cmd/Ctrl+N is handled in the main-process before-input-event allowlist (window-shortcut-policy.ts), not here, so it fires even inside editors/browser guests.
 
-      // Why: full-page navigation surfaces should not reveal the right sidebar;
-      // they are designed as distraction-free content areas.
+      // Full-page navigation surfaces own the whole content area, so don't reveal the right sidebar.
       if (matchShortcut('view.tasks') && activeView !== 'settings') {
         const store = useAppStore.getState()
         if (store.repos.some((repo) => isGitRepoKind(repo))) {
@@ -1909,11 +1661,7 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd/Ctrl+Shift+G — toggle right sidebar / source control tab.
-      // Skip when terminal search is open — Cmd+Shift+G means "find previous"
-      // in that context (handled by keyboard-handlers.ts). Both listeners share
-      // the window capture phase and registration order can vary with React
-      // effect re-runs, so a DOM check is the reliable coordination mechanism.
+      // Cmd/Ctrl+Shift+G — source control tab; skip when terminal search is open (there it means "find previous"). DOM check because capture-phase order varies.
       if (matchShortcut('sidebar.sourceControl.toggle')) {
         if (document.querySelector('[data-terminal-search-root]')) {
           return
@@ -1933,9 +1681,7 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd+Shift+I — toggle right sidebar / ports tab (macOS only).
-      // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
-      // intercepting it would break an essential developer tool.
+      // Cmd+Shift+I — ports tab (macOS only); Ctrl+Shift+I is the DevTools accelerator on Windows/Linux.
       if (matchShortcut('sidebar.ports.toggle')) {
         input.preventDefault()
         notifyTerminalCapture('sidebar.ports.toggle')
@@ -2038,23 +1784,14 @@ function App(): React.JSX.Element {
 
   const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)
   if (resolvedMountedLazyModalIds !== mountedLazyModalIds) {
-    // Why: lazy-load these modals only after first use, then keep them mounted
-    // so repeat opens preserve their local state and avoid re-fetch flashes.
+    // Why: lazy-load modals on first use, then keep them mounted so repeat opens preserve state and avoid re-fetch flashes.
     setMountedLazyModalIds(new Set(resolvedMountedLazyModalIds))
   }
 
-  // Why: extracted so both the full-width titlebar (settings/landing) and
-  // the sidebar-width left header (workspace view) can share the same
-  // controls without duplicating the agent badge popover.
+  // Why: extracted so the full-width titlebar and the sidebar-width left header share these controls without duplicating the agent badge popover.
   const titlebarLeftControls = (
-    // Why: measure the ENTIRE row (traffic-light pad + sidebar toggle + agent
-    // badge + back/forward group) so the sidebar-collapse spacer in
-    // TabGroupPanel reserves enough width to clear the full floating
-    // `titlebar-left`. Measuring only the inner control cluster left the
-    // back/forward arrows hanging over the first tab when the sidebar was
-    // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
-    // Why: collapsed workspace mode floats inside a w-0 sidebar wrapper; w-max
-    // prevents Windows Chromium from shrinking the app name down to one glyph.
+    // Why: measure the ENTIRE row so TabGroupPanel's collapse spacer reserves enough width; measuring only the inner cluster left back/forward over the first tab.
+    // Why: collapsed mode floats in a w-0 wrapper; w-max stops Windows Chromium from shrinking the app name to one glyph.
     <div
       ref={titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
@@ -2065,10 +1802,7 @@ function App(): React.JSX.Element {
         {isMac && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
         ) : hasCustomTitleBar ? (
-          /* Why: on Windows/Linux the native title bar is removed, so we render
-             the Orca logo as a non-interactive identity anchor and a ··· button
-             that pops up the application menu (the same menu revealed by Alt
-             on the default autoHideMenuBar). */
+          /* Why: Windows/Linux remove the native title bar, so render the logo plus a ··· button that pops the application menu (as Alt does). */
           <>
             <img src={logo} alt="" aria-hidden className="titlebar-logo" />
             <Tooltip>
@@ -2135,12 +1869,9 @@ function App(): React.JSX.Element {
           </Tooltip>
         )}
       </div>
-      {/* Why: Back/Forward traverse mixed worktree + page history, so the
-          cluster is shown wherever the history shortcut is live. Hidden in
-          Settings and non-stack page views. */}
+      {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}
       {shouldShowWorktreeHistoryControls(activeView) && (
-        // Why: when the workspace sidebar is collapsed, this header shrink-wraps
-        // and ml-auto has no spare width; keep a fixed gutter before Back.
+        // With the sidebar collapsed the header shrink-wraps and ml-auto has no spare width, so keep a fixed gutter before Back.
         <div className="ml-auto mr-3 flex items-center pl-2">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -2228,12 +1959,9 @@ function App(): React.JSX.Element {
         </Tooltip>
       )}
       {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
-      {/* Why: when the right sidebar is open, its own header renders
-      an identical close button — hide this copy so only one is
-      visible at a time. */}
+      {/* Why: the open right sidebar's header renders its own close button, so hide this duplicate. */}
       {!rightSidebarOpen && rightSidebarToggle}
-      {/* Why: reserve space so content is not obscured by the
-      fixed-position window-controls overlay on Windows/Linux. */}
+      {/* Why: reserve space so the Windows/Linux window-controls overlay doesn't obscure content. */}
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
@@ -2264,13 +1992,9 @@ function App(): React.JSX.Element {
       style={
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
-          // Why: consumed by anything that needs to avoid the fixed-position
-          // window-controls overlay on Windows/Linux (floating sidebar toggle,
-          // right sidebar header, etc.) without hardcoding 138px in multiple
-          // places.
+          // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
           '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
-          // Why: consumed by the side-position activity bar to push icons below
-          // the fixed-position window-controls overlay on Windows/Linux.
+          // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
           '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
         } as React.CSSProperties
       }
@@ -2279,12 +2003,10 @@ function App(): React.JSX.Element {
         <ConfirmationDialogProvider>
           <LinkRoutingPreferenceDialogProvider>
             <WorkspacePortScanner enabled={workspaceSessionReady} />
-            {/* Why: leaf-mounted retention sync keeps agent-status retention
-            subscriptions from re-rendering the App tree. */}
+            {/* Why: leaf-mounted retention sync keeps agent-status subscriptions out of the App render tree. */}
             <RetainedAgentsSyncGate />
             <AgentHibernationGate />
-            {/* Why: workspace activation is a hot path; including activeWorktreeId
-            in reset keys remounts whole surfaces during wake. */}
+            {/* Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake. */}
             <RecoverableRenderErrorBoundary
               boundaryId="app.workspace-shell"
               surface="workspace-shell"
@@ -2296,16 +2018,9 @@ function App(): React.JSX.Element {
               )}
             >
               <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-                {/* Why: the non-workspace titlebar lives inside this left+center
-              wrapper so it does not span over the right-sidebar column —
-              when the right sidebar is open, its own header anchors at the
-              top alongside the titlebar instead of being pushed below it. */}
+                {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the right-sidebar column. */}
                 <div className="flex flex-col flex-1 min-w-0 min-h-0">
-                  {/* Why: in workspace view (split groups always enabled), the
-                full-width titlebar is removed so tab groups + terminal extend
-                to the top of the window. Left titlebar controls move to a
-                header above the sidebar. Settings, landing, and the tasks
-                page keep the titlebar. */}
+                  {/* Why: workspace view drops the full-width titlebar so tab groups extend to the top; settings/landing/tasks keep it. */}
                   {!leftTitlebarChromeLayout.shouldMount ? (
                     <div className="titlebar">
                       <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
@@ -2315,52 +2030,28 @@ function App(): React.JSX.Element {
                   <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
                     {showSidebar ? (
                       leftTitlebarChromeLayout.shouldMount ? (
-                        /* Why: left column wraps the sidebar with a titlebar-height
-                     header above it. The header holds the same controls
-                     (traffic lights, sidebar toggle, "Orca" title, agent badge)
-                     that the full-width titlebar held while the center and right
-                     columns keep their own top strips at the same 36px height.
-                     When the sidebar is collapsed, take this header out of flex
-                     layout so the terminal/editor reclaim the left edge instead of
-                     leaving behind a content-width blank strip. */
+                        /* Why: when the sidebar is collapsed, take this titlebar-height header out of flex layout so the terminal/editor reclaim the left edge. */
                         <div
                           className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
                         >
                           <div
-                            // Why: when the sidebar is collapsed, titlebar-left floats
-                            // absolutely on top of the center column's own `border-l`
-                            // (see TabGroupSplitLayout), occluding that seam. Add a
-                            // `border-r` in the floating state so the vertical line
-                            // between the traffic-light/nav cluster and the tab strip
-                            // stays visible in both states. w-max keeps the floating
-                            // header sized to its own controls instead of the w-0
-                            // sidebar wrapper.
+                            // Why: floating titlebar-left occludes the center column's border-l seam; border-r restores that line, w-max sizes it to its own controls.
                             className={`titlebar-left${
                               leftTitlebarChromeLayout.isFloating
                                 ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
                                 : ''
                             }`}
                             style={{
-                              // Why: custom sidebar appearances are scoped to the sidebar
-                              // root, so mirror those variables onto the open header that
-                              // visually belongs to the same left-column panel.
+                              // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
                               ...(sidebarOpen ? leftSidebarStyle : undefined),
-                              // Why: the Sidebar resize hook updates the sidebar DOM width
-                              // directly during drag and only persists to Zustand on
-                              // mouseup. In workspace view, size this header from the
-                              // wrapper's live width so it tracks those in-flight resizes
-                              // instead of leaving a stale-width gap until the drag ends.
+                              // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
                               width: sidebarOpen ? '100%' : undefined
                             }}
                           >
                             {titlebarLeftControls}
                           </div>
                           <div className="flex min-h-0 flex-1">
-                            {/* Why: the workspace-view wrapper adds a fixed 36px header
-                          above the sidebar. Without a flex-1/min-h-0 slot here,
-                          the sidebar falls back to its content height, so the
-                          worktree list loses its scroll viewport and the fixed
-                          bottom toolbar (including Add Project) gets pushed offscreen. */}
+                            {/* Why: flex-1/min-h-0 slot needed under the fixed 36px header, else the sidebar collapses to content height and loses its scroll viewport. */}
                             <RecoverableRenderErrorBoundary
                               boundaryId="sidebar.worktrees"
                               surface="sidebar"
@@ -2407,24 +2098,13 @@ function App(): React.JSX.Element {
                         <div className="titlebar">{titlebarMainStrip}</div>
                       ) : null}
                       <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                        {/* Why: right sidebar toggle floats at the top-right of the center
-                    column so it's always accessible whether the right sidebar is
-                    open or closed. Match the RightSidebar header's 36px height and
-                    top-0 anchor so the icon's vertical center is identical between
-                    open and closed states — otherwise toggling makes the icon jump
-                    a few pixels, which reads as layout jitter. */}
+                        {/* Why: match the RightSidebar header's 36px/top-0 so the toggle's vertical center is identical open vs closed — else the icon jitters. */}
                         {workspaceChromeActive && !rightSidebarOpen && (
                           <div
                             className="absolute top-0 z-10 flex items-center h-[36px]"
                             style={
                               {
-                                // Why: right: var(--window-controls-width) is the single
-                                // mechanism that keeps the toggle clear of the
-                                // fixed-position window-controls overlay on custom desktop
-                                // chrome (138px) and sits at the right edge otherwise (0px).
-                                // No internal spacer needed — adding one would push the button
-                                // a further 138px to the left and cover the pane-actions
-                                // Ellipsis button with an un-clickable div.
+                                // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.
                                 right: 'var(--window-controls-width)',
                                 WebkitAppRegion: 'no-drag'
                               } as React.CSSProperties
@@ -2508,10 +2188,7 @@ function App(): React.JSX.Element {
                     </div>
                   </div>
                 </div>
-                {/* Why: keep the right-sidebar shell mounted for layout stability.
-              Its heavy panels disconnect while closed so workspace wake stays
-              responsive. Unmount on the tasks view since that surface is
-              intentionally distraction-free. */}
+                {/* Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view. */}
                 {showRightSidebarControls ? (
                   <RecoverableRenderErrorBoundary
                     boundaryId="right-sidebar"
@@ -2574,8 +2251,7 @@ function App(): React.JSX.Element {
                 </RecoverableRenderErrorBoundary>
               </Suspense>
             ) : null}
-            {/* Why: workspace creation is a core action; keeping it in the
-            entry bundle avoids stale/corrupt lazy chunks stranding users at Create. */}
+            {/* Why: keep in the entry bundle so a stale/corrupt lazy chunk can't strand users at Create. */}
             {activeModal === 'new-workspace-composer' ? (
               <RecoverableRenderErrorBoundary
                 boundaryId="modal.new-workspace-composer"
@@ -2597,8 +2273,7 @@ function App(): React.JSX.Element {
                   <AddRepoDialog />
                 </RecoverableRenderErrorBoundary>
               ) : null}
-              {/* Why: Settings can start Add Project without mounting Sidebar,
-              so Add Project handoff dialogs must share the root host. */}
+              {/* Why: Settings can start Add Project without Sidebar, so its handoff dialogs must share the root host. */}
               {activeModal === 'confirm-non-git-folder' ? (
                 <RecoverableRenderErrorBoundary
                   boundaryId="modal.confirm-non-git-folder"
@@ -2630,8 +2305,7 @@ function App(): React.JSX.Element {
                 </RecoverableRenderErrorBoundary>
               ) : null}
             </Suspense>
-            {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
-            the shared provider so lazy surfaces mount safely from any entry point. */}
+            {/* Why: root overlays can render Radix <Tooltip>s; keep inside the shared provider so lazy surfaces mount from any entry point. */}
             <Suspense fallback={null}>
               {resolvedMountedLazyModalIds.has('workspace-cleanup') ? (
                 <RecoverableRenderErrorBoundary
@@ -2706,9 +2380,7 @@ function App(): React.JSX.Element {
                 <ContextualTourOverlay />
               </Suspense>
             ) : null}
-            {/* Why: mount PetOverlay only after persisted UI hydration, with
-          both independent pet toggles allowing it; otherwise a hidden pet
-          flashes while the store still has default visibility. */}
+            {/* Why: mount only after UI hydration, else a hidden pet flashes while the store still holds default visibility. */}
             {renderPetOverlay ? (
               <Suspense fallback={null}>
                 <RecoverableRenderErrorBoundary
@@ -2750,13 +2422,7 @@ function App(): React.JSX.Element {
               <StarNagToastHost />
             </RecoverableRenderErrorBoundary>
             <StarNagAgentValueMomentObserver />
-            {/* Why: the existing-user opt-in banner mounts at App root so it
-          renders once per renderer session, not per view. It gates
-          internally on the cohort markers populated by the migration,
-          so it only shows for users who installed before the telemetry
-          release and have not yet resolved consent. New users get no
-          first-launch surface — see telemetry-plan.md §First-launch
-          experience. */}
+            {/* Why: mount at App root to render once per session; internal cohort gate limits it to pre-telemetry users — see telemetry-plan.md §First-launch experience. */}
             <RecoverableRenderErrorBoundary
               boundaryId="overlay.telemetry-first-launch"
               surface="overlay"
@@ -2859,8 +2525,7 @@ function App(): React.JSX.Element {
             >
               <RecentTabSwitcher />
             </RecoverableRenderErrorBoundary>
-            {/* Why: the dialog hosts a live terminal pane, which requires the
-                link-routing preference context; mounting outside crashes it. */}
+            {/* Why: hosts a live terminal pane needing the link-routing preference context; mounting outside crashes it. */}
             <RecoverableRenderErrorBoundary
               boundaryId="overlay.skill-freshness-update-dialog"
               surface="overlay"
@@ -2874,10 +2539,7 @@ function App(): React.JSX.Element {
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       <SkillFreshnessNudge />
       <PinnedTabCloseDialog />
-      {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
-          in DOM order. Electron's hit-test for drag regions is DOM-order-based and
-          ignores z-index — placing WindowControls earlier caused the drag region to
-          win, making the buttons unclickable. */}
+      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
       {hasCustomTitleBar && <WindowControls />}
     </div>
   )

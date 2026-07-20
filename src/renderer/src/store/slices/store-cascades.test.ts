@@ -805,8 +805,7 @@ describe('setActiveWorktree', () => {
     const worktree = store.getState().worktreesByRepo.repo1[0]
     expect(worktree.sortOrder).toBe(123)
     expect(worktree.lastActivityAt).toBe(lastActivityAt)
-    // Why: selecting a worktree should not manufacture smart-sort activity.
-    // Persisted ordering signals come from real background work or edits, not focus.
+    // Why: selecting a worktree must not manufacture smart-sort activity; ordering comes from real work, not focus.
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
@@ -1708,9 +1707,7 @@ describe('setActiveWorktree', () => {
     store.getState().createTab(wt)
     unsubscribe()
 
-    // Why: task-page launches queue startup/setup commands before React mounts.
-    // A terminal-only intermediate state can mount the legacy host and race
-    // the split-group host, duplicating setup panes and PTYs.
+    // Why: a terminal-only intermediate state mounts the legacy host and races the split-group host, duplicating setup panes and PTYs.
     expect(snapshots).toEqual([{ terminalCount: 1, unifiedCount: 1, groupCount: 1 }])
   })
 
@@ -2423,10 +2420,7 @@ describe('setActiveWorktree', () => {
     })
   })
 
-  // Why: unread flags are ephemeral UI state — they must not linger past the
-  // lifetime of the tab/pane they point at. A stale flag on a closed tab
-  // would render a bell the user can never dismiss because the tab (and
-  // therefore every focus path that clears it) is gone.
+  // Why: a stale unread flag on a closed tab renders a bell the user can never dismiss, since the tab is gone.
   it('drops unreadTerminalTabs for a closed tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -2440,9 +2434,7 @@ describe('setActiveWorktree', () => {
     const closing = store.getState().createTab(wt)
     const surviving = store.getState().createTab(wt)
 
-    // Seed flags directly — the self-guarded mark actions intentionally
-    // refuse the currently-active tab, but this test's subject is closeTab's
-    // cleanup behavior, not the guards.
+    // Seed directly: mark actions refuse the active tab, but this test targets closeTab's cleanup, not the guards.
     store.setState({
       unreadTerminalTabs: {
         [closing.id]: true as const,
@@ -2458,10 +2450,7 @@ describe('setActiveWorktree', () => {
     expect(s.unreadTerminalTabs[surviving.id]).toBe(true)
   })
 
-  // Why: shutdownWorktreeTerminals tears down every PTY in the worktree. The
-  // focus events that would normally clear unread (bell-in-focused-pane,
-  // activate-tab) never arrive for dead PTYs, so the flags have to be
-  // dropped by the shutdown path itself.
+  // Why: focus events that normally clear unread never arrive for dead PTYs, so the shutdown path must drop the flags itself.
   it('drops unread flags for every tab in a shutdown worktree', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -2490,11 +2479,7 @@ describe('setActiveWorktree', () => {
     expect(s.unreadTerminalTabs[tabB.id]).toBeUndefined()
   })
 
-  // Why: ownership regression (design §1.3). shutdownWorktreeTerminals used to
-  // delete browserTabsByWorktree[worktreeId] and reset
-  // activeBrowserTabId/activeTabType as a side effect — now those mutations
-  // belong exclusively to shutdownWorktreeBrowsers. If a refactor reintroduces
-  // the side effect, both thunks will write the same keys and race.
+  // Why: browser-state mutations belong to shutdownWorktreeBrowsers only (design §1.3); reintroducing them here races both thunks.
   it('leaves browser state untouched when shutting down terminals', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -2925,14 +2910,7 @@ describe('setActiveWorktree', () => {
   })
 })
 
-// Why: sleep (`shutdownWorktreeTerminals(wt, { keepIdentifiers: true })`)
-// kills the PTYs but preserves wake hints (tab.ptyId, ptyIdsByLeafId, the
-// runtime pane titles) so wake can reattach to the same daemon-history dir
-// or relay session. Before the sleep-statuses fix, the live agent-status
-// rows were also preserved — so a Claude that was mid-turn at sleep time
-// kept its row in the inline agents list as "working" until the 30-min
-// stale TTL decayed it. Sleep now drops live entries and retained `done`
-// snapshots for the whole worktree, so the card folds to a single grey signal.
+// Why: sleep must drop live + retained agent-status rows, else a mid-turn agent stays "working" until the 30-min stale TTL.
 describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -3047,11 +3025,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   })
 
   it('aborts pane hibernation without side effects when no resume record can be captured', async () => {
-    // The prod ghost pane was killed with NO sleeping record captured, so
-    // nothing could ever wake it. Planner eligibility can go stale between
-    // ticks, so the shutdown must throw before any suppression or kill when the
-    // capture comes back empty (a done agent with no resumable provider
-    // session), leaving the pane fully intact for a later retry.
+    // No capturable resume record means the pane could never wake, so shutdown throws before any suppression or kill.
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
     const targetLeaf = '11111111-1111-4111-8111-111111111111'
@@ -3110,10 +3084,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   })
 
   it('rolls back the sleeping record and suppression when the hibernation kill fails', async () => {
-    // The sleeping record must be visible to the pane's exit handler BEFORE the
-    // kill (pty:exit can beat the kill promise back to the renderer), so it is
-    // written alongside the suppression — and both must roll back if the kill
-    // fails, or a live pane would carry a stale wake record.
+    // Record written before the kill (pty:exit can beat it back); both it and the suppression must roll back if the kill fails.
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
     const targetLeaf = '11111111-1111-4111-8111-111111111111'
@@ -3164,11 +3135,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   })
 
   it('persists the sleeping record and suppression before issuing the hibernation kill', async () => {
-    // pty:exit can beat the kill promise back to the renderer, and the pane's
-    // exit handler arms the hibernation wake only if the sleeping record is
-    // already in the store. A record written after the kill resolves passes
-    // every end-state assertion while still losing that race, so this test
-    // observes the store at the moment the kill is issued.
+    // pty:exit can beat the kill promise back; the record must be in the store before the kill or the wake never arms.
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
     const targetLeaf = '11111111-1111-4111-8111-111111111111'
@@ -3222,8 +3189,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       providerSession: { key: 'session_id', id: 'sess-ordering-1' }
     })
     expect(suppressionAtKillTime).toBe(true)
-    // The record must survive the successful kill so the reveal-time wake can
-    // consume it.
+    // The record must survive the successful kill so the reveal-time wake can consume it.
     const state = store.getState()
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeDefined()
   })
@@ -4838,8 +4804,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] }
     })
 
-    // Plant one current-tab row and one orphan row. Retained rows render by
-    // worktreeId, so sleep must sweep both instead of only tab prefixes.
+    // Retained rows render by worktreeId, so sleep must sweep the orphan row too, not just tab prefixes.
     store.getState().retainAgents([
       {
         entry: {
@@ -4959,8 +4924,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
-    // Why: sleep folds retained rows too, so the next retention sync must not
-    // recreate a `done` row from the previous render after the user slept it.
+    // Why: sleep folds retained rows too, so the next retention sync must not recreate a slept `done` row.
     expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
   })
 
@@ -4983,8 +4947,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
 
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
-    // Why: an existing suppressor was planted by a prior dismissal flow; sleep
-    // must not erase it (would resurface a row the user already dismissed).
+    // Why: a suppressor planted by a prior dismissal must survive sleep, else the dismissed row resurfaces.
     expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
   })
 
@@ -5038,9 +5001,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   })
 })
 
-// Why: CLI-spawned background terminals stamp ORCA_PANE_KEY into the PTY env
-// at spawn time. The renderer must adopt the tab under the same id so hook
-// events route to the correct slot.
+// Why: CLI-spawned terminals stamp ORCA_PANE_KEY at spawn; renderer must adopt the tab under that id so hook events route correctly.
 describe('createTab tabId hint', () => {
   it('uses the supplied id when no collision exists', () => {
     const store = createTestStore()
