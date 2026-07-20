@@ -94,6 +94,44 @@ describe('resolveTerminalShortcutAction — accept autosuggest', () => {
     ).not.toEqual({ type: 'acceptAutosuggest' })
   })
 
+  it('does not intercept a repeated RightArrow keydown, even with an active suggestion', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight', repeat: true }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).not.toEqual({ type: 'acceptAutosuggest' })
+  })
+
+  it('does not intercept a repeated End keydown, even with an active suggestion', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'End', repeat: true }),
+        false,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).not.toEqual({ type: 'acceptAutosuggest' })
+  })
+
   it('honors a rebound terminal.acceptAutosuggest keybinding over the old default', () => {
     // Why: proves the check routes through keybindingMatchesAction rather than
     // a hardcoded ArrowRight/End check — a Settings rebind must take effect.

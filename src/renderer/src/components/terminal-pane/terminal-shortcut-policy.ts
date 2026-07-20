@@ -104,8 +104,10 @@ export function resolveTerminalShortcutAction(
 
   // Why: must win over word-nav/EOL handling below; keybindingMatchesAction's
   // exact modifier match keeps Alt+Arrow word-nav and Cmd+Arrow EOL jumps
-  // unaffected for the default (unmodified) binding.
+  // unaffected for the default (unmodified) binding. Excludes repeat so a
+  // held key can't resend the (possibly stale) remainder multiple times.
   if (
+    !event.repeat &&
     keybindingMatchesAction('terminal.acceptAutosuggest', event, platform, keybindings) &&
     hasActiveAutosuggestAtEndOfLine?.()
   ) {
