@@ -1,13 +1,21 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import type { PtyExitPayload } from './pty-sender-binding'
+import type { RemoteCliBridgeEnv } from './ssh-pty-remote-cli-env'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
-import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
 import {
   requireSshSenderBindingGeneration,
   restartSshPtyForSenderBinding
 } from './ssh-sender-binding-restart'
 import { PTY_STARTUP_INGRESS_VERSION } from '../../shared/pty-startup-ingress'
+import {
+  isSshPtyIdentityMismatchError,
+  isSshPtyNotFoundError,
+  SSH_PTY_IDENTITY_MISMATCH_ERROR,
+  SSH_SESSION_EXPIRED_ERROR
+} from './ssh-pty-errors'
+import { sshPtyRelayTimeoutOptions } from './ssh-pty-relay-timeout'
+import { buildSshPtyRemoteCliEnv } from './ssh-pty-remote-cli-env'
 
 type DataCallback = (payload: {
   id: string
@@ -18,27 +26,13 @@ type DataCallback = (payload: {
 }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
 type ExitCallback = (payload: PtyExitPayload) => void
-type RemoteCliBridgeEnv = {
-  binDir: string
-  relayDir: string
-  nodePath: string
-  sockPath: string
-  pathDelimiter?: ':' | ';'
+export {
+  isSshPtyIdentityMismatchError,
+  isSshPtyNotFoundError,
+  SSH_PTY_IDENTITY_MISMATCH_ERROR,
+  SSH_SESSION_EXPIRED_ERROR
 }
-
-export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
-export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
 export { SSH_SENDER_BINDING_RESTART_FAILED_ERROR } from './ssh-sender-binding-restart'
-
-export function isSshPtyNotFoundError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err)
-  return /PTY ".+" not found/i.test(message)
-}
-
-export function isSshPtyIdentityMismatchError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err)
-  return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
-}
 
 /**
  * Remote PTY provider that proxies all operations through the relay
@@ -201,7 +195,7 @@ export class SshPtyProvider implements IPtyProvider {
       cols: opts.cols,
       rows: opts.rows,
       cwd: opts.cwd,
-      env: this.withRemoteCliBridgeEnv(opts.env, opts.envToDelete),
+      env: buildSshPtyRemoteCliEnv(opts.env, this.remoteCliBridgeEnv, opts.envToDelete),
       ...(opts.envToDelete?.length ? { envToDelete: opts.envToDelete } : {}),
       // Why: the relay's plugin-overlay env augmenter needs to know which
       // Pi-compatible agent is being launched, while commandDelivery tells it
@@ -236,36 +230,6 @@ export class SshPtyProvider implements IPtyProvider {
     }
   }
 
-  private withRemoteCliBridgeEnv(
-    env: Record<string, string> | undefined,
-    envToDelete?: readonly string[]
-  ): Record<string, string> {
-    const merged = { ...env }
-    if (this.remoteCliBridgeEnv) {
-      const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
-      const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
-      if (pathKey) {
-        const pathValue = merged[pathKey] ?? ''
-        merged[pathKey] = pathValue.split(pathDelimiter).includes(this.remoteCliBridgeEnv.binDir)
-          ? pathValue
-          : pathValue
-            ? `${this.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
-            : this.remoteCliBridgeEnv.binDir
-      }
-      merged.ORCA_REMOTE_CLI_BIN_DIR = this.remoteCliBridgeEnv.binDir
-      merged.ORCA_RELAY_DIR = this.remoteCliBridgeEnv.relayDir
-      merged.ORCA_RELAY_NODE_PATH = this.remoteCliBridgeEnv.nodePath
-      merged.ORCA_RELAY_SOCKET_PATH = this.remoteCliBridgeEnv.sockPath
-    }
-    // Why: match local/daemon precedence—managed defaults and augmentations
-    // cannot resurrect values the caller explicitly removed.
-    for (const key of envToDelete ?? []) {
-      delete merged[key]
-    }
-    seedPowerlevel10kWizardEnv(merged, { envToDelete })
-    return merged
-  }
-
   async attach(id: string): Promise<void> {
     await this.mux.request('pty.attach', { id: this.toRelayPtyId(id) })
   }
@@ -295,12 +259,19 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux.notify('pty.resize', { id: this.toRelayPtyId(id), cols, rows })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.mux.request('pty.shutdown', {
-      id: this.toRelayPtyId(id),
-      immediate: opts.immediate ?? false,
-      keepHistory: opts.keepHistory ?? false
-    })
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
+    await this.mux.request(
+      'pty.shutdown',
+      {
+        id: this.toRelayPtyId(id),
+        immediate: opts.immediate ?? false,
+        keepHistory: opts.keepHistory ?? false
+      },
+      sshPtyRelayTimeoutOptions(opts.deadlineMs)
+    )
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -353,8 +324,12 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
-    const result = await this.mux.request('pty.listProcesses')
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    const result = await this.mux.request(
+      'pty.listProcesses',
+      undefined,
+      sshPtyRelayTimeoutOptions(opts?.deadlineMs)
+    )
     return (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)

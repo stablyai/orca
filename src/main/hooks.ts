@@ -10,6 +10,7 @@ import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { gitExecFileSync, promptGuardShellEnv } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
+import { addWorktreeSetupWslInteropEnv } from './pty/wsl-orca-env'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
@@ -601,6 +602,10 @@ export function runHook(
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
+    const hookEnv: NodeJS.ProcessEnv = { ...process.env, ...wslEnv }
+    // Why: wsl.exe only imports Windows env vars named in WSLENV; without
+    // registering them the setup vars never reach the guest (#9206).
+    addWorktreeSetupWslInteropEnv(hookEnv)
 
     return new Promise((resolve) => {
       let child: ReturnType<typeof execFile> | null = null
@@ -645,8 +650,10 @@ export function runHook(
             // Why: same unattended-git guard as the non-WSL branch below
             // (issue #7652) — WSL repos are the likeliest to hit the GCM
             // popup, and the guard's WSLENV registration is what carries it
-            // across the wsl.exe boundary into the distro.
-            env: promptGuardShellEnv({ ...process.env, ...wslEnv })
+            // across the wsl.exe boundary. Wrap hookEnv (not a fresh env) so
+            // the setup-var WSLENV entries registered above (#9206) are kept —
+            // promptGuardShellEnv appends its own keys to the existing WSLENV.
+            env: promptGuardShellEnv(hookEnv)
           },
           (error, stdout, stderr) => {
             finish(error ?? null, stdout, stderr)

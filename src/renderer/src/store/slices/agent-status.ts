@@ -117,6 +117,9 @@ export type AgentStatusSlice = {
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   /** Monotonic tick that advances when agent-status freshness boundaries pass. */
   agentStatusEpoch: number
+  /** SSH connections whose transient rows were cleared and must reject renderer callbacks
+   *  until a later reconnect establishes a new connection lifecycle. */
+  transientClearedAgentStatusConnectionIds: Record<string, true>
   /** Arm the shared freshness timer after an external mirror writes live rows. */
   scheduleAgentStatusFreshness: () => void
 
@@ -1156,6 +1159,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,
+    transientClearedAgentStatusConnectionIds: {},
     retainedAgentsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
@@ -2209,16 +2213,24 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           next ??= { ...s.agentStatusByPaneKey }
           delete next[paneKey]
         }
-        if (!next) {
+        const wasAlreadyBlocked = connectionId in s.transientClearedAgentStatusConnectionIds
+        if (!next && wasAlreadyBlocked) {
           return s
         }
-        removed = true
+        removed = next !== null
         // Why: transport loss is reversible. Keep launch, resume, retention,
         // and acknowledgement maps intact for same-pane relay replay.
         return {
-          agentStatusByPaneKey: next,
-          agentStatusEpoch: s.agentStatusEpoch + 1,
-          sortEpoch: s.sortEpoch + 1
+          ...(next
+            ? {
+                agentStatusByPaneKey: next,
+                agentStatusEpoch: s.agentStatusEpoch + 1,
+                sortEpoch: s.sortEpoch + 1
+              }
+            : {}),
+          transientClearedAgentStatusConnectionIds: wasAlreadyBlocked
+            ? s.transientClearedAgentStatusConnectionIds
+            : { ...s.transientClearedAgentStatusConnectionIds, [connectionId]: true }
         }
       })
       if (removed) {

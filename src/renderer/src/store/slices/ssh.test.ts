@@ -98,6 +98,10 @@ describe('createSshSlice', () => {
         { requestId: 'req-2', targetId: otherTargetId, kind: 'password', detail: 'password' }
       ],
       deferredSshReconnectTargets: [targetId, otherTargetId],
+      transientClearedAgentStatusConnectionIds: {
+        [targetId]: true,
+        [otherTargetId]: true
+      },
       deferredSshSessionIdsByTabId: {
         'tab-ssh': 'legacy-session-without-target-prefix',
         'tab-stale-encoded': toAppSshPtyId(targetId, 'pty-1'),
@@ -116,6 +120,9 @@ describe('createSshSlice', () => {
     expect(state.detectedPortsByConnection[targetId]).toBeUndefined()
     expect(state.sshCredentialQueue.map((req) => req.targetId)).toEqual([otherTargetId])
     expect(state.deferredSshReconnectTargets).toEqual([otherTargetId])
+    expect(state.transientClearedAgentStatusConnectionIds).toEqual({
+      [otherTargetId]: true
+    })
     expect(state.deferredSshSessionIdsByTabId).toEqual({
       'tab-other': toAppSshPtyId(otherTargetId, 'pty-2')
     })
@@ -221,6 +228,15 @@ describe('createSshSlice', () => {
     store.getState().clearRemovedSshTargetState('missing-target')
 
     expect(store.getState()).toBe(previousState)
+  })
+
+  it("removes a transient-clear block when it is the target's only remaining state", () => {
+    const store = createTestStore()
+    store.setState({ transientClearedAgentStatusConnectionIds: { 'ssh-1': true } })
+
+    store.getState().clearRemovedSshTargetState('ssh-1')
+
+    expect(store.getState().transientClearedAgentStatusConnectionIds).toEqual({})
   })
 
   it('preserves untouched cleanup slice references while removing deferred target metadata', () => {

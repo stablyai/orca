@@ -1,4 +1,5 @@
 import { detectLanguage } from '@/lib/language-detect'
+import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 
 export function cancelRevealFrame(frameRef: React.RefObject<number | null>): void {
@@ -9,16 +10,20 @@ export function cancelRevealFrame(frameRef: React.RefObject<number | null>): voi
 }
 
 export function openMatchResult(params: {
-  activeWorktreeId: string
+  resultOwner: FileSearchResultOwner | null
   fileResult: SearchFileResult
   match: SearchMatch
-  openFile: (file: {
-    filePath: string
-    relativePath: string
-    worktreeId: string
-    language: string
-    mode: 'edit'
-  }) => void
+  openFile: (
+    file: {
+      filePath: string
+      relativePath: string
+      worktreeId: string
+      language: string
+      mode: 'edit'
+      runtimeEnvironmentId: string | null
+    },
+    options: { suppressActiveRuntimeFallback: boolean }
+  ) => void
   setPendingEditorReveal: (
     reveal: {
       filePath: string
@@ -31,7 +36,7 @@ export function openMatchResult(params: {
   revealInnerRafRef: React.RefObject<number | null>
 }): void {
   const {
-    activeWorktreeId,
+    resultOwner,
     fileResult,
     match,
     openFile,
@@ -40,13 +45,23 @@ export function openMatchResult(params: {
     revealInnerRafRef
   } = params
 
-  openFile({
-    filePath: fileResult.filePath,
-    relativePath: fileResult.relativePath,
-    worktreeId: activeWorktreeId,
-    language: detectLanguage(fileResult.relativePath),
-    mode: 'edit'
-  })
+  if (!resultOwner) {
+    return
+  }
+
+  openFile(
+    {
+      filePath: fileResult.filePath,
+      relativePath: fileResult.relativePath,
+      worktreeId: resultOwner.worktreeId,
+      runtimeEnvironmentId: resultOwner.runtimeEnvironmentId,
+      language: detectLanguage(fileResult.relativePath),
+      mode: 'edit'
+    },
+    {
+      suppressActiveRuntimeFallback: resultOwner.runtimeEnvironmentId === null
+    }
+  )
 
   cancelRevealFrame(revealRafRef)
   cancelRevealFrame(revealInnerRafRef)

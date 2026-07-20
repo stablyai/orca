@@ -3,6 +3,7 @@ import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { resetRemoteRuntimeTerminalMultiplexersForTests } from '@/runtime/remote-runtime-terminal-multiplexer'
+import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 
 const mockSpawn = vi.fn()
 const mockKill = vi.fn()
@@ -69,6 +70,13 @@ const state = {
     ]
   },
   tabsByWorktree: { 'wt-1': [] as { id: string; title: string }[] },
+  terminalLayoutsByTabId: {} as Record<
+    string,
+    { ptyIdsByLeafId?: Record<string, string | undefined> }
+  >,
+  ptyIdsByTabId: {} as Record<string, string[]>,
+  sshConnectionStates: new Map<string, { status: string }>(),
+  transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
   allWorktrees: vi.fn(() => state.worktreesByRepo['repo-1']),
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
@@ -145,6 +153,10 @@ describe('launchAgentBackgroundSession', () => {
       ]
     }
     state.tabsByWorktree = { 'wt-1': [] }
+    state.terminalLayoutsByTabId = {}
+    state.ptyIdsByTabId = {}
+    state.sshConnectionStates = new Map()
+    state.transientClearedAgentStatusConnectionIds = {}
     mockCreateTab.mockImplementation(() => {
       const tab = { id: 'tab-1', title: 'Terminal 1' }
       state.tabsByWorktree['wt-1'].push(tab)
@@ -152,6 +164,12 @@ describe('launchAgentBackgroundSession', () => {
     })
     mockCloseTab.mockImplementation((tabId: string) => {
       state.tabsByWorktree['wt-1'] = state.tabsByWorktree['wt-1'].filter((tab) => tab.id !== tabId)
+    })
+    mockSetTabLayout.mockImplementation((tabId: string, layout) => {
+      state.terminalLayoutsByTabId[tabId] = layout
+    })
+    mockUpdateTabPtyId.mockImplementation((tabId: string, ptyId: string) => {
+      state.ptyIdsByTabId[tabId] = [ptyId]
     })
     mockSpawn.mockResolvedValue({ id: 'pty-1' })
     mockRuntimeEnvironmentCall.mockResolvedValue({
@@ -440,35 +458,29 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalled()
   })
 
-  it('parses agent status from hidden PTY output when the kill switch is off', async () => {
+  it('stamps hidden SSH status from renderer fallback when the kill switch is off', async () => {
     // Why: with main side-effect authority disabled, this sidecar is the only
-    // OSC 9999 → store path for hidden local sessions.
+    // OSC 9999 → store path for hidden SSH sessions.
     state.settings.terminalMainSideEffectAuthority = false
-    const onAgentStatus = vi.fn()
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
+    state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
+    mockSpawn.mockResolvedValue({ id: toAppSshPtyId('ssh-a', 'pty-1') })
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     await launchAgentBackgroundSession({
       agent: 'claude',
       worktreeId: 'wt-1',
-      prompt: 'run the automation',
-      onAgentStatus
+      prompt: 'run the automation'
     })
 
     const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
     dataSidecar('\x1b]9999;{"state":"done","prompt":"ok","agentType":"codex"}\x07')
 
-    const paneKey = expectStablePaneSpawn()
-    expect(state.setAgentStatus).toHaveBeenCalledWith(
-      paneKey,
-      expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' }),
-      undefined,
-      undefined,
-      undefined,
-      { launchToken: expect.stringMatching(UUID_RE) }
-    )
-    expect(onAgentStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' })
-    )
+    expectStablePaneSpawn()
+    expect(state.setAgentStatus.mock.calls.at(-1)?.[4]).toEqual({ connectionId: 'ssh-a' })
+    expect(state.setAgentStatus.mock.calls.at(-1)?.[5]).toEqual({
+      launchToken: expect.stringMatching(UUID_RE)
+    })
   })
 
   it('skips the duplicate OSC store write under main side-effect authority', async () => {
@@ -494,7 +506,10 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
-  it('seeds a working status for Command Code prompt launches', async () => {
+  it('stamps a working status for SSH Command Code prompt launches', async () => {
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
+    state.sshConnectionStates = new Map([['ssh-a', { status: 'connected' }]])
+    mockSpawn.mockResolvedValue({ id: toAppSshPtyId('ssh-a', 'pty-1') })
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     await launchAgentBackgroundSession({
@@ -503,26 +518,16 @@ describe('launchAgentBackgroundSession', () => {
       prompt: 'check the status spinner'
     })
 
-    const paneKey = expectStablePaneSpawn()
-    expect(state.setAgentStatus).toHaveBeenCalledWith(
-      paneKey,
-      {
-        state: 'working',
-        prompt: 'check the status spinner',
-        agentType: 'command-code'
+    expectStablePaneSpawn()
+    expect(state.setAgentStatus.mock.calls.at(-1)?.[4]).toEqual({ connectionId: 'ssh-a' })
+    expect(state.setAgentStatus.mock.calls.at(-1)?.[5]).toEqual({
+      launchConfig: {
+        agentCommand: "command-code --trust '--yolo'",
+        agentArgs: '--yolo',
+        agentEnv: {}
       },
-      undefined,
-      undefined,
-      undefined,
-      {
-        launchConfig: {
-          agentCommand: "command-code --trust '--yolo'",
-          agentArgs: '--yolo',
-          agentEnv: {}
-        },
-        launchToken: expect.stringMatching(UUID_RE)
-      }
-    )
+      launchToken: expect.stringMatching(UUID_RE)
+    })
   })
 
   it('uses a sidecar exit watcher so completion survives terminal attachment', async () => {

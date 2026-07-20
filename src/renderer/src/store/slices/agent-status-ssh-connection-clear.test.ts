@@ -17,6 +17,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
     const newerA = 'tab-new:33333333-3333-4333-8333-333333333333'
     const siblingB = 'tab-b:44444444-4444-4444-8444-444444444444'
     const unstamped = 'tab-legacy:55555555-5555-4555-8555-555555555555'
+    const local = 'tab-local:66666666-6666-4666-8666-666666666666'
     for (const [paneKey, updatedAt, connectionId] of [
       [oldA, 10, 'ssh-a'],
       [secondA, 20, 'ssh-a'],
@@ -40,6 +41,15 @@ describe('agent status cleanup for a lost SSH connection', () => {
         { state: 'working', prompt: 'legacy', agentType: 'claude' },
         undefined,
         { updatedAt: 5 }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        local,
+        { state: 'working', prompt: 'local', agentType: 'codex' },
+        undefined,
+        { updatedAt: 6 },
+        { connectionId: null }
       )
     store.setState({
       agentLaunchConfigByPaneKey: {
@@ -66,6 +76,7 @@ describe('agent status cleanup for a lost SSH connection', () => {
     expect(store.getState().agentStatusByPaneKey[newerA]).toBeDefined()
     expect(store.getState().agentStatusByPaneKey[siblingB]).toBeDefined()
     expect(store.getState().agentStatusByPaneKey[unstamped]).toBeDefined()
+    expect(store.getState().agentStatusByPaneKey[local]?.connectionId).toBeNull()
     expect(store.getState().agentLaunchConfigByPaneKey[oldA]).toBeDefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[oldA]).toBe(2)
     expect(store.getState().retentionSuppressedPaneKeys[oldA]).toBe(true)
@@ -93,5 +104,58 @@ describe('agent status cleanup for a lost SSH connection', () => {
       )
 
     expect(store.getState().agentStatusByPaneKey[paneKey]?.connectionId).toBe('ssh-a')
+  })
+
+  it('blocks renderer callbacks at clear time until a later reconnect', () => {
+    const store = createTestStore()
+
+    store.getState().clearTransientAgentStatuses('ssh-a', 10)
+
+    expect(store.getState().transientClearedAgentStatusConnectionIds['ssh-a']).toBe(true)
+    store.getState().setSshConnectionState('ssh-a', {
+      targetId: 'ssh-a',
+      status: 'disconnected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    expect(store.getState().transientClearedAgentStatusConnectionIds['ssh-a']).toBe(true)
+
+    store.getState().setSshConnectionState('ssh-a', {
+      targetId: 'ssh-a',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    expect(store.getState().transientClearedAgentStatusConnectionIds['ssh-a']).toBeUndefined()
+  })
+
+  it('moves a colliding pane to newer authoritative ownership', () => {
+    const store = createTestStore()
+    const paneKey = 'tab-a:11111111-1111-4111-8111-111111111111'
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'host a', agentType: 'codex' },
+        undefined,
+        { updatedAt: 1 },
+        { connectionId: 'ssh-a' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'host b', agentType: 'codex' },
+        undefined,
+        { updatedAt: 2 },
+        { connectionId: 'ssh-b' }
+      )
+
+    store.getState().clearTransientAgentStatuses('ssh-a', 3)
+
+    expect(store.getState().agentStatusByPaneKey[paneKey]).toMatchObject({
+      prompt: 'host b',
+      connectionId: 'ssh-b'
+    })
   })
 })

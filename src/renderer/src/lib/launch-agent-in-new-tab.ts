@@ -324,7 +324,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         if (agent === 'command-code' && submitPastedPrompt) {
           // Why: Command Code has no prompt-submit hook; when Orca submits a
           // generated prompt after readiness, seed working at delivery time.
-          seedCommandCodeSubmittedPromptStatus(tab.id, trimmedPrompt)
+          seedCommandCodeSubmittedPromptStatus(worktreeId, tab.id, trimmedPrompt)
         }
         onPromptDelivered?.()
       }
