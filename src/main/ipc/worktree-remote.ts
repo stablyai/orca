@@ -1912,6 +1912,12 @@ export async function createRemoteWorktree(
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
       : {}),
+    ...(args.linkedClickUpTaskId !== undefined
+      ? { linkedClickUpTaskId: args.linkedClickUpTaskId }
+      : {}),
+    ...(args.linkedClickUpWorkspaceId !== undefined
+      ? { linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId }
+      : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
@@ -2534,6 +2540,12 @@ export async function createLocalWorktree(
       : {}),
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+      : {}),
+    ...(args.linkedClickUpTaskId !== undefined
+      ? { linkedClickUpTaskId: args.linkedClickUpTaskId }
+      : {}),
+    ...(args.linkedClickUpWorkspaceId !== undefined
+      ? { linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId }
       : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),

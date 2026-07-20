@@ -86,7 +86,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--clickup-task <id-or-url>] [--clickup-workspace <id>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -99,6 +99,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'base-branch',
       'issue',
       'linear-issue',
+      'clickup-task',
+      'clickup-workspace',
       'comment',
       'setup',
       'parent-worktree',
@@ -136,13 +138,15 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--clickup-task <id-or-url|null>] [--clickup-workspace <id>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
       'display-name',
       'issue',
       'linear-issue',
+      'clickup-task',
+      'clickup-workspace',
       'comment',
       'workspace-status',
       'parent-worktree',
@@ -150,7 +154,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
+      'Pass --linear-issue null to clear the Linear issue link.',
+      'Pass --clickup-task null to clear the ClickUp task link.'
     ],
     examples: [
       'orca worktree set --worktree active --linear-issue STA-335 --json',

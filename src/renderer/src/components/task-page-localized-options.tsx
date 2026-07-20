@@ -2,6 +2,7 @@ import React from 'react'
 import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { getTaskPresetQuery } from '@/lib/new-workspace'
@@ -119,6 +120,11 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
     id: 'linear',
     label: translate('auto.components.TaskPage.8675cd6188', 'Linear'),
     Icon: ({ className }) => <LinearIcon className={className} />
+  },
+  {
+    id: 'clickup',
+    label: translate('auto.components.TaskPage.clickupSource', 'ClickUp'),
+    Icon: ({ className }) => <ClickUpIcon className={className} />
   },
   {
     id: 'jira',

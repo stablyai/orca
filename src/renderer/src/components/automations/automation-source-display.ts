@@ -39,6 +39,8 @@ function getProviderLabel(provider: TaskSourceContext['provider']): string {
       return 'GitLab'
     case 'linear':
       return 'Linear'
+    case 'clickup':
+      return 'ClickUp'
     case 'jira':
       return 'Jira'
   }
@@ -56,6 +58,8 @@ function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null
           : (identity.projectId ?? null)
       case 'linear':
         return identity.workspaceName ?? identity.workspaceId ?? null
+      case 'clickup':
+        return identity.listName ?? identity.workspaceName ?? identity.workspaceId ?? null
       case 'jira':
         return identity.siteUrl ?? identity.siteId ?? null
     }

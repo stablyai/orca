@@ -120,6 +120,9 @@ Computer Use:
 Linear:
   linear                    Read Linear ticket context for agents
 
+ClickUp:
+  clickup                   Read and update ClickUp tasks for agents
+
 Mobile Emulator (iOS Simulator):
   emulator list             List available/running emulators (Orca-managed + raw serve-sim)
   emulator attach <device>  Attach/start helper and make active for the worktree
@@ -498,6 +501,9 @@ export function formatFlagHelp(flag: string): string {
     issue: '--issue <number|null>  Linked GitHub issue number',
     'linear-issue':
       '--linear-issue <id|url|null> Linked Linear issue identifier or URL; null clears on set',
+    'clickup-task':
+      '--clickup-task <id|url|null> Linked ClickUp task ID or URL; null clears on set',
+    'clickup-workspace': '--clickup-workspace <id> ClickUp Workspace that owns the linked task',
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',

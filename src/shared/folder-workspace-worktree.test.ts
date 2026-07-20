@@ -81,6 +81,26 @@ describe('folderWorkspaceToWorktree', () => {
     expect(worktree.linkedGitLabMR).toBeNull()
   })
 
+  it('projects ClickUp tasks with their owning Workspace', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        linkedTask: {
+          provider: 'clickup',
+          type: 'issue',
+          number: 0,
+          title: 'Polish folder workspaces',
+          url: 'https://app.clickup.com/t/86abc123',
+          clickUpTaskId: '86abc123',
+          clickUpWorkspaceId: 'team-1'
+        }
+      })
+    )
+
+    expect(worktree.linkedClickUpTaskId).toBe('86abc123')
+    expect(worktree.linkedClickUpWorkspaceId).toBe('team-1')
+    expect(worktree.linkedLinearIssue).toBeNull()
+  })
+
   it('projects first-message rename state for folder workspace cards', () => {
     const worktree = folderWorkspaceToWorktree(
       makeFolderWorkspace({

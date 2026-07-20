@@ -232,3 +232,4 @@ function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProvid
 }
 
 export { JiraIntegrationCard } from './jira-integration-card'
+export { ClickUpIntegrationCard } from './clickup-integration-card'

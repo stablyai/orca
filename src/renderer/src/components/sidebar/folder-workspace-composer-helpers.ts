@@ -75,6 +75,8 @@ export function toFolderWorkspaceLinkedTask(
     url: item.url,
     ...(item.linearIdentifier ? { linearIdentifier: item.linearIdentifier } : {}),
     ...(item.jiraIdentifier ? { jiraIdentifier: item.jiraIdentifier } : {}),
+    ...(item.clickUpTaskId ? { clickUpTaskId: item.clickUpTaskId } : {}),
+    ...(item.clickUpWorkspaceId ? { clickUpWorkspaceId: item.clickUpWorkspaceId } : {}),
     ...(item.repoId ? { repoId: item.repoId } : {})
   }
 }

@@ -1,5 +1,6 @@
 import type {
   BaseRefSearchResult,
+  ClickUpTask,
   GitHubWorkItem,
   GitLabWorkItem,
   LinearCollectionResult,
@@ -7,7 +8,14 @@ import type {
 } from '../types'
 import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'text'
+export type SmartNameMode =
+  | 'smart'
+  | 'github'
+  | 'gitlab'
+  | 'branches'
+  | 'linear'
+  | 'clickup'
+  | 'text'
 
 export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = 2048
 
@@ -18,6 +26,7 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
+  | { kind: 'clickup'; value: string; task: ClickUpTask }
 
 type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
@@ -27,6 +36,7 @@ const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   gitlab: 'Start typing to search GitLab MRs and issues.',
   branches: 'No matching branches.',
   linear: 'Start typing to search Linear issues.',
+  clickup: 'Start typing to search ClickUp tasks.',
   text: ''
 }
 
@@ -110,6 +120,8 @@ export function buildSmartWorkspaceSourceRows({
   gitlabItems,
   linearAvailable,
   linearIssues,
+  clickUpAvailable = false,
+  clickUpTasks = [],
   mode,
   resultLimit,
   value
@@ -120,6 +132,8 @@ export function buildSmartWorkspaceSourceRows({
   gitlabItems: GitLabWorkItem[]
   linearAvailable: boolean
   linearIssues: LinearIssueSourceInput
+  clickUpAvailable?: boolean
+  clickUpTasks?: ClickUpTask[]
   mode: SmartNameMode
   resultLimit: number
   value: string
@@ -183,6 +197,15 @@ export function buildSmartWorkspaceSourceRows({
         kind: 'linear' as const,
         value: `linear-${issue.id}`,
         issue
+      }))
+    )
+  }
+  if (clickUpAvailable && (mode === 'smart' || mode === 'clickup')) {
+    nextRows.push(
+      ...clickUpTasks.map((task) => ({
+        kind: 'clickup' as const,
+        value: `clickup-${task.workspaceId}-${task.id}`,
+        task
       }))
     )
   }

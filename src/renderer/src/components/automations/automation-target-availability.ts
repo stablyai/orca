@@ -257,6 +257,8 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
       return 'GitLab'
     case 'linear':
       return 'Linear'
+    case 'clickup':
+      return 'ClickUp'
     case 'jira':
       return 'Jira'
   }

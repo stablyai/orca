@@ -1477,6 +1477,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         linkedLinearIssue: args.linkedLinearIssue,
         linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
+        linkedClickUpTaskId: args.linkedClickUpTaskId,
+        linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId,
         linkedGitLabIssue: args.linkedGitLabIssue,
         linkedGitLabMR: args.linkedGitLabMR,
         linkedBitbucketPR: args.linkedBitbucketPR,

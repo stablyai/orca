@@ -11,6 +11,7 @@ import { createKeybindingsSlice } from './slices/keybindings'
 import { createGitHubSlice } from './slices/github'
 import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
+import { createClickUpSlice } from './slices/clickup'
 import { createPreflightSlice } from './slices/preflight'
 import { createJiraSlice } from './slices/jira'
 import { createEditorSlice } from './slices/editor'
@@ -53,6 +54,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createGitHubSlice(...a),
   ...createHostedReviewSlice(...a),
   ...createLinearSlice(...a),
+  ...createClickUpSlice(...a),
   ...createPreflightSlice(...a),
   ...createJiraSlice(...a),
   ...createEditorSlice(...a),

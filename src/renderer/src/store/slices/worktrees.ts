@@ -3020,7 +3020,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedAzureDevOpsPR,
     linkedGiteaPR,
     compareBaseRef,
-    options
+    options,
+    linkedClickUpTaskId,
+    linkedClickUpWorkspaceId
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
     try {
@@ -3064,6 +3066,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedLinearIssueOrganizationUrlKey !== undefined
               ? { linkedLinearIssueOrganizationUrlKey }
               : {}),
+            ...(linkedClickUpTaskId !== undefined ? { linkedClickUpTaskId } : {}),
+            ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(parentWorkspace ? { parentWorkspace } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
@@ -3109,6 +3113,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedLinearIssueOrganizationUrlKey !== undefined
                       ? { linkedLinearIssueOrganizationUrlKey }
                       : {}),
+                    ...(linkedClickUpTaskId !== undefined ? { linkedClickUpTaskId } : {}),
+                    ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(parentWorkspace ? { parentWorkspace } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),

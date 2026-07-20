@@ -40,6 +40,7 @@ import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type {
+  ClickUpTask,
   GitHubWorkItem,
   GitLabWorkItem,
   LinearIssue,
@@ -111,6 +112,7 @@ type NewWorkspaceComposerCardProps = {
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  onSmartClickUpTaskSelect?: (task: ClickUpTask) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   /** True when an existing local branch is selected and can be reused. */
@@ -658,6 +660,7 @@ export default function NewWorkspaceComposerCard({
   onSmartBranchSelect,
   onSmartNameModeChange,
   onSmartLinearIssueSelect,
+  onSmartClickUpTaskSelect,
   smartNameSelection,
   onClearSmartNameSelection,
   canReuseSelectedBranch,
@@ -1036,6 +1039,7 @@ export default function NewWorkspaceComposerCard({
             onGitLabItemSelect={onSmartGitLabItemSelect}
             onBranchSelect={onSmartBranchSelect}
             onLinearIssueSelect={onSmartLinearIssueSelect}
+            onClickUpTaskSelect={onSmartClickUpTaskSelect}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
             githubSourceContext={smartNameGitHubSourceContext}

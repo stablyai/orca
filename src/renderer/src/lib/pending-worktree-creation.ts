@@ -66,6 +66,8 @@ export type WorktreeCreationRequest = {
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedClickUpTaskId?: string
+  linkedClickUpWorkspaceId?: string | null
   branchNameOverride?: string
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number

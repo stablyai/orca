@@ -30,6 +30,11 @@ export type LinearWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue'
 }
 
+export type ClickUpWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'clickup'
+  type: 'issue'
+}
+
 export type WorkspaceSourceItemLike = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
   provider?: WorkspaceSourceProvider
 }
@@ -41,6 +46,7 @@ export type WorkspaceSourceSelectionKind =
   | 'gitlab-issue'
   | 'branch'
   | 'linear'
+  | 'clickup'
   | 'jira'
 
 export type WorkspaceSourceSelection = {
@@ -77,6 +83,9 @@ export function getWorkspaceSourceProvider(item: WorkspaceSourceItemLike): Works
   }
   if (item.linearIdentifier) {
     return 'linear'
+  }
+  if (item.clickUpTaskId) {
+    return 'clickup'
   }
   if (item.jiraIdentifier || isJiraIssueUrl(item.url)) {
     return 'jira'
@@ -176,19 +185,24 @@ export function buildWorkspaceSourceSelection(args: {
   const kind: WorkspaceSourceSelectionKind =
     provider === 'linear'
       ? 'linear'
-      : provider === 'jira'
-        ? 'jira'
-        : provider === 'gitlab'
-          ? linkedWorkItem.type === 'mr'
-            ? 'gitlab-mr'
-            : 'gitlab-issue'
-          : linkedWorkItem.type === 'pr'
-            ? 'github-pr'
-            : 'github-issue'
+      : provider === 'clickup'
+        ? 'clickup'
+        : provider === 'jira'
+          ? 'jira'
+          : provider === 'gitlab'
+            ? linkedWorkItem.type === 'mr'
+              ? 'gitlab-mr'
+              : 'gitlab-issue'
+            : linkedWorkItem.type === 'pr'
+              ? 'github-pr'
+              : 'github-issue'
   return {
     kind,
     label:
-      provider === 'linear' || provider === 'jira' || linkedWorkItem.number === 0
+      provider === 'linear' ||
+      provider === 'clickup' ||
+      provider === 'jira' ||
+      linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
     url: linkedWorkItem.url
@@ -202,5 +216,5 @@ export function shouldPreserveWorkspaceSourceOnRepoChange(
     return false
   }
   const provider = getWorkspaceSourceProvider(item)
-  return provider === 'linear' || provider === 'jira'
+  return provider === 'linear' || provider === 'clickup' || provider === 'jira'
 }

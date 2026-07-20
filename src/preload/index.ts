@@ -1744,6 +1744,66 @@ const api = {
       ipcRenderer.invoke('linear:teamMembers', args)
   },
 
+  clickup: {
+    connect: (args: {
+      apiToken: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('clickup:connect', args),
+
+    disconnect: (): Promise<void> => ipcRenderer.invoke('clickup:disconnect'),
+
+    selectWorkspace: (args: { workspaceId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('clickup:selectWorkspace', args),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('clickup:status'),
+
+    testConnection: (): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('clickup:testConnection'),
+
+    searchTasks: (args: {
+      query: string
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('clickup:searchTasks', args),
+
+    listTasks: (args?: {
+      filter?: 'assigned' | 'created' | 'all' | 'completed' | 'open'
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('clickup:listTasks', args),
+
+    getTask: (args: { taskId: string; workspaceId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('clickup:getTask', args),
+
+    createTask: (args: unknown): Promise<unknown> => ipcRenderer.invoke('clickup:createTask', args),
+
+    updateTask: (args: {
+      taskId: string
+      updates: unknown
+      workspaceId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('clickup:updateTask', args),
+
+    addTaskComment: (args: {
+      taskId: string
+      body: string
+      workspaceId?: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('clickup:addTaskComment', args),
+
+    taskComments: (args: { taskId: string; workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('clickup:taskComments', args),
+
+    listLists: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('clickup:listLists', args),
+
+    listMembers: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('clickup:listMembers', args),
+
+    listTags: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('clickup:listTags', args)
+  },
+
   jira: {
     connect: (args: {
       siteUrl: string

@@ -129,6 +129,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
     visibleTaskProvidersDefaultedForJira: true,
+    visibleTaskProvidersDefaultedForClickUp: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',

@@ -1806,7 +1806,8 @@
         "jiraSortDescending": "descending",
         "jiraSortBy": "Sort by",
         "jiraToggleSortDirection": "Sort {{value0}}",
-        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly."
+        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
+        "clickupSource": "ClickUp"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -4081,7 +4082,8 @@
           "196c1b5362": "Open GitLab tasks",
           "0ccba862b8": "Open GitHub tasks",
           "fee535205b": "Tasks",
-          "d599269755": "Hide from sidebar"
+          "d599269755": "Hide from sidebar",
+          "openClickUpTasks": "Open ClickUp tasks"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -4226,7 +4228,8 @@
           "34f03eb0de": "Board settings",
           "26cbc92150": "Workspace board settings",
           "87d24a0c2f": "Sync board and issue status",
-          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
+          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists.",
+          "taskTrackerSyncDescription": "Moving a linked workspace updates its Linear or ClickUp task when a matching status exists."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
@@ -4717,7 +4720,10 @@
           "b6c7d8e9f0": "Task status sync could not finish.",
           "c7d8e9f0a1": "{{value0}} updated",
           "d8e9f0a1b2": "{{value0}} skipped",
-          "e9f0a1b2c3": "{{value0}} failed"
+          "e9f0a1b2c3": "{{value0}} failed",
+          "clickUpTaskReadFailed": "ClickUp task {{value0}} could not be read.",
+          "clickUpTaskUpdateFailed": "Could not update ClickUp task {{value0}}.",
+          "clickUpTaskSyncFailed": "Could not sync ClickUp task {{value0}}."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "Failed to set parent worktree",
@@ -6787,7 +6793,9 @@
           "dd67a1b6e1": "Show GitLab in the Tasks source picker and sidebar shortcuts.",
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "Show GitHub in the Tasks source picker and sidebar shortcuts.",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "clickupLabel": "ClickUp",
+          "clickupDescription": "Show ClickUp in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -9238,6 +9246,20 @@
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
+        },
+        "clickup": {
+          "connectedDescription": "{{value0}} Workspace{{value1}} available",
+          "checkingDescription": "Checking ClickUp access before showing setup actions.",
+          "disconnectedDescription": "Browse, create, update, and link ClickUp tasks.",
+          "replaceToken": "Replace token",
+          "connect": "Connect ClickUp",
+          "verified": "Verified",
+          "testing": "Testing…",
+          "test": "Test",
+          "disconnect": "Disconnect ClickUp",
+          "tokenScope": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
+          "setupHelp": "Use a Personal API token from ClickUp Settings → Apps.",
+          "recheck": "Re-check"
         }
       },
       "right": {
@@ -10693,7 +10715,10 @@
             "searchGitLab": "Search GitLab MRs and issues",
             "searchBranches": "Search branches",
             "searchLinear": "Search Linear issues",
-            "workspaceName": "Workspace name"
+            "workspaceName": "Workspace name",
+            "searchClickUp": "Search ClickUp tasks",
+            "connectClickUp": "Connect ClickUp in Settings to search tasks.",
+            "clickup": "ClickUp"
           },
           "ProjectHostSetupCombobox": {
             "empty": "No hosts are ready for this project.",
@@ -13259,6 +13284,78 @@
           },
           "undo": "Undo",
           "widthOption": "{{value0}} px"
+        }
+      },
+      "clickup": {
+        "detail": {
+          "name": "Name",
+          "description": "Description",
+          "status": "Status",
+          "priority": "Priority",
+          "dueDate": "Due date",
+          "comments": "Comments",
+          "commentPlaceholder": "Add a comment…",
+          "addComment": "Add comment",
+          "open": "Open in ClickUp",
+          "startWorkspace": "Start workspace",
+          "save": "Save",
+          "priorityNone": "None",
+          "priorityUrgent": "Urgent",
+          "priorityHigh": "High",
+          "priorityNormal": "Normal",
+          "priorityLow": "Low"
+        },
+        "page": {
+          "connectTitle": "Connect your ClickUp account",
+          "connectDescription": "Browse, create, edit, and start work from ClickUp tasks.",
+          "connect": "Connect ClickUp",
+          "hide": "Hide ClickUp",
+          "allWorkspaces": "All Workspaces",
+          "searchPlaceholder": "Search ClickUp tasks…",
+          "clearSearch": "Clear search",
+          "newTask": "New ClickUp task",
+          "refresh": "Refresh ClickUp tasks",
+          "name": "Name",
+          "status": "Status",
+          "list": "List",
+          "updated": "Updated",
+          "emptyTitle": "No ClickUp tasks found",
+          "emptyDescription": "Try another filter or search term.",
+          "startWorkspace": "Start workspace",
+          "openTask": "Open in ClickUp",
+          "filterAssigned": "Assigned to me",
+          "filterOpen": "Open",
+          "filterCreated": "Created by me",
+          "filterCompleted": "Completed",
+          "filterAll": "All",
+          "id": "ID"
+        },
+        "dialog": {
+          "title": "Connect ClickUp",
+          "description": "Paste a Personal API token. Orca will load every ClickUp Workspace that token can access.",
+          "tokenLabel": "Personal API token",
+          "instructions": "Create the token from ClickUp Settings → Apps. Personal tokens inherit your account permissions.",
+          "openSettings": "Open ClickUp settings",
+          "remoteStorage": "The active remote runtime stores this token with runtime-supported encryption.",
+          "localStorage": "This device stores the token with Electron encrypted storage when available.",
+          "cancel": "Cancel",
+          "connecting": "Connecting…",
+          "connect": "Connect"
+        },
+        "create": {
+          "title": "Create ClickUp task",
+          "description": "Choose the destination List, then add the task details.",
+          "list": "List",
+          "loadingLists": "Loading Lists…",
+          "selectList": "Select a List",
+          "name": "Name",
+          "taskDescription": "Description",
+          "cancel": "Cancel",
+          "creating": "Creating…",
+          "submit": "Create task"
+        },
+        "token": {
+          "placeholder": "pk_..."
         }
       }
     },

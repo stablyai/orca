@@ -35,6 +35,8 @@ export function mergeWorktree(
     linkedLinearIssue: meta?.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta?.linkedLinearIssueOrganizationUrlKey ?? null,
+    linkedClickUpTaskId: meta?.linkedClickUpTaskId ?? null,
+    linkedClickUpWorkspaceId: meta?.linkedClickUpWorkspaceId ?? null,
     ...getLinkedWorkItemMetadata(meta),
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
