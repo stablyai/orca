@@ -9689,6 +9689,7 @@
             "hugeRepoIgnorePrompt": "This repository has too many active changes. Add \"{{value0}}\" to .gitignore?",
             "hugeRepoIgnoreAction": "Add to .gitignore",
             "tooManyChanges": "Too many changes detected. Only the first {{value0}} changes are shown.",
+            "submoduleTruncated": "More submodule changes were omitted",
             "bf5082de46": "{{value0}} copied",
             "c06193ef57": "Failed to copy {{value0}}",
             "d172a4f068": "Commit hash",

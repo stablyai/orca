@@ -1,4 +1,4 @@
-import { exec, type ChildProcess } from 'node:child_process'
+import { execFile, type ChildProcess } from 'node:child_process'
 
 // Why: Windows commands may run through wrappers, so killing only the direct
 // child can leave Git or an agent alive after cancellation.
@@ -8,7 +8,7 @@ export function terminateRelaySubprocessTree(child: ChildProcess): void {
     return
   }
   if (process.platform === 'win32') {
-    exec(`taskkill /pid ${pid} /T /F`, () => {
+    execFile('taskkill', ['/pid', String(pid), '/T', '/F'], () => {
       // Best-effort; the child close listener owns completion.
     })
     return

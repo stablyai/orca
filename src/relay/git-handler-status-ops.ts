@@ -18,7 +18,7 @@ import {
   parseNumstat,
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
-import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
+import { resolveGitStatusLimit } from '../shared/git-status-limit'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
@@ -80,18 +80,13 @@ export async function getStatusOp(
   const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
   // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
-  const rawLimit = params.limit
-  const limit =
-    typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit >= 0
-      ? Math.floor(rawLimit)
-      : DEFAULT_GIT_STATUS_LIMIT
+  const limit = resolveGitStatusLimit(params.limit)
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
   let upstreamStatus: GitUpstreamStatus | undefined
   let ignoredPaths: string[] = []
-  let unmergedLines: readonly string[] = []
   let didHitLimit = false
   let statusLength = 0
 
@@ -118,12 +113,9 @@ export async function getStatusOp(
     if (!stoppedEarly) {
       parser.finish()
     }
-    const cappedEntries = stoppedEarly ? parser.entries.slice(0, limit) : parser.entries
-    entries.push(...(cappedEntries as Record<string, unknown>[]))
     head = parser.branch.head
     branch = parser.branch.branch
     ignoredPaths = parser.ignoredPaths
-    unmergedLines = parser.unmergedLines
     statusLength = parser.statusLength
     didHitLimit = stoppedEarly
     const { upstreamName, upstreamAheadBehind } = parser.branch
@@ -156,14 +148,19 @@ export async function getStatusOp(
       }
     }
 
-    // Why: cap conflict lookups too so a conflict-heavy merge cannot bypass the status bound.
-    for (const uLine of unmergedLines) {
+    // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
+    // an early conflict behind ordinary rows that appeared later in the stream.
+    for (const record of parser.statusRecords) {
       if (didHitLimit && entries.length >= limit) {
         break
       }
-      const entry = parseUnmergedEntry(worktreePath, uLine)
-      if (entry) {
-        entries.push(entry)
+      if (record.type === 'entry') {
+        entries.push(record.entry as Record<string, unknown>)
+      } else {
+        const entry = parseUnmergedEntry(worktreePath, record.line)
+        if (entry) {
+          entries.push(entry)
+        }
       }
     }
   } catch (error) {

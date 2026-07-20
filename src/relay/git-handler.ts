@@ -43,6 +43,7 @@ import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { capGitStatusEntries, resolveGitStatusLimit } from '../shared/git-status-limit'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import {
@@ -346,15 +347,19 @@ export class GitHandler {
     const area = resolveSubmoduleStatusArea(params)
     const staged = area === 'staged'
     const resolved = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
-    const workingResult = await getStatusOp(
-      this.git.bind(this),
-      streamRelayGitStdout,
-      {
-        ...params,
-        worktreePath: resolved
-      },
-      { signal: context.signal }
-    )
+    const limit = resolveGitStatusLimit(params.limit)
+    // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
+    const workingResult = staged
+      ? { entries: [], conflictOperation: 'unknown' }
+      : await getStatusOp(
+          this.git.bind(this),
+          streamRelayGitStdout,
+          {
+            ...params,
+            worktreePath: resolved
+          },
+          { signal: context.signal }
+        )
     // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
     const requestGit: GitExec = (args, cwd, options) =>
       this.git(args, cwd, { ...options, signal: context.signal })
@@ -368,14 +373,17 @@ export class GitHandler {
     if (fromOid && toOid && fromOid !== toOid) {
       const rangeEntries = await computeSubmoduleRangeEntries(requestGit, resolved, fromOid, toOid)
       if (staged) {
-        return { ...workingResult, entries: rangeEntries }
+        return { ...workingResult, ...capGitStatusEntries(rangeEntries, limit) }
       }
       const rangePaths = new Set(rangeEntries.map((entry) => entry.path))
       const entries = [
         ...rangeEntries,
         ...workingResult.entries.filter((entry) => !rangePaths.has(entry.path))
       ]
-      return { ...workingResult, entries }
+      return {
+        ...workingResult,
+        ...capGitStatusEntries(entries, limit, workingResult)
+      }
     }
     if (staged) {
       return { ...workingResult, entries: [] }

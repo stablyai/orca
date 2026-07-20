@@ -158,6 +158,32 @@ describe('getStatusOp', () => {
     expect(git).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps an early conflict ahead of later ordinary rows at the cap', async () => {
+    const lines = [
+      '? before.ts',
+      'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts',
+      '? after.ts'
+    ].join('\n')
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return { stdout: `${lines}\n`, stderr: '' }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    const result = await getStatusOp(git, streamGitFromCapture(git), {
+      worktreePath: tmpDir,
+      limit: 2
+    })
+
+    expect(result.didHitLimit).toBe(true)
+    expect(result.entries.map((entry) => entry.path)).toEqual(['before.ts', 'conflict.ts'])
+    expect(result.entries[1]).toMatchObject({
+      conflictKind: 'both_modified',
+      conflictStatus: 'unresolved'
+    })
+  })
+
   it('reuses unchanged line stats only for hinted safety reads', async () => {
     const statusOutput = `${buildBranchStatusOutput('head-1', '(detached)')}\n1 .M N... 100644 100644 100644 aaaa aaaa src/a.ts`
     const git = vi.fn<GitExec>(async (args) => {

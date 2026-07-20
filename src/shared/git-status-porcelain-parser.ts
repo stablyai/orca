@@ -23,6 +23,10 @@ export type BranchMetadata = {
   upstreamAheadBehind?: { ahead: number; behind: number }
 }
 
+export type StatusPorcelainRecord =
+  | { type: 'entry'; entry: GitStatusEntry }
+  | { type: 'unmerged'; line: string }
+
 export class StatusPorcelainParser {
   private carry = ''
   /** Count of changed-file entries seen — the limit is measured against this. */
@@ -32,6 +36,8 @@ export class StatusPorcelainParser {
   readonly ignoredPaths: string[] = []
   /** Raw `u ` lines for the caller to resolve asynchronously. */
   readonly unmergedLines: string[] = []
+  /** Changed records in Git's output order, including deferred unmerged rows. */
+  readonly statusRecords: StatusPorcelainRecord[] = []
   readonly branch: BranchMetadata = {}
 
   /** Total changed-file entries observed (including any past the limit). */
@@ -125,6 +131,7 @@ export class StatusPorcelainParser {
     if (line.startsWith('u ')) {
       this.count += 1
       this.unmergedLines.push(line)
+      this.statusRecords.push({ type: 'unmerged', line })
     }
   }
 
@@ -186,6 +193,7 @@ export class StatusPorcelainParser {
   private push(entry: GitStatusEntry): void {
     this.count += 1
     this.entries.push(entry)
+    this.statusRecords.push({ type: 'entry', entry })
   }
 }
 

@@ -542,6 +542,10 @@ const SUBMODULE_WORKTREE_ONLY_TOOLTIP =
 const SUBMODULE_LOADING_LABEL = 'Loading submodule changes…'
 const SUBMODULE_EMPTY_LABEL = 'No changes in submodule'
 const SUBMODULE_ERROR_LABEL = 'Failed to load submodule changes'
+const SUBMODULE_TRUNCATED_LABEL = translate(
+  'auto.components.right.sidebar.SourceControl.submoduleTruncated',
+  'More submodule changes were omitted'
+)
 
 function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
@@ -7746,7 +7750,7 @@ function SubmodulePlaceholderRow({
   message
 }: {
   depth: number
-  state: 'loading' | 'empty' | 'error'
+  state: 'loading' | 'empty' | 'error' | 'truncated'
   message?: string
 }): React.JSX.Element {
   const fallback =
@@ -7754,7 +7758,9 @@ function SubmodulePlaceholderRow({
       ? SUBMODULE_ERROR_LABEL
       : state === 'empty'
         ? SUBMODULE_EMPTY_LABEL
-        : SUBMODULE_LOADING_LABEL
+        : state === 'truncated'
+          ? SUBMODULE_TRUNCATED_LABEL
+          : SUBMODULE_LOADING_LABEL
   return (
     <div
       className={cn(

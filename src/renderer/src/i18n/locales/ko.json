@@ -9666,6 +9666,7 @@
             "hugeRepoIgnorePrompt": "이 repos에 활성 변경 사항이 너무 많습니다. \"{{value0}}\"을(를) .gitignore에 추가하시겠습니까?",
             "hugeRepoIgnoreAction": ".gitignore에 추가",
             "tooManyChanges": "변경 사항이 너무 많이 감지되었습니다. 처음 {{value0}}개만 표시됩니다.",
+            "submoduleTruncated": "추가 서브모듈 변경 사항이 생략되었습니다",
             "bf5082de46": "{{value0}}이(가) 복사됨",
             "c06193ef57": "{{value0}}을(를) 복사하지 못했습니다",
             "d172a4f068": "Commit 해시",

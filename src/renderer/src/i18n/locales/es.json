@@ -9666,6 +9666,7 @@
             "hugeRepoIgnorePrompt": "Este repositorio tiene demasiados cambios activos. ¿Agregar \"{{value0}}\" a .gitignore?",
             "hugeRepoIgnoreAction": "Agregar a .gitignore",
             "tooManyChanges": "Se detectaron demasiados cambios. Solo se muestran los primeros {{value0}}.",
+            "submoduleTruncated": "Se omitieron más cambios del submódulo",
             "bf5082de46": "{{value0}} copiado",
             "c06193ef57": "No se pudo copiar {{value0}}",
             "d172a4f068": "Hash del commit",

@@ -105,6 +105,31 @@ describe('StatusPorcelainParser', () => {
     expect(parser.statusLength).toBe(4)
   })
 
+  it('preserves deferred conflicts in status output order', () => {
+    const parser = new StatusPorcelainParser()
+    parser.update(
+      '? before.ts\n' +
+        'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts\n' +
+        '? after.ts\n',
+      0
+    )
+
+    expect(parser.statusRecords).toEqual([
+      {
+        type: 'entry',
+        entry: { path: 'before.ts', status: 'untracked', area: 'untracked' }
+      },
+      {
+        type: 'unmerged',
+        line: 'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts'
+      },
+      {
+        type: 'entry',
+        entry: { path: 'after.ts', status: 'untracked', area: 'untracked' }
+      }
+    ])
+  })
+
   it('does not signal stop when limit is 0 (disabled)', () => {
     const parser = new StatusPorcelainParser()
     const lines = `${Array.from({ length: 50 }, (_, i) => `? f${i}.txt`).join('\n')}\n`
