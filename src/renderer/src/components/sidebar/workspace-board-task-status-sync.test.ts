@@ -176,6 +176,35 @@ describe('syncWorkspaceBoardTaskStatuses', () => {
     )
   })
 
+  it('routes ClickUp sync to the local runtime when settings are omitted', async () => {
+    const item = worktree({
+      linkedLinearIssue: null,
+      linkedLinearIssueWorkspaceId: null,
+      linkedClickUpTaskId: 'task-1',
+      linkedClickUpWorkspaceId: 'clickup-workspace-1'
+    })
+    const getClickUpTask = vi.fn().mockResolvedValue(clickUpTask())
+    const updateClickUpTask = vi
+      .fn<() => Promise<ClickUpMutationResult>>()
+      .mockResolvedValue({ ok: true })
+
+    await syncWorkspaceBoardTaskStatuses({
+      worktreeIds: [item.id],
+      targetStatus: targetStatus(),
+      worktreesById: new Map([[item.id, item]]),
+      getLatestWorkspaceStatus: () => 'in-review',
+      deps: { getClickUpTask, updateClickUpTask }
+    })
+
+    expect(getClickUpTask).toHaveBeenCalledWith(undefined, 'task-1', 'clickup-workspace-1')
+    expect(updateClickUpTask).toHaveBeenCalledWith(
+      undefined,
+      'task-1',
+      { status: 'In review' },
+      'clickup-workspace-1'
+    )
+  })
+
   it('reports ClickUp status update failures with provider context', async () => {
     const item = worktree({
       linkedLinearIssue: null,

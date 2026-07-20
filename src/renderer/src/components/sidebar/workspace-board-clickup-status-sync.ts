@@ -57,6 +57,7 @@ export async function syncClickUpWorktreeStatus(
     result.skipped += 1
     return result
   }
+  // Why: undefined intentionally routes through the local runtime when no owner-specific settings exist.
   const settings = args.getSettingsForWorktree
     ? args.getSettingsForWorktree(worktreeId)
     : args.settings
