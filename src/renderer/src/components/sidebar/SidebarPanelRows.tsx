@@ -85,6 +85,7 @@ function PanelCanvasContextMenu({
   title,
   host,
   onRename,
+  onDelete,
   children
 }: {
   kind: 'terminal' | 'web'
@@ -92,6 +93,7 @@ function PanelCanvasContextMenu({
   title: string
   host?: string | null
   onRename: () => void
+  onDelete: () => void
   children: React.ReactNode
 }): React.JSX.Element {
   const openCanvasSplitFromSource = useAppStore((s) => s.openCanvasSplitFromSource)
@@ -176,6 +178,9 @@ function PanelCanvasContextMenu({
         <ContextMenuItem onSelect={() => detachPanelIntoWindow(kind, panelId, title)}>
           {translate('auto.components.sidebar.SidebarPanelsNav.detachPanel', 'Open in new window')}
         </ContextMenuItem>
+        <ContextMenuItem variant="destructive" onSelect={onDelete}>
+          {translate('auto.components.sidebar.SidebarPanelsNav.deletePanel', 'Delete panel')}
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )
@@ -216,6 +221,18 @@ export function SortableWebPanelButton({
       panelId={panel.id}
       title={panel.title}
       onRename={() => setRenaming(true)}
+      onDelete={() => {
+        const state = useAppStore.getState()
+        const panels = state.settings?.pinnedWebPanels ?? []
+        void updateSettings({
+          pinnedWebPanels: panels.filter((p) => p.id !== panel.id)
+        })
+        // Why: leave the open page if this panel is active, otherwise the
+        // viewer keeps a ghost of a deleted id.
+        if (state.activePinnedWebPanelId === panel.id) {
+          state.closePinnedWebPanelPage()
+        }
+      }}
     >
       <button
         ref={setNodeRef}
@@ -281,6 +298,16 @@ export function SortableTerminalPanelButton({
       title={panel.title}
       host={panel.host ?? null}
       onRename={() => setRenaming(true)}
+      onDelete={() => {
+        const state = useAppStore.getState()
+        const panels = state.settings?.pinnedTerminalPanels ?? []
+        void updateSettings({
+          pinnedTerminalPanels: panels.filter((p) => p.id !== panel.id)
+        })
+        if (state.activePinnedTerminalPanelId === panel.id) {
+          state.closePinnedTerminalPanelPage()
+        }
+      }}
     >
       <button
         ref={setNodeRef}

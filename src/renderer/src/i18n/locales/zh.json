@@ -4802,7 +4802,8 @@
           "emptyNodes": "Add an observability terminal with +",
           "newGroup": "New group",
           "addChildGroup": "Add nested group",
-          "deleteGroup": "Delete group"
+          "deleteGroup": "Delete group",
+          "deletePanel": "删除面板"
         },
         "SidebarPanelRows": {
           "renameLabel": "Rename"
