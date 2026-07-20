@@ -19,6 +19,7 @@ import {
   type ImageViewerSurfaceSize,
   getZoomedImageLayoutSize
 } from './image-viewer-zoom'
+import { useImageViewerPanSurface } from './use-image-viewer-pan'
 import { translate } from '@/i18n/i18n'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
 
@@ -46,6 +47,7 @@ export default function ImageViewer({
   const [popupSurfaceSize, setPopupSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
   const [imageDimensions, setImageDimensions] = useState<ImageViewerImageDimensions | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
+  const imagePan = useImageViewerPanSurface()
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
@@ -252,12 +254,17 @@ export default function ImageViewer({
         <div
           ref={setInlineSurfaceRef}
           className={cn(
-            'cursor-pointer bg-muted/20',
+            'bg-muted/20',
+            imagePan.cursorClassName ?? 'cursor-pointer',
             isIntrinsicLayout
               ? 'flex justify-center overflow-visible p-4'
               : 'flex-1 overflow-auto scrollbar-editor'
           )}
           onClick={openPopup}
+          onClickCapture={imagePan.onClickCapture}
+          onPointerDown={imagePan.onPointerDown}
+          onPointerEnter={imagePan.onPointerEnter}
+          onPointerLeave={imagePan.onPointerLeave}
           title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
         >
           <div
@@ -279,6 +286,7 @@ export default function ImageViewer({
               <img
                 src={previewSrc}
                 alt={filename}
+                draggable={false}
                 className={cn(
                   'object-contain',
                   isIntrinsicLayout
@@ -351,6 +359,7 @@ export default function ImageViewer({
         imageLayoutStyle={popupImageLayoutStyle}
         isOpen={isPopupOpen}
         onOpenChange={handlePopupOpenChange}
+        pan={imagePan}
         previewUrl={previewSrc}
         setSurfaceRef={setPopupSurfaceRef}
         zoomPercent={Math.round(popupZoom * 100)}

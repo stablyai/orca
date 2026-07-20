@@ -193,4 +193,23 @@ describe('ImageViewer preview source retry', () => {
     expect(findElementsByType(rendered, 'Image')).toHaveLength(1)
     expect(findElementsByType(rendered, 'img')).toHaveLength(0)
   })
+
+  it('binds panning to both surfaces and disables native image dragging', async () => {
+    const rendered = await renderExpandedImageViewer(pngBase64(1))
+    const panSurfaces = findElementsByType(rendered, 'div').filter(
+      (element) => element.props.onPointerDown && element.props.onClickCapture
+    )
+
+    expect(panSurfaces).toHaveLength(2)
+    for (const surface of panSurfaces) {
+      expect(surface.props.onPointerEnter).toBeTypeOf('function')
+      expect(surface.props.onPointerLeave).toBeTypeOf('function')
+    }
+    expect(panSurfaces[0].props.onPointerDown).toBe(panSurfaces[1].props.onPointerDown)
+    expect(panSurfaces[0].props.onClickCapture).toBe(panSurfaces[1].props.onClickCapture)
+    expect(findElementsByType(rendered, 'img')).toHaveLength(2)
+    for (const image of findElementsByType(rendered, 'img')) {
+      expect(image.props.draggable).toBe(false)
+    }
+  })
 })

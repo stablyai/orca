@@ -3,6 +3,7 @@ import type { CSSProperties, JSX } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import type { ImageViewerImageDimensions } from './image-viewer-zoom'
+import type { ImageViewerPanSurfaceBindings } from './use-image-viewer-pan'
 import { translate } from '@/i18n/i18n'
 
 type ImageViewerPopupProps = {
@@ -13,6 +14,7 @@ type ImageViewerPopupProps = {
   imageLayoutSize: ImageViewerImageDimensions | null
   imageLayoutStyle: CSSProperties | undefined
   onOpenChange: (open: boolean) => void
+  pan: ImageViewerPanSurfaceBindings
   setSurfaceRef: (surface: HTMLDivElement | null) => void
 }
 
@@ -24,6 +26,7 @@ export default function ImageViewerPopup({
   imageLayoutSize,
   imageLayoutStyle,
   onOpenChange,
+  pan,
   setSurfaceRef
 }: ImageViewerPopupProps): JSX.Element {
   return (
@@ -52,13 +55,21 @@ export default function ImageViewerPopup({
         </div>
         <div
           ref={setSurfaceRef}
-          className="min-h-0 flex-1 overflow-auto bg-muted/20 scrollbar-editor"
+          className={cn(
+            'min-h-0 flex-1 overflow-auto bg-muted/20 scrollbar-editor',
+            pan.cursorClassName
+          )}
+          onClickCapture={pan.onClickCapture}
+          onPointerDown={pan.onPointerDown}
+          onPointerEnter={pan.onPointerEnter}
+          onPointerLeave={pan.onPointerLeave}
         >
           <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-4">
             <div className="flex items-center justify-center" style={imageLayoutStyle}>
               <img
                 src={previewUrl}
                 alt={filename}
+                draggable={false}
                 className={cn(
                   'object-contain',
                   imageLayoutSize ? 'block h-full w-full' : 'block max-h-full max-w-full'
