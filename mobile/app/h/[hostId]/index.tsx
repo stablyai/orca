@@ -154,6 +154,8 @@ export function HostScreen({
   const newWorktreeModalVisibleRef = useRef(false)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
+  // Why: retain this snapshot through disconnects; a separate last-known copy
+  // would duplicate every polling comparison while always holding the same data.
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
   // Why: opening a worktree activates it on the host, but the active-row
@@ -167,7 +169,6 @@ export function HostScreen({
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
   const [compatVerdict, setCompatVerdict] = useState<CompatVerdict>({ kind: 'ok' })
-  const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [sortMode, setSortMode] = useState<MobileSortMode>('recent')
@@ -348,12 +349,10 @@ export function HostScreen({
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
     if (freshCache) {
       setWorktrees(freshCache)
-      setLastKnownWorktrees(freshCache)
       setWorktreesLoaded(true)
     } else {
       setWorktreesLoaded(false)
       setWorktrees([])
-      setLastKnownWorktrees([])
     }
     if (!hostId) {
       return
@@ -457,9 +456,6 @@ export function HostScreen({
           // poll. Preserving the existing array keeps SectionList/sort rebuilds
           // off the JS tap path unless something actually changed.
           setWorktrees((current) =>
-            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
-          )
-          setLastKnownWorktrees((current) =>
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
           setWorktreesLoaded(true)
@@ -665,9 +661,6 @@ export function HostScreen({
       setWorktrees((prev) =>
         prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isPinned: newPinned } : w))
       )
-      setLastKnownWorktrees((prev) =>
-        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isPinned: newPinned } : w))
-      )
 
       updateLocalPins(worktreeId, newPinned)
 
@@ -692,7 +685,6 @@ export function HostScreen({
       const removeFromList = (list: Worktree[]) =>
         list.filter((w) => w.worktreeId !== item.worktreeId)
       setWorktrees(removeFromList)
-      setLastKnownWorktrees(removeFromList)
 
       try {
         const response = await client.sendRequest('worktree.rm', {
@@ -701,12 +693,10 @@ export function HostScreen({
         })
         if (!response.ok) {
           setWorktrees((prev) => [...prev, item])
-          setLastKnownWorktrees((prev) => [...prev, item])
         }
         void fetchWorktrees()
       } catch {
         setWorktrees((prev) => [...prev, item])
-        setLastKnownWorktrees((prev) => [...prev, item])
       }
     },
     [client, fetchWorktrees]
@@ -820,10 +810,7 @@ export function HostScreen({
   )
 
   const displayWorktrees = useMemo(() => {
-    const base =
-      connState === 'disconnected' || connState === 'reconnecting' || connState === 'auth-failed'
-        ? lastKnownWorktrees
-        : worktrees
+    const base = worktrees
     if (sleptIds.size === 0 && optimisticActiveWorktreeId === null) {
       return base
     }
@@ -839,7 +826,7 @@ export function HostScreen({
           : null
       return slept || active ? { ...w, ...slept, ...active } : w
     })
-  }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeId])
+  }, [worktrees, sleptIds, optimisticActiveWorktreeId])
 
   const toggleCollapsed = useCallback(
     (key: string) => {
