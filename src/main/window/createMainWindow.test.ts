@@ -365,12 +365,12 @@ describe('createMainWindow', () => {
     vi.advanceTimersByTime(1)
     expect(webContents.invalidate).toHaveBeenCalledTimes(3)
 
-    // Focus covers occlusion-uncover with invalidate only — no setSize jiggle
-    // that would resize terminals on every window focus.
+    // Why: focus covers occlusion-uncover with invalidate only — no setSize
+    // jiggle that would resize terminals on every window focus.
     const setSizeCalls = browserWindowInstance.setSize.mock.calls.length
     windowHandlers.get('focus')?.[0]?.()
     expect(webContents.invalidate).toHaveBeenCalledTimes(4)
-    expect(browserWindowInstance.setSize.mock.calls.length).toBe(setSizeCalls)
+    expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(setSizeCalls)
   })
 
   it('supports all minus key variants for terminal zoom out', () => {
