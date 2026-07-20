@@ -73,8 +73,7 @@ vi.mock('../ipc/pty', () => ({
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
-  setPtyOwnership: vi.fn(),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
+  setPtyOwnership: vi.fn()
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -152,7 +151,9 @@ describe('SshRelaySession', () => {
     expect(runtime.onPtyData).toHaveBeenCalledWith(
       'ssh-pty-1',
       'hidden ssh output',
-      expect.any(Number)
+      expect.any(Number),
+      'hidden ssh output'.length,
+      undefined
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
     // Why out-of-band: an in-band empty pty:data sentinel is ambiguous with
@@ -207,7 +208,8 @@ describe('SshRelaySession', () => {
 
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
       id: 'ssh-pty-1',
-      data: 'still delivered'
+      data: 'still delivered',
+      rawLength: 'still delivered'.length
     })
   })
 
@@ -424,7 +426,7 @@ describe('SshRelaySession', () => {
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
-  it('installs a native Windows Orca CLI bridge without POSIX shell commands', async () => {
+  it('compiles a native Windows Orca CLI bridge without a cmd.exe shim', async () => {
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -447,20 +449,20 @@ describe('SshRelaySession', () => {
 
     await session.establish(mockConn)
 
-    expect(execCommand).toHaveBeenCalledTimes(1)
+    expect(execCommand).toHaveBeenCalledTimes(2)
     expect(vi.mocked(execCommand).mock.calls[0]?.[1]).toContain('powershell.exe')
     expect(vi.mocked(execCommand).mock.calls[0]?.[2]).toEqual({ wrapCommand: false })
     expect(mockConn.writeFile).toHaveBeenCalledWith(
-      'C:/Users/me/.orca-relay/bin/orca.cmd',
-      expect.stringContaining('@echo off'),
+      'C:/Users/me/.orca-relay/bin/orca-launcher.cs',
+      expect.stringContaining('ProcessStartInfo'),
       { hostPlatform: getRemoteHostPlatform('win32-x64') }
     )
-    const shim = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
-    expect(shim).toContain('C:/Users/me/.orca-remote/relay-v1')
-    expect(shim).toContain('\\\\.\\pipe\\orca-relay-123')
-    expect(shim).not.toContain('if not exist "%ORCA_RELAY_SOCKET_PATH%"')
-    expect(shim).not.toContain('Orca SSH CLI bridge cannot find the relay socket')
-    expect(shim).not.toContain('#!/usr/bin/env sh')
+    const launcherSource = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
+    expect(launcherSource).toContain('ORCA_RELAY_SOCKET_PATH')
+    expect(launcherSource).not.toContain('cmd.exe')
+    expect(launcherSource).not.toContain('%*')
+    expect(vi.mocked(execCommand).mock.calls[1]?.[1]).toContain('powershell.exe')
+    expect(vi.mocked(execCommand).mock.calls[1]?.[2]).toEqual({ wrapCommand: false })
     expect(vi.mocked(execCommand).mock.calls.some(([, command]) => command.includes('chmod'))).toBe(
       false
     )

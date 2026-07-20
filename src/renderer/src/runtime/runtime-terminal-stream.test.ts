@@ -132,6 +132,60 @@ describe('remote runtime terminal data subscriptions', () => {
     expect(_getRemoteRuntimeTerminalMultiplexerCountForTest()).toBe(0)
   })
 
+  it('can start at the live tail without replaying the initial snapshot', async () => {
+    const watcher = vi.fn()
+    const subscription = subscribeToRuntimeTerminalData(
+      { activeRuntimeEnvironmentId: 'env-fallback' },
+      'remote:env-1@@terminal-1',
+      'watcher-1',
+      watcher,
+      { startAtLiveTail: true }
+    )
+
+    await vi.waitFor(() => expect(sendBinary).toHaveBeenCalled())
+    const subscribeFrame = decodeTerminalStreamFrame(sendBinary.mock.calls[0][0])
+    const subscribePayload =
+      subscribeFrame && decodeTerminalStreamJson<{ streamId: number }>(subscribeFrame.payload)
+    const streamId = subscribePayload!.streamId
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotStart,
+        streamId,
+        seq: 0,
+        payload: encodeTerminalStreamJson({ seq: 0 })
+      })
+    )
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotChunk,
+        streamId,
+        seq: 0,
+        payload: encodeTerminalStreamText('historical')
+      })
+    )
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotEnd,
+        streamId,
+        seq: 0,
+        payload: new Uint8Array()
+      })
+    )
+    const dispose = await subscription
+
+    expect(watcher).not.toHaveBeenCalled()
+    callbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId,
+        seq: 4,
+        payload: encodeTerminalStreamText('live')
+      })
+    )
+    expect(watcher).toHaveBeenCalledWith('live')
+    dispose()
+  })
+
   it('keeps the shared terminal multiplexer until the last watcher closes', async () => {
     const firstDispose = await subscribeToRuntimeTerminalData(
       { activeRuntimeEnvironmentId: 'env-fallback' },

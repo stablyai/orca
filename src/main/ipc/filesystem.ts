@@ -122,6 +122,9 @@ import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { registerLocalLogTailHandlers } from './local-log-tail'
 import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
+import { sanitizeLocalDownloadFilename } from '../local-download-filename'
+import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
+import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -147,9 +150,6 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
 }
-const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
-const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
-
 async function readLocalLogSnapshot(filePath: string): Promise<{
   content: string
   isBinary: boolean
@@ -191,18 +191,6 @@ function validateRequiredString(value: unknown, label: string): string {
   return value
 }
 
-function sanitizeSaveDialogFilename(remoteBasename: string): string {
-  const sanitized = Array.from(remoteBasename, (char) =>
-    char.charCodeAt(0) < 32 || LOCAL_FILENAME_REPLACEMENT_CHARS.has(char) ? '_' : char
-  )
-    .join('')
-    .replace(/[. ]+$/g, '')
-  if (!sanitized || WINDOWS_RESERVED_LOCAL_BASENAME.test(sanitized)) {
-    return 'download'
-  }
-  return sanitized
-}
-
 function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 'base64'): Buffer {
   if (encoding === 'base64') {
     return Buffer.from(content, 'base64')
@@ -222,6 +210,8 @@ type DownloadSession = {
 const DOWNLOAD_SESSION_TTL_MS = 30 * 60 * 1000
 
 function createSiblingTransferPath(destinationPath: string, suffix: string): string {
+  // Why: promotion uses rename/no-clobber operations that must stay on the
+  // destination volume, so transfer paths intentionally remain siblings.
   return join(dirname(destinationPath), `.${randomUUID()}.${suffix}`)
 }
 
@@ -640,7 +630,7 @@ export function registerFilesystemHandlers(
       }
 
       const remoteBasename = getRuntimePathBasename(filePath)
-      const defaultPath = sanitizeSaveDialogFilename(remoteBasename)
+      const defaultPath = sanitizeLocalDownloadFilename(remoteBasename)
       const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
       const dialogResult = parentWindow
         ? await dialog.showSaveDialog(parentWindow, { defaultPath })
@@ -666,13 +656,15 @@ export function registerFilesystemHandlers(
     }
   )
 
+  registerFilesystemDownloadFolderHandlers()
+
   ipcMain.handle(
     'fs:saveDownloadedFile',
     async (
       event,
       args: { suggestedName?: string; content?: string; encoding?: 'utf8' | 'base64' }
     ): Promise<DownloadFileResult> => {
-      const suggestedName = sanitizeSaveDialogFilename(
+      const suggestedName = sanitizeLocalDownloadFilename(
         validateRequiredString(args?.suggestedName, 'suggestedName')
       )
       if (typeof args?.content !== 'string') {
@@ -718,7 +710,7 @@ export function registerFilesystemHandlers(
           destinationPath: string
         }
     > => {
-      const suggestedName = sanitizeSaveDialogFilename(
+      const suggestedName = sanitizeLocalDownloadFilename(
         validateRequiredString(args?.suggestedName, 'suggestedName')
       )
       const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
@@ -1072,11 +1064,11 @@ export function registerFilesystemHandlers(
   // Why #7721: keyed by renderer-generated token so a workspace switch can
   // abort the previous workspace's full-tree scan (SSH relays otherwise stack
   // scans that starve interactive fs.readDir/fs.stat past their 30s timeout).
-  const listFilesCancellations = new Map<string, AbortController>()
+  const listFilesCancellations = createSenderScopedRequestCancellations()
   ipcMain.handle(
     'fs:listFiles',
     async (
-      _event,
+      event,
       args: {
         rootPath: string
         connectionId?: string
@@ -1084,10 +1076,7 @@ export function registerFilesystemHandlers(
         requestToken?: string
       }
     ): Promise<string[]> => {
-      const controller = args.requestToken ? new AbortController() : null
-      if (controller && args.requestToken) {
-        listFilesCancellations.set(args.requestToken, controller)
-      }
+      const controller = listFilesCancellations.begin(event, args.requestToken)
       try {
         if (args.connectionId) {
           const provider = getSshFilesystemProvider(args.connectionId)
@@ -1108,52 +1097,65 @@ export function registerFilesystemHandlers(
         }
         return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
       } finally {
-        if (args.requestToken) {
-          listFilesCancellations.delete(args.requestToken)
-        }
+        listFilesCancellations.finish(event, args.requestToken, controller)
       }
     }
   )
 
-  ipcMain.handle('fs:cancelListFiles', (_event, args: { requestToken: string }): void => {
-    // Why: best-effort — the entry is gone once the listing settles.
-    listFilesCancellations.get(args.requestToken)?.abort()
+  ipcMain.handle('fs:cancelListFiles', (event, args: { requestToken: string }): void => {
+    listFilesCancellations.cancel(event, args.requestToken)
   })
 
   // ─── Git operations ─────────────────────────────────────
+  const gitStatusCancellations = createSenderScopedRequestCancellations()
   ipcMain.handle(
     'git:status',
     async (
-      _event,
+      event,
       args: {
         worktreePath: string
         connectionId?: string
         includeIgnored?: boolean
         bypassEffectiveUpstreamNegativeCache?: boolean
+        reuseLineStats?: boolean
+        requestToken?: string
       }
     ): Promise<GitStatusResult> => {
+      const controller = gitStatusCancellations.begin(event, args.requestToken)
       const options = {
         includeIgnored: args.includeIgnored ?? false,
+        ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(args.bypassEffectiveUpstreamNegativeCache === true
           ? { bypassEffectiveUpstreamNegativeCache: true }
-          : {})
+          : {}),
+        ...(controller ? { signal: controller.signal } : {})
       }
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      try {
+        if (args.connectionId) {
+          const provider = getSshGitProvider(args.connectionId)
+          if (!provider) {
+            throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+          }
+          // Why: awaiting here keeps the cancellation token registered until
+          // the remote request settles instead of running finally immediately.
+          return await provider.getStatus(args.worktreePath, options)
         }
-        return provider.getStatus(args.worktreePath, options)
+        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+          store,
+          args.worktreePath,
+          worktreePath
+        )
+        return await getStatus(worktreePath, { ...options, ...gitOptions })
+      } finally {
+        gitStatusCancellations.finish(event, args.requestToken, controller)
       }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
-      return getStatus(worktreePath, { ...options, ...gitOptions })
     }
   )
+
+  ipcMain.handle('git:cancelStatus', (event, args: { requestToken: string }): void => {
+    gitStatusCancellations.cancel(event, args.requestToken)
+  })
 
   // Why: the parent status only reports one gitlink row per submodule. When the
   // user expands a dirty submodule, this fetches the inner per-file changes by

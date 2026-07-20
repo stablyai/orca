@@ -1034,7 +1034,7 @@ export default function GitLabItemDialog({
                     <StateBadge state={item.state} />
                     {item.author ? (
                       <span>
-                        {translate('auto.components.GitLabItemDialog.9bfb4a24d7', 'by')}
+                        {translate('auto.components.GitLabItemDialog.9bfb4a24d7', 'by')}{' '}
                         {item.author}
                       </span>
                     ) : null}
@@ -1521,7 +1521,7 @@ export default function GitLabItemDialog({
                                       {translate(
                                         'auto.components.GitLabItemDialog.a7eb4f4916',
                                         'from'
-                                      )}
+                                      )}{' '}
                                       {file.oldPath}
                                     </div>
                                   ) : null}

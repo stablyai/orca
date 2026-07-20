@@ -1,6 +1,6 @@
 /**
- * Phase 5 slice 2 (docs/reference/terminal-query-authority.md §View-attribute
- * bridge): OSC 4/10/11/12 and DSR ?996n responder handlers for the runtime
+ * Phase 5 slice 2 (View-attribute bridge): OSC 4/10/11/12 and DSR ?996n
+ * responder handlers for the runtime
  * headless emulator. The headless xterm core has no theme service, so these
  * handlers compute replies from the renderer's pushed attribute snapshot,
  * with per-PTY OSC SET mutations layered on top — mirroring exactly what the

@@ -33,6 +33,11 @@ type SessionApi = {
   setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
 }
 
+type DurableSessionApi = SessionApi & {
+  set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
+  flush: () => Promise<void>
+}
+
 export type WorkspaceSessionHostRead = {
   session: WorkspaceSessionState
   runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
@@ -221,6 +226,23 @@ export function patchWorkspaceSessionByHost(
     })
   }
   return localWrite
+}
+
+/** Persist a fresh full snapshot to every owning host partition, then force the
+ * main store to disk. Used by request/reply lifecycle operations whose success
+ * receipt is a durability boundary rather than a debounced UI update. */
+export async function persistWorkspaceSessionByHost(
+  api: DurableSessionApi,
+  payload: WorkspaceSessionState,
+  state: HostPersistenceState
+): Promise<void> {
+  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
+  const writes: Promise<void>[] = [api.set(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)]
+  for (const [hostId, slice] of nonLocalEntries(slices)) {
+    writes.push(api.set(slice, hostId))
+  }
+  await Promise.all(writes)
+  await api.flush()
 }
 
 /** Synchronous full-session split for the beforeunload / quit paths. */

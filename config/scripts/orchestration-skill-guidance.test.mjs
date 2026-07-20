@@ -144,23 +144,22 @@ describe('orchestration skill guidance', () => {
       'Sidebar lineage and orchestration lifecycle are related but not identical.'
     )
     expect(workerTerminals).toContain(
-      'A same-worktree worker created with `orca terminal create --worktree active` may appear as a peer terminal/agent'
+      'A same-worktree worker may appear as a peer under that worktree in the sidebar'
+    )
+    expect(workerTerminals).toContain('while remaining a child dispatch in orchestration state')
+    expect(workerTerminals).toContain(
+      'only an actual child worktree creates visible parent/child worktree lineage'
     )
     expect(workerTerminals).toContain(
-      'even though it is a child dispatch in Orca orchestration state'
+      'Create a new worktree only when the user explicitly requests one or a concrete checkout or filesystem conflict makes sharing unsafe or impossible'
     )
     expect(workerTerminals).toContain(
-      'A visible parent/child worktree relationship requires creating a child worktree'
+      'Independent tasks, parallel execution, convenience, or a preference for separate checkouts are not isolation requirements.'
     )
     expect(workerTerminals).toContain(
-      'only when the task can safely run from an isolated checkout and does not need uncommitted artifacts from the current working tree'
+      'When a new worktree is allowed, use child lineage for isolated work that is stacked under or dependent on the active worktree'
     )
-    expect(workerTerminals).toContain(
-      'For supervised new-worktree workers, decide the desired Orca lineage before creation'
-    )
-    expect(workerTerminals).toContain(
-      'use `--no-parent` for independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks'
-    )
+    expect(workerTerminals).toContain('use `--no-parent` when it is not stacked')
   })
 
   it('keeps review-only completions and named next-owner fixes in their lanes', () => {
@@ -213,7 +212,7 @@ describe('orchestration skill guidance', () => {
       /```bash\norca worktree create --name <task-name> --agent codex --json\n[\s\S]*?```/
     )?.[0]
 
-    expect(workerTerminals).toContain('Agent-first (required for ordinary agent workers)')
+    expect(workerTerminals).toContain('For an allowed new worktree, use agent-first:')
     expect(workerTerminals).toContain('fallback shell + agent pair')
     expect(workerTerminals).toContain(
       'Repo setup or default-terminal settings may still add tabs or splits'

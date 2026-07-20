@@ -8,12 +8,15 @@ import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
+  advancedNativeChatUserTexts,
   assignNativeChatPendingOccurrence,
   matchingNativeChatUserContentCounts,
+  matchingNativeChatUserTexts,
   nativeChatPendingContentKey,
   nativeChatPendingMatchKey,
   nativeChatPendingMatchingAfter,
-  nativeChatPendingOccurrence
+  nativeChatPendingOccurrence,
+  selectPendingIndicesRepresentedByUserTexts
 } from './native-chat-pending-occurrence'
 
 /** An optimistic, not-yet-confirmed composer send. */
@@ -133,7 +136,7 @@ export function prunePendingSends(
     return pending
   }
   const consumed = new Map<string, number>()
-  const next = pending.filter((entry) => {
+  const exactKeep = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const available =
@@ -143,10 +146,22 @@ export function prunePendingSends(
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
-    if (occurrence > available) {
-      return true
+    return occurrence > available
+  })
+  // Why: when rapid body writes glued two optimistic sends into one transcript
+  // user row ("joke"+"continue"→"jokecontinue"), exact keys never match. Drop
+  // those echoes once an assistant turn advances past the glued user text.
+  const stillOpen = pending.filter((_, index) => exactKeep[index])
+  const gluedRepresented = selectPendingIndicesRepresentedByUserTexts(
+    stillOpen,
+    advancedNativeChatUserTexts(messages)
+  )
+  const next = pending.filter((entry, index) => {
+    if (!exactKeep[index]) {
+      return false
     }
-    return false
+    const openIndex = stillOpen.indexOf(entry)
+    return openIndex < 0 || !gluedRepresented.has(openIndex)
   })
   return next.length === pending.length ? pending : next
 }
@@ -162,21 +177,32 @@ export function pendingSendsAsMessages(
   existingMessages: NativeChatMessage[] = []
 ): NativeChatMessage[] {
   const consumed = new Map<string, number>()
+  const exactVisible = pending.map((entry) => {
+    const contentKey = nativeChatPendingContentKey(entry)
+    const key = nativeChatPendingMatchKey(entry)
+    const represented =
+      matchingNativeChatUserContentCounts(
+        messagesAfterPendingBoundary(existingMessages, entry)
+      ).get(contentKey) ?? 0
+    const used = consumed.get(key) ?? 0
+    const occurrence = nativeChatPendingOccurrence(entry, used)
+    consumed.set(key, Math.max(used, occurrence))
+    return occurrence > represented
+  })
+  // Hide optimistic echoes that were glued into a single transcript user row
+  // even before the assistant reply lands (matching, not advanced).
+  const stillVisible = pending.filter((_, index) => exactVisible[index])
+  const gluedRepresented = selectPendingIndicesRepresentedByUserTexts(
+    stillVisible,
+    matchingNativeChatUserTexts(existingMessages)
+  )
   return pending
-    .filter((entry) => {
-      const contentKey = nativeChatPendingContentKey(entry)
-      const key = nativeChatPendingMatchKey(entry)
-      const represented =
-        matchingNativeChatUserContentCounts(
-          messagesAfterPendingBoundary(existingMessages, entry)
-        ).get(contentKey) ?? 0
-      const used = consumed.get(key) ?? 0
-      const occurrence = nativeChatPendingOccurrence(entry, used)
-      consumed.set(key, Math.max(used, occurrence))
-      if (occurrence > represented) {
-        return true
+    .filter((entry, index) => {
+      if (!exactVisible[index]) {
+        return false
       }
-      return false
+      const openIndex = stillVisible.indexOf(entry)
+      return openIndex < 0 || !gluedRepresented.has(openIndex)
     })
     .map((entry) => ({
       id: `pending:${entry.id}`,

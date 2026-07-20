@@ -34,7 +34,10 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
   const onError = vi.fn()
   const channel = new E2EEChannel(ws as unknown as WebSocket, {
     serverSecretKey: serverKeys.secretKey,
-    validateToken: (token) => token === 'valid-token',
+    resolveAuthenticatedDevice: (token) =>
+      token === 'valid-token'
+        ? { deviceId: 'device-1', deviceToken: token, scope: 'mobile' }
+        : null,
     onReady: vi.fn(),
     onError,
     ...overrides

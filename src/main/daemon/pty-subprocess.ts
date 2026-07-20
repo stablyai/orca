@@ -34,7 +34,12 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
-import { getWslContextFromSessionId } from './wsl-session-context'
+import {
+  gitCredentialPromptGuardEnv,
+  mergeGitConfigEnvProtocol
+} from '../../shared/git-credential-prompt-env'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
+import { resolveWslSessionContext } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
@@ -58,6 +63,8 @@ import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import type { TuiAgent } from '../../shared/types'
+import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -82,6 +89,22 @@ const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
+function composeGuardedDaemonGitConfigEnv(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined,
+  launchAgent: TuiAgent | undefined
+): void {
+  const policy = explicitEnv?.[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
+  delete env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
+  if (policy !== 'guard' && launchAgent === undefined) {
+    return
+  }
+  // Why: the daemon can outlive Electron, so only its process.env is the
+  // authoritative inherited config. The raw env merge already gives an
+  // explicit wire protocol normal override semantics; append only the guard.
+  Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
+}
+
 export type PtySubprocessOptions = {
   sessionId: string
   cols: number
@@ -91,6 +114,7 @@ export type PtySubprocessOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
+  launchAgent?: TuiAgent
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
@@ -151,16 +175,6 @@ function removeInheritedDevAgentHookEndpoint(
     // needed by hooks whose runners scrub token-like env vars before exec.
     delete env.ORCA_AGENT_HOOK_ENDPOINT
   }
-}
-
-/**
- * Resolves a WSL launch context from a user-selected distro name.
- */
-function getWslContextFromPreferredDistro(
-  distro: string | null | undefined
-): { distro: string } | undefined {
-  const trimmed = distro?.trim()
-  return trimmed ? { distro: trimmed } : undefined
 }
 
 /**
@@ -543,8 +557,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
-    ...process.env,
-    ...opts.env,
+    ...mergeGitConfigEnvProtocol(process.env, opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
@@ -561,6 +574,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   for (const key of opts.envToDelete ?? []) {
     delete env[key]
   }
@@ -581,18 +595,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // setting, relayed by main) takes priority over env.COMSPEC — otherwise
   // Windows always resolves to cmd.exe (COMSPEC) or PowerShell by fallback,
   // no matter which shell the user actually picked.
-  const cwdWslInfo = process.platform === 'win32' ? parseWslPath(opts.cwd ?? '') : null
-  const sessionWslContext =
-    process.platform === 'win32' ? getWslContextFromSessionId(opts.sessionId) : undefined
-  const preferredWslContext =
-    process.platform === 'win32'
-      ? getWslContextFromPreferredDistro(opts.terminalWindowsWslDistro)
-      : undefined
+  const resolvedWslContext = resolveWslSessionContext(opts)
   // Why: WSL worktree cwd is the repo's execution environment. Older persisted
   // tabs can carry a PowerShell/cmd shellOverride; ignore it so reconnects and
   // daemon-backed terminals enter the WSL distro just like LocalPtyProvider.
-  let shellPath =
-    cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
+  let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
@@ -648,7 +655,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellPath,
       cwd: spawnCwd,
       defaultCwd: getDefaultCwd(),
-      wslContext: sessionWslContext ?? preferredWslContext,
+      wslContext: resolvedWslContext,
       startupCommand: opts.command
     })
     const primaryAttempt = windowsFallbackAttempts[0]
@@ -663,7 +670,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         shellPath,
         spawnCwd,
         getDefaultCwd(),
-        sessionWslContext ?? preferredWslContext,
+        resolvedWslContext,
         opts.command
       )
       shellArgs = resolved.shellArgs
@@ -679,8 +686,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       if (codexHomeWslInfo) {
-        const launchWslDistro =
-          cwdWslInfo?.distro ?? sessionWslContext?.distro ?? preferredWslContext?.distro
+        const launchWslDistro = resolvedWslContext?.distro
         if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
           delete env.CODEX_HOME
           delete env.ORCA_CODEX_HOME
@@ -959,38 +965,59 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: daemon foreground reads are sync and run on the IPC hot path.
     // Refresh derived identities (shell/wrapper/helper -> codex/claude/etc.)
     // in the background and serve them from a short cache on later reads.
+    // Why: Windows may need an async membership check before this shared
+    // shell/wrapper retirement policy is safe to apply.
+    const retireStaleForegroundIdentity = (): void => {
+      const currentFallbackProcess = getFallbackForegroundProcess()
+      if (
+        fallbackIsShell &&
+        !getActiveStartupAgentForeground() &&
+        currentFallbackProcess !== null &&
+        isShellProcess(currentFallbackProcess)
+      ) {
+        cachedAgentForeground = null
+        startupAgentForeground = null
+      } else if (
+        cachedAgentForeground !== null &&
+        Date.now() - cachedAgentForeground.refreshedAt > FOREGROUND_AGENT_CACHE_TTL_MS &&
+        currentFallbackProcess !== null &&
+        isAgentForegroundWrapperProcess(currentFallbackProcess)
+      ) {
+        // Why: the wrapper's tree no longer resolves to an agent — an expired
+        // identity must not transfer to an unrelated wrapper (e.g. npm right
+        // after an agent exit). Fresh identities survive one-off scan hiccups.
+        cachedAgentForeground = null
+      }
+    }
     void resolveAgentForegroundProcessWithAvailability(proc.pid, fallbackProcess, {
       contextPaths: agentForegroundContextPaths
     })
-      .then(({ processName }) => {
+      .then<string | void>(({ processName, available }) => {
         if (dead) {
           return
         }
+        // Why: a degraded scan is not exit evidence; retiring here fires false
+        // completion while an agent is still working under CIM load.
+        if (!available) {
+          return
+        }
         if (!processName || !recognizeAgentProcess(processName)) {
-          const currentFallbackProcess = getFallbackForegroundProcess()
-          if (
-            fallbackIsShell &&
-            !getActiveStartupAgentForeground() &&
-            currentFallbackProcess !== null &&
-            isShellProcess(currentFallbackProcess)
-          ) {
-            cachedAgentForeground = null
-            startupAgentForeground = null
-          } else if (
-            cachedAgentForeground !== null &&
-            Date.now() - cachedAgentForeground.refreshedAt > FOREGROUND_AGENT_CACHE_TTL_MS &&
-            currentFallbackProcess !== null &&
-            isAgentForegroundWrapperProcess(currentFallbackProcess)
-          ) {
-            // Why: the wrapper's tree no longer resolves to an agent — an expired
-            // identity must not transfer to an unrelated wrapper (e.g. npm right
-            // after an agent exit). Fresh identities survive one-off scan hiccups.
-            cachedAgentForeground = null
+          // Why: a Windows snapshot can omit a live agent; only verified
+          // shell-only membership may retire its cached identity.
+          if (process.platform === 'win32' && fallbackIsShell && cachedAgentForeground !== null) {
+            return readWindowsConptyProcessIds(proc.pid).then((consoleProcessIds) => {
+              if (dead || consoleProcessIds === null || consoleProcessIds.size > 1) {
+                return
+              }
+              retireStaleForegroundIdentity()
+            })
           }
+          retireStaleForegroundIdentity()
           return
         }
         cachedAgentForeground = { processName, refreshedAt: Date.now() }
         startupAgentForeground = null
+        return processName
       })
       .catch(() => {
         // Best-effort only: foreground enrichment must never affect PTY health.
@@ -1045,14 +1072,18 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           return cachedAgentForeground.processName
         }
         // Why: a wrapper foreground (node/python) can never identify itself, and
-        // readers poll slower than the cache TTL — returning the raw wrapper here
+        // readers poll slower than the cache TTL — returning the raw fallback here
         // would hide the resolved identity forever. Serve the last resolved agent
-        // while the scheduled refresh revalidates; exit truth is safe because an
-        // exited agent's foreground falls back to the shell, not a wrapper.
+        // while the scheduled refresh revalidates. On Windows a shell fallback is
+        // also an unreliable exit signal (ConPTY lag under load surfaces the shell
+        // while the agent is alive), so trust the cache there too; the background
+        // refresh retires the identity only after a console-presence read confirms
+        // the agent left the console.
         if (
           cachedAgentForeground &&
           fallbackProcess !== null &&
-          isAgentForegroundWrapperProcess(fallbackProcess)
+          (isAgentForegroundWrapperProcess(fallbackProcess) ||
+            (process.platform === 'win32' && isShellProcess(fallbackProcess)))
         ) {
           return cachedAgentForeground.processName
         }
@@ -1176,11 +1207,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       if (dead) {
         return
       }
+      nodePtyKillIssued = true
       try {
-        nodePtyKillIssued = true
         proc.kill()
-      } catch {
-        dead = true
+      } catch (error) {
+        // Why: a rejected native kill is not proof of exit. Keep the wrapper
+        // live and let Session retain/retry the physical owner.
+        nodePtyKillIssued = false
+        throw error
       }
     },
     forceKill: () => {
@@ -1194,13 +1228,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return
       }
       try {
-        process.kill(proc.pid, 'SIGKILL')
-      } catch {
+        forceKillPosixPtyProcessGroups(proc.pid, () => {
+          process.kill(proc.pid, 'SIGKILL')
+        })
+      } catch (signalError) {
         try {
-          nodePtyKillIssued = true
           proc.kill()
+          nodePtyKillIssued = true
         } catch {
-          // Process may already be dead
+          nodePtyKillIssued = false
+          // Keep the original OS failure so callers can retry the same owner.
+          throw signalError
         }
       }
     },

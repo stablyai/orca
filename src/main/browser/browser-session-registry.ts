@@ -551,6 +551,7 @@ class BrowserSessionRegistry {
     }
 
     const sess = session.fromPartition(partition)
+    browserManager.installCertificateRequestGuard(sess)
     if (typeof sess.getUserAgent === 'function') {
       const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
       sess.setUserAgent(cleanUA)
@@ -622,6 +623,7 @@ class BrowserSessionRegistry {
     // Electron Session object survives; clear policy callbacks and listener
     // bookkeeping so removed profiles do not leave retained closures behind.
     this.configuredPartitions.delete(partition)
+    browserManager.removeCertificateRequestGuard(sess)
     sess.removeListener('will-download', this.handleWillDownload)
     clearBrowserWebAuthnAccessHandlers(sess)
     sess.setPermissionRequestHandler(null)

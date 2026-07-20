@@ -283,9 +283,8 @@ async function runAutoRename(
   const username = provider
     ? (await getSshGitUsername(provider, repo.path)) || null
     : (await resolveLocalGitUsername(repo.path)) || null
-  // The model is told not to add a prefix, but sometimes echoes the configured
-  // one (e.g. `tmchow/...`); strip it so it doesn't double-prefix the branch or
-  // leak into the display name.
+  // The model sometimes echoes the configured prefix (e.g. `tmchow/...`); strip
+  // it so it doesn't double-prefix the branch or leak into the display name.
   const slug = stripConfiguredBranchPrefix(
     generated.slug,
     getConfiguredBranchPrefix(settings, username)

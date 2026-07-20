@@ -10,6 +10,10 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type {
+  TerminalTabCloseRequest,
+  TerminalTabCloseResponse
+} from '../shared/terminal-tab-close'
+import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
@@ -17,6 +21,12 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type {
+  WriteTerminalRenderDesyncEvidenceArgs,
+  WriteTerminalRenderDesyncEvidenceResult
+} from '../shared/terminal-render-desync-evidence'
+import type { MobileRelayStatus } from '../shared/mobile-relay-status'
+import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -61,6 +71,8 @@ import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
   BrowserCookieImportResult,
+  BrowserCertificateFailure,
+  BrowserCertificateProceedResult,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
@@ -292,10 +304,12 @@ import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
+  AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
+import type { AgentQuestionAnsweredInferenceRequest } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
   RuntimeBrowserDriverState,
@@ -315,6 +329,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-c
 import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
+import type { SkillFreshnessInventory } from '../shared/skill-freshness'
 import type {
   CrashReportBreadcrumbData,
   CrashReportCopyDiagnosticsArgs,
@@ -418,7 +433,11 @@ import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
 } from '../shared/ai-vault-types'
-import type { AgentType, NativeChatMessage } from '../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../shared/native-chat-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -472,7 +491,7 @@ export type BrowserApi = {
     worktreeId: string
     sessionProfileId?: string | null
     webContentsId: number
-  }) => Promise<void>
+  }) => Promise<boolean>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
@@ -483,6 +502,13 @@ export type BrowserApi = {
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
+  onCertificateFailureChanged: (
+    callback: (event: { browserPageId: string; failure: BrowserCertificateFailure | null }) => void
+  ) => () => void
+  proceedCertificate: (args: {
+    browserPageId: string
+    challengeId: string
+  }) => Promise<BrowserCertificateProceedResult>
   onPermissionDenied: (callback: (event: BrowserPermissionDeniedEvent) => void) => () => void
   onPopup: (callback: (event: BrowserPopupEvent) => void) => () => void
   onDownloadRequested: (callback: (event: BrowserDownloadRequestedEvent) => void) => () => void
@@ -667,7 +693,11 @@ export type PtyManagementApi = {
   // `degraded` is true when the daemon is alive but cannot spawn fresh PTYs, so
   // new terminals run on the local provider without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
-  killAll: () => Promise<{ killedCount: number; remainingCount: number }>
+  killAll: () => Promise<{
+    killedCount: number
+    remainingCount: number
+    killedSessionIds?: string[]
+  }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>
 }
@@ -816,16 +846,39 @@ export type AiVaultApi = {
 // notFound marks a miss caused by the transcript not existing on disk yet
 // (retry-worthy), as opposed to a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
-  | { messages: NativeChatMessage[] }
+  | {
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+    }
   | { error: string; notFound?: true }
 
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
+export type NativeChatSubscriptionFrame =
+  | {
+      type: 'snapshot'
+      messages: NativeChatMessage[]
+      hasMore: boolean
+      error?: string
+      lifecycle?: NativeChatTurnLifecycle
+    }
+  | {
+      type: 'replacement'
+      messages: NativeChatMessage[]
+      hasMore: boolean
+      lifecycle?: NativeChatTurnLifecycle
+    }
+  | {
+      type: 'appended'
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+    }
+
 /** Wire payload for the `nativeChat:appended` push channel. */
 export type NativeChatAppendedPayload = {
   subscriptionId: string
-  messages: NativeChatAppendedMessages
+  frame: NativeChatSubscriptionFrame
 }
 
 export type NativeChatSubscribeArgs = {
@@ -836,6 +889,8 @@ export type NativeChatSubscribeArgs = {
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  /** First snapshot size; later readSession calls grow this for pagination. */
+  limit?: number
 }
 
 export type NativeChatApi = {
@@ -849,11 +904,11 @@ export type NativeChatApi = {
     limit?: number,
     transcriptPath?: string
   ) => Promise<NativeChatReadSessionResult>
-  /** Live-tail a transcript: `onAppended` fires with only newly-appended
-   *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
+  /** Live-tail a transcript. The first frame is a bounded race-safe snapshot;
+   *  later frames contain only newly appended messages. */
   subscribe: (
     args: NativeChatSubscribeArgs,
-    onAppended: (messages: NativeChatAppendedMessages) => void
+    onFrame: (frame: NativeChatSubscriptionFrame) => void
   ) => () => void
 }
 
@@ -898,6 +953,10 @@ export type AppApi = {
   /** Opens a native directory picker and authorizes the selected directory
    *  for Floating Workspace markdown file creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
+  /** Persists flag-gated terminal render evidence under app-owned userData. */
+  writeTerminalRenderDesyncEvidence: (
+    args: WriteTerminalRenderDesyncEvidenceArgs
+  ) => Promise<WriteTerminalRenderDesyncEvidenceResult>
 }
 
 export type PreloadApi = {
@@ -958,6 +1017,10 @@ export type PreloadApi = {
     // other hosts (local or a re-added SSH target) intact.
     removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
     reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
+    reorderForHost: (args: {
+      orderedIds: string[]
+      hostId: string
+    }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
       updates: Partial<
@@ -1014,12 +1077,21 @@ export type PreloadApi = {
     getDefaultCreateProjectParent: () => Promise<string>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
-    getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
-    searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
+    getBaseRefDefault: (args: {
+      repoId: string
+      hostId?: ExecutionHostId
+    }) => Promise<BaseRefDefaultResult>
+    searchBaseRefs: (args: {
+      repoId: string
+      query: string
+      limit?: number
+      hostId?: ExecutionHostId
+    }) => Promise<string[]>
     searchBaseRefDetails: (args: {
       repoId: string
       query: string
       limit?: number
+      hostId?: ExecutionHostId
     }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
   }
@@ -1262,7 +1334,7 @@ export type PreloadApi = {
       isAlternateScreen?: boolean
       replay?: string
       sessionExpired?: boolean
-      coldRestore?: { scrollback: string; cwd: string }
+      coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
       startupCwdFallback?: { kind: 'worktree'; cwd: string }
     }>
     write: (id: string, data: string) => void
@@ -1308,6 +1380,9 @@ export type PreloadApi = {
     getCwd: (id: string) => Promise<string>
     getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
+    getAuthoritativeBufferSnapshotCapabilities?: (
+      ids: string[]
+    ) => { id: string; authoritative: boolean | null }[]
     hasPty: (id: string) => Promise<boolean | null>
     getMainBufferSnapshot: (
       id: string,
@@ -1364,6 +1439,7 @@ export type PreloadApi = {
         data: string
         seq?: number
         rawLength?: number
+        transformed?: boolean
         background?: boolean
         droppedOutput?: boolean
       }) => void
@@ -1374,7 +1450,7 @@ export type PreloadApi = {
      *  the model snapshot. Never delivered in-band on pty:data. */
     onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void) => () => void
     /** Batched derived side-effect facts for PTYs whose bytes transit local
-     *  main; see docs/reference/terminal-side-effect-authority.md. */
+     *  main. */
     onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void) => () => void
     /** Title-only replay snapshot for (re)attach; attention facts never replay. */
     getSideEffectSnapshot: (id: string) => Promise<TerminalSideEffectBatch | null>
@@ -1389,11 +1465,18 @@ export type PreloadApi = {
     onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
     sendSerializedBuffer: (
       requestId: string,
-      snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
+      snapshot: {
+        data: string
+        cols: number
+        rows: number
+        seq?: number
+        lastTitle?: string
+      } | null
     ) => void
     declarePendingPaneSerializer: (paneKey: string) => Promise<number>
     settlePaneSerializer: (paneKey: string, gen: number) => Promise<void>
     clearPendingPaneSerializer: (paneKey: string, gen: number) => Promise<void>
+    reportRendererSerializerReady?: (ptyId: string) => Promise<void>
     management: PtyManagementApi
   }
   feedback: {
@@ -1511,7 +1594,7 @@ export type PreloadApi = {
       repoId?: string
       limit?: number
       query?: string
-      before?: string
+      page?: number
       noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (
@@ -1974,6 +2057,7 @@ export type PreloadApi = {
       siteUrl: string
       email: string
       apiToken: string
+      authType?: 'cloud' | 'server'
     }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
     disconnect: (args?: { siteId?: string }) => Promise<void>
     selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
@@ -2214,6 +2298,7 @@ export type PreloadApi = {
   }
   skills: {
     discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
+    freshnessInventory: () => Promise<SkillFreshnessInventory>
   }
   pet: {
     import: () => Promise<CustomPet | null>
@@ -2236,7 +2321,7 @@ export type PreloadApi = {
       worktreePath: string
       command: string
     }) => Promise<WorktreeSetupLaunch>
-    readIssueCommand: (args: { repoId: string }) => Promise<{
+    readIssueCommand: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
       status?: 'ok' | 'error'
       localContent: string | null
       sharedContent: string | null
@@ -2244,7 +2329,11 @@ export type PreloadApi = {
       localFilePath: string
       source: 'local' | 'shared' | 'none'
     }>
-    writeIssueCommand: (args: { repoId: string; content: string }) => Promise<void>
+    writeIssueCommand: (args: {
+      repoId: string
+      content: string
+      hostId?: ExecutionHostId
+    }) => Promise<void>
   }
   ephemeralVm: {
     listRecipes: (args: { repoId: string }) => Promise<{
@@ -2328,6 +2417,7 @@ export type PreloadApi = {
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
     setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
@@ -2388,6 +2478,10 @@ export type PreloadApi = {
     onLocalLogTailChanged: (callback: (payload: LocalLogTailChangedPayload) => void) => () => void
     downloadFile: (args: {
       filePath: string
+      connectionId: string
+    }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
+    downloadFolder: (args: {
+      dirPath: string
       connectionId: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     saveDownloadedFile: (args: {
@@ -2512,7 +2606,10 @@ export type PreloadApi = {
       connectionId?: string
       includeIgnored?: boolean
       bypassEffectiveUpstreamNegativeCache?: boolean
+      reuseLineStats?: boolean
+      requestToken?: string
     }) => Promise<GitStatusResult>
+    cancelStatus: (args: { requestToken: string }) => Promise<void>
     submoduleStatus: (args: {
       worktreePath: string
       submodulePath: string
@@ -2716,6 +2813,8 @@ export type PreloadApi = {
     recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
     onOpenSettings: (callback: () => void) => () => void
+    /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
+    consumePendingOpenSettings: () => Promise<boolean>
     onOpenSetupGuide: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void
@@ -2815,6 +2914,9 @@ export type PreloadApi = {
     onRequestTerminalCreate: (
       callback: (data: RuntimeTerminalCreateRequestPayload) => void
     ) => () => void
+    onRequestTerminalTabMount: (
+      callback: (data: { worktreeId: string; tabId?: string; ptyId?: string }) => void
+    ) => () => void
     replyTerminalCreate: (reply: {
       requestId: string
       tabId?: string
@@ -2876,6 +2978,8 @@ export type PreloadApi = {
     onCloseTerminal: (
       callback: (data: { tabId: string; paneRuntimeId?: number }) => void
     ) => () => void
+    onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
+    respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
     onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
@@ -3109,11 +3213,14 @@ export type PreloadApi = {
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */
     onSet: (callback: (data: AgentStatusIpcPayload) => void) => () => void
-    /** Listen for main-process pane teardown that evicted a cached hook status. */
-    onClear: (callback: (data: { paneKey: string }) => void) => () => void
+    /** Listen for main-process cleanup that evicted cached hook status. */
+    onClear: (callback: (data: AgentStatusClearIpcPayload) => void) => () => void
     /** Return the current main-process hook cache after renderer hydration. */
     getSnapshot: () => Promise<AgentStatusIpcPayload[]>
     inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
+    /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no
+     *  hook at answer time, so the renderer reports the submit keystroke. */
+    inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest) => Promise<boolean>
     /** Listen for PTYs that still use a legacy numeric pane key but have
      *  registry-backed UUID pane proof. */
     onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
@@ -3125,12 +3232,24 @@ export type PreloadApi = {
     /** Drop every cached hook status under one terminal tab prefix.
      *  Fire-and-forget. */
     dropByTabPrefix: (tabId: string) => void
+    /** Permanently retire one pane's hook authority while siblings stay live. */
+    retirePaneAuthority: (paneKey: string) => void
+    /** Move hook authority when a live pane is detached into another tab. */
+    transferPaneAuthority: (args: {
+      fromPaneKey: string
+      toPaneKey: string
+      ptyId?: string
+    }) => void
   }
   mobile: {
     listNetworkInterfaces: () => Promise<{
       interfaces: { name: string; address: string }[]
     }>
-    getPairingQR: (args?: { address?: string; rotate?: boolean }) => Promise<
+    getPairingQR: (args?: {
+      address?: string
+      connectionMode?: MobilePairingConnectionMode
+      rotate?: boolean
+    }) => Promise<
       | { available: false }
       | {
           available: true
@@ -3138,6 +3257,9 @@ export type PreloadApi = {
           pairingUrl: string
           endpoint: string
           deviceId: string
+          /** Mode the QR actually encodes; 'local-only' when an automatic
+           *  request degraded because Relay could not be attached. */
+          connectionMode: MobilePairingConnectionMode
         }
     >
     getWindowsFirewallStatus: (args?: { address?: string }) => Promise<
@@ -3146,6 +3268,7 @@ export type PreloadApi = {
           supported: true
           port: number
           ruleAllowed: boolean
+          blockingRuleDetected: boolean
           privateFirewallEnabled: boolean
           networkCategory: 'private' | 'public' | 'domain' | 'unknown'
           inspectionAvailable: boolean
@@ -3172,6 +3295,8 @@ export type PreloadApi = {
     listRuntimeAccessGrants: () => Promise<{ grants: RuntimeAccessGrant[] }>
     revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
     isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
+    getRelayStatus: () => Promise<{ status: MobileRelayStatus }>
+    onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void) => () => void
   }
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>

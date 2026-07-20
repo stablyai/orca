@@ -13,6 +13,7 @@ import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
+import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
@@ -55,6 +56,7 @@ export function createPaneDOM(
   // line) escapes to window.onerror and gets the renderer killed. Guard every
   // provider registered after this point — addon-internal and Orca's own.
   installGuardedLinkProviderRegistration(terminal)
+  installWindowsCtrlAltChordRepair(terminal)
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()

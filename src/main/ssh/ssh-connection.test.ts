@@ -23,6 +23,7 @@ type MockSshClient = {
   lastExecCommand?: string
   lastConnectConfig?: unknown
   exec: (cmd: string, cb: (err: Error | undefined, channel: unknown) => void) => void
+  sftp: (cb: (err: Error | undefined, channel: unknown) => void) => void
 }
 let clientInstances: MockSshClient[] = []
 
@@ -304,6 +305,7 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(conn.getState().status).toBe('connected')
+    expect(conn.getState().supportsFolderDownload).toBe(true)
     expect(callbacks.onStateChange).toHaveBeenCalledWith(
       'target-1',
       expect.objectContaining({ status: 'connected' })
@@ -657,15 +659,19 @@ describe('SshConnection', () => {
     }
   })
 
-  it('wraps exec commands in /bin/sh so non-POSIX login shells do not parse relay snippets', async () => {
+  it('wraps exec commands as a single line that csh/tcsh login shells cannot break', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
 
-    await conn.exec("cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)")
+    const original = "cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)"
+    await conn.exec(original)
 
-    expect(clientInstances[0].lastExecCommand).toBe(
-      "exec /bin/sh -c 'cd '\\''/tmp'\\'' && ('\\''/usr/bin/node'\\'' -e '\\''console.log(1)'\\'' || echo MISSING)'"
-    )
+    const wrapped = clientInstances[0].lastExecCommand!
+    // Why: sshd lets the login shell parse this first, so raw newlines let
+    // csh/tcsh split the command before /bin/sh receives it (issue #8701).
+    expect(wrapped).not.toContain('\n')
+    expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*printf %b .*' orca-command /)
+    expect(wrapped).not.toContain('base64')
   })
 
   it('can execute native remote commands without the POSIX shell wrapper', async () => {
@@ -686,15 +692,15 @@ describe('SshConnection', () => {
 
     vi.useFakeTimers()
     try {
-      const outcomePromise = conn
-        .exec('printf ready')
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
+      const outcomePromise = conn.exec('printf ready').catch((error: Error) => error)
 
       await vi.advanceTimersByTimeAsync(30_000)
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
-      expect(outcome).toBe('SSH exec channel timed out')
+      expect(outcome).toMatchObject({
+        message: 'SSH exec channel timed out',
+        sshChannelCloseConfirmed: false
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -780,15 +786,54 @@ describe('SshConnection', () => {
     try {
       const outcomePromise = conn
         .exec('printf ready', { signal: controller.signal })
-        .then(() => 'opened')
-        .catch((error: Error) => error.name)
+        .catch((error: Error) => error)
 
       controller.abort()
       // Why: a hung socket must not pin the aborted caller for the full 30s
       // connect timeout — the abort settles at the 5s grace bound instead.
       await vi.advanceTimersByTimeAsync(5_000)
 
-      await expect(outcomePromise).resolves.toBe('AbortError')
+      await expect(outcomePromise).resolves.toMatchObject({
+        name: 'AbortError',
+        sshChannelCloseConfirmed: false
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drains an exec channel that opens after the abort grace has settled', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+    const controller = new AbortController()
+    const lateChannel = Object.assign(new EventEmitter(), {
+      close: vi.fn(),
+      resume: vi.fn(),
+      stderr: { resume: vi.fn() }
+    })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready', { signal: controller.signal })
+        .catch((error: Error) => error)
+
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const outcome = await outcomePromise
+      expect(outcome).toMatchObject({
+        name: 'AbortError',
+        sshChannelCloseConfirmed: false
+      })
+
+      pendingExecCallback?.(undefined, lateChannel)
+
+      expect(lateChannel.resume).toHaveBeenCalledTimes(1)
+      expect(lateChannel.stderr.resume).toHaveBeenCalledTimes(1)
+      expect(lateChannel.close).toHaveBeenCalledTimes(1)
+      lateChannel.emit('close')
+      expect(outcome).toMatchObject({ sshChannelCloseConfirmed: true })
     } finally {
       vi.useRealTimers()
     }
@@ -833,7 +878,7 @@ describe('SshConnection', () => {
     const lateChannel = Object.assign(new EventEmitter(), {
       close: vi.fn(),
       resume: vi.fn(),
-      stderr: { resume: vi.fn() }
+      stderr: Object.assign(new EventEmitter(), { resume: vi.fn() })
     })
 
     const outcomePromise = conn
@@ -851,9 +896,39 @@ describe('SshConnection', () => {
     expect(early).toBe('pending')
     expect(lateChannel.close).toHaveBeenCalledTimes(1)
     expect(lateChannel.resume).toHaveBeenCalled()
+    expect(() => lateChannel.emit('error', new Error('late channel teardown'))).not.toThrow()
+    expect(() => lateChannel.stderr.emit('error', new Error('late stderr teardown'))).not.toThrow()
 
     lateChannel.emit('close')
     await expect(outcomePromise).resolves.toBe('AbortError')
+  })
+
+  it('removes the late-channel close listener when abort grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    vi.useFakeTimers()
+    try {
+      sftpBehavior = 'pending'
+      const controller = new AbortController()
+      const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+      const outcomePromise = conn
+        .sftp(controller.signal)
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+      await vi.advanceTimersByTimeAsync(0)
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+      expect(() => lateSftp.emit('error', new Error('late SFTP teardown'))).not.toThrow()
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('times out when ssh2 never opens an SFTP channel', async () => {
@@ -863,15 +938,13 @@ describe('SshConnection', () => {
 
     vi.useFakeTimers()
     try {
-      const outcomePromise = conn
-        .sftp()
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
+      const outcomePromise = conn.sftp().catch((error: Error) => error)
 
       await vi.advanceTimersByTimeAsync(30_000)
       const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
 
-      expect(outcome).toBe('SSH SFTP channel timed out')
+      expect(outcome).toMatchObject({ message: 'SSH SFTP channel timed out' })
+      expect(outcome).not.toHaveProperty('sshChannelCloseConfirmed')
     } finally {
       vi.useRealTimers()
     }
@@ -900,6 +973,55 @@ describe('SshConnection', () => {
     }
   })
 
+  it('cancels a pending SFTP channel open and ends the late channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = { end: vi.fn() }
+
+    const outcomePromise = conn
+      .sftp({ signal: controller.signal })
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    await Promise.resolve()
+    controller.abort()
+    pendingSftpCallback?.(undefined, lateSftp)
+
+    await expect(outcomePromise).resolves.toBe('AbortError')
+    expect(lateSftp.end).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the late SFTP close listener when the bounded grace expires', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .sftp({ signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      await Promise.resolve()
+      controller.abort()
+      pendingSftpCallback?.(undefined, lateSftp)
+      expect(lateSftp.listenerCount('close')).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(lateSftp.listenerCount('close')).toBe(0)
+      expect(lateSftp.end).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -908,6 +1030,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getState().supportsFolderDownload).toBe(false)
     expect(clientInstances).toHaveLength(0)
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
@@ -1060,6 +1183,236 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(false)
   })
 
+  it('tries system SSH first for targets that explicitly request GSSAPI authentication', async () => {
+    const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), createCallbacks())
+
+    await conn.connect()
+    await conn.exec('echo after-connect')
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(clientInstances).toHaveLength(0)
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      {
+        gssapiOnly: true,
+        wrapCommand: false
+      }
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo after-connect',
+      { gssapiOnly: true }
+    )
+  })
+
+  it('falls back to ssh2 when the GSSAPI-first system SSH attempt fails', async () => {
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'Permission denied (gssapi-with-mic,publickey)')
+    )
+    const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(clientInstances).toHaveLength(1)
+    // Why: proves the GSSAPI-first probe actually ran before the ssh2 fallback,
+    // so the test fails if the proactive block is removed.
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      {
+        gssapiOnly: true,
+        wrapCommand: false
+      }
+    )
+  })
+
+  it('falls back to system SSH after an ssh2 auth failure when resolved config enables GSSAPI', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'All configured authentication methods failed'
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({ configHost: 'krb-host' }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(onCredentialRequest).not.toHaveBeenCalled()
+  })
+
+  it('connects through the GSSAPI fallback without credential callbacks (headless)', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'All configured authentication methods failed'
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const conn = new SshConnection(createTarget({ configHost: 'krb-host' }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
+  it('keeps prompting for credentials when the GSSAPI fallback probe fails', async () => {
+    // Why: identityAgent 'none' makes resolveAgentSocket return undefined on
+    // every platform (SSH_AUTH_SOCK='' alone leaves the Windows agent pipe), so
+    // ssh2's first connect carries any default key directly and the agent
+    // fallback retry never consumes the second connectSequence entry —
+    // deterministic on dev machines with both ~/.ssh/id_* and a live agent.
+    vi.stubEnv('SSH_AUTH_SOCK', '')
+    connectSequence = [new Error('All configured authentication methods failed'), 'ready']
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'Permission denied (gssapi-with-mic,password)')
+    )
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({
+        proxyUseFdpass: false,
+        gssapiAuthentication: true,
+        identityAgent: 'none'
+      })
+    )
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(
+      createTarget({ configHost: 'krb-host' }),
+      createCallbacks({ onCredentialRequest })
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    // Why: proves the reactive GSSAPI probe actually ran before prompting, so
+    // the test fails if the reactive fallback block is removed.
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'krb-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({ wrapCommand: false })
+    )
+    expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'password', expect.any(String))
+  })
+
+  it('tries the GSSAPI probe before prompting for an encrypted key passphrase', async () => {
+    // Why: a valid Kerberos ticket should connect silently before the user is
+    // ever asked for the key passphrase. Agent auth fails, the explicit-key
+    // retry fails with a passphrase error, and resolved GSSAPI is on — so the
+    // reactive probe must run before onCredentialRequest.
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'test-key')
+    connectSequence = [
+      new Error('All configured authentication methods failed'),
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given')
+    ]
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const order: string[] = []
+    spawnSystemSshCommandMock.mockImplementation(() => {
+      order.push('probe')
+      return createSystemCommandChannel()
+    })
+    const onCredentialRequest = vi.fn(async () => {
+      order.push('prompt')
+      return 'secret'
+    })
+
+    try {
+      const conn = new SshConnection(
+        createTarget({ configHost: 'krb-host', identityFile: keyPath }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      await conn.connect()
+
+      expect(conn.getState().status).toBe('connected')
+      expect(conn.usesSystemSshTransport()).toBe(true)
+      // Why: the probe must precede any passphrase prompt (which here never runs).
+      expect(order[0]).toBe('probe')
+      expect(onCredentialRequest).not.toHaveBeenCalled()
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not try system SSH for auth failures when resolved config leaves GSSAPI off', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'All configured authentication methods failed'
+    vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig({ proxyUseFdpass: false }))
+    const conn = new SshConnection(createTarget({ configHost: 'plain-host' }), createCallbacks())
+
+    await expect(conn.connect()).rejects.toThrow('All configured authentication methods failed')
+    expect(conn.getState().status).toBe('auth-failed')
+    expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
+  })
+
+  it('clears system SSH transport when the GSSAPI-first probe throws synchronously', async () => {
+    // Why: no system ssh binary makes spawnSystemSshCommand throw before the
+    // probe's try/catch, so the ssh2 fall-through must still reset the flag —
+    // otherwise exec/sftp keep routing through the unusable system transport.
+    spawnSystemSshCommandMock.mockImplementation(() => {
+      throw new Error('No system ssh binary found. Install OpenSSH.')
+    })
+    connectSequence = ['ready']
+    const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), createCallbacks())
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(clientInstances).toHaveLength(1)
+  })
+
+  it('keeps disconnected state when a disconnect cancels the reactive GSSAPI probe', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'All configured authentication methods failed'
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    // Why: a probe channel that stays open until close() leaves the reactive
+    // fallback pending, so we can disconnect mid-probe; disconnect() then calls
+    // close() (bumping the generation first), which settles the probe as a
+    // cancellation rather than a probe failure.
+    let pendingChannel: ReturnType<typeof createSystemCommandChannel> | null = null
+    spawnSystemSshCommandMock.mockImplementation(() => {
+      const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
+      channel.stdin = { end: vi.fn(), write: vi.fn() }
+      channel.stderr = new EventEmitter()
+      channel.close = vi.fn(() => channel.emit('close', null))
+      pendingChannel = channel
+      return channel
+    })
+    const onStateChange = vi.fn()
+    const conn = new SshConnection(
+      createTarget({ configHost: 'krb-host' }),
+      createCallbacks({ onStateChange })
+    )
+
+    const connectPromise = conn.connect()
+    // Wait until the reactive probe has spawned its (never-closing) channel.
+    await vi.waitFor(() => expect(pendingChannel).not.toBeNull())
+
+    await conn.disconnect()
+    await connectPromise.catch(() => {})
+
+    expect(conn.getState().status).toBe('disconnected')
+    const statuses = onStateChange.mock.calls.map((call) => call[1].status)
+    expect(statuses).not.toContain('auth-failed')
+    expect(statuses).not.toContain('error')
+  })
+
   it('passes the detected host platform to system SSH file operations', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
@@ -1132,6 +1485,61 @@ describe('SshConnection', () => {
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
+  })
+
+  it('composes a caller abort into system SSH relay uploads', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const controller = new AbortController()
+    let transferSignal: AbortSignal | undefined
+    vi.mocked(uploadDirectoryViaSystemSsh).mockImplementationOnce(
+      (_target, _localDir, _remoteDir, options) => {
+        transferSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
+            once: true
+          })
+        })
+      }
+    )
+
+    await conn.connect()
+    const upload = conn.uploadDirectory('/tmp/local-relay', '/remote/relay', {
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(transferSignal).toBeDefined())
+    controller.abort()
+
+    await expect(upload).rejects.toMatchObject({ name: 'AbortError' })
+    expect(transferSignal?.aborted).toBe(true)
+  })
+
+  it('keeps connection disconnect cancellation linked to caller-scoped relay writes', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    const controller = new AbortController()
+    let transferSignal: AbortSignal | undefined
+    vi.mocked(writeFileViaSystemSsh).mockImplementationOnce(
+      (_target, _remotePath, _contents, options) => {
+        transferSignal = options?.signal
+        return new Promise((_resolve, reject) => {
+          transferSignal?.addEventListener('abort', () => reject(transferSignal?.reason), {
+            once: true
+          })
+        })
+      }
+    )
+
+    await conn.connect()
+    const write = conn.writeFile('/remote/relay/.version', '0.1.0', {
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(transferSignal).toBeDefined())
+    await conn.disconnect()
+
+    await expect(write).rejects.toMatchObject({ name: 'AbortError' })
+    expect(controller.signal.aborted).toBe(false)
+    expect(transferSignal?.aborted).toBe(true)
   })
 
   it('keeps an upload session cancelled after the connection disconnects', async () => {

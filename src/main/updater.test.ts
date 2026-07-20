@@ -1170,6 +1170,54 @@ describe('updater', () => {
     )
   })
 
+  it('surfaces an accepted retry before electron-updater emits download progress', async () => {
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+    autoUpdaterMock.downloadUpdate
+      .mockRejectedValueOnce(new Error('signature check blocked'))
+      .mockImplementationOnce(() => new Promise(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    downloadUpdate()
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: 'signature check blocked'
+      })
+    })
+
+    sendMock.mockClear()
+    downloadUpdate()
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'downloading',
+      percent: 0,
+      version: '1.0.61'
+    })
+
+    downloadUpdate()
+    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(2)
+  })
+
   it('defers quitAndInstall through the shared main-process entrypoint', async () => {
     vi.useFakeTimers()
 

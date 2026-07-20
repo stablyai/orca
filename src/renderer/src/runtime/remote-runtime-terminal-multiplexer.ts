@@ -37,7 +37,7 @@ type TerminalMultiplexEvent =
   | { type: string; streamId?: number; [key: string]: unknown }
 
 export type RemoteRuntimeMultiplexedTerminalCallbacks = {
-  onData: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+  onData: (data: string, meta?: { seq?: number; rawLength?: number; transformed?: boolean }) => void
   onSnapshot: (data: string, meta?: { pendingEscapeTailAnsi?: string }) => void
   onSubscribed?: () => void
   onEnd?: () => void
@@ -437,10 +437,42 @@ class RemoteRuntimeTerminalMultiplexer {
     if (!stream) {
       return
     }
-    if (frame.opcode === TerminalStreamOpcode.Output) {
-      const data = decodeTerminalStreamText(frame.payload)
+    if (
+      frame.opcode === TerminalStreamOpcode.Output ||
+      frame.opcode === TerminalStreamOpcode.OutputSpan
+    ) {
+      const span =
+        frame.opcode === TerminalStreamOpcode.OutputSpan
+          ? decodeTerminalStreamJson<{
+              data?: unknown
+              rawLength?: unknown
+              transformed?: unknown
+            }>(frame.payload)
+          : null
+      const validSpan =
+        frame.opcode !== TerminalStreamOpcode.OutputSpan ||
+        (typeof span?.data === 'string' &&
+          typeof span.rawLength === 'number' &&
+          Number.isSafeInteger(span.rawLength) &&
+          span.rawLength >= 0 &&
+          span.transformed === true)
+      const data =
+        frame.opcode === TerminalStreamOpcode.OutputSpan
+          ? validSpan
+            ? (span!.data as string)
+            : ''
+          : decodeTerminalStreamText(frame.payload)
       try {
-        const rawLength = data.length
+        if (!validSpan) {
+          // Why: rendering malformed span JSON would expose protocol framing
+          // as terminal text and lose its raw sequence accounting.
+          this.requestResyncSnapshot(stream)
+          return
+        }
+        const rawLength =
+          frame.opcode === TerminalStreamOpcode.OutputSpan && typeof span?.rawLength === 'number'
+            ? span.rawLength
+            : data.length
         // Why: a resync snapshot is authoritative; discard live output while
         // it is in flight, but still return transport credit in finally.
         if (stream.resyncInFlight) {
@@ -454,7 +486,11 @@ class RemoteRuntimeTerminalMultiplexer {
         if (typeof seq === 'number') {
           stream.expectedSeq = seq
         }
-        stream.callbacks.onData(data, { seq, rawLength })
+        stream.callbacks.onData(data, {
+          seq,
+          rawLength,
+          ...(frame.opcode === TerminalStreamOpcode.OutputSpan ? { transformed: true } : {})
+        })
       } finally {
         if (stream.acknowledgeOutput) {
           if (shouldHoldE2eRemoteTerminalAck(stream.terminal)) {

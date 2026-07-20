@@ -17,6 +17,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string
     data: string
     sequenceChars?: number
+    transformed?: boolean
+    seq?: number
   }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
 
@@ -60,6 +62,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     const result = await target.spawn(opts)
     this.sessionAdapters.set(result.id, target)
     return result
+  }
+
+  supportsGitCredentialGuardHost(sessionId?: string): boolean {
+    const adapter = sessionId ? this.adapterFor(sessionId) : this.current
+    return adapter.supportsGitCredentialGuardHost()
   }
 
   async attach(id: string): Promise<void> {
@@ -130,8 +137,16 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.adapterFor(id).getBufferSnapshot(id, opts)
   }
 
+  canProvideAuthoritativeBufferSnapshot(id: string): boolean {
+    return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
+  }
+
+  async closeStartupQueryAuthority(id: string): Promise<number> {
+    return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {
@@ -174,7 +189,13 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   onData(
-    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
+    callback: (payload: {
+      id: string
+      data: string
+      sequenceChars?: number
+      transformed?: boolean
+      seq?: number
+    }) => void
   ): () => void {
     this.dataListeners.push(callback)
     return () => {

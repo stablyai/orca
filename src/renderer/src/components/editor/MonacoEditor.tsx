@@ -15,7 +15,11 @@ import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-select
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
-import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
+import {
+  syncContentOnMount,
+  syncContentUpdate,
+  type MonacoContentSyncMode
+} from './monaco-content-sync'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import {
   beginProgrammaticContentSync,
@@ -44,7 +48,11 @@ import {
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import {
+  installEditorAddReviewNoteShortcut,
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
 import { Plus } from 'lucide-react'
 import {
   getMonacoMarkdownSelectionAnnotationTarget,
@@ -77,6 +85,7 @@ type MonacoEditorProps = {
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
+  liveTail?: boolean
   autoHeight?: boolean
 }
 
@@ -101,6 +110,7 @@ export default function MonacoEditor({
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
+  liveTail = false,
   autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -131,6 +141,8 @@ export default function MonacoEditor({
   propsRef.current = { relativePath, language, onSave, onContentChange }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
+  const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
+  contentSyncModeRef.current = readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
 
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -190,6 +202,13 @@ export default function MonacoEditor({
   const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
+  // Why: claim open drafts synchronously so a same-tick second chord cannot
+  // remount the composer before React commits commentPopover state. Mirrored
+  // in an effect so a discarded render pass cannot leak into the ref.
+  const commentPopoverRef = useRef<MarkdownCommentPopoverState | null>(null)
+  useEffect(() => {
+    commentPopoverRef.current = commentPopover
+  }, [commentPopover])
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -212,6 +231,12 @@ export default function MonacoEditor({
 
   const shouldShowMarkdownAnnotations =
     markdownAnnotationsEnabled && language === 'markdown' && Boolean(worktreeId)
+  // Why: the Monaco mount closure installs its keydown listeners once, so the
+  // add-review-note shortcut reads the current enablement through a ref.
+  const shouldShowMarkdownAnnotationsRef = useRef(shouldShowMarkdownAnnotations)
+  useEffect(() => {
+    shouldShowMarkdownAnnotationsRef.current = shouldShowMarkdownAnnotations
+  }, [shouldShowMarkdownAnnotations])
 
   const pendingScrollForThisEditor = useMemo(() => {
     if (!shouldShowMarkdownAnnotations || !scrollToDiffCommentId) {
@@ -370,7 +395,11 @@ export default function MonacoEditor({
       beginProgrammaticContentSync(filePath)
       isApplyingProgrammaticContentRef.current = true
       try {
-        const didSyncOnMount = syncContentOnMount(editorInstance, contentRef.current)
+        const didSyncOnMount = syncContentOnMount(
+          editorInstance,
+          contentRef.current,
+          contentSyncModeRef.current
+        )
         if (didSyncOnMount) {
           lastSyncedContentRef.current = contentRef.current
         }
@@ -401,6 +430,32 @@ export default function MonacoEditor({
         propsRef.current.onSave(value)
       })
       const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+      // Opens the same composer as the selection "+" button.
+      const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
+        // Why: product B — keep an open draft instead of remounting (same-tick
+        // races and editor-focused second chords before the composer guard runs).
+        if (commentPopoverRef.current) {
+          return true
+        }
+        if (!shouldShowMarkdownAnnotationsRef.current) {
+          return false
+        }
+        // Why: the rendered target ref lags onDidChangeCursorSelection by a
+        // render, so a chord right after a drag could open on the previous
+        // selection (or miss a fresh one); read Monaco's live selection instead.
+        const target = getMonacoMarkdownSelectionAnnotationTarget(
+          editorInstance,
+          editorInstance.getSelection(),
+          getDiffCommentPopoverLeft(editorInstance, editorContainerRef.current) ?? undefined
+        )
+        if (!target) {
+          return false
+        }
+        commentPopoverRef.current = target
+        setCommentPopover(target)
+        setSelectionAnnotationTarget(null)
+        return true
+      })
       const searchInFilesAction = editorInstance.addAction({
         id: 'orca.searchInFiles',
         label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
@@ -500,6 +555,7 @@ export default function MonacoEditor({
         gutterMouseDownSub.dispose()
         cleanupSaveShortcut()
         cleanupFindShortcut()
+        cleanupAddReviewNoteShortcut()
         editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
         searchInFilesAction.dispose()
         autoHeightSub?.dispose()
@@ -672,7 +728,7 @@ export default function MonacoEditor({
     beginProgrammaticContentSync(filePath)
     isApplyingProgrammaticContentRef.current = true
     try {
-      syncContentUpdate(ed, content)
+      syncContentUpdate(ed, content, contentSyncModeRef.current)
       lastSyncedContentRef.current = content
     } finally {
       isApplyingProgrammaticContentRef.current = false

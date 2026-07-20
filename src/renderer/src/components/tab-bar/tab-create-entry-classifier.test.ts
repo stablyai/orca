@@ -50,6 +50,15 @@ describe('tab create entry classification', () => {
     })
   })
 
+  it('keeps the shared legacy local-dev forms in parity with address-bar normalization', () => {
+    for (const input of ['0.0.0.0:3000', '[::1]:3000', '[2001:db8::1]:3000/path']) {
+      expect(classifyTabEntryQuery(input, readyFiles([]))).toMatchObject({
+        kind: 'host-url',
+        url: expect.stringMatching(/^http:/)
+      })
+    }
+  })
+
   it('does not classify invalid numeric hosts as URLs', () => {
     expect(classifyTabEntryQuery('999.999.999.999', readyFiles([]))).toEqual({
       kind: 'new-file',

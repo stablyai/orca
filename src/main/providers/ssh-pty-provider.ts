@@ -2,8 +2,15 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
+import { PTY_STARTUP_INGRESS_VERSION } from '../../shared/pty-startup-ingress'
 
-type DataCallback = (payload: { id: string; data: string }) => void
+type DataCallback = (payload: {
+  id: string
+  data: string
+  sequenceChars?: number
+  transformed?: boolean
+  seq?: number
+}) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
 type ExitCallback = (payload: { id: string; code: number }) => void
 type RemoteCliBridgeEnv = {
@@ -56,7 +63,15 @@ export class SshPtyProvider implements IPtyProvider {
       switch (method) {
         case 'pty.data':
           for (const cb of this.dataListeners) {
-            cb({ id: this.toAppPtyId(params.id as string), data: params.data as string })
+            cb({
+              id: this.toAppPtyId(params.id as string),
+              data: params.data as string,
+              ...(typeof params.rawLength === 'number'
+                ? { sequenceChars: params.rawLength as number }
+                : {}),
+              ...(params.transformed === true ? { transformed: true } : {}),
+              ...(typeof params.seq === 'number' ? { seq: params.seq as number } : {})
+            })
           }
           break
 
@@ -154,6 +169,7 @@ export class SshPtyProvider implements IPtyProvider {
       // Pi-compatible agent is being launched, while commandDelivery tells it
       // whether to submit the command itself for runtime-owned background PTYs.
       ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.shellOverride !== undefined ? { shellOverride: opts.shellOverride } : {}),
       ...(opts.terminalWindowsWslDistro !== undefined
         ? { terminalWindowsWslDistro: opts.terminalWindowsWslDistro }
@@ -166,7 +182,13 @@ export class SshPtyProvider implements IPtyProvider {
       // remote hooks are disabled, but the relay still needs attach identity
       // metadata to reject cross-generation PTY id collisions.
       ...(opts.paneKey ? { paneKey: opts.paneKey } : {}),
-      ...(opts.tabId ? { tabId: opts.tabId } : {})
+      ...(opts.tabId ? { tabId: opts.tabId } : {}),
+      ...(opts.startupIngress
+        ? {
+            startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+            startupIngress: opts.startupIngress
+          }
+        : {})
     })
     return {
       ...(result as PtySpawnResult),
@@ -258,6 +280,13 @@ export class SshPtyProvider implements IPtyProvider {
 
   async clearBuffer(id: string): Promise<void> {
     await this.mux.request('pty.clearBuffer', { id: this.toRelayPtyId(id) })
+  }
+
+  async closeStartupQueryAuthority(id: string): Promise<number> {
+    const result = (await this.mux.request('pty.closeStartupQueryAuthority', {
+      id: this.toRelayPtyId(id)
+    })) as { appliedSeq?: number }
+    return result.appliedSeq ?? 0
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {

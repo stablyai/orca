@@ -46,6 +46,7 @@ function createPane(): ManagedPaneInternal {
       loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
+      cols: 80,
       rows: 24
     } as never,
     container: {} as never,
@@ -57,7 +58,8 @@ function createPane(): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     fitAddon: {
-      fit: vi.fn()
+      fit: vi.fn(),
+      proposeDimensions: vi.fn(() => ({ cols: 80, rows: 23 }))
     } as never,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -513,6 +515,7 @@ describe('openTerminal — addon and provider wiring', () => {
         }
       }),
       attachCustomWheelEventHandler: vi.fn(),
+      onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
       write: vi.fn(() => {
         events.push('write')
       }),
@@ -602,6 +605,22 @@ describe('openTerminal — addon and provider wiring', () => {
 
     expect(events).toContain('deregisterCharacterJoiner:3')
     expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  // Why: a link streamed under a stationary pointer must re-linkify on the next
+  // move; openTerminal wires the hover-cache reset and disposePane must detach it.
+  it('installs the streamed-output linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    const disposable = pane.linkifierHoverResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(1)
+
+    const disposeSpy = vi.spyOn(disposable!, 'dispose')
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(pane.linkifierHoverResetDisposable).toBeNull()
   })
 
   // Why: the DOM renderer misrenders joined spans (per-character

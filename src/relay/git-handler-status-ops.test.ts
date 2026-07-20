@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitExec } from './git-handler-ops'
 import { getStatusOp } from './git-handler-status-ops'
 import { clearNoEffectiveUpstreamStatusCache } from './git-status-upstream-negative-cache'
+import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 
 const LARGE_STATUS_ENTRY_COUNT = 150_000
 
@@ -26,6 +27,7 @@ describe('getStatusOp', () => {
 
   beforeEach(() => {
     clearNoEffectiveUpstreamStatusCache()
+    clearGitStatusLineStatsCache()
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-git-status-'))
   })
 
@@ -77,6 +79,51 @@ describe('getStatusOp', () => {
 
     expect(result.didHitLimit).toBeUndefined()
     expect(result.entries).toHaveLength(5)
+  })
+
+  it('reuses unchanged line stats only for hinted safety reads', async () => {
+    const statusOutput = `${buildBranchStatusOutput('head-1', '(detached)')}\n1 .M N... 100644 100644 100644 aaaa aaaa src/a.ts`
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return { stdout: statusOutput, stderr: '' }
+      }
+      if (args.includes('diff')) {
+        return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    await getStatusOp(git, { worktreePath: tmpDir })
+    const reused = await getStatusOp(git, { worktreePath: tmpDir, reuseLineStats: true })
+    await getStatusOp(git, { worktreePath: tmpDir })
+
+    expect(reused.entries).toContainEqual(
+      expect.objectContaining({ path: 'src/a.ts', added: 3, removed: 2 })
+    )
+    expect(git.mock.calls.filter(([args]) => args.includes('diff'))).toHaveLength(2)
+  })
+
+  it('forwards the request abort signal to status and numstat subprocesses', async () => {
+    const controller = new AbortController()
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return {
+          stdout: '1 .M N... 100644 100644 100644 aaaa aaaa src/a.ts',
+          stderr: ''
+        }
+      }
+      if (args.includes('diff')) {
+        return { stdout: '1\t0\tsrc/a.ts\n', stderr: '' }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    await getStatusOp(git, { worktreePath: tmpDir }, { signal: controller.signal })
+
+    expect(git.mock.calls).not.toHaveLength(0)
+    for (const [, , options] of git.mock.calls) {
+      expect(options?.signal).toBe(controller.signal)
+    }
   })
 
   it('caches no-effective-upstream probes across status polls for the same head', async () => {

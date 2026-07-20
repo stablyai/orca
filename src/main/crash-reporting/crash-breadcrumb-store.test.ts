@@ -55,27 +55,30 @@ describe('crash breadcrumb store', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
 
-    recordCoalescedCrashBreadcrumb({
+    const first = recordCoalescedCrashBreadcrumb({
       name: 'agent_state_changed',
       data: { agentType: 'claude', state: 'working' },
       coalesceKey: 'agent:claude:working',
       minIntervalMs: 30_000
     })
     vi.advanceTimersByTime(1_000)
-    recordCoalescedCrashBreadcrumb({
+    const suppressed = recordCoalescedCrashBreadcrumb({
       name: 'agent_state_changed',
       data: { agentType: 'claude', state: 'working' },
       coalesceKey: 'agent:claude:working',
       minIntervalMs: 30_000
     })
     vi.advanceTimersByTime(30_000)
-    recordCoalescedCrashBreadcrumb({
+    const resumed = recordCoalescedCrashBreadcrumb({
       name: 'agent_state_changed',
       data: { agentType: 'claude', state: 'working' },
       coalesceKey: 'agent:claude:working',
       minIntervalMs: 30_000
     })
 
+    expect(first).toEqual({ suppressedSinceLast: 0 })
+    expect(suppressed).toBeUndefined()
+    expect(resumed).toEqual({ suppressedSinceLast: 1 })
     expect(getCrashBreadcrumbSnapshot().map((entry) => entry.data)).toEqual([
       { agentType: 'claude', state: 'working' },
       { agentType: 'claude', state: 'working', suppressedSinceLast: 1 }

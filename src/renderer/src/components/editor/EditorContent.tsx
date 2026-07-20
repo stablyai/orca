@@ -327,6 +327,7 @@ export function EditorContent({
       // the change/save callbacks so no draft, dirty state, or write can occur —
       // mirrors the conflict-review read-only rendering pattern.
       readOnly={activeFile.readOnly === true}
+      liveTail={activeFile.liveTail === true}
       onContentChange={activeFile.readOnly === true ? noopEditorContentChange : handleContentChange}
       onSave={activeFile.readOnly === true ? noopEditorSave : isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
@@ -962,7 +963,9 @@ export function EditorContent({
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
   const diffViewer = (
     <DiffViewer
-      key={`${viewStateScopeId}:${diffReloadNonce}:${getDiffContentSignature(dc.modifiedContent)}`}
+      // Why: content already refreshes in place via modifiedModelKey below, so
+      // keying the component off content too remounts Monaco and flashes on every save.
+      key={`${viewStateScopeId}:${diffReloadNonce}`}
       modelKey={diffViewStateKey}
       originalModelKey={originalModelKey}
       modifiedModelKey={modifiedModelKey}

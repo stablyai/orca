@@ -146,8 +146,8 @@ describe('task page cache selectors', () => {
       entry<GitHubWorkItem[]>([patched])
     ])
 
-    expect(nextPages[0][0]).toBe(patched)
-    expect(nextPages[0][1]).toBe(otherRepoSameId)
+    expect(nextPages[0]?.[0]).toBe(patched)
+    expect(nextPages[0]?.[1]).toBe(otherRepoSameId)
   })
 
   it('merges landing refresh status changes without reordering GitHub rows', () => {

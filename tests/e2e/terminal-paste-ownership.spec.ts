@@ -312,7 +312,7 @@ test.describe('terminal paste ownership', () => {
     }
   })
 
-  test('Windows multiline keyboard paste preserves terminal content with one PTY owner', async ({
+  test('Windows multiline keyboard paste normalizes terminal newlines with one PTY owner', async ({
     electronApp,
     orcaPage,
     testRepoPath
@@ -336,8 +336,11 @@ test.describe('terminal paste ownership', () => {
       'Unicode: caf\u00e9 \u4f60\u597d \u0645\u0631\u062d\u0628\u0627 \ud83d\ude00',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
+    // Why: xterm translates clipboard line endings to terminal Enter bytes;
+    // Orca's direct Windows bracketed-paste path must produce the same bytes.
+    const terminalText = payload.replace(/\r?\n/g, '\r')
     const scriptPath = path.join(testRepoPath, `.orca-paste-multiline-${runId}.mjs`)
-    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, payload))
+    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, terminalText))
     let scriptStarted = false
 
     try {
@@ -353,7 +356,7 @@ test.describe('terminal paste ownership', () => {
       await waitForTerminalOutput(orcaPage, `PASTE_COMPLETE_${runId}:MATCH`, 10_000, 12_000)
 
       const writes = (await readTerminalPtyWrites(electronApp)).join('')
-      expect(countOccurrences(writes, payload), 'multiline payload PTY write count').toBe(1)
+      expect(countOccurrences(writes, terminalText), 'multiline payload PTY write count').toBe(1)
     } finally {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)

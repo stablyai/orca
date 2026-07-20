@@ -1,5 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
+import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 
 // Why: re-export WorktreeStatus under the existing `Status` alias so the
@@ -33,9 +34,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
         title={resolvedTitle}
         {...rest}
       >
-        {/* Why: a stepped spin preserves the worker-is-running affordance while
-            avoiding a full-refresh-rate compositor loop for long agent runs. */}
-        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]" />
+        <AgentWorkingSpinner className="size-2" />
       </span>
     )
   }

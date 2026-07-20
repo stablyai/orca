@@ -11,14 +11,19 @@ export function normalizeRuntimePathSeparators(value: string): string {
 }
 
 export function normalizeRuntimePathForComparison(value: string): string {
-  const normalized = trimRuntimePathTrailingSlash(normalizeRuntimePathSeparators(value))
+  const isWindowsPath = isWindowsAbsolutePathLike(value)
+  // Why: backslash is a valid POSIX filename character; fold it only when the
+  // path itself proves Windows drive/UNC semantics.
+  const normalized = trimRuntimePathTrailingSlash(
+    isWindowsPath ? normalizeRuntimePathSeparators(value) : value.replace(/\/+/g, '/')
+  )
   const wslUnc = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/[\s\S]*)?$/i)
   if (wslUnc) {
     // Why: Windows exposes the same case-sensitive WSL filesystem through two
     // UNC aliases, while the distro/server portion remains case-insensitive.
     return `//wsl/${wslUnc[1].toLowerCase()}${wslUnc[2] ?? ''}`
   }
-  return isWindowsAbsolutePathLike(value) ? normalized.toLowerCase() : normalized
+  return isWindowsPath ? normalized.toLowerCase() : normalized
 }
 
 export function isRuntimePathAbsolute(
@@ -64,7 +69,9 @@ export function isPathInsideOrEqual(rootPath: string, candidatePath: string): bo
 
 export function relativePathInsideRoot(rootPath: string, candidatePath: string): string | null {
   const normalizedCandidate = trimRuntimePathTrailingSlash(
-    normalizeRuntimePathSeparators(candidatePath)
+    isWindowsAbsolutePathLike(candidatePath)
+      ? normalizeRuntimePathSeparators(candidatePath)
+      : candidatePath.replace(/\/+/g, '/')
   )
   const comparisonRoot = normalizeRuntimePathForComparison(rootPath)
   const comparisonCandidate = normalizeRuntimePathForComparison(candidatePath)

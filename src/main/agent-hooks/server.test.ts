@@ -1425,7 +1425,92 @@ describe('AgentHookServer listener replay', () => {
     server.clearPaneState(PANE)
 
     expect(listener).toHaveBeenCalledTimes(1)
-    expect(listener).toHaveBeenCalledWith(PANE)
+    expect(listener).toHaveBeenCalledWith({ paneKey: PANE })
+  })
+
+  it('batches connection cleanup and retains sibling and local statuses', () => {
+    const server = new AgentHookServer()
+    const paneKeyAt = (prefix: string, index: number): string =>
+      makePaneKey(
+        `${prefix}-tab-${index}`,
+        `00000000-0000-4000-8000-${(index + 1).toString(16).padStart(12, '0')}`
+      )
+    const targetPaneKeys = Array.from({ length: 100 }, (_, index) => paneKeyAt('target', index))
+    const siblingPaneKeys = Array.from({ length: 100 }, (_, index) =>
+      paneKeyAt('sibling', index + 100)
+    )
+    const unstampedPaneKey = paneKeyAt('legacy', 250)
+    const statusListener = vi.fn()
+    const clearListener = vi.fn()
+    const internals = server as unknown as AgentHookServerCacheInternals
+    const persistSpy = vi.spyOn(internals, 'scheduleStatusPersist')
+    server.subscribeStatusChanges(statusListener)
+    server.setPaneStatusClearListener(clearListener)
+    for (const paneKey of targetPaneKeys) {
+      server.ingestRemote({ paneKey, payload: { state: 'working', agentType: 'claude' } }, 'ssh-a')
+    }
+    for (const paneKey of siblingPaneKeys) {
+      server.ingestRemote({ paneKey, payload: { state: 'working', agentType: 'claude' } }, 'ssh-b')
+    }
+    server.ingestTerminalStatus({
+      paneKey: unstampedPaneKey,
+      payload: { state: 'working', prompt: '', agentType: 'codex' }
+    })
+    statusListener.mockClear()
+    persistSpy.mockClear()
+
+    server.clearStatusEntriesForConnection('ssh-a')
+
+    expect(statusListener).toHaveBeenCalledOnce()
+    expect(persistSpy).toHaveBeenCalledOnce()
+    expect(clearListener).toHaveBeenCalledOnce()
+    expect(clearListener).toHaveBeenCalledWith({
+      transient: true,
+      connectionId: 'ssh-a',
+      clearedAt: expect.any(Number)
+    })
+    expect(server.getStatusSnapshot().map((entry) => entry.paneKey)).toEqual([
+      ...siblingPaneKeys,
+      unstampedPaneKey
+    ])
+  })
+
+  it('emits a connection cutoff after a pane-key collision and orders replay after it', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_700_000_000_000)
+    const server = new AgentHookServer()
+    const clearListener = vi.fn()
+    server.setPaneStatusClearListener(clearListener)
+    server.ingestRemote(
+      { paneKey: PANE, payload: { state: 'working', agentType: 'claude' } },
+      'ssh-a'
+    )
+    server.ingestRemote(
+      { paneKey: PANE, payload: { state: 'working', agentType: 'codex' } },
+      'ssh-b'
+    )
+
+    server.clearStatusEntriesForConnection('ssh-a')
+    const clear = clearListener.mock.calls[0]?.[0] as {
+      transient: true
+      connectionId: string
+      clearedAt: number
+    }
+    server.ingestRemote(
+      { paneKey: GOOD_PANE, payload: { state: 'working', agentType: 'claude' }, isReplay: true },
+      'ssh-a'
+    )
+
+    expect(clear).toMatchObject({ transient: true, connectionId: 'ssh-a' })
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: PANE, connectionId: 'ssh-b' }),
+      expect.objectContaining({
+        paneKey: GOOD_PANE,
+        connectionId: 'ssh-a',
+        receivedAt: clear.clearedAt + 1
+      })
+    ])
+    vi.useRealTimers()
   })
 
   it('drops cached statuses and pane-scoped listener caches under one tab prefix', () => {
@@ -5956,6 +6041,71 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('persists and hydrates Pi session identity without creating status telemetry', async () => {
+    const firstServer = new AgentHookServer()
+    const firstRendererListener = vi.fn()
+    const statusChangeListener = vi.fn()
+    firstServer.setListener(firstRendererListener)
+    firstServer.subscribeStatusChanges(statusChangeListener)
+    await firstServer.start({ env: 'production', userDataPath })
+    try {
+      const response = await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'session_start',
+          session_id: 'pi-session-1',
+          session_file: '/tmp/pi-session-1.jsonl'
+        }),
+        '/hook/pi'
+      )
+      expect(response.status).toBe(204)
+      expect(firstRendererListener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          providerSessionOnly: true,
+          providerSession: {
+            key: 'session_id',
+            id: 'pi-session-1',
+            transcriptPath: '/tmp/pi-session-1.jsonl'
+          }
+        })
+      )
+      expect(statusChangeListener).toHaveBeenCalledWith([])
+      expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+
+      firstServer.flushStatusPersistSync()
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(file.entries[PANE]).toMatchObject({
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-session-1',
+          transcriptPath: '/tmp/pi-session-1.jsonl'
+        }
+      })
+    } finally {
+      firstServer.stop()
+    }
+
+    const hydratedServer = new AgentHookServer()
+    await hydratedServer.start({ env: 'production', userDataPath })
+    try {
+      const hydratedListener = vi.fn()
+      hydratedServer.setListener(hydratedListener)
+      expect(hydratedListener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          providerSessionOnly: true,
+          providerSession: expect.objectContaining({ transcriptPath: '/tmp/pi-session-1.jsonl' }),
+          isReplay: true
+        })
+      )
+      expect(hydratedServer.getStatusChangeSnapshot()).toEqual([])
+    } finally {
+      hydratedServer.stop()
+    }
+  })
+
   it('does not write prompt interaction keys to last-status.json', async () => {
     const server = new AgentHookServer()
     await server.start({
@@ -6046,6 +6196,124 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('keeps SSH status ordering monotonic across hydration and clock rollback', async () => {
+    const now = 1_700_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = now + 1_000
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: 'ssh-a',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            payload: { state: 'working', prompt: 'before restart', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const clearListener = vi.fn()
+      server.setPaneStatusClearListener(clearListener)
+      server.ingestRemote(
+        { paneKey: PANE, payload: { state: 'working', agentType: 'codex' } },
+        'ssh-a'
+      )
+
+      expect(server.getStatusSnapshot()[0]?.receivedAt).toBe(receivedAt + 1)
+      server.clearStatusEntriesForConnection('ssh-a')
+      const clearedAt = receivedAt + 2
+      expect(clearListener).toHaveBeenCalledWith({
+        transient: true,
+        connectionId: 'ssh-a',
+        clearedAt
+      })
+      server.ingestRemote(
+        {
+          paneKey: GOOD_PANE,
+          isReplay: true,
+          payload: { state: 'working', agentType: 'claude' }
+        },
+        'ssh-a'
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: GOOD_PANE,
+          connectionId: 'ssh-a',
+          receivedAt: clearedAt + 1
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('drops persisted idle Claude child rows from hydration replay', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: recentTs(-1000),
+            payload: {
+              state: 'done',
+              prompt: 'finished orchestration',
+              agentType: 'claude',
+              subagents: [
+                { id: 'aweb-research-8a76b7d7', state: 'idle', startedAt: receivedAt - 5000 },
+                { id: 'apr-history-9b87c6e6', state: 'idle', startedAt: receivedAt - 4000 }
+              ]
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ subagents: undefined })
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'finished orchestration',
+          subagents: undefined
+        })
+      ])
+      // Why: make the migration one-time; otherwise every launch reparses and
+      // re-prunes the same persisted idle rows.
+      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(persisted.entries[PANE].payload.subagents).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('treats a corrupt file as empty hydration without throwing', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     writeFileSync(lastStatusPath(), 'not-json{{', 'utf8')
@@ -6060,6 +6328,43 @@ describe('Last-status persistence', () => {
       server.setListener(listener)
       expect(listener).not.toHaveBeenCalled()
       expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('drops hydrated metadata-only entries without a resumable Pi session', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            providerSessionOnly: true,
+            providerSession: { key: 'session_id', id: 'pi-session-without-file' },
+            payload: { state: 'done', prompt: '', agentType: 'pi' }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([])
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('last-status hydrate dropped 1 entries')
+      )
     } finally {
       server.stop()
       warnSpy.mockRestore()
@@ -6410,6 +6715,111 @@ describe('Last-status persistence', () => {
 })
 
 describe('AgentHookServer ingestRemote', () => {
+  it('caches and replays Pi session identity without exposing a turn-status change', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const rendererListener = vi.fn()
+      const statusChangeListener = vi.fn()
+      server.setListener(rendererListener)
+      server.subscribeStatusChanges(statusChangeListener)
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          providerSession: {
+            key: 'session_id',
+            id: 'pi-session-1',
+            transcriptPath: '/tmp/pi-session-1.jsonl'
+          },
+          providerSessionOnly: true,
+          payload: { state: 'done', prompt: '', agentType: 'pi' }
+        },
+        'conn-1'
+      )
+
+      expect(rendererListener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'conn-1',
+          providerSessionOnly: true,
+          providerSession: {
+            key: 'session_id',
+            id: 'pi-session-1',
+            transcriptPath: '/tmp/pi-session-1.jsonl'
+          }
+        })
+      )
+      expect(statusChangeListener).toHaveBeenCalledWith([])
+      expect(server.getStatusChangeSnapshot()).toEqual([])
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          providerSessionOnly: true,
+          providerSession: expect.objectContaining({ transcriptPath: '/tmp/pi-session-1.jsonl' })
+        })
+      ])
+      expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+
+      const replayListener = vi.fn()
+      server.setListener(replayListener)
+      expect(replayListener).toHaveBeenCalledWith(
+        expect.objectContaining({ paneKey: PANE, providerSessionOnly: true, isReplay: true })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects invalid remote metadata-only session envelopes', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSessionOnly: true,
+        payload: { state: 'done', prompt: '', agentType: 'pi' }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSessionOnly: true,
+        providerSession: { key: 'session_id', id: 'pi-session-1' },
+        payload: { state: 'done', prompt: '', agentType: 'pi' }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-session-1',
+          transcriptPath: '/tmp/pi-session-1.jsonl'
+        },
+        payload: { state: 'done', prompt: '', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
   it('stamps connectionId and forwards a valid relay envelope to the listener', () => {
     const server = new AgentHookServer()
     const payload = parseAgentStatusPayload(

@@ -28,7 +28,10 @@ describe('electron-builder config', () => {
         '!mobile{,/**/*}',
         '!native{,/**/*}',
         '!skills{,/**/*}',
+        '!skill-guides{,/**/*}',
+        '!resources/skills/**',
         '!tests{,/**/*}',
+        '!pr-evidence{,/**/*}',
         '!Casks{,/**/*}',
         '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
         '!out/**/*.test.js'
@@ -37,6 +40,12 @@ describe('electron-builder config', () => {
   })
 
   it('keeps runtime resources available through extraResources', () => {
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'resources/skills',
+        to: 'skills'
+      })
+    }
     expect(electronBuilderConfig.mac.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

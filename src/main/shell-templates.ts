@@ -13,7 +13,17 @@ export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
 # Why: capture the runtime wrapper dir before it is unset below. On WSL this
 # file is generated with a Windows path but sourced via /mnt/c, so the baked
 # literal is unusable there and ZDOTDIR must be restored from this value.
-_orca_wrapper_zdotdir_self="\${ZDOTDIR:-}"
+# Derive it from the file being sourced (%x, zsh's internal script name) rather
+# than the env-imported $ZDOTDIR: zsh corrupts environment values whose UTF-8
+# bytes fall in its 0x84-0x9D token range (e.g. a non-ASCII Windows username
+# such as a Korean login), which would make the self-check below fail and fall
+# back to the unusable baked literal, so the user's .zshrc never loads (#8003).
+# %x is not subject to that corruption; keep $ZDOTDIR as a fallback for the
+# rare shell where %x prompt expansion yields nothing.
+_orca_wrapper_zdotdir_self="\${\${(%):-%x}:h}"
+if [[ -z "\${_orca_wrapper_zdotdir_self:-}" ]]; then
+  _orca_wrapper_zdotdir_self="\${ZDOTDIR:-}"
+fi
 while [[ "\${_orca_wrapper_zdotdir_self:-}" == */ ]]; do
   _orca_wrapper_zdotdir_self="\${_orca_wrapper_zdotdir_self%/}"
 done

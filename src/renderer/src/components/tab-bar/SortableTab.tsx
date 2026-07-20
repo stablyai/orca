@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
-import { ShellIcon } from './shell-icons'
-import { AgentIcon } from '@/lib/agent-catalog'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -11,7 +9,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
-import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { useAppStore } from '../../store'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
@@ -26,6 +23,12 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import {
+  hasUnreadAgentCompletionForTerminalTab,
+  isTerminalTabActivityLive,
+  resolveTerminalTabActivityStatus
+} from './terminal-tab-activity-status'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -82,11 +85,27 @@ export default function SortableTab({
   isChatView = false,
   onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
-  // Why: subscribe to the per-tab boolean directly so only the tab whose unread
-  // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
-  // map in TabBar would invalidate every SortableTab on every bell event
-  // because the slice returns a fresh object reference on each mark/clear.
-  const hasUnreadActivity = useAppStore((s) => s.unreadTerminalTabs[tab.id] === true)
+  // Why: agent-completion unread is pane-keyed and exists even when the
+  // experimental generic terminal-attention setting is off. Collapse both
+  // sources to one per-tab primitive so unrelated tabs do not re-render.
+  const hasUnreadActivity = useAppStore(
+    (s) =>
+      s.unreadTerminalTabs[tab.id] === true ||
+      hasUnreadAgentCompletionForTerminalTab(s.unreadAgentCompletionPanes, tab.id)
+  )
+  // Why: the resolver returns a WorktreeStatus primitive, so unrelated agent
+  // updates can't repaint this tab. The per-tab pane bucketing it reads is
+  // memoized once per store snapshot, so this stays O(1) per tab per write.
+  const activityStatus = useAppStore((s) =>
+    resolveTerminalTabActivityStatus({
+      tab,
+      agentStatusByPaneKey: s.agentStatusByPaneKey,
+      agentStatusEpoch: s.agentStatusEpoch,
+      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+      ptyIdsByTabId: s.ptyIdsByTabId,
+      terminalLayout: s.terminalLayoutsByTabId?.[tab.id]
+    })
+  )
   const renamingTabId = useAppStore((s) => s.renamingTabId)
   const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
@@ -118,11 +137,11 @@ export default function SortableTab({
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isEditing, setIsEditing] = useState(false)
-  // Why: single source of truth for the unread-activity visual treatment —
-  // drives BOTH the amber wash overlay and the bell icon swap below. Kept as
-  // one derived boolean so the two visual cues can never drift out of sync
-  // (e.g. showing the bell without the wash, or vice versa).
-  const showActivityAffordance = hasUnreadActivity && !isEditing
+  // Why: a live working/needs-input state is newer and more specific than an
+  // unread event from the prior turn. It owns the icon until the turn ends;
+  // the unread completion bell then returns if the tab is still unvisited.
+  const showUnreadActivity =
+    hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
   const [renameValue, setRenameValue] = useState('')
   const renameFocusFrameRef = useRef<number | null>(null)
   // Why: React's synthetic onBlur fires during the Input's unmount when isEditing flips
@@ -236,6 +255,7 @@ export default function SortableTab({
       // pass even if the tab-bar render path had silently broken (the same
       // tautology that let PR #1186's render crash ship past E2E in #1193).
       data-active={isActive ? 'true' : 'false'}
+      data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
       // Why: on unread activity, tint the whole tab with a subtle amber
@@ -284,50 +304,18 @@ export default function SortableTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
-      {showActivityAffordance && (
-        // Why: amber wash for unread tabs. Rendered as a real DOM child so
-        // both drop indicators (::before left / ::after right in
-        // drop-indicator.ts) stay free for drag-and-drop feedback — a prior
-        // ::after-based implementation collided with the right-edge drop
-        // indicator and hid it on unread tabs. pointer-events-none keeps
-        // clicks reaching the underlying tab handlers.
+      {showUnreadActivity && (
+        // Why: a real DOM child leaves both drop-indicator pseudo-elements
+        // available and keeps pointer events reaching the tab beneath it.
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
       )}
-      {showActivityAffordance ? (
-        // Why: the activity marker sits to the LEFT of the tab title using
-        // Orca's filled bell glyph (amber-500 with a subtle drop shadow)
-        // so it matches the worktree-level bell in the sidebar — keeping
-        // every "needs your attention" surface in Orca consistent.
-        <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
-          <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
-        </span>
-      ) : tabAgent ? (
-        // Why: coding-agent tabs should read as Claude/Codex/etc. while the
-        // harness is running; plain shells keep the generic terminal tile.
-        <span
-          className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
-          data-agent-icon={tabAgent}
-          aria-hidden
-        >
-          <AgentIcon agent={tabAgent} size={12} />
-        </span>
-      ) : (
-        // Why: ShellIcon renders a colored brand-style tile for PowerShell,
-        // CMD, Git Bash, and WSL so Windows users can distinguish shells at a glance.
-        // On mac/linux (or Windows tabs without a resolved shell) it falls
-        // back to a matching colored generic-terminal tile — keeping every
-        // tab's leading glyph in the same visual idiom instead of mixing a
-        // flat lucide chevron with the brand tiles. Opacity dims the icon
-        // on inactive tabs to match the existing text treatment without
-        // desaturating the brand colors beyond recognition.
-        <span
-          className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
-          data-shell-icon={shellForIcon ?? 'generic'}
-          aria-hidden
-        >
-          <ShellIcon shell={shellForIcon} size={12} />
-        </span>
-      )}
+      <TerminalTabLeadingIcon
+        agent={tabAgent}
+        activityStatus={activityStatus}
+        shell={shellForIcon}
+        showUnreadActivity={showUnreadActivity}
+        isActive={isActive}
+      />
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}

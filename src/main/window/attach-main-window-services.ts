@@ -38,6 +38,7 @@ import type {
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
+import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
@@ -74,6 +75,7 @@ export function attachMainWindowServices(
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     awaitLocalPtyStartup?: () => Promise<void>
+    awaitLocalPtyProviderStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
     // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
@@ -96,6 +98,7 @@ export function attachMainWindowServices(
     store,
     {
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
+      awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
     }
   )
@@ -389,6 +392,7 @@ function registerRuntimeWindowLifecycle(
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
+    closeTerminalTab: (tabId) => requestTerminalTabCloseFromRenderer(mainWindow, tabId),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>

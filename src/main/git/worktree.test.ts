@@ -273,6 +273,38 @@ describe('parseWorktreeList', () => {
     })
   })
 
+  it('preserves a prunable marker and its reason', () => {
+    expect(
+      parseWorktreeList(
+        'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /stale\nHEAD def\nbranch refs/heads/feature\nprunable gitdir file points to non-existent location\n'
+      )[1]
+    ).toMatchObject({
+      path: '/stale',
+      prunable: true,
+      prunableReason: 'gitdir file points to non-existent location'
+    })
+  })
+
+  it('preserves a NUL-delimited prunable marker', () => {
+    const output = [
+      'worktree /repo',
+      'HEAD abc',
+      'branch refs/heads/main',
+      '',
+      'worktree /stale',
+      'HEAD def',
+      'branch refs/heads/feature',
+      'prunable gitdir file points to non-existent location',
+      ''
+    ].join('\0')
+
+    expect(parseWorktreeList(output, { nulDelimited: true })[1]).toMatchObject({
+      path: '/stale',
+      prunable: true,
+      prunableReason: 'gitdir file points to non-existent location'
+    })
+  })
+
   it('parses regular and bare worktree blocks from porcelain output', () => {
     const output = `
 worktree /repo
@@ -555,7 +587,10 @@ branch refs/heads/main-2
         head: 'def456',
         branch: 'refs/heads/main-2',
         isBare: false,
-        isMainWorktree: false
+        isMainWorktree: false,
+        // The line-block fallback also probes linked worktree paths for
+        // existence (issue #8389), and this mocked path is absent on disk.
+        prunable: true
       }
     ])
 

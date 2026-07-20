@@ -74,7 +74,11 @@ export function registerDaemonManagementHandlers(): void {
   // daemons aren't killed here.
   ipcMain.handle(
     'pty:management:killAll',
-    async (): Promise<{ killedCount: number; remainingCount: number }> => {
+    async (): Promise<{
+      killedCount: number
+      remainingCount: number
+      killedSessionIds: string[]
+    }> => {
       const adapters = getDaemonAdapters()
       // Why: snapshot the initial session set once, up front. All subsequent
       // accounting is relative to these IDs. If the renderer respawns panes
@@ -87,7 +91,7 @@ export function registerDaemonManagementHandlers(): void {
       const initialCount = initial.length
 
       if (initialCount === 0) {
-        return { killedCount: 0, remainingCount: 0 }
+        return { killedCount: 0, remainingCount: 0, killedSessionIds: [] }
       }
 
       // Why: fire one shutdown per initial session, in parallel, once — no
@@ -125,20 +129,29 @@ export function registerDaemonManagementHandlers(): void {
       // session count) is what keeps the math honest when the renderer
       // respawns panes with fresh IDs mid-kill.
       let remainingOriginalCount = initialCount
+      let remainingOriginalIds = initialIds
       for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
         await sleep(POLL_INTERVAL_MS)
         const current = await collectSessions(adapters)
-        remainingOriginalCount = current.reduce(
-          (count, s) => (initialIds.has(s.sessionId) ? count + 1 : count),
-          0
+        remainingOriginalIds = new Set(
+          current
+            .filter((session) => initialIds.has(session.sessionId))
+            .map((session) => session.sessionId)
         )
+        remainingOriginalCount = remainingOriginalIds.size
         if (remainingOriginalCount === 0) {
           break
         }
       }
 
       const killedCount = initialCount - remainingOriginalCount
-      return { killedCount, remainingCount: remainingOriginalCount }
+      return {
+        killedCount,
+        remainingCount: remainingOriginalCount,
+        killedSessionIds: [...initialIds].filter(
+          (sessionId) => !remainingOriginalIds.has(sessionId)
+        )
+      }
     }
   )
 

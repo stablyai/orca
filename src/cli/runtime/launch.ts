@@ -266,7 +266,7 @@ function resolveForegroundOrcaExecutable(): string {
   )
 }
 
-function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const next = { ...env }
   delete next.ELECTRON_RUN_AS_NODE
   return next

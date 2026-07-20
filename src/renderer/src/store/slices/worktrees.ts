@@ -25,10 +25,20 @@ import {
   getRepoIdFromWorktreeId,
   type WorktreeSlice
 } from './worktree-helpers'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
+import {
+  remapClosedTerminalTabSnapshotCwds,
+  type ClosedTerminalTabSnapshot
+} from './recently-closed-tabs'
 import { findRepoForHost } from './repo-host-identity'
+import {
+  dropWorktreeRowsForRemovedRuntimeEnvironments,
+  isRemovedRuntimeHostId
+} from './stale-runtime-host-rows'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -37,6 +47,7 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
+import { routeListingBranchSwitchesThroughGitIdentity } from './worktree-listing-branch-switch'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
@@ -66,6 +77,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,
+  getActiveSidebarWorkspaceId,
   isWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
@@ -1762,7 +1774,8 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'showDotfilesByWorktree',
   'expandedDirs',
   'lastVisitedAtByWorktreeId',
-  'defaultTerminalTabsAppliedByWorktreeId'
+  'defaultTerminalTabsAppliedByWorktreeId',
+  'recentlyClosedTabKindsByWorktree'
 ] as const satisfies readonly (keyof AppState)[]
 
 /**
@@ -1811,6 +1824,10 @@ function buildWorktreeRenameState(
         workspace: withNewWorktreeId(snapshot.workspace),
         pages: snapshot.pages.map(withNewWorktreeId)
       })),
+    fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
+      ...searchState,
+      resultOwner: searchState.resultOwner ? withNewWorktreeId(searchState.resultOwner) : null
+    }),
     unifiedTabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
     groupsByWorktree: (groups: { worktreeId: string }[]) => groups.map(withNewWorktreeId)
   }
@@ -1822,6 +1839,17 @@ function buildWorktreeRenameState(
   // removeWorktree reducer — now also purge them on removal.)
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
     files.map(withNewWorktreeId)
+  )
+  // Why: terminal reopen snapshots carry absolute startupCwd paths under the
+  // old worktree folder; remap them or Cmd+Shift+T respawns into a directory
+  // that no longer exists after the rename. Paths outside the renamed folder
+  // are untouched by the move and stay valid as-is.
+  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
+  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+  renameKey('recentlyClosedTerminalTabsByWorktree', (snapshots: ClosedTerminalTabSnapshot[]) =>
+    oldWorktreePath && newWorktreePath
+      ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
+      : snapshots
   )
   renameKey('remoteStatusesByWorktree')
 
@@ -2240,6 +2268,8 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // Why: keyed by worktreeId; re-keyed on rename but missed by both removal
     // paths, leaking the per-worktree editor-undo (Cmd/Ctrl+Shift+T) snapshots.
     recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
+    recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
+    recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
@@ -2325,6 +2355,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   fetchWorktrees: async (repoId, options) => {
     try {
       const ownerState = get()
+      const requestStartedWorktrees = ownerState.worktreesByRepo[repoId]
       const hostId = repoHostId(ownerState, repoId)
       const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
@@ -2336,11 +2367,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (options?.requireAuthoritative && !detected.authoritative) {
         return false
       }
+      let incoming = toVisibleWorktrees(detected, hostId, setup)
+      const latestState = get()
+      if (repoHasExecutionHost(latestState, repoId, hostId, ownerWasMissingAtStart)) {
+        const matchOptions = worktreeHostMatchOptions(latestState, repoId, hostId)
+        incoming = routeListingBranchSwitchesThroughGitIdentity({
+          requestStarted: requestStartedWorktrees,
+          current: latestState.worktreesByRepo[repoId],
+          incoming,
+          matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, hostId, matchOptions),
+          hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+          updateWorktreeGitIdentity: latestState.updateWorktreeGitIdentity
+        })
+      }
       const current = get().worktreesByRepo[repoId]
-      const worktrees = sanitizeHostedReviewLinksForBranchClears(
-        toVisibleWorktrees(detected, hostId, setup),
-        current
-      )
+      const worktrees = sanitizeHostedReviewLinksForBranchClears(incoming, current)
       const currentMatchOptions = worktreeHostMatchOptions(get(), repoId, hostId)
       const currentForHost = (current ?? []).filter((worktree) =>
         worktreeMatchesHost(worktree, hostId, currentMatchOptions)
@@ -2476,15 +2517,30 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (get().hasHydratedWorktreePurge) {
       await mapReposForWorktreeRefresh(repos, async (r) => {
         try {
+          const requestStartedState = get()
+          const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
-          const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
-          const settings = settingsForKnownRepoOwner(get().settings, r)
+          const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
+          const settings = settingsForKnownRepoOwner(requestStartedState.settings, r)
           const detected = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
             executionHostId: hostId,
             reuseRecentCompatibilityFailure: true
           })
+          let incoming = toVisibleWorktrees(detected, hostId, setup)
+          const latestState = get()
+          if (repoHasExecutionHost(latestState, r.id, hostId, false)) {
+            const matchOptions = worktreeHostMatchOptions(latestState, r.id, hostId)
+            incoming = routeListingBranchSwitchesThroughGitIdentity({
+              requestStarted: requestStartedWorktrees,
+              current: latestState.worktreesByRepo[r.id],
+              incoming,
+              matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, hostId, matchOptions),
+              hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+              updateWorktreeGitIdentity: latestState.updateWorktreeGitIdentity
+            })
+          }
           const worktrees = sanitizeHostedReviewLinksForBranchClears(
-            toVisibleWorktrees(detected, hostId, setup),
+            incoming,
             get().worktreesByRepo[r.id]
           )
           set((s) => {
@@ -2555,18 +2611,30 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         | { repoId: string; ok: false }
       > => {
         try {
+          const requestStartedState = get()
+          const requestStartedWorktrees = requestStartedState.worktreesByRepo[r.id]
           const hostId = getRepoExecutionHostId(r)
-          const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
+          const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
           const detected = await listDetectedWorktreesForRepoCoalesced(
-            settingsForKnownRepoOwner(get().settings, r),
+            settingsForKnownRepoOwner(requestStartedState.settings, r),
             r.id,
             { executionHostId: hostId, reuseRecentCompatibilityFailure: true }
           )
+          let incoming = toVisibleWorktrees(detected, hostId, setup)
+          const latestState = get()
+          if (repoHasExecutionHost(latestState, r.id, hostId, false)) {
+            const matchOptions = worktreeHostMatchOptions(latestState, r.id, hostId)
+            incoming = routeListingBranchSwitchesThroughGitIdentity({
+              requestStarted: requestStartedWorktrees,
+              current: latestState.worktreesByRepo[r.id],
+              incoming,
+              matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, hostId, matchOptions),
+              hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+              updateWorktreeGitIdentity: latestState.updateWorktreeGitIdentity
+            })
+          }
           const current = get().worktreesByRepo[r.id]
-          const list = sanitizeHostedReviewLinksForBranchClears(
-            toVisibleWorktrees(detected, hostId, setup),
-            current
-          )
+          const list = sanitizeHostedReviewLinksForBranchClears(incoming, current)
           const currentMatchOptions = worktreeHostMatchOptions(get(), r.id, hostId)
           const currentForHost = (current ?? []).filter((worktree) =>
             worktreeMatchesHost(worktree, hostId, currentMatchOptions)
@@ -3257,6 +3325,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const worktreeBeforeRemoval = get()
         .allWorktrees()
         .find((entry) => entry.id === worktreeId)
+      const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
+        (tab) => get().ptyIdsByTabId[tab.id] ?? []
+      )
       const currentOwner = resolveWorktreeRemovalHost(get(), worktreeId)
       if (
         currentOwner.ambiguous ||
@@ -3344,6 +3415,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // batch) rather than only the context menu.
       requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
+      // Why: explicit deletion provenance is available here before child
+      // unmount cleanup; identity migration and recoverable remounts are not
+      // destructive and must keep their buffered live PTY state.
+      disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
       set((s) => {
         const next = { ...s.worktreesByRepo }
         for (const repoId of Object.keys(next)) {
@@ -3548,6 +3623,18 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           })(),
           recentlyClosedEditorTabsByWorktree: (() => {
             const next = { ...s.recentlyClosedEditorTabsByWorktree }
+            delete next[worktreeId]
+            return next
+          })(),
+          recentlyClosedTerminalTabsByWorktree: (() => {
+            const next = { ...s.recentlyClosedTerminalTabsByWorktree }
+            delete next[worktreeId]
+            return next
+          })(),
+          // Why: a deleted worktree's tabs can never be reopened, so purge the
+          // cross-type kind list symmetrically with the snapshot stacks above.
+          recentlyClosedTabKindsByWorktree: (() => {
+            const next = { ...s.recentlyClosedTabKindsByWorktree }
             delete next[worktreeId]
             return next
           })(),
@@ -3920,7 +4007,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
     try {
       await persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, enriched)
-      if (reviewRepo && reviewBranch && typeof get().fetchHostedReviewForBranch === 'function') {
+      if (
+        !options?.suppressHostedReviewRefresh &&
+        reviewRepo &&
+        reviewBranch &&
+        typeof get().fetchHostedReviewForBranch === 'function'
+      ) {
         // Why: the old cache entry may have been populated by the previous
         // provider link. Refetch against the post-update links so stale lookups
         // cannot keep showing the removed review.
@@ -4045,33 +4137,44 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setWorktreesPinnedAndReveal: (worktreeIds, isPinned) => {
+    // Only follow a toggled row with the viewport when it's the focused
+    // worktree; pinning/unpinning an unfocused card shouldn't yank the user's
+    // scroll to a row they aren't looking at.
+    const activeSidebarWorktreeId = getActiveSidebarWorkspaceId(
+      get().activeWorkspaceKey,
+      get().activeWorktreeId
+    )
     // Skip worktrees already in the target state so a no-op toggle doesn't
     // scroll the viewport away from where the user is.
     const updates = new Map<string, Partial<WorktreeMeta>>()
+    let didChange = false
     let revealWorktreeId: string | null = null
     for (const worktreeId of worktreeIds) {
       const current = get().getKnownWorktreeById(worktreeId)
       if (!current || current.isPinned === isPinned) {
         continue
       }
+      didChange = true
       const workspaceScope = parseWorkspaceKey(worktreeId)
       if (workspaceScope?.type === 'folder') {
         void get().updateWorktreeMeta(worktreeId, { isPinned })
       } else {
         updates.set(worktreeId, { isPinned })
       }
-      if (revealWorktreeId === null) {
+      if (revealWorktreeId === null && worktreeId === activeSidebarWorktreeId) {
         revealWorktreeId = worktreeId
       }
     }
-    if (revealWorktreeId === null) {
+    if (!didChange) {
       return
     }
     // updateWorktreesMeta applies its store update synchronously (only the
     // persistence is async), so the reveal below resolves against a render
     // where the shortcut row already exists.
     void get().updateWorktreesMeta(updates)
-    get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
+    if (revealWorktreeId !== null) {
+      get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
+    }
   },
 
   markWorktreeUnread: (worktreeId) => {
@@ -4382,6 +4485,41 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set({
       renamingWorktreeId: typeof request === 'string' ? { worktreeId: request } : request
     })
+  },
+
+  remountTerminalTabForRecovery: (tabId) => {
+    let remounted = false
+    set((s) => {
+      for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const index = tabs.findIndex((tab) => tab.id === tabId)
+        if (index < 0) {
+          continue
+        }
+        const tab = tabs[index]
+        const nextTabs = tabs.slice()
+        nextTabs[index] = {
+          ...tab,
+          // Why: TerminalPane keys on `${tab.id}-${generation}` — the bump is
+          // the remount. Same mechanism as the dead-transport activation bump
+          // above; here it is health-driven for a pane whose renderer died
+          // while its PTY stayed alive (wedged/disposed xterm, unbound
+          // transport), so the remounted pane reattaches instead of spawning.
+          generation: (tab.generation ?? 0) + 1,
+          // Why: recovery is not a user interaction — suppress the resulting
+          // PTY updates from reshuffling Recent, like activation remounts do.
+          pendingActivationSpawn: getActivationSpawnSuppression(s.terminalLayoutsByTabId[tab.id])
+        }
+        remounted = true
+        return {
+          tabsByWorktree: {
+            ...s.tabsByWorktree,
+            [worktreeId]: nextTabs
+          }
+        }
+      }
+      return {}
+    })
+    return remounted
   },
 
   setActiveWorktree: (worktreeId) => {
@@ -4841,6 +4979,200 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     set((s) => buildWorktreePurgeState(s, purgeableWorktreeIds))
+  },
+
+  purgeStaleRuntimeHostState: (removedEnvironmentIds) => {
+    const removed = new Set(removedEnvironmentIds)
+    if (removed.size === 0) {
+      return
+    }
+    set((s) => {
+      const repoIdsWithRemovedOwners = new Set<string>()
+      const survivingRepoIds = new Set<string>()
+      const repoIdsWithSurvivingOwners = new Set<string>()
+      const survivingRepos: AppState['repos'] = []
+      for (const repo of s.repos) {
+        if (isRemovedRuntimeHostId(getRepoExecutionHostId(repo), removed)) {
+          repoIdsWithRemovedOwners.add(repo.id)
+        } else {
+          survivingRepos.push(repo)
+          survivingRepoIds.add(repo.id)
+          repoIdsWithSurvivingOwners.add(repo.id)
+        }
+      }
+      const reposChanged = survivingRepos.length !== s.repos.length
+
+      // Why: broader than filterSetupsForPrunedRepoRows — a repoId-less setup on
+      // the removed host can still flip projectIdsRequiringSetupGroups and split a
+      // surviving project group, so drop every setup owned by the removed host.
+      const survivingSetups: AppState['projectHostSetups'] = []
+      for (const setup of s.projectHostSetups) {
+        if (isRemovedRuntimeHostId(setup.hostId, removed)) {
+          if (setup.repoId) {
+            repoIdsWithRemovedOwners.add(setup.repoId)
+          }
+        } else {
+          survivingSetups.push(setup)
+          if (setup.repoId) {
+            repoIdsWithSurvivingOwners.add(setup.repoId)
+          }
+        }
+      }
+      const setupsChanged = survivingSetups.length !== s.projectHostSetups.length
+      const detectedRows: Record<string, DetectedWorktreeListResult['worktrees']> =
+        Object.fromEntries(
+          Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
+            repoId,
+            result.worktrees
+          ])
+        )
+      // Why: repo/setup catalogs can lag session hydration; hosted worktree rows
+      // are ownership evidence during that loading gap too.
+      const recordWorktreeOwners = (
+        rowsByRepo: Record<string, readonly { hostId?: ExecutionHostId }[]>
+      ): void => {
+        for (const [repoId, rows] of Object.entries(rowsByRepo)) {
+          for (const row of rows) {
+            if (!row.hostId) {
+              continue
+            }
+            const ownerSet = isRemovedRuntimeHostId(row.hostId, removed)
+              ? repoIdsWithRemovedOwners
+              : repoIdsWithSurvivingOwners
+            ownerSet.add(repoId)
+          }
+        }
+      }
+      recordWorktreeOwners(s.worktreesByRepo)
+      recordWorktreeOwners(detectedRows)
+
+      const sessionWorktreeIdsOwnedByRemovedHosts = new Set<string>()
+      let survivingRestoredSessionOwners = s.restoredRuntimeHostIdByWorkspaceSessionKey
+      for (const [workspaceKey, hostId] of Object.entries(
+        s.restoredRuntimeHostIdByWorkspaceSessionKey
+      )) {
+        const scope = parseWorkspaceKey(workspaceKey)
+        if (scope?.type === 'folder') {
+          continue
+        }
+        const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceKey
+        const repoId = getRepoIdFromWorktreeId(worktreeId)
+        if (!isRemovedRuntimeHostId(hostId, removed)) {
+          // Why: restored sessions can be the only surviving-owner evidence before catalogs load.
+          repoIdsWithSurvivingOwners.add(repoId)
+          continue
+        }
+        sessionWorktreeIdsOwnedByRemovedHosts.add(worktreeId)
+        repoIdsWithRemovedOwners.add(repoId)
+        if (survivingRestoredSessionOwners === s.restoredRuntimeHostIdByWorkspaceSessionKey) {
+          survivingRestoredSessionOwners = { ...survivingRestoredSessionOwners }
+        }
+        delete survivingRestoredSessionOwners[workspaceKey]
+      }
+
+      // Why: legacy rows predate host stamps; every available owner record must
+      // agree that no other host survives before an unhosted row can be retired.
+      const repoIdsWithoutSurvivingOwners = new Set(repoIdsWithRemovedOwners)
+      for (const repoId of repoIdsWithSurvivingOwners) {
+        repoIdsWithoutSurvivingOwners.delete(repoId)
+      }
+
+      const worktreeDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(
+        s.worktreesByRepo,
+        removed,
+        repoIdsWithoutSurvivingOwners
+      )
+      const detectedDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(
+        detectedRows,
+        removed,
+        repoIdsWithoutSurvivingOwners
+      )
+
+      const worktreesChanged = worktreeDrop.rowsByRepo !== s.worktreesByRepo
+      const detectedChanged = detectedDrop.rowsByRepo !== detectedRows
+
+      const removedWorktreeIds = new Set([
+        ...worktreeDrop.removedWorktreeIds,
+        ...detectedDrop.removedWorktreeIds,
+        ...sessionWorktreeIdsOwnedByRemovedHosts
+      ])
+      // Why: terminal tabs hydrate before worktree metadata; session-only ids for
+      // repos whose owners are all gone still need the full worktree-state purge.
+      if (repoIdsWithoutSurvivingOwners.size > 0) {
+        for (const worktreeId of Object.keys(s.tabsByWorktree)) {
+          const scope = parseWorkspaceKey(worktreeId)
+          const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+          if (
+            scope?.type !== 'folder' &&
+            repoIdsWithoutSurvivingOwners.has(getRepoIdFromWorktreeId(rawWorktreeId))
+          ) {
+            removedWorktreeIds.add(rawWorktreeId)
+          }
+        }
+      }
+      // Why: bare-id state follows an exact survivor unless the restored session
+      // partition proves that state belonged to the removed host.
+      for (const rows of Object.values(worktreeDrop.rowsByRepo)) {
+        for (const row of rows) {
+          if (!sessionWorktreeIdsOwnedByRemovedHosts.has(row.id)) {
+            removedWorktreeIds.delete(row.id)
+          }
+        }
+      }
+      for (const rows of Object.values(detectedDrop.rowsByRepo)) {
+        for (const row of rows) {
+          if (!sessionWorktreeIdsOwnedByRemovedHosts.has(row.id)) {
+            removedWorktreeIds.delete(row.id)
+          }
+        }
+      }
+      const purgeState =
+        removedWorktreeIds.size > 0 ? buildWorktreePurgeState(s, [...removedWorktreeIds]) : {}
+
+      const restoredSessionOwnersChanged =
+        survivingRestoredSessionOwners !== s.restoredRuntimeHostIdByWorkspaceSessionKey
+      if (
+        !reposChanged &&
+        !setupsChanged &&
+        !worktreesChanged &&
+        !detectedChanged &&
+        !restoredSessionOwnersChanged &&
+        removedWorktreeIds.size === 0
+      ) {
+        return s
+      }
+
+      const detectedWorktreesByRepo = detectedChanged
+        ? Object.fromEntries(
+            Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
+              repoId,
+              { ...result, worktrees: detectedDrop.rowsByRepo[repoId] }
+            ])
+          )
+        : s.detectedWorktreesByRepo
+
+      const rowsChanged = worktreesChanged || detectedChanged
+      return {
+        ...purgeState,
+        ...(reposChanged ? { repos: survivingRepos } : {}),
+        ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
+        ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
+        ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
+        ...(restoredSessionOwnersChanged
+          ? { restoredRuntimeHostIdByWorkspaceSessionKey: survivingRestoredSessionOwners }
+          : {}),
+        ...(rowsChanged ? { sortEpoch: s.sortEpoch + 1 } : {}),
+        // Why: mirror validateRepoScopedUi's repo-scoped UI subset so a filtered or
+        // active sidebar can't be left referencing a purged repo id.
+        ...(reposChanged
+          ? {
+              activeRepoId:
+                s.activeRepoId && survivingRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+              filterRepoIds: s.filterRepoIds.filter((repoId) => survivingRepoIds.has(repoId))
+            }
+          : {})
+      }
+    })
   },
 
   migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => {

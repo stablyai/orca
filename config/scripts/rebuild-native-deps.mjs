@@ -20,9 +20,18 @@
 
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, globSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  globSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { platform as osPlatform } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const projectDir = process.cwd()
 let cliOptions
@@ -40,6 +49,7 @@ const electronVersion = JSON.parse(
 ).version
 
 const ignoreModules = ['cpu-features']
+const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 
 if (ignoreModules.length > 0) {
   console.log(`[rebuild] Skipping optional Electron rebuild modules: ${ignoreModules.join(', ')}`)
@@ -49,7 +59,11 @@ if (ignoreModules.length > 0) {
 // modules inside pnpm's .pnpm/ store. Passing an explicit list of modules to
 // rebuild via `onlyModules` ensures they're recompiled against Electron's Node
 // ABI regardless of the package manager's store layout.
-const NATIVE_MODULES = ['node-pty', 'cpu-features']
+const NATIVE_MODULES = [
+  'node-pty',
+  'cpu-features',
+  ...(rebuildPlatform === 'win32' ? ['windows-native-registry'] : [])
+]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild =
   process.env.ORCA_FORCE_NATIVE_REBUILD === '1' ||
@@ -58,6 +72,7 @@ const forceRebuild =
   rebuildArch !== process.arch
 
 ensureElectronPackageInstalled()
+restoreNodePtyWindowsConptyRuntime()
 
 const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebuildReason()
 
@@ -124,6 +139,7 @@ try {
     // Node before postinstall runs this script.
     force: true
   })
+  restoreNodePtyWindowsConptyRuntime()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
   if (isWindowsNativeLockError(err)) {
@@ -141,6 +157,37 @@ try {
     }
   }
   process.exit(1)
+}
+
+function restoreNodePtyWindowsConptyRuntime() {
+  if (rebuildPlatform !== 'win32' || !onlyModules.includes('node-pty')) {
+    return
+  }
+
+  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
+  if (!existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))) {
+    return
+  }
+  const conptyRoot = join(nodePtyDir, 'third_party', 'conpty')
+  const sourceDir = readdirSync(conptyRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(conptyRoot, entry.name, `win10-${rebuildArch}`))
+    .find((candidate) => existsSync(candidate))
+  if (!sourceDir) {
+    throw new Error(`node-pty has no ConPTY runtime payload for win10-${rebuildArch}`)
+  }
+
+  const runtimeDir = join(nodePtyDir, 'build', 'Release', 'conpty')
+  mkdirSync(runtimeDir, { recursive: true })
+  for (const filename of NODE_PTY_CONPTY_RUNTIME_FILES) {
+    const sourceFile = join(sourceDir, filename)
+    if (!existsSync(sourceFile)) {
+      throw new Error(`node-pty is missing ${sourceFile}`)
+    }
+    copyFileSync(sourceFile, join(runtimeDir, filename))
+  }
+  // Why: @electron/rebuild bypasses node-pty's postinstall step that normally copies these DLLs.
+  console.log(`[rebuild] Restored node-pty ConPTY runtime files for win10-${rebuildArch}.`)
 }
 
 function ensureElectronPackageInstalled() {
@@ -390,6 +437,7 @@ function probeElectronNativeModules(moduleNames) {
 
   const probeSource = `
 const { createRequire } = require('node:module')
+const { existsSync } = require('node:fs')
 const { release } = require('node:os')
 const { resolve } = require('node:path')
 const projectRequire = createRequire(resolve(process.cwd(), 'package.json'))
@@ -411,10 +459,17 @@ if (failures.length > 0) {
 }
 
 function loadNativeModule(moduleName) {
+  if (moduleName === 'windows-native-registry') {
+    const registry = projectRequire(moduleName)
+    // Why: the package defers loading its .node addon until the first registry call.
+    registry.getRegistryKey(registry.HK.CU, 'Environment')
+    return
+  }
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
     const native = loadNativeModule(getNodePtyNativeModuleName())
+    assertNodePtyWindowsConptyRuntime(native.dir)
     if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
       throw new Error(
         'node-pty resolved to ' +
@@ -425,6 +480,26 @@ function loadNativeModule(moduleName) {
     return
   }
   projectRequire(moduleName)
+}
+
+function assertNodePtyWindowsConptyRuntime(nativeDir) {
+  if (process.platform !== 'win32' || !isNodePtyReleaseBuildDir(nativeDir)) {
+    return
+  }
+  const runtimeDir = resolve(
+    process.cwd(),
+    'node_modules',
+    'node-pty',
+    'build',
+    'Release',
+    'conpty'
+  )
+  for (const filename of ${JSON.stringify(NODE_PTY_CONPTY_RUNTIME_FILES)}) {
+    const runtimeFile = resolve(runtimeDir, filename)
+    if (!existsSync(runtimeFile)) {
+      throw new Error('node-pty ConPTY runtime file is missing: ' + runtimeFile)
+    }
+  }
 }
 
 function isNodePtyReleaseBuildDir(nativeDir) {

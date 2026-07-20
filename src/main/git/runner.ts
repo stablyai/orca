@@ -29,6 +29,11 @@ import {
   notifyGhPrimaryRateLimit
 } from './gh-rate-limit-breaker'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
+import { addWslEnvKeys } from '../wsl-env'
+import {
+  appendGitConfigEnv,
+  gitCredentialPromptGuardEnv
+} from '../../shared/git-credential-prompt-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 import {
   buildWslLoginShellCommand,
@@ -37,6 +42,10 @@ import {
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
 import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
+// Re-exported for existing importers; lightweight consumers should import these
+// from './exec-error' directly so they do not depend on this heavy module.
+import { extractExecError, parseRetryAfterMs } from './exec-error'
+export { extractExecError, parseRetryAfterMs }
 
 // ─── Core resolution ────────────────────────────────────────────────
 
@@ -314,24 +323,57 @@ function createAbortError(): Error {
   return error
 }
 
-function killSpawnedCommandTree(child: ChildProcess): void {
+const WINDOWS_TREE_KILL_WAIT_MS = 2_000
+
+function killSpawnedCommandTree(child: ChildProcess): Promise<void> {
   const pid = child.pid
   if (!pid || process.platform !== 'win32') {
     child.kill()
-    return
+    return Promise.resolve()
   }
-  try {
-    // Why: Windows package-manager CLIs are often .cmd shims. Killing only
-    // cmd.exe leaves the underlying node/npm/pnpm child running.
-    const killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    killer.on('error', () => child.kill())
+  return new Promise((resolve) => {
+    let killer: ChildProcess
+    try {
+      // Why: Windows shims and wsl.exe can own descendants; wait for /t tree
+      // cleanup before settling so a timed-out command cannot outlive its probe.
+      killer = spawn('taskkill', ['/pid', String(pid), '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      if (!killer || typeof killer.unref !== 'function') {
+        child.kill()
+        resolve()
+        return
+      }
+    } catch {
+      child.kill()
+      resolve()
+      return
+    }
+    let settled = false
+    let timer: NodeJS.Timeout | null = null
+    const finish = (fallbackToChildKill: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      killer.removeAllListeners()
+      if (fallbackToChildKill) {
+        child.kill()
+      }
+      resolve()
+    }
+    killer.once('error', () => finish(true))
+    killer.once('close', (code) => finish(code !== 0))
+    timer = setTimeout(() => {
+      killer.kill()
+      finish(true)
+    }, WINDOWS_TREE_KILL_WAIT_MS)
     killer.unref()
-  } catch {
-    child.kill()
-  }
+  })
 }
 
 type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
@@ -367,6 +409,7 @@ function execFileCapture(
     }
 
     let settled = false
+    let terminating = false
     let child: ChildProcess | null = null
     let timer: NodeJS.Timeout | null = null
     const cleanup = (): void => {
@@ -396,14 +439,26 @@ function execFileCapture(
       resolve({ stdout, stderr })
     }
     const onAbort = (): void => {
-      if (child) {
-        killSpawnedCommandTree(child)
+      if (settled || terminating) {
+        return
       }
-      finish(createAbortError())
+      terminating = true
+      const abortError = createAbortError()
+      if (!child) {
+        terminating = false
+        finish(abortError)
+        return
+      }
+      void killSpawnedCommandTree(child).then(() => {
+        terminating = false
+        finish(abortError)
+      })
     }
 
     try {
       const spawnStartedAt = performance.now()
+      // Why: the abort listener below owns tree-aware cleanup. Node's
+      // signal handler could kill wsl.exe before taskkill sees its children.
       child = execFile(
         command,
         args,
@@ -411,10 +466,12 @@ function execFileCapture(
           cwd: options.cwd,
           encoding: options.encoding,
           maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
-          env: options.env,
-          signal: options.signal
+          env: options.env
         },
         (error, stdout, stderr) => {
+          if (terminating) {
+            return
+          }
           if (!error && stderr === undefined && isExecFileResultObject(stdout)) {
             finish(null, stdout.stdout, stdout.stderr)
             return
@@ -428,21 +485,34 @@ function execFileCapture(
       return
     }
 
-    child.once('error', (error) => finish(error))
+    child.once('error', (error) => {
+      if (!terminating) {
+        finish(error)
+      }
+    })
 
     if (options.stdin !== undefined) {
       endSubprocessStdin(child.stdin, options.stdin)
     }
 
-    // Why: Node's native execFile timeout waits for the child to exit after
-    // signaling it. Some CLIs ignore that signal, so reject the UI operation
-    // on our own timer and kill the child only as best effort.
+    // Why: Node's native timeout can wait forever for signal-ignoring CLIs;
+    // enforce our own deadline and settle after bounded process-tree cleanup.
     if (options.timeout && options.timeout > 0) {
       timer = setTimeout(() => {
-        if (child) {
-          killSpawnedCommandTree(child)
+        if (settled || terminating) {
+          return
         }
-        finish(new Error(`${command} timed out.`))
+        terminating = true
+        const timeoutError = new Error(`${command} timed out.`)
+        if (!child) {
+          terminating = false
+          finish(timeoutError)
+          return
+        }
+        void killSpawnedCommandTree(child).then(() => {
+          terminating = false
+          finish(timeoutError)
+        })
       }, options.timeout)
     }
     options.signal?.addEventListener('abort', onAbort, { once: true })
@@ -475,7 +545,7 @@ async function spawnCommandCapture(
     recordSubprocessSpawn(spawnCmd, spawnArgs, performance.now() - spawnStartedAt)
     let timer: NodeJS.Timeout | null = null
     const onAbort = (): void => {
-      killSpawnedCommandTree(child)
+      void killSpawnedCommandTree(child)
       finish(createAbortError())
     }
     const cleanupListeners = (): void => {
@@ -503,7 +573,7 @@ async function spawnCommandCapture(
     }
     timer = options.timeout
       ? setTimeout(() => {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(new Error(`${command} timed out.`))
         }, options.timeout)
       : null
@@ -511,7 +581,7 @@ async function spawnCommandCapture(
     function onStdoutData(chunk: Buffer): void {
       stdoutBytes += chunk.byteLength
       if (options.maxBuffer && stdoutBytes > options.maxBuffer) {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(new Error(`${command} stdout exceeded maxBuffer.`))
         return
       }
@@ -520,7 +590,7 @@ async function spawnCommandCapture(
     function onStderrData(chunk: Buffer): void {
       stderrBytes += chunk.byteLength
       if (options.maxBuffer && stderrBytes > options.maxBuffer) {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(new Error(`${command} stderr exceeded maxBuffer.`))
         return
       }
@@ -558,20 +628,7 @@ export function gitOptionalLocksDisabledEnv(
  * already present in `env` so we never clobber config a caller injected the
  * same way.
  */
-export function appendGitConfigEnv(
-  env: NodeJS.ProcessEnv,
-  entries: readonly (readonly [key: string, value: string])[]
-): NodeJS.ProcessEnv {
-  const parsed = Number.parseInt(env.GIT_CONFIG_COUNT ?? '', 10)
-  const base = Number.isInteger(parsed) && parsed > 0 ? parsed : 0
-  const next = { ...env }
-  entries.forEach(([key, value], index) => {
-    next[`GIT_CONFIG_KEY_${base + index}`] = key
-    next[`GIT_CONFIG_VALUE_${base + index}`] = value
-  })
-  next.GIT_CONFIG_COUNT = String(base + entries.length)
-  return next
-}
+export { appendGitConfigEnv }
 
 /**
  * Pin Orca-spawned git to untranslated English output so stderr/progress
@@ -584,26 +641,25 @@ export function untranslatedGitOutputEnv(env: NodeJS.ProcessEnv = process.env): 
   return { ...env, ...UNTRANSLATED_GIT_OUTPUT_ENV }
 }
 
-export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return appendGitConfigEnv(
-    {
-      ...untranslatedGitOutputEnv(env),
-      GIT_TERMINAL_PROMPT: '0',
-      GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-      SSH_ASKPASS: env.SSH_ASKPASS ?? '',
-      // Why: Git Credential Manager ignores GIT_TERMINAL_PROMPT / GIT_ASKPASS and
-      // pops a GUI on first auth — the Windows worktree-create hang (STA-1292).
-      // `never` suppresses the prompt while still serving cached credentials.
-      GCM_INTERACTIVE: 'never'
-    },
-    // Why: disable only the *interactive* credential prompt, NOT the helper
-    // itself — an empty credential.helper would break cached-credential auth for
-    // private repos. Harmless on macOS/Linux (no GCM) and on the SSH path.
-    [
-      ['credential.interactive', 'false'],
-      ['credential.guiPrompt', 'false']
-    ]
-  )
+export function promptGuardGitEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  return gitCredentialPromptGuardEnv(untranslatedGitOutputEnv(env), platform)
+}
+
+/**
+ * Credential-prompt guard for a general-purpose shell environment (terminal
+ * PTYs, hook scripts): everything promptGuardGitEnv does EXCEPT the issue-7808
+ * locale pins. Those exist so Orca can parse stderr of git it spawns itself;
+ * forcing LC_ALL/LANG/LANGUAGE onto a user's shell would change the locale of
+ * every child process, not just git's.
+ */
+export function promptGuardShellEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  return gitCredentialPromptGuardEnv(env, platform)
 }
 
 /**
@@ -614,17 +670,28 @@ export function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.
  * stuck calls pile up and the runtime stops answering all clients (issue #5308).
  *
  * - GIT_TERMINAL_PROMPT=0: git refuses to prompt for credentials and errors out.
- * - GIT_ASKPASS / SSH_ASKPASS='': disable any GUI/askpass credential helper that
- *   would otherwise pop a prompt and block.
+ * - GIT_ASKPASS / SSH_ASKPASS: emptied when unset so no GUI/askpass helper can
+ *   pop a prompt and block. A caller-provided askpass is preserved on purpose —
+ *   custom askpass setups commonly *serve* credentials non-interactively, and
+ *   blanking them would break those fetches.
  * - GIT_SSH_COMMAND BatchMode=yes: SSH fails instead of waiting on an
  *   interactive password/host-key prompt. BatchMode does NOT change host trust
  *   (an unknown host still errors, it just won't hang). Only added when the
  *   caller hasn't set its own GIT_SSH_COMMAND.
  */
-export function nonInteractiveGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const next = promptGuardGitEnv(env)
+export function nonInteractiveGitEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const next = promptGuardGitEnv(env, platform)
   if (!next.GIT_SSH_COMMAND) {
     next.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+    if (platform === 'win32') {
+      // Why: forward across the WSL boundary only when we set the value —
+      // plain `ssh` resolves inside the distro, whereas a caller's
+      // Windows-specific GIT_SSH_COMMAND must not leak into Linux git.
+      addWslEnvKeys(next, ['GIT_SSH_COMMAND'])
+    }
   }
   return next
 }
@@ -775,7 +842,12 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
   }
 
   if (!configuredCommand) {
-    return { env: { ...promptEnv, GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }, mode: 'fallback' }
+    const env = { ...promptEnv, GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }
+    // Why: WSL routing can come from either an explicit distro or a UNC cwd.
+    if (resolved.wsl) {
+      addWslEnvKeys(env, ['GIT_SSH_COMMAND'])
+    }
+    return { env, mode: 'fallback' }
   }
 
   const batchModeCommand = buildOpenSshBatchModeCommand(configuredCommand)
@@ -785,10 +857,11 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
     return { env: promptEnv, mode: 'configured-wrapper-passthrough' }
   }
 
-  return {
-    env: { ...promptEnv, GIT_SSH_COMMAND: batchModeCommand },
-    mode: 'configured-openssh'
+  const env = { ...promptEnv, GIT_SSH_COMMAND: batchModeCommand }
+  if (resolved.wsl) {
+    addWslEnvKeys(env, ['GIT_SSH_COMMAND'])
   }
+  return { env, mode: 'configured-openssh' }
 }
 
 /**
@@ -985,7 +1058,7 @@ export async function gitStreamStdout(
       function onStdoutData(chunk: Buffer): void {
         stdoutBytes += chunk.byteLength
         if (stdoutBytes > maxBuffer) {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(new Error('git stdout exceeded maxBuffer.'))
           return
         }
@@ -1000,7 +1073,7 @@ export async function gitStreamStdout(
         try {
           shouldStop = options.onStdout(decoded)
         } catch (error) {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(error instanceof Error ? error : new Error(String(error)))
           return
         }
@@ -1008,14 +1081,14 @@ export async function gitStreamStdout(
           // Why: parser hit its limit. Kill git and resolve cleanly — the
           // partial output we already parsed is the intended result.
           stoppedEarly = true
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(null)
         }
       }
       function onStderrData(chunk: Buffer): void {
         stderrBytes += chunk.byteLength
         if (stderrBytes > maxBuffer) {
-          killSpawnedCommandTree(child)
+          void killSpawnedCommandTree(child)
           finish(new Error('git stderr exceeded maxBuffer.'))
           return
         }
@@ -1032,7 +1105,7 @@ export async function gitStreamStdout(
         finish(new Error(`git exited with ${code}: ${stderr}`))
       }
       function onAbort(): void {
-        killSpawnedCommandTree(child)
+        void killSpawnedCommandTree(child)
         finish(createAbortError())
       }
 
@@ -1223,110 +1296,6 @@ function argsLookIdempotent(args: string[]): boolean {
     }
   }
   return true
-}
-
-/**
- * Extract stderr from an execFile rejection.
- *
- * Why: Node's execFile rejects with an Error that has `.stdout` and `.stderr`
- * fields populated separately from `.message`. Reading `err.message` alone is
- * unreliable — it can truncate stderr or omit it entirely depending on Node
- * version and maxBuffer behavior. We prefer the explicit fields and fall
- * back to `.message` only when neither is present.
- */
-export function extractExecError(err: unknown): { stderr: string; stdout: string } {
-  if (err && typeof err === 'object') {
-    const e = err as { stderr?: unknown; stdout?: unknown; message?: unknown }
-    const stderr =
-      typeof e.stderr === 'string'
-        ? e.stderr
-        : Buffer.isBuffer(e.stderr)
-          ? e.stderr.toString('utf-8')
-          : ''
-    const stdout =
-      typeof e.stdout === 'string'
-        ? e.stdout
-        : Buffer.isBuffer(e.stdout)
-          ? e.stdout.toString('utf-8')
-          : ''
-    if (stderr || stdout) {
-      return { stderr, stdout }
-    }
-    if (typeof e.message === 'string') {
-      return { stderr: e.message, stdout: '' }
-    }
-  }
-  return { stderr: String(err), stdout: '' }
-}
-
-/**
- * Detect a Retry-After hint in gh stderr and return the suggested delay in ms,
- * or null when the response includes no Retry-After.
- *
- * Why: gh forwards response headers when verbose, and prints "Retry-After:
- * <seconds>" in error output for primary rate-limit 429s. When present, the
- * caller is better served by propagating the error so the UI can surface the
- * real wait time — retrying on our own 250ms cadence just earns another 429
- * and burns the retry budget. Also supports HTTP-date Retry-After values.
- */
-export function parseRetryAfterMs(stderr: string): number | null {
-  const raw = findRetryAfterHeaderValue(stderr)
-  if (raw === null) {
-    return null
-  }
-  if (/^\d+$/.test(raw)) {
-    const seconds = Number(raw)
-    return Number.isFinite(seconds) ? seconds * 1000 : null
-  }
-  const ts = Date.parse(raw)
-  if (Number.isNaN(ts)) {
-    return null
-  }
-  return Math.max(0, ts - Date.now())
-}
-
-function findRetryAfterHeaderValue(stderr: string): string | null {
-  const headerIndex = indexOfAsciiIgnoreCase(stderr, 'retry-after:', 0)
-  if (headerIndex === -1) {
-    return null
-  }
-  let valueStart = headerIndex + 'retry-after:'.length
-  while (valueStart < stderr.length) {
-    const code = stderr.charCodeAt(valueStart)
-    if (code !== 9 && code !== 32) {
-      break
-    }
-    valueStart++
-  }
-  let valueEnd = valueStart
-  while (valueEnd < stderr.length) {
-    const code = stderr.charCodeAt(valueEnd)
-    if (code === 10 || code === 13) {
-      break
-    }
-    valueEnd++
-  }
-  const value = stderr.slice(valueStart, valueEnd).trim()
-  return value.length > 0 ? value : null
-}
-
-function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
-  const lastStart = value.length - search.length
-  for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
-    let matches = true
-    for (let offset = 0; offset < search.length; offset++) {
-      const code = value.charCodeAt(index + offset)
-      const normalizedCode = code >= 65 && code <= 90 ? code + 32 : code
-      if (normalizedCode !== search.charCodeAt(offset)) {
-        matches = false
-        break
-      }
-    }
-    if (matches) {
-      return index
-    }
-  }
-  return -1
 }
 
 /**
@@ -1560,7 +1529,8 @@ export async function glabExecFileAsync(
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
         timeout: options.timeout,
-        env: options.env
+        env: options.env,
+        signal: options.signal
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {

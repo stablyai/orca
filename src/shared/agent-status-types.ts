@@ -121,6 +121,8 @@ export type AgentStatusEntry = {
    *  present in a renderer; retaining this lets worktree-level UI still show
    *  the live child agent instead of dropping it as unattributed. */
   worktreeId?: string
+  /** Accepted transport authority for this live row; null means local. */
+  connectionId?: string | null
   /** Tab attribution from the hook IPC payload, when available. */
   tabId?: string
   terminalTitle?: string
@@ -224,9 +226,20 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
+  /** Resume identity update only; the status-shaped fields are transport placeholders. */
+  providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
 }
+
+/** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
+export type AgentStatusClearIpcPayload =
+  | { paneKey: string }
+  | {
+      transient: true
+      connectionId: string
+      clearedAt: number
+    }
 
 /** Maximum character length for the toolName field. */
 export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60

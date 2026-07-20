@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
@@ -60,8 +61,10 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../../shared/orca-profiles'
 import type {
+  BrowserCertificateProceedResult,
   BrowserLoadError,
   BrowserPage as BrowserPageState,
   BrowserWorkspace as BrowserWorkspaceState
@@ -69,7 +72,9 @@ import type {
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
-  redactKagiSessionToken
+  redactKagiSessionToken,
+  resolveRemoteFailureExternalUrl,
+  toHttpsRecoveryUrl
 } from '../../../../shared/browser-url'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -147,6 +152,7 @@ import {
 } from '@/runtime/runtime-file-client'
 import {
   callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability,
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
@@ -164,13 +170,7 @@ import {
   type BrowserScreencastFrameMetadata
 } from '../../../../shared/browser-screencast-protocol'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../shared/runtime-rpc-feature-interaction-source'
-import {
-  formatByteCount,
-  formatLoadFailureDescription,
-  formatLoadFailureRecoveryHint,
-  formatPermissionNotice,
-  formatPopupNotice
-} from './browser-notices'
+import { formatByteCount, formatPermissionNotice, formatPopupNotice } from './browser-notices'
 import {
   getDriverForBrowserPage,
   onBrowserDriverChange,
@@ -181,6 +181,11 @@ import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
 import { isBrowserPagePanePaintable } from './browser-page-paintability'
+import { useMarkupMode, type MarkupCaptureContext } from './markup/useMarkupMode'
+import { MarkupOverlay } from './markup/MarkupOverlay'
+import { MarkupDrawButton } from './markup/MarkupDrawButton'
+import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
+import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -695,28 +700,6 @@ function getRemoteBrowserDeviceScaleFactor(): number {
   return Math.min(2, Math.max(1, Number(scale.toFixed(2))))
 }
 
-function getLoadErrorMetadata(loadError: BrowserLoadError | null): {
-  displayUrl: string
-  host: string | null
-  isLocalhostLike: boolean
-} {
-  const rawUrl = loadError?.validatedUrl ?? 'about:blank'
-  const displayUrl = toDisplayUrl(rawUrl)
-  try {
-    const parsed = new URL(rawUrl)
-    const host = parsed.host || null
-    const hostname = parsed.hostname
-    const isLocalhostLike =
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '0.0.0.0' ||
-      hostname === '::1'
-    return { displayUrl, host, isLocalhostLike }
-  } catch {
-    return { displayUrl, host: null, isLocalhostLike: false }
-  }
-}
-
 function getOpenableExternalUrl(
   webview: Electron.WebviewTag | null,
   fallbackUrl: string
@@ -955,10 +938,48 @@ function RemoteBrowserPagePane({
     (token: RemoteBrowserOperationToken) => Promise<BrowserTabInfo | null>
   >(async () => null)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
+  const certificateFailure = useAppStore(
+    (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
+  )
+  const remotePageHandle = useAppStore(
+    (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
+  )
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const keybindings = useAppStore((state) => state.keybindings)
+
+  // Why: a remote runtime that predates browser.certificate-trust.v1 cannot
+  // honor a proceed request, so the "Proceed Anyway (Unsafe)" affordance stays
+  // hidden until the connected runtime positively advertises support (design
+  // doc: older runtimes never show an enabled proceed action).
+  const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
+  const remoteCertificateEnvironmentId = remotePageHandle?.environmentId ?? null
+  const certificateChallengeId = certificateFailure?.challengeId ?? null
+  useEffect(() => {
+    if (!remoteCertificateEnvironmentId || !certificateChallengeId) {
+      setRemoteCertificateTrustSupported(false)
+      return
+    }
+    let cancelled = false
+    void runtimeEnvironmentSupportsCapability(
+      remoteCertificateEnvironmentId,
+      BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
+    )
+      .then((supported) => {
+        if (!cancelled) {
+          setRemoteCertificateTrustSupported(supported)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRemoteCertificateTrustSupported(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [remoteCertificateEnvironmentId, certificateChallengeId])
 
   currentBrowserTabIdRef.current = browserTab.id
   currentBrowserTabUrlRef.current = browserTab.url
@@ -1980,7 +2001,13 @@ function RemoteBrowserPagePane({
         setRemoteError(message)
         onUpdatePageState(browserTab.id, {
           loading: false,
-          loadError: { code: 0, description: message, validatedUrl: url ?? browserTab.url }
+          // Why: validatedUrl crosses process/persistence boundaries, so redact a
+          // Kagi session token the same way the main-process failure path does.
+          loadError: {
+            code: 0,
+            description: message,
+            validatedUrl: redactKagiSessionToken(url ?? browserTab.url)
+          }
         })
       } finally {
         if (isCurrentRemoteOperationToken(pageToken)) {
@@ -2393,6 +2420,36 @@ function RemoteBrowserPagePane({
   }, [frameUrl, handleRemoteScreenshotWheel])
 
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
+  const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
+  const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
+  const showRemoteFailureOverlay =
+    Boolean(browserTab.loadError) &&
+    remoteFailureUrl !== 'about:blank' &&
+    remoteFailureUrl !== ORCA_BROWSER_BLANK_URL
+
+  // Why: markup works on remote panes by snapshotting the already-displayed
+  // screencast <img> — no in-page injection needed, so it is enabled here even
+  // though element-grab annotations are not.
+  const markup = useMarkupMode({
+    getCaptureContext: useCallback((): MarkupCaptureContext | null => {
+      const element = imageRef.current
+      const container = remoteViewportRef.current
+      if (!element || !container) {
+        return null
+      }
+      const rect = container.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
+      return {
+        source: { kind: 'image', element },
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        outputScale: window.devicePixelRatio || 1
+      }
+    }, []),
+    onDeliver: deliverMarkupToClipboard
+  })
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -2600,12 +2657,27 @@ function RemoteBrowserPagePane({
             )}
           </TooltipContent>
         </Tooltip>
+        <MarkupDrawButton
+          onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
+          disabled={!frameUrl}
+          active={markup.isActive}
+          surfaceActive={isActive}
+          className="h-7 w-7"
+        />
       </div>
       <div
         ref={remoteViewportRef}
         tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-hidden bg-background"
       >
+        {markup.isActive && markup.baseImage ? (
+          <MarkupOverlay
+            baseImage={markup.baseImage}
+            busy={markup.state === 'composing'}
+            onComplete={(input) => void markup.complete(input)}
+            onCancel={markup.cancel}
+          />
+        ) : null}
         {frameUrl ? (
           <img
             ref={imageRef}
@@ -2648,6 +2720,44 @@ function RemoteBrowserPagePane({
             </div>
           </div>
         )}
+        {showRemoteFailureOverlay && browserTab.loadError ? (
+          <BrowserLoadFailureOverlay
+            loadError={browserTab.loadError}
+            externalUrl={remoteFailureExternalUrl}
+            currentUrl={toDisplayUrl(remoteFailureUrl)}
+            httpsRecoveryUrl={toHttpsRecoveryUrl(remoteFailureUrl)}
+            onRetry={() => void runRemoteNavigation('browser.reload')}
+            onTryHttps={(url) => void runRemoteNavigation('browser.goto', url)}
+            onCopy={(url) => void window.api.ui.writeClipboardText(url)}
+            onOpenExternal={(url) => void window.api.shell.openUrl(url)}
+            certificateFailure={remoteCertificateTrustSupported ? certificateFailure : null}
+            expectedBrowserPageId={
+              remotePageHandle?.environmentId === activeRuntimeEnvironmentId
+                ? remotePageHandle.remotePageId
+                : null
+            }
+            onProceedCertificate={async (challengeId) => {
+              const target = runtimeTarget()
+              if (
+                !target ||
+                remotePageHandle?.environmentId !== target.environmentId ||
+                remotePageHandle.remotePageId !== certificateFailure?.browserPageId
+              ) {
+                return { ok: false, reason: 'missing' }
+              }
+              return callRuntimeRpc<BrowserCertificateProceedResult>(
+                target,
+                'browser.certificate.proceed',
+                {
+                  worktree: runtimeWorktree,
+                  page: remotePageHandle.remotePageId,
+                  challengeId
+                },
+                { timeoutMs: 15_000, suppressFeatureInteraction: true }
+              )
+            }}
+          />
+        ) : null}
         {remoteError ? (
           <div className="absolute bottom-4 left-1/2 max-w-md -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
             {remoteError}
@@ -2796,6 +2906,27 @@ function BrowserPagePane({
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
+
+  const markup = useMarkupMode({
+    getCaptureContext: useCallback((): MarkupCaptureContext | null => {
+      const webview = webviewRef.current
+      const container = containerRef.current
+      if (!webview || !container) {
+        return null
+      }
+      const rect = container.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) {
+        return null
+      }
+      return {
+        source: { kind: 'webview', webview },
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        outputScale: window.devicePixelRatio || 1
+      }
+    }, []),
+    onDeliver: deliverMarkupToClipboard
+  })
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
   grabIntentRef.current = grabIntent
@@ -2810,13 +2941,12 @@ function BrowserPagePane({
   })
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const annotationViewportBridgeTokenRef = useRef(
-    typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID().replaceAll('-', '')
-      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`
-  )
+  const annotationViewportBridgeTokenRef = useRef(createBrowserUuid().replaceAll('-', ''))
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTab.id] ?? EMPTY_BROWSER_ANNOTATIONS
+  )
+  const certificateFailure = useAppStore(
+    (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const browserAnnotationsRef = useRef(browserAnnotations)
@@ -3670,21 +3800,53 @@ function BrowserPagePane({
       dismissAddressBarSuggestionsRef.current?.()
     }
 
-    const handleDomReady = (): void => {
+    let registrationInFlight: { webContentsId: number; promise: Promise<boolean> } | null = null
+    const registerGuest = (): Promise<boolean> => {
       const webContentsId = webview.getWebContentsId()
-      let queuedAnnotationViewportBridgeSync = false
-      if (registeredWebContentsIds.get(browserTab.id) !== webContentsId) {
-        registeredWebContentsIds.set(browserTab.id, webContentsId)
-        queuedAnnotationViewportBridgeSync = true
-        void window.api.browser
-          .registerGuest({
-            browserPageId: browserTab.id,
-            workspaceId,
-            worktreeId,
-            sessionProfileId,
-            webContentsId
-          })
-          .finally(() => syncBrowserAnnotationViewportBridge())
+      if (registeredWebContentsIds.get(browserTab.id) === webContentsId) {
+        return Promise.resolve(true)
+      }
+      if (registrationInFlight?.webContentsId === webContentsId) {
+        return registrationInFlight.promise
+      }
+      const promise = window.api.browser
+        .registerGuest({
+          browserPageId: browserTab.id,
+          workspaceId,
+          worktreeId,
+          sessionProfileId,
+          webContentsId
+        })
+        .then((registered) => {
+          if (registered) {
+            registeredWebContentsIds.set(browserTab.id, webContentsId)
+          }
+          return registered
+        })
+        // Why: normalize IPC rejection to false so the dom-ready fallback can
+        // retry attach-policy races without an unhandled promise rejection.
+        .catch(() => false)
+        .finally(() => {
+          if (registrationInFlight?.promise === promise) {
+            registrationInFlight = null
+          }
+        })
+      registrationInFlight = { webContentsId, promise }
+      return promise
+    }
+
+    const handleDidAttach = (): void => {
+      // Why: certificate failures can happen before dom-ready. Register at
+      // attach so main can map the initial failure to this page; dom-ready below
+      // remains an idempotent fallback for attach-policy races.
+      void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
+    }
+
+    const handleDomReady = (): void => {
+      const queuedAnnotationViewportBridgeSync =
+        registeredWebContentsIds.get(browserTab.id) !== webview.getWebContentsId()
+      if (queuedAnnotationViewportBridgeSync) {
+        void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
       }
       syncNavigationState(webview)
       if (keepAddressBarFocusRef.current) {
@@ -3903,6 +4065,7 @@ function BrowserPagePane({
       }
     }
 
+    webview.addEventListener('did-attach', handleDidAttach)
     webview.addEventListener('dom-ready', handleDomReady)
     webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
@@ -3936,6 +4099,7 @@ function BrowserPagePane({
     }
 
     return () => {
+      webview.removeEventListener('did-attach', handleDidAttach)
       webview.removeEventListener('dom-ready', handleDomReady)
       webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
@@ -4149,14 +4313,19 @@ function BrowserPagePane({
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      if (keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)) {
+      // Why: while the markup overlay is open, don't let the grab shortcut start
+      // the in-guest picker behind it — matching the disabled grab toolbar buttons.
+      if (
+        !markup.isActive &&
+        keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
+      ) {
         e.preventDefault()
         startGrabIntent('copy')
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, keybindings, startGrabIntent])
+  }, [isActive, keybindings, markup.isActive, startGrabIntent])
 
   useEffect(() => {
     if (!isActive) {
@@ -4606,8 +4775,8 @@ function BrowserPagePane({
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
   const currentBrowserUrl = getCurrentBrowserUrl(webviewRef.current, browserTab.url)
-  const loadErrorMeta = getLoadErrorMetadata(browserTab.loadError)
-  const loadErrorHint = formatLoadFailureRecoveryHint(loadErrorMeta)
+  const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
+  const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
   const visibleDownloads = (() => {
     const active = downloadStates.filter((download) => download.status === 'downloading')
@@ -4989,7 +5158,7 @@ function BrowserPagePane({
                       'bg-foreground/80 text-background hover:bg-foreground/90'
                   )}
                   onClick={() => startGrabIntent('copy')}
-                  disabled={isBlankTab}
+                  disabled={isBlankTab || markup.isActive}
                   aria-label={translate(
                     'auto.components.browser.pane.BrowserPane.fdfc7fe0ef',
                     'Grab page element'
@@ -5026,7 +5195,7 @@ function BrowserPagePane({
                       'bg-foreground/80 text-background hover:bg-foreground/90'
                   )}
                   onClick={() => startGrabIntent('annotate')}
-                  disabled={isBlankTab}
+                  disabled={isBlankTab || markup.isActive}
                   aria-label={translate(
                     'auto.components.browser.pane.BrowserPane.fc9be38f6f',
                     'Annotate page element'
@@ -5049,6 +5218,13 @@ function BrowserPagePane({
               )}
             </TooltipContent>
           </Tooltip>
+
+          <MarkupDrawButton
+            onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
+            disabled={isBlankTab || grab.state !== 'idle'}
+            active={markup.isActive}
+            surfaceActive={isActive}
+          />
 
           <Button
             size="icon"
@@ -5379,6 +5555,14 @@ function BrowserPagePane({
       {pageViewport?.container
         ? createPortal(
             <>
+              {markup.isActive && markup.baseImage ? (
+                <MarkupOverlay
+                  baseImage={markup.baseImage}
+                  busy={markup.state === 'composing'}
+                  onComplete={(input) => void markup.complete(input)}
+                  onCancel={markup.cancel}
+                />
+              ) : null}
               <div
                 role="status"
                 aria-live="polite"
@@ -5395,114 +5579,40 @@ function BrowserPagePane({
                 onClose={() => setFindOpen(false)}
                 webviewRef={webviewRef}
               />
-              {showFailureOverlay ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
-                  <div className="flex max-w-sm flex-col items-center px-8 py-8 text-center opacity-70">
-                    <div className="mb-4 rounded-full border border-border/70 bg-muted/30 p-3">
-                      <Globe className="size-5 text-muted-foreground" />
-                    </div>
-                    <h2 className="text-base font-semibold text-foreground/85">
-                      {loadErrorMeta.host
-                        ? translate(
-                            'auto.components.browser.pane.BrowserPane.db325a7eeb',
-                            "Can't reach {{value0}}",
-                            { value0: loadErrorMeta.host }
-                          )
-                        : translate(
-                            'auto.components.browser.pane.BrowserPane.b2856516e2',
-                            "Can't load this page"
-                          )}
-                    </h2>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {formatLoadFailureDescription(browserTab.loadError, loadErrorMeta)}
-                    </p>
-                    {loadErrorHint ? (
-                      <p className="mt-2 text-xs text-muted-foreground/80">{loadErrorHint}</p>
-                    ) : null}
-                    <div className="mt-5 flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 gap-2 px-3"
-                        title={translate(
-                          'auto.components.browser.pane.BrowserPane.781d6459ad',
-                          'Retry'
-                        )}
-                        onClick={() => {
-                          const webview = webviewRef.current
-                          if (!webview) {
-                            return
-                          }
-                          onUpdatePageStateRef.current(browserTab.id, {
-                            loading: true
-                          })
-                          retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-                        }}
-                      >
-                        <RefreshCw className="size-4" />
-                        <span>
-                          {translate(
-                            'auto.components.browser.pane.BrowserPane.c6be71329e',
-                            'Refresh'
-                          )}
-                        </span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-9 gap-2 px-3"
-                        title={translate(
-                          'auto.components.browser.pane.BrowserPane.3c085f638d',
-                          'Copy failed page URL'
-                        )}
-                        onClick={() => {
-                          // Why: failed guests often leave users stranded on a blank
-                          // error surface. Put the current URL on the clipboard from
-                          // the recovery UI itself so they can retry elsewhere
-                          // without having to discover the toolbar overflow first.
-                          void window.api.ui.writeClipboardText(currentBrowserUrl)
-                          setResourceNotice('Copied the current page URL.')
-                        }}
-                      >
-                        <Copy className="size-4" />
-                        <span>
-                          {translate(
-                            'auto.components.browser.pane.BrowserPane.93be92f8d1',
-                            'Copy Address'
-                          )}
-                        </span>
-                      </Button>
-                      {externalUrl ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-9 gap-2 px-3"
-                          title={translate(
-                            'auto.components.browser.pane.BrowserPane.da68d35f7b',
-                            'Open failed page in default browser'
-                          )}
-                          onClick={() => {
-                            // Why: page failures inside Orca can still be recoverable
-                            // in the system browser, especially for OAuth, captive
-                            // portals, or enterprise auth flows that rely on a full
-                            // browser profile. Keep this action in the failed-state
-                            // overlay so recovery does not depend on toolbar affordance
-                            // discovery while the guest itself is unusable.
-                            void window.api.shell.openUrl(externalUrl)
-                          }}
-                        >
-                          <ExternalLink className="size-4" />
-                          <span>
-                            {translate(
-                              'auto.components.browser.pane.BrowserPane.1c78adc73d',
-                              'Open Externally'
-                            )}
-                          </span>
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
+              {showFailureOverlay && browserTab.loadError ? (
+                <BrowserLoadFailureOverlay
+                  loadError={browserTab.loadError}
+                  externalUrl={failureExternalUrl}
+                  currentUrl={toDisplayUrl(failedNavigationUrl)}
+                  httpsRecoveryUrl={toHttpsRecoveryUrl(failedNavigationUrl)}
+                  onRetry={() => {
+                    const webview = webviewRef.current
+                    if (!webview) {
+                      return
+                    }
+                    onUpdatePageStateRef.current(browserTab.id, { loading: true })
+                    retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+                  }}
+                  onTryHttps={navigateToUrl}
+                  onCopy={(url) => {
+                    void window.api.ui.writeClipboardText(url)
+                    setResourceNotice(
+                      translate(
+                        'browser.loadFailure.addressCopied',
+                        'Copied the current page address.'
+                      )
+                    )
+                  }}
+                  onOpenExternal={(url) => void window.api.shell.openUrl(url)}
+                  certificateFailure={certificateFailure}
+                  expectedBrowserPageId={browserTab.id}
+                  onProceedCertificate={(challengeId) =>
+                    window.api.browser.proceedCertificate({
+                      browserPageId: browserTab.id,
+                      challengeId
+                    })
+                  }
+                />
               ) : null}
               {isBlankTab ? (
                 <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">

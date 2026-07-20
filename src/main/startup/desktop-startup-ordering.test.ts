@@ -13,6 +13,9 @@ describe('startup ordering', () => {
     const desktopStartup = source.slice(desktopStart, desktopEnd)
 
     expect(attachBlock).toContain('awaitLocalPtyStartup: () => localPtyStartupReady')
+    expect(attachBlock).toContain(
+      'awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady'
+    )
     expect(source).toContain('firstWindowStartupServicesReady = startupServices.firstWindowReady')
     expect(source).toContain('localPtyStartupReady = startupServices.localPtyReady')
 

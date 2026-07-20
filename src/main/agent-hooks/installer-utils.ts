@@ -13,10 +13,7 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
-import {
-  POSIX_HOOK_STDIN_DRAIN_COMMAND,
-  WINDOWS_HOOK_STDIN_DRAIN_COMMAND
-} from './hook-stdin-contract'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -179,12 +176,15 @@ export function wrapWindowsHookCommand(
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
 
 export function wrapWindowsCmdHookCommand(scriptPath: string): string {
-  // Why: keep the safe-path fast path PowerShell-free while making a stale
-  // config entry own stdin; the `path\.` sentinel also rejects a directory
-  // that happens to occupy the managed .cmd path, including an empty one.
-  return WINDOWS_CMD_SAFE_PATH.test(scriptPath)
-    ? `if exist "${scriptPath}\\." (${WINDOWS_HOOK_STDIN_DRAIN_COMMAND}) else if exist "${scriptPath}" (call "${scriptPath}") else (${WINDOWS_HOOK_STDIN_DRAIN_COMMAND})`
-    : wrapWindowsHookCommand(scriptPath)
+  // Why: Codex/Antigravity/Devin launch the hook command as a program (argv[0]),
+  // NOT through cmd.exe, so the launcher must be a single directly-spawnable
+  // token. The bare .cmd path is exactly that. A cmd-builtin `if exist …`
+  // launcher is unspawnable — its argv[0] is `if` — so it fails every hook with
+  // exit 1 (#8430 regression). A stale/missing script therefore surfaces a normal
+  // launch failure here; the missing-script stdin drain lives on the encoded
+  // fallback below, which needs a real interpreter for spaces/metacharacters
+  // anyway and cannot be reached by a cmd-builtin drain without breaking spawn.
+  return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
 export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/

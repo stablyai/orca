@@ -41,6 +41,7 @@ import type {
   LocalWindowsRuntimePreference
 } from './project-execution-runtime'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
+import type { PersistedNativeChatSessionOptions } from './native-chat-session-options'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -428,6 +429,11 @@ export type GitWorktreeInfo = {
   isSparse?: boolean
   locked?: boolean
   lockReason?: string
+  /** True when Git reports the worktree as prunable (its directory is gone but
+   *  the registration remains). Detected via the `prunable` porcelain field
+   *  (Git ≥ 2.36) or a path-existence probe on older Git. */
+  prunable?: boolean
+  prunableReason?: string
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
@@ -883,6 +889,28 @@ export type BrowserLoadError = {
   validatedUrl: string
 }
 
+export type BrowserCertificateFailure = {
+  challengeId: string
+  browserPageId: string
+  errorCode: number | null
+  error: string
+  origin: string
+  displayHost: string
+  canProceed: boolean
+  observedAt: number
+}
+
+export type BrowserCertificateProceedFailureReason =
+  | 'expired'
+  | 'changed'
+  | 'ineligible'
+  | 'missing'
+  | 'navigated'
+
+export type BrowserCertificateProceedResult =
+  | { ok: true }
+  | { ok: false; reason: BrowserCertificateProceedFailureReason }
+
 // Why: BrowserPage persists the active viewport preset so CDP emulation can be
 // reapplied on reload/navigation without the user re-picking from the toolbar.
 export type BrowserViewportPresetId =
@@ -1166,26 +1194,47 @@ export type PRInfo = {
   headDivergedFromMergedPRAtOid?: string
   /** Target branch name for PR-created worktree compare-base repair. */
   baseRefName?: string
+  /** PR head branch name. Lets linked-PR consumers detect that the worktree
+   *  has switched to a different branch and the durable link is stale. */
+  headRefName?: string
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
 }
+
+/**
+ * Discriminates a classified GitHub PR-refresh failure. The renderer maps these
+ * to stable, non-destructive empty-state copy; a `hard` subset (auth, permission,
+ * repo_unavailable, gh_unavailable) means the existing-review lookup is currently
+ * impossible and must hide the Create composer.
+ */
+export type PRRefreshErrorType =
+  | 'rate_limited'
+  | 'auth'
+  | 'network'
+  | 'permission'
+  | 'repo_unavailable'
+  | 'gh_unavailable'
+  | 'server_error'
+  | 'unknown'
+
+// Backward-compatible name used by outage-copy consumers added on main.
+export type PRRefreshUpstreamErrorType = PRRefreshErrorType
 
 export type PRRefreshOutcome =
   | { kind: 'found'; pr: PRInfo; fetchedAt: number }
   | { kind: 'no-pr'; fetchedAt: number }
   | {
       kind: 'upstream-error'
-      errorType:
-        | 'rate_limited'
-        | 'auth'
-        | 'network'
-        | 'permission'
-        | 'repo_unavailable'
-        | 'gh_unavailable'
-        | 'unknown'
+      errorType: PRRefreshErrorType
       message: string
       fetchedAt: number
+      // Unified retry schedule (see docs/reference/pr-panel-refresh-guidance.md).
+      // `nextAutoRetryAt`: earliest time main expects to auto-retry this key.
+      // `retryDisabledUntil`: earliest time a manual Retry / refreshPRNow is
+      // accepted (rate-limit gates only, never ordinary network/auth backoff).
+      nextAutoRetryAt?: number
+      retryDisabledUntil?: number
     }
 
 export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr'
@@ -1460,6 +1509,11 @@ export type GitHubWorkItem = {
   labels: string[]
   updatedAt: string
   author: string | null
+  // Why: GHE user logins don't exist on github.com, so the github.com/{login}.png
+  // fallback 404s. Carry the API-provided avatar_url so github.com + Enterprise
+  // both render; absent on the gh-pr-view path (gh omits avatar), then the UI
+  // falls back to the login URL and finally an initials placeholder. See #8784.
+  authorAvatarUrl?: string
   branchName?: string
   baseRefName?: string
   // Why: PR checks are keyed by head commit; carrying this lets task rows use
@@ -1598,6 +1652,7 @@ export type LinearIssue = {
   workspaceName?: string
   identifier: string
   title: string
+  branchName?: string
   description?: string
   url: string
   state: {
@@ -1854,6 +1909,7 @@ export type {
 } from './gitlab-types'
 
 export type {
+  JiraAuthType,
   JiraComment,
   JiraConnectArgs,
   JiraConnectionStatus,
@@ -2589,6 +2645,9 @@ export type GlobalSettings = {
    *  system tray instead of quitting Orca; off keeps the default quit-on-close.
    *  The tray icon itself is always present on Windows regardless of this flag. */
   minimizeToTrayOnClose?: boolean
+  /** Why: macOS keeps Orca running after its last window closes, so this
+   *  controls the additive menu-bar entry without changing Dock behavior. */
+  showMenuBarIcon?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture,
    *  while macOS/Linux default to their existing context menu behavior. */
   terminalRightClickToPaste: boolean
@@ -2667,6 +2726,9 @@ export type GlobalSettings = {
   /** Experimental: native chat surface for Claude/Codex terminal sessions.
    *  Off by default while the desktop UX is still being exercised. */
   experimentalNativeChat?: boolean
+  /** Last explicit native-chat model and model-scoped option selections. Live
+   * panes still require an applied/dispatched record before showing a value. */
+  nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
@@ -2693,6 +2755,9 @@ export type GlobalSettings = {
   /** Why: Orca Mobile remains reachable from Settings; this only controls
    *  whether the top-level sidebar shortcut is shown. */
   showMobileButton?: boolean
+  /** Why: pinned workspaces default to one sidebar location; users can opt
+   *  back into seeing them in their natural groups too. */
+  showPinnedWorktreesInGroups?: boolean
   /** Controls how Ctrl+Tab chooses the next visible tab. Optional for
    *  profiles saved before this setting existed; readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
@@ -2757,14 +2822,12 @@ export type GlobalSettings = {
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking — unmounting long-hidden
    *  terminal panes while a pane-less watcher keeps PTY side effects alive.
-   *  Defaults to true; `false` disables parking entirely.
-   *  See docs/reference/terminal-hidden-view-parking.md. */
+   *  Defaults to true; `false` disables parking entirely. */
   terminalHiddenViewParking?: boolean
   /** Kill switch for main-process terminal side-effect authority: when true
    *  (default), local-daemon/SSH PTY title/bell/agent facts are consumed from
    *  the `pty:sideEffect` channel and renderer byte parsers stay unregistered
-   *  for those PTYs; `false` restores renderer byte parsing.
-   *  See docs/reference/terminal-side-effect-authority.md. */
+   *  for those PTYs; `false` restores renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
   /** Kill switch for main's hidden-delivery gate (Phase 4): when true
    *  (default) AND terminalMainSideEffectAuthority is on, main drops PTY byte
@@ -2774,8 +2837,7 @@ export type GlobalSettings = {
   /** Kill switch for the main model query responder (Phase 5): when true
    *  (default) AND both Phase-4 gate switches are on, main answers terminal
    *  queries (DA1/CPR/DECRPM, …) embedded in hidden-dropped chunks from the
-   *  runtime emulator. `false` silences the responder without changing drops.
-   *  See docs/reference/terminal-query-authority.md. */
+   *  runtime emulator. `false` silences the responder without changing drops. */
   terminalModelQueryAuthority?: boolean
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
@@ -2862,6 +2924,9 @@ export type GlobalSettings = {
   /** Why: disabling must persist so startup does not reinstall global agent
    *  hook entries right after the user removes them from Settings or CLI. */
   agentStatusHooksEnabled: boolean
+  /** Dismissed freshness tuples grant no write authority; they only keep the
+   *  same exact official placement/revision from nudging more than once. */
+  dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are semantic but subjective, so they stay opt-in
    *  and manual renames remain the stronger user intent. */
   tabAutoGenerateTitle: boolean
@@ -2911,6 +2976,10 @@ export type GlobalSettings = {
    *  on read into [5_000ms, 60min] to defend against bad config.
    *  See docs/mobile-fit-hold.md. */
   mobileAutoRestoreFitMs: number | null
+  /** Preferred mobile pairing path for new QR codes: Anywhere (Orca Relay +
+   *  local) or same-network only. Missing/undefined defaults to Anywhere.
+   *  An explicit `local-only` means the user already chose that path. */
+  mobilePairingConnectionMode?: 'automatic' | 'local-only'
   /** Experimental: floating animated pet (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the
@@ -2987,6 +3056,12 @@ export type GlobalSettings = {
      *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
   }
+  /** One-shot cohort marker for the tab-switch keybinding convention swap.
+   *  Absent before the migration runs. Set once on first boot after the swap:
+   *  `'pending'` for pre-existing installs (a seed then pins the old chords in
+   *  keybindings.json before flipping this to `'done'`), or `'done'` for fresh
+   *  installs, which adopt the new registry defaults with no seed. */
+  tabSwitchKeybindingSeed?: 'pending' | 'done'
   /** Local voice/dictation configuration (Phase 1 voice feature). Optional
    *  because profiles created before voice landed won't have the key;
    *  `getDefaultSettings()` hydrates `getDefaultVoiceSettings()` via the
@@ -3244,6 +3319,10 @@ export type ProjectOrderBy = 'manual' | 'recent'
 export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
 export type WorkspaceHostOrder = Exclude<WorkspaceHostScope, 'all'>[]
+export type ManualRepoOrderEntry = {
+  hostId: WorkspaceHostOrder[number]
+  repoId: string
+}
 
 /** The active top-level section shown in the main content area. */
 export type TopLevelView =
@@ -3291,6 +3370,9 @@ export type PersistedUIState = {
   /** User-defined sidebar order for host sections. Missing/new hosts append in
    *  the discovered host order. */
   workspaceHostOrder?: WorkspaceHostOrder
+  /** Desktop-owned all-host repo order. Host-qualified identities preserve a
+   *  manual cross-host interleaving while each host owns its local permutation. */
+  manualRepoOrder?: ManualRepoOrderEntry[]
   /** Deprecated legacy positive-form setting. Ignored on hydration. */
   showSleepingWorkspaces?: boolean
   /** Deprecated legacy name used by a short-lived build. Ignored on hydration. */
@@ -3548,6 +3630,8 @@ export type CustomPet = {
 export type SpriteAnimation = {
   row: number
   frames: number
+  /** Per-frame holds in ms (length === frames). Absent means uniform sheet fps. */
+  frameDurationsMs?: number[]
 }
 
 export type PersistedTrustedOrcaHookEntry = {
@@ -3569,7 +3653,10 @@ export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookR
 
 export type LegacyPaneKeyAliasEntry = {
   ptyId: string
+  /** Physical pane key retained by the live process. Field name is persisted
+   *  for compatibility; UUID keys are used after pane-to-tab detach. */
   legacyPaneKey: string
+  /** Current logical owner pane key. May belong to another tab after detach. */
   stablePaneKey: string
   updatedAt: number
 }
@@ -3712,6 +3799,13 @@ export type GitDiffBinaryResult = {
   isImage?: boolean
   /** MIME type for binary preview rendering, e.g. "image/png" or "application/pdf" */
   mimeType?: string
+  /**
+   * True only when the modified side is a proven deletion (working-tree file gone
+   * or absent from the index) — distinct from an empty modified side caused by a
+   * read failure or size cap. Lets previewers fall back to the original bytes for
+   * a deletion without showing a stale image on a failed read.
+   */
+  modifiedDeleted?: boolean
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
   | { originalIsBinary: boolean; modifiedIsBinary: true }

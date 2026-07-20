@@ -68,6 +68,11 @@ import {
   isMarkdownPreviewFindShortcut,
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
+import {
+  previewHasAnnotationBlockKey,
+  resolveMarkdownPreviewAddReviewNoteKey
+} from './markdown-preview-annotation-shortcut'
+import { installOpenDraftAddReviewNoteGuard } from './editor-shortcuts'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -310,7 +315,7 @@ const markdownPreviewSanitizeSchema = {
       ...(defaultSchema.attributes?.details ?? []),
       'open',
       ['className', 'orca-details'],
-      ['dataOrcaToggle', 'heading-1']
+      ['dataOrcaToggle', 'heading-1', 'heading-2', 'heading-3', 'heading-4', 'heading-5']
     ],
     h1: [...(defaultSchema.attributes?.h1 ?? []), 'id'],
     h2: [...(defaultSchema.attributes?.h2 ?? []), 'id'],
@@ -484,12 +489,18 @@ export default function MarkdownPreview({
     input.focus()
     input.select()
   }, [])
-  const matchesRef = useRef<HTMLElement[]>([])
+  const matchesRef = useRef<Range[]>([])
+  // Stable token identifying this preview in the document-global highlight
+  // registry, so split/floating previews don't clobber each other's Find paint.
+  const searchInstanceRef = useRef<object>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
   const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
+  // Bumps whenever the match ranges are recomputed, so the active-highlight
+  // effect re-runs even when a streamed rerender yields the same count/index.
+  const [searchRevision, setSearchRevision] = useState(0)
   const [activeMatchIndex, setActiveMatchIndex] = useState(-1)
   const isMac = navigator.userAgent.includes('Mac')
   const openFile = useAppStore((s) => s.openFile)
@@ -626,6 +637,28 @@ export default function MarkdownPreview({
     ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? true)
     : true
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
+  const activeAnnotationBlockKeyRef = useRef(activeAnnotationBlockKey)
+  // Why: mirrored in an effect (not the render body) so a discarded render
+  // pass cannot leak into the ref; keydown paths still write it eagerly.
+  useEffect(() => {
+    activeAnnotationBlockKeyRef.current = activeAnnotationBlockKey
+  }, [activeAnnotationBlockKey])
+  // Why: line-derived block keys can go stale after content renumbers; drop them
+  // when the block no longer mounts so the shortcut cannot lock out forever.
+  useEffect(() => {
+    if (!activeAnnotationBlockKey) {
+      return
+    }
+    const root = rootRef.current
+    if (!root || previewHasAnnotationBlockKey(root, activeAnnotationBlockKey)) {
+      return
+    }
+    // Why: the mirror effect above re-syncs the ref once this setState commits;
+    // only the same-tick keydown paths need an eager manual write.
+    setActiveAnnotationBlockKey(null)
+    // Why: keyed on renderedContent (not content) — the DOM the block keys live
+    // in derives from it and can lag content during external-edit preservation.
+  }, [activeAnnotationBlockKey, renderedContent])
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
   const [copiedReviewNoteId, setCopiedReviewNoteId] = useState<string | null>(null)
   const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
@@ -835,29 +868,36 @@ export default function MarkdownPreview({
       return
     }
 
+    const instanceId = searchInstanceRef.current
+
     if (!isSearchOpen) {
       matchesRef.current = []
       setMatchCount(0)
-      clearMarkdownPreviewSearchHighlights(body)
+      clearMarkdownPreviewSearchHighlights(instanceId)
       return
     }
 
-    // Search decorations are applied imperatively because the rendered preview is
-    // already owned by react-markdown. Rewriting the markdown AST for transient
-    // find state would make navigation and link rendering much harder to reason about.
-    const matches = applyMarkdownPreviewSearchHighlights(body, query)
+    // Search decorations are painted via the CSS Custom Highlight API (Ranges,
+    // no DOM mutation) because the rendered preview is owned by react-markdown;
+    // splitting its nodes to inject <mark> corrupted react's tree (crash 237acef1).
+    const matches = applyMarkdownPreviewSearchHighlights(instanceId, body, query)
     matchesRef.current = matches
     setMatchCount(matches.length)
+    setSearchRevision((v) => v + 1)
     setActiveMatchIndex((cur) =>
       matches.length === 0 ? -1 : cur >= 0 && cur < matches.length ? cur : 0
     )
 
-    return () => clearMarkdownPreviewSearchHighlights(body)
+    return () => clearMarkdownPreviewSearchHighlights(instanceId)
   }, [renderedContent, isSearchOpen, query])
 
   useEffect(() => {
-    setActiveMarkdownPreviewSearchMatch(matchesRef.current, activeMatchIndex)
-  }, [activeMatchIndex, matchCount])
+    setActiveMarkdownPreviewSearchMatch(
+      searchInstanceRef.current,
+      matchesRef.current,
+      activeMatchIndex
+    )
+  }, [activeMatchIndex, matchCount, searchRevision])
 
   useLayoutEffect(() => {
     if (!initialAnchor || initialAnchor === lastAppliedInitialAnchorRef.current) {
@@ -903,6 +943,36 @@ export default function MarkdownPreview({
         return
       }
 
+      const reviewNoteKey = resolveMarkdownPreviewAddReviewNoteKey({
+        event,
+        platform: getShortcutPlatform(),
+        keybindings,
+        targetInsidePreview,
+        markdownAnnotationsEnabled,
+        activeAnnotationBlockKey: activeAnnotationBlockKeyRef.current,
+        root,
+        selection: window.getSelection()
+      })
+      if (reviewNoteKey.action === 'consume') {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      if (reviewNoteKey.action === 'clear-stale-and-ignore') {
+        // Why: drop a line-derived key that no longer mounts a composer so the
+        // shortcut cannot stay permanently consumed after content renumbers.
+        activeAnnotationBlockKeyRef.current = null
+        setActiveAnnotationBlockKey(null)
+        return
+      }
+      if (reviewNoteKey.action === 'open') {
+        event.preventDefault()
+        event.stopPropagation()
+        activeAnnotationBlockKeyRef.current = reviewNoteKey.blockKey
+        setActiveAnnotationBlockKey(reviewNoteKey.blockKey)
+        return
+      }
+
       if (!isSearchOpen) {
         return
       }
@@ -917,7 +987,7 @@ export default function MarkdownPreview({
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [closeSearch, isSearchOpen, keybindings, openSearch])
+  }, [closeSearch, isSearchOpen, keybindings, markdownAnnotationsEnabled, openSearch])
 
   const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
     if (markdownReviewNotes.length === 0) {
@@ -1235,6 +1305,7 @@ export default function MarkdownPreview({
           className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''}`.trim()}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
+          data-annotation-block-key={blockKey}
           onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
         >
           {rendered}
@@ -1655,6 +1726,11 @@ export default function MarkdownPreview({
         }
         const blockKey = `li:${range.startLine}-${range.endLine}`
         const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
+        const controls = renderAnnotationControls(
+          range,
+          blockKey,
+          getMarkdownPreviewAnnotationQuote(children)
+        )
         return (
           <li {...props}>
             <div
@@ -1663,14 +1739,13 @@ export default function MarkdownPreview({
               }`.trim()}
               data-source-line={range.startLine}
               data-source-end-line={range.endLine}
+              // Why: only advertise the block to the add-review-note shortcut
+              // when the composer can actually render (mirrors wrapAnnotatedBlock).
+              data-annotation-block-key={controls ? blockKey : undefined}
               onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
             >
               <span className="markdown-annotation-list-content">{children}</span>
-              {renderAnnotationControls(
-                range,
-                blockKey,
-                getMarkdownPreviewAnnotationQuote(children)
-              )}
+              {controls}
             </div>
           </li>
         )
@@ -1919,7 +1994,10 @@ export default function MarkdownPreview({
             ) : null}
           </div>
         ) : null}
-        <div ref={bodyRef} className="markdown-body">
+        {/* Why: translate="no" keeps browser/OS page-translation from swapping
+            text nodes react owns, which otherwise triggers the same
+            insertBefore/removeChild reconciliation crash (237acef1). */}
+        <div ref={bodyRef} className="markdown-body" translate="no">
           {/* Why: remarkFrontmatter strips front matter from normal markdown
         output. When the user opts in from the preview actions menu, render the
         raw metadata as a compact read-only block above the document body. */}
@@ -2013,6 +2091,18 @@ function MarkdownAnnotationComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
+  const composerRef = useRef<HTMLDivElement | null>(null)
+
+  // Why: product B — composer focus is in the textarea, so consume the bindable
+  // add-review-note chord on the composer subtree (same guard as
+  // DiffCommentPopover) rather than window, so other surfaces keep their chord.
+  useEffect(() => {
+    const composer = composerRef.current
+    if (!composer) {
+      return
+    }
+    return installOpenDraftAddReviewNoteGuard(composer)
+  }, [])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
     // Why: opening an annotation composer should focus the draft field on the
@@ -2043,7 +2133,11 @@ function MarkdownAnnotationComposer({
   }
 
   return (
-    <div className="markdown-annotation-composer" onClick={(event) => event.stopPropagation()}>
+    <div
+      ref={composerRef}
+      className="markdown-annotation-composer"
+      onClick={(event) => event.stopPropagation()}
+    >
       <div className="orca-diff-comment-popover-label">
         {translate('auto.components.editor.MarkdownPreview.b1bfc04034', 'Selected text')}
       </div>

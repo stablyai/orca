@@ -735,7 +735,7 @@ function CheckRunDetails({
                 {translate(
                   'auto.components.right.sidebar.checks.panel.content.fd46a70f1a',
                   'Started'
-                )}
+                )}{' '}
                 {startedAt}
               </span>
             )}
@@ -744,7 +744,7 @@ function CheckRunDetails({
                 {translate(
                   'auto.components.right.sidebar.checks.panel.content.00e1c1658a',
                   'Completed'
-                )}
+                )}{' '}
                 {completedAt}
               </span>
             )}
@@ -1980,7 +1980,7 @@ function PRCommentGroupView({
   presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onStartReply?: (commentId: number) => void
-  onCancelReply?: () => void
+  onCancelReply?: (commentId: number) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
@@ -2001,7 +2001,7 @@ function PRCommentGroupView({
           autoFocus
           disabled={replyDisabled}
           disabledReason={replyDisabledReason}
-          onCancel={onCancelReply}
+          onCancel={() => onCancelReply?.(comment.id)}
           onSubmit={(body) => onReply(comment, body)}
         />
       </div>
@@ -2113,7 +2113,7 @@ function ResolvedCommentGroupsSection({
   presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onStartReply?: (commentId: number) => void
-  onCancelReply?: () => void
+  onCancelReply?: (commentId: number) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
@@ -2351,7 +2351,9 @@ export function PRCommentsList({
         presentation={presentation}
         onResolve={onResolve}
         onStartReply={setReplyingCommentId}
-        onCancelReply={() => setReplyingCommentId(null)}
+        onCancelReply={(commentId) =>
+          setReplyingCommentId((current) => (current === commentId ? null : current))
+        }
         onReply={onReply}
         onEditComment={onEditComment}
         onDeleteComment={onDeleteComment}
@@ -2679,7 +2681,9 @@ export function PRCommentsList({
                 presentation={presentation}
                 onResolve={onResolve}
                 onStartReply={setReplyingCommentId}
-                onCancelReply={() => setReplyingCommentId(null)}
+                onCancelReply={(commentId) =>
+                  setReplyingCommentId((current) => (current === commentId ? null : current))
+                }
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}

@@ -1,15 +1,70 @@
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+const require = createRequire(import.meta.url)
+const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtime-node-modules.cjs')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
+  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
+    const patch = readFileSync(
+      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
+      'utf8'
+    )
+
+    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
+    expect(patch).toContain('readonly clearModelGeneration: number')
+    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
+    expect(patch).toContain('this.clearModelGeneration++')
+    expect(patch).toContain('this._atlas._clearModelGeneration||0')
+  })
+
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
+  })
+
+  it('keeps the native Windows registry addon optional and platform-gated', () => {
+    const rebuildScript = readFileSync(
+      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      'utf8'
+    )
+    const ensureScript = readFileSync(
+      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      'utf8'
+    )
+    expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
+    // Why: pnpm installs optional target architectures on every host; the root
+    // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
+    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
+    expect(rebuildScript).toContain(
+      "rebuildPlatform === 'win32' ? ['windows-native-registry'] : []"
+    )
+    expect(ensureScript).toContain(
+      "process.platform === 'win32' ? ['windows-native-registry'] : []"
+    )
+    const packageTargets = {
+      win32: createPackagedRuntimeNodeModuleResources('win32'),
+      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
+      linux: createPackagedRuntimeNodeModuleResources('linux')
+    }
+    expect(packageTargets.win32).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ to: join('node_modules', 'windows-native-registry') }),
+        expect.objectContaining({ to: join('node_modules', 'node-addon-api') })
+      ])
+    )
+    for (const platform of ['darwin', 'linux']) {
+      expect(packageTargets[platform]).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', 'windows-native-registry') })
+        ])
+      )
+    }
   })
 
   it('guards package scripts that launch Electron tooling', () => {
@@ -361,16 +416,27 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
   })
 
-  it('lets release-cut tag a version that is already present on main', () => {
+  it('keeps release-cut version commits skill-independent and taggable on retries', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
     )
     const parsedWorkflow = parse(releaseWorkflow)
+    const checkoutStep = parsedWorkflow.jobs.cut.steps.find((step) => step.name === 'Checkout ref')
     const bumpStep = parsedWorkflow.jobs.cut.steps.find(
       (step) => step.name === 'Bump package.json and tag'
     )
 
+    const bumpIndex = bumpStep.run.indexOf(
+      'npm version "$VERSION" --no-git-tag-version --allow-same-version'
+    )
+    const stageIndex = bumpStep.run.indexOf('git add package.json')
+    expect(checkoutStep.with['fetch-depth']).toBe(0)
+    expect(bumpIndex).toBeGreaterThanOrEqual(0)
+    expect(stageIndex).toBeGreaterThan(bumpIndex)
+    // Why: version-only cuts must not mutate content-addressed skill artifacts.
+    expect(bumpStep.run).not.toContain('generate-skill-bundle-manifest')
+    expect(bumpStep.run).not.toContain('resources/skills')
     expect(bumpStep.run).toContain('git diff --cached --quiet')
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })
@@ -535,6 +601,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
       'terminal-raw-emoji-table-scroll-restore.spec.ts'
     )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-webgl-atlas-budget.spec.ts'
+    )
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
@@ -548,6 +617,8 @@ describe('Electron runtime package contract', () => {
       expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
     expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-webgl-atlas-budget.spec.ts')
+    expect(pullRequestPaths).toContain('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
     expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
     expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')

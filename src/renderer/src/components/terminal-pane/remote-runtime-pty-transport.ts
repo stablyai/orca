@@ -33,18 +33,24 @@ import {
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
-import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
+import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
+import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
+import { listRemoteRuntimeSessionTabsDeduped } from '@/runtime/remote-runtime-session-tabs-inflight'
+import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
 const HOST_SESSION_ATTACH_POLL_MS = 150
+const HOST_SESSION_REPLACEMENT_POLL_MAX_MS = 1_000
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
+
+function isRemoteTerminalStaleMessage(message: string): boolean {
+  return message.includes('terminal_handle_stale')
+}
 
 function isRemoteTerminalGoneMessage(message: string): boolean {
   return (
-    message.includes('terminal_handle_stale') ||
     message.includes('terminal_exited') ||
     message.includes('terminal_gone') ||
     message.includes('no_connected_pty')
@@ -73,6 +79,7 @@ export function createRemoteRuntimePtyTransport(
     activate,
     onPtyExit,
     onPtySpawn,
+    onPtyRebind,
     onTitleChange,
     onBell,
     onAgentBecameIdle,
@@ -90,7 +97,9 @@ export function createRemoteRuntimePtyTransport(
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
-  let resubscribeRequested = false
+  let resubscribeRequestedHandle: string | null = null
+  let resubscribeRequestedRequiresReplacement = false
+  let stopWaitingForPublishedHandle: (() => void) | null = null
   let subscriptionGeneration = 0
   let pendingViewportClaim = false
   let pendingClaimInput = ''
@@ -185,8 +194,13 @@ export function createRemoteRuntimePtyTransport(
       await new Promise((resolve) =>
         setTimeout(resolve, Math.min(HOST_SESSION_ATTACH_POLL_MS, remainingMs))
       )
-      const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-        worktree
+      const listed = await listRemoteRuntimeSessionTabsDeduped({
+        environmentId: currentRuntimeEnvironmentId,
+        worktreeId,
+        load: () =>
+          callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+            worktree
+          })
       })
       const handle = findReadyHostSessionHandle(listed, hostTabId)
       if (handle) {
@@ -199,14 +213,70 @@ export function createRemoteRuntimePtyTransport(
     return null
   }
 
-  async function listHostSessionHandle(hostTabId: string): Promise<string | null> {
+  async function waitForResubscribeHostSessionHandle(
+    hostTabId: string,
+    previousHandle: string,
+    requireReplacement: boolean
+  ): Promise<string | null | undefined> {
     if (!worktreeId) {
       return null
     }
-    const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-      worktree: toRuntimeWorktreeSelector(worktreeId)
-    })
-    return findReadyHostSessionHandle(listed, hostTabId)
+    const worktree = toRuntimeWorktreeSelector(worktreeId)
+    const startedAt = Date.now()
+    let pollMs = HOST_SESSION_ATTACH_POLL_MS
+    let lastListError: unknown = null
+    const finishWithUnknownLiveness = (): undefined => {
+      if (lastListError) {
+        console.warn(
+          '[remote-runtime-pty] host session inventory unavailable during reconnect:',
+          runtimeTerminalErrorMessage(lastListError)
+        )
+      }
+      // Why: a bounded wait without removal evidence is unknown liveness;
+      // keep the mounted pane for an external snapshot to reattach later.
+      return undefined
+    }
+    while (!destroyed && connected && handle === previousHandle) {
+      const requestRemainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      if (requestRemainingMs <= 0) {
+        return finishWithUnknownLiveness()
+      }
+      try {
+        const listed = await listRemoteRuntimeSessionTabsDeduped({
+          environmentId: currentRuntimeEnvironmentId,
+          worktreeId,
+          load: () =>
+            callRuntime<RuntimeMobileSessionTabsResult>(
+              'session.tabs.list',
+              {
+                worktree
+              },
+              requestRemainingMs
+            )
+        })
+        lastListError = null
+        const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
+        if (nextHandle && (!requireReplacement || nextHandle !== previousHandle)) {
+          return nextHandle
+        }
+        if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+          return null
+        }
+      } catch (error) {
+        // Why: the session inventory can race the same runtime reconnect that
+        // invalidated the handle. Unknown liveness must not retire the pane.
+        lastListError = error
+      }
+      const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      if (remainingMs <= 0) {
+        return finishWithUnknownLiveness()
+      }
+      // Why: a stale response can precede publication of its replacement.
+      // Bounded backoff avoids retrying the known-stale handle in a hot loop.
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remainingMs)))
+      pollMs = Math.min(pollMs * 2, HOST_SESSION_REPLACEMENT_POLL_MAX_MS)
+    }
+    return undefined
   }
 
   async function attachHostSessionMirror(
@@ -244,12 +314,16 @@ export function createRemoteRuntimePtyTransport(
     } satisfies PtyConnectResult
   }
 
-  async function callRuntime<TResult>(method: string, params?: unknown): Promise<TResult> {
+  async function callRuntime<TResult>(
+    method: string,
+    params?: unknown,
+    timeoutMs = 15_000
+  ): Promise<TResult> {
     const response = await window.api.runtimeEnvironments.call({
       selector: currentRuntimeEnvironmentId,
       method,
       params,
-      timeoutMs: 15_000
+      timeoutMs
     })
     return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>)
   }
@@ -392,6 +466,11 @@ export function createRemoteRuntimePtyTransport(
     multiplexedStreamHandle = null
   }
 
+  function clearPublishedHandleWait(): void {
+    stopWaitingForPublishedHandle?.()
+    stopWaitingForPublishedHandle = null
+  }
+
   function isCurrentRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
     return (
       !destroyed &&
@@ -404,6 +483,7 @@ export function createRemoteRuntimePtyTransport(
 
   function retireRemoteTerminalId(): void {
     connected = false
+    clearPublishedHandleWait()
     clearPendingViewportClaim()
     const stalePtyId = remotePtyId
     handle = null
@@ -414,6 +494,56 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
+  function rebindRemoteTerminalHandle(nextHandle: string): void {
+    clearPublishedHandleWait()
+    const replacedPtyId = remotePtyId
+    handle = nextHandle
+    remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
+    // Why: host handle rotation preserves the pane generation; only the store
+    // identity changes, without fresh-spawn or terminal-exit semantics.
+    if (replacedPtyId) {
+      replaceFitOverridePtyId(replacedPtyId, remotePtyId)
+      replaceDriverPtyId(replacedPtyId, remotePtyId)
+      onPtyRebind?.(remotePtyId, replacedPtyId)
+    }
+  }
+
+  function waitForPublishedHostSessionHandle(hostTabId: string, previousHandle: string): void {
+    if (!worktreeId) {
+      return
+    }
+    clearPublishedHandleWait()
+    stopWaitingForPublishedHandle = subscribeAcceptedWebSessionTerminalHandle(
+      {
+        environmentId: currentRuntimeEnvironmentId,
+        worktreeId,
+        hostTabId,
+        leafId
+      },
+      (update) => {
+        if (destroyed || !connected || handle !== previousHandle) {
+          clearPublishedHandleWait()
+          return
+        }
+        if (!update.surfacePresent) {
+          retireRemoteTerminalId()
+          return
+        }
+        if (!update.terminalHandle || update.terminalHandle === previousHandle) {
+          return
+        }
+        rebindRemoteTerminalHandle(update.terminalHandle)
+        const reboundHandle = handle
+        const reboundPtyId = remotePtyId
+        void subscribeToHandle().catch((error) => {
+          if (reboundHandle && isCurrentRemoteTerminal(reboundHandle, reboundPtyId)) {
+            handleRemoteTerminalError(error)
+          }
+        })
+      }
+    )
+  }
+
   function handleRemoteTerminalError(error: unknown): void {
     const message = runtimeTerminalErrorMessage(error)
     if (message === REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE) {
@@ -421,10 +551,20 @@ export function createRemoteRuntimePtyTransport(
       // flowing — informational, not fatal, so never surface a red xterm banner.
       return
     }
+    if (isRemoteTerminalStaleMessage(message)) {
+      if (tabId && isWebTerminalSurfaceTabId(tabId)) {
+        // Why: reconnect can re-mint a mirrored pane's handle while its host tab
+        // remains alive. Keep xterm/composer state mounted while we re-resolve it.
+        closeMultiplexedStream()
+        scheduleResubscribeAfterTransportClose(true)
+      } else {
+        retireRemoteTerminalId()
+      }
+      return
+    }
     if (isRemoteTerminalGoneMessage(message)) {
-      // Why: paired web clients consume host-published PTY handles. If the host
-      // retires one between snapshots, clear this mirror and wait for the next
-      // session-tabs update instead of surfacing a red xterm error.
+      // Why: an explicit terminal-gone response is terminal lifecycle evidence,
+      // unlike a replaceable stale handle observed during reconnect.
       retireRemoteTerminalId()
       return
     }
@@ -435,10 +575,21 @@ export function createRemoteRuntimePtyTransport(
   // handle (reconnect, epoch or PTY change). Re-derive it from the current
   // session snapshot instead of resubscribing the stale closure value, which
   // would mirror (and type into) whatever PTY now sits behind it (#7718).
-  async function resubscribeAfterTransportClose(previousHandle: string): Promise<void> {
+  async function resubscribeAfterTransportClose(
+    previousHandle: string,
+    requireReplacement: boolean
+  ): Promise<void> {
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
-      const nextHandle = await listHostSessionHandle(toHostSessionTabId(tabId))
+      const hostTabId = toHostSessionTabId(tabId)
+      const nextHandle = await waitForResubscribeHostSessionHandle(
+        hostTabId,
+        previousHandle,
+        requireReplacement
+      )
       if (destroyed || !connected || handle !== previousHandle) {
+        return
+      }
+      if (nextHandle === undefined) {
         return
       }
       if (!nextHandle) {
@@ -448,25 +599,42 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       if (nextHandle !== previousHandle) {
-        handle = nextHandle
-        remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
-        onPtySpawn?.(remotePtyId)
+        rebindRemoteTerminalHandle(nextHandle)
       }
     }
+    clearPublishedHandleWait()
     await subscribeToHandle()
   }
 
-  function scheduleResubscribeAfterTransportClose(): void {
+  function scheduleResubscribeAfterTransportClose(requireReplacement = false): void {
     if (destroyed || !connected || !handle) {
       return
     }
-    if (resubscribing) {
-      resubscribeRequested = true
+    if (requireReplacement && stopWaitingForPublishedHandle) {
+      // Why: once bounded polling has handed recovery to accepted snapshots,
+      // repeated sends to the known-stale handle must not re-arm inventory RPCs.
       return
     }
-    resubscribing = true
+    if (resubscribing) {
+      // Why: concurrent stale errors belong to the handle that produced them.
+      // Do not carry an old handle's replacement requirement onto its successor.
+      if (resubscribeRequestedHandle !== handle) {
+        resubscribeRequestedHandle = handle
+        resubscribeRequestedRequiresReplacement = requireReplacement
+      } else {
+        resubscribeRequestedRequiresReplacement ||= requireReplacement
+      }
+      return
+    }
     const resubscribeHandle = handle
-    void resubscribeAfterTransportClose(resubscribeHandle)
+    clearPublishedHandleWait()
+    if (tabId && isWebTerminalSurfaceTabId(tabId)) {
+      // Why: subscribe before polling so a fresh host snapshot cannot land in
+      // the gap between the bounded inventory loop and its event-driven fallback.
+      waitForPublishedHostSessionHandle(toHostSessionTabId(tabId), resubscribeHandle)
+    }
+    resubscribing = true
+    void resubscribeAfterTransportClose(resubscribeHandle, requireReplacement)
       .catch((error) => {
         if (!destroyed && connected && handle) {
           clearPendingViewportClaim()
@@ -475,9 +643,12 @@ export function createRemoteRuntimePtyTransport(
       })
       .finally(() => {
         resubscribing = false
-        if (resubscribeRequested) {
-          resubscribeRequested = false
-          scheduleResubscribeAfterTransportClose()
+        const pendingHandle = resubscribeRequestedHandle
+        const pendingRequiresReplacement = resubscribeRequestedRequiresReplacement
+        resubscribeRequestedHandle = null
+        resubscribeRequestedRequiresReplacement = false
+        if (!stopWaitingForPublishedHandle && pendingHandle && pendingHandle === handle) {
+          scheduleResubscribeAfterTransportClose(pendingRequiresReplacement)
         }
       })
   }
@@ -688,6 +859,7 @@ export function createRemoteRuntimePtyTransport(
     },
 
     attach(options) {
+      clearPublishedHandleWait()
       storedCallbacks = options.callbacks
       currentRuntimeEnvironmentId =
         getRemoteRuntimePtyEnvironmentId(options.existingPtyId) ?? runtimeEnvironmentId
@@ -728,6 +900,7 @@ export function createRemoteRuntimePtyTransport(
     },
 
     disconnect() {
+      clearPublishedHandleWait()
       inputBatcher.flush()
       inputBatcher.clear()
       viewportBatcher.flush()
@@ -748,6 +921,7 @@ export function createRemoteRuntimePtyTransport(
     },
 
     detach() {
+      clearPublishedHandleWait()
       inputBatcher.flush()
       inputBatcher.clear()
       viewportBatcher.flush()
