@@ -47,6 +47,7 @@ import {
   lookupGitLabWorkItemByPathForSource
 } from '@/lib/gitlab-work-item-source-lookup'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { cn } from '@/lib/utils'
@@ -1504,6 +1505,14 @@ export default function SmartWorkspaceNameField({
                         !event.ctrlKey &&
                         !event.shiftKey
                       ) {
+                        // Why: an Enter that only commits a CJK IME candidate
+                        // must not select a row or advance focus — moving focus
+                        // mid-composition makes Chromium re-commit the composed
+                        // character into the controlled input, duplicating the
+                        // last syllable (e.g. 배포 → 배포포).
+                        if (isImeCompositionKeyDown(event)) {
+                          return
+                        }
                         if (open && rows.length > 0) {
                           const row = rows.find((entry) => entry.value === resolvedCommandValue)
                           if (row) {
