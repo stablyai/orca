@@ -38,13 +38,21 @@ function targetFor(settings: RuntimeClickUpSettings): ReturnType<typeof getActiv
   )
 }
 
+function withLocalTimeout<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout>
+  const rejected = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error('ClickUp request timed out.')), timeoutMs)
+  })
+  return Promise.race([request, rejected]).finally(() => clearTimeout(timeout))
+}
+
 export async function clickUpStatus(
   settings: RuntimeClickUpSettings
 ): Promise<ClickUpConnectionStatus> {
   const target = targetFor(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.status', undefined, { timeoutMs: 15_000 })
-    : window.api.clickup.status()
+    : withLocalTimeout(window.api.clickup.status(), 15_000)
 }
 
 export async function clickUpConnect(
@@ -54,7 +62,7 @@ export async function clickUpConnect(
   const target = targetFor(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.connect', { apiToken }, { timeoutMs: 30_000 })
-    : window.api.clickup.connect({ apiToken })
+    : withLocalTimeout(window.api.clickup.connect({ apiToken }), 30_000)
 }
 
 export async function clickUpDisconnect(settings: RuntimeClickUpSettings): Promise<void> {
@@ -63,7 +71,7 @@ export async function clickUpDisconnect(settings: RuntimeClickUpSettings): Promi
     await callRuntimeRpc(target, 'clickup.disconnect', undefined, { timeoutMs: 15_000 })
     return
   }
-  await window.api.clickup.disconnect()
+  await withLocalTimeout(window.api.clickup.disconnect(), 15_000)
 }
 
 export async function clickUpSelectWorkspace(
@@ -73,7 +81,7 @@ export async function clickUpSelectWorkspace(
   const target = targetFor(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.selectWorkspace', { workspaceId }, { timeoutMs: 15_000 })
-    : window.api.clickup.selectWorkspace({ workspaceId })
+    : withLocalTimeout(window.api.clickup.selectWorkspace({ workspaceId }), 15_000)
 }
 
 export async function clickUpTestConnection(
@@ -82,7 +90,7 @@ export async function clickUpTestConnection(
   const target = targetFor(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.testConnection', undefined, { timeoutMs: 30_000 })
-    : window.api.clickup.testConnection()
+    : withLocalTimeout(window.api.clickup.testConnection(), 30_000)
 }
 
 export async function clickUpSearchTasks(
@@ -98,7 +106,7 @@ export async function clickUpSearchTasks(
   const params = { query, limit, workspaceId: workspaceId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.searchTasks', params, { timeoutMs: 60_000 })
-    : window.api.clickup.searchTasks(params)
+    : withLocalTimeout(window.api.clickup.searchTasks(params), 60_000)
 }
 
 export async function clickUpListTasks(
@@ -111,7 +119,7 @@ export async function clickUpListTasks(
   const params = { filter, limit, workspaceId: workspaceId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.listTasks', params, { timeoutMs: 60_000 })
-    : window.api.clickup.listTasks(params)
+    : withLocalTimeout(window.api.clickup.listTasks(params), 60_000)
 }
 
 export async function clickUpGetTask(
@@ -123,7 +131,7 @@ export async function clickUpGetTask(
   const params = { taskId, workspaceId: workspaceId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.getTask', params, { timeoutMs: 30_000 })
-    : window.api.clickup.getTask(params)
+    : withLocalTimeout(window.api.clickup.getTask(params), 30_000)
 }
 
 export async function clickUpCreateTask(
@@ -133,7 +141,7 @@ export async function clickUpCreateTask(
   const target = targetFor(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.createTask', args, { timeoutMs: 30_000 })
-    : window.api.clickup.createTask(args)
+    : withLocalTimeout(window.api.clickup.createTask(args), 30_000)
 }
 
 export async function clickUpUpdateTask(
@@ -146,7 +154,7 @@ export async function clickUpUpdateTask(
   const params = { taskId, updates, workspaceId: workspaceId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.updateTask', params, { timeoutMs: 30_000 })
-    : window.api.clickup.updateTask(params)
+    : withLocalTimeout(window.api.clickup.updateTask(params), 30_000)
 }
 
 export async function clickUpAddTaskComment(
@@ -159,7 +167,7 @@ export async function clickUpAddTaskComment(
   const params = { taskId, body, workspaceId: workspaceId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.addTaskComment', params, { timeoutMs: 30_000 })
-    : window.api.clickup.addTaskComment(params)
+    : withLocalTimeout(window.api.clickup.addTaskComment(params), 30_000)
 }
 
 export async function clickUpTaskComments(
@@ -171,7 +179,7 @@ export async function clickUpTaskComments(
   const params = { taskId, workspaceId: workspaceId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.taskComments', params, { timeoutMs: 30_000 })
-    : window.api.clickup.taskComments(params)
+    : withLocalTimeout(window.api.clickup.taskComments(params), 30_000)
 }
 
 export async function clickUpListLists(
@@ -182,7 +190,7 @@ export async function clickUpListLists(
   const params = workspaceId ? { workspaceId } : undefined
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.listLists', params, { timeoutMs: 60_000 })
-    : window.api.clickup.listLists(params)
+    : withLocalTimeout(window.api.clickup.listLists(params), 60_000)
 }
 
 export async function clickUpListMembers(
@@ -193,7 +201,7 @@ export async function clickUpListMembers(
   const params = workspaceId ? { workspaceId } : undefined
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.listMembers', params, { timeoutMs: 30_000 })
-    : window.api.clickup.listMembers(params)
+    : withLocalTimeout(window.api.clickup.listMembers(params), 30_000)
 }
 
 export async function clickUpListTags(
@@ -204,5 +212,5 @@ export async function clickUpListTags(
   const params = workspaceId ? { workspaceId } : undefined
   return target.kind === 'environment'
     ? callRuntimeRpc(target, 'clickup.listTags', params, { timeoutMs: 30_000 })
-    : window.api.clickup.listTags(params)
+    : withLocalTimeout(window.api.clickup.listTags(params), 30_000)
 }
