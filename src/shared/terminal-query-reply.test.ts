@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
-import { isTerminalQueryReply } from './terminal-query-reply'
+import { isTerminalQueryReply, isXtversionReply } from './terminal-query-reply'
 
 describe('isTerminalQueryReply', () => {
   it('matches synthetic query replies that must be sent immediately', () => {
@@ -95,5 +95,27 @@ describe('isTerminalQueryReply', () => {
     // Incomplete / non-terminated OSC and DCS must not match.
     expect(isTerminalQueryReply('\x1b]11;rgb:2828/2c2c/3434')).toBe(false)
     expect(isTerminalQueryReply('\x1bP1$r2 q')).toBe(false)
+  })
+})
+
+describe('isXtversionReply', () => {
+  it('matches the framed XTVERSION reply so it is suppressed, not forwarded', () => {
+    expect(isXtversionReply('\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\')).toBe(true)
+    expect(isXtversionReply('\x1bP>|xterm.js(5.6.0)\x1b\\')).toBe(true)
+    // Any terminal identity string inside the ESC P > | ... ST frame.
+    expect(isXtversionReply('\x1bP>|WezTerm 20240203\x1b\\')).toBe(true)
+  })
+
+  it('does NOT match other DCS replies or the ESC-stripped body', () => {
+    // DECRQSS cursor-style / SGR reports share the DCS frame but are not XTVERSION.
+    expect(isXtversionReply('\x1bP1$r2 q\x1b\\')).toBe(false)
+    expect(isXtversionReply('\x1bP0$r\x1b\\')).toBe(false)
+    // The printable body with framing already stripped is user-owned text.
+    expect(isXtversionReply('>|xterm.js(6.1.0-beta.287)')).toBe(false)
+    // Unterminated frame must not match.
+    expect(isXtversionReply('\x1bP>|xterm.js(6.1.0-beta.287)')).toBe(false)
+    // Other query replies stay forwardable (only XTVERSION is dropped).
+    expect(isXtversionReply('\x1b[?1;2c')).toBe(false)
+    expect(isXtversionReply('\x1b[>0;276;0c')).toBe(false)
   })
 })

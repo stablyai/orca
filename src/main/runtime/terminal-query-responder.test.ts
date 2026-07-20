@@ -139,7 +139,6 @@ describe('reply parity for hidden-dropped chunks', () => {
     ['DECRQSS DECSCUSR default cursor', '\x1bP$q q\x1b\\', ['\x1bP1$r2 q\x1b\\']],
     ['DECRQSS DECSCA', '\x1bP$q"q\x1b\\', ['\x1bP1$r0"q\x1b\\']],
     ['DECRQSS SGR', '\x1bP$qm\x1b\\', ['\x1bP1$r0m\x1b\\']],
-    ['XTVERSION', '\x1b[>0q', ['\x1bP>|xterm.js(6.0.0)\x1b\\']],
     ['kitty CSI ? u default flags', '\x1b[?u', ['\x1b[?0u']],
     ['kitty CSI ? u reports pushed flags', '\x1b[=5;1u\x1b[?u', ['\x1b[?5u']]
   ])('%s', async (_label, chunk, expectedReplies) => {
@@ -155,6 +154,10 @@ describe('reply parity for hidden-dropped chunks', () => {
 
   it.each([
     ['XTWINOPS', '\x1b[14t'],
+    // XTVERSION is deliberately silenced: Orca advertises identity via
+    // TERM_PROGRAM, and a forwarded `xterm.js(...)` reply gated behind the
+    // daemon shell-ready write queue leaks onto the fresh prompt (#7839).
+    ['XTVERSION', '\x1b[>0q'],
     ['XTGETTCAP', '\x1bP+q544e\x1b\\'],
     ['DSR ?15n printer status', '\x1b[?15n'],
     ['DSR ?25n UDK status', '\x1b[?25n'],

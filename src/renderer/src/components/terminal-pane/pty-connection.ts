@@ -25,7 +25,7 @@ import {
 } from '../../../../shared/terminal-reply-query-extraction'
 import { takeCurrentPtyDeliveryAckCredit } from './terminal-pty-ack-gate'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
-import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
+import { isTerminalQueryReply, isXtversionReply } from '../../../../shared/terminal-query-reply'
 import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
@@ -3627,6 +3627,13 @@ export function connectPanePty(
     // isTerminalQueryReply (it requires length >= 3 and a full reply grammar),
     // so a real keystroke never reaches this branch.
     if (isTerminalQueryReply(data)) {
+      // Why drop XTVERSION: it is a non-blocking identity probe and Orca already
+      // brands itself via TERM_PROGRAM=Orca, so forwarding xterm's bare
+      // `xterm.js(...)` reply only leaks onto the shell prompt when the querying
+      // startup program is gone by reply time (#7839). See isXtversionReply.
+      if (isXtversionReply(data)) {
+        return
+      }
       sendDesktopQueryReplyImmediate(data)
       return
     }

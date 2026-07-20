@@ -41,6 +41,8 @@ const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u00
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
 const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
+// XTVERSION reply alone: "ESC P > | <name(version)> ESC \\" (e.g. xterm.js(6.1.0)).
+const XTVERSION_RESPONSE_RE = new RegExp('^\\u001bP>\\|[^\\u001b]*\\u001b\\\\$')
 /* oxlint-enable no-control-regex */
 
 /**
@@ -66,4 +68,19 @@ export function isTerminalQueryReply(data: string): boolean {
     OSC_RESPONSE_RE.test(data) ||
     DCS_RESPONSE_RE.test(data)
   )
+}
+
+/**
+ * True when `data` is xterm's XTVERSION reply ("ESC P > | xterm.js(<ver>) ST").
+ *
+ * Orca must NOT forward this to the PTY. XTVERSION is a non-blocking identity
+ * probe (nothing hangs without a reply, unlike DA1/CPR/DSR), and Orca already
+ * advertises its identity via TERM_PROGRAM=Orca / TERM_PROGRAM_VERSION. The bare
+ * `xterm.js(...)` reply is both misleading (Orca is not raw xterm.js) and the
+ * recurring source of a prompt leak (#7839): on a fresh spawn the startup
+ * program that probed is gone by the time the reply clears the daemon
+ * shell-ready write gate, so it lands on the shell prompt as `>|xterm.js(...)`.
+ */
+export function isXtversionReply(data: string): boolean {
+  return data.length >= 3 && data[0] === ESC && XTVERSION_RESPONSE_RE.test(data)
 }
