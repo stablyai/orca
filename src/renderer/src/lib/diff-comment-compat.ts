@@ -9,8 +9,10 @@ export function isPRCommentsCacheKey(
   worktree: { repoId: string },
   linkedPR: number | string
 ): boolean {
+  const kLower = k.toLowerCase()
+  const repoIdLower = worktree.repoId.toLowerCase()
   return (
-    k.toLowerCase().includes(worktree.repoId.toLowerCase()) &&
+    (kLower.startsWith(`${repoIdLower}::`) || kLower.includes(`::${repoIdLower}::`)) &&
     k.includes('::pr-comments::') &&
     k.endsWith(`::${linkedPR}`)
   )
@@ -109,7 +111,7 @@ export function getPRInlineCommentsFromStore(
   }
 
   const worktree = state.getKnownWorktreeById(worktreeId)
-  if (!worktree) {
+  if (!worktree || !worktree.repoId) {
     return []
   }
 
@@ -118,7 +120,8 @@ export function getPRInlineCommentsFromStore(
     const keys = Object.keys(state.prCache)
     const targetKey = keys.find(
       (k) =>
-        k.toLowerCase().includes(worktree.repoId.toLowerCase()) &&
+        (k.toLowerCase().startsWith(`${worktree.repoId.toLowerCase()}::`) ||
+          k.toLowerCase().includes(`::${worktree.repoId.toLowerCase()}::`)) &&
         k.endsWith(`::${worktree.branch}`)
     )
     const cachedPR = targetKey ? state.prCache[targetKey]?.data : null
@@ -169,7 +172,10 @@ export function selectRawPRCommentsFromStore(
   if (!linkedPR && worktree.branch) {
     const keys = Object.keys(state.prCache)
     const targetKey = keys.find(
-      (k) => k.toLowerCase().includes(worktree.repoId.toLowerCase()) && k.endsWith(`::${worktree.branch}`)
+      (k) =>
+        (k.toLowerCase().startsWith(`${worktree.repoId.toLowerCase()}::`) ||
+          k.toLowerCase().includes(`::${worktree.repoId.toLowerCase()}::`)) &&
+        k.endsWith(`::${worktree.branch}`)
     )
     const cachedPR = targetKey ? state.prCache[targetKey]?.data : null
     if (cachedPR) {

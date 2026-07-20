@@ -73,15 +73,19 @@ export default function DiffViewer({
       return
     }
     const load = async () => {
-      let pr = wtLinkedPR
-      if (!pr && wtBranch) {
-        const prInfo = await fetchPRForBranch(wtPath, wtBranch, { repoId: wtRepoId })
-        if (prInfo) {
-          pr = prInfo.number
+      try {
+        let pr = wtLinkedPR
+        if (!pr && wtBranch) {
+          const prInfo = await fetchPRForBranch(wtPath, wtBranch, { repoId: wtRepoId })
+          if (prInfo) {
+            pr = prInfo.number
+          }
         }
-      }
-      if (pr) {
-        void fetchPRComments(wtPath, pr, { repoId: wtRepoId })
+        if (pr) {
+          void fetchPRComments(wtPath, pr, { repoId: wtRepoId })
+        }
+      } catch {
+        // best-effort background warm-up; ignore failures
       }
     }
     void load()

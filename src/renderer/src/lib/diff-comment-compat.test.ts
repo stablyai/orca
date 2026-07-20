@@ -327,7 +327,7 @@ describe('diff comment compatibility helpers', () => {
       expect(retrieved[0].id).toBe(123)
     })
 
-    it('matches PR comment cache repo IDs by inclusion', () => {
+    it('matches PR comment cache repo IDs by delimiter-bounded segments to avoid substring hits', () => {
       const state = {
         getKnownWorktreeById: (id: string) => ({
           id,
@@ -341,7 +341,7 @@ describe('diff comment compatibility helpers', () => {
         }
       } as unknown as AppState
 
-      expect(selectRawPRCommentsFromStore(state, 'wt-1')).toEqual([mockPRComment])
+      expect(selectRawPRCommentsFromStore(state, 'wt-1')).toEqual([])
     })
 
     it('reuses empty PR comment array references', () => {

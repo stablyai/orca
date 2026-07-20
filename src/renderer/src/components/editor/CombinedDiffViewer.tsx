@@ -55,7 +55,10 @@ import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText }
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
-import { isPRCommentsCacheKey, prCommentsToDecoratedDiffComments } from '@/lib/diff-comment-compat'
+import {
+  prCommentsToDecoratedDiffComments,
+  selectRawPRCommentsFromStore
+} from '@/lib/diff-comment-compat'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,
@@ -163,7 +166,6 @@ const COMBINED_DIFF_OVERSCAN = 5
 const COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT = 64
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
-const EMPTY_PR_COMMENTS: PRComment[] = []
 let combinedDiffCollapsedPreference: boolean | null = null
 let combinedDiffSideBySidePreference: boolean | null = null
 let combinedDiffFileTreeCollapsedPreference: boolean | null = null
@@ -279,32 +281,7 @@ export default function CombinedDiffViewer({
   // linkedPR/worktree and returning a bare `[]` on the falsy branch caused an
   // infinite re-render loop because each `[]` is a new reference and Zustand's
   // Object.is comparison treated it as a change every time.
-  const prComments = useAppStore((s) => {
-    const wt = s.getKnownWorktreeById(file.worktreeId)
-    if (!wt || !wt.repoId) {
-      return EMPTY_PR_COMMENTS
-    }
-    let pr = wt.linkedPR
-    if (!pr && wt.branch) {
-      const keys = Object.keys(s.prCache)
-      const targetKey = keys.find(
-        (k) => k.toLowerCase().includes(wt.repoId.toLowerCase()) && k.endsWith(`::${wt.branch}`)
-      )
-      const cachedPR = targetKey ? s.prCache[targetKey]?.data : null
-      if (cachedPR) {
-        pr = cachedPR.number
-      }
-    }
-    if (!pr) {
-      return EMPTY_PR_COMMENTS
-    }
-    // Why: commentsCache keys may be prefixed by host/runtime environment
-    // scope or contain the full prRepo name in the middle. Match keys
-    // dynamically to find the correct entry regardless of caching scopes.
-    const keys = Object.keys(s.commentsCache)
-    const targetKey = keys.find((k) => isPRCommentsCacheKey(k, wt, pr))
-    return (targetKey ? s.commentsCache[targetKey]?.data : null) ?? EMPTY_PR_COMMENTS
-  })
+  const prComments = useAppStore((s) => selectRawPRCommentsFromStore(s, file.worktreeId))
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
