@@ -28,6 +28,7 @@ const REPO_ICON_FILE_STEMS = [
 ] as const
 
 const REPO_ICON_FILE_EXTENSIONS = ['.png', '.webp'] as const
+const REPO_ICON_FILE_PROBE_CONCURRENCY = 6
 
 export const REPO_ICON_FILE_CANDIDATES = REPO_ICON_FILE_STEMS.flatMap((stem) =>
   REPO_ICON_FILE_EXTENSIONS.map((extension) => `${stem}${extension}`)
@@ -151,16 +152,40 @@ async function readRemoteImageIcon(
   return repoIconFromImageBuffer(buffer, relativePath)
 }
 
-async function detectLocalImageIcon(repoPath: string): Promise<RepoIcon | null> {
-  for (const relativePath of REPO_ICON_FILE_CANDIDATES) {
-    try {
-      const icon = await readLocalImageIcon(repoPath, relativePath)
-      if (icon) {
-        return icon
-      }
-    } catch {
-      // Try the next conventional icon path.
+async function detectConventionalImageIcon(
+  readIcon: (relativePath: string) => Promise<RepoIcon | null>
+): Promise<RepoIcon | null> {
+  // Why: SSH stats are network round trips; bounded batches avoid making the
+  // expanded candidate list serial without flooding the remote filesystem.
+  for (
+    let offset = 0;
+    offset < REPO_ICON_FILE_CANDIDATES.length;
+    offset += REPO_ICON_FILE_PROBE_CONCURRENCY
+  ) {
+    const batch = REPO_ICON_FILE_CANDIDATES.slice(offset, offset + REPO_ICON_FILE_PROBE_CONCURRENCY)
+    const icons = await Promise.all(
+      batch.map(async (relativePath) => {
+        try {
+          return await readIcon(relativePath)
+        } catch {
+          return null
+        }
+      })
+    )
+    const icon = icons.find((candidate): candidate is RepoIcon => candidate !== null)
+    if (icon) {
+      return icon
     }
+  }
+  return null
+}
+
+async function detectLocalImageIcon(repoPath: string): Promise<RepoIcon | null> {
+  const conventionalIcon = await detectConventionalImageIcon((relativePath) =>
+    readLocalImageIcon(repoPath, relativePath)
+  )
+  if (conventionalIcon) {
+    return conventionalIcon
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {
@@ -195,15 +220,11 @@ async function detectRemoteImageIcon(
   repoPath: string,
   fsProvider: IFilesystemProvider
 ): Promise<RepoIcon | null> {
-  for (const relativePath of REPO_ICON_FILE_CANDIDATES) {
-    try {
-      const icon = await readRemoteImageIcon(repoPath, fsProvider, relativePath)
-      if (icon) {
-        return icon
-      }
-    } catch {
-      // Try the next conventional icon path.
-    }
+  const conventionalIcon = await detectConventionalImageIcon((relativePath) =>
+    readRemoteImageIcon(repoPath, fsProvider, relativePath)
+  )
+  if (conventionalIcon) {
+    return conventionalIcon
   }
   for (const sourceFile of REPO_ICON_SOURCE_FILE_CANDIDATES) {
     try {

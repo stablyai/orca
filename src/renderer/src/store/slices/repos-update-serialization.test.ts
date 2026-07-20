@@ -137,8 +137,7 @@ describe('repo update serialization', () => {
       repoIcon: {
         type: 'image',
         source: 'upload',
-        // Why: GIF is still unsupported; PNG/WebP/SVG are allowed after #7902.
-        src: 'data:image/gif;base64,aGVsbG8='
+        src: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='
       } as never
     })
 
