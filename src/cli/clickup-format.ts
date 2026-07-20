@@ -52,12 +52,10 @@ export function formatClickUpLists(lists: ClickUpList[]): string {
       [
         list.id,
         list.workspaceName ?? list.workspaceId,
-        list.space?.name,
-        list.folder?.name,
+        list.space?.name ?? '',
+        list.folder?.name ?? '',
         list.name
-      ]
-        .filter(Boolean)
-        .join('\t')
+      ].join('\t')
     )
     .join('\n')
 }

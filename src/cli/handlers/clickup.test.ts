@@ -104,4 +104,98 @@ describe('orca clickup CLI handlers', () => {
       workspaceId: 'team-1'
     })
   })
+
+  it('normalizes task filters case-insensitively', async () => {
+    call.mockResolvedValueOnce({ result: [] })
+
+    await CLICKUP_HANDLERS['clickup list']({
+      flags: new Map([['filter', 'Assigned']]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('clickup.listTasks', {
+      filter: 'assigned',
+      limit: undefined,
+      workspaceId: undefined
+    })
+  })
+
+  it('prints a comment-specific success message', async () => {
+    call.mockResolvedValueOnce({ result: { ok: true } })
+
+    await CLICKUP_HANDLERS['clickup comment add']({
+      flags: new Map([
+        ['id', '86abc123'],
+        ['body', 'Ready for review']
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: false
+    })
+
+    expect(log).toHaveBeenCalledWith('Added comment to ClickUp task.')
+  })
+
+  it.each([
+    new Map<string, string | boolean>([
+      ['id', '86abc123'],
+      ['current', true],
+      ['to', 'high']
+    ]),
+    new Map<string, string | boolean>([['to', 'high']])
+  ])('rejects ambiguous or missing task selectors', async (flags) => {
+    await expect(
+      CLICKUP_HANDLERS['clickup priority set']({
+        flags,
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['clickup list', new Map([['filter', 'unknown']])],
+    [
+      'clickup priority set',
+      new Map([
+        ['id', '86abc123'],
+        ['to', 'critical']
+      ])
+    ],
+    [
+      'clickup due-date set',
+      new Map([
+        ['id', '86abc123'],
+        ['to', '2026-02-30']
+      ])
+    ]
+  ])('rejects invalid ClickUp command values', async (handler, flags) => {
+    await expect(
+      CLICKUP_HANDLERS[handler]({
+        flags,
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('rejects --current when the worktree is not linked to ClickUp', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo-1::/tmp/worktree'
+    call.mockResolvedValueOnce({ result: { worktree: {} } })
+
+    await expect(
+      CLICKUP_HANDLERS['clickup task']({
+        flags: new Map([['current', true]]),
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'selector_not_found' })
+  })
 })

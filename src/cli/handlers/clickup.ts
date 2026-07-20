@@ -45,6 +45,7 @@ async function resolveTaskTarget({
   if (!current) {
     throw new RuntimeClientError('invalid_argument', 'Pass a ClickUp task id or --current.')
   }
+  // Why: the launcher-provided ID remains authoritative when cwd no longer identifies the worktree.
   const envWorktreeId = process.env.ORCA_WORKTREE_ID
   const selector =
     typeof envWorktreeId === 'string' && envWorktreeId.length > 0
@@ -72,13 +73,14 @@ function getFilter(flags: Map<string, string | boolean>): ClickUpTaskFilter | un
   if (!value) {
     return undefined
   }
-  if (!FILTERS.has(value as ClickUpTaskFilter)) {
+  const normalized = value.toLowerCase()
+  if (!FILTERS.has(normalized as ClickUpTaskFilter)) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--filter must be assigned, created, all, completed, or open.'
     )
   }
-  return value as ClickUpTaskFilter
+  return normalized as ClickUpTaskFilter
 }
 
 function getPriority(flags: Map<string, string | boolean>, name: string): number {
@@ -95,7 +97,12 @@ function getPriority(flags: Map<string, string | boolean>, name: string): number
 
 function getDueDate(flags: Map<string, string | boolean>, name: string): string {
   const value = getRequiredStringFlag(flags, name)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+  const timestamp = Date.parse(`${value}T00:00:00Z`)
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(timestamp) ||
+    new Date(timestamp).toISOString().slice(0, 10) !== value
+  ) {
     throw new RuntimeClientError('invalid_argument', `--${name} must use YYYY-MM-DD.`)
   }
   return value
@@ -159,7 +166,9 @@ export const CLICKUP_HANDLERS: Record<string, CommandHandler> = {
       ...target,
       body: getRequiredStringFlag(context.flags, 'body')
     })
-    printResult(response, context.json, formatClickUpMutation)
+    printResult(response, context.json, (result) =>
+      result.ok ? 'Added comment to ClickUp task.' : (result.error ?? 'Failed to add comment.')
+    )
   },
   'clickup create': async ({ flags, client, json }) => {
     const response = await client.call<ClickUpCreateTaskResult>('clickup.createTask', {
