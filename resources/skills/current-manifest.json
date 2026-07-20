@@ -59,17 +59,17 @@
       "name": "orca-clickup",
       "sourcePath": "skills/orca-clickup",
       "releaseRevision": 1,
-      "packageDigest": "3cc7b9c23dacea3402e571d087c117842607cda841d2098764e8403cbae33a7a",
-      "gitTreeSha": "4adc7a74109ecd19fce8b129c2cb245a68341b77",
+      "packageDigest": "a023d11e55c720b7c5950d41e7d7c12778b10f4f52997ab1c3ace384d5d39191",
+      "gitTreeSha": "c281e73e0b57a1b694eb62161f4f6683d3ecc807",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3960,
+          "size": 5803,
           "executable": false,
           "classification": "text",
-          "exactSha256": "3b31e88a1907dff9896957d29cb61513fdeadc47f4f06dc2b2ae1a86e612f01e",
-          "textNormalizedSha256": "3b31e88a1907dff9896957d29cb61513fdeadc47f4f06dc2b2ae1a86e612f01e",
-          "identitySha256": "3b31e88a1907dff9896957d29cb61513fdeadc47f4f06dc2b2ae1a86e612f01e"
+          "exactSha256": "4010948608267b942b281e591b3c6bc86f3dd99260a48fb7e8a8089f1b261297",
+          "textNormalizedSha256": "4010948608267b942b281e591b3c6bc86f3dd99260a48fb7e8a8089f1b261297",
+          "identitySha256": "4010948608267b942b281e591b3c6bc86f3dd99260a48fb7e8a8089f1b261297"
         }
       ]
     },
