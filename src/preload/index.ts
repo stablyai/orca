@@ -1160,6 +1160,11 @@ const api = {
     }
   },
 
+  terminal: {
+    readHistoryFile: (args: { worktreeId: string; shellPath: string; wslDistro?: string }) =>
+      ipcRenderer.invoke('terminal:readHistoryFile', args)
+  },
+
   feedback: {
     submit: (args: {
       feedback: string

@@ -24,6 +24,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock,
   registerShellHandlersMock,
   registerPetHandlersMock,
+  registerTerminalHistoryFileHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
@@ -86,6 +87,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
+  registerTerminalHistoryFileHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
@@ -244,6 +246,10 @@ vi.mock('./pet', () => ({
   registerPetHandlers: registerPetHandlersMock
 }))
 
+vi.mock('./terminal-history-file', () => ({
+  registerTerminalHistoryFileHandlers: registerTerminalHistoryFileHandlersMock
+}))
+
 vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
@@ -389,6 +395,7 @@ describe('registerCoreHandlers', () => {
     registerTerminalRenderDesyncEvidenceHandlerMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
+    registerTerminalHistoryFileHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
@@ -520,6 +527,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()
+    expect(registerTerminalHistoryFileHandlersMock).toHaveBeenCalled()
     expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)

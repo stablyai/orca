@@ -1485,6 +1485,14 @@ export type PreloadApi = {
     reportRendererSerializerReady?: (ptyId: string) => Promise<void>
     management: PtyManagementApi
   }
+  terminal: {
+    /** Raw HISTFILE content for a worktree's shell, or null when unsupported (fish/pwsh/powershell/cmd) or missing. */
+    readHistoryFile: (args: {
+      worktreeId: string
+      shellPath: string
+      wslDistro?: string
+    }) => Promise<string | null>
+  }
   feedback: {
     submit: (args: {
       feedback: string
