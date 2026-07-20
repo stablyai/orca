@@ -320,18 +320,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     let result = await createOrAttach(scrollback)
     let senderBindingCreatedFresh = result.isNew && senderBindingGeneration !== undefined
     if (!result.isNew && senderBindingGeneration) {
-      // Why: createOrAttach cannot update a live child's environment.
-      this.senderBindingReplacementBySessionId.set(sessionId, senderBindingGeneration)
-      try {
-        await this.client.request('kill', { sessionId, immediate: true })
-      } catch (error) {
-        this.senderBindingReplacementBySessionId.delete(sessionId)
-        throw error
-      }
-      if (this.senderBindingReplacementBySessionId.has(sessionId)) {
-        this.senderBindingReplacementBySessionId.delete(sessionId)
-        throw new Error('orchestration_sender_binding_restart_exit_not_observed')
-      }
+      await this.retireSessionForSenderBinding(sessionId, senderBindingGeneration)
       result = await createOrAttach(scrollback)
       if (!result.isNew) {
         throw new Error('orchestration_sender_binding_restart_not_fresh')
@@ -404,11 +393,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (restoreInfo && scrollback) {
         // Why: the aliveness probe raced with session death, so the first
         // create lacked recovery bytes. Replace it before exposing the PTY.
-        await this.client.request('kill', { sessionId, immediate: true })
+        await (senderBindingGeneration
+          ? this.retireSessionForSenderBinding(sessionId, senderBindingGeneration)
+          : this.client.request('kill', { sessionId, immediate: true }))
         effectiveCwd = restoreInfo.cwd
         effectiveCols = restoreInfo.cols
         effectiveRows = restoreInfo.rows
         result = await createOrAttach(scrollback)
+        if (senderBindingGeneration && !result.isNew) {
+          throw new Error('orchestration_sender_binding_restart_not_fresh')
+        }
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined
         if (wslDistro) {
@@ -547,6 +541,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
       ...(result.snapshot.pendingEscapeTailAnsi
         ? { pendingEscapeTailAnsi: result.snapshot.pendingEscapeTailAnsi }
         : {})
+    }
+  }
+
+  private async retireSessionForSenderBinding(
+    sessionId: string,
+    senderBindingGeneration: string
+  ): Promise<void> {
+    // Why: every pre-exposure child belongs to one refresh generation, including a cold-restore reseed.
+    this.senderBindingReplacementBySessionId.set(sessionId, senderBindingGeneration)
+    try {
+      await this.client.request('kill', { sessionId, immediate: true })
+    } catch (error) {
+      this.senderBindingReplacementBySessionId.delete(sessionId)
+      throw error
+    }
+    if (this.senderBindingReplacementBySessionId.has(sessionId)) {
+      this.senderBindingReplacementBySessionId.delete(sessionId)
+      throw new Error('orchestration_sender_binding_restart_exit_not_observed')
     }
   }
 

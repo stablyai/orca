@@ -174,7 +174,7 @@ type FreshLocalFallbackProvider = IPtyProvider & {
   routesFreshSpawnsToLocalProvider?: true
 }
 const sshProviders = new Map<string, IPtyProvider>()
-// Why: only an exit tagged with the exact fresh generation may skip teardown.
+// Why: only exits tagged with an in-flight fresh generation may skip teardown.
 const pendingSenderBindingReplacementGenerations = new Set<string>()
 
 type SenderBindingSpawnAttempt = {
@@ -253,7 +253,7 @@ export function consumeSenderBindingReplacementExit(payload: PtyExitPayload): bo
   if (!generation || !pendingSenderBindingReplacementGenerations.has(generation)) {
     return false
   }
-  pendingSenderBindingReplacementGenerations.delete(generation)
+  // Why: daemon cold restore may retire multiple pre-exposure children; provider acknowledgement closes the generation.
   return true
 }
 

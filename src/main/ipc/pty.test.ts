@@ -2442,6 +2442,86 @@ describe('registerPtyHandlers', () => {
         ).toEqual([['pty:exit', { id: sessionId, code: 42 }]])
       })
 
+      it('keeps the pending runtime capability through every tagged pre-exposure exit', async () => {
+        const sessionId = 'cold-restore-generation-session'
+        const tabId = 'tab-cold-restore-generation'
+        const leafId = '66666666-6666-4666-8666-666666666666'
+        const paneKey = makePaneKey(tabId, leafId)
+        const runtime = new OrcaRuntimeService()
+        runtime.preAllocateHandleForPty(sessionId)
+        runtime.registerPty(sessionId, 'wt-existing', null, { tabId, leafId })
+        let emitExit:
+          | ((payload: {
+              id: string
+              code: number
+              replacedBySenderBindingGeneration?: string
+            }) => void)
+          | undefined
+        let capability: string | undefined
+        let finalHandle: string | undefined
+        setLocalPtyProvider({
+          spawn: vi.fn(
+            async (options: {
+              env: Record<string, string>
+              sessionId?: string
+              senderBindingGeneration?: string
+            }) => {
+              capability = options.env[ORCHESTRATION_SENDER_CAPABILITY_ENV]
+              finalHandle = options.env.ORCA_TERMINAL_HANDLE
+              const exit = {
+                id: options.sessionId ?? sessionId,
+                code: 137,
+                replacedBySenderBindingGeneration: options.senderBindingGeneration
+              }
+              emitExit?.(exit)
+              emitExit?.(exit)
+              return {
+                id: options.sessionId ?? sessionId,
+                senderBindingGeneration: options.senderBindingGeneration,
+                coldRestore: {
+                  scrollback: 'restored output',
+                  cwd: '/projects/live',
+                  cols: 80,
+                  rows: 24
+                }
+              }
+            }
+          ),
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          shutdown: vi.fn(),
+          onData: vi.fn(() => vi.fn()),
+          onExit: vi.fn((listener) => {
+            emitExit = listener
+            return vi.fn()
+          }),
+          listProcesses: vi.fn(async () => []),
+          getForegroundProcess: vi.fn(async () => null)
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime)
+
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: {},
+          sessionId,
+          worktreeId: 'wt-existing',
+          tabId,
+          leafId
+        })
+
+        expect(capability).toBeDefined()
+        expect(runtime.resolveAuthenticatedOrchestrationSender(capability)).toEqual({
+          canonicalHandle: finalHandle,
+          canonicalPaneKey: paneKey
+        })
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([])
+      })
+
       it('prefixes a minted sessionId with the worktreeId when provided', async () => {
         // Why: daemon reconnect keys live-shell survival on the sessionId.
         // Prefixing with worktreeId lets the daemon scope sessions by worktree

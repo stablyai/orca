@@ -1164,15 +1164,23 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onExit((payload) => {
-      if (consumeSenderBindingReplacementExit(payload)) {
-        return
-      }
+      const suppressRendererExit = consumeSenderBindingReplacementExit(payload)
       const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
+      // Why: SSH replacement uses a new id, so the tagged old id must still retire all internal ownership.
       clearProviderPtyState(payload.id)
       deletePtyOwnership(payload.id)
       this.forwardedReattachReplayByPty.delete(payload.id)
       this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
-      this.runtime?.onPtyExit(payload.id, payload.code)
+      if (suppressRendererExit) {
+        this.runtime?.onPtyExit(payload.id, payload.code, {
+          preservePendingOrchestrationSenderReplacement: true
+        })
+      } else {
+        this.runtime?.onPtyExit(payload.id, payload.code)
+      }
+      if (suppressRendererExit) {
+        return
+      }
       const win = this.getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('pty:exit', payload)

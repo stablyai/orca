@@ -1751,6 +1751,45 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
     })
 
+    it('keeps one sender generation across live refresh and cold-restore reseed', async () => {
+      const sessionId = 'sender-binding-live-cold-restore'
+      const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      await first.spawn({ cols: 80, rows: 24, cwd: '/projects/live', sessionId })
+      lastSubprocess._simulateData('restorable live output\r\n')
+      await first.disconnectOnly()
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const generation = randomUUID()
+      const capability = randomUUID()
+      const exits: { replacedBySenderBindingGeneration?: string }[] = []
+      historyAdapter.onExit((payload) => exits.push(payload))
+
+      const result = await historyAdapter.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId,
+        restartExistingSessionForSenderBinding: true,
+        senderBindingGeneration: generation,
+        env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: capability }
+      })
+
+      // Why: neither pre-exposure child may revoke the capability installed in the final child.
+      expect(exits).toEqual([
+        expect.objectContaining({ replacedBySenderBindingGeneration: generation }),
+        expect.objectContaining({ replacedBySenderBindingGeneration: generation })
+      ])
+      expect(result).toMatchObject({
+        id: sessionId,
+        senderBindingGeneration: generation,
+        coldRestore: { scrollback: expect.stringContaining('restorable live output') }
+      })
+      expect(lastSpawnOpts).toMatchObject({
+        sessionId,
+        cwd: '/projects/live',
+        env: { [ORCHESTRATION_SENDER_CAPABILITY_ENV]: capability }
+      })
+    })
+
     it('does not probe session aliveness when there is no restorable history', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const client = (

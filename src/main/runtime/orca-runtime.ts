@@ -6043,7 +6043,10 @@ export class OrcaRuntimeService {
     }
   }
 
-  private revokeOrchestrationSenderCapabilityForPty(ptyId: string): void {
+  private revokeOrchestrationSenderCapabilityForPty(
+    ptyId: string,
+    preservePendingReplacement = false
+  ): void {
     this.orchestrationSenderGenerationByPtyId.set(
       ptyId,
       (this.orchestrationSenderGenerationByPtyId.get(ptyId) ?? 0) + 1
@@ -6052,6 +6055,10 @@ export class OrcaRuntimeService {
       if (sender.ptyId === ptyId) {
         this.revokeOrchestrationSenderCapability(capability)
       }
+    }
+    // Why: tagged SSH old-id exit must not revoke its same-pane replacement before binding.
+    if (preservePendingReplacement) {
+      return
     }
     const paneKey = this.ptysById.get(ptyId)?.paneKey
     if (paneKey) {
@@ -9386,9 +9393,16 @@ export class OrcaRuntimeService {
     }
   }
 
-  onPtyExit(ptyId: string, exitCode: number): void {
+  onPtyExit(
+    ptyId: string,
+    exitCode: number,
+    opts: { preservePendingOrchestrationSenderReplacement?: boolean } = {}
+  ): void {
     this.advancePtyLifecycleGeneration(ptyId)
-    this.revokeOrchestrationSenderCapabilityForPty(ptyId)
+    this.revokeOrchestrationSenderCapabilityForPty(
+      ptyId,
+      opts.preservePendingOrchestrationSenderReplacement === true
+    )
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
@@ -23130,19 +23144,25 @@ export class OrcaRuntimeService {
 
   private getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
     const parsed = parsePaneKey(paneKey)
+    let disconnectedMatch: RuntimePtyWorktreeRecord | null = null
     if (parsed) {
       const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
       const pty = leaf?.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-      if (pty) {
+      if (pty?.connected) {
         return pty
       }
+      disconnectedMatch = pty ?? null
     }
     for (const pty of this.ptysById.values()) {
       if (pty.paneKey === paneKey) {
-        return pty
+        // Why: new-id SSH replacement shares a pane with its disconnected predecessor.
+        if (pty.connected) {
+          return pty
+        }
+        disconnectedMatch ??= pty
       }
     }
-    return null
+    return disconnectedMatch
   }
 
   private getPaneKeyForTerminalHandle(handle: string): string | null {

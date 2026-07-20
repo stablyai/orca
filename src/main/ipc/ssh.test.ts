@@ -222,10 +222,12 @@ import {
 } from '../../shared/ssh-types'
 import {
   clearProviderPtyState,
+  consumeSenderBindingReplacementExit,
   deletePtyOwnership,
   getSshPtyProvider,
   getPtyIdsForConnection
 } from './pty'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 describe('SSH IPC handlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -348,6 +350,7 @@ describe('SSH IPC handlers', () => {
     vi.mocked(getSshPtyProvider).mockReset()
     vi.mocked(getPtyIdsForConnection).mockReset().mockReturnValue([])
     vi.mocked(clearProviderPtyState).mockReset()
+    vi.mocked(consumeSenderBindingReplacementExit).mockReset().mockReturnValue(false)
     vi.mocked(deletePtyOwnership).mockReset()
 
     registerSshHandlers(mockStore as never, () => mockWindow as never)
@@ -812,6 +815,83 @@ describe('SSH IPC handlers', () => {
 
     expect(runtime.onPtyData).toHaveBeenCalledWith('remote-pty', 'hello', expect.any(Number))
     expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7)
+  })
+
+  it('retires a tagged old SSH id without touching the new lifecycle generation', async () => {
+    const runtime = new OrcaRuntimeService()
+    const oldPtyId = 'ssh:ssh-1@@pty-old'
+    const newPtyId = 'ssh:ssh-1@@pty-new'
+    const leafId = '77777777-7777-4777-8777-777777777777'
+    const paneKey = `tab-ssh-replacement:${leafId}`
+    runtime.preAllocateHandleForPty(oldPtyId)
+    runtime.registerPty(oldPtyId, 'wt-ssh', 'ssh-1', {
+      tabId: 'tab-ssh-replacement',
+      leafId
+    })
+    const newHandle = runtime.createPreAllocatedTerminalHandle()
+    const newCapability = runtime.issuePendingOrchestrationSenderCapability(paneKey, newHandle)
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime)
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    vi.mocked(consumeSenderBindingReplacementExit).mockReturnValue(true)
+    const onExit = mockPtyProvider.onExit.mock.calls[0]?.[0] as
+      | ((payload: {
+          id: string
+          code: number
+          replacedBySenderBindingGeneration?: string
+        }) => void)
+      | undefined
+    mockWindow.webContents.send.mockClear()
+    onExit?.({
+      id: oldPtyId,
+      code: 137,
+      replacedBySenderBindingGeneration: 'sender-binding-generation'
+    })
+    runtime.registerPreAllocatedHandleForPty(newPtyId, newHandle)
+    runtime.registerPty(newPtyId, 'wt-ssh', 'ssh-1', {
+      tabId: 'tab-ssh-replacement',
+      leafId
+    })
+
+    expect(clearProviderPtyState).toHaveBeenCalledWith(oldPtyId)
+    expect(deletePtyOwnership).toHaveBeenCalledWith(oldPtyId)
+    expect(clearProviderPtyState).not.toHaveBeenCalledWith(newPtyId)
+    expect(deletePtyOwnership).not.toHaveBeenCalledWith(newPtyId)
+    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'pty-old', 'terminated')
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+      'ssh-1',
+      'pty-new',
+      'terminated'
+    )
+    expect(
+      (
+        runtime as unknown as {
+          ptysById: Map<string, { connected: boolean }>
+        }
+      ).ptysById.get(oldPtyId)?.connected
+    ).not.toBe(true)
+    expect(runtime.resolveAuthenticatedOrchestrationSender(newCapability)).toEqual({
+      canonicalHandle: newHandle,
+      canonicalPaneKey: paneKey
+    })
+    expect(mockWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
+      []
+    )
   })
 
   it('mirrors SSH state broadcasts onto the runtime client-event stream', async () => {
