@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+const require = createRequire(import.meta.url)
+const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtime-node-modules.cjs')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
@@ -34,11 +37,6 @@ describe('Electron runtime package contract', () => {
       join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
       'utf8'
     )
-    const packagedRuntime = readFileSync(
-      join(projectDir, 'config/packaged-runtime-node-modules.cjs'),
-      'utf8'
-    )
-
     expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
     // Why: pnpm installs optional target architectures on every host; the root
     // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
@@ -49,9 +47,24 @@ describe('Electron runtime package contract', () => {
     expect(ensureScript).toContain(
       "process.platform === 'win32' ? ['windows-native-registry'] : []"
     )
-    expect(packagedRuntime).toContain(
-      "process.platform === 'win32' ? ['windows-native-registry'] : []"
+    const packageTargets = {
+      win32: createPackagedRuntimeNodeModuleResources('win32'),
+      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
+      linux: createPackagedRuntimeNodeModuleResources('linux')
+    }
+    expect(packageTargets.win32).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ to: join('node_modules', 'windows-native-registry') }),
+        expect.objectContaining({ to: join('node_modules', 'node-addon-api') })
+      ])
     )
+    for (const platform of ['darwin', 'linux']) {
+      expect(packageTargets[platform]).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', 'windows-native-registry') })
+        ])
+      )
+    }
   })
 
   it('guards package scripts that launch Electron tooling', () => {

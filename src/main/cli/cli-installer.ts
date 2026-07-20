@@ -20,6 +20,7 @@ import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-instal
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
 import {
   invalidateWindowsUserPathRegistryCache,
+  readFreshWindowsUserPathRegistry,
   readWindowsUserPathRegistry,
   type WindowsUserPathReadResult
 } from './windows-user-path-registry'
@@ -47,7 +48,9 @@ type CliInstallerOptions = {
   defaultMacCommandPath?: string
   privilegedRunner?: (command: string) => Promise<void>
   userPathReader?: () => Promise<WindowsUserPathReadResult>
+  userPathMutationReader?: () => Promise<WindowsUserPathReadResult>
   userPathWriter?: (value: string) => Promise<void>
+  userPathCacheInvalidator?: () => void
   windowsEnvironment?: NodeJS.ProcessEnv
   /** Why: AppImage reports a stable outer file path via $APPIMAGE while bundled resources live in an ephemeral FUSE mount. */
   appImagePath?: string | null
@@ -72,7 +75,9 @@ export class CliInstaller {
   private readonly macCommandPath: string
   private readonly privilegedRunner: (command: string) => Promise<void>
   private readonly userPathReader: () => Promise<WindowsUserPathReadResult>
+  private readonly userPathMutationReader: () => Promise<WindowsUserPathReadResult>
   private readonly userPathWriter: (value: string) => Promise<void>
+  private readonly userPathCacheInvalidator: () => void
   private readonly windowsEnvironment: NodeJS.ProcessEnv
   private readonly appImagePath: string | null
 
@@ -113,7 +118,11 @@ export class CliInstaller {
       : join(this.homePath, '.local', 'bin', 'orca')
     this.privilegedRunner = options.privilegedRunner ?? runMacPrivilegedCommand
     this.userPathReader = options.userPathReader ?? readWindowsUserPathRegistry
+    this.userPathMutationReader =
+      options.userPathMutationReader ?? options.userPathReader ?? readFreshWindowsUserPathRegistry
     this.userPathWriter = options.userPathWriter ?? ((value) => writeWindowsUserPath(value))
+    this.userPathCacheInvalidator =
+      options.userPathCacheInvalidator ?? invalidateWindowsUserPathRegistryCache
     this.windowsEnvironment = options.windowsEnvironment ?? process.env
     this.appImagePath =
       this.platform === 'linux' && this.isPackaged
@@ -789,7 +798,7 @@ export class CliInstaller {
     }
     return {
       configured: splitPathEntries('win32', result.value).some((entry) =>
-        samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment)
+        samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, result.expandable)
       ),
       detail: null
     }
@@ -856,9 +865,11 @@ export class CliInstaller {
 
   private async ensureWindowsPathEntry(pathDirectory: string): Promise<void> {
     const current = await this.readWindowsUserPathForMutation()
-    const entries = splitPathEntries('win32', current)
+    const entries = splitPathEntries('win32', current.value)
     if (
-      entries.some((entry) => samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment))
+      entries.some((entry) =>
+        samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, current.expandable)
+      )
     ) {
       return
     }
@@ -871,9 +882,10 @@ export class CliInstaller {
       return
     }
     const current = await this.readWindowsUserPathForMutation()
-    const entries = splitPathEntries('win32', current)
+    const entries = splitPathEntries('win32', current.value)
     const nextEntries = entries.filter(
-      (entry) => !samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment)
+      (entry) =>
+        !samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, current.expandable)
     )
     if (nextEntries.length === entries.length) {
       return
@@ -881,10 +893,13 @@ export class CliInstaller {
     await this.writeWindowsUserPathEntry(nextEntries.join(';'), pathDirectory, 'remove')
   }
 
-  private async readWindowsUserPathForMutation(): Promise<string | null> {
-    const result = await this.userPathReader()
+  private async readWindowsUserPathForMutation(): Promise<{
+    value: string | null
+    expandable: boolean
+  }> {
+    const result = await this.userPathMutationReader()
     if (result.state === 'success') {
-      return result.value
+      return { value: result.value, expandable: result.expandable }
     }
     // Why: PATH updates are read-modify-write; continuing after an unknown read
     // could replace the user's existing PATH with an incomplete value.
@@ -900,7 +915,7 @@ export class CliInstaller {
   ): Promise<void> {
     try {
       await this.userPathWriter(value)
-      invalidateWindowsUserPathRegistryCache()
+      this.userPathCacheInvalidator()
     } catch (error) {
       if (!isWindowsUserPathPermissionError(error)) {
         throw error
@@ -1074,11 +1089,12 @@ function samePathEntry(
   platform: NodeJS.Platform,
   left: string,
   right: string,
-  windowsEnvironment: NodeJS.ProcessEnv = process.env
+  windowsEnvironment: NodeJS.ProcessEnv = process.env,
+  expandWindowsVariables = true
 ): boolean {
   return platform === 'win32'
-    ? normalizeWindowsPath(left, windowsEnvironment) ===
-        normalizeWindowsPath(right, windowsEnvironment)
+    ? normalizeWindowsPath(left, windowsEnvironment, expandWindowsVariables) ===
+        normalizeWindowsPath(right, windowsEnvironment, expandWindowsVariables)
     : left === right
 }
 
@@ -1100,8 +1116,12 @@ async function isExecutableFile(commandPath: string): Promise<boolean> {
   }
 }
 
-function normalizeWindowsPath(value: string, env: NodeJS.ProcessEnv = process.env): string {
-  return expandWindowsEnvironmentVariables(value, env)
+function normalizeWindowsPath(
+  value: string,
+  env: NodeJS.ProcessEnv = process.env,
+  expandEnvironmentVariables = true
+): string {
+  return (expandEnvironmentVariables ? expandWindowsEnvironmentVariables(value, env) : value)
     .replaceAll('/', '\\')
     .replace(/\\+$/, '')
     .toLowerCase()

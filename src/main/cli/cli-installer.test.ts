@@ -29,10 +29,13 @@ vi.mock('node:child_process', () => ({
 
 import { CliInstaller } from './cli-installer'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
-import type { WindowsUserPathReadResult } from './windows-user-path-registry'
+import {
+  WindowsUserPathRegistryReader,
+  type WindowsUserPathReadResult
+} from './windows-user-path-registry'
 
-function userPathRead(value: string | null): WindowsUserPathReadResult {
-  return { state: 'success', value }
+function userPathRead(value: string | null, expandable = false): WindowsUserPathReadResult {
+  return { state: 'success', value, expandable }
 }
 
 async function makeFixture(): Promise<{
@@ -478,6 +481,45 @@ describe('CliInstaller', () => {
     expect(userPathWriter).not.toHaveBeenCalled()
   })
 
+  it('bypasses cached status data before a Windows PATH mutation', async () => {
+    const fixture = await makeFixture()
+    const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
+    const pathDirectory = dirname(installPath)
+    let registryPath = 'C:\\Tools'
+    const registryReader = new WindowsUserPathRegistryReader({
+      platform: 'win32',
+      registryLoader: async () => ({
+        HK: { CU: 0x80000001 },
+        getRegistryKey: () => ({
+          Path: { name: 'Path', type: 2, value: registryPath }
+        })
+      })
+    })
+    const userPathWriter = vi.fn(async (value: string) => {
+      registryPath = value
+    })
+    const installer = new CliInstaller({
+      platform: 'win32',
+      isPackaged: false,
+      userDataPath: fixture.userDataPath,
+      execPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\Orca.exe',
+      appPath: fixture.appPath,
+      commandPathOverride: installPath,
+      userPathReader: () => registryReader.read(),
+      userPathMutationReader: () => registryReader.readFresh(),
+      userPathWriter,
+      userPathCacheInvalidator: () => registryReader.invalidate()
+    })
+
+    await installer.getStatus()
+    registryPath = 'C:\\Tools;C:\\AddedByAnotherInstaller'
+    await installer.install()
+
+    expect(userPathWriter).toHaveBeenCalledWith(
+      `C:\\Tools;C:\\AddedByAnotherInstaller;${pathDirectory}`
+    )
+  })
+
   it('matches expandable Windows PATH entries case-insensitively without rewriting them', async () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, 'Local App Data', 'Orca', 'bin', 'orca.cmd')
@@ -490,7 +532,7 @@ describe('CliInstaller', () => {
       appPath: fixture.appPath,
       commandPathOverride: installPath,
       windowsEnvironment: { LOCALAPPDATA: join(fixture.root, 'Local App Data') },
-      userPathReader: async () => userPathRead('%localappdata%\\Orca\\bin\\'),
+      userPathReader: async () => userPathRead('%localappdata%\\Orca\\bin\\', true),
       userPathWriter
     })
 
@@ -499,6 +541,28 @@ describe('CliInstaller', () => {
       pathConfigured: true
     })
     expect(userPathWriter).not.toHaveBeenCalled()
+  })
+
+  it('does not expand environment variables stored in a REG_SZ Windows PATH', async () => {
+    const fixture = await makeFixture()
+    const installPath = join(fixture.root, 'Local App Data', 'Orca', 'bin', 'orca.cmd')
+    const pathDirectory = dirname(installPath)
+    const userPathWriter = vi.fn()
+    const installer = new CliInstaller({
+      platform: 'win32',
+      isPackaged: false,
+      userDataPath: fixture.userDataPath,
+      execPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\Orca.exe',
+      appPath: fixture.appPath,
+      commandPathOverride: installPath,
+      windowsEnvironment: { LOCALAPPDATA: join(fixture.root, 'Local App Data') },
+      userPathReader: async () => userPathRead('%LOCALAPPDATA%\\Orca\\bin'),
+      userPathWriter
+    })
+
+    await installer.install()
+
+    expect(userPathWriter).toHaveBeenCalledWith(`%LOCALAPPDATA%\\Orca\\bin;${pathDirectory}`)
   })
 
   // Why: this test creates a Unix symlink to /tmp/not-orca, which only applies on macOS/Linux.
