@@ -184,14 +184,14 @@ export function mergeSnapshotAndSessions(
     return repo.worktrees.find((w) => w.worktreeId === worktreeId)
   }
 
-  // ── Step 1: ingest snapshot worktrees as the local-truth foundation.
+  // ── Step 1: ingest snapshot worktrees as the sample foundation.
+  // Why: do not filter by runtime-scoped repo id here. When the focused
+  // environment is a runtime host, `memory:getSnapshot` proxies
+  // `diagnostics.memory` there and the snapshot rows are honest samples from
+  // that host. Filtering them out left Resource Manager empty under LXC/remote
+  // focus ("Nothing running right now") while the environment was busy.
   if (snapshot) {
     for (const wt of snapshot.worktrees as readonly WorktreeMemory[]) {
-      // Why: local snapshot data must never render under a runtime-hosted repo
-      // row; belt-and-braces with the matching session-ingest guard below.
-      if (isRuntimeScopedRepo(wt.repoId)) {
-        continue
-      }
       const repo = ensureRepo(wt.repoId, wt.repoName)
       const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
         seenSessionIds.add(s.sessionId)
