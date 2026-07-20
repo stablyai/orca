@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { ipcMain } from 'electron'
@@ -6205,6 +6205,34 @@ describe('OrcaRuntimeService', () => {
         { name: 'alpha', isDirectory: true, isSymlink: false },
         { name: 'zeta', isDirectory: true, isSymlink: false },
         { name: 'readme.md', isDirectory: false, isSymlink: false }
+      ])
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('classifies symlinked directories as directories when browsing server dirs', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-browse-symlink-'))
+    try {
+      await mkdir(join(tempRoot, 'real-dir'))
+      await writeFile(join(tempRoot, 'real-file.txt'), 'contents\n')
+      await symlink(
+        join(tempRoot, 'real-dir'),
+        join(tempRoot, 'linked-dir'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+      await symlink(join(tempRoot, 'real-file.txt'), join(tempRoot, 'linked-file'))
+      await symlink(join(tempRoot, 'missing-target'), join(tempRoot, 'broken-link'))
+      const runtime = new OrcaRuntimeService(store)
+
+      const result = await runtime.browseServerDir(tempRoot)
+
+      expect(result.entries).toEqual([
+        { name: 'linked-dir', isDirectory: true, isSymlink: true },
+        { name: 'real-dir', isDirectory: true, isSymlink: false },
+        { name: 'broken-link', isDirectory: false, isSymlink: true },
+        { name: 'linked-file', isDirectory: false, isSymlink: true },
+        { name: 'real-file.txt', isDirectory: false, isSymlink: false }
       ])
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
