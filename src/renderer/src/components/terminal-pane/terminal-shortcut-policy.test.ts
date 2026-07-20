@@ -967,4 +967,44 @@ describe('resolveTerminalShortcutAction — accept autosuggest', () => {
       )
     ).not.toEqual({ type: 'acceptAutosuggest' })
   })
+
+  it('honors a rebound terminal.acceptAutosuggest keybinding over the old default', () => {
+    // Why: proves the check routes through keybindingMatchesAction rather than
+    // a hardcoded ArrowRight/End check — a Settings rebind must take effect.
+    const overrides = { 'terminal.acceptAutosuggest': ['Tab'] }
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight' }),
+        false,
+        'false',
+        0,
+        false,
+        overrides,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).not.toEqual({ type: 'acceptAutosuggest' })
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Tab' }),
+        false,
+        'false',
+        0,
+        false,
+        overrides,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        () => false,
+        () => true
+      )
+    ).toEqual({ type: 'acceptAutosuggest' })
+  })
 })

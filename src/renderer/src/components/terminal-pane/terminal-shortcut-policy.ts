@@ -102,14 +102,11 @@ export function resolveTerminalShortcutAction(
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 
-  // Why: must win over word-nav/EOL handling below, but only when unmodified
-  // so Alt+Arrow word-nav and Cmd+Arrow EOL jumps are unaffected.
+  // Why: must win over word-nav/EOL handling below; keybindingMatchesAction's
+  // exact modifier match keeps Alt+Arrow word-nav and Cmd+Arrow EOL jumps
+  // unaffected for the default (unmodified) binding.
   if (
-    !event.metaKey &&
-    !event.ctrlKey &&
-    !event.altKey &&
-    !event.shiftKey &&
-    (event.key === 'ArrowRight' || event.key === 'End') &&
+    keybindingMatchesAction('terminal.acceptAutosuggest', event, platform, keybindings) &&
     hasActiveAutosuggestAtEndOfLine?.()
   ) {
     return { type: 'acceptAutosuggest' }
