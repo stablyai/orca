@@ -3,9 +3,10 @@ import {
   MAX_PANEL_LAYOUTS,
   MAX_PANEL_LAYOUT_LEAVES,
   countPanelLayoutLeaves,
-  normalizePanelLayouts
+  normalizePanelLayouts,
+  prunePanelLayoutsForSurvivingPanels
 } from './panel-layouts'
-import type { PanelLayoutNode } from './types'
+import type { PanelLayout, PanelLayoutNode } from './types'
 
 const leaf = (panelId: string): PanelLayoutNode => ({ kind: 'terminal', panelId })
 
@@ -213,5 +214,72 @@ describe('shell leaves', () => {
       }
     ])
     expect(countPanelLayoutLeaves(wide[0].root)).toBe(MAX_PANEL_LAYOUT_LEAVES)
+  })
+})
+
+describe('prunePanelLayoutsForSurvivingPanels', () => {
+  const layout = (root: PanelLayoutNode): PanelLayout => ({ id: 'l1', title: 'L', root })
+
+  it('keeps layouts untouched when every referenced panel survives', () => {
+    const l = layout({ direction: 'row', children: [leaf('t1'), { kind: 'web', panelId: 'w1' }] })
+    const out = prunePanelLayoutsForSurvivingPanels([l], [{ id: 't1' }], [{ id: 'w1' }])
+    expect(out).toHaveLength(1)
+    // identity preserved so a no-op delete elsewhere can't churn the profile
+    expect(out[0]).toBe(l)
+  })
+
+  it('collapses a split to the surviving child when one panel is deleted', () => {
+    const l = layout({ direction: 'row', children: [leaf('t1'), { kind: 'web', panelId: 'w1' }] })
+    const out = prunePanelLayoutsForSurvivingPanels([l], [{ id: 't1' }], [])
+    expect(out).toHaveLength(1)
+    expect(out[0].root).toEqual({ kind: 'terminal', panelId: 't1' })
+  })
+
+  it('drops the layout entirely when nothing survives', () => {
+    const l = layout({ direction: 'row', children: [leaf('t1'), leaf('t2')] })
+    expect(prunePanelLayoutsForSurvivingPanels([l], [], [])).toEqual([])
+  })
+
+  it('drops stale sizes when the child count shrinks', () => {
+    const l = layout({
+      direction: 'row',
+      children: [leaf('t1'), leaf('t2'), leaf('t3')],
+      sizes: [1, 2, 3]
+    })
+    const out = prunePanelLayoutsForSurvivingPanels([l], [{ id: 't1' }, { id: 't3' }], [])
+    const root = out[0].root as Extract<PanelLayoutNode, { direction: 'row' | 'column' }>
+    expect(root.children).toHaveLength(2)
+    expect(root.sizes).toBeUndefined()
+  })
+
+  it('never drops self-contained shell and browser leaves', () => {
+    const l = layout({
+      direction: 'column',
+      children: [
+        leaf('gone'),
+        { kind: 'shell', host: 'node-a' },
+        { kind: 'browser', url: 'about:blank' }
+      ]
+    })
+    const out = prunePanelLayoutsForSurvivingPanels([l], [], [])
+    const root = out[0].root as Extract<PanelLayoutNode, { direction: 'row' | 'column' }>
+    expect(root.children).toEqual([
+      { kind: 'shell', host: 'node-a' },
+      { kind: 'browser', url: 'about:blank' }
+    ])
+  })
+
+  it('prunes nested splits recursively', () => {
+    const l = layout({
+      direction: 'row',
+      children: [leaf('keep'), { direction: 'column', children: [leaf('gone1'), leaf('gone2')] }]
+    })
+    const out = prunePanelLayoutsForSurvivingPanels([l], [{ id: 'keep' }], [])
+    expect(out[0].root).toEqual({ kind: 'terminal', panelId: 'keep' })
+  })
+
+  it('handles empty and missing layout lists', () => {
+    expect(prunePanelLayoutsForSurvivingPanels(undefined, [], [])).toEqual([])
+    expect(prunePanelLayoutsForSurvivingPanels([], [{ id: 'x' }], [])).toEqual([])
   })
 })

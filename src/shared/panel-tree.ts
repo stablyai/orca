@@ -77,6 +77,34 @@ export function panelTreeGroupDepth(groups: readonly PanelTreeGroup[], groupId: 
   return depth
 }
 
+/** Titles from the outermost group down to `groupId` ("node-a", "gpu"), for
+ *  UI that shows where a panel lives (search subtitles, tooltips). Unknown or
+ *  cyclic ids yield an empty path rather than throwing. */
+export function panelTreeGroupPath(
+  groups: readonly PanelTreeGroup[],
+  groupId: string | null | undefined
+): string[] {
+  if (!groupId) {
+    return []
+  }
+  const byId = new Map(groups.map((g) => [g.id, g]))
+  const path: string[] = []
+  const guard = new Set<string>()
+  let current = byId.get(groupId)
+  while (current) {
+    if (guard.has(current.id)) {
+      return []
+    }
+    guard.add(current.id)
+    path.unshift(current.title)
+    if (path.length > MAX_PANEL_TREE_DEPTH + 1) {
+      break
+    }
+    current = current.parentId ? byId.get(current.parentId) : undefined
+  }
+  return path
+}
+
 export function canReparentPanelTreeGroup(
   groups: readonly PanelTreeGroup[],
   groupId: string,

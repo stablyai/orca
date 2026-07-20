@@ -1,4 +1,10 @@
-import type { PanelLayout, PinnedTerminalPanel, PinnedWebPanel } from '../../../shared/types'
+import type {
+  PanelLayout,
+  PanelTreeGroup,
+  PinnedTerminalPanel,
+  PinnedWebPanel
+} from '../../../shared/types'
+import { panelTreeGroupPath } from '../../../shared/panel-tree'
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
 
 export type PanelPaletteKind = 'web' | 'terminal' | 'layout'
@@ -28,6 +34,9 @@ export function searchPanelPaletteResults(input: {
   webPanels: readonly PinnedWebPanel[]
   terminalPanels: readonly PinnedTerminalPanel[]
   layouts: readonly PanelLayout[]
+  /** Optional: resolves a panel's groupId to a readable path. Panels created
+   *  from the sidebar quick-add only carry groupId, never the legacy label. */
+  groups?: readonly PanelTreeGroup[]
 }): PanelPaletteSearchResult[] {
   const trimmed = input.query.trim()
   if (trimmed.length === 0 || isWorktreePaletteQueryTooLarge(trimmed)) {
@@ -44,7 +53,9 @@ export function searchPanelPaletteResults(input: {
         return panel.url
       }
     })()
-    const hay = `${panel.title} ${host} ${panel.url} user panels`
+    const groupPath = panelTreeGroupPath(input.groups ?? [], panel.groupId)
+    const where = ['User Panels', ...groupPath].join(' / ')
+    const hay = `${panel.title} ${host} ${panel.url} ${where}`
     if (!includesQuery(hay, q)) {
       continue
     }
@@ -54,7 +65,7 @@ export function searchPanelPaletteResults(input: {
       kind: 'web',
       targetId: panel.id,
       title: panel.title,
-      subtitle: `User Panels · ${host}`,
+      subtitle: `${where} · ${host}`,
       score: titleHit ? 0 : 1
     })
   }
@@ -64,9 +75,12 @@ export function searchPanelPaletteResults(input: {
       continue
     }
     const host = panel.host ?? 'local'
-    const group = panel.group ?? ''
-    const path = group.length > 0 ? `Nodes / ${group}` : 'Nodes'
-    const hay = `${panel.title} ${panel.command} ${host} ${group} nodes`
+    // Why: groupId is the source of truth post-migration; the legacy `group`
+    // label only exists on panels created before the tree (or via Settings).
+    const groupPath = panelTreeGroupPath(input.groups ?? [], panel.groupId)
+    const segments = groupPath.length > 0 ? groupPath : panel.group ? [panel.group] : []
+    const path = ['Nodes', ...segments].join(' / ')
+    const hay = `${panel.title} ${panel.command} ${host} ${path}`
     if (!includesQuery(hay, q)) {
       continue
     }

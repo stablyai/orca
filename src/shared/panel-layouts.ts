@@ -156,6 +156,79 @@ export function normalizePanelLayouts(value: unknown): PanelLayout[] {
   return layouts
 }
 
+/** Drop panel leaves whose panel no longer exists, collapsing the tree around
+ *  them. Shell and browser leaves are self-contained and always survive.
+ *  Returns null when the whole node disappears. */
+function prunePanelLayoutNode(
+  node: PanelLayoutNode,
+  surviving: { terminalIds: ReadonlySet<string>; webIds: ReadonlySet<string> }
+): PanelLayoutNode | null {
+  if ('kind' in node) {
+    if (node.kind === 'terminal') {
+      return surviving.terminalIds.has(node.panelId) ? node : null
+    }
+    if (node.kind === 'web') {
+      return surviving.webIds.has(node.panelId) ? node : null
+    }
+    return node
+  }
+  const children = node.children
+    .map((child) => prunePanelLayoutNode(child, surviving))
+    .filter((child): child is PanelLayoutNode => child !== null)
+  if (children.length === 0) {
+    return null
+  }
+  if (children.length === 1) {
+    // Why: a split with one surviving child renders identically to the child;
+    // collapse it so deleting a panel can't leave a phantom divider behind.
+    return children[0]
+  }
+  if (children.length === node.children.length) {
+    return node
+  }
+  // Sizes are positional — a stale array would mis-weight the survivors.
+  return { direction: node.direction, children }
+}
+
+/**
+ * Remove references to deleted pinned panels from saved layouts. Without this a
+ * layout keeps pointing at a panel id that no longer resolves and the canvas
+ * renders a dead tile. Layouts left with nothing to show are dropped entirely.
+ */
+export function prunePanelLayoutsForPanels(
+  layouts: readonly PanelLayout[] | undefined,
+  surviving: {
+    terminalIds: ReadonlySet<string>
+    webIds: ReadonlySet<string>
+  }
+): PanelLayout[] {
+  if (!layouts || layouts.length === 0) {
+    return []
+  }
+  const next: PanelLayout[] = []
+  for (const layout of layouts) {
+    const root = prunePanelLayoutNode(layout.root, surviving)
+    if (root === null) {
+      continue
+    }
+    next.push(root === layout.root ? layout : { ...layout, root })
+  }
+  return next
+}
+
+/** Convenience wrapper: build the surviving-id sets from the panel lists that
+ *  are about to be written, so callers can't get the two out of sync. */
+export function prunePanelLayoutsForSurvivingPanels(
+  layouts: readonly PanelLayout[] | undefined,
+  terminalPanels: readonly { id: string }[],
+  webPanels: readonly { id: string }[]
+): PanelLayout[] {
+  return prunePanelLayoutsForPanels(layouts, {
+    terminalIds: new Set(terminalPanels.map((p) => p.id)),
+    webIds: new Set(webPanels.map((p) => p.id))
+  })
+}
+
 export function countPanelLayoutLeaves(node: PanelLayoutNode): number {
   if ('kind' in node) {
     return 1

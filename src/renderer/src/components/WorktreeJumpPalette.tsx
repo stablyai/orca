@@ -937,7 +937,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             query: deferredQuery,
             webPanels: settings?.pinnedWebPanels ?? [],
             terminalPanels: settings?.pinnedTerminalPanels ?? [],
-            layouts: settings?.panelLayouts ?? []
+            layouts: settings?.panelLayouts ?? [],
+            groups: settings?.panelTreeGroups ?? []
           }).map((result) => ({
             id: result.id,
             type: 'pinned-panel' as const,
@@ -948,6 +949,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       deferredQuery,
       hasQuery,
       settings?.panelLayouts,
+      settings?.panelTreeGroups,
       settings?.pinnedTerminalPanels,
       settings?.pinnedWebPanels
     ]

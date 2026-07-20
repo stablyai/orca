@@ -6,6 +6,7 @@ import type { PanelLayout, PinnedTerminalPanel, PinnedWebPanel } from '../../../
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { detachPanelIntoWindow } from '@/lib/panel-canvas-detach'
+import { prunePanelLayoutsForSurvivingPanels } from '../../../../shared/panel-layouts'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -224,8 +225,15 @@ export function SortableWebPanelButton({
       onDelete={() => {
         const state = useAppStore.getState()
         const panels = state.settings?.pinnedWebPanels ?? []
+        const nextPanels = panels.filter((p) => p.id !== panel.id)
         void updateSettings({
-          pinnedWebPanels: panels.filter((p) => p.id !== panel.id)
+          pinnedWebPanels: nextPanels,
+          // Why: a saved layout pointing at a deleted panel renders a dead tile.
+          panelLayouts: prunePanelLayoutsForSurvivingPanels(
+            state.settings?.panelLayouts,
+            state.settings?.pinnedTerminalPanels ?? [],
+            nextPanels
+          )
         })
         // Why: leave the open page if this panel is active, otherwise the
         // viewer keeps a ghost of a deleted id.
@@ -301,8 +309,15 @@ export function SortableTerminalPanelButton({
       onDelete={() => {
         const state = useAppStore.getState()
         const panels = state.settings?.pinnedTerminalPanels ?? []
+        const nextPanels = panels.filter((p) => p.id !== panel.id)
         void updateSettings({
-          pinnedTerminalPanels: panels.filter((p) => p.id !== panel.id)
+          pinnedTerminalPanels: nextPanels,
+          // Why: a saved layout pointing at a deleted panel renders a dead tile.
+          panelLayouts: prunePanelLayoutsForSurvivingPanels(
+            state.settings?.panelLayouts,
+            nextPanels,
+            state.settings?.pinnedWebPanels ?? []
+          )
         })
         if (state.activePinnedTerminalPanelId === panel.id) {
           state.closePinnedTerminalPanelPage()

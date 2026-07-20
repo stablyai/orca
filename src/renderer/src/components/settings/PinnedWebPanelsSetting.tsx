@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import { MAX_PINNED_WEB_PANELS } from '../../../../shared/pinned-web-panels'
+import { prunePanelLayoutsForSurvivingPanels } from '../../../../shared/panel-layouts'
+import { useAppStore } from '../../store'
 
 type PinnedWebPanelsSettingProps = {
   settings: GlobalSettings
@@ -58,7 +60,17 @@ export function PinnedWebPanelsSetting({
   }
 
   const removePanel = (id: string): void => {
-    updateSettings({ pinnedWebPanels: panels.filter((panel) => panel.id !== id) })
+    const next = panels.filter((panel) => panel.id !== id)
+    const state = useAppStore.getState()
+    updateSettings({
+      pinnedWebPanels: next,
+      // Why: a saved layout pointing at a deleted panel renders a dead tile.
+      panelLayouts: prunePanelLayoutsForSurvivingPanels(
+        state.settings?.panelLayouts,
+        state.settings?.pinnedTerminalPanels ?? [],
+        next
+      )
+    })
   }
 
   return (

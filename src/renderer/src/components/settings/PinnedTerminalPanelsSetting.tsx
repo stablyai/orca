@@ -11,6 +11,7 @@ import {
   movePinnedTerminalPanel,
   resolvePinnedTerminalPanelSshTargetIdFromLabels
 } from '../../../../shared/pinned-terminal-panels'
+import { prunePanelLayoutsForSurvivingPanels } from '../../../../shared/panel-layouts'
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
@@ -123,7 +124,17 @@ export function PinnedTerminalPanelsSetting({
   }
 
   const removePanel = (id: string): void => {
-    setPanels(panels.filter((panel) => panel.id !== id))
+    const next = panels.filter((panel) => panel.id !== id)
+    const state = useAppStore.getState()
+    updateSettings({
+      pinnedTerminalPanels: [...next],
+      // Why: a saved layout pointing at a deleted panel renders a dead tile.
+      panelLayouts: prunePanelLayoutsForSurvivingPanels(
+        state.settings?.panelLayouts,
+        next,
+        state.settings?.pinnedWebPanels ?? []
+      )
+    })
     if (editingId === id) {
       setEditingId(null)
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PANEL_TREE_ROOT_NODES,
   canReparentPanelTreeGroup,
   childrenOfGroup,
   createPanelTreeGroup,
@@ -7,8 +8,8 @@ import {
   migrateLegacyPanelGroups,
   movePanelInTree,
   normalizePanelTreeGroups,
-  PANEL_TREE_ROOT_NODES,
   panelTreeGroupDepth,
+  panelTreeGroupPath,
   renamePanelTreeGroup
 } from './panel-tree'
 
@@ -124,5 +125,34 @@ describe('tree ops', () => {
     expect(childrenOfGroup(groups, PANEL_TREE_ROOT_NODES, rootId).map((g) => g.title)).toEqual([
       'Child'
     ])
+  })
+})
+
+describe('panelTreeGroupPath', () => {
+  const groups = [
+    { id: 'g1', root: PANEL_TREE_ROOT_NODES, parentId: null, title: 'node-a', order: 0 },
+    { id: 'g2', root: PANEL_TREE_ROOT_NODES, parentId: 'g1', title: 'gpu', order: 0 }
+  ]
+
+  it('returns an empty path for no group', () => {
+    expect(panelTreeGroupPath(groups, null)).toEqual([])
+    expect(panelTreeGroupPath(groups, undefined)).toEqual([])
+  })
+
+  it('returns an empty path for an unknown id', () => {
+    expect(panelTreeGroupPath(groups, 'nope')).toEqual([])
+  })
+
+  it('returns outermost-first titles for a nested group', () => {
+    expect(panelTreeGroupPath(groups, 'g2')).toEqual(['node-a', 'gpu'])
+    expect(panelTreeGroupPath(groups, 'g1')).toEqual(['node-a'])
+  })
+
+  it('returns an empty path instead of hanging on a cycle', () => {
+    const cyclic = [
+      { id: 'a', root: PANEL_TREE_ROOT_NODES, parentId: 'b', title: 'A', order: 0 },
+      { id: 'b', root: PANEL_TREE_ROOT_NODES, parentId: 'a', title: 'B', order: 0 }
+    ]
+    expect(panelTreeGroupPath(cyclic, 'a')).toEqual([])
   })
 })
