@@ -11,6 +11,8 @@ import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictatio
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { getSupportedSpeechModels } from '../speech/speech-platform-support'
+import { reconcileUnsupportedSpeechSettings } from '../speech/speech-platform-settings'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -40,6 +42,8 @@ export function registerSpeechHandlers(
   store: Store,
   agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
 ): void {
+  reconcileUnsupportedSpeechSettings(store)
+
   ipcMain.handle(
     'speech:cleanUpDictation',
     (
@@ -73,7 +77,7 @@ export function registerSpeechHandlers(
   })
 
   ipcMain.handle('speech:getCatalog', () => {
-    return SPEECH_MODEL_CATALOG
+    return getSupportedSpeechModels(SPEECH_MODEL_CATALOG)
   })
 
   ipcMain.handle('speech:getModelStates', async () => {
