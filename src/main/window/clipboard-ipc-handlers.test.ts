@@ -18,7 +18,7 @@ const {
   fsWriteFileMock,
   fsStatMock,
   clipboardReadTextMock,
-  clipboardReadMock,
+  clipboardReadBufferMock,
   clipboardWriteTextMock,
   clipboardReadImageMock,
   clipboardWriteImageMock,
@@ -51,7 +51,7 @@ const {
   fsWriteFileMock: vi.fn(),
   fsStatMock: vi.fn(),
   clipboardReadTextMock: vi.fn(),
-  clipboardReadMock: vi.fn(),
+  clipboardReadBufferMock: vi.fn(),
   clipboardWriteTextMock: vi.fn(),
   clipboardReadImageMock: vi.fn(),
   clipboardWriteImageMock: vi.fn(),
@@ -95,7 +95,7 @@ vi.mock('electron', () => ({
   },
   clipboard: {
     readText: clipboardReadTextMock,
-    read: clipboardReadMock,
+    readBuffer: clipboardReadBufferMock,
     writeText: clipboardWriteTextMock,
     readImage: clipboardReadImageMock,
     writeImage: clipboardWriteImageMock,
@@ -195,8 +195,8 @@ describe('registerClipboardHandlers', () => {
     fsStatMock.mockReset()
     fsStatMock.mockResolvedValue({})
     clipboardReadTextMock.mockReset()
-    clipboardReadMock.mockReset()
-    clipboardReadMock.mockReturnValue('')
+    clipboardReadBufferMock.mockReset()
+    clipboardReadBufferMock.mockReturnValue(Buffer.alloc(0))
     clipboardWriteTextMock.mockReset()
     clipboardReadImageMock.mockReset()
     clipboardWriteImageMock.mockReset()
@@ -557,13 +557,13 @@ describe('registerClipboardHandlers', () => {
   it('saves image files copied from Windows Explorer as clipboard images', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const png = Buffer.from([4, 3, 2, 1])
-    const sourcePath = 'C:\\Users\\alice\\Pictures\\copied-image.png'
+    const sourcePath = 'C:\\Users\\alice\\图片\\copied-image.png'
     const expectedPath = join(
       '/tmp',
       'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
     )
     clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
-    clipboardReadMock.mockReturnValue(`${sourcePath}\0`)
+    clipboardReadBufferMock.mockReturnValue(Buffer.from(`${sourcePath}\0`, 'utf16le'))
     fsStatMock.mockResolvedValue({ isFile: () => true, size: png.byteLength })
     nativeImageCreateFromPathMock.mockReturnValue({
       getSize: () => ({ height: 1, width: 1 }),
@@ -578,7 +578,7 @@ describe('registerClipboardHandlers', () => {
       await expect(
         handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
       ).resolves.toBe(expectedPath)
-      expect(clipboardReadMock).toHaveBeenCalledWith('FileNameW')
+      expect(clipboardReadBufferMock).toHaveBeenCalledWith('FileNameW')
       expect(fsStatMock).toHaveBeenCalledWith(sourcePath)
       expect(nativeImageCreateFromPathMock).toHaveBeenCalledWith(sourcePath)
       expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)

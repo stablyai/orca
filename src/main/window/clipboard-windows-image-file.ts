@@ -13,19 +13,23 @@ type ClipboardImageFileStat = {
 
 type ReadWindowsClipboardImageFileDeps = {
   platform: NodeJS.Platform
-  readClipboardFormat: (format: string) => string
+  readClipboardFormatBuffer: (format: string) => Buffer
   statFile: (filePath: string) => Promise<ClipboardImageFileStat>
   createImageFromPath: (filePath: string) => NativeImage
 }
 
 const IMAGE_FILE_EXTENSION_SET = new Set(IMAGE_FILE_EXTENSIONS)
 
-function decodeWindowsClipboardFileName(value: string): string | null {
-  let end = value.length
-  while (end > 0 && value.charCodeAt(end - 1) === 0) {
+function decodeWindowsClipboardFileName(value: Buffer): string | null {
+  if (value.byteLength % 2 !== 0) {
+    return null
+  }
+  const decoded = value.toString('utf16le')
+  let end = decoded.length
+  while (end > 0 && decoded.charCodeAt(end - 1) === 0) {
     end -= 1
   }
-  const filePath = value.slice(0, end)
+  const filePath = decoded.slice(0, end)
   if (!filePath || filePath.includes('\0') || !win32.isAbsolute(filePath)) {
     return null
   }
@@ -34,7 +38,7 @@ function decodeWindowsClipboardFileName(value: string): string | null {
 
 export async function readWindowsClipboardImageFileAsPng({
   platform,
-  readClipboardFormat,
+  readClipboardFormatBuffer,
   statFile,
   createImageFromPath
 }: ReadWindowsClipboardImageFileDeps): Promise<Buffer | null> {
@@ -44,12 +48,17 @@ export async function readWindowsClipboardImageFileAsPng({
 
   // Why: Explorer copies files as CF_HDROP/FileNameW, not bitmap data, so
   // clipboard.readImage() cannot see a copied image file.
-  const filePath = decodeWindowsClipboardFileName(readClipboardFormat('FileNameW'))
+  const filePath = decodeWindowsClipboardFileName(readClipboardFormatBuffer('FileNameW'))
   if (!filePath) {
     return null
   }
 
-  const file = await statFile(filePath)
+  let file: ClipboardImageFileStat
+  try {
+    file = await statFile(filePath)
+  } catch {
+    return null
+  }
   if (!file.isFile()) {
     return null
   }

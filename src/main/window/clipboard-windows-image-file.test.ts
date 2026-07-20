@@ -12,22 +12,22 @@ function image(png = Buffer.from([1, 2, 3])) {
 
 describe('readWindowsClipboardImageFileAsPng', () => {
   it('converts a copied Windows image file to bounded PNG bytes', async () => {
-    const filePath = 'C:\\Users\\alice\\Pictures\\shot.PNG'
+    const filePath = 'C:\\Users\\alice\\图片\\shot.PNG'
     const png = Buffer.from([4, 3, 2, 1])
-    const readClipboardFormat = vi.fn(() => `${filePath}\0`)
+    const readClipboardFormatBuffer = vi.fn(() => Buffer.from(`${filePath}\0`, 'utf16le'))
     const statFile = vi.fn(async () => ({ isFile: () => true, size: 1024 }))
     const createImageFromPath = vi.fn(() => image(png) as never)
 
     await expect(
       readWindowsClipboardImageFileAsPng({
         platform: 'win32',
-        readClipboardFormat,
+        readClipboardFormatBuffer,
         statFile,
         createImageFromPath
       })
     ).resolves.toEqual(png)
 
-    expect(readClipboardFormat).toHaveBeenCalledWith('FileNameW')
+    expect(readClipboardFormatBuffer).toHaveBeenCalledWith('FileNameW')
     expect(statFile).toHaveBeenCalledWith(filePath)
     expect(createImageFromPath).toHaveBeenCalledWith(filePath)
   })
@@ -39,7 +39,7 @@ describe('readWindowsClipboardImageFileAsPng', () => {
     await expect(
       readWindowsClipboardImageFileAsPng({
         platform: 'linux',
-        readClipboardFormat: vi.fn(() => '/tmp/shot.png'),
+        readClipboardFormatBuffer: vi.fn(() => Buffer.from('/tmp/shot.png\0', 'utf16le')),
         statFile,
         createImageFromPath
       })
@@ -47,7 +47,9 @@ describe('readWindowsClipboardImageFileAsPng', () => {
     await expect(
       readWindowsClipboardImageFileAsPng({
         platform: 'win32',
-        readClipboardFormat: vi.fn(() => 'C:\\Users\\alice\\notes.txt\0'),
+        readClipboardFormatBuffer: vi.fn(() =>
+          Buffer.from('C:\\Users\\alice\\notes.txt\0', 'utf16le')
+        ),
         statFile,
         createImageFromPath
       })
@@ -63,7 +65,9 @@ describe('readWindowsClipboardImageFileAsPng', () => {
     await expect(
       readWindowsClipboardImageFileAsPng({
         platform: 'win32',
-        readClipboardFormat: vi.fn(() => 'C:\\Users\\alice\\one.png\0C:\\Users\\alice\\two.png\0'),
+        readClipboardFormatBuffer: vi.fn(() =>
+          Buffer.from('C:\\Users\\alice\\one.png\0C:\\Users\\alice\\two.png\0', 'utf16le')
+        ),
         statFile,
         createImageFromPath: vi.fn()
       })
@@ -78,7 +82,9 @@ describe('readWindowsClipboardImageFileAsPng', () => {
     await expect(
       readWindowsClipboardImageFileAsPng({
         platform: 'win32',
-        readClipboardFormat: vi.fn(() => 'C:\\Users\\alice\\huge.png\0'),
+        readClipboardFormatBuffer: vi.fn(() =>
+          Buffer.from('C:\\Users\\alice\\huge.png\0', 'utf16le')
+        ),
         statFile: vi.fn(async () => ({
           isFile: () => true,
           size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1
@@ -86,6 +92,25 @@ describe('readWindowsClipboardImageFileAsPng', () => {
         createImageFromPath
       })
     ).rejects.toThrow('Clipboard image is too large')
+
+    expect(createImageFromPath).not.toHaveBeenCalled()
+  })
+
+  it('ignores clipboard files that disappeared before paste', async () => {
+    const createImageFromPath = vi.fn()
+
+    await expect(
+      readWindowsClipboardImageFileAsPng({
+        platform: 'win32',
+        readClipboardFormatBuffer: vi.fn(() =>
+          Buffer.from('C:\\Users\\alice\\missing.png\0', 'utf16le')
+        ),
+        statFile: vi.fn(async () => {
+          throw new Error('ENOENT')
+        }),
+        createImageFromPath
+      })
+    ).resolves.toBeNull()
 
     expect(createImageFromPath).not.toHaveBeenCalled()
   })
