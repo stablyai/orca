@@ -4241,6 +4241,9 @@
           "branchFolderPathIdentity": "ブランチまたはフォルダパス",
           "ef18787206": "削除待ち"
         },
+        "WorktreeRenameQuickAction": {
+          "renameWorkspace": "ワークスペース名の変更"
+        },
         "WorktreeCardAgents": {
           "1b0a156717": "エージェント"
         },
