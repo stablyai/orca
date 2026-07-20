@@ -750,7 +750,7 @@ import {
   getTerminalViewAttributes,
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
-import { killAllProcessesForWorktree, boundedRpcTimeoutMs } from './worktree-teardown'
+import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
 import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
@@ -1259,7 +1259,10 @@ type RuntimePtyController = {
   }): Promise<{ id: string; wslDistro?: string }>
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
-  stopAndWait?(ptyId: string, opts?: { keepHistory?: boolean; timeoutMs?: number }): Promise<boolean>
+  stopAndWait?(
+    ptyId: string,
+    opts?: { keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<boolean>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
@@ -20435,13 +20438,13 @@ export class OrcaRuntimeService {
         if (options.stopPty) {
           // Why: destructive worktree cleanup must not let its cross-surface
           // dedupe treat fire-and-forget controller.kill as physical exit.
-          // Why: bound the underlying shutdown/list RPCs below the sweep deadline so
-          // a wedged daemon fails fast instead of tripping the outer sweep deadline;
-          // no deadline (non-destructive) keeps the provider default RPC timeout.
+          // Why: the RPC deadline makes shutdown/list RPCs settle before the sweep
+          // deadline so a wedged daemon yields the accurate stop failure; no deadline
+          // (non-destructive) keeps the provider default RPC timeout.
           if (options.deadline !== undefined) {
             return (
               this.ptyController?.stopAndWait?.(ptyId, {
-                timeoutMs: boundedRpcTimeoutMs(options.deadline)
+                deadlineMs: teardownRpcDeadline(options.deadline)
               }) ?? false
             )
           }

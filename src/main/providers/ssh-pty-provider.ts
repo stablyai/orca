@@ -34,6 +34,15 @@ export function isSshPtyIdentityMismatchError(err: unknown): boolean {
   return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
 }
 
+// Why: providers take an absolute teardown deadline, but the mux takes a relative
+// timeout — convert only here, at the RPC itself, so sequential relay calls share
+// the remaining budget (undefined keeps the multiplexer default timeout).
+function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
+  return deadlineMs === undefined
+    ? undefined
+    : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
+}
+
 /**
  * Remote PTY provider that proxies all operations through the relay
  * via the JSON-RPC multiplexer. Implements the same IPtyProvider interface
@@ -258,10 +267,8 @@ export class SshPtyProvider implements IPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; timeoutMs?: number }
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    // Why: destructive teardown bounds the relay RPC within its sweep budget so a
-    // wedged relay fails fast; undefined keeps the multiplexer default timeout.
     await this.mux.request(
       'pty.shutdown',
       {
@@ -269,7 +276,7 @@ export class SshPtyProvider implements IPtyProvider {
         immediate: opts.immediate ?? false,
         keepHistory: opts.keepHistory ?? false
       },
-      opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : undefined
+      relayTimeoutOptions(opts.deadlineMs)
     )
   }
 
@@ -323,13 +330,11 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(opts?: { timeoutMs?: number }): Promise<PtyProcessInfo[]> {
-    // Why: destructive teardown bounds the relay RPC within its sweep budget so a
-    // wedged relay fails fast; undefined keeps the multiplexer default timeout.
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
     const result = await this.mux.request(
       'pty.listProcesses',
       undefined,
-      opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : undefined
+      relayTimeoutOptions(opts?.deadlineMs)
     )
     return (result as PtyProcessInfo[]).map((session) => ({
       ...session,

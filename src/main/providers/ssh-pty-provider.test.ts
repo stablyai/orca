@@ -496,13 +496,20 @@ describe('SshPtyProvider', () => {
     )
   })
 
-  it('shutdown bounds the relay RPC with timeoutMs for destructive teardown', async () => {
-    await provider.shutdown(scopedPty1, { immediate: true, timeoutMs: 4321 })
-    expect(mux.request).toHaveBeenCalledWith(
-      'pty.shutdown',
-      { id: 'pty-1', immediate: true, keepHistory: false },
-      { timeoutMs: 4321 }
-    )
+  it('shutdown bounds the relay RPC by the teardown deadline', async () => {
+    // Why: freeze Date.now() so the leaf conversion deadline -> remaining relative
+    // timeout is exact and the mux receives precisely the leftover budget.
+    vi.useFakeTimers()
+    try {
+      await provider.shutdown(scopedPty1, { immediate: true, deadlineMs: Date.now() + 4321 })
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.shutdown',
+        { id: 'pty-1', immediate: true, keepHistory: false },
+        { timeoutMs: 4321 }
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('sendSignal sends pty.sendSignal request', async () => {
@@ -566,10 +573,15 @@ describe('SshPtyProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('pty.listProcesses', undefined, undefined)
   })
 
-  it('listProcesses bounds the relay RPC with timeoutMs for destructive teardown', async () => {
-    mux.request.mockResolvedValue([])
-    await provider.listProcesses({ timeoutMs: 4321 })
-    expect(mux.request).toHaveBeenCalledWith('pty.listProcesses', undefined, { timeoutMs: 4321 })
+  it('listProcesses bounds the relay RPC by the teardown deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      mux.request.mockResolvedValue([])
+      await provider.listProcesses({ deadlineMs: Date.now() + 4321 })
+      expect(mux.request).toHaveBeenCalledWith('pty.listProcesses', undefined, { timeoutMs: 4321 })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('getDefaultShell returns shell path', async () => {

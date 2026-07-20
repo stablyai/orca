@@ -66,14 +66,14 @@ export class DaemonPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; timeoutMs?: number }
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    // Why: destructive teardown passes a bound below its sweep deadline so a wedged
-    // daemon fails fast; undefined keeps the DaemonClient 30s default otherwise.
+    // Why: convert the absolute teardown deadline to a relative timeout only here,
+    // at the RPC leaf; undefined keeps the DaemonClient 30s default.
     await this.client.request(
       'kill',
       { sessionId: id, immediate: opts.immediate ?? false },
-      opts.timeoutMs
+      opts.deadlineMs !== undefined ? Math.max(1, opts.deadlineMs - Date.now()) : undefined
     )
   }
 

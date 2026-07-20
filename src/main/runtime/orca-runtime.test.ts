@@ -25133,7 +25133,7 @@ describe('OrcaRuntimeService', () => {
     await expect(stopping).resolves.toEqual({ stopped: 1 })
   })
 
-  it('passes a deadline-bounded timeoutMs into stopAndWait for destructive teardown', async () => {
+  it('passes a margin-adjusted RPC deadline into stopAndWait for destructive teardown', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopAndWait = vi.fn(async () => true)
     runtime.setPtyController({
@@ -25150,7 +25150,7 @@ describe('OrcaRuntimeService', () => {
 
     // Why: the runtime-graph sweep must bound the underlying shutdown/list RPCs
     // below the sweep deadline, or a wedged daemon trips the outer sweep deadline.
-    const deadline = Date.now() + 10_000
+    const deadline = Date.now() + WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
     await expect(
       runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { deadline, stopPty })
     ).resolves.toEqual({ stopped: 1 })
@@ -25158,15 +25158,12 @@ describe('OrcaRuntimeService', () => {
     expect(stopAndWait).toHaveBeenCalledTimes(1)
     const [ptyId, opts] = stopAndWait.mock.calls[0] as unknown as [
       string,
-      { timeoutMs?: number } | undefined
+      { deadlineMs?: number } | undefined
     ]
     expect(ptyId).toBe('pty-1')
-    expect(opts?.timeoutMs).toBeGreaterThan(0)
-    // Pin the margin: the bound must sit at or below the sweep window minus the
-    // teardown RPC margin, not merely under the raw sweep timeout.
-    expect(opts?.timeoutMs).toBeLessThanOrEqual(
-      WORKTREE_PROCESS_SWEEP_TIMEOUT_MS - WORKTREE_TEARDOWN_RPC_MARGIN_MS
-    )
+    // Pin the margin: RPCs must settle WORKTREE_TEARDOWN_RPC_MARGIN_MS before the
+    // sweep deadline so the accurate stop failure outruns the sweep-timeout error.
+    expect(opts?.deadlineMs).toBe(deadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS)
   })
 
   it('fails terminal listing closed if the graph reloads during selector resolution', async () => {
@@ -31123,7 +31120,7 @@ describe('OrcaRuntimeService', () => {
       // Destructive teardown must bound the underlying RPCs below the sweep deadline.
       expect(stopAndWait).toHaveBeenCalledWith(
         'pty-1',
-        expect.objectContaining({ timeoutMs: expect.any(Number) })
+        expect.objectContaining({ deadlineMs: expect.any(Number) })
       )
     })
 
@@ -32900,7 +32897,7 @@ describe('OrcaRuntimeService', () => {
       // Destructive teardown must bound the underlying RPCs below the sweep deadline.
       expect(stopAndWait).toHaveBeenCalledWith(
         'pty-1',
-        expect.objectContaining({ timeoutMs: expect.any(Number) })
+        expect.objectContaining({ deadlineMs: expect.any(Number) })
       )
       // The provider-prefix sweep and the git removal must happen AFTER the
       // runtime-graph physical stop. Git removal must NOT start before it.

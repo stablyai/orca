@@ -161,11 +161,12 @@ export type IPtyProvider = {
    */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
 
-  // Why: timeoutMs bounds the underlying daemon RPC so destructive teardown can
-  // fail fast within its sweep budget instead of tripping the outer sweep deadline.
+  // Why: deadlineMs (absolute epoch ms) bounds the underlying RPCs so destructive
+  // teardown fails fast inside its sweep budget instead of tripping the outer sweep
+  // deadline; each RPC leaf converts to a relative timeout when it actually issues.
   shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; timeoutMs?: number }
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
@@ -180,9 +181,8 @@ export type IPtyProvider = {
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
-  // Why: timeoutMs bounds the underlying daemon RPC so destructive teardown can
-  // fail fast within its sweep budget instead of tripping the outer sweep deadline.
-  listProcesses(opts?: { timeoutMs?: number }): Promise<PtyProcessInfo[]>
+  // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
+  listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: PtyDataEvent) => void): () => void

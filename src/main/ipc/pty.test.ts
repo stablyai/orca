@@ -3017,12 +3017,18 @@ describe('registerPtyHandlers', () => {
         // Why: sequential RPCs must share one absolute deadline; otherwise both get
         // the full ~9.5s bound and their sum overruns the 10s sweep deadline (Finding 1).
         // Fake timers freeze Date.now() at entry, then let the shutdown RPC burn a
-        // deterministic slice of the budget so the recomputed verify bound is provable.
+        // deterministic slice of the budget so the leaf-observed remainders are provable.
         vi.useFakeTimers()
-        const shutdown = vi.fn(async () => {
+        // Each provider call records the budget an RPC leaf would see at issue time.
+        const remainingAtLeaf: number[] = []
+        const shutdown = vi.fn(async (_id: string, opts?: { deadlineMs?: number }) => {
+          remainingAtLeaf.push((opts?.deadlineMs ?? 0) - Date.now())
           await new Promise<void>((resolve) => setTimeout(resolve, 1000))
         })
-        const listProcesses = vi.fn(async () => [])
+        const listProcesses = vi.fn(async (opts?: { deadlineMs?: number }) => {
+          remainingAtLeaf.push((opts?.deadlineMs ?? 0) - Date.now())
+          return []
+        })
         setLocalPtyProvider({
           spawn: vi.fn(),
           write: vi.fn(),
@@ -3054,27 +3060,24 @@ describe('registerPtyHandlers', () => {
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           stopAndWait: (
             ptyId: string,
-            opts?: { keepHistory?: boolean; timeoutMs?: number }
+            opts?: { keepHistory?: boolean; deadlineMs?: number }
           ) => Promise<boolean>
         }
 
-        const stopPromise = controller.stopAndWait('local-pty', { timeoutMs: 4321 })
+        const deadlineMs = Date.now() + 4321
+        const stopPromise = controller.stopAndWait('local-pty', { deadlineMs })
         await vi.advanceTimersByTimeAsync(1000)
         await expect(stopPromise).resolves.toBe(true)
 
-        // The first RPC (daemon shutdown) receives the full remaining budget...
+        // Both calls carry the same absolute deadline...
         expect(shutdown).toHaveBeenCalledWith(
           'local-pty',
-          expect.objectContaining({ immediate: true, timeoutMs: 4321 })
+          expect.objectContaining({ immediate: true, deadlineMs })
         )
-        // ...and the SUBSEQUENT liveness list RPC gets strictly less: the 1000ms the
-        // shutdown consumed is gone, so 4321 - 1000 = 3321 remain.
-        const listCalls = listProcesses.mock.calls as unknown as Array<
-          [{ timeoutMs?: number } | undefined]
-        >
-        const listArgs = listCalls[0]?.[0]
-        expect(listArgs?.timeoutMs).toBeLessThan(4321)
-        expect(listArgs?.timeoutMs).toBe(3321)
+        // ...so at the leaves the shutdown RPC sees the full 4321ms budget, while the
+        // SUBSEQUENT liveness list RPC sees only what shutdown left: the 1000ms it
+        // consumed is gone, so 4321 - 1000 = 3321 remain until the shared deadline.
+        expect(remainingAtLeaf).toEqual([4321, 3321])
         vi.useRealTimers()
       })
 
