@@ -371,6 +371,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: off by default — opt-in cosmetic joke feature. Leaving the default
     // false keeps the overlay unmounted for users who never enable it.
     experimentalPet: false,
+    petBubbleEnabled: true,
     experimentalActivity: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,

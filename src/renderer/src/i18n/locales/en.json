@@ -5509,7 +5509,9 @@
             "defaultViewLabel": "Default native chat view",
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Native chat"
-          }
+          },
+          "petBubbleLabel": "Speech bubble",
+          "petBubbleDescription": "Shows a short bubble naming which agent needs you when its state changes (waiting, done, working)."
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "Status Bar",
@@ -7715,7 +7717,8 @@
               "title": "Native chat",
               "description": "Preview the desktop chat surface for supported agent terminal sessions.",
               "grok": "grok"
-            }
+            },
+            "petBubbleKeyword": "bubble"
           }
         },
         "floating": {
@@ -10479,6 +10482,21 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
+        },
+        "pet-bubble": {
+          "waiting1": "waiting…",
+          "waiting2": "your turn",
+          "waiting3": "all yours",
+          "failed1": "cancelled",
+          "failed2": "stopped",
+          "failed3": "interrupted",
+          "waving1": "done!",
+          "waving2": "finished!",
+          "waving3": "all set!",
+          "running1": "working…",
+          "running2": "on it…",
+          "running3": "in progress…",
+          "countSuffix": "+{{value0}}"
         }
       },
       "onboarding": {

@@ -12,6 +12,7 @@ import {
 } from './pet-agent-state'
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
+import { PetBubble } from './pet-bubble'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -395,7 +396,7 @@ export function PetOverlay(): React.JSX.Element {
       <div className="pointer-events-none flex size-full items-center justify-end">
         <div
           {...handlers}
-          className="pointer-events-auto flex h-fit w-fit select-none"
+          className="pointer-events-auto relative flex h-fit w-fit select-none"
           style={{
             cursor: dragging ? 'grabbing' : 'grab',
             animation: 'pet-bob 1.2s ease-in-out infinite',
@@ -408,6 +409,7 @@ export function PetOverlay(): React.JSX.Element {
           }}
         >
           <style>{PET_BOB_KEYFRAMES_CSS}</style>
+          <PetBubble />
           {sprite ? (
             // Why: remount per pet so a switched-to sprite starts a fresh
             // animation instead of inheriting the prior pet's currentTime.

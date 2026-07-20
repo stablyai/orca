@@ -5471,7 +5471,9 @@
             "defaultViewLabel": "기본 기본 채팅 보기",
             "defaultViewTerminal": "Terminal 채팅",
             "defaultViewNative": "네이티브 채팅"
-          }
+          },
+          "petBubbleLabel": "말풍선",
+          "petBubbleDescription": "에이전트 상태가 바뀔 때(대기 중, 완료, 작업 중) 어떤 에이전트가 필요한지 짧은 말풍선으로 보여줍니다."
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "상태 표시줄",
@@ -7640,7 +7642,8 @@
               "title": "네이티브 채팅",
               "description": "지원되는 에이전트 터미널 세션의 데스크톱 채팅 화면을 미리 봅니다.",
               "grok": "grok"
-            }
+            },
+            "petBubbleKeyword": "말풍선"
           }
         },
         "floating": {
@@ -10456,6 +10459,21 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "클라우디노"
           }
+        },
+        "pet-bubble": {
+          "waiting1": "대기 중…",
+          "waiting2": "당신 차례",
+          "waiting3": "맡길게요",
+          "failed1": "취소됨",
+          "failed2": "중지됨",
+          "failed3": "중단됨",
+          "waving1": "완료!",
+          "waving2": "끝났어요!",
+          "waving3": "다 됐어요!",
+          "running1": "작업 중…",
+          "running2": "처리 중…",
+          "running3": "진행 중…",
+          "countSuffix": "+{{value0}}"
         }
       },
       "onboarding": {

@@ -3005,6 +3005,11 @@ export type GlobalSettings = {
   /** Legacy persisted key from before the sidekick -> pet rename. Read only
    *  during migration; new writes use experimentalPet. */
   experimentalSidekick?: boolean
+  /** Whether the pet overlay shows the transient speech bubble on agent-state
+   *  transitions (waiting/failed/waving/running). Nested under the pet
+   *  feature itself; defaults on so the richer pet behaves like Codex's out
+   *  of the box, but is easy to turn off if a user finds the bubble noisy. */
+  petBubbleEnabled: boolean
   /** Experimental: left-sidebar Agents view with a threaded feed for agent
    *  completions, blocking states, unread state, and worktree creation events. */
   experimentalActivity: boolean

@@ -5486,7 +5486,9 @@
             "defaultViewLabel": "Vista predeterminada de chat nativo",
             "defaultViewTerminal": "Chat en terminal",
             "defaultViewNative": "Chat nativo"
-          }
+          },
+          "petBubbleLabel": "Burbuja de diálogo",
+          "petBubbleDescription": "Muestra una breve burbuja indicando qué agente te necesita cuando cambia de estado (esperando, terminado, trabajando)."
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "Barra de estado",
@@ -7655,7 +7657,8 @@
               "title": "Chat nativo",
               "description": "Previsualiza la interfaz de chat de escritorio para sesiones de terminal de agentes compatibles.",
               "grok": "grok"
-            }
+            },
+            "petBubbleKeyword": "burbuja"
           }
         },
         "floating": {
@@ -10456,6 +10459,21 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
+        },
+        "pet-bubble": {
+          "waiting1": "esperando…",
+          "waiting2": "tu turno",
+          "waiting3": "todo tuyo",
+          "failed1": "cancelado",
+          "failed2": "detenido",
+          "failed3": "interrumpido",
+          "waving1": "¡listo!",
+          "waving2": "¡terminado!",
+          "waving3": "¡todo listo!",
+          "running1": "trabajando…",
+          "running2": "en ello…",
+          "running3": "en progreso…",
+          "countSuffix": "+{{value0}}"
         }
       },
       "onboarding": {

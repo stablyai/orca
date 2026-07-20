@@ -5471,7 +5471,9 @@
             "defaultViewLabel": "默认原生聊天视图",
             "defaultViewTerminal": "终端聊天",
             "defaultViewNative": "原生聊天"
-          }
+          },
+          "petBubbleLabel": "对话气泡",
+          "petBubbleDescription": "当代理状态变化时（等待、完成、工作中），显示一个简短的气泡说明哪个代理需要你。"
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "状态栏",
@@ -7640,7 +7642,8 @@
               "title": "原生聊天",
               "description": "预览受支持的智能体终端会话的桌面聊天界面。",
               "grok": "grok"
-            }
+            },
+            "petBubbleKeyword": "气泡"
           }
         },
         "floating": {
@@ -10456,6 +10459,21 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "克劳迪诺"
           }
+        },
+        "pet-bubble": {
+          "waiting1": "等待中…",
+          "waiting2": "轮到你了",
+          "waiting3": "交给你了",
+          "failed1": "已取消",
+          "failed2": "已停止",
+          "failed3": "已中断",
+          "waving1": "完成！",
+          "waving2": "搞定！",
+          "waving3": "全部完成！",
+          "running1": "工作中…",
+          "running2": "处理中…",
+          "running3": "进行中…",
+          "countSuffix": "+{{value0}}"
         }
       },
       "onboarding": {

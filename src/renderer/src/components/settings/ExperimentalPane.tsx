@@ -5,7 +5,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import { NumberField, SettingsSwitch } from './SettingsFormControls'
+import { NumberField, SettingsSwitch, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
@@ -100,6 +100,21 @@ export function ExperimentalPane({
               />
             </button>
           </div>
+          {settings.experimentalPet ? (
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.ExperimentalPane.petBubbleLabel',
+                'Speech bubble'
+              )}
+              description={translate(
+                'auto.components.settings.ExperimentalPane.petBubbleDescription',
+                'Shows a short bubble naming which agent needs you when its state changes (waiting, done, working).'
+              )}
+              checked={settings.petBubbleEnabled !== false}
+              onChange={() => updateSettings({ petBubbleEnabled: settings.petBubbleEnabled === false })}
+              className="pl-0"
+            />
+          ) : null}
         </SearchableSetting>
       ) : null}
 

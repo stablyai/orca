@@ -5471,7 +5471,9 @@
             "defaultViewLabel": "デフォルトのネイティブ チャット ビュー",
             "defaultViewTerminal": "Terminal チャット",
             "defaultViewNative": "ネイティブチャット"
-          }
+          },
+          "petBubbleLabel": "吹き出し",
+          "petBubbleDescription": "エージェントの状態が変わったとき（待機中・完了・作業中）に、対応が必要なエージェントを短い吹き出しで表示します。"
         },
         "FloatingWorkspacePane": {
           "aeaf76fda9": "ステータスバー",
@@ -7677,7 +7679,8 @@
               "title": "ネイティブチャット",
               "description": "対応エージェントのターミナルセッション用デスクトップチャット画面をプレビューします。",
               "grok": "grok"
-            }
+            },
+            "petBubbleKeyword": "吹き出し"
           }
         },
         "floating": {
@@ -10456,6 +10459,21 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "クラウディーノ"
           }
+        },
+        "pet-bubble": {
+          "waiting1": "待機中…",
+          "waiting2": "あなたの番",
+          "waiting3": "お任せします",
+          "failed1": "キャンセル",
+          "failed2": "停止",
+          "failed3": "中断",
+          "waving1": "完了！",
+          "waving2": "終わった！",
+          "waving3": "できた！",
+          "running1": "作業中…",
+          "running2": "対応中…",
+          "running3": "進行中…",
+          "countSuffix": "+{{value0}}"
         }
       },
       "onboarding": {
