@@ -3116,6 +3116,166 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('nests SSH worktrees under the remote home workspace root when the relay resolves it', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/work/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const expectedPath = '/home/user/orca/workspaces/repo/improve-dashboard'
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/work/repo',
+          head: 'base123',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: expectedPath,
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
+    }
+    const mux = {
+      request: vi.fn().mockImplementation(async (method: string) => {
+        if (method === 'session.resolveHome') {
+          return { resolvedPath: '/home/user' }
+        }
+        return undefined
+      }),
+      notify: vi.fn()
+    }
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: true,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace'
+    })
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('session.resolveHome', { path: '~' })
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/work/repo',
+      'improve-dashboard',
+      expectedPath,
+      expect.anything()
+    )
+    expect(mux.request).toHaveBeenCalledWith('session.registerRoot', { rootPath: expectedPath })
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      `repo-ssh::${expectedPath}`,
+      expect.objectContaining({
+        orcaCreationWorkspaceLayout: { path: '/home/user/orca/workspaces', nestWorkspaces: true }
+      })
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({ path: expectedPath })
+    })
+  })
+
+  it('keeps the legacy SSH sibling path when the relay cannot resolve the remote home', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/work/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const expectedPath = '/remote/work/improve-dashboard'
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/work/repo',
+          head: 'base123',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: expectedPath,
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
+    }
+    // Why: older relays reject session.resolveHome; creation must degrade to
+    // the pre-existing sibling placement instead of failing.
+    const mux = {
+      request: vi.fn().mockImplementation(async (method: string) => {
+        if (method === 'session.resolveHome') {
+          throw new Error('Method not found')
+        }
+        return undefined
+      }),
+      notify: vi.fn()
+    }
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: true,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace'
+    })
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })
+
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/work/repo',
+      'improve-dashboard',
+      expectedPath,
+      expect.anything()
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({ path: expectedPath })
+    })
+  })
+
   it('returns SSH local base refresh skip status when the owning worktree is dirty', async () => {
     const repo = {
       id: 'repo-ssh',

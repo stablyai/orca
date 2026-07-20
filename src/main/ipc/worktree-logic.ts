@@ -116,7 +116,7 @@ export function computeRemoteWorktreePath(
   sanitizedName: string,
   repoPath: string,
   settings: WorktreePathSettings,
-  options: { useConfiguredAbsolutePath?: boolean } = {}
+  options: { useConfiguredAbsolutePath?: boolean; remoteHome?: string | null } = {}
 ): string {
   if (
     options.useConfiguredAbsolutePath ||
@@ -125,9 +125,44 @@ export function computeRemoteWorktreePath(
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
   // Why: absolute global workspaceDir values belong to the desktop machine.
-  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
-  // path opts into a remote-host location.
+  // Mirror the local workspace layout under the SSH host's home instead (like
+  // the WSL mirror) so nestWorkspaces isolates repos and same-named worktrees
+  // from sibling repos cannot collide on one path.
+  const remoteRoot = computeRemoteHomeWorkspaceRoot(options.remoteHome)
+  if (remoteRoot) {
+    return computeWorktreePath(sanitizedName, repoPath, {
+      nestWorkspaces: settings.nestWorkspaces,
+      workspaceDir: remoteRoot
+    })
+  }
+  // Why: older relays cannot resolve the remote home; keep the legacy
+  // repo-sibling root so creation still succeeds.
   return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
+}
+
+export function remoteWorktreePathUsesRemoteHome(
+  repoPath: string,
+  settings: Pick<WorktreePathSettings, 'workspaceDir'>,
+  options: { useConfiguredAbsolutePath?: boolean } = {}
+): boolean {
+  return (
+    !options.useConfiguredAbsolutePath &&
+    !isWorkspaceDirRelativeToRepo(repoPath, settings.workspaceDir)
+  )
+}
+
+export function computeRemoteHomeWorkspaceRoot(
+  remoteHome: string | null | undefined
+): string | null {
+  const trimmed = remoteHome?.trim()
+  if (!trimmed) {
+    return null
+  }
+  const pathOps = isWindowsAbsolutePathLike(trimmed) ? win32 : posix
+  if (!pathOps.isAbsolute(trimmed)) {
+    return null
+  }
+  return pathOps.join(trimmed, 'orca', 'workspaces')
 }
 
 export function getWorktreePathSettings(
@@ -148,6 +183,24 @@ export function getWorktreeCreationLayout(
     path: getEffectiveWorktreeBasePath(repo, settings),
     nestWorkspaces: settings.nestWorkspaces
   }
+}
+
+export function getRemoteWorktreeCreationLayout(
+  repo: WorktreeBasePathRepo,
+  settings: WorktreePathSettings,
+  remoteHome: string | null | undefined
+): OrcaWorkspaceLayout {
+  // Why: persisted creation meta should record the root the worktree actually
+  // lives under on the SSH host, not the desktop workspaceDir it mirrors.
+  const remoteRoot = remoteWorktreePathUsesRemoteHome(repo.path, settings, {
+    useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+  })
+    ? computeRemoteHomeWorkspaceRoot(remoteHome)
+    : null
+  if (remoteRoot) {
+    return { path: remoteRoot, nestWorkspaces: settings.nestWorkspaces }
+  }
+  return getWorktreeCreationLayout(repo, settings)
 }
 
 export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): boolean {

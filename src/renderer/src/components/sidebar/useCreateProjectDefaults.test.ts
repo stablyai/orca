@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   browseRuntimeServerDirectory: vi.fn(),
   callRuntimeRpc: vi.fn(),
   isGitAvailable: vi.fn(),
-  getDefaultCreateProjectParent: vi.fn()
+  getDefaultCreateProjectParent: vi.fn(),
+  sshBrowseDir: vi.fn()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -54,6 +55,8 @@ import { useCreateProjectDefaults } from './useCreateProjectDefaults'
 const DEFAULT_PARENT_STATE = 0
 const GIT_AVAILABILITY_STATE = 1
 const RUNTIME_PARENT_STATUS_STATE = 2
+// Ref order inside the hook: [autoFilled marker, autoFilledParent, provenance, ...].
+const PROVENANCE_REF = 2
 
 function flushAsync(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0))
@@ -85,6 +88,9 @@ describe('useCreateProjectDefaults', () => {
         repos: {
           isGitAvailable: mocks.isGitAvailable,
           getDefaultCreateProjectParent: mocks.getDefaultCreateProjectParent
+        },
+        ssh: {
+          browseDir: mocks.sshBrowseDir
         }
       }
     })
@@ -242,17 +248,65 @@ describe('useCreateProjectDefaults', () => {
     expect(setCreateParent).not.toHaveBeenCalled()
   })
 
-  it('does not use client defaults or Git probing for SSH targets', async () => {
+  it('resolves the SSH default parent from the host home without client probing', async () => {
     mocks.isGitAvailable.mockResolvedValue(true)
+    mocks.sshBrowseDir.mockResolvedValue({ entries: [], resolvedPath: '/home/alice' })
 
     const { setCreateParent } = useHarness({ sshTargetId: 'ssh-1' })
     await flushAsync()
 
-    expect(setCreateParent).not.toHaveBeenCalled()
+    expect(mocks.sshBrowseDir).toHaveBeenCalledWith({ targetId: 'ssh-1', dirPath: '~' })
+    expect(setCreateParent).toHaveBeenCalledWith('/home/alice/orca/projects')
+    expect(mocks.stateValues[DEFAULT_PARENT_STATE]).toBe('/home/alice/orca/projects')
+    expect(mocks.stateValues[RUNTIME_PARENT_STATUS_STATE]).toBe('idle')
+    // Why: SSH creation runs on the host relay, so client Git and local/runtime
+    // parent lookups must stay untouched and Git availability stays unknown.
+    expect(mocks.stateValues[GIT_AVAILABILITY_STATE]).toBe('unknown')
     expect(mocks.getDefaultCreateProjectParent).not.toHaveBeenCalled()
     expect(mocks.isGitAvailable).not.toHaveBeenCalled()
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mocks.stateValues[GIT_AVAILABILITY_STATE]).toBe('unknown')
+    // Provenance is recorded so a later target switch can detect the stale value.
+    expect(mocks.refValues[PROVENANCE_REF].current).toEqual({
+      parent: '/home/alice/orca/projects',
+      targetKey: 'ssh:ssh-1'
+    })
+  })
+
+  it('marks the SSH parent lookup failed without filling a parent', async () => {
+    mocks.sshBrowseDir.mockRejectedValue(new Error('disconnected'))
+
+    const { setCreateParent } = useHarness({ sshTargetId: 'ssh-1' })
+    await flushAsync()
+
+    expect(mocks.stateValues[RUNTIME_PARENT_STATUS_STATE]).toBe('failed')
+    expect(setCreateParent).not.toHaveBeenCalled()
+  })
+
+  it('does not replace a touched parent with the SSH default', async () => {
+    mocks.sshBrowseDir.mockResolvedValue({ entries: [], resolvedPath: '/home/alice' })
+
+    const ssh = useHarness({ sshTargetId: 'ssh-1', createParent: '/home/alice/custom' })
+    ssh.result.markCreateParentTouched('/home/alice/custom')
+
+    const sshTouched = useHarness({ sshTargetId: 'ssh-1', createParent: '/home/alice/custom' })
+    await flushAsync()
+
+    expect(mocks.sshBrowseDir).not.toHaveBeenCalled()
+    expect(sshTouched.setCreateParent).not.toHaveBeenCalled()
+  })
+
+  it('clears the stale SSH default when switching to a local target', async () => {
+    mocks.isGitAvailable.mockResolvedValue(true)
+    mocks.sshBrowseDir.mockResolvedValue({ entries: [], resolvedPath: '/home/alice' })
+
+    const ssh = useHarness({ sshTargetId: 'ssh-1' })
+    await flushAsync()
+    expect(ssh.setCreateParent).toHaveBeenCalledWith('/home/alice/orca/projects')
+
+    const local = useHarness({ createParent: '/home/alice/orca/projects' })
+
+    expect(local.result.createParentDefaultPending).toBe(true)
+    expect(local.setCreateParent).toHaveBeenCalledWith('')
   })
 
   it('does nothing outside the create step', async () => {

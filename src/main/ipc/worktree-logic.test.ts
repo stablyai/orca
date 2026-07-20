@@ -7,10 +7,13 @@ import {
   computeBranchName,
   getConfiguredBranchPrefix,
   computeWorktreePath,
+  computeRemoteHomeWorkspaceRoot,
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
+  getRemoteWorktreeCreationLayout,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
+  remoteWorktreePathUsesRemoteHome,
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
@@ -242,13 +245,113 @@ describe('computeWorktreePath', () => {
     ).toBe('C:\\Projects\\app\\worktrees\\feature')
   })
 
-  it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
+  it('keeps legacy SSH sibling paths when the remote home is unavailable', () => {
     expect(
       computeRemoteWorktreePath('feature', '/remote/repo', {
         nestWorkspaces: false,
         workspaceDir: '/local/workspaces'
       })
     ).toBe('/remote/feature')
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/repo',
+        { nestWorkspaces: true, workspaceDir: '/local/workspaces' },
+        { remoteHome: null }
+      )
+    ).toBe('/remote/feature')
+  })
+
+  it('mirrors the workspace layout under the SSH home for global absolute workspace directories', () => {
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/work/repo',
+        { nestWorkspaces: true, workspaceDir: '/local/workspaces' },
+        { remoteHome: '/home/user' }
+      )
+    ).toBe('/home/user/orca/workspaces/repo/feature')
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/work/repo.git',
+        { nestWorkspaces: true, workspaceDir: '/local/workspaces' },
+        { remoteHome: '/home/user/' }
+      )
+    ).toBe('/home/user/orca/workspaces/repo/feature')
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/work/repo',
+        { nestWorkspaces: false, workspaceDir: '/local/workspaces' },
+        { remoteHome: '/home/user' }
+      )
+    ).toBe('/home/user/orca/workspaces/feature')
+  })
+
+  it('mirrors the workspace layout under a Windows SSH home', () => {
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        'C:\\Remote\\repo',
+        { nestWorkspaces: true, workspaceDir: '/local/workspaces' },
+        { remoteHome: 'C:\\Users\\user' }
+      )
+    ).toBe('C:\\Users\\user\\orca\\workspaces\\repo\\feature')
+  })
+
+  it('ignores non-absolute or empty remote homes', () => {
+    expect(computeRemoteHomeWorkspaceRoot('')).toBeNull()
+    expect(computeRemoteHomeWorkspaceRoot('  ')).toBeNull()
+    expect(computeRemoteHomeWorkspaceRoot('relative/home')).toBeNull()
+    expect(computeRemoteHomeWorkspaceRoot('/home/user')).toBe('/home/user/orca/workspaces')
+  })
+
+  it('reports when SSH placement needs the remote home', () => {
+    expect(
+      remoteWorktreePathUsesRemoteHome('/remote/repo', { workspaceDir: '/local/workspaces' })
+    ).toBe(true)
+    expect(remoteWorktreePathUsesRemoteHome('/remote/repo', { workspaceDir: '../worktrees' })).toBe(
+      false
+    )
+    expect(
+      remoteWorktreePathUsesRemoteHome(
+        '/remote/repo',
+        { workspaceDir: '/local/workspaces' },
+        { useConfiguredAbsolutePath: true }
+      )
+    ).toBe(false)
+  })
+
+  it('records the remote home layout in SSH creation metadata', () => {
+    const repo = { path: '/remote/work/repo' } as Parameters<
+      typeof getRemoteWorktreeCreationLayout
+    >[0]
+    expect(
+      getRemoteWorktreeCreationLayout(
+        repo,
+        { nestWorkspaces: true, workspaceDir: '/local/workspaces' },
+        '/home/user'
+      )
+    ).toEqual({ path: '/home/user/orca/workspaces', nestWorkspaces: true })
+    // Why: without a resolved home the worktree lands at the legacy sibling
+    // path, so keep recording the desktop layout exactly as before.
+    expect(
+      getRemoteWorktreeCreationLayout(
+        repo,
+        { nestWorkspaces: true, workspaceDir: '/local/workspaces' },
+        null
+      )
+    ).toEqual({ path: '/local/workspaces', nestWorkspaces: true })
+    expect(
+      getRemoteWorktreeCreationLayout(
+        { path: '/remote/work/repo', worktreeBasePath: '../worktrees' } as Parameters<
+          typeof getRemoteWorktreeCreationLayout
+        >[0],
+        { nestWorkspaces: true, workspaceDir: '/local/workspaces' },
+        '/home/user'
+      )
+    ).toEqual({ path: '../worktrees', nestWorkspaces: true })
   })
 
   it('applies repo-specific SSH workspace directories on the remote path', () => {

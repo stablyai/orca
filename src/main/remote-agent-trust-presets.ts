@@ -1,19 +1,15 @@
 import type { AgentTrustPreset } from './agent-trust-presets'
 import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
-import { getActiveMultiplexer } from './ipc/ssh'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
-import {
-  isWindowsAbsolutePathLike,
-  normalizeRuntimePathSeparators
-} from '../shared/cross-platform-path'
+import { resolveSshRemoteHome } from './ssh/ssh-remote-home'
 
 export async function markRemoteAgentWorkspaceTrusted(args: {
   preset: AgentTrustPreset
   connectionId: string
   workspacePath: string
 }): Promise<void> {
-  const home = await resolveRemoteHome(args.connectionId)
+  const home = await resolveSshRemoteHome(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
   if (!home || !fsProvider) {
     return
@@ -27,29 +23,6 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
   }
-}
-
-async function resolveRemoteHome(connectionId: string): Promise<string | null> {
-  const mux = getActiveMultiplexer(connectionId)
-  if (!mux || mux.isDisposed?.()) {
-    return null
-  }
-  const result = (await mux.request('session.resolveHome', { path: '~' })) as {
-    resolvedPath?: unknown
-  }
-  const home =
-    typeof result.resolvedPath === 'string'
-      ? normalizeRuntimePathSeparators(result.resolvedPath.trim())
-      : ''
-  return home &&
-    (home.startsWith('/') || isWindowsAbsolutePathLike(home)) &&
-    !hasRemotePathControlCharacter(home)
-    ? home.replace(/\/$/, '')
-    : null
-}
-
-function hasRemotePathControlCharacter(value: string): boolean {
-  return value.includes(String.fromCharCode(0)) || value.includes('\r') || value.includes('\n')
 }
 
 async function canonicalizeRemoteWorkspacePath(

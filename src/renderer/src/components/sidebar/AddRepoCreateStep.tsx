@@ -108,8 +108,10 @@ export function CreateStep({
   )
   const showGitFallback = gitAvailability === 'unavailable'
   const showGitChecking = gitAvailability === 'checking'
-  const showRuntimeMissingParent =
-    runtimeEnvironmentId && !createParent.trim() && runtimeParentStatus !== 'checking'
+  // Why: SSH shares the runtime path — any remote host needs a chosen parent,
+  // and the default may not have filled (probe failed/timed out).
+  const showRemoteMissingParent =
+    isRemoteHost && !createParent.trim() && runtimeParentStatus !== 'checking'
 
   if (browsingParent && (runtimeEnvironmentId || sshTargetId)) {
     return (
@@ -207,7 +209,7 @@ export function CreateStep({
                     'Git is required to create a project.'
                   )}
                 </p>
-              ) : showRuntimeMissingParent ? (
+              ) : showRemoteMissingParent ? (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   {translate(
                     'auto.components.sidebar.AddRepoCreateStep.c234df77f7',

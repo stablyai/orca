@@ -1,5 +1,5 @@
 // Default-driven create-project state for AddRepoDialog: resolves the default
-// parent (local/runtime host home) and probes Git
+// parent (local/runtime/SSH host home) and probes Git
 // availability, guarding against stale async results when the target changes.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
@@ -189,17 +189,23 @@ export function useCreateProjectDefaults({
       return
     }
     const runtimeEnvironmentId = activeCreateParentRuntimeEnvironmentId
-    if (!runtimeEnvironmentId || activeCreateParentSshTargetId) {
+    const sshTargetId = activeCreateParentSshTargetId
+    // Why: this effect resolves the default for exactly one active remote target.
+    // Local mode and the ambiguous both-set case stay idle (old runtime behavior).
+    if (Boolean(runtimeEnvironmentId) === Boolean(sshTargetId)) {
       setCreateRuntimeParentStatus('idle')
       return
     }
+    const targetKey = runtimeEnvironmentId
+      ? `runtime:${runtimeEnvironmentId}`
+      : `ssh:${sshTargetId}`
     if (!canReplaceCreateParentDefault(createParent)) {
       setCreateRuntimeParentStatus('idle')
       return
     }
     if (
       createParent.trim() &&
-      autoFilledCreateParentRef.current?.targetKey !== `runtime:${runtimeEnvironmentId}` &&
+      autoFilledCreateParentRef.current?.targetKey !== targetKey &&
       autoFilledCreateParentRef.current?.parent === createParent.trim()
     ) {
       setCreateDefaultParent('')
@@ -208,7 +214,7 @@ export function useCreateProjectDefaults({
       return
     }
     if (
-      autoFilledCreateParentRef.current?.targetKey === `runtime:${runtimeEnvironmentId}` &&
+      autoFilledCreateParentRef.current?.targetKey === targetKey &&
       autoFilledCreateParentRef.current.parent === createParent.trim()
     ) {
       setCreateRuntimeParentStatus('idle')
@@ -218,10 +224,12 @@ export function useCreateProjectDefaults({
 
     const gen = ++createParentDefaultGenRef.current
     setCreateRuntimeParentStatus('checking')
-    void withTimeout(
-      browseRuntimeServerDirectory(runtimeEnvironmentId, '~'),
-      RUNTIME_GIT_AVAILABILITY_TIMEOUT_MS
-    )
+    // Why: same short renderer-side timeout for both hosts so the dialog can't
+    // hang on a slow remote home lookup.
+    const probe = runtimeEnvironmentId
+      ? browseRuntimeServerDirectory(runtimeEnvironmentId, '~')
+      : window.api.ssh.browseDir({ targetId: sshTargetId as string, dirPath: '~' })
+    void withTimeout(probe, RUNTIME_GIT_AVAILABILITY_TIMEOUT_MS)
       .then((result) => {
         if (
           gen !== createParentDefaultGenRef.current ||
@@ -231,8 +239,8 @@ export function useCreateProjectDefaults({
         }
         const parent = getDefaultCreateProjectParent(result.resolvedPath)
         createStepAutoFilledRef.current = true
-        autoFilledCreateParentRef.current = { parent, targetKey: `runtime:${runtimeEnvironmentId}` }
-        createParentProvenanceRef.current = { parent, targetKey: `runtime:${runtimeEnvironmentId}` }
+        autoFilledCreateParentRef.current = { parent, targetKey }
+        createParentProvenanceRef.current = { parent, targetKey }
         setCreateDefaultParent(parent)
         setCreateParent(parent)
         setCreateRuntimeParentStatus('idle')
@@ -241,6 +249,7 @@ export function useCreateProjectDefaults({
         if (gen !== createParentDefaultGenRef.current) {
           return
         }
+        // Leave the field empty on failure so the user can type or browse.
         setCreateRuntimeParentStatus('failed')
       })
   }, [

@@ -23,11 +23,16 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn()
 }))
 
+vi.mock('./ssh', () => ({
+  getActiveMultiplexer: vi.fn()
+}))
+
 vi.mock('./worktree-head-identity-reader', () => ({
   readGitCommonHeadIdentities: vi.fn(async () => [])
 }))
 
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { getActiveMultiplexer } from './ssh'
 import {
   notifyWorktreeGitStatusMetadataChanged,
   notifyWorktreeHeadIdentitiesChanged,
@@ -507,6 +512,42 @@ describe('worktree base directory watcher', () => {
     expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
     await disposeWorktreeBaseDirectoryWatchers()
     expect(remoteUnwatch).toHaveBeenCalled()
+  })
+
+  it('also watches the remote home workspace root when the relay resolves it', async () => {
+    const remoteCallbacks = new Map<string, (events: never[]) => void>()
+    const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
+      remoteCallbacks.set(root, callback)
+      return vi.fn()
+    })
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({
+      stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
+      realpath: vi.fn(async (path: string) => path),
+      readFile: vi.fn(async () => ({ content: '', isBinary: false })),
+      watch: remoteWatch
+    } as never)
+    vi.mocked(getActiveMultiplexer).mockReturnValue({
+      request: vi.fn(async (method: string) =>
+        method === 'session.resolveHome' ? { resolvedPath: '/home/alice' } : undefined
+      )
+    } as never)
+
+    await syncWorktreeBaseDirectoryWatchers(
+      makeStore([makeRepo({ connectionId: 'ssh-1', path: '/home/alice/work/project' })]) as never,
+      makeWindow() as never
+    )
+
+    expect(remoteWatch).toHaveBeenCalledWith('/home/alice/work', expect.any(Function))
+    expect(remoteWatch).toHaveBeenCalledWith('/home/alice/orca/workspaces', expect.any(Function))
+    remoteCallbacks.get('/home/alice/orca/workspaces')?.([
+      {
+        kind: 'create',
+        absolutePath: '/home/alice/orca/workspaces/project/feature-x/.git'
+      }
+    ] as never[])
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
   })
 
   it('treats remote index renames as status-only and overflow as structural', async () => {

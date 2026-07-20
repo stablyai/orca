@@ -16,10 +16,12 @@ import {
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
+  computeRemoteHomeWorkspaceRoot,
   computeWorkspaceRoot,
   getWorktreePathSettings,
   hasRepoWorktreeBasePath
 } from './worktree-logic'
+import { resolveSshRemoteHome } from '../ssh/ssh-remote-home'
 import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
 import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
@@ -99,25 +101,33 @@ function isRuntimePathAbsoluteForRepo(repoPath: string, pathValue: string): bool
   return isRuntimePathAbsolute(pathValue, pathFlavor)
 }
 
-function getBaseWatchLayout(
+async function getBaseWatchLayouts(
   repo: Repo,
   pathSettings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>,
   connectionId: string | undefined
-): { workspaceRoot: string; nestWorkspaces: boolean } {
+): Promise<{ workspaceRoot: string; nestWorkspaces: boolean }[]> {
   if (
     connectionId &&
     !hasRepoWorktreeBasePath(repo) &&
     isRuntimePathAbsoluteForRepo(repo.path, pathSettings.workspaceDir)
   ) {
-    // Why: SSH creates default worktrees beside the remote repo when the
-    // global workspace dir is a desktop-local absolute path.
-    return { workspaceRoot: resolveRuntimePath(repo.path, '..'), nestWorkspaces: false }
+    // Why: SSH default placement mirrors the workspace layout under the remote
+    // home when the relay can resolve it, while worktrees created before that
+    // (or via older relays) sit beside the remote repo — watch both roots.
+    const layouts = [{ workspaceRoot: resolveRuntimePath(repo.path, '..'), nestWorkspaces: false }]
+    const remoteRoot = computeRemoteHomeWorkspaceRoot(await resolveSshRemoteHome(connectionId))
+    if (remoteRoot) {
+      layouts.push({ workspaceRoot: remoteRoot, nestWorkspaces: pathSettings.nestWorkspaces })
+    }
+    return layouts
   }
 
-  return {
-    workspaceRoot: computeWorkspaceRoot(repo.path, pathSettings),
-    nestWorkspaces: pathSettings.nestWorkspaces
-  }
+  return [
+    {
+      workspaceRoot: computeWorkspaceRoot(repo.path, pathSettings),
+      nestWorkspaces: pathSettings.nestWorkspaces
+    }
+  ]
 }
 
 async function maybeAddBaseTarget(
@@ -127,39 +137,43 @@ async function maybeAddBaseTarget(
   connectionId?: string
 ): Promise<void> {
   const pathSettings = getWorktreePathSettings(repo, settings)
-  const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, pathSettings, connectionId)
-  // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
-  if (isWslUncPath(workspaceRoot) || isWslUncPath(repo.path)) {
-    const key = `${repo.id}:${workspaceRoot}`
-    if (shouldEmitBoundedWarning(skippedWslWarnings, key)) {
-      console.warn(
-        `[worktree-base-watcher] skipping WSL worktree root watcher for ${workspaceRoot}`
-      )
-    }
-    return
-  }
-
-  const config = {
-    repoId: repo.id,
-    repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
-    nestWorkspaces
-  }
+  const layouts = await getBaseWatchLayouts(repo, pathSettings, connectionId)
   const remoteProvider = getRemoteProvider(connectionId)
   if (connectionId && !remoteProvider) {
     return
   }
-  try {
-    const rootStat = remoteProvider
-      ? await remoteProvider.stat(workspaceRoot)
-      : await stat(workspaceRoot)
-    if (isDirectoryStat(rootStat)) {
-      await addTarget(targets, 'base', workspaceRoot, config, connectionId)
+  const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
+  let config: { repoId: string; repoName: string; nestWorkspaces: boolean } | undefined
+  for (const { workspaceRoot, nestWorkspaces } of layouts) {
+    // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
+    if (isWslUncPath(workspaceRoot) || isWslUncPath(repo.path)) {
+      const key = `${repo.id}:${workspaceRoot}`
+      if (shouldEmitBoundedWarning(skippedWslWarnings, key)) {
+        console.warn(
+          `[worktree-base-watcher] skipping WSL worktree root watcher for ${workspaceRoot}`
+        )
+      }
+      continue
     }
-  } catch {
-    const key = normalizeWatchKey(workspaceRoot)
-    if (shouldEmitBoundedWarning(missingRootWarnings, key)) {
-      console.warn(`[worktree-base-watcher] worktree root unavailable: ${workspaceRoot}`)
+
+    const layoutConfig = { repoId: repo.id, repoName, nestWorkspaces }
+    config ??= layoutConfig
+    try {
+      const rootStat = remoteProvider
+        ? await remoteProvider.stat(workspaceRoot)
+        : await stat(workspaceRoot)
+      if (isDirectoryStat(rootStat)) {
+        await addTarget(targets, 'base', workspaceRoot, layoutConfig, connectionId)
+      }
+    } catch {
+      const key = normalizeWatchKey(workspaceRoot)
+      if (shouldEmitBoundedWarning(missingRootWarnings, key)) {
+        console.warn(`[worktree-base-watcher] worktree root unavailable: ${workspaceRoot}`)
+      }
     }
+  }
+  if (!config) {
+    return
   }
 
   const commonDir = await resolveWorktreeCommonGitDirectory(

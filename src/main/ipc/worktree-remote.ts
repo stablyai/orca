@@ -69,6 +69,7 @@ import {
   registerOptionalSshWorktreeCreateRoots,
   registerRequiredSshWorktreeCreateRoots
 } from './ssh-worktree-create-root-registration'
+import { resolveSshRemoteHome } from '../ssh/ssh-remote-home'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -81,9 +82,11 @@ import {
   computeRemoteWorktreePath,
   computeWorkspaceRoot,
   ensurePathWithinWorkspace,
+  getRemoteWorktreeCreationLayout,
   getWorktreeCreationLayout,
   getWorktreePathSettings,
   hasRepoWorktreeBasePath,
+  remoteWorktreePathUsesRemoteHome,
   shouldSetDisplayName,
   mergeWorktree,
   areWorktreePathsEqual
@@ -1567,6 +1570,14 @@ export async function createRemoteWorktree(
 
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(repo, settings)
+  const useConfiguredAbsolutePath = hasRepoWorktreeBasePath(repo)
+  // Why: the desktop workspaceDir cannot apply on the SSH host; resolve the
+  // remote home once so placement can mirror the local workspace layout there.
+  const remoteHome = remoteWorktreePathUsesRemoteHome(repo.path, worktreePathSettings, {
+    useConfiguredAbsolutePath
+  })
+    ? await resolveSshRemoteHome(repo.connectionId!)
+    : null
   let effectiveRequestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   let effectiveSanitizedName = sanitizedName
@@ -1655,7 +1666,8 @@ export async function createRemoteWorktree(
       repo.path,
       worktreePathSettings,
       {
-        useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+        useConfiguredAbsolutePath,
+        remoteHome
       }
     )
     if (!(await remotePathExists(fsProvider, remotePath))) {
@@ -1882,7 +1894,7 @@ export async function createRemoteWorktree(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'ssh',
-    orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+    orcaCreationWorkspaceLayout: getRemoteWorktreeCreationLayout(repo, settings, remoteHome),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     baseRef: metadataBaseRef,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
