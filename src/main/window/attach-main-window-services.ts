@@ -28,6 +28,7 @@ import {
   dismissNudge
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history'
+import { openCodeHookService } from '../opencode/hook-service'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
@@ -114,6 +115,10 @@ export function attachMainWindowServices(
   scheduleHistoryGc(async () => {
     return getKnownWorktreeIdsForHistoryGc(store)
   })
+  // Why: bulk-remove orphaned per-session OpenCode config dirs (35k files /
+  // 574MB observed). Internally once-per-run guarded, so macOS dock
+  // re-activation re-running this function does not re-sweep.
+  openCodeHookService.scheduleOrphanedDirGc()
   // Why: warm-reattach gap.
   // Daemon-hosted PTYs survive renderer restarts on purpose, so on a fresh
   // Orca launch the daemon's `listSessions()` returns sessions that

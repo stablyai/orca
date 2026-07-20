@@ -16,12 +16,14 @@ import {
 } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
-
-const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
-const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
-const OPENCODE_OVERLAY_DIR = 'opencode-config-overlays'
-const OPENCODE_SHARED_CONFIG_DIR = 'shared'
-const OPENCODE_OVERLAY_MANIFEST_FILE = '.orca-opencode-overlay-manifest.json'
+import { sweepOrphanedOpenCodeDirs } from './overlay-dir-gc'
+import {
+  OPENCODE_LEGACY_HOOKS_DIR,
+  OPENCODE_OVERLAY_DIR,
+  OPENCODE_OVERLAY_MANIFEST_FILE,
+  OPENCODE_SHARED_CONFIG_DIR,
+  ORCA_OPENCODE_PLUGIN_FILE
+} from './overlay-dir-names'
 
 type OpenCodeOverlayManifest = {
   topLevelEntries: string[]
@@ -412,6 +414,11 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
 // agent-hooks server (/hook/opencode), so OpenCode rides the same status
 // pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
+  // Why: every config dir handed to a PTY during this app run is live no
+  // matter how old its mtimes are — the GC sweep must never remove one.
+  private handedOutConfigDirs = new Set<string>()
+  private orphanDirGcScheduled = false
+
   clearPty(_ptyId: string): void {
     // Why: OpenCode can materialize thousands of plugin runtime files under
     // OPENCODE_CONFIG_DIR. This teardown runs on Electron's main process hot
@@ -437,6 +444,7 @@ export class OpenCodeHookService {
       if (!configDir) {
         return {}
       }
+      this.handedOutConfigDirs.add(configDir)
       return { OPENCODE_CONFIG_DIR: configDir }
     }
 
@@ -463,7 +471,48 @@ export class OpenCodeHookService {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
+    this.handedOutConfigDirs.add(overlayDir)
     return { OPENCODE_CONFIG_DIR: overlayDir }
+  }
+
+  // Why: bulk-remove per-session/per-source config dirs that nothing has
+  // spawned against for 30+ days — a real machine accumulated ~35k files /
+  // 574MB of them. Runs at most once per app run, delayed and unref'd so it
+  // stays off the startup critical path; the sweep itself is bounded and
+  // yields between deletions.
+  scheduleOrphanedDirGc(delayMs = 3 * 60_000): void {
+    if (this.orphanDirGcScheduled) {
+      return
+    }
+    this.orphanDirGcScheduled = true
+    const timer = setTimeout(() => {
+      void this.runOrphanedDirGc().catch(() => {
+        // Best-effort maintenance; never let it surface as an app error.
+      })
+    }, delayMs)
+    timer.unref?.()
+  }
+
+  // Public so tests can run one sweep synchronously without timer plumbing.
+  async runOrphanedDirGc(): Promise<void> {
+    const referencedConfigDirs = new Set(this.handedOutConfigDirs)
+    // Why: a nested Orca (launched inside another Orca's terminal) can inherit
+    // an overlay path via env; treat inherited values as live too.
+    for (const value of [process.env.OPENCODE_CONFIG_DIR, process.env.ORCA_OPENCODE_CONFIG_DIR]) {
+      if (value) {
+        referencedConfigDirs.add(value)
+      }
+    }
+    const result = await sweepOrphanedOpenCodeDirs({
+      legacyHooksRoot: join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR),
+      overlayRoot: join(app.getPath('userData'), OPENCODE_OVERLAY_DIR),
+      referencedConfigDirs
+    })
+    if (result.removed > 0 || result.failed > 0) {
+      console.log(
+        `[opencode-gc] removed ${result.removed} orphaned dir(s) (scanned ${result.scanned}, failed ${result.failed})`
+      )
+    }
   }
 
   private getOverlayRoot(): string {

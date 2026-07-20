@@ -8,6 +8,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -546,5 +547,86 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       'export default "new"'
     )
     expect(existsSync(join(overlayDir, 'node_modules', 'opencode-runtime', 'index.js'))).toBe(true)
+  })
+})
+
+describe('OpenCodeHookService orphaned-dir GC', () => {
+  let userDataDir: string
+  let userConfigDir: string
+
+  beforeEach(() => {
+    userDataDir = mkdtempSync(join(tmpdir(), 'orca-opencode-gc-userdata-'))
+    getPathMock.mockImplementation((name: string) => {
+      if (name === 'userData') {
+        return userDataDir
+      }
+      throw new Error(`unexpected getPath(${name})`)
+    })
+    userConfigDir = mkdtempSync(join(tmpdir(), 'orca-opencode-gc-userconfig-'))
+    writeFileSync(join(userConfigDir, 'opencode.json'), '{}')
+  })
+
+  afterEach(() => {
+    rmSync(userDataDir, { recursive: true, force: true })
+    rmSync(userConfigDir, { recursive: true, force: true })
+  })
+
+  function ageEverything(dir: string, days: number): void {
+    // Deep utimes, children before parents so parent dir mtimes stay aged.
+    const stack = [dir]
+    const paths: string[] = []
+    while (stack.length > 0) {
+      const current = stack.pop()!
+      paths.push(current)
+      if (lstatSync(current).isDirectory()) {
+        for (const entry of readdirSync(current)) {
+          stack.push(join(current, entry))
+        }
+      }
+    }
+    const at = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    for (const path of paths.toReversed()) {
+      utimesSync(path, at, at)
+    }
+  }
+
+  it('a sweep spares shared and this-run overlays but removes aged orphans end-to-end', async () => {
+    const service = new OpenCodeHookService()
+    // Live dirs handed out this run: the shared config + one source overlay.
+    const sharedDir = service.buildPtyEnv('session-a').OPENCODE_CONFIG_DIR!
+    const liveOverlayDir = service.buildPtyEnv('session-b', userConfigDir).OPENCODE_CONFIG_DIR!
+    // Aged orphans in both roots, shaped exactly like real generated dirs.
+    const legacyOrphan = join(userDataDir, 'opencode-hooks', 'a'.repeat(32))
+    const overlayOrphan = join(userDataDir, 'opencode-config-overlays', 'b'.repeat(32))
+    for (const orphan of [legacyOrphan, overlayOrphan]) {
+      mkdirSync(join(orphan, 'plugins'), { recursive: true })
+      writeFileSync(join(orphan, 'plugins', 'orca-opencode-status.js'), '// stale')
+    }
+    // Age everything, live dirs included — only the handed-out reference
+    // (not recency) must be what saves the live overlay.
+    for (const dir of [sharedDir, liveOverlayDir, legacyOrphan, overlayOrphan]) {
+      ageEverything(dir, 60)
+    }
+
+    await service.runOrphanedDirGc()
+
+    expect(existsSync(sharedDir)).toBe(true)
+    expect(existsSync(liveOverlayDir)).toBe(true)
+    expect(existsSync(legacyOrphan)).toBe(false)
+    expect(existsSync(overlayOrphan)).toBe(false)
+  })
+
+  it('scheduleOrphanedDirGc arms at most one sweep per app run', () => {
+    vi.useFakeTimers()
+    try {
+      const service = new OpenCodeHookService()
+      const runSpy = vi.spyOn(service, 'runOrphanedDirGc').mockResolvedValue()
+      service.scheduleOrphanedDirGc(1000)
+      service.scheduleOrphanedDirGc(1000)
+      vi.advanceTimersByTime(10_000)
+      expect(runSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
