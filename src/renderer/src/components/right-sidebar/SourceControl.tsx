@@ -1386,7 +1386,7 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
 
-    // Why: reset to null so branch compare doesn't fire with a stale defaultBaseRef from a different repo (causing transient "invalid-base" on repo switch).
+    // Why: reset to null so that effectiveBaseRef becomes falsy until the IPC resolves, so branch compare can't fire with a stale defaultBaseRef from a different repo (transient "invalid-base" on switch).
     setDefaultBaseRef(null)
 
     let stale = false

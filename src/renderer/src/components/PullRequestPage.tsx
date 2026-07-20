@@ -6547,7 +6547,7 @@ export default function PullRequestPage({
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
 
-  // Why: a cross-window invalidation makes cachedEntry undefined without changing the fetch effect's deps; bump a tick so it refetches.
+  // Why: if a cross-window mutation invalidates the open drawer's entry (cachedEntry undefined, fetch deps unchanged), bump a tick so it refetches.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
     if (workItem && detailsCacheKey && !cachedEntry) {

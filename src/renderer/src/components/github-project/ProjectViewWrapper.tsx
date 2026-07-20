@@ -902,7 +902,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
           onUse={(item) => {
             const current = resolvedDialogRepoItem
             setDialogRepoItem(null)
-            // Why: issue #4756 keeps project-view actions on direct "start work now", not the TaskPage background-create flow.
+            // Why: issue #4756 keeps project-view actions on the direct "start work now" path, not the TaskPage background-create flow.
             void launchWorkItemDirect({
               item,
               repoId: current.workItem.repoId,
