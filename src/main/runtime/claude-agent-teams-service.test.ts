@@ -59,6 +59,7 @@ function createServiceWithLeader(): {
       preview: '',
       paneRuntimeId: -1,
       ptyId: 'pty-1',
+      backend: 'orca' as const,
       rendererGraphEpoch: 1
     }))
   }

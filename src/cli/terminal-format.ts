@@ -94,6 +94,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `worktree: ${terminal.worktreePath}`,
     `branch: ${terminal.branch}`,
     `leaf: ${terminal.leafId}`,
+    `backend: ${terminal.backend}`,
     `ptyId: ${terminal.ptyId ?? 'none'}`,
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,

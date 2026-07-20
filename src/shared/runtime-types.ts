@@ -560,6 +560,7 @@ export type RuntimeWorktreeTerminalSleepResult = {
 export type RuntimeTerminalShow = RuntimeTerminalSummary & {
   paneRuntimeId: number
   ptyId: string | null
+  backend: 'orca' | 'herdr'
   rendererGraphEpoch: number
 }
 

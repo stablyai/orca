@@ -11,6 +11,7 @@ import {
   formatGetAppState,
   formatTerminalList,
   formatTerminalRead,
+  formatTerminalShow,
   formatWorktreeList,
   printResult
 } from './format'
@@ -193,6 +194,32 @@ describe('formatAutomationShow', () => {
     expect(output).toContain('runPath: /srv/orca')
     expect(output).toContain('legacyRepoId: repo-legacy')
     expect(output).not.toContain('projectId: repo-legacy')
+  })
+})
+
+describe('formatTerminalShow', () => {
+  it('prints the explicit terminal backend', () => {
+    const output = formatTerminalShow({
+      terminal: {
+        handle: 'term_herdr',
+        ptyId: 'herdr:v1:encoded',
+        backend: 'herdr',
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        branch: 'main',
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        title: 'Herdr',
+        connected: true,
+        writable: true,
+        lastOutputAt: null,
+        preview: '',
+        paneRuntimeId: 1,
+        rendererGraphEpoch: 1
+      }
+    })
+
+    expect(output).toContain('backend: herdr')
   })
 })
 

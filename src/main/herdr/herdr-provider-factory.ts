@@ -19,19 +19,25 @@ export function createLocalHerdrPtyProvider(
   fallback: IPtyProvider,
   store: Store
 ): HerdrPtyProvider {
-  const source = resolveHerdrBinarySource(store.getSettings(), 'local')
-  const executable = resolveLocalHerdrExecutable({
-    source,
-    isPackaged: app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    platform: process.platform,
-    arch: process.arch,
-    developmentOverride: process.env.ORCA_HERDR_BINARY
-  })
-  if (source.kind === 'managed' && app.isPackaged) {
-    verifyManagedHerdrExecutable(executable)
+  let executable: string | null = null
+  const commandFor = (args: string[]) => {
+    if (!executable) {
+      const source = resolveHerdrBinarySource(store.getSettings(), 'local')
+      executable = resolveLocalHerdrExecutable({
+        source,
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        platform: process.platform,
+        arch: process.arch,
+        developmentOverride: process.env.ORCA_HERDR_BINARY
+      })
+      if (source.kind === 'managed' && app.isPackaged) {
+        verifyManagedHerdrExecutable(executable)
+      }
+    }
+    return localHerdrCommand(executable)(args)
   }
-  const transport = new HerdrCliHostTransport({ commandFor: localHerdrCommand(executable) })
+  const transport = new HerdrCliHostTransport({ commandFor })
   return new HerdrPtyProvider(fallback, transport, createLocalHerdrPtyTargetResolver(store))
 }
 

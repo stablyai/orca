@@ -143,6 +143,29 @@ describe('HerdrRuntimeManager', () => {
           }
         } as HerdrResponse<T>
       }
+      if (method === 'tab.bind') {
+        const request = params as { external_ref: { owner: string; id: string } }
+        return {
+          id: 'tab',
+          result: {
+            tab: { tab_id: 'w1:t1', workspace_id: 'w1', external_ref: request.external_ref }
+          }
+        } as HerdrResponse<T>
+      }
+      if (method === 'pane.bind') {
+        const request = params as { external_ref: { owner: string; id: string } }
+        return {
+          id: 'pane',
+          result: {
+            pane: {
+              pane_id: 'w1:p1',
+              tab_id: 'w1:t1',
+              workspace_id: 'w1',
+              external_ref: request.external_ref
+            }
+          }
+        } as HerdrResponse<T>
+      }
       if (method === 'pane.split') {
         const request = params as Record<string, { owner: 'orca'; id: string }>
         return {

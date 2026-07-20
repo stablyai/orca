@@ -128,6 +128,31 @@ function transport() {
         }
       } as HerdrResponse<unknown>
     }
+    if (method === 'tab.bind') {
+      return {
+        id: 'tab-bind',
+        result: {
+          tab: {
+            tab_id: 't1',
+            workspace_id: 'w1',
+            external_ref: (_params as { external_ref: unknown }).external_ref
+          }
+        }
+      } as HerdrResponse<unknown>
+    }
+    if (method === 'pane.bind') {
+      return {
+        id: 'pane-bind',
+        result: {
+          pane: {
+            pane_id: 'p1',
+            tab_id: 't1',
+            workspace_id: 'w1',
+            external_ref: (_params as { external_ref: unknown }).external_ref
+          }
+        }
+      } as HerdrResponse<unknown>
+    }
     if (method === 'pane.close') {
       return { id: 'close', result: {} } as HerdrResponse<unknown>
     }

@@ -28,6 +28,7 @@ import {
   createElectronHomeIsolation,
   type ElectronHomeIsolation
 } from './electron-home-isolation'
+import type { TerminalBackendPreference } from '../../../src/shared/terminal-backend'
 
 type LaunchedOrca = {
   app: ElectronApplication
@@ -99,10 +100,13 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
 function createRestartLaunchIsolation(
   userDataDir: string,
   headful: boolean,
-  extraEnv: Record<string, string>
+  extraEnv: NodeJS.ProcessEnv = {}
 ): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
+  const definedExtraEnv = Object.fromEntries(
+    Object.entries(extraEnv).filter((entry): entry is [string, string] => entry[1] !== undefined)
+  )
   return createElectronHomeIsolation({
     inheritedEnv: cleanEnv,
     launchEnv: {
@@ -116,7 +120,7 @@ function createRestartLaunchIsolation(
       ...extraEnv,
       ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     },
-    extraEnv: {},
+    extraEnv: definedExtraEnv,
     userDataDir,
     codexRealHomeEnabled: false
   })
@@ -131,7 +135,7 @@ function createRestartLaunchIsolation(
  */
 export function createRestartSession(
   testInfo: TestInfo,
-  extraEnv: Record<string, string> = {}
+  extraEnv: NodeJS.ProcessEnv = {}
 ): RestartSession {
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
@@ -198,7 +202,11 @@ export function createRestartSession(
  * active on its worktree. Matches the shared fixture's setup path so the
  * first-launch state lines up with what real users persist.
  */
-export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): Promise<string> {
+export async function attachRepoAndOpenTerminal(
+  page: Page,
+  repoPath: string,
+  options: { terminalBackendPreference?: TerminalBackendPreference } = {}
+): Promise<string> {
   if (!isValidGitRepo(repoPath)) {
     throw new Error(`attachRepoAndOpenTerminal: ${repoPath} is not a git repo`)
   }
@@ -270,7 +278,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     )
     .toBe(true)
 
-  const worktreeId = await page.evaluate((repoId: string) => {
+  const worktreeId = await page.evaluate(async ({ repoId, terminalBackendPreference }) => {
     const store = window.__store
     if (!store) {
       return null
@@ -283,9 +291,13 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     if (!primary) {
       return null
     }
+    const project = state.projects.find((candidate) => candidate.sourceRepoIds.includes(repoId))
+    if (project && terminalBackendPreference) {
+      await state.updateProject(project.id, { terminalBackendPreference })
+    }
     state.setActiveWorktree(primary.id)
     return primary.id
-  }, repoId)
+  }, { repoId, terminalBackendPreference: options.terminalBackendPreference })
 
   if (!worktreeId) {
     throw new Error('attachRepoAndOpenTerminal: test repo did not surface in the store')

@@ -14,7 +14,7 @@ import {
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
-import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import type { GlobalSettings, TerminalLayoutSnapshot, TuiAgent } from '../../shared/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
@@ -3157,6 +3157,9 @@ export function registerPtyHandlers(
       if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
         spawnOptions.tabId = args.tabId
       }
+      if (args.terminalLayout) {
+        spawnOptions.terminalLayout = args.terminalLayout
+      }
       if (process.platform === 'win32' && !args.connectionId) {
         spawnOptions.shellOverride = terminalRuntimeOptions.shellOverride
         spawnOptions.terminalWindowsWslDistro =
@@ -3954,6 +3957,7 @@ export function registerPtyHandlers(
         // Why: closes the SIGKILL race (INVESTIGATION.md) by letting main sync-flush the binding before pty:spawn returns; only the Ctrl+T daemon-host path threads these.
         tabId?: string
         leafId?: string
+        terminalLayout?: TerminalLayoutSnapshot
         // Why: renderer-threaded launch telemetry (telemetry-plan.md§Agent launch semantics); loosely typed because the main-side schema validator is the single enforcement point.
         telemetry?: {
           agent_kind?: unknown
@@ -4290,6 +4294,9 @@ export function registerPtyHandlers(
       }
       if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
         spawnOptions.tabId = args.tabId
+      }
+      if (args.terminalLayout) {
+        spawnOptions.terminalLayout = args.terminalLayout
       }
       if (effectiveSessionId !== undefined) {
         spawnOptions.sessionId = effectiveSessionId

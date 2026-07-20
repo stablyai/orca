@@ -12,6 +12,7 @@ import type {
   GitStagingArea,
   GitUpstreamStatus,
   GitWorktreeInfo,
+  TerminalLayoutSnapshot,
   TuiAgent,
   RemoveWorktreeResult,
   SearchOptions,
@@ -78,6 +79,7 @@ export type PtySpawnOptions = {
   /** Stable terminal tab identity used as a coarser attach guard when a pane
    *  identity is unavailable. */
   tabId?: string
+  terminalLayout?: TerminalLayoutSnapshot
   /** Daemon session ID. A caller-provided ID is treated as an attach request;
    *  daemon hosts also pass minted IDs for fresh sessions that need stable
    *  per-PTY state before provider.spawn returns. */

@@ -11,7 +11,7 @@ import type { StartupCommandDelivery } from '../../../../shared/codex-startup-de
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TuiAgent } from '../../../../shared/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 
@@ -188,6 +188,7 @@ export type IpcPtyTransportOptions = {
   worktreeId?: string
   tabId?: string
   leafId?: string
+  terminalLayout?: TerminalLayoutSnapshot
   activate?: boolean
   shellOverride?: string
   projectRuntime?: ProjectExecutionRuntimeResolution

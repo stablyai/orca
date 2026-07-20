@@ -3,7 +3,11 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../shared/worktree-id'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../shared/types'
 import type { Project } from '../../shared/types'
 import { resolveDesiredTerminalBackend } from '../../shared/terminal-backend'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
@@ -99,6 +103,42 @@ function syntheticLayout(leafId: string): TerminalLayoutSnapshot {
   }
 }
 
+function layoutContainsLeaf(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
+  if (!node) {
+    return false
+  }
+  if (node.type === 'leaf') {
+    return node.leafId === leafId
+  }
+  return layoutContainsLeaf(node.first, leafId) || layoutContainsLeaf(node.second, leafId)
+}
+
+function layoutLeafCount(node: TerminalPaneLayoutNode | null): number {
+  if (!node) {
+    return 0
+  }
+  if (node.type === 'leaf') {
+    return 1
+  }
+  return layoutLeafCount(node.first) + layoutLeafCount(node.second)
+}
+
+function resolveLayout(
+  candidate: TerminalLayoutSnapshot | undefined,
+  persisted: TerminalLayoutSnapshot | undefined,
+  leafId: string
+): TerminalLayoutSnapshot {
+  const validLayouts = [candidate, persisted].filter((layout): layout is TerminalLayoutSnapshot =>
+    Boolean(layout && layoutContainsLeaf(layout.root, leafId))
+  )
+  if (validLayouts.length > 0) {
+    return validLayouts.reduce((fullest, layout) =>
+      layoutLeafCount(layout.root) > layoutLeafCount(fullest.root) ? layout : fullest
+    )
+  }
+  return syntheticLayout(leafId)
+}
+
 export function createLocalHerdrPtyTargetResolver(store: Store): HerdrPtyTargetResolver {
   return createHerdrPtyTargetResolver(store, 'local')
 }
@@ -133,7 +173,11 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
       const tabs = existingTabs.some((candidate) => candidate.id === targetTab.id)
         ? existingTabs
         : [...existingTabs, targetTab]
-      const layout = session.terminalLayoutsByTabId[targetTab.id] ?? syntheticLayout(partial.leafId)
+      const layout = resolveLayout(
+        opts.terminalLayout,
+        session.terminalLayoutsByTabId[targetTab.id],
+        partial.leafId
+      )
       return {
         project,
         identity: { hostId, projectId: project.id, ...partial },
@@ -189,7 +233,11 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
     const tabs = existingTabs.some((candidate) => candidate.id === targetTab.id)
       ? existingTabs
       : [...existingTabs, targetTab]
-    const layout = session.terminalLayoutsByTabId[targetTab.id] ?? syntheticLayout(partial.leafId)
+    const layout = resolveLayout(
+      opts.terminalLayout,
+      session.terminalLayoutsByTabId[targetTab.id],
+      partial.leafId
+    )
     const identity: HerdrPtyIdentity = {
       hostId,
       projectId: project.id,
