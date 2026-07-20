@@ -105,7 +105,17 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    await this.adapterFor(id).shutdown(id, opts)
+    const adapter = this.adapterFor(id)
+    try {
+      await adapter.shutdown(id, opts)
+    } catch (error) {
+      if (adapter === this.current || !isMissingLegacyDaemonEndpointError(error)) {
+        throw error
+      }
+      console.warn('[daemon] Legacy daemon endpoint disappeared during session shutdown', error)
+      this.sessionAdapters.delete(id)
+      return
+    }
     // Why: sleep passes keepHistory=true and re-spawns against the same
     // sessionId on wake. If we delete the routing entry here, adapterFor()
     // falls back to `this.current` on wake — for a session that originally
@@ -177,11 +187,27 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    // Why: runtime exact-stop/liveness flows must fail closed if any adapter
-    // cannot provide a trustworthy process list.
-    const results = await Promise.all(
-      this.allAdapters().map((adapter) => adapter.listProcesses(opts))
-    )
+    // Why: runtime exact-stop/liveness flows fail closed for the current daemon
+    // and live legacy daemons. A legacy endpoint whose socket/token disappeared
+    // cannot own a live session, so treating ENOENT as an empty inventory lets
+    // destructive worktree teardown proceed after an upgrade.
+    const results = await Promise.all([
+      this.current.listProcesses(opts),
+      ...this.legacy.map(async (adapter) => {
+        try {
+          return await adapter.listProcesses(opts)
+        } catch (error) {
+          if (!isMissingLegacyDaemonEndpointError(error)) {
+            throw error
+          }
+          console.warn(
+            '[daemon] Legacy daemon endpoint disappeared during session inventory',
+            error
+          )
+          return []
+        }
+      })
+    ])
     return results.flat()
   }
 
@@ -324,4 +350,13 @@ export class DaemonPtyRouter implements IPtyProvider {
   private allAdapters(): DaemonPtyAdapter[] {
     return [this.current, ...this.legacy]
   }
+}
+
+function isMissingLegacyDaemonEndpointError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as NodeJS.ErrnoException).code === 'ENOENT' &&
+    ((error as NodeJS.ErrnoException).syscall === 'connect' ||
+      (error as NodeJS.ErrnoException).syscall === 'open')
+  )
 }

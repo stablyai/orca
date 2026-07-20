@@ -265,6 +265,41 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
+  it.each(['connect', 'open'])(
+    'treats a dead legacy daemon ENOENT %s as an already-stopped session',
+    async (syscall) => {
+      const current = createAdapter('current')
+      const legacy = createAdapter('legacy', ['legacy-session'])
+      vi.mocked(legacy.shutdown).mockRejectedValueOnce(
+        Object.assign(new Error(`legacy ${syscall} missing`), { code: 'ENOENT', syscall })
+      )
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+      await router.discoverLegacySessions()
+
+      await expect(router.shutdown('legacy-session', { immediate: true })).resolves.toBeUndefined()
+      expect(legacy.shutdown).toHaveBeenCalledWith('legacy-session', { immediate: true })
+      expect(current.shutdown).not.toHaveBeenCalled()
+      expect(warn).toHaveBeenCalledWith(
+        '[daemon] Legacy daemon endpoint disappeared during session shutdown',
+        expect.objectContaining({ code: 'ENOENT', syscall })
+      )
+      warn.mockRestore()
+    }
+  )
+
+  it('still fails shutdown when the current daemon endpoint is missing', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const error = Object.assign(new Error('current socket missing'), {
+      code: 'ENOENT',
+      syscall: 'connect'
+    })
+    vi.mocked(current.shutdown).mockRejectedValueOnce(error)
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+
+    await expect(router.shutdown('current-session', { immediate: true })).rejects.toBe(error)
+  })
+
   it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {
     const current = createAdapter('current', ['current-session'])
     const legacy = createAdapter('legacy', ['legacy-session'])
@@ -272,6 +307,55 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
+  })
+
+  it.each(['connect', 'open'])(
+    'ignores a dead legacy daemon with an ENOENT %s failure',
+    async (syscall) => {
+      const current = createAdapter('current', ['current-session'])
+      const legacy = createAdapter('legacy', ['legacy-session'])
+      vi.mocked(legacy.listProcesses).mockRejectedValueOnce(
+        Object.assign(new Error(`legacy ${syscall} missing`), { code: 'ENOENT', syscall })
+      )
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.listProcesses()).resolves.toEqual([
+        { id: 'current-session', cwd: '', title: 'current' }
+      ])
+      expect(legacy.listProcesses).toHaveBeenCalledOnce()
+      expect(warn).toHaveBeenCalledWith(
+        '[daemon] Legacy daemon endpoint disappeared during session inventory',
+        expect.objectContaining({ code: 'ENOENT', syscall })
+      )
+      warn.mockRestore()
+    }
+  )
+
+  it('still fails listProcesses when the current daemon endpoint is missing', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const error = Object.assign(new Error('current socket missing'), {
+      code: 'ENOENT',
+      syscall: 'connect'
+    })
+    vi.mocked(current.listProcesses).mockRejectedValueOnce(error)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listProcesses()).rejects.toBe(error)
+    expect(legacy.listProcesses).toHaveBeenCalledOnce()
+  })
+
+  it('contacts and includes a live legacy daemon during session inventory', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listProcesses()).resolves.toEqual([
+      { id: 'current-session', cwd: '', title: 'current' },
+      { id: 'legacy-session', cwd: '', title: 'legacy' }
+    ])
+    expect(legacy.listProcesses).toHaveBeenCalledOnce()
   })
 
   it('merges startup reconciliation and updates route mappings', async () => {
