@@ -4793,10 +4793,19 @@
           "layouts": "Layouts",
           "renamePanel": "Rename",
           "detachPanel": "Open in new window",
-          "openInCanvas": "Open in canvas"
+          "openInCanvas": "Open in canvas",
+          "emptyUserPanels": "Pin a dashboard with +",
+          "emptyNodes": "Add an observability terminal with +"
         },
         "SidebarPanelRows": {
           "renameLabel": "Rename"
+        },
+        "QuickAddPanelPopovers": {
+          "addWebPanel": "Add browser panel",
+          "webTitle": "New user panel",
+          "addTerminalPanel": "Add node terminal",
+          "terminalTitle": "New node panel",
+          "commandPlaceholder": "Command (e.g. btop)"
         }
       },
       "shared": {
@@ -9248,7 +9257,8 @@
           "edit": "Edit panel",
           "duplicate": "Duplicate panel",
           "saveEdit": "Save panel",
-          "cancelEdit": "Cancel edit"
+          "cancelEdit": "Cancel edit",
+          "commandPlaceholder": "Command (e.g. btop)"
         },
         "PinnedWebPanelsSetting": {
           "title": "Pinned web panels",

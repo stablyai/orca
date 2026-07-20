@@ -17,6 +17,7 @@ import {
   SortableTerminalPanelButton,
   SortableWebPanelButton
 } from './SidebarPanelRows'
+import { QuickAddTerminalPanelButton, QuickAddWebPanelButton } from './QuickAddPanelPopovers'
 
 function movedBefore<T extends { id: string }>(
   items: readonly T[],
@@ -176,9 +177,9 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
   const hasLayouts = (panelLayouts ?? []).length > 0
-  if (!hasWebPanels && !hasTerminalPanels && !hasLayouts) {
-    return null
-  }
+  const hasGroupedTerminals = groupedTerminalPanels.some((section) => section.group !== null)
+  // Why: always mount the rails so User Panels / Nodes + buttons exist even
+  // with zero panels (quick-add without Settings). Layouts still optional.
 
   return (
     <div
@@ -205,15 +206,13 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
               ))}
             </>
           ) : null}
-          {hasWebPanels ? (
+          <div className="flex w-full items-center gap-0.5">
             <button
               type="button"
               onClick={() => void updateSettings({ pinnedWebPanelsCollapsed: !webPanelsCollapsed })}
               aria-expanded={!webPanelsCollapsed}
               className={cn(
-                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
-                // Why: a collapsed fold hiding the active panel keeps accent
-                // styling so the current location stays discoverable.
+                'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
                 webPanelsCollapsed &&
                   (pinnedWebPanels ?? []).some(
                     (panel) => activeView === 'web-panel' && activePinnedWebPanelId === panel.id
@@ -236,8 +235,9 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                 )}
               </span>
             </button>
-          ) : null}
-          {webPanelsCollapsed ? null : (
+            <QuickAddWebPanelButton />
+          </div>
+          {webPanelsCollapsed ? null : hasWebPanels ? (
             <SortableContext
               items={(pinnedWebPanels ?? []).map((panel) => panel.id)}
               strategy={verticalListSortingStrategy}
@@ -251,6 +251,13 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                 />
               ))}
             </SortableContext>
+          ) : (
+            <p className="px-2 py-1 pl-8 text-[11px] text-worktree-sidebar-foreground/35">
+              {translate(
+                'auto.components.sidebar.SidebarPanelsNav.emptyUserPanels',
+                'Pin a dashboard with +'
+              )}
+            </p>
           )}
           <SortableContext
             items={groupedTerminalPanels
@@ -273,13 +280,13 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                 ))
               )}
           </SortableContext>
-          {groupedTerminalPanels.some((section) => section.group !== null) ? (
+          <div className="flex w-full items-center gap-0.5">
             <button
               type="button"
               onClick={() => toggleTerminalPanelGroup(PINNED_TERMINAL_PANELS_ROOT_FOLD)}
               aria-expanded={!collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD)}
               className={cn(
-                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
+                'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
                 'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
               )}
             >
@@ -294,10 +301,19 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                 {translate('auto.components.sidebar.SidebarNav.pinnedPanelNodes', 'Nodes')}
               </span>
             </button>
-          ) : null}
-          {collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD)
-            ? null
-            : groupedTerminalPanels.map((section) => {
+            <QuickAddTerminalPanelButton />
+          </div>
+          {collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD) ? null : (
+            <>
+              {!hasTerminalPanels && !hasGroupedTerminals ? (
+                <p className="px-2 py-1 pl-8 text-[11px] text-worktree-sidebar-foreground/35">
+                  {translate(
+                    'auto.components.sidebar.SidebarPanelsNav.emptyNodes',
+                    'Add an observability terminal with +'
+                  )}
+                </p>
+              ) : null}
+              {groupedTerminalPanels.map((section) => {
                 const { group } = section
                 return group === null ? null : (
                   <div key={`group:${group}`}>
@@ -307,8 +323,6 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                       aria-expanded={!collapsedTerminalPanelGroups.has(group)}
                       className={cn(
                         'flex w-full items-center gap-1.5 rounded-md py-1 pr-2 pl-4 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
-                        // Why: a collapsed group hiding the active panel keeps accent
-                        // styling so the current location stays discoverable.
                         collapsedTerminalPanelGroups.has(group) &&
                           section.panels.some(
                             (panel) =>
@@ -350,6 +364,8 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                   </div>
                 )
               })}
+            </>
+          )}
         </div>
       </DndContext>
     </div>
