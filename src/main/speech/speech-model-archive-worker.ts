@@ -5,10 +5,12 @@ import { isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { x as extractTar } from 'tar'
 import unbzip2Stream from 'unbzip2-stream'
 
+// Why: reject links that could redirect extraction outside the model directory.
 const ALLOWED_ENTRY_TYPES = new Set(['File', 'OldFile', 'Directory'])
 
 function assertSafeEntry(path: string, type: string): void {
   const normalized = path.replaceAll('\\', '/')
+  // Why: validate the path tar writes after strip removes the archive wrapper directory.
   const stripped = normalized.split('/').slice(1).join('/')
   if (
     normalized.includes('\0') ||
