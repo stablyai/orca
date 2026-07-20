@@ -69,6 +69,10 @@ export type GitStatusResult = {
   // "too many changes" state.
   didHitLimit?: boolean
   statusLength?: number
+  // Why: string enum (not boolean) so a future manager (e.g. 'jj') can extend it
+  // without a new field; optional + absent-by-default keeps un-upgraded consumers
+  // and the wire protocol backward compatible.
+  managedBy?: 'gitbutler'
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a

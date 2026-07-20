@@ -38,6 +38,7 @@ import {
   gitStreamStdout
 } from './runner'
 import { StatusPorcelainParser } from './status-porcelain-parser'
+import { detectGitButlerWorkspace } from './gitbutler-detection'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../shared/git-status-limit'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
@@ -398,11 +399,18 @@ async function runGetStatus(
     throw error
   }
 
+  // Why: detection is gated behind the branch-name check inside the helper, so
+  // normal repos pay nothing (no git-dir resolve, no fs probe) on this path.
+  const managedBy = (await detectGitButlerWorkspace(worktreePath, branch, resolveGitDir))
+    ? ('gitbutler' as const)
+    : undefined
+
   return {
     entries,
     conflictOperation,
     head,
     branch,
+    ...(managedBy ? { managedBy } : {}),
     ...(options.includeIgnored ? { ignoredPaths: parser.ignoredPaths } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength: parser.statusLength } : {}),
     ...(statusSucceeded

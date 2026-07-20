@@ -618,6 +618,10 @@ export type EditorSlice = {
   // un-ignored folder), the SCM view shows a "too many changes" state and
   // polling pauses. `{ limit }` when huge, absent otherwise.
   gitStatusHugeByWorktree: Record<string, { limit: number }>
+  // Why: tracks which worktrees are sitting on a GitButler workspace branch so
+  // Source Control can show an informational badge. Keyed by worktree, value is
+  // the detected manager (string enum so a future manager can extend it).
+  gitStatusManagedByByWorktree: Record<string, 'gitbutler'>
   gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
@@ -3478,6 +3482,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   gitStatusByWorktree: {},
   gitStatusHeadByWorktree: {},
   gitStatusHugeByWorktree: {},
+  gitStatusManagedByByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
@@ -3582,6 +3587,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const nextStatusHead = getKnownGitHead(status.head)
       const statusHeadUnchanged = prevStatusHead === nextStatusHead
 
+      const prevManagedBy = s.gitStatusManagedByByWorktree[worktreeId]
+      const nextManagedBy = status.managedBy
+      const managedByUnchanged = prevManagedBy === nextManagedBy
+
       const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
       // Why: a compare request can finish after git status has observed a new
       // HEAD; reject that stale snapshot before it can render a false clean state.
@@ -3599,6 +3608,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ignoredUnchanged &&
         hugeUnchanged &&
         statusHeadUnchanged &&
+        managedByUnchanged &&
         !shouldInvalidateBranchCompare
       ) {
         return s
@@ -3623,6 +3633,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               delete copy[worktreeId]
               return copy
             })()
+      const nextManagedByMap = managedByUnchanged
+        ? s.gitStatusManagedByByWorktree
+        : nextManagedBy
+          ? { ...s.gitStatusManagedByByWorktree, [worktreeId]: nextManagedBy }
+          : (() => {
+              const copy = { ...s.gitStatusManagedByByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
       const nextBranchCompareSummaries = shouldInvalidateBranchCompare
         ? {
             ...s.gitBranchCompareSummaryByWorktree,
@@ -3637,6 +3656,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         openFiles: nextOpenFiles,
         gitStatusHugeByWorktree: nextHugeMap,
         gitStatusHeadByWorktree: nextStatusHeadMap,
+        gitStatusManagedByByWorktree: nextManagedByMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },

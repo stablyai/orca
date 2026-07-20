@@ -1051,6 +1051,7 @@ describe('getStatus', () => {
     lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
+    statMock.mockReset()
     // Why: after the status call, getStatus may issue `git diff --numstat`
     // calls to attach per-entry line counts. Tests that don't care about counts
     // set only a `mockResolvedValueOnce` for the status output; this default
@@ -1301,6 +1302,35 @@ describe('getStatus', () => {
       head: 'abcdef1234567890',
       branch: 'refs/heads/feature/prompts'
     })
+  })
+
+  it('flags managedBy gitbutler when on the workspace branch with gitbutler metadata', async () => {
+    // `.git` is a real dir here (not a worktree pointer), so resolveGitDir's
+    // readFile throws and the common dir is `/repo/.git`. Metadata dir present;
+    // commondir/conflict markers absent. Proves runGetStatus runs detection.
+    readFileMock.mockRejectedValue(new Error('EISDIR'))
+    existsSyncMock.mockImplementation((target: string) => target.endsWith(`${path.sep}gitbutler`))
+    // Detection requires the gitbutler metadata to be a directory, not a file.
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '# branch.oid abcdef1234567890\n# branch.head gitbutler/workspace\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.managedBy).toBe('gitbutler')
+  })
+
+  it('omits managedBy for a normal branch even when gitbutler metadata exists', async () => {
+    readFileMock.mockRejectedValue(new Error('EISDIR'))
+    existsSyncMock.mockImplementation((target: string) => target.endsWith(`${path.sep}gitbutler`))
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.managedBy).toBeUndefined()
   })
 
   it('folds upstream ahead/behind from porcelain v2 into the status result', async () => {
