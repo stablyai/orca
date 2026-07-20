@@ -9,6 +9,7 @@ import { shouldWaitForSetupBeforeAgentStartup } from '../shared/setup-agent-star
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { gitExecFileSync } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
+import { addWorktreeSetupWslInteropEnv } from './pty/wsl-orca-env'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
@@ -595,6 +596,10 @@ export function runHook(
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
+    const hookEnv: NodeJS.ProcessEnv = { ...process.env, ...wslEnv }
+    // Why: wsl.exe only imports Windows env vars named in WSLENV; without
+    // registering them the setup vars never reach the guest (#9206).
+    addWorktreeSetupWslInteropEnv(hookEnv)
 
     return new Promise((resolve) => {
       let child: ReturnType<typeof execFile> | null = null
@@ -636,7 +641,7 @@ export function runHook(
           {
             timeout: HOOK_TIMEOUT,
             encoding: 'utf-8',
-            env: { ...process.env, ...wslEnv }
+            env: hookEnv
           },
           (error, stdout, stderr) => {
             finish(error ?? null, stdout, stderr)
