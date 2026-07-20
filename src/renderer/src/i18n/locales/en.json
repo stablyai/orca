@@ -13542,6 +13542,15 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    },
+    "terminal": {
+      "quickCommands": {
+        "reuseTab": {
+          "title": "Reuse terminal tab",
+          "description": "Re-run in the terminal this command already opened instead of a new tab. Opens a new tab while the previous one is still busy.",
+          "toggleLabel": "Toggle reuse terminal tab"
+        }
+      }
     }
   }
 }

@@ -798,6 +798,11 @@ export type Tab = {
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
   quickCommandLabel?: string | null
+  /** Internal id of the Quick Command that spawned this terminal. Not rendered —
+   *  it only marks the tab so a reuse-enabled command can find and refocus its
+   *  own terminal instead of duplicating it. Set only when the command opts into
+   *  tab reuse. */
+  quickCommandId?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -839,6 +844,10 @@ export type TerminalTab = {
   generatedTitle?: string | null
   /** Stable label from the tab-bar Quick Command that created this terminal. */
   quickCommandLabel?: string | null
+  /** Internal id of the Quick Command that spawned this terminal (not rendered).
+   *  Lets a reuse-enabled command refocus its own terminal instead of opening a
+   *  new one. Set only when the command opts into tab reuse. */
+  quickCommandId?: string | null
   customTitle: string | null
   color: string | null
   /** Pinned tabs survive "close others"; host-persisted for remote servers. */
@@ -2509,6 +2518,11 @@ export type TerminalCommandQuickCommand = TerminalQuickCommandBase & {
   action?: 'terminal-command'
   command: string
   appendEnter: boolean
+  /** Opt-in: re-running this command focuses the terminal it already spawned
+   *  (per worktree) instead of opening a new tab. Re-sends the command only when
+   *  that terminal is idle; if a foreground process is still running it just
+   *  focuses. Off (default) keeps the always-new-tab behavior. */
+  reuseTab?: boolean
 }
 
 export type TerminalAgentQuickCommand = TerminalQuickCommandBase & {

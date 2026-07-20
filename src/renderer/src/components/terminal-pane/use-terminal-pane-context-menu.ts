@@ -413,7 +413,7 @@ export function useTerminalPaneContextMenu({
 
   const onQuickCommand = (command: TerminalQuickCommand): void => {
     if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId })
+      void runQuickCommandInNewTab({ command, worktreeId, groupId })
       return
     }
 

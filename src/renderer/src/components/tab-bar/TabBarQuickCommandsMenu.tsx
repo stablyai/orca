@@ -236,26 +236,31 @@ export function TabBarQuickCommandsMenu({
             </span>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {mostRecent
-            ? isTerminalAgentQuickCommand(mostRecent)
-              ? translate(
-                  'auto.components.tab.bar.TabBarQuickCommandsButton.77ac113df0',
-                  'Start {{value0}}: {{value1}}',
-                  {
-                    value0: getAgentLabel(mostRecent.agent),
-                    value1: getTerminalQuickCommandBody(mostRecent)
-                  }
-                )
+        <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+          {/* Why: command bodies can be long single-line scripts; clamp on a span
+              (not the content box, to keep the arrow layout intact) so the tooltip
+              stays a tidy 3-line block instead of stretching across the window. */}
+          <span className="line-clamp-3 break-words">
+            {mostRecent
+              ? isTerminalAgentQuickCommand(mostRecent)
+                ? translate(
+                    'auto.components.tab.bar.TabBarQuickCommandsButton.77ac113df0',
+                    'Start {{value0}}: {{value1}}',
+                    {
+                      value0: getAgentLabel(mostRecent.agent),
+                      value1: getTerminalQuickCommandBody(mostRecent)
+                    }
+                  )
+                : translate(
+                    'auto.components.tab.bar.TabBarQuickCommandsButton.37e1bb90ce',
+                    'Run: {{value0}}',
+                    { value0: getTerminalQuickCommandBody(mostRecent) }
+                  )
               : translate(
-                  'auto.components.tab.bar.TabBarQuickCommandsButton.37e1bb90ce',
-                  'Run: {{value0}}',
-                  { value0: getTerminalQuickCommandBody(mostRecent) }
-                )
-            : translate(
-                'auto.components.tab.bar.TabBarQuickCommandsButton.85482c57bc',
-                'Run quick command'
-              )}
+                  'auto.components.tab.bar.TabBarQuickCommandsButton.85482c57bc',
+                  'Run quick command'
+                )}
+          </span>
         </TooltipContent>
       </Tooltip>
       <DropdownMenu modal={false} open={menuOpen} onOpenChange={handleOpenChange}>

@@ -73,6 +73,11 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.quickCommandLabel?.trim())
         .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
     )
+    const quickCommandIdByTerminalId = new Map(
+      (session.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.quickCommandId?.trim())
+        .map((tab) => [tab.id, tab.quickCommandId!.trim()])
+    )
     tabsByWorktree[worktreeId] = [...tabs]
       .map((tab) => ({
         ...tab,
@@ -85,10 +90,14 @@ function hydrateUnifiedFormat(
         const quickCommandLabel = tab.quickCommandLabel?.trim()
           ? tab.quickCommandLabel.trim()
           : quickCommandLabelByTerminalId.get(tab.entityId)
+        const quickCommandId = tab.quickCommandId?.trim()
+          ? tab.quickCommandId.trim()
+          : quickCommandIdByTerminalId.get(tab.entityId)
         const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
         return {
           ...tab,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
+          ...(quickCommandId ? { quickCommandId } : {}),
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
         }
       })
@@ -218,6 +227,7 @@ function hydrateLegacyFormat(
         contentType: 'terminal',
         label: tt.title,
         ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
+        ...(tt.quickCommandId?.trim() ? { quickCommandId: tt.quickCommandId.trim() } : {}),
         ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
         customLabel: tt.customTitle,
         color: tt.color,

@@ -3,6 +3,7 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
 export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
+export const RUN_TERMINAL_COMMAND_EVENT = 'orca-run-terminal-command'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
@@ -48,6 +49,20 @@ export type PasteTerminalTextDetail = {
   tabId: string
   paneId?: number
   text: string
+}
+
+/** Re-runs a quick command inside the terminal it already spawned. Unlike paste,
+ *  this writes `input` as raw PTY input so a trailing `\r` actually executes the
+ *  command (bracketed paste would insert it as literal text). `input` is the
+ *  fully-built string (e.g. from `buildTerminalQuickCommandInput`). */
+export type RunTerminalCommandDetail = {
+  tabId: string
+  input: string
+  /** PTY whose idleness the reuse path probed. The receiver re-runs against the
+   *  pane that owns this PTY so the command lands in the exact pane that was
+   *  checked — never a different, possibly busy, split pane. Omitted = fall back
+   *  to the tab's active pane. */
+  ptyId?: string
 }
 
 export type SplitTerminalPaneDetail = {

@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
   PASTE_TERMINAL_TEXT_EVENT,
+  RUN_TERMINAL_COMMAND_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
   type FocusTerminalPaneDetail,
-  type PasteTerminalTextDetail
+  type PasteTerminalTextDetail,
+  type RunTerminalCommandDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
@@ -15,6 +17,7 @@ import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
+import { handleTerminalProgrammaticCommandRun } from './terminal-programmatic-command-run'
 import {
   hideTerminalVisibility,
   resumeTerminalVisibility,
@@ -245,6 +248,20 @@ export function useTerminalPaneGlobalEffects({
     }
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
     return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
+  }, [tabId, managerRef, paneTransportsRef])
+
+  useEffect(() => {
+    const onRunCommand = (event: Event): void => {
+      const detail = (event as CustomEvent<RunTerminalCommandDetail | undefined>).detail
+      handleTerminalProgrammaticCommandRun({
+        detail,
+        tabId,
+        getManager: () => managerRef.current,
+        getPaneTransports: () => paneTransportsRef.current
+      })
+    }
+    window.addEventListener(RUN_TERMINAL_COMMAND_EVENT, onRunCommand)
+    return () => window.removeEventListener(RUN_TERMINAL_COMMAND_EVENT, onRunCommand)
   }, [tabId, managerRef, paneTransportsRef])
 
   // Why: dictation events are dispatched globally; gate on isActiveRef so only

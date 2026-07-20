@@ -145,7 +145,10 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
         ...base,
         action: 'terminal-command',
         command: command.slice(0, MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH),
-        appendEnter: record.appendEnter !== false
+        appendEnter: record.appendEnter !== false,
+        // Why: opt-in flag; only persist it when explicitly enabled so default
+        // commands stay clean and keep the always-new-tab behavior.
+        ...(record.reuseTab === true ? { reuseTab: true } : {})
       })
     }
 

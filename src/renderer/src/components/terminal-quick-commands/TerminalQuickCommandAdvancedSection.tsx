@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
+import { TerminalQuickCommandReuseTabSwitch } from './TerminalQuickCommandReuseTabSwitch'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 
 type TerminalQuickCommandAdvancedSectionProps = {
@@ -20,6 +21,7 @@ type TerminalQuickCommandAdvancedSectionProps = {
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
   toggleAppendEnter: () => void
+  toggleReuseTab: () => void
 }
 
 export function TerminalQuickCommandAdvancedSection({
@@ -32,7 +34,8 @@ export function TerminalQuickCommandAdvancedSection({
   lastRepoScopeIdRef,
   setAdvancedOpen,
   setDraft,
-  toggleAppendEnter
+  toggleAppendEnter,
+  toggleReuseTab
 }: TerminalQuickCommandAdvancedSectionProps): React.JSX.Element {
   return (
     <div>
@@ -67,10 +70,16 @@ export function TerminalQuickCommandAdvancedSection({
             )}
           >
             {!isTerminalAgentQuickCommand(draft) ? (
-              <TerminalQuickCommandAppendEnterSwitch
-                appendEnter={draft.appendEnter}
-                onToggle={toggleAppendEnter}
-              />
+              <>
+                <TerminalQuickCommandAppendEnterSwitch
+                  appendEnter={draft.appendEnter}
+                  onToggle={toggleAppendEnter}
+                />
+                <TerminalQuickCommandReuseTabSwitch
+                  reuseTab={draft.reuseTab === true}
+                  onToggle={toggleReuseTab}
+                />
+              </>
             ) : null}
             <TerminalQuickCommandScopeField
               repos={repos}

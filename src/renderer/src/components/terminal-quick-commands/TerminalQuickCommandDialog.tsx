@@ -125,6 +125,21 @@ export function TerminalQuickCommandDialog({
     )
   }
 
+  const toggleReuseTab = (): void => {
+    setDraft((current) =>
+      isTerminalAgentQuickCommand(current)
+        ? current
+        : (() => {
+            const reuseTab = current.reuseTab !== true
+            draftMemoryRef.current = {
+              ...draftMemoryRef.current,
+              terminalReuseTab: reuseTab
+            }
+            return { ...current, reuseTab }
+          })()
+    )
+  }
+
   const saveDraft = (): void => {
     const next: TerminalQuickCommand = isTerminalAgentQuickCommand(draft)
       ? {
@@ -141,6 +156,7 @@ export function TerminalQuickCommandDialog({
           action: 'terminal-command',
           command: draft.command.trimEnd(),
           appendEnter: draft.appendEnter,
+          ...(draft.reuseTab === true ? { reuseTab: true } : {}),
           scope: selectedScope
         }
     if (
@@ -228,6 +244,7 @@ export function TerminalQuickCommandDialog({
             setAdvancedOpen={setAdvancedOpen}
             setDraft={setDraft}
             toggleAppendEnter={toggleAppendEnter}
+            toggleReuseTab={toggleReuseTab}
           />
         </div>
 

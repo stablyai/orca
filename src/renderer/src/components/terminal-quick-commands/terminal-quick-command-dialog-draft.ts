@@ -9,6 +9,7 @@ export type TerminalQuickCommandDialogAction = 'terminal-command' | 'agent-promp
 export type TerminalQuickCommandDialogDraftMemory = {
   terminalCommand: string
   terminalAppendEnter: boolean
+  terminalReuseTab: boolean
   agent: TuiAgent
   agentPrompt: string
 }
@@ -21,6 +22,7 @@ export function createTerminalQuickCommandDialogDraftMemory(
     return {
       terminalCommand: '',
       terminalAppendEnter: true,
+      terminalReuseTab: false,
       agent: command.agent,
       agentPrompt: command.prompt
     }
@@ -28,6 +30,7 @@ export function createTerminalQuickCommandDialogDraftMemory(
   return {
     terminalCommand: command.command,
     terminalAppendEnter: command.appendEnter,
+    terminalReuseTab: command.reuseTab === true,
     agent: fallbackAgent,
     agentPrompt: ''
   }
@@ -47,7 +50,8 @@ export function rememberTerminalQuickCommandDialogDraft(
   return {
     ...memory,
     terminalCommand: draft.command,
-    terminalAppendEnter: draft.appendEnter
+    terminalAppendEnter: draft.appendEnter,
+    terminalReuseTab: draft.reuseTab === true
   }
 }
 
@@ -86,7 +90,8 @@ export function switchTerminalQuickCommandDialogAction(
       ...base,
       action: 'terminal-command',
       command: nextMemory.terminalCommand,
-      appendEnter: nextMemory.terminalAppendEnter
+      appendEnter: nextMemory.terminalAppendEnter,
+      ...(nextMemory.terminalReuseTab ? { reuseTab: true } : {})
     }
   }
 }

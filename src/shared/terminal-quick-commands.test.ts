@@ -40,6 +40,48 @@ describe('terminal quick commands', () => {
     ).toEqual([])
   })
 
+  it('persists reuseTab only when explicitly enabled', () => {
+    expect(
+      normalizeTerminalQuickCommands([
+        { id: 'dev', label: 'Dev', command: 'npm run dev', appendEnter: true, reuseTab: true },
+        {
+          id: 'build',
+          label: 'Build',
+          command: 'npm run build',
+          appendEnter: true,
+          reuseTab: false
+        },
+        { id: 'lint', label: 'Lint', command: 'npm run lint', appendEnter: true }
+      ])
+    ).toEqual([
+      {
+        id: 'dev',
+        label: 'Dev',
+        action: 'terminal-command',
+        command: 'npm run dev',
+        appendEnter: true,
+        reuseTab: true,
+        scope: { type: 'global' }
+      },
+      {
+        id: 'build',
+        label: 'Build',
+        action: 'terminal-command',
+        command: 'npm run build',
+        appendEnter: true,
+        scope: { type: 'global' }
+      },
+      {
+        id: 'lint',
+        label: 'Lint',
+        action: 'terminal-command',
+        command: 'npm run lint',
+        appendEnter: true,
+        scope: { type: 'global' }
+      }
+    ])
+  })
+
   it('drops malformed entries and normalizes valid commands and drafts', () => {
     expect(
       normalizeTerminalQuickCommands([

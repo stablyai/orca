@@ -125,7 +125,7 @@ export function TabBarQuickCommandsButton({
   }
 
   const handleRun = (command: TerminalQuickCommand): void => {
-    runQuickCommandInNewTab({ command, worktreeId, groupId })
+    void runQuickCommandInNewTab({ command, worktreeId, groupId })
   }
 
   // Why: hidden in folder-mode worktrees (no repoId) and floating terminals.
