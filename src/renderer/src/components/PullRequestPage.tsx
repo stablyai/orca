@@ -3746,6 +3746,14 @@ function ConversationTab({
               type="button"
               className="flex items-center gap-2 pt-1 text-left"
               aria-expanded={!commentsCollapsed}
+              aria-label={
+                commentsCollapsed
+                  ? translate('auto.components.PullRequestPage.comments.expand', 'Expand comments')
+                  : translate(
+                      'auto.components.PullRequestPage.comments.collapse',
+                      'Collapse comments'
+                    )
+              }
               onClick={() => setCommentsCollapsed((c) => !c)}
             >
               <ChevronDown

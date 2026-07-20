@@ -3113,6 +3113,17 @@ function ConversationTab({
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [commentsCollapsed, setCommentsCollapsed] = useState(false)
+  const ariaLabel =
+    item.type === 'issue'
+      ? commentsCollapsed
+        ? translate('auto.components.GitHubItemDialog.timeline.activityExpand', 'Expand activity')
+        : translate(
+            'auto.components.GitHubItemDialog.timeline.activityCollapse',
+            'Collapse activity'
+          )
+      : commentsCollapsed
+        ? translate('auto.components.GitHubItemDialog.comments.expand', 'Expand comments')
+        : translate('auto.components.GitHubItemDialog.comments.collapse', 'Collapse comments')
   const [bodyDraft, setBodyDraft] = useState(body)
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
@@ -3735,6 +3746,7 @@ function ConversationTab({
               type="button"
               className="flex items-center gap-2 pt-1 text-left"
               aria-expanded={!commentsCollapsed}
+              aria-label={ariaLabel}
               onClick={() => setCommentsCollapsed((c) => !c)}
             >
               <ChevronDown
