@@ -162,6 +162,58 @@ export function resolveCreatePrIntentRemoteStep({
   return 'none'
 }
 
+export type CreatePrIntentGeneratedFields = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+}
+
+export type CreatePrIntentGeneratedFieldsResolution =
+  | { outcome: 'branchChanged' }
+  | { outcome: 'canceled' }
+  | { outcome: 'failed'; errorDetail: string }
+  | { outcome: 'applied'; fields: CreatePrIntentGeneratedFields }
+
+export function resolveCreatePrIntentGeneratedFields({
+  generated,
+  fallback
+}: {
+  generated: {
+    success: boolean
+    error?: string
+    canceled?: boolean
+    branchChangedByPreparation?: boolean
+    fields?: { title: string; body: string; draft: boolean }
+  }
+  fallback: CreatePrIntentGeneratedFields
+}): CreatePrIntentGeneratedFieldsResolution {
+  if (generated.branchChangedByPreparation) {
+    return { outcome: 'branchChanged' }
+  }
+  if (generated.success && generated.fields) {
+    return {
+      outcome: 'applied',
+      fields: {
+        // Why: Create PR intent auto-submits; generated details should
+        // not retarget the review without user confirmation.
+        base: fallback.base,
+        title: generated.fields.title.trim() || fallback.title,
+        body: generated.fields.body,
+        draft: generated.fields.draft
+      }
+    }
+  }
+  if (generated.canceled) {
+    return { outcome: 'canceled' }
+  }
+  return { outcome: 'failed', errorDetail: generated.error ?? '' }
+}
+
+export function resolveCreatePrIntentGenerationErrorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export function getCreatePrIntentCommitFailureNoticeMessage(
   commitError: string | null | undefined,
   copy: {

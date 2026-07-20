@@ -9719,7 +9719,8 @@
               "a9bf7c171a": "푸시 실패",
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
-            }
+            },
+            "createPrIntentDetailGenerationFailed": "{{value0}} 세부 정보를 생성할 수 없습니다: {{value1}} Create PR을 다시 시도하세요."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

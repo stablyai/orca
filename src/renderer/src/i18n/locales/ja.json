@@ -9719,7 +9719,8 @@
               "a9bf7c171a": "プッシュ失敗",
               "834cb3f23d": "AIで修正",
               "783a808870": "閉じる"
-            }
+            },
+            "createPrIntentDetailGenerationFailed": "{{value0}} の詳細を生成できませんでした: {{value1}} Create PR を再試行してください。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",

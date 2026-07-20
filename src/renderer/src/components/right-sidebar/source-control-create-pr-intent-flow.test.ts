@@ -7,6 +7,8 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
+  resolveCreatePrIntentGeneratedFields,
+  resolveCreatePrIntentGenerationErrorDetail,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep
 } from './source-control-create-pr-intent-flow'
@@ -300,5 +302,66 @@ describe('source-control Create PR intent flow helpers', () => {
         withSummary: (summary) => `localized ${summary}`
       })
     ).toBe('localized Pre-commit hook failed.')
+  })
+
+  it('resolves generated PR details without auto-submitting a blank template on failure', () => {
+    const fallback = { base: 'main', title: 'fallback title', body: 'fallback body', draft: false }
+
+    expect(
+      resolveCreatePrIntentGeneratedFields({
+        generated: { success: true, branchChangedByPreparation: true },
+        fallback
+      })
+    ).toEqual({ outcome: 'branchChanged' })
+
+    expect(
+      resolveCreatePrIntentGeneratedFields({
+        generated: {
+          success: true,
+          fields: { title: '  Generated title  ', body: 'Generated body', draft: true }
+        },
+        fallback
+      })
+    ).toEqual({
+      outcome: 'applied',
+      fields: { base: 'main', title: 'Generated title', body: 'Generated body', draft: true }
+    })
+
+    // Why: a blank generated title must not overwrite the seeded fallback title.
+    expect(
+      resolveCreatePrIntentGeneratedFields({
+        generated: { success: true, fields: { title: '   ', body: 'Generated body', draft: true } },
+        fallback
+      })
+    ).toEqual({
+      outcome: 'applied',
+      fields: { base: 'main', title: 'fallback title', body: 'Generated body', draft: true }
+    })
+
+    expect(
+      resolveCreatePrIntentGeneratedFields({
+        generated: { success: false, canceled: true },
+        fallback
+      })
+    ).toEqual({ outcome: 'canceled' })
+
+    expect(
+      resolveCreatePrIntentGeneratedFields({
+        generated: { success: false, error: 'Model request timed out' },
+        fallback
+      })
+    ).toEqual({ outcome: 'failed', errorDetail: 'Model request timed out' })
+
+    expect(
+      resolveCreatePrIntentGeneratedFields({ generated: { success: false }, fallback })
+    ).toEqual({ outcome: 'failed', errorDetail: '' })
+  })
+
+  it('stringifies both Error and non-Error thrown values for the failure notice', () => {
+    expect(resolveCreatePrIntentGenerationErrorDetail(new Error('boom'))).toBe('boom')
+    expect(resolveCreatePrIntentGenerationErrorDetail('raw string throw')).toBe('raw string throw')
+    expect(resolveCreatePrIntentGenerationErrorDetail({ code: 'ECONNRESET' })).toBe(
+      '[object Object]'
+    )
   })
 })

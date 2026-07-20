@@ -261,6 +261,8 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
+  resolveCreatePrIntentGeneratedFields,
+  resolveCreatePrIntentGenerationErrorDetail,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
@@ -3615,13 +3617,26 @@ function SourceControlInner(): React.JSX.Element {
           )
         })
         const target = getCreatePrIntentOperationTarget(token)
+        // Why: the intent auto-submits, so a swallowed failure would ship a
+        // blank-template PR; abort and surface the error instead.
+        const surfaceCreatePrIntentDetailGenerationFailure = (errorDetail: string): void => {
+          setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            tone: 'destructive',
+            message: translate(
+              'auto.components.right.sidebar.SourceControl.createPrIntentDetailGenerationFailed',
+              'Couldn’t generate {{value0}} details: {{value1}} Retry Create PR.',
+              { value0: hostedReviewCreateCopy.reviewLabel, value1: errorDetail }
+            )
+          })
+        }
         try {
           const generated = await generateRuntimePullRequestFields(target, {
             ...fields,
             provider: eligibility.provider,
             useTemplate: resolvedPrCreationDefaults.useTemplate
           })
-          if (generated.branchChangedByPreparation) {
+          const resolution = resolveCreatePrIntentGeneratedFields({ generated, fallback: fields })
+          if (resolution.outcome === 'branchChanged') {
             setCreatePrIntentNoticeForWorktree(token.worktreeId, {
               tone: 'muted',
               message: translate(
@@ -3631,18 +3646,20 @@ function SourceControlInner(): React.JSX.Element {
             })
             return false
           }
-          if (generated.success) {
-            fields = {
-              // Why: Create PR intent auto-submits; generated details should
-              // not retarget the review without user confirmation.
-              base: fields.base,
-              title: generated.fields.title.trim() || fields.title,
-              body: generated.fields.body,
-              draft: generated.fields.draft
-            }
+          if (resolution.outcome === 'applied') {
+            fields = resolution.fields
+          } else if (resolution.outcome === 'canceled') {
+            setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
+            return false
+          } else {
+            surfaceCreatePrIntentDetailGenerationFailure(resolution.errorDetail)
+            return false
           }
         } catch (error) {
-          console.warn('[SourceControl] Create PR intent detail generation failed', error)
+          surfaceCreatePrIntentDetailGenerationFailure(
+            resolveCreatePrIntentGenerationErrorDetail(error)
+          )
+          return false
         }
       }
 
