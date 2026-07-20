@@ -75,8 +75,8 @@ function spriteDiv(container: HTMLElement): HTMLDivElement {
   return div
 }
 
-// The @keyframes name is `pet-<useId>-<row>-<frames>-<dragGeneration>`: the
-// resolved track keeps a switched-to row from reusing the prior timeline, and
+// The @keyframes name is `pet-<useId>-<row>-<frames>-<settleRow>-<dragGeneration>`:
+// the resolved track keeps a switched-to row from reusing the prior timeline, and
 // the generation suffix restarts a same-row grab from frame 0.
 function animationName(container: HTMLElement): string {
   return spriteDiv(container).style.animation.split(' ')[0]

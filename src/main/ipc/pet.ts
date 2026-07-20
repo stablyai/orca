@@ -114,7 +114,11 @@ const PetManifestSchema = z
           row: z.number().int().min(0).max(256),
           frames: z.number().int().positive().max(512),
           // Why: cap each hold at 60s so a bad manifest can't freeze the overlay.
-          frameDurationsMs: z.array(z.number().positive().max(60_000)).max(512).optional()
+          frameDurationsMs: z.array(z.number().positive().max(60_000)).max(512).optional(),
+          // Why: repeat x frames becomes one keyframe stop each. The product
+          // cap is enforced with the other cross-field checks below.
+          repeat: z.number().int().min(1).max(64).optional(),
+          settleTo: z.string().min(1).max(64).optional()
         })
       )
       .optional()
@@ -399,6 +403,18 @@ export function registerPetHandlers(): void {
           if (anim.frameDurationsMs && anim.frameDurationsMs.length !== anim.frames) {
             throw new Error(
               `Animation "${name}" declares ${anim.frameDurationsMs.length} frame durations but ${anim.frames} frames.`
+            )
+          }
+          if (anim.settleTo && !manifest.animations[anim.settleTo]) {
+            throw new Error(
+              `Animation "${name}" settles to "${anim.settleTo}" which is not in animations.`
+            )
+          }
+          // Why: the renderer emits one keyframe stop per repeated frame, so
+          // the repeats must stay within the same 512 cap as the frame count.
+          if (anim.repeat !== undefined && anim.repeat * anim.frames > 512) {
+            throw new Error(
+              `Animation "${name}" repeats ${anim.repeat}x${anim.frames} frames, exceeding the 512 keyframe cap.`
             )
           }
         }
