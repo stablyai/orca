@@ -776,6 +776,34 @@ export type TabGroupLayoutNode =
       ratio?: number
     }
 
+// ─── Workbench Views (parallel multi-project view) ──────────────────
+// Why: the workbench composes multiple worktrees side by side. This layout
+// tree mirrors TabGroupLayoutNode, but its leaves are whole worktrees. A
+// single-leaf view is the N=1 case — identical to the pre-feature workbench,
+// so single-project usage keeps its exact behavior (no separate mode).
+export type WorktreeSplitDirection = 'horizontal' | 'vertical'
+
+export type WorktreeLayoutNode =
+  | { type: 'leaf'; worktreeId: string }
+  | {
+      type: 'split'
+      direction: WorktreeSplitDirection
+      first: WorktreeLayoutNode
+      second: WorktreeLayoutNode
+      /** Flex ratio of the first child (0–1). Defaults to 0.5 if absent. */
+      ratio?: number
+    }
+
+/** One super-tab in the ProjectTabStrip: a saved workbench arrangement. */
+export type WorkbenchView = {
+  id: string
+  /** User-set title; when absent the strip derives a label from the leaf projects. */
+  title?: string
+  layout: WorktreeLayoutNode
+  /** The single focused pane; always a leaf of `layout`. Mirrors activeWorktreeId. */
+  focusedWorktreeId: string
+}
+
 // ─── Unified Tab ────────────────────────────────────────────────────
 export type TabContentType =
   | 'terminal'

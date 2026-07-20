@@ -75,6 +75,8 @@ import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
+import { WorktreeSplitLayout, type WorktreePaneRect } from './workbench/WorktreeSplitLayout'
+import { collectLeafWorktreeIds } from '../lib/worktree-layout-tree'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { setForegroundTerminalTabIds } from '@/lib/foreground-terminal-tabs'
@@ -268,6 +270,46 @@ function Terminal(): React.JSX.Element | null {
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
   )
   const activeView = useAppStore((s) => s.activeView)
+  const workbenchViews = useAppStore((s) => s.workbenchViews)
+  const syncWorkbenchToActiveWorktree = useAppStore((s) => s.syncWorkbenchToActiveWorktree)
+  const [workbenchPaneRects, setWorkbenchPaneRects] = useState<Map<string, WorktreePaneRect>>(
+    () => new Map()
+  )
+  // Why: the shown parallel arrangement is the SET (a view with >= 2 panes) that
+  // contains the active worktree — searched across ALL views, not just the
+  // flagged-active one — so clicking any member switches to that set. A worktree
+  // in no such set falls back to the single view, so normal navigation and
+  // "revert to single" stay byte-identical to the pre-parallel behavior.
+  const activeParallelSet = useMemo(() => {
+    if (renderedActiveWorktreeId == null) {
+      return null
+    }
+    return (
+      workbenchViews.find((v) => {
+        const leaves = collectLeafWorktreeIds(v.layout)
+        return leaves.length >= 2 && leaves.includes(renderedActiveWorktreeId)
+      }) ?? null
+    )
+  }, [workbenchViews, renderedActiveWorktreeId])
+  // Keep the slice's active view pointing at the shown set so pane actions
+  // (resize / split / close / toggle) target it, not a stale view.
+  useEffect(() => {
+    syncWorkbenchToActiveWorktree()
+  }, [renderedActiveWorktreeId, workbenchViews, syncWorkbenchToActiveWorktree])
+  const workbenchVisibleWorktreeIds = useMemo(
+    () =>
+      activeParallelSet
+        ? collectLeafWorktreeIds(activeParallelSet.layout)
+        : renderedActiveWorktreeId
+          ? [renderedActiveWorktreeId]
+          : [],
+    [activeParallelSet, renderedActiveWorktreeId]
+  )
+  const workbenchVisibleSet = useMemo(
+    () => new Set(workbenchVisibleWorktreeIds),
+    [workbenchVisibleWorktreeIds]
+  )
+  const isMultiPaneWorkbench = workbenchVisibleWorktreeIds.length >= 2
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
@@ -2258,6 +2300,15 @@ function Terminal(): React.JSX.Element | null {
               can preserve hidden trees without reflowing the active one. Keep
               a relative anchor here so those panes size to the workspace body
               rather than some outer ancestor when split groups are enabled. */}
+          {/* Why: in a multi-pane workbench the split layout renders only empty
+              measured slots + resize handles; the surfaces below are positioned
+              over each slot's rect. Single-pane keeps the legacy inset-0 path. */}
+          {isMultiPaneWorkbench && activeParallelSet && activeView === 'terminal' ? (
+            <WorktreeSplitLayout
+              layout={activeParallelSet.layout}
+              onSlotRectsChange={setWorkbenchPaneRects}
+            />
+          ) : null}
           {workspaceSurfaces
             .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
             .map((workspace) => {
@@ -2267,7 +2318,11 @@ function Terminal(): React.JSX.Element | null {
               }
               // Why: use strict equality with 'terminal' instead of !== 'settings'
               // so the terminal/browser surface hides on the tasks page too.
-              const isVisible =
+              // isVisible = rendered on screen (a leaf of the active workbench
+              // view); isFocused = the single pane that owns shortcuts / active
+              // state. They coincide in the single-pane case.
+              const isVisible = activeView === 'terminal' && workbenchVisibleSet.has(workspace.id)
+              const isFocused =
                 activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
               const shouldMeasureHiddenWorktree =
                 !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
@@ -2283,6 +2338,9 @@ function Terminal(): React.JSX.Element | null {
                   layout={layout}
                   focusedGroupId={activeGroupIdByWorktree[workspace.id]}
                   isVisible={isVisible}
+                  isFocused={isFocused}
+                  isMultiPane={isMultiPaneWorkbench}
+                  paneRect={isMultiPaneWorkbench ? workbenchPaneRects.get(workspace.id) : undefined}
                   shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
                   shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
                   activityTerminalPortals={activityTerminalPortals}
@@ -2586,6 +2644,9 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout,
   focusedGroupId,
   isVisible,
+  isFocused,
+  isMultiPane,
+  paneRect,
   shouldMeasureHiddenWorktree,
   shouldColdParkTerminalPanes,
   activityTerminalPortals,
@@ -2597,6 +2658,9 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   layout: TabGroupLayoutNode
   focusedGroupId?: string
   isVisible: boolean
+  isFocused: boolean
+  isMultiPane: boolean
+  paneRect?: WorktreePaneRect
   shouldMeasureHiddenWorktree: boolean
   shouldColdParkTerminalPanes: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -2610,31 +2674,97 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       )
     )
   )
+  const closeActiveWorkbenchPane = useAppStore((s) => s.closeActiveWorkbenchPane)
+  const togglePaneSplitDirection = useAppStore((s) => s.togglePaneSplitDirection)
+  const focusActiveWorkbenchPane = useAppStore((s) => s.focusActiveWorkbenchPane)
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const shouldKeepPaintable =
     shouldMeasureHiddenWorktree || hasAutomationVisibleBrowser || hasMobileDrivenBrowser
 
+  // Why: in a multi-pane workbench each visible surface is positioned over its
+  // slot's rect (from WorktreeSplitLayout) rather than filling the container;
+  // awaitingRect keeps it invisible for the one frame before first measurement.
+  const usesRect = isVisible && paneRect != null
+  const awaitingRect = isMultiPane && isVisible && paneRect == null
+  // Why: in a multi-pane view a left-edge strip labels each pane with its
+  // worktree folder so the user can tell a separate worktree apart from a
+  // same-worktree tab-group split, and its ✕ closes the pane (revert).
+  const paneLabelSegments = worktreePath.split(/[\\/]/).filter(Boolean)
+  const paneLabel = paneLabelSegments.at(-1) ?? worktreeId
   return (
     <div
       className={
-        isVisible
-          ? 'absolute inset-0 flex'
-          : shouldKeepPaintable
+        usesRect
+          ? 'absolute flex'
+          : awaitingRect
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
-            : 'absolute inset-0 hidden'
+            : isVisible
+              ? 'absolute inset-0 flex'
+              : shouldKeepPaintable
+                ? 'absolute inset-0 flex opacity-0 pointer-events-none'
+                : 'absolute inset-0 hidden'
+      }
+      style={
+        usesRect
+          ? {
+              top: paneRect.top,
+              left: paneRect.left,
+              width: paneRect.width,
+              height: paneRect.height
+            }
+          : undefined
       }
       // Why: automation and mobile control need paintable webviews, but hidden
       // worktree controls cannot remain reachable by Tab or assistive tech.
       inert={!isVisible}
       aria-hidden={!isVisible}
+      onPointerDownCapture={() => {
+        // Why: clicking into a parallel pane makes it the focused pane so the
+        // right sidebar / file list / shortcuts follow, mirroring a sidebar click.
+        if (isMultiPane && !isFocused) {
+          focusActiveWorkbenchPane(worktreeId)
+        }
+      }}
     >
+      {isMultiPane && isVisible ? (
+        <div
+          style={{ zIndex: 60 }}
+          className={`pointer-events-auto absolute right-1 top-1 flex items-center gap-1.5 rounded border bg-background/95 px-1.5 py-0.5 text-[11px] text-muted-foreground shadow-sm ${
+            isFocused ? 'border-ring' : 'border-border'
+          }`}
+        >
+          <span className="max-w-[140px] select-none truncate" title={worktreePath}>
+            {paneLabel}
+          </span>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => togglePaneSplitDirection(worktreeId)}
+            title="Toggle this pane's split direction (side-by-side / stacked)"
+            aria-label="Toggle this pane's split direction"
+            className="leading-none hover:text-foreground"
+          >
+            ⇅
+          </button>
+          <button
+            type="button"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => closeActiveWorkbenchPane(worktreeId)}
+            title="Close parallel pane"
+            aria-label="Close parallel pane"
+            className="leading-none hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
       <CodexRestartChip isVisible={isVisible} worktreeId={worktreeId} />
       <TabGroupSplitLayout
         layout={layout}
         worktreeId={worktreeId}
         focusedGroupId={focusedGroupId}
-        isWorktreeActive={isVisible}
+        isWorktreeActive={isFocused}
       />
       <TerminalPaneOverlayLayer
         worktreeId={worktreeId}

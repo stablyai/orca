@@ -74,6 +74,7 @@ import {
 } from './workspace-delete-quick-action'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { collectLeafWorktreeIds } from '@/lib/worktree-layout-tree'
 import {
   getFlushWorktreeCardPaddingLeft,
   getNewCardStyleParentContentMarginLeft
@@ -232,6 +233,26 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  // Why: a worktree that is a pane in the active parallel view gets a muted
+  // "in parallel" selection; the focused pane still gets the real active
+  // highlight (isActiveSurface takes priority below).
+  const isInParallelView = useAppStore((s) => {
+    const active = s.activeWorktreeId
+    if (active == null) {
+      return false
+    }
+    // Match Terminal's shown set: the parallel set that CONTAINS the active
+    // worktree (searched across all views), so the sidebar's muted selection
+    // always agrees with what's actually on screen.
+    const view = s.workbenchViews.find((v) => collectLeafWorktreeIds(v.layout).includes(active))
+    if (!view) {
+      return false
+    }
+    return (
+      collectLeafWorktreeIds(view.layout).length >= 2 &&
+      collectLeafWorktreeIds(view.layout).includes(worktree.id)
+    )
+  })
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -1866,9 +1887,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
             ? activeSurfaceIsSecondary
               ? 'border border-sidebar-ring/25 bg-sidebar-accent/45 shadow-none ring-1 ring-sidebar-ring/15'
               : 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-            : isMultiSelected
-              ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-              : 'border border-transparent worktree-sidebar-card-hover',
+            : isInParallelView
+              ? 'border border-worktree-sidebar-ring/25 bg-worktree-sidebar-accent/40'
+              : isMultiSelected
+                ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
+                : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
