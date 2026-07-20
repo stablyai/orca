@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: the preload bridge is the audited contract between
-renderer and Electron. Keeping the IPC surface co-located in one file makes security
-review and type drift checks easier than scattering these bindings across modules. */
+/* eslint-disable max-lines -- Why: preload is the audited renderer/Electron IPC contract; co-locating the surface eases security and type-drift review. */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
@@ -269,8 +267,7 @@ const onNativeFileDrop = (_event: Electron.IpcRendererEvent, data: NativeFileDro
 function subscribeNativeFileDrop(callback: NativeFileDropCallback): () => void {
   nativeFileDropCallbacks.push(callback)
   if (!nativeFileDropListenerRegistered) {
-    // Why: terminal panes subscribe per visible split group, so the IPC layer
-    // must keep one real listener and fan out locally to avoid listener warnings.
+    // Why: keep one real IPC listener and fan out locally — panes subscribe per split group, which would otherwise trip listener warnings.
     ipcRenderer.on('terminal:file-drop', onNativeFileDrop)
     nativeFileDropListenerRegistered = true
   }
@@ -286,21 +283,14 @@ function subscribeNativeFileDrop(callback: NativeFileDropCallback): () => void {
   }
 }
 
-// Why: one shared HTMLAudioElement per sound file, restarted from t=0 on each
-// play, with an in-flight guard that drops new plays while the sound is still
-// ringing. This mirrors VS Code's AccessibilitySignalService and GNOME's
-// libcanberra: a burst of triggers self-dedupes by the sound's own duration
-// (no magic time constant), while distinct sounds are still allowed to overlap.
-// We also cache the decoded blob URL by path so we don't re-read 10MB from
-// disk and re-transfer it over IPC on every notification.
+// Why: cache one shared Audio + blob URL per sound path so we don't re-read 10MB from disk and re-transfer over IPC on every notification.
 let cachedNotificationSound: {
   path: string
   blobUrl: string
   audio: HTMLAudioElement
 } | null = null
 let isNotificationSoundPlaying = false
-// Why: audio.play() can reject before ended/error fires; keep a cleanup hook
-// so failed or replaced plays do not accumulate listeners on the cached Audio.
+// Why: audio.play() can reject before ended/error fires — cleanup hook prevents leaked listeners on the cached Audio.
 let cleanupNotificationSoundPlayback: (() => void) | null = null
 
 function clearNotificationSoundPlaybackState(): void {
@@ -320,14 +310,11 @@ function disposeCachedNotificationSound(): void {
 }
 
 /**
- * Walk the composed event path to classify which UI surface the native OS drop
- * landed on, and — for file-explorer drops — extract the nearest destination
- * directory from `data-native-file-drop-dir`.
+ * Classify which UI surface the native OS drop landed on, and for file-explorer drops
+ * extract the destination directory from `data-native-file-drop-dir`.
  *
- * Why: the preload layer consumes native OS `drop` events before React can read
- * filesystem paths. If preload does not capture the destination directory at
- * drop time, the renderer can no longer tell whether the user meant "root" or
- * "inside this folder".
+ * Why: preload consumes the native `drop` before React can read paths, so it must capture
+ * the destination dir now — otherwise the renderer can't tell "root" from "inside this folder".
  */
 function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
   const pathEntries: NativeFileDropPathEntry[] = []
@@ -344,16 +331,11 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
   return resolveNativeFileDropPath(pathEntries)
 }
 
-// ---------------------------------------------------------------------------
-// File drag-and-drop: handled here in the preload because webUtils (which
-// resolves File objects to filesystem paths) is only available in Electron's
-// preload/main worlds, not the renderer's isolated main world.
-// ---------------------------------------------------------------------------
+// File drag-and-drop lives in preload because webUtils (File→path) is only available in the preload/main world, not the renderer's isolated world.
 document.addEventListener(
   'dragover',
   (e) => {
-    // Let in-app drags (e.g. file explorer drag-to-move) through to React handlers
-    // so they can set their own dropEffect. Only override for native OS file drops.
+    // Let in-app drags through to React handlers (their own dropEffect); only override for native OS file drops.
     if (e.dataTransfer && !hasNativeFileDragTypes(e.dataTransfer.types)) {
       return
     }
@@ -381,8 +363,7 @@ document.addEventListener(
     }
     const resolution = resolveNativeFileDrop(e)
 
-    // Why: resolving native File objects to paths is synchronous in preload.
-    // Reject oversized gestures by count before touching every File object.
+    // Why: reject oversized gestures by count before resolving every File object (path resolution is synchronous here).
     if (files.length > NATIVE_FILE_DROP_MAX_PATHS) {
       ipcRenderer.send(
         'terminal:file-dropped-from-preload',
@@ -409,9 +390,7 @@ document.addEventListener(
       return
     }
 
-    // Why: when the explorer marker was present but no destination directory
-    // could be resolved, the gesture is rejected entirely — no fallback to
-    // editor, per the fail-closed requirement in design §7.1.
+    // Why: explorer marker present but no destination dir resolved → reject entirely, no editor fallback (fail-closed, design §7.1).
     if (resolution?.target === 'rejected') {
       return
     }
@@ -420,9 +399,7 @@ document.addEventListener(
     if (!payload) {
       return
     }
-    // Why: preload must emit exactly one native-drop event per drop gesture.
-    // The shared planner also rejects large path payloads without including
-    // path contents in the failure event.
+    // Why: emit exactly one native-drop event per gesture (the shared planner rejects oversized payloads without leaking path contents).
     ipcRenderer.send('terminal:file-dropped-from-preload', payload)
   },
   true
@@ -466,10 +443,7 @@ const api = {
       startupDiagnosticsEnabled
         ? ipcRenderer.invoke('app:startupDiagnostic', event, details)
         : Promise.resolve(),
-    // Why: on macOS this returns the active input mode, or the layout ID when
-    // no IME mode is selected, so renderer keyboard workarounds can distinguish
-    // CJK IMEs and compose layouts from plain US QWERTY (see issue #1205).
-    // Returns null on non-Darwin or when the defaults read fails.
+    // Why: macOS input mode (or layout ID) so keyboard workarounds can tell CJK/compose layouts from US QWERTY (issue #1205); null on non-Darwin or read failure.
     getKeyboardInputSourceId: (): Promise<string | null> =>
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
@@ -823,21 +797,12 @@ const api = {
       shellOverride?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
       terminalColorQueryReplies?: { foreground?: string; background?: string }
-      // Why: hidden-at-spawn declaration — main marks the PTY hidden before
-      // its first byte so the delivery gate + model responder own spawn-time
-      // queries (terminal-query-authority.md §races).
+      // Why: marks the PTY hidden before its first byte so the delivery gate + model responder own spawn-time queries (terminal-query-authority.md §races).
       initiallyHidden?: boolean
-      // Why: closes the SIGKILL race documented in INVESTIGATION.md by
-      // letting main patch + sync-flush the (worktreeId, tabId, leafId →
-      // ptyId) binding before pty:spawn returns. Only the renderer's
-      // user-typing-Ctrl+T daemon-host path threads these.
+      // Why: closes the SIGKILL race (INVESTIGATION.md) — main sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before pty:spawn returns.
       tabId?: string
       leafId?: string
-      // Why: telemetry-plan.md§Agent launch semantics — main fires
-      // `agent_started` only after the spawn succeeds. The renderer is the
-      // source of truth for the launch metadata; main is the source of
-      // truth for whether the launch happened. Loose typing here on
-      // purpose: validation lives at the main-side schema validator.
+      // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
@@ -866,11 +831,7 @@ const api = {
       ipcRenderer.send('pty:claimViewport', { id, cols, rows })
     },
 
-    /** Why: measurement-only sibling of resize. Fires when a desktop pane
-     * container measures real geometry (e.g. previously hidden tab becomes
-     * visible) so the runtime's restore-target baseline can stay fresh
-     * even while a mobile-fit override blocks pty:resize. Never resizes
-     * the PTY. See docs/mobile-fit-hold.md. */
+    /** Why: measurement-only sibling of resize — keeps the runtime's restore-target baseline fresh while a mobile-fit override blocks pty:resize. Never resizes the PTY. See docs/mobile-fit-hold.md. */
     reportGeometry: (id: string, cols: number, rows: number): void => {
       ipcRenderer.send('pty:reportGeometry', { id, cols, rows })
     },
@@ -879,9 +840,7 @@ const api = {
       ipcRenderer.send('pty:signal', { id, signal })
     },
 
-    /** Why: Cmd/Ctrl+K clears the renderer xterm, but the PTY host (ConPTY,
-     * daemon emulator, SSH host buffer) keeps its own screen state and would
-     * repaint the next prompt at the stale cursor row. */
+    /** Why: Cmd/Ctrl+K clears the renderer xterm, but the PTY host keeps its own screen state and would repaint the next prompt at the stale cursor row. */
     clearBuffer: (id: string): void => {
       ipcRenderer.send('pty:clearBuffer', { id })
     },
@@ -889,8 +848,7 @@ const api = {
     ackColdRestore: (id: string): void => {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
-    /** charCount is the legacy per-chunk delta; processedChars is the
-     *  cumulative per-pty total (self-healing under lost ACK messages). */
+    /** charCount is the legacy per-chunk delta; processedChars is the cumulative per-pty total (self-heals under lost ACKs). */
     ackData: (id: string, charCount: number, processedChars?: number): void => {
       ipcRenderer.send('pty:ackData', {
         id,
@@ -898,8 +856,7 @@ const api = {
         ...(typeof processedChars === 'number' ? { processedChars } : {})
       })
     },
-    /** Main asks for the renderer's cumulative processed totals when terminal
-     *  delivery looks stuck on lost ACKs. */
+    /** Main requests the renderer's cumulative processed totals when delivery looks stuck on lost ACKs. */
     onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: { requestId: number }) =>
         callback(payload)
@@ -912,15 +869,12 @@ const api = {
     }): void => {
       ipcRenderer.send('pty:deliveryResyncResponse', payload)
     },
-    /** Renderer-initiated delivery health/heal lane. Rides invoke because the
-     *  field wedge (v1.4.121-rc.0 snapshot) kills main→renderer push events
-     *  while invoke stays alive — push-initiated recovery can't reach it. */
+    /** Renderer-initiated delivery health/heal lane — rides invoke because the field wedge (v1.4.121-rc.0) kills main→renderer push while invoke stays alive. */
     reportRendererDeliveryState: (
       report: PtyRendererDeliveryStateReport
     ): Promise<PtyRendererDeliveryHealthReply> =>
       ipcRenderer.invoke('pty:reportRendererDeliveryState', report),
-    /** Sync count of live pty:data listeners on this preload's emitter — the
-     *  watchdog's "listener detached" vs "channel dead" discriminator. */
+    /** Live pty:data listener count — the watchdog's "listener detached" vs "channel dead" discriminator. */
     getPtyDataListenerCount: (): number => ipcRenderer.listenerCount('pty:data'),
     rendererDispatcherReady: (): void => {
       ipcRenderer.send('pty:rendererDispatcherReady')
@@ -931,21 +885,15 @@ const api = {
     setRendererPtyVisible: (id: string, visible: boolean): void => {
       ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
     },
-    /** Hidden-delivery gate (Phase 4): hidden=true lets main DROP renderer
-     *  byte delivery after model ingestion; reveal restores from the model
-     *  snapshot. Fire-and-forget like setActiveRendererPty. */
+    /** Hidden-delivery gate: hidden=true lets main DROP renderer byte delivery after model ingestion; reveal restores from the model snapshot. Fire-and-forget. */
     setHiddenRendererPty: (id: string, hidden: boolean): void => {
       ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
     },
-    /** Delivery-interest signal: any renderer party that needs raw bytes
-     *  (dispatcher sidecars, eager pre-mount buffers) suppresses the
-     *  hidden-delivery gate for that PTY while registered. */
+    /** Delivery-interest signal: a renderer party needing raw bytes suppresses the hidden-delivery gate for that PTY while registered. */
     setPtyDeliveryInterest: (id: string, interested: boolean): void => {
       ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
     },
-    /** View-attribute bridge (Phase 5 slice 2): app-global composed terminal
-     *  appearance push that lets main's model responder answer OSC 4/10/11/12
-     *  and DSR ?996n for hidden-gated PTYs with renderer-true values. */
+    /** Push composed terminal appearance so main's model responder can answer OSC 4/10/11/12 and DSR ?996n for hidden-gated PTYs with renderer-true values. */
     publishTerminalViewAttributes: (attributes: TerminalViewAttributes): void => {
       ipcRenderer.send('pty:terminalViewAttributes', attributes)
     },
@@ -1008,8 +956,7 @@ const api = {
     resetRendererDeliveryDebug: (): Promise<void> =>
       ipcRenderer.invoke('pty:resetRendererDeliveryDebug'),
 
-    /** Check if a PTY's shell has child processes (e.g. a running command).
-     *  Returns false for an idle shell prompt. */
+    /** True if the PTY's shell has child processes (a running command); false at an idle prompt. */
     hasChildProcesses: (id: string): Promise<boolean> =>
       ipcRenderer.invoke('pty:hasChildProcesses', { id }),
 
@@ -1019,13 +966,10 @@ const api = {
     confirmForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
 
-    /** Resolve the live cwd of a PTY via `/proc` (Linux) or `lsof` (macOS).
-     *  Returns `''` when the id is unknown or the platform cannot resolve one. */
+    /** Resolve a PTY's live cwd via `/proc` (Linux) or `lsof` (macOS); `''` when unknown or unresolvable. */
     getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
 
-    /** The PTY's last APPLIED size (its real winsize), or null if unknown.
-     *  Lets the renderer detect drift after a resize was dropped main-side and
-     *  re-assert, instead of trusting the size it last fired blind. */
+    /** The PTY's last APPLIED size (real winsize), or null if unknown — lets the renderer detect drift after a dropped resize and re-assert. */
     getSize: (id: string): Promise<{ cols: number; rows: number } | null> =>
       ipcRenderer.invoke('pty:getSize', { id }),
 
@@ -1063,10 +1007,8 @@ const api = {
       return () => ipcRenderer.removeListener('pty:replay', listener)
     },
 
-    /** Out-of-band signal that main dropped renderer-bound bytes for a PTY
-     *  (hidden-delivery gate / pending cap) — the pane must restore from the
-     *  model snapshot. Deliberately NOT on pty:data: an in-band marker is
-     *  ambiguous with chunks fully stripped by OSC-9999 cleaning. */
+    /** Out-of-band signal that main dropped renderer-bound bytes (hidden-gate / pending cap); pane restores from the model snapshot.
+     *  NOT on pty:data — an in-band marker is ambiguous with chunks fully stripped by OSC-9999 cleaning. */
     onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, event: PtyModelRestoreNeededEvent) =>
         callback(event)
@@ -1074,9 +1016,8 @@ const api = {
       return () => ipcRenderer.removeListener('pty:modelRestoreNeeded', listener)
     },
 
-    /** Batched derived side-effect facts (title/bell/agent transitions) for
-     *  PTYs whose bytes transit local main. Per-PTY in-order; deliberately not
-     *  synchronized with pty:data (terminal-side-effect-authority.md). */
+    /** Batched side-effect facts (title/bell/agent transitions) for local-main PTYs.
+     *  Per-PTY in-order; deliberately NOT synced with pty:data (terminal-side-effect-authority.md). */
     onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, batch: TerminalSideEffectBatch) =>
         callback(batch)
@@ -1084,8 +1025,7 @@ const api = {
       return () => ipcRenderer.removeListener('pty:sideEffect', listener)
     },
 
-    /** Title-only replay snapshot applied on (re)attach — attention facts
-     *  (bells/completions) never replay. */
+    /** Title-only replay snapshot on (re)attach — attention facts (bells/completions) never replay. */
     getSideEffectSnapshot: (id: string): Promise<TerminalSideEffectBatch | null> =>
       ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
@@ -1135,11 +1075,8 @@ const api = {
       ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
     },
 
-    // Why: pre-signal handshake — renderer declares it will own the serializer
-    // for `paneKey` BEFORE issuing pty:spawn so the cooperation gate in main
-    // can suppress the daemon-snapshot seed. Returns a generation token that
-    // the renderer must echo on settle/clear so paneKey-reuse during teardown
-    // cannot defeat the pre-signal. See docs/mobile-prefer-renderer-scrollback.md.
+    // Why: renderer declares serializer ownership for `paneKey` BEFORE pty:spawn so main suppresses the daemon-snapshot seed.
+    // The returned gen token must be echoed on settle/clear so paneKey reuse during teardown can't defeat the pre-signal. See docs/mobile-prefer-renderer-scrollback.md.
     declarePendingPaneSerializer: (paneKey: string): Promise<number> =>
       ipcRenderer.invoke('pty:declarePendingPaneSerializer', { paneKey }),
 
@@ -1485,9 +1422,7 @@ const api = {
       sourceContext?: TaskSourceContext | null
     }): Promise<GitHubAssignableUser[]> => ipcRenderer.invoke('gh:listAssignableUsers', args),
 
-    // Why: the app renderer owns the work-item-details cache. Main targets this
-    // bridge for non-origin mutations; origin callers already updated their
-    // cache optimistically — see src/main/ipc/github.ts.
+    // Why: renderer owns the work-item cache; main fires this for non-origin mutations only (origin callers updated optimistically). See src/main/ipc/github.ts.
     onWorkItemMutated: (
       callback: (payload: {
         repoPath: string
@@ -1508,9 +1443,7 @@ const api = {
     starOrca: (source: AppStarSource): Promise<boolean> =>
       ipcRenderer.invoke('gh:starOrca', source),
 
-    // Why: rate_limit is exempt from rate-limit accounting, but we still pass
-    // `force` through so callers can bust the 30s in-process cache after a
-    // known-expensive op (e.g. after ProjectPicker discovery).
+    // Why: rate_limit is exempt from rate-limit accounting; `force` still busts the 30s in-process cache after an expensive op.
     rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
       ipcRenderer.invoke('gh:rateLimit', args),
 
@@ -1575,9 +1508,7 @@ const api = {
     create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('hostedReview:create', args)
   },
 
-  // Why: GitLab bindings live in `./gitlab` so adding or changing a
-  // `gl.*` channel doesn't surface as a merge conflict on every
-  // upstream sync of this central preload file.
+  // Why: GitLab bindings live in `./gitlab` so `gl.*` changes don't conflict on every upstream sync of this central file.
   gl: glApi,
 
   linear: {
@@ -1842,11 +1773,7 @@ const api = {
     onboardingCompleted: (): Promise<void> => ipcRenderer.invoke('star-nag:onboardingCompleted')
   },
 
-  // Why: telemetry uses a loose untyped surface at the preload boundary on
-  // purpose — the main-side validator (src/main/telemetry/validator.ts) is
-  // the single enforcement point, not the preload types. The renderer gets
-  // typed `track<N>()` / `setOptIn()` wrappers via
-  // src/renderer/src/lib/telemetry.ts, which is what call sites import.
+  // Why: deliberately loose — main's validator (src/main/telemetry/validator.ts) is the single enforcement point; call sites use the typed wrappers in src/renderer/src/lib/telemetry.ts.
   telemetryTrack: (name: string, props: Record<string, unknown>): Promise<void> =>
     ipcRenderer.invoke('telemetry:track', name, props),
   telemetrySetOptIn: (optedIn: boolean): Promise<void> =>
@@ -1856,10 +1783,7 @@ const api = {
   telemetryGetConsentState: (): Promise<TelemetryConsentState> =>
     ipcRenderer.invoke('telemetry:getConsentState'),
 
-  // Why: diagnostics is the renderer-facing surface for the error-tracking
-  // lane (telemetry-error-tracking.md §User controls). Handlers type-narrow
-  // their inputs in main (renderer is untrusted by design); the bridges here
-  // are deliberately loose for the same reason the telemetry bridges are.
+  // Why: bridges are deliberately loose — main type-narrows this untrusted renderer input (see telemetry-error-tracking.md).
   diagnostics: {
     getStatus: (): Promise<unknown> => ipcRenderer.invoke('diagnostics:getStatus'),
     collectBundle: (lookbackMinutes?: number): Promise<unknown> =>
@@ -1877,8 +1801,7 @@ const api = {
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
 
-    // Why: blocking read for the few startup decisions (terminal side-effect
-    // authority) that cannot wait for async hydration. Call sparingly.
+    // Why: blocking read for the few startup decisions (terminal side-effect authority) that can't wait for async hydration. Call sparingly.
     getSync: (): unknown => ipcRenderer.sendSync('settings:get-sync'),
 
     set: (args: Record<string, unknown>): Promise<unknown> =>
@@ -2066,8 +1989,7 @@ const api = {
       volume?: number
     }): Promise<NotificationSoundResult> => {
       try {
-        // Why: drop replays while the sound is still ringing. The "test"
-        // button bypasses with force so the user always hears a confirmation.
+        // Why: drop replays while still ringing; the test button passes force to always confirm.
         if (!options?.force && isNotificationSoundPlaying) {
           return { played: false, reason: 'deduped' }
         }
@@ -2101,9 +2023,7 @@ const api = {
         }
 
         const audio = entry.audio
-        // Why: restart-from-zero on every play so a burst of triggers replays
-        // the sound from the start instead of stacking overlapping copies.
-        // Matches GNOME canberra and VS Code AccessibilitySignalService.
+        // Why: restart from zero on each play so bursts replay instead of stacking copies (GNOME canberra / VS Code signal service).
         audio.currentTime = 0
         if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
           audio.volume = Math.min(1, Math.max(0, options.volume / 100))
@@ -2702,8 +2622,7 @@ const api = {
   } satisfies PreloadApi['cache'],
 
   session: {
-    // hostId is optional and defaults to 'local' on the main side, so existing
-    // call sites that omit it keep targeting the local session partition.
+    // hostId is optional; main defaults it to 'local' so existing omitting call sites keep the local session partition.
     get: (hostId) => ipcRenderer.invoke('session:get', hostId),
     set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),
     patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
@@ -3759,10 +3678,7 @@ const api = {
     setZoomLevel: (level: number): void => webFrame.setZoomLevel(level),
     syncTrafficLights: (zoomFactor: number): void =>
       ipcRenderer.send('ui:sync-traffic-lights', zoomFactor),
-    // Why: one-way send (not invoke) so the main-process before-input-event
-    // handler can read the mirrored flag synchronously without a round-trip.
-    // The carve-out in createMainWindow.ts uses this to skip Cmd+B interception
-    // while the markdown editor owns focus, letting TipTap apply bold instead.
+    // Why: one-way send so main's before-input-event can synchronously skip Cmd+B while the markdown editor is focused (TipTap bold).
     setMarkdownEditorFocused: (focused: boolean): void => {
       ipcRenderer.send('ui:setMarkdownEditorFocused', focused)
     },
@@ -3791,9 +3707,7 @@ const api = {
       ipcRenderer.on('window:fullscreen-changed', listener)
       return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
     },
-    /** Fired when the OS resumes from sleep (main relays powerMonitor). A
-     *  focus-preserving display wake fires no renderer focus/visibility
-     *  events, so terminal wake recovery listens to this explicit signal. */
+    /** Fired when the OS resumes from sleep — a focus-preserving wake fires no renderer focus/visibility events. */
     onSystemResumed: (callback: () => void): (() => void) => {
       const listener = () => callback()
       ipcRenderer.on('system:resumed', listener)
@@ -3807,36 +3721,26 @@ const api = {
     maximize: (): void => {
       ipcRenderer.send('window:maximize')
     },
-    /** Desktop custom titlebar only: read the current maximize state on mount, since
-     *  window:maximize-changed only fires on transitions and a window that
-     *  starts maximized would otherwise show the wrong icon. */
+    /** Desktop custom titlebar only: read initial maximize state on mount — maximize-changed only fires on transitions. */
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
-    /** Desktop custom titlebar only: subscribe to maximize state changes so the renderer-drawn
-     *  maximize button can show the correct restore/maximize icon. */
+    /** Desktop custom titlebar only: subscribe to maximize-state changes so the maximize button shows the right icon. */
     onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>
         callback(isMaximized)
       ipcRenderer.on('window:maximize-changed', listener)
       return () => ipcRenderer.removeListener('window:maximize-changed', listener)
     },
-    /** Desktop custom titlebar only: request a close from the renderer-drawn close button.
-     *  Routes through main so the BrowserWindow 'close' event fires and the
-     *  terminal-running confirmation guard in the renderer stays active.
-     *  window.close() is unreliable in sandboxed renderers. */
+    /** Desktop custom titlebar only: request close via main so the BrowserWindow 'close' event
+     *  (and its terminal-running guard) still fires — window.close() is unreliable in sandboxed renderers. */
     requestClose: (): void => {
       ipcRenderer.send('window:request-close')
     },
-    /** Desktop custom titlebar only: pop up the application menu at the cursor position.
-     *  Replicates the Alt-key reveal that autoHideMenuBar normally provides,
-     *  triggered by the ··· button in the renderer-drawn title bar. */
+    /** Desktop custom titlebar only: pop up the app menu at the cursor — Alt-reveal replacement for the ··· button. */
     popupMenu: (): void => {
       ipcRenderer.send('menu:popup')
     },
-    /** Fired by the main process when the user tries to close the window
-     *  (X button, Cmd+Q, etc.). Renderer should show a confirmation dialog
-     *  if terminals are still running, then call confirmWindowClose().
-     *  When isQuitting is true, the close was initiated by app.quit() (Cmd+Q)
-     *  and the renderer should skip the running-process dialog. */
+    /** Fired by main when the user tries to close the window; renderer confirms running
+     *  terminals then calls confirmWindowClose(). isQuitting (Cmd+Q / app.quit) skips that dialog. */
     onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { isQuitting: boolean }) =>
         callback(data ?? { isQuitting: false })
@@ -3936,9 +3840,7 @@ const api = {
       transcriptPath?: string
     ): Promise<NativeChatReadSessionResult> =>
       ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
-    /** Start live tailing for a transcript. `onAppended` fires with only the
-     *  newly-appended messages. Returns an unsubscribe fn that closes the
-     *  main-process watcher (subscriptionId routes appends to this caller). */
+    /** Start live tailing; onAppended fires with only newly-appended messages. Returns an unsubscribe fn that closes the watcher. */
     subscribe: (
       args: {
         subscriptionId: string
@@ -4385,9 +4287,7 @@ const api = {
       ipcRenderer.on('agentStatus:clear', listener)
       return () => ipcRenderer.removeListener('agentStatus:clear', listener)
     },
-    /** Pull the current cached hook statuses after renderer workspace-session
-     *  hydration. This avoids losing startup replays before the renderer
-     *  knows which tabs exist. */
+    /** Pull cached hook statuses after renderer hydration, so startup replays aren't lost before tabs exist. */
     getSnapshot: (): Promise<AgentStatusIpcPayload[]> =>
       ipcRenderer.invoke('agentStatus:getSnapshot'),
     inferInterrupt: (request: AgentInterruptInferenceRequest): Promise<boolean> =>
@@ -4410,15 +4310,11 @@ const api = {
     },
     getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
       ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
-    /** Drop the cached hook status for a paneKey on both sides — main-process
-     *  cache (lastStatusByPaneKey) and on-disk last-status file. Fired from
-     *  the renderer when the user dismisses a retained row so a relaunch
-     *  cannot resurrect it. Fire-and-forget; no response. */
+    /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
     },
-    /** Drop all cached hook statuses under one terminal tab prefix. Fired on
-     *  explicit tab close even when the renderer has no matching local row. */
+    /** Drop all cached hook statuses under one terminal tab prefix; fired on explicit tab close even without a local row. */
     dropByTabPrefix: (tabId: string): void => {
       ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
     },
@@ -4455,8 +4351,7 @@ const api = {
       sessionId: string
     ): Promise<void> => ipcRenderer.invoke('speech:startDictation', modelId, hotwords, sessionId),
     feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<void> =>
-      // Why: Float32Array data gets zeroed out when crossing the contextBridge
-      // + IPC boundary. Wrapping in a Buffer preserves the raw bytes reliably.
+      // Why: Float32Array is zeroed crossing the contextBridge/IPC boundary; wrap in a Buffer to preserve bytes.
       ipcRenderer.invoke(
         'speech:feedAudio',
         Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength),
@@ -4509,9 +4404,7 @@ const api = {
   }
 }
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
+// Expose Electron APIs via contextBridge when context-isolated, otherwise attach to the DOM global.
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)

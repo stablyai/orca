@@ -2641,93 +2641,55 @@ export type GlobalSettings = {
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
-  /** Why: Windows-only. When on, the close (X) button hides the window to the
-   *  system tray instead of quitting Orca; off keeps the default quit-on-close.
-   *  The tray icon itself is always present on Windows regardless of this flag. */
+  /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
-  /** Why: macOS keeps Orca running after its last window closes, so this
-   *  controls the additive menu-bar entry without changing Dock behavior. */
+  /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
   showMenuBarIcon?: boolean
-  /** Why: Windows terminals conventionally use right-click as a paste gesture,
-   *  while macOS/Linux default to their existing context menu behavior. */
+  /** Windows convention: right-click pastes; macOS/Linux keep the context menu. */
   terminalRightClickToPaste: boolean
-  /** One-shot guard that distinguishes the old global true default from a
-   *  choice made after the setting became available on every platform. */
+  /** One-shot guard distinguishing the old global true default from a per-platform choice. */
   terminalRightClickToPasteDefaultedForPlatform?: boolean
-  /** Why: COMSPEC always points to cmd.exe on stock Windows, so without an
-   *  explicit setting the terminal would always open CMD instead of the
-   *  user's preferred shell. Defaults to 'powershell.exe' which is the
-   *  modern choice for an IDE context. Only consulted on Windows. */
+  /** Windows-only: COMSPEC always points to cmd.exe, so this explicit shell (default 'powershell.exe') overrides it. */
   terminalWindowsShell: string
-  /** Why: when WSL is the Windows default shell, users with multiple distros
-   *  need Orca to launch terminals and scan agents in the same chosen distro
-   *  instead of whatever WSL currently marks as its global default. */
+  /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
-  /** Why: account/auth location is independent from the user's preferred
-   *  terminal shell. A user may default new terminals to WSL while still
-   *  inspecting or adding Windows-scoped provider accounts. */
+  /** Account/auth location independent from the terminal shell (e.g. WSL terminals but Windows-scoped accounts). */
   localAccountRuntime: 'host' | 'wsl'
   localAccountWslDistro?: string | null
-  /** Why: installed-agent detection is also a local environment choice. Keep
-   *  it independent so users can inspect Windows and WSL PATH state without
-   *  changing the default terminal shell. */
+  /** Independent from the terminal shell so users can inspect Windows vs WSL agent PATH state without changing it. */
   localAgentRuntime?: 'host' | 'wsl'
   localAgentWslDistro?: string | null
   /** Why: global is only the default policy; project-level runtime preference wins. */
   localWindowsRuntimeDefault: GlobalWindowsRuntimeDefault
-  /** Why: "PowerShell" is the product-facing shell family. Auto resolves to
-   *  PowerShell 7+ when present and falls back to inbox Windows PowerShell. */
+  /** 'auto' resolves to PowerShell 7+ when present, else falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
   terminalFocusFollowsMouse: boolean
-  /** Why: mirrors X11 / gnome-terminal "copy on select" UX — making a terminal
-   *  selection copies it to the system clipboard automatically, so users can
-   *  paste with Cmd/Ctrl+V without an intervening Cmd/Ctrl+Shift+C. Defaults
-   *  to false so existing users keep the explicit-copy behavior. */
+  /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
-  /** Why: lets TUIs like Grok, tmux, nvim, and fzf copy to the system clipboard
-   *  via the OSC 52 escape sequence — essential for SSH-hosted workflows where
-   *  the terminal is the only bridge to the local clipboard. Defaults to
-   *  false because OSC 52 is a classic data-exfiltration vector (any
-   *  process piping untrusted output into the terminal — `cat attacker.log`
-   *  — can silently rewrite the user's clipboard). Opt-in preserves the
-   *  conservative default while making the capability one toggle away. */
+  /** Enables OSC 52 clipboard writes for TUIs (SSH clipboard bridge); default off since OSC 52 is a clipboard-exfiltration vector. */
   terminalAllowOsc52Clipboard: boolean
-  /** Experimental Claude Code Agent Teams integration. Native panes use a
-   *  tmux-compatible shim so teammate output stays on Orca's normal PTY path. */
+  /** Experimental Claude Agent Teams; native panes use a tmux-compatible shim so teammate output stays on the normal PTY path. */
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
-  /** Where the repo setup script runs on workspace create. Defaults to a
-   *  background "Setup" tab so the user's main terminal stays immediately
-   *  usable without the setup output crowding the initial pane. */
+  /** Where the repo setup script runs on workspace create; defaults to a background "Setup" tab to keep the main terminal usable. */
   setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackRows: number
-  /** Optional app-level proxy for Electron networking and locally spawned PTYs.
-   *  Empty preserves system proxy settings plus inherited proxy env behavior. */
+  /** Optional app-level proxy for Electron networking and local PTYs; empty preserves system/inherited proxy env. */
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
-  /** Why: corporate TLS-intercepting proxies can break Electron HTTP/2 downloads;
-   *  this opt-in compatibility mode applies Chromium's process-wide HTTP/1.1 switch. */
+  /** Why: corporate TLS-intercepting proxies can break HTTP/2 downloads; opt-in Chromium process-wide HTTP/1.1 switch. */
   electronHttp1CompatibilityMode?: boolean
-  /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
-   *  The setting stays opt-in so existing workflows continue to use the system browser
-   *  until the user explicitly wants worktree-scoped in-app browsing. */
+  /** Opt-in in-app browsing (isolated guest surface); default keeps links opening in the system browser. */
   openLinksInApp: boolean
-  /** Why: worktree-scoped localhost hostnames make same-app tabs distinguishable
-   *  in external browsers. Opt-in (default off): serving the app under a different
-   *  host can break dev apps that bind cookies/sessions to localhost. */
+  /** Worktree-scoped localhost hostnames to distinguish tabs; opt-in since a non-localhost host can break apps binding cookies/sessions to localhost. */
   localhostWorktreeLabelsEnabled?: boolean
-  /** Why: terminal link routing asks once at first use instead of silently
-   *  changing where links open for new users. */
+  /** Tracks the one-time first-use prompt for terminal link routing (avoid silently changing where links open). */
   openLinksInAppPreferencePrompted: boolean
-  /** Opt-in: open newly launched coding-agent tabs directly in the native chat
-   *  view instead of the raw terminal. Off by default so existing workflows are
-   *  unchanged. Optional for legacy-settings compatibility; defaults applied. */
+  /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
-  /** Experimental: native chat surface for Claude/Codex terminal sessions.
-   *  Off by default while the desktop UX is still being exercised. */
+  /** Experimental native chat surface for Claude/Codex sessions; off by default. */
   experimentalNativeChat?: boolean
-  /** Last explicit native-chat model and model-scoped option selections. Live
-   * panes still require an applied/dispatched record before showing a value. */
+  /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
@@ -2738,177 +2700,109 @@ export type GlobalSettings = {
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */
   sourceControlGroupOrder: SourceControlGroupOrder
-  /** When enabled, the Source Control compare base defaults to the current
-   *  branch's upstream (prioritizing local changes) instead of the repo
-   *  default branch. Only affects the compare/diff view, not the PR/rebase
-   *  merge target. Per-user, not per-workspace. */
+  /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
-  /** Why: some users do not use the Tasks feature and prefer to keep the
-   *  left sidebar free of its button entirely. Hiding the button here also
-   *  removes it from keyboard navigation. */
+  /** Hides the Tasks sidebar button (also removes it from keyboard navigation). */
   showTasksButton: boolean
-  /** Why: Automations can be restored from Settings or the View menu, so this
-   *  only controls whether the top-level sidebar shortcut is shown. */
+  /** Only toggles the sidebar shortcut; Automations stay reachable from Settings/View menu. */
   showAutomationsButton?: boolean
-  /** Why: Orca Mobile remains reachable from Settings; this only controls
-   *  whether the top-level sidebar shortcut is shown. */
+  /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
-  /** Why: pinned workspaces default to one sidebar location; users can opt
-   *  back into seeing them in their natural groups too. */
+  /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
-  /** Controls how Ctrl+Tab chooses the next visible tab. Optional for
-   *  profiles saved before this setting existed; readers default to MRU. */
+  /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
-  /** Why: Orca-first preserves fast workspace/app control from agent TUIs.
-   *  Terminal-first is opt-in for users who want shell/TUI bindings to win. */
+  /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */
   terminalShortcutPolicy?: TerminalShortcutPolicy
-  /** Why: Floating Workspace is the default global surface so users can
-   *  reach terminal, browser, and markdown tabs outside repo/worktree context. */
+  /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
-  /** One-shot migration flag for the default-on rollout. Before this field
-   *  landed, the floating workspace defaulted off and many profiles persisted
-   *  that inherited false. Once migrated, an explicit off choice sticks. */
+  /** One-shot migration flag for the floating-workspace default-on rollout; after migration an explicit off sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
-  /** Where new Floating Workspace terminal tabs start. Empty or '~' means
-   *  the user's home directory; markdown notes use Orca's app-owned
-   *  floating workspace under Electron userData. */
+  /** Start dir for new floating-workspace terminal tabs; empty or '~' = home dir. */
   floatingTerminalCwd: string
-  /** Picker-approved Floating Workspace directories that may be reauthorized
-   *  across restarts. Renderer-provided text alone must not populate this. */
+  /** Picker-approved floating-workspace dirs reauthorized across restarts; renderer text alone must not populate this. */
   floatingTerminalTrustedCwds?: string[]
   /** One-shot migration marker for legacy floating workspace cwd trust grants. */
   floatingTerminalCwdMigratedToAppWorkspace?: boolean
-  /** Where the Floating Workspace toggle is shown. Defaults to the floating
-   *  button for discoverability. */
+  /** Where the Floating Workspace toggle is shown; defaults to the floating button for discoverability. */
   floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
-  /** Legacy pre-file-backed keyboard shortcut overrides. New writes go to
-   *  ~/.orca/keybindings.json; main migrates this once when present. */
+  /** Legacy keyboard-shortcut overrides; new writes go to ~/.orca/keybindings.json, migrated once when present. */
   keybindings?: KeybindingOverrides
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
-  /** Comment author logins the user manually marked as bots (stored lowercased).
-   *  Why: some review bots use regular user accounts that defeat both provider
-   *  metadata and login heuristics, so the Humans/Bots comment filter needs a
-   *  user-supplied escape hatch. */
+  /** Bot-marked comment-author logins (stored lowercased); escape hatch for review bots on regular accounts that defeat provider metadata/heuristics. */
   prBotAuthorOverrides: string[]
   notifications: NotificationSettings
-  /** When true, a countdown timer is shown after a Claude agent becomes idle,
-   *  indicating time remaining before the prompt cache expires. Disabled by default. */
+  /** Countdown after a Claude agent goes idle showing time left before the prompt cache expires. */
   promptCacheTimerEnabled: boolean
-  /** Prompt-cache TTL in milliseconds. Only two values are supported:
-   *  300 000 (5 min, the standard Anthropic API / Bedrock TTL) and
-   *  3 600 000 (1 hr, for extended-TTL plans). */
+  /** Prompt-cache TTL (ms); only 300000 (5 min standard) or 3600000 (1 hr, extended-TTL plans). */
   promptCacheTtlMs: number
-  /** Why: Codex rate-limit account routing is a durable app preference owned by
-   *  the main process, not transient UI state. Persisting the selected managed
-   *  auth here lets Orca prepare shared ~/.codex before the renderer hydrates,
-   *  while keeping this scope explicitly separate from Codex usage analytics
-   *  and external terminal sessions. */
+  /** Why: durable main-owned pref so Orca can prepare shared ~/.codex before the renderer hydrates. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
   activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
-  /** Why: Claude Code keeps conversations under one shared config root. Orca
-   *  persists only per-account auth material here so switching accounts does
-   *  not fork prior chat/session context the way CLAUDE_CONFIG_DIR swapping would. */
+  /** Why: persist only per-account auth (not a CLAUDE_CONFIG_DIR swap) so switching accounts doesn't fork Claude's shared chat/session context. */
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** When true, each worktree gets its own shell history file so ArrowUp
-   *  does not surface commands from other worktrees. Defaults to true.
-   *  Disable to revert to shared global shell history. */
+  /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
-  /** Kill switch for hidden terminal view parking — unmounting long-hidden
-   *  terminal panes while a pane-less watcher keeps PTY side effects alive.
-   *  Defaults to true; `false` disables parking entirely. */
+  /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean
-  /** Kill switch for main-process terminal side-effect authority: when true
-   *  (default), local-daemon/SSH PTY title/bell/agent facts are consumed from
-   *  the `pty:sideEffect` channel and renderer byte parsers stay unregistered
-   *  for those PTYs; `false` restores renderer byte parsing. */
+  /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
-  /** Kill switch for main's hidden-delivery gate (Phase 4): when true
-   *  (default) AND terminalMainSideEffectAuthority is on, main drops PTY byte
-   *  delivery to hidden renderer views after model ingestion; reveal restores
-   *  from the model snapshot. `false` restores hidden byte delivery. */
+  /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */
   terminalHiddenDeliveryGate?: boolean
-  /** Kill switch for the main model query responder (Phase 5): when true
-   *  (default) AND both Phase-4 gate switches are on, main answers terminal
-   *  queries (DA1/CPR/DECRPM, …) embedded in hidden-dropped chunks from the
-   *  runtime emulator. `false` silences the responder without changing drops. */
+  /** Kill switch for main's model query responder (Phase 5); active only when both Phase-4 gates are also on. */
   terminalModelQueryAuthority?: boolean
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
    *  - 'blank': blank terminal (no agent launched)
    *  - TuiAgent: a specific agent id */
   defaultTuiAgent: TuiAgent | 'blank' | null
-  /** Agents hidden from future picker and automatic launch choices. Detection
-   *  remains a raw PATH capability snapshot. */
+  /** Agents hidden from picker/auto-launch; detection stays a raw PATH snapshot. */
   disabledTuiAgents: TuiAgent[]
-  /** One-shot guard so the experimental Claude Agent Teams launch mode starts
-   *  hidden for existing profiles without overriding later user opt-ins. */
+  /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
-  /** Why: worktree deletion is destructive (git worktree remove + rm -rf of the
-   *  working directory), so Orca shows a confirmation dialog by default. Users
-   *  who delete frequently can opt into skipping the dialog via a "Don't ask
-   *  again" checkbox inside it or from the General settings pane. We keep this
-   *  defaulted to false so first-time behavior stays safe. */
+  /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
   skipDeleteWorktreeConfirm: boolean
-  /** Why: closing a terminal with child processes kills foreground work. Keep
-   *  this separate from other destructive confirmations so power users can speed
-   *  up terminal cleanup without weakening workspace or automation safeguards. */
+  /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
-  /** Why: deleting an automation also deletes its run history. Keep this
-   *  separate from worktree deletion so skipping one destructive confirmation
-   *  does not silently skip the other. */
+  /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */
   skipDeleteAutomationConfirm: boolean
-  /** Why: Codex rate-limit resets consume a scarce reset credit and immediately
-   *  affect the signed-in account, so keep the skip preference explicit and
-   *  separate from local destructive-action confirmations. */
+  /** Why: a Codex rate-limit reset spends a scarce credit on the live account; keep this skip separate from local confirmations. */
   skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
-  /** Why: persists the user's last-used task source so the Tasks page
-   *  reopens to the same provider instead of always defaulting to GitHub. */
+  /** Persisted last-used task source so Tasks reopens to the same provider instead of defaulting to GitHub. */
   defaultTaskSource: TaskProvider
-  /** Why: users may only work from one hosted task system. Persisting this
-   *  list hides unused providers from Tasks chrome and sidebar shortcuts while
-   *  leaving the chosen default source stable when it is still visible. */
+  /** Persisted visible task providers; hides unused providers from Tasks chrome and sidebar shortcuts. */
   visibleTaskProviders: TaskProvider[]
-  /** Why: one-shot migration guard so Jira becomes visible for existing
-   *  profiles once, without re-adding it after a later deliberate opt-out. */
+  /** Why: one-shot guard to make Jira visible for existing profiles once, without re-adding after a later opt-out. */
   visibleTaskProvidersDefaultedForJira: boolean
-  /** Why: persists the user's repo selection in the cross-repo tasks view.
-   *  `null` means sticky-all — every eligible repo is selected, including
-   *  repos added in future sessions, so the "All repos" label stays
-   *  truthful. An explicit array freezes the curated subset; ids no longer
-   *  eligible are silently dropped on load. An empty array after that drop
-   *  is treated as `null`. */
+  /** Persisted repo selection (cross-repo tasks view). null = sticky-all (includes future-added repos);
+   *  string[] = frozen curated subset (ineligible ids dropped on load; empty after drop is treated as null). */
   defaultRepoSelection: string[] | null
-  /** Why: persists the user's Linear team selection in the tasks view.
-   *  Same nullable-array pattern as `defaultRepoSelection`: `null` = sticky-all,
-   *  `string[]` = frozen subset of team IDs. */
+  /** Persisted Linear team selection (tasks view). Same nullable-array pattern as
+   *  defaultRepoSelection: null = sticky-all, string[] = frozen subset of team IDs. */
   defaultLinearTeamSelection: string[] | null
   /** Session cookie for OpenCode Go rate-limit fetching. Stored encrypted. */
   opencodeSessionCookie: string
-  /** Optional workspace ID override for OpenCode Go. When set, skips the
-   *  workspaces lookup and fetches usage directly for this workspace. */
+  /** Optional OpenCode Go workspace ID override; when set, skips the workspaces lookup and fetches usage directly. */
   opencodeWorkspaceId: string
   /** Optional MiniMax group id. When empty, the usage fetcher extracts minimax_group_id_v2 from the cookie. */
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */
   minimaxUsageModels: string
-  /** Whether to extract OAuth credentials from the local Gemini CLI installation
-   *  for rate-limit fetching. Disabled by default for explicit opt-in. */
+  /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
-  /** Why: Orca bridges Codex session history from the user's real Codex home into
-   *  its managed home so /resume finds it, but defaults to ~/.codex. Users who run
-   *  Codex with a custom CODEX_HOME can point history discovery at that folder here.
-   *  History-only: this does not change which account/config/hooks Orca uses. */
+  /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
+   *  History-only: does not change which account/config/hooks Orca uses. */
   codexSessionSourceHome?: {
     /** Absolute host path; empty/undefined falls back to ~/.codex. */
     host?: string
@@ -2921,82 +2815,50 @@ export type GlobalSettings = {
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
-  /** Why: disabling must persist so startup does not reinstall global agent
-   *  hook entries right after the user removes them from Settings or CLI. */
+  /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
   agentStatusHooksEnabled: boolean
-  /** Dismissed freshness tuples grant no write authority; they only keep the
-   *  same exact official placement/revision from nudging more than once. */
+  /** Dismissed freshness tuples: no write authority, just suppress re-nudging the same official placement/revision. */
   dismissedSkillFreshnessNudges?: string[]
-  /** Why: generated tab titles are semantic but subjective, so they stay opt-in
-   *  and manual renames remain the stronger user intent. */
+  /** Why: generated tab titles are subjective, so they stay opt-in and manual renames win. */
   tabAutoGenerateTitle: boolean
-  /** Why: pinned tabs can still be closed via the keyboard/native-menu close
-   *  path, so this gates that close behind a confirmation prompt to prevent
-   *  accidental loss. Defaults on. */
+  /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
-  /** Why: macOS terminals must choose between letting Option compose layout
-   *  characters (@ on German, € on French) or treating Option as Meta/Esc for
-   *  readline shortcuts. Mirrors Ghostty's macos-option-as-alt setting — and
-   *  like Ghostty, defaults to 'auto', which fingerprints the active keyboard
-   *  layout via navigator.keyboard.getLayoutMap() at runtime and picks
-   *  'true' for US / US-International and 'false' for everything else.
-   *  'auto'  = layout-aware (default). See docs/terminal-option-key-layout-aware-default.md.
-   *  'false' = compose (for non-US keyboards);
-   *  'true'  = full Meta on both Option keys;
-   *  'left' / 'right' = only that Option key acts as Meta, the other composes. */
+  /** macOS Option key: compose layout chars (@ German, € French) vs act as Meta/Esc for readline.
+   *  'auto' (default) = layout-aware via navigator.keyboard.getLayoutMap() (US → Meta, else compose);
+   *  'false' = compose; 'true' = Meta on both Option keys; 'left'/'right' = only that key is Meta.
+   *  See docs/terminal-option-key-layout-aware-default.md. */
   terminalMacOptionAsAlt: 'auto' | 'true' | 'false' | 'left' | 'right'
-  /** One-shot migration guard for the 'auto' rollout. Before this field landed,
-   *  the field defaulted to 'true' for everyone, meaning a persisted 'true'
-   *  could either be an explicit user choice or just the old default. On first
-   *  launch after upgrade, if this flag is false and the persisted value is
-   *  'true', we reset to 'auto' so non-US users stop getting their keyboard
-   *  broken by the stale global default. US users land on 'true' anyway via
-   *  detection, so no visible behavior change. Then we flip this flag to true
-   *  and never migrate again. */
+  /** One-shot migration guard for the 'auto' rollout. Old default 'true' was ambiguous (explicit vs default);
+   *  on first upgrade launch, reset a persisted 'true' to 'auto' so non-US keyboards aren't broken by the stale default. */
   terminalMacOptionAsAltMigrated: boolean
-  /** Controls whether macOS terminal input translates the physical JIS Yen (¥)
-   *  key to a backslash, matching the common terminal expectation for that key. */
+  /** Whether macOS terminal input maps the physical JIS Yen (¥) key to backslash, per common terminal expectation. */
   terminalJISYenToBackslash: boolean
   experimentalMobile: boolean
-  /** Why: the iOS Simulator feature is default-on for capable macOS hosts, but
-   *  users need a durable off switch that hides UI affordances and blocks CLI attach. */
+  /** Why: iOS Simulator is default-on for capable macOS hosts; this is the durable off switch (hides UI, blocks CLI attach). */
   mobileEmulatorEnabled?: boolean
   /** Preferred iOS Simulator UDID for UI auto-attach and agent CLI attach. */
   mobileEmulatorDefaultDeviceUdid?: string | null
-  /** Explicit Android SDK root, used when auto-discovery (ANDROID_HOME / the
-   *  default install path) does not find it. `null` (default) auto-discovers. */
+  /** Explicit Android SDK root for when auto-discovery (ANDROID_HOME / default path) fails; null (default) auto-discovers. */
   androidSdkPath?: string | null
-  /** Auto-restore window for a phone-fit PTY after the last mobile
-   *  subscriber leaves. `null` (default) holds the PTY at phone size
-   *  indefinitely; the desktop "Restore" banner remains the explicit
-   *  return-to-desktop-size action. A finite millisecond value schedules
-   *  an automatic restore that long after the last unsubscribe. Clamped
-   *  on read into [5_000ms, 60min] to defend against bad config.
-   *  See docs/mobile-fit-hold.md. */
+  /** Auto-restore window (ms) for a phone-fit PTY after the last mobile subscriber leaves.
+   *  `null` (default) holds phone size indefinitely; a finite value schedules restore.
+   *  Clamped on read to [5_000ms, 60min]. See docs/mobile-fit-hold.md. */
   mobileAutoRestoreFitMs: number | null
-  /** Preferred mobile pairing path for new QR codes: Anywhere (Orca Relay +
-   *  local) or same-network only. Missing/undefined defaults to Anywhere.
-   *  An explicit `local-only` means the user already chose that path. */
+  /** Preferred mobile pairing path for new QR codes. Missing/'automatic' = Anywhere (Relay + local);
+   *  explicit 'local-only' = same-network only. */
   mobilePairingConnectionMode?: 'automatic' | 'local-only'
-  /** Experimental: floating animated pet (claude.webp) in the bottom-right
-   *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
-   *  off never mount the overlay. Toggling takes effect immediately in the
-   *  current session (no relaunch) because it is purely renderer-side. */
+  /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
+   *  off never mounts the overlay, and toggling takes effect instantly (renderer-side). */
   experimentalPet: boolean
-  /** Legacy persisted key from before the sidekick -> pet rename. Read only
-   *  during migration; new writes use experimentalPet. */
+  /** Legacy persisted key from before the sidekick -> pet rename; read only during migration, new writes use experimentalPet. */
   experimentalSidekick?: boolean
-  /** Experimental: left-sidebar Agents view with a threaded feed for agent
-   *  completions, blocking states, unread state, and worktree creation events. */
+  /** Experimental: left-sidebar Agents view — threaded feed of agent completions, blocking/unread state, worktree creation. */
   experimentalActivity: boolean
-  /** One-shot migration guard for defaulting the Agents view off for all
-   *  users. Once set, later explicit opt-ins persist normally. */
+  /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
-  /** Experimental: persistent terminal pane attention ring for terminal bell
-   *  and agent-completion events. Opt-in while the signal/noise balance is
-   *  being tested. */
+  /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */
   experimentalTerminalAttention: boolean
   /** Experimental: automatically sleep completed, resumable background agent terminals. */
   experimentalAgentHibernation?: boolean
@@ -3006,68 +2868,35 @@ export type GlobalSettings = {
   experimentalNewWorktreeCardStyle?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
-  /** Compact worktree cards by hiding a redundant metadata row when the title
-   *  and branch already say the same thing. */
+  /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */
   compactWorktreeCards: boolean
-  /** Legacy persisted key from the Experimental rollout. New writes use
-   *  compactWorktreeCards. */
+  /** Legacy persisted key from the Experimental rollout; new writes use compactWorktreeCards. */
   experimentalCompactWorktreeCards?: boolean
-  /** Active non-local runtime environment for client-routed RPC. `null`
-   *  preserves the current local desktop behavior. */
+  /** Active non-local runtime environment for client-routed RPC; null keeps local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null
-  /** GitHub Project mode state — pinned/recent/active project, last selected
-   *  view per project. Optional because profiles created before this feature
-   *  landed won't have the key; `getDefaultSettings()` hydrates the empty
-   *  default via the persistence merge. */
+  /** GitHub Project mode state (pinned/recent/active project, last view per project).
+   *  Optional for pre-feature profiles; the persistence merge hydrates the default. */
   githubProjects?: GitHubProjectSettings
-  /** AI-generated commit messages: agent + model + per-model thinking +
-   *  user-customizable prompt suffix. Optional so existing profiles do not
-   *  require a migration step before this feature lands. */
+  /** AI commit-message config (agent, model, per-model thinking, prompt suffix). Optional to avoid migrating existing profiles. */
   commitMessageAi?: CommitMessageAiSettings
   /** Source-control AI generation settings for commit messages and hosted-review drafts. */
   sourceControlAi?: SourceControlAiSettings
-  /** GitLab project preferences — pinned + recent project paths.
-   *  Optional for backward compatibility with profiles saved before
-   *  GitLab support; the persistence merge fills the empty default. */
+  /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
-  /** Anonymous product-telemetry state. Optional because the one-shot
-   *  migration in `Store.load()` is what populates it on first boot of the
-   *  telemetry release; before migration runs, the field is absent. After
-   *  migration every user has `installId` set and `optedIn` is `true` (new
-   *  users) or `null` (existing users awaiting the first-launch banner).
-   *
-   *  Why this block carries only consent + identity state, not volatile
-   *  counters: DAU and crash attribution are both out of v1 scope
-   *  (daily_active_user is derived server-side from app_opened; crashes are
-   *  handled by a separate crash-reporting lane, not product telemetry). So
-   *  there is no lastActiveDate, no lastSessionId, and no heartbeat
-   *  timestamp here — adding any of those would amplify the debounced
-   *  settings write on a fast cadence and couple user preferences to
-   *  volatile telemetry counters. Keep this surface to values that only
-   *  change on explicit consent transitions. */
+  /** Anonymous product-telemetry state; optional until the one-shot Store.load() migration populates it.
+   *  Holds only consent + identity, not volatile counters — those would amplify the debounced settings write. */
   telemetry?: {
-    /** New users: initialized to `true` at install.
-     *  Existing users: `null` until they resolve the first-launch banner. */
+    /** New users: true at install. Existing users: null until they resolve the first-launch banner. */
     optedIn: boolean | null
     /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
     installId: string
-    /** Cohort marker set once during migration. True for users with a
-     *  pre-existing profile (gates the existing-user opt-in banner);
-     *  false for fresh installs (no first-launch surface). */
+    /** Cohort marker: true for pre-existing profiles (gates the opt-in banner), false for fresh installs. */
     existedBeforeTelemetryRelease: boolean
   }
-  /** One-shot cohort marker for the tab-switch keybinding convention swap.
-   *  Absent before the migration runs. Set once on first boot after the swap:
-   *  `'pending'` for pre-existing installs (a seed then pins the old chords in
-   *  keybindings.json before flipping this to `'done'`), or `'done'` for fresh
-   *  installs, which adopt the new registry defaults with no seed. */
+  /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
+   *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */
   tabSwitchKeybindingSeed?: 'pending' | 'done'
-  /** Local voice/dictation configuration (Phase 1 voice feature). Optional
-   *  because profiles created before voice landed won't have the key;
-   *  `getDefaultSettings()` hydrates `getDefaultVoiceSettings()` via the
-   *  `{ ...defaults, ...parsed }` merge in persistence.ts. Treat as
-   *  effectively present at runtime — the renderer should still fall back to
-   *  defaults when reading optional sub-fields. */
+  /** Local voice/dictation config. Optional for pre-voice profiles; getDefaultSettings() hydrates defaults via the persistence merge. */
   voice?: VoiceSettings
 }
 
@@ -3101,9 +2930,7 @@ export type CommitMessageAiSettings = {
   selectedThinkingByModel: Record<string, string>
   /** Optional user-provided suffix appended to the base prompt (style overrides, etc.). */
   customPrompt: string
-  /** Command template used when `agentId === 'custom'`. Tokenized POSIX-style;
-   *  `{prompt}` is substituted with the diff prompt (argv delivery). When the
-   *  template has no `{prompt}`, the prompt is piped via stdin. */
+  /** Command template for agentId === 'custom'; {prompt} substitutes the diff prompt via argv, else the prompt is piped via stdin. */
   customAgentCommand: string
 }
 
@@ -3116,12 +2943,7 @@ export type GhosttyImportPreview = {
   error?: string
 }
 
-// Subset of the renderer's onboarding-step Ghostty `DiscoveryState['status']`
-// values that ever ship a telemetry event. The UI-only states (`'idle'`,
-// `'detecting'`) never fire `onboarding_ghostty_discovered`. Lives in
-// `shared/` because the schema in `telemetry-events.ts` (node-tsconfig) and
-// `ThemeStep.tsx` (web-tsconfig) both need it for the compile-time
-// schema-vs-renderer enum sync guard.
+// Subset of onboarding Ghostty DiscoveryState statuses that emit telemetry; UI-only 'idle'/'detecting' don't.
 export type DiscoveryStatusEmitted = 'found' | 'absent' | 'imported'
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -3150,9 +2972,7 @@ export type NotificationDispatchRequest = {
 
 export type NotificationDispatchResult = {
   delivered: boolean
-  /** Present when delivered is false. Tells the caller why delivery was skipped.
-   *  'blocked-by-system' means the OS-level permission readout says macOS
-   *  would silently swallow the notification (denied or prompt unanswered). */
+  /** Why delivery was skipped (set when delivered is false); 'blocked-by-system' = macOS would silently swallow it. */
   reason?:
     | 'disabled'
     | 'source-disabled'
@@ -3209,20 +3029,16 @@ export type OnboardingChecklistState = {
   addedFolder: boolean
   openedFile: boolean
   ranAgentOnFile: boolean
-  // Why: UI state flag (panel visibility), not an activation event. The
-  // telemetry checklist enum in telemetry-events.ts intentionally omits this.
+  // Why: UI state flag (panel visibility), not an activation event; telemetry checklist enum omits it.
   dismissed: boolean
 }
 
 export type OnboardingState = {
-  // Why: numeric step meanings can change when pages are removed; persisted
-  // state needs a version marker so migration does not re-run on new progress.
+  // Why: step meanings change when pages are removed; version marker prevents migration re-running on new progress.
   flowVersion: number
   closedAt: number | null
   outcome: OnboardingOutcome | null
-  // Sentinel `-1` = not started; `1..5` = highest wizard step the user
-  // finished. Kept as `number` (not a literal union) because callers clamp
-  // via `Math.max`/`Math.min` against arbitrary numerics.
+  // Sentinel -1 = not started; 1..5 = highest finished wizard step. number (not union) because callers clamp via Math.max/min.
   lastCompletedStep: number
   checklist: OnboardingChecklistState
 }
@@ -3233,15 +3049,11 @@ export type NotificationPermissionStatusResult = {
   requested: boolean
 }
 
-/** Outcome of a macOS notification permission check. Preferred source is the
- *  bundled native helper reading UNUserNotificationCenter authorization
- *  (authoritative); when unavailable, a silent delivery probe supplies weaker
- *  scheduling-based evidence. 'awaiting-decision' means the macOS permission
- *  dialog has not been answered yet. */
+/** macOS notification permission outcome: authoritative native UNUserNotificationCenter readout, else a weaker
+ *  delivery-probe fallback; 'awaiting-decision' = permission dialog unanswered. */
 export type NotificationDeliveryProbeResult = {
   state: 'delivered' | 'blocked' | 'awaiting-decision' | 'unsupported'
-  /** True when the state comes from the native authorization readout. Silent
-   *  to poll; probe-based fallbacks flash a banner when delivery works. */
+  /** True when the state comes from the native authorization readout (vs. the delivery-probe fallback). */
   authoritative: boolean
 }
 
@@ -3250,21 +3062,16 @@ export type WorktreeCardProperty =
   | 'unread'
   // Legacy persisted preference. CI status is now represented by linked PR metadata.
   | 'ci'
-  // Internal migration-only property for legacy detailed cards that showed
-  // branch identity as a visible row.
+  // Migration-only: legacy detailed cards showed branch identity as a visible row.
   | 'branch'
-  // Task metadata shown on workspace cards. Kept as provider-specific
-  // persisted values so older profiles and provider-specific fetch paths work.
+  // Task metadata on workspace cards; provider-specific persisted values kept for older profiles.
   | 'issue'
   | 'linear-issue'
   | 'pr'
   | 'automation'
   | 'comment'
   | 'ports'
-  // Why: inline list of agent activity rendered directly inside each
-  // workspace card when the experimental agent-activity feature is on. On by
-  // default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts) —
-  // live agent activity is the primary reason users opt into the feature.
+  // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
   | 'inline-agents'
 
 export type WorktreeCardMode = 'Default' | 'Compact'
@@ -3338,10 +3145,7 @@ export type TopLevelView =
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
-  /** Active top-level view at save time, restored on reload/relaunch so the app
-   *  reopens where the user left off instead of snapping back to the terminal.
-   *  Sanitized on hydration (unknown value or a now-gated view falls back to
-   *  'terminal'). */
+  /** Active top-level view at save time, restored on relaunch; sanitized to 'terminal' if unknown or now-gated. */
   activeView: TopLevelView
   sidebarWidth: number
   rightSidebarOpen: boolean
@@ -3351,36 +3155,25 @@ export type PersistedUIState = {
   markdownTocPanelWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
-  /** Project header ordering in `groupBy: 'repo'`, independent of workspace
-   *  `sortBy`. 'manual' (default) uses the persisted repo order and enables
-   *  header drag; 'recent' orders by each project's most recent visible
-   *  workspace activity. */
+  /** Project header ordering in `groupBy: 'repo'`, independent of `sortBy`: 'manual' uses persisted order + header drag, 'recent' by latest visible activity. */
   projectOrderBy: ProjectOrderBy
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
   hideSleepingWorkspaces?: boolean
-  /** Which execution hosts the workspace sidebar shows. `all` keeps the mixed
-   *  command-center view; specific host IDs focus the sidebar without tearing
-   *  down sessions owned by other hosts. */
+  /** Which execution hosts the sidebar shows; `all` = mixed view, specific IDs focus without tearing down other hosts' sessions. */
   workspaceHostScope?: WorkspaceHostScope
-  /** Which execution hosts the workspace sidebar shows. `null` means sticky
-   *  all-hosts so newly-added hosts appear automatically. */
+  /** Which execution hosts the sidebar shows; `null` = sticky all-hosts so new hosts appear automatically. */
   visibleWorkspaceHostIds?: VisibleWorkspaceHostIds
-  /** User-defined sidebar order for host sections. Missing/new hosts append in
-   *  the discovered host order. */
+  /** User-defined sidebar order for host sections; missing/new hosts append in discovered order. */
   workspaceHostOrder?: WorkspaceHostOrder
-  /** Desktop-owned all-host repo order. Host-qualified identities preserve a
-   *  manual cross-host interleaving while each host owns its local permutation. */
+  /** Desktop-owned all-host repo order; host-qualified identities keep a manual cross-host interleaving while each host owns its local permutation. */
   manualRepoOrder?: ManualRepoOrderEntry[]
   /** Deprecated legacy positive-form setting. Ignored on hydration. */
   showSleepingWorkspaces?: boolean
   /** Deprecated legacy name used by a short-lived build. Ignored on hydration. */
   showInactiveWorkspaces?: boolean
-  /** Hide the repo's original checked-out branch from workspace navigation
-   *  (sidebar and Cmd+J jump palette). Folder-mode repos are unaffected —
-   *  the predicate in visible-worktrees.ts excludes worktrees with an empty
-   *  branch. */
+  /** Hide the repo's checked-out branch from workspace nav (sidebar, Cmd+J); folder-mode repos are unaffected (empty-branch worktrees excluded). */
   hideDefaultBranchWorkspace: boolean
   /** Hide workspaces created by automation new-per-run dispatches. */
   hideAutomationGeneratedWorkspaces?: boolean
@@ -3391,26 +3184,20 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
-  /** One-shot migration flag for deriving card properties from the two
-   *  user-facing worktree card modes. */
+  /** One-shot migration flag for deriving card properties from the two worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number
   syncTaskStatusFromWorkspaceBoard?: boolean
-  /** One-shot migration flag for a short-lived build that persisted the
-   *  default workspace statuses in reverse workflow order. Once stamped,
-   *  user-authored status ordering is never inferred from IDs/labels again. */
+  /** One-shot migration flag for a short-lived build that persisted default statuses in reverse order; once stamped, ordering is never re-inferred from IDs/labels. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
-  /** One-shot repair flag for the exact default payload that a short-lived
-   *  build persisted in reverse workflow order. */
+  /** One-shot repair flag for the exact default payload a short-lived build persisted in reverse workflow order. */
   _workspaceStatusesReorderedDefaultRepaired?: boolean
-  /** One-shot migration flag for default status workflow labels/visuals.
-   *  Exact legacy default payloads migrate; customized statuses are preserved. */
+  /** One-shot migration flag for default status workflow labels/visuals; only exact legacy defaults migrate, customized statuses preserved. */
   _workspaceStatusesDefaultWorkflowMigrated?: boolean
-  /** One-shot migration flag for the old default blue/violet/emerald status
-   *  visuals. Once stamped, valid user-authored colors/icons are preserved. */
+  /** One-shot migration flag for the old default status visuals; once stamped, user-authored colors/icons are preserved. */
   _workspaceStatusesDefaultVisualsMigrated?: boolean
   /** One-shot migration flag for adding the default-on Ports status item. */
   _portsStatusBarDefaultAdded?: boolean
@@ -3430,157 +3217,88 @@ export type PersistedUIState = {
   lastUpdateCheckAt: number | null
   pendingUpdateNudgeId?: string | null
   dismissedUpdateNudgeId?: string | null
-  /** Whether Orca has already attempted to trigger the macOS notification
-   *  permission dialog via a startup notification. Prevents re-firing on
-   *  every launch. */
+  /** Whether Orca already tried triggering the macOS notification permission dialog; prevents re-firing every launch. */
   notificationPermissionRequested?: boolean
-  /** Once the user has seen the "your sessions won't be interrupted"
-   *  reassurance card, we never show it again. */
+  /** Once the "your sessions won't be interrupted" reassurance card is seen, never show it again. */
   updateReassuranceSeen?: boolean
-  /** Per-paneKey "user has visited this row" timestamps, used by the inline
-   *  agents list to mute rows the user has already seen. Persisted because
-   *  agent rows themselves now survive restart; without persisting acks too,
-   *  rows you'd already clicked come back bold on relaunch. Stale entries
-   *  keyed on dead panes are inert: a future paneKey reuse stamps a fresh
-   *  stateStartedAt that beats the old ack via the existing comparison in
-   *  WorktreeCardAgents. Renderer-owned, written through ui:set. */
+  /** Per-paneKey "row visited" timestamps that mute seen inline-agent rows; persisted because rows survive restart, else acked rows return bold. Renderer-owned via ui:set. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
-  /** User-hidden sidebar entry for the setup guide. The Help menu remains
-   *  available so this is a reversible declutter preference, not completion. */
+  /** User-hidden setup-guide sidebar entry; a reversible declutter pref (Help menu stays available), not completion. */
   setupGuideSidebarDismissed?: boolean
-  /** One-shot migration marker for the browser setup-guide milestone. Existing
-   *  profiles missing this marker are evaluated once in the renderer because
-   *  full checklist completion depends on runtime probes. */
+  /** One-shot marker for the browser setup-guide milestone; profiles missing it are evaluated once in the renderer (completion needs runtime probes). */
   setupGuideBrowserMilestoneMigrated?: boolean
-  /** Existing users who completed or dismissed the pre-browser checklist stay
-   *  complete after the browser milestone is added. */
+  /** Existing users who completed/dismissed the pre-browser checklist stay complete after the browser milestone is added. */
   setupGuideBrowserMilestoneLegacyComplete?: boolean
-  /** User-dismissed browser import hint in the browser toolbar. Import remains
-   *  available from Settings > Browser and the toolbar overflow menu. */
+  /** User-dismissed browser import toolbar hint; import stays available from Settings > Browser and the overflow menu. */
   browserImportHintHidden?: boolean
-  /** Why: Windows-only. Set once after the window first hides to the system
-   *  tray, so the "Orca is still running" notification shows only on first use. */
+  /** Why: Windows-only. Set once on first hide to tray so the "Orca is still running" notice shows only once. */
   trayMinimizeNoticeShown?: boolean
-  /** User dismissed the first-run Mobile Emulator intro (Keep, Hide, or close).
-   *  Reversible only by re-enabling the feature in Settings. */
+  /** User dismissed the first-run Mobile Emulator intro; reversible only by re-enabling the feature in Settings. */
   mobileEmulatorTabIntroDismissed?: boolean
   /** User deferred the in-pane Mobile Emulator CLI + skill setup guide. */
   mobileEmulatorAgentSetupDismissed?: boolean
-  /** One-shot rollout notice for manual project ordering becoming the default.
-   *  Absent or true means the sidebar callout stays hidden. */
+  /** One-shot rollout notice for manual project ordering default; absent or true keeps the sidebar callout hidden. */
   projectOrderManualDefaultNoticeDismissed?: boolean
-  /** One-shot notice that status-bar usage meters now show percent used (not
-   *  remaining). Absent is resolved on load: brand-new profiles default to
-   *  dismissed; upgraded profiles see the notice once. */
+  /** One-shot notice that usage meters show percent used, not remaining; absent resolves on load (new profiles dismissed, upgraded see it once). */
   usagePercentageDisplayChangeNoticeDismissed?: boolean
-  /** User-hidden empty-state usage CTA in the status bar. Permanently hides the
-   *  "Connect AI accounts to see usage" prompt even if all providers are later
-   *  disconnected — a dismissed teaching nudge stays dismissed. */
+  /** User-hidden empty-state usage CTA; permanently hides the "Connect AI accounts" prompt even if providers are later disconnected. */
   usageEmptyStateDismissed?: boolean
-  /** URL to navigate to when a new browser tab is opened. Null means blank tab.
-   *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
+  /** URL for new browser tabs; null = blank tab. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
   /** Electron browser zoom level applied when a new local browser tab is created. */
   browserDefaultZoomLevel?: number
   /** Optional Kagi private-session link used only when Kagi is the search engine. */
   browserKagiSessionLink?: string | null
-  /** Saved window bounds so the app restores to the user's last position/size
-   *  instead of maximizing on every launch. */
+  /** Saved window bounds so the app restores last position/size instead of maximizing each launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
-  /** One-shot migration flag: 'recent' used to mean the weighted smart sort
-   *  (v1→v2 rename). When this flag is absent and sortBy is 'recent', the
-   *  main-process load() migrates it to 'smart' and sets this flag so the
-   *  migration never re-fires — allowing users to intentionally select the
-   *  new 'recent' (last-activity) sort without it being clobbered on restart. */
+  /** One-shot flag: 'recent' once meant the smart sort (v1→v2 rename), migrated to 'smart' once so the new last-activity 'recent' isn't re-clobbered. */
   _sortBySmartMigrated?: boolean
-  /** LEGACY one-shot flag from the experimental-toggle era of the inline
-   *  agents feature. It was stamped unconditionally on every successful
-   *  load() in prior builds (regardless of whether the experiment was on),
-   *  so it cannot be used to detect "already migrated under the new
-   *  default-on rules" — every prior-RC user already has it set to true on
-   *  disk. Kept persisted for forward-compat with rollback to a pre-default-on
-   *  build that still reads it; the actual migration gate is now
-   *  `_inlineAgentsDefaultedForAllUsers` below. */
+  /** LEGACY inline-agents flag, stamped unconditionally every load so it can't gate migration; kept only for rollback forward-compat (real gate: _inlineAgentsDefaultedForAllUsers). */
   _inlineAgentsDefaultedForExperiment?: boolean
-  /** One-shot migration flag for the default-on rollout of the inline
-   *  agents feature. Set once on first load after upgrade once the
-   *  'inline-agents' card property has been ensured in
-   *  `worktreeCardProperties`. Distinct from
-   *  `_inlineAgentsDefaultedForExperiment` because that legacy flag was
-   *  stamped on every prior load and so is permanently dirty for the
-   *  prior-RC opt-out cohort the widened migration is meant to reach. */
+  /** One-shot flag for the inline-agents default-on rollout; distinct from _inlineAgentsDefaultedForExperiment, which was stamped every load and is permanently dirty. */
   _inlineAgentsDefaultedForAllUsers?: boolean
-  /** One-shot migration flag for card properties that were split out after
-   *  the original metadata toggles shipped. Set once so later deliberate
-   *  unchecks of Linear issue and Ports stick across restarts. */
+  /** One-shot migration flag for split-out card properties, set once so later deliberate unchecks of Linear issue/Ports stick across restarts. */
   _expandedWorktreeCardPropertiesDefaulted?: boolean
-  /** Snapshot of totalAgentsSpawned captured the first time we see the current
-   *  app version. Why: the nag threshold counts agents spawned *since the
-   *  user's last update* so a fresh install or new release does not trigger
-   *  the notification immediately. Reset whenever starNagAppVersion changes. */
+  /** totalAgentsSpawned snapshot at first sighting of the current app version, so the nag counts agents since last update (not from zero). */
   starNagBaselineAgents?: number | null
-  /** The app version that set the current baseline. When the live app version
-   *  differs from this value, the baseline is re-captured on next agent
-   *  spawn — effectively restarting the nag countdown after each update. */
+  /** App version that set the current baseline; a version change re-captures the baseline on next spawn, restarting the nag countdown. */
   starNagAppVersion?: string | null
-  /** Next threshold (agents spawned since baseline) at which the star-nag
-   *  notification should fire. Starts at 35 and doubles each time the user
-   *  dismisses the notification without starring. */
+  /** Next agents-since-baseline threshold that fires the star-nag; starts at 35, doubles per dismissal without starring. */
   starNagNextThreshold?: number
-  /** Once the user has starred Orca (from any entry point) we permanently
-   *  suppress the nag — no further thresholds, no notifications. */
+  /** Once the user has starred Orca (any entry point), permanently suppress the nag. */
   starNagCompleted?: boolean
-  /** Timestamp until which nonterminal dismissals suppress threshold prompts.
-   *  Force-show bypasses this for dev/testing. */
+  /** Timestamp until which nonterminal dismissals suppress threshold prompts (force-show bypasses for dev/testing). */
   starNagDeferredUntil?: number | null
-  /** App version that already consumed the first successful-agent value-moment ask.
-   *  Main-owned so remote/web clients cannot spoof the once-per-version cap. */
+  /** App version that consumed the first value-moment ask; main-owned so remote/web clients can't spoof the once-per-version cap. */
   starNagAgentValueMomentAppVersion?: string | null
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
   setupScriptPromptDismissedRepoIds?: string[]
-  /** Whether the experimental pet overlay is currently visible. Separate
-   *  from the experimentalPet settings flag so "Hide pet" from the
-   *  status-bar menu is a reversible dismiss (re-show without re-enabling the
-   *  feature). Absent = treated as true so existing users see the pet
-   *  the first time they enable the experimental flag. */
+  /** Pet overlay visibility, separate from the experimentalPet settings flag so "Hide pet" is a reversible dismiss; absent = true. */
   petVisible?: boolean
-  /** Active pet id: one of the bundled ids or a custom UUID from
-   *  customPets. Unknown ids fall back to the default at read time so
-   *  removing a custom pet the user had selected doesn't leave the
-   *  overlay rendering nothing. */
+  /** Active pet id (bundled id or custom UUID); unknown ids fall back to the default on read so a removed custom pet doesn't blank the overlay. */
   petId?: string
-  /** User-uploaded pet images. Bytes live under the legacy
-   *  userData/sidekicks/custom/ folder; this field is the metadata index so
-   *  custom pets ride the existing PersistedUIState save pipeline. */
+  /** Metadata index for user-uploaded pet images; bytes live under legacy userData/sidekicks/custom/. */
   customPets?: CustomPet[]
-  /** On-screen size of the pet overlay in CSS pixels (square box).
-   *  Clamped to [PET_SIZE_MIN, PET_SIZE_MAX] when read. */
+  /** Pet overlay size in CSS pixels (square); clamped to [PET_SIZE_MIN, PET_SIZE_MAX] on read. */
   petSize?: number
-  /** Legacy persisted keys from before the sidekick -> pet rename. Read only
-   *  during migration; new writes use the pet* names above. */
+  /** Legacy keys from before the sidekick -> pet rename; read only during migration, new writes use pet* above. */
   sidekickVisible?: boolean
   sidekickId?: string
   customSidekicks?: CustomPet[]
   sidekickSize?: number
-  /** Page-position state for Tasks. Source/repo/team/project selections keep
-   *  using their existing settings paths; this only restores transient tabs
-   *  and applied searches. */
+  /** Page-position state for Tasks: only transient tabs/searches (source/repo/team/project selections use their own settings paths). */
   taskResumeState?: TaskResumeState
   workspaceCleanup?: WorkspaceCleanupUIState
-  /** Feature tips already surfaced to the user. Startup only opens the tips
-   *  modal when this list is missing one of the current tip ids. */
+  /** Feature tips already surfaced; startup opens the tips modal only when a current tip id is missing here. */
   featureTipsSeenIds?: FeatureTipId[]
-  /** Local product-state facts: feature ids the user has actually used.
-   *  Used by education surfaces to avoid teaching already-discovered features. */
+  /** Feature ids the user has actually used; education surfaces skip teaching already-discovered features. */
   featureInteractions?: FeatureInteractionState
-  /** Contextual tours already surfaced to the user. Unknown ids are ignored
-   *  during hydration so downgrade/upgrade cycles remain forward-compatible. */
+  /** Contextual tours already surfaced; unknown ids ignored on hydration for downgrade/upgrade forward-compat. */
   contextualToursSeenIds?: ContextualTourId[]
-  /** Whether this profile may receive automatic contextual tours from this
-   *  rollout. Missing means the renderer has not classified the profile yet. */
+  /** Whether this profile may receive automatic contextual tours; missing = renderer hasn't classified the profile yet. */
   contextualToursAutoEligible?: boolean
 }
 
@@ -3588,26 +3306,16 @@ export const PET_SIZE_MIN = 60
 export const PET_SIZE_MAX = 360
 export const PET_SIZE_DEFAULT = 180
 
-/** Metadata for a user-uploaded pet image. `id` is the stable identifier;
- *  the on-disk filename (preserving the original extension) lives in `fileName`.
- *  The renderer never learns the absolute path — it asks main for the bytes
- *  via pet:read using (id, fileName). */
+/** User-uploaded pet image metadata; renderer fetches bytes from main via pet:read (id, fileName), never learning the on-disk path. */
 export type CustomPet = {
   id: string
   label: string
   fileName: string
-  /** MIME type needed so the renderer builds a Blob with the correct
-   *  Content-Type — especially image/svg+xml, which browsers won't render
-   *  from a misdeclared blob URL. */
+  /** MIME type for the renderer's Blob Content-Type — esp. image/svg+xml, which browsers won't render from a misdeclared blob URL. */
   mimeType: string
-  /** Storage layout. `image` = legacy flat file at `custom/<id>.<ext>`.
-   *  `bundle` = `.codex-pet` import expanded into `custom/<id>/`. Absent =
-   *  legacy `image` for backwards compatibility with persisted state. */
+  /** Storage layout: `image` = legacy flat file `custom/<id>.<ext>`; `bundle` = `.codex-pet` expanded into `custom/<id>/`; absent = legacy `image`. */
   kind?: 'image' | 'bundle'
-  /** Sprite-sheet metadata captured at import time. Present iff this entry
-   *  came from a `.codex-pet` bundle and the manifest declared frame layout.
-   *  `columns`/`rows`/`sheetWidth`/`sheetHeight` are derived in main from
-   *  the decoded sheet so the renderer doesn't need to probe the image. */
+  /** Sprite-sheet metadata; present iff from a `.codex-pet` bundle with a manifest frame layout. Dims derived in main so the renderer needn't probe the image. */
   sprite?: {
     frameWidth: number
     frameHeight: number
@@ -3619,14 +3327,11 @@ export type CustomPet = {
     defaultAnimation?: string
     animations?: Record<string, SpriteAnimation>
   }
-  /** Manifest-declared fps captured even when the manifest omits `frame` and
-   *  the renderer falls back to auto-detected frames. Lets DetectedSpriteFrame
-   *  honor the bundle's intended playback speed instead of a hardcoded 8 fps. */
+  /** Manifest-declared fps kept even when frames are auto-detected, so playback honors the bundle's speed instead of a hardcoded 8 fps. */
   spriteFps?: number
 }
 
-/** One animation strip within a sprite sheet: `row` is the y-index (0-based)
- *  and `frames` is the number of consecutive cells played left-to-right. */
+/** One animation strip in a sprite sheet: `row` = 0-based y-index, `frames` = consecutive cells played left-to-right. */
 export type SpriteAnimation = {
   row: number
   frames: number
@@ -3653,8 +3358,7 @@ export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookR
 
 export type LegacyPaneKeyAliasEntry = {
   ptyId: string
-  /** Physical pane key retained by the live process. Field name is persisted
-   *  for compatibility; UUID keys are used after pane-to-tab detach. */
+  /** Physical pane key retained by the live process; name is persisted for compatibility (UUID keys after detach). */
   legacyPaneKey: string
   /** Current logical owner pane key. May belong to another tab after detach. */
   stablePaneKey: string
@@ -3669,8 +3373,7 @@ export type PersistedState = {
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   folderWorkspaces: FolderWorkspace[]
-  /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
-   *  presets are managed from the new-workspace composer and repo settings. */
+  /** Sparse-checkout presets keyed by repoId. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   worktreeMeta: Record<string, WorktreeMeta>
   worktreeLineageById: Record<string, WorktreeLineage>
@@ -3681,26 +3384,17 @@ export type PersistedState = {
     pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
     issue: Record<string, { data: IssueInfo | null; fetchedAt: number }>
   }
-  /** Legacy single-blob session. Retained as the canonical 'local' execution
-   *  host partition so an app downgrade still reads its workspace. Non-local
-   *  hosts live in workspaceSessionsByHostId, keyed by ExecutionHostId. */
+  /** Legacy single-blob session, kept as the canonical 'local' host partition so an app downgrade still reads its workspace. */
   workspaceSession: WorkspaceSessionState
-  /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:).
-   *  Mixed-host writes stay isolated here; 'local' stays in workspaceSession so
-   *  pre-partition builds keep working. Optional/absent on legacy files. */
+  /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
-  /** SSH config aliases the user explicitly deleted. Suppresses re-import of the
-   *  matching ~/.ssh/config host on the next sync so a deleted host does not
-   *  reappear. Cleared for an alias when the user re-adds it or re-adopts config. */
+  /** SSH config aliases the user deleted; suppresses re-import from ~/.ssh/config so a deleted host doesn't reappear. */
   deletedSshConfigAliases: string[]
-  /** Identity records for removed SSH targets. Lets a re-added host re-adopt
-   *  workspaces that were orphaned on the old target id. Pruned by age/count. */
+  /** Identity records for removed SSH targets so a re-added host can re-adopt workspaces orphaned on the old target id. */
   removedSshTargetTombstones?: RemovedSshTargetTombstone[]
   sshRemotePtyLeases: SshRemotePtyLease[]
-  /** Daemon session ids of live local Claude launches. Seeds the Claude
-   *  live-PTY gate on startup so an early OAuth refresh cannot rotate the
-   *  single-use refresh token out from under a still-running daemon CLI. */
+  /** Live local Claude daemon session ids; seeds the live-PTY gate so early OAuth refresh can't rotate the single-use refresh token out from under a running daemon. */
   claudeLivePtySessionIds?: string[]
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
@@ -3739,8 +3433,7 @@ export type FsChangedPayload = {
 }
 
 // ─── Git Status ─────────────────────────────────────────────
-// Re-exported from git-status-types.ts so mobile can share the runtime git
-// wire contract without importing this desktop-oriented aggregate type module.
+// Re-exported from git-status-types.ts so mobile shares the wire contract without this desktop aggregate.
 
 export type GitBranchChangeEntry = {
   path: string
@@ -3799,12 +3492,7 @@ export type GitDiffBinaryResult = {
   isImage?: boolean
   /** MIME type for binary preview rendering, e.g. "image/png" or "application/pdf" */
   mimeType?: string
-  /**
-   * True only when the modified side is a proven deletion (working-tree file gone
-   * or absent from the index) — distinct from an empty modified side caused by a
-   * read failure or size cap. Lets previewers fall back to the original bytes for
-   * a deletion without showing a stale image on a failed read.
-   */
+  /** True only for a proven deletion — distinct from an empty modified side caused by a read failure or size cap. */
   modifiedDeleted?: boolean
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
@@ -3853,15 +3541,11 @@ export type StatsSummary = {
   totalAgentsSpawned: number
   totalPRsCreated: number
   totalAgentTimeMs: number
-  // For display formatting — sourced from aggregates, not the event log,
-  // so it survives event trimming.
+  // Sourced from aggregates, not the event log, so it survives event trimming.
   firstEventAt: number | null // timestamp of first-ever event, for "tracking since..."
 }
 
 // ─── Memory dashboard ──────────────────────────────────────────────
-// Resource-metrics snapshot shared across main, preload, and renderer so
-// the IPC payload is the same shape everywhere. Memory is in bytes; CPU
-// is a percentage (can exceed 100 on multi-core).
 
 /** cpu is percent of a single core — can exceed 100 on multi-core. memory is in bytes. */
 export type UsageValues = {
@@ -3874,9 +3558,7 @@ export type AppMemory = UsageValues & {
   main: UsageValues
   renderer: UsageValues
   other: UsageValues
-  /** Oldest-first memory samples (bytes) for the whole Orca app, one per
-   *  successful collection. Used to render the sparkline in the dashboard.
-   *  Empty before the first snapshot is recorded. */
+  /** Oldest-first memory samples (bytes) for the whole Orca app; empty before the first snapshot. */
   history: number[]
 }
 
@@ -3893,8 +3575,7 @@ export type WorktreeMemory = UsageValues & {
   repoId: string
   repoName: string
   sessions: SessionMemory[]
-  /** Oldest-first memory samples (bytes) for this worktree's tracked
-   *  subtrees, one per successful collection. */
+  /** Oldest-first memory samples (bytes) for this worktree's tracked subtrees. */
   history: number[]
 }
 

@@ -615,8 +615,7 @@ export type DetectedBrowserInfo = {
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
-  /** Optional — older preload payloads predating GitLab support don't
-   *  include it. Consumers gate on `glab?.installed` / `authenticated`. */
+  /** Optional — older preload payloads predating GitLab support omit it; consumers gate on `glab?.installed`. */
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
@@ -639,14 +638,10 @@ export type RefreshAgentsResult = {
   agents: string[]
   addedPathSegments: string[]
   shellHydrationOk: boolean
-  /** Why: drives the agent_picks `on_path:false` triage in dashboard 1562016
-   *  (insight A). `'shell_hydrate'` = detection saw the user's full shell PATH;
-   *  `'sync_seed_only'` = hydration failed and detection ran against the
-   *  seed list from `patchPackagedProcessPath`. */
+  /** Drives agent_picks `on_path:false` triage (dashboard 1562016). `'shell_hydrate'` = detection saw the user's
+   *  full shell PATH; `'sync_seed_only'` = hydration failed and detection ran against the `patchPackagedProcessPath` seed list. */
   pathSource: PathSource
-  /** Why: classified hydration outcome. `'none'` on success; one of the failure
-   *  modes when `shellHydrationOk` is false. Typed off the shared alias so
-   *  schema/main/preload/renderer stay in lockstep. */
+  /** Classified hydration outcome: `'none'` on success, else a failure mode when `shellHydrationOk` is false. */
   pathFailureReason: ShellHydrationFailureReason
 }
 
@@ -670,12 +665,7 @@ export type PreflightApi = {
   }>
 }
 
-// Why: renderer-facing mirror of the daemon's `SessionInfo` + protocolVersion
-// annotation (src/main/daemon/types.ts `DaemonSessionInfo`). Kept here instead
-// of imported from main because the preload boundary must not depend on
-// main-only protocol types — those are subprocess-facing. Keep the two shapes
-// in sync when adding fields on either side; the Manage Sessions panel reads
-// these directly.
+// Mirror of daemon's `DaemonSessionInfo` (src/main/daemon/types.ts); not imported — preload can't depend on main-only protocol types.
 export type PtyManagementSession = {
   sessionId: string
   state: 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -690,8 +680,7 @@ export type PtyManagementSession = {
 }
 
 export type PtyManagementApi = {
-  // `degraded` is true when the daemon is alive but cannot spawn fresh PTYs, so
-  // new terminals run on the local provider without daemon persistence.
+  // `degraded`: daemon is alive but can't spawn fresh PTYs, so new terminals run locally without daemon persistence.
   listSessions: () => Promise<{ sessions: PtyManagementSession[]; degraded: boolean }>
   killAll: () => Promise<{
     killedCount: number
@@ -715,11 +704,7 @@ export type StatsApi = {
   getSummary: () => Promise<StatsSummary>
 }
 
-// Diagnostics — error-tracking-lane payload shapes that cross the IPC
-// boundary. Mirror the runtime types in
-// `src/main/observability/{index,bundle}.ts`. Kept here, not imported,
-// because the preload api-types file is the source of truth for the
-// renderer's view of the IPC surface.
+// Diagnostics IPC payloads; mirror the runtime types in `src/main/observability/{index,bundle}.ts`.
 export type DiagnosticsStatusPayload = {
   readonly localFileEnabled: boolean
   readonly bundleEnabled: boolean
@@ -843,8 +828,7 @@ export type AiVaultApi = {
   onWindowFocused: (callback: () => void) => () => void
 }
 
-// notFound marks a miss caused by the transcript not existing on disk yet
-// (retry-worthy), as opposed to a real read/parse error (#8401).
+// notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
   | {
       messages: NativeChatMessage[]
@@ -894,10 +878,8 @@ export type NativeChatSubscribeArgs = {
 }
 
 export type NativeChatApi = {
-  /** Read the on-disk transcript for an agent + session id, windowed to the most
-   *  recent `limit` turns (defaults to the desktop window). The renderer raises
-   *  `limit` to page in older history as it scrolls to the top. `transcriptPath`
-   *  is the hook-reported authoritative file path, preferred over the id glob. */
+  /** Read the on-disk transcript for an agent + session id, windowed to the most recent `limit`
+   *  turns. `transcriptPath` is the hook-reported authoritative path, preferred over the id glob. */
   readSession: (
     agent: AgentType,
     sessionId: string,
@@ -918,9 +900,7 @@ export type AppApi = {
   /** Returns a URL base for feature-wall assets. In dev this is Vite /@fs;
    *  in packaged builds this is file:// resources. Renderer appends filenames. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
-  /** Relaunches the app via Electron's app.relaunch() + app.exit(0). Used
-   *  by settings panes that need a full restart to apply changes (e.g. the
-   *  terminal-window blur setting in TerminalWindowSection). */
+  /** Relaunches the app (app.relaunch() + app.exit(0)) for settings that need a full restart to apply. */
   relaunch: () => Promise<void>
   /** Restarts Orca through the normal quit pipeline so daemon-backed terminal
    *  sessions survive and can reattach after the new process starts. */
@@ -939,12 +919,9 @@ export type AppApi = {
   awaitFirstWindowStartupServices: () => Promise<void>
   /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
   startupDiagnostic: (event: string, details?: Record<string, unknown>) => Promise<void>
-  /** Returns the macOS active input mode, or layout ID when no IME mode is
-   *  selected (e.g. `com.apple.keylayout.PolishPro`). Used by the
-   *  keyboard-layout probe to distinguish CJK IMEs and layouts whose base
-   *  layer matches US QWERTY but whose Option layer composes characters
-   *  (issue #1205).
-   *  Returns null on non-Darwin platforms or when the defaults read fails. */
+  /** macOS active input mode, or layout ID when no IME is selected (e.g. `com.apple.keylayout.PolishPro`).
+   *  Distinguishes CJK IMEs and Option-layer-composing layouts that look like US QWERTY (issue #1205).
+   *  Returns null on non-Darwin or when the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
   /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
   setUnreadDockBadgeCount: (count: number) => Promise<void>
@@ -1019,8 +996,7 @@ export type PreloadApi = {
       kind?: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
-    // Forget a project on one execution host only, leaving the same repo id on
-    // other hosts (local or a re-added SSH target) intact.
+    // Forget a project on one execution host only, leaving the same repo id on other hosts intact.
     removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
     reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
     reorderForHost: (args: {
@@ -1202,10 +1178,8 @@ export type PreloadApi = {
     listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
-    /** Two-phase progress for a background `create`, correlated by
-     *  `creationId`. Renderer routes each event to its pending creation's
-     *  status surface; the remote/runtime create path emits nothing, so the
-     *  surface falls back to an indeterminate spinner. */
+    /** Two-phase progress for a background `create`, correlated by `creationId`. The remote/runtime
+     *  create path emits nothing, so the surface falls back to an indeterminate spinner. */
     onCreateProgress: (
       callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
     ) => () => void
@@ -1236,8 +1210,7 @@ export type PreloadApi = {
       force?: boolean
       skipArchive?: boolean
     }) => Promise<RemoveWorktreeResult>
-    // Forget a workspace from Orca only — no remote Git/filesystem work. Used
-    // for workspaces pinned to a removed/disconnected SSH host.
+    // Forget a workspace from Orca only (no remote Git/FS work) — for workspaces pinned to a removed/disconnected SSH host.
     forgetLocal: (args: {
       worktreeId: string
       hostId?: ExecutionHostId
@@ -1310,24 +1283,15 @@ export type PreloadApi = {
       worktreeId?: string
       sessionId?: string
       // Why: lets a single tab open in a different shell than the user's default.
-      // Preserved from the deleted index.d.ts PtyApi duplicate during the
-      // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
       shellOverride?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
       terminalColorQueryReplies?: { foreground?: string; background?: string }
-      // Why: hidden-at-spawn declaration — main marks the PTY hidden before
-      // its first byte so the delivery gate + model responder own spawn-time
-      // queries (terminal-query-authority.md §races).
+      // Why: mark the PTY hidden before its first byte so the delivery gate owns spawn-time queries (terminal-query-authority.md §races).
       initiallyHidden?: boolean
-      // Why: closes the SIGKILL race documented in INVESTIGATION.md — main
-      // sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before
-      // pty:spawn returns. Only the renderer's daemon-host path threads these.
+      // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
       tabId?: string
       leafId?: string
-      // Why: telemetry-plan.md§Agent launch semantics — main emits
-      // `agent_started` only after the PTY/session is created successfully,
-      // so the renderer threads the launch metadata through this field and
-      // the IPC handler fires the event from the spawn-success branch.
+      // Why: main fires `agent_started` only on spawn success, so launch metadata rides this field (telemetry-plan.md §Agent launch semantics).
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }) => Promise<{
       id: string
@@ -1701,11 +1665,7 @@ export type PreloadApi = {
       args: GitHubRepoSelectorArgs & {
         number: number
         body: string
-        /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
-         *  too, so the IPC and `gh` call paths are identical. The renderer cache
-         *  key is keyed by the drawer's `type`, so callers pass it through to
-         *  scope the cross-window invalidation broadcast correctly and avoid
-         *  evicting an unrelated PR/issue that happens to share the number. */
+        /** Why: scopes the cross-window cache invalidation so a PR and issue sharing the same number don't evict each other. */
         type?: 'issue' | 'pr'
         prRepo?: GitHubOwnerRepo | null
       }
@@ -1737,11 +1697,7 @@ export type PreloadApi = {
       repoId?: string
       sourceContext?: TaskSourceContext | null
     }) => Promise<GitHubAssignableUser[]>
-    /**
-     * Subscribe to local-mutation broadcasts. Used by the work-item-drawer
-     * cache to invalidate entries across windows after a successful mutation.
-     * Returns an unsubscribe function.
-     */
+    /** Subscribe to local-mutation broadcasts so the work-item-drawer cache can invalidate across windows. Returns an unsubscribe. */
     onWorkItemMutated: (
       callback: (payload: {
         repoPath: string
@@ -1758,13 +1714,7 @@ export type PreloadApi = {
      * `force: true` to bust after a known-expensive op.
      */
     rateLimit: (args?: { force?: boolean }) => Promise<GetRateLimitResult>
-    /**
-     * Probe `gh auth status` and the Electron process env to explain
-     * why ProjectV2 calls are failing with scope_missing. Surfaces the
-     * common gotcha where `GITHUB_TOKEN` is exported in the user's
-     * shell and silently shadows the keyring credential — in that case
-     * `gh auth refresh` is a no-op and the UI must say so.
-     */
+    /** Explains scope_missing ProjectV2 failures — notably a shell `GITHUB_TOKEN` shadowing the keyring credential, where `gh auth refresh` is a no-op. */
     diagnoseAuth: () => Promise<GhAuthDiagnostic>
     // ── ProjectV2 (GitHub Projects) ─────────────────────────────────
     listAccessibleProjects: () => Promise<ListAccessibleProjectsResult>
@@ -1806,9 +1756,7 @@ export type PreloadApi = {
     create: (args: CreateHostedReviewArgs) => Promise<CreateHostedReviewResult>
   }
   // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
-  // Shapes mirror gh.* one-to-one where the data matches; diverge
-  // where GitLab's API differs (MR state values, project path with
-  // host, paginated envelope from `glab api -i`).
+  // Shapes mirror gh.* except where GitLab's API differs (MR states, host-qualified project path, `glab api -i` paging).
   gl: {
     viewer: () => Promise<GitLabViewer | null>
     diagnoseAuth: () => Promise<GitLabAuthDiagnostic>
@@ -2131,19 +2079,14 @@ export type PreloadApi = {
     showAgentValueMoment: () => Promise<void>
     onboardingCompleted: () => Promise<void>
   }
-  /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
-   *  the main-side validator is the single enforcement point. Renderer call
-   *  sites should import `track<N>()` from `src/renderer/src/lib/telemetry.ts`
-   *  for the `EventMap`-based type safety, not reach for this directly. */
+  /** Fire-and-forget track. Loose IPC typing on purpose — the main-side validator enforces;
+   *  renderer sites should import `track<N>()` from lib/telemetry.ts, not reach here. */
   telemetryTrack: (name: string, props: Record<string, unknown>) => Promise<void>
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
-  /** Diagnostic file controls. Surface for telemetry-error-tracking.md
-   *  §User controls. The renderer triggers flows; main does the filesystem /
-   *  network work and returns serializable metadata. Main retains collected
-   *  upload payloads so the renderer can confirm without reading or
-   *  substituting arbitrary bytes. */
+  /** Diagnostic file controls (telemetry-error-tracking.md §User controls). Main does the FS/network
+   *  work and retains upload payloads so the renderer can't read or substitute arbitrary bytes. */
   diagnostics: {
     getStatus: () => Promise<DiagnosticsStatusPayload>
     collectBundle: (lookbackMinutes?: number) => Promise<DiagnosticsBundlePayload>
@@ -2152,33 +2095,21 @@ export type PreloadApi = {
     uploadBundle: (bundleSubmissionId: string) => Promise<DiagnosticsUploadPayload>
     deleteBundle: (ticketId: string) => Promise<void>
   }
-  /** Read-only view of effective consent state, including the reason if
-   *  disabled (env var / user opt-out / CI / pending banner). Used by the
-   *  Privacy pane to render the correct "blocked by X" helper text — env
-   *  vars are main-side state the renderer cannot read directly. */
+  /** Read-only effective consent state (+ reason if disabled) — env vars are main-side state the renderer can't read directly. */
   telemetryGetConsentState: () => Promise<TelemetryConsentState>
-  /** Banner ✕ — persist `optedIn = true` silently, emit nothing. Deliberately
-   *  a separate channel from `telemetrySetOptIn` because main's `via`
-   *  derivation on that channel would tag this path as `first_launch_banner`
-   *  and fire `telemetry_opted_in`, which the ✕-as-silent-acknowledge
-   *  semantics forbid (the user did not explicitly opt in, they declined to
-   *  intervene). Subject to the same per-session consent-mutation rate
-   *  limit as `telemetrySetOptIn`. */
+  /** Banner ✕ — persist `optedIn = true` silently. Separate channel from `telemetrySetOptIn`,
+   *  whose `via` derivation would wrongly fire `telemetry_opted_in`. Same per-session rate limit. */
   telemetryAcknowledgeBanner: () => Promise<void>
   settings: {
     get: () => Promise<GlobalSettings>
-    /** Synchronous persisted-settings read for startup decisions that cannot
-     *  wait for async hydration (terminal side-effect authority). Blocking
-     *  IPC — call sparingly. */
+    /** Synchronous persisted-settings read for startup decisions that can't wait for async hydration. Blocking IPC — call sparingly. */
     getSync: () => GlobalSettings | null
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
     updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
     previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
-    /** Subscribe to out-of-band settings updates (e.g. the View > Appearance
-     *  menu toggles) so the renderer can stay in sync with main's persisted
-     *  state without round-tripping through settings:get. */
+    /** Subscribe to out-of-band settings updates (e.g. View > Appearance toggles) to stay in sync with main. */
     onChanged: (callback: (updates: Partial<GlobalSettings>) => void) => () => void
   }
   localhostWorktreeLabels: {
@@ -2266,9 +2197,7 @@ export type PreloadApi = {
   }
   onboarding: {
     get: () => Promise<OnboardingState>
-    // Why: main-process `updateOnboarding` merges checklist field-by-field, so
-    // callers can pass a partial checklist (e.g. just `{ addedRepo: true }`)
-    // without re-supplying every flag.
+    // Why: main merges the checklist field-by-field, so a partial checklist is fine.
     update: (
       updates: Partial<Omit<OnboardingState, 'checklist'>> & {
         checklist?: Partial<OnboardingState['checklist']>
@@ -2418,8 +2347,7 @@ export type PreloadApi = {
     }) => Promise<void>
   }
   session: {
-    // hostId is optional and defaults to the 'local' partition on the main
-    // side, so existing callers that omit it behave exactly as before.
+    // hostId defaults to the 'local' partition on main, so omitting it stays backward-compatible.
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
@@ -3124,8 +3052,7 @@ export type PreloadApi = {
   }
   ssh: {
     listTargets: () => Promise<SshTarget[]>
-    // Removed-target id → last known label, for showing a friendly host name on
-    // workspaces still pinned to a target that no longer exists.
+    // Removed-target id → last known label, for a friendly host name on workspaces still pinned to a removed target.
     listRemovedTargetLabels: () => Promise<Record<string, string>>
     addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTargetAddResult>
     updateTarget: (args: {
@@ -3224,19 +3151,15 @@ export type PreloadApi = {
     /** Return the current main-process hook cache after renderer hydration. */
     getSnapshot: () => Promise<AgentStatusIpcPayload[]>
     inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
-    /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no
-     *  hook at answer time, so the renderer reports the submit keystroke. */
+    /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no hook at answer time, so the renderer reports the submit keystroke. */
     inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest) => Promise<boolean>
-    /** Listen for PTYs that still use a legacy numeric pane key but have
-     *  registry-backed UUID pane proof. */
+    /** Listen for PTYs on a legacy numeric pane key that have registry-backed UUID pane proof. */
     onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
     onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void
     getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
-    /** Drop a paneKey from the main-process hook cache and the on-disk
-     *  last-status file. Fire-and-forget. */
+    /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
     drop: (paneKey: string) => void
-    /** Drop every cached hook status under one terminal tab prefix.
-     *  Fire-and-forget. */
+    /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
     dropByTabPrefix: (tabId: string) => void
     /** Permanently retire one pane's hook authority while siblings stay live. */
     retirePaneAuthority: (paneKey: string) => void
@@ -3263,8 +3186,7 @@ export type PreloadApi = {
           pairingUrl: string
           endpoint: string
           deviceId: string
-          /** Mode the QR actually encodes; 'local-only' when an automatic
-           *  request degraded because Relay could not be attached. */
+          /** Mode the QR actually encodes; 'local-only' when Relay could not be attached. */
           connectionMode: MobilePairingConnectionMode
         }
     >
