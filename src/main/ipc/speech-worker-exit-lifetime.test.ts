@@ -80,7 +80,6 @@ vi.mock('../speech/model-catalog', () => ({
   isLocalSpeechModel: () => true
 }))
 vi.mock('../speech/stt-worker-paths', () => ({
-  LOCAL_SPEECH_UNAVAILABLE_ERROR: 'voice_model_not_ready:unavailable',
   getSttWorkerPath: () => 'unused-worker',
   getSherpaModulePath: () => 'unused-module',
   hasLocalSpeechRecognizer: () => true

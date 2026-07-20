@@ -30,7 +30,10 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../speech/model-catalog', () => ({
-  SPEECH_MODEL_CATALOG: [],
+  SPEECH_MODEL_CATALOG: [
+    { id: 'local-model', provider: 'local' },
+    { id: 'cloud-model', provider: 'openai' }
+  ],
   getCatalogModel: vi.fn(() => ({ id: 'model-1' }))
 }))
 
@@ -43,7 +46,7 @@ vi.mock('../speech/speech-model-deletion', () => ({
   deleteLocalSpeechModel: deleteLocalSpeechModelMock
 }))
 
-import { registerSpeechHandlers } from './speech'
+import { reconcileUnsupportedSpeechSettings, registerSpeechHandlers } from './speech'
 
 type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
 
@@ -53,6 +56,14 @@ function getHandler(channel: string): SpeechDownloadHandler {
     throw new Error(`${channel} handler not registered`)
   }
   return call[1] as SpeechDownloadHandler
+}
+
+function makeStore(sttModel = '') {
+  const voice = { sttModel }
+  return {
+    getSettings: vi.fn(() => ({ voice })),
+    updateSettings: vi.fn()
+  }
 }
 
 describe('registerSpeechHandlers', () => {
@@ -87,7 +98,7 @@ describe('registerSpeechHandlers', () => {
     }
     getSpeechModelManagerMock.mockReturnValue(manager)
     fromWebContentsMock.mockReturnValue(window)
-    registerSpeechHandlers({} as never)
+    registerSpeechHandlers(makeStore() as never)
 
     const pending = getHandler('speech:downloadModel')({ sender: { id: 7 } }, 'model-1')
     closeHandlers[0]?.()
@@ -96,5 +107,22 @@ describe('registerSpeechHandlers', () => {
 
     expect(clearProgressCallback).toHaveBeenCalledTimes(1)
     expect(window.off).toHaveBeenCalledWith('closed', expect.any(Function))
+  })
+
+  it('clears a persisted local model selection on Windows ARM64', () => {
+    const store = makeStore('local-model')
+
+    expect(reconcileUnsupportedSpeechSettings(store as never, 'win32', 'arm64')).toBe(true)
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { voice: { sttModel: '' } },
+      { notifyListeners: true }
+    )
+  })
+
+  it('preserves a supported cloud model selection on Windows ARM64', () => {
+    const store = makeStore('cloud-model')
+
+    expect(reconcileUnsupportedSpeechSettings(store as never, 'win32', 'arm64')).toBe(false)
+    expect(store.updateSettings).not.toHaveBeenCalled()
   })
 })
