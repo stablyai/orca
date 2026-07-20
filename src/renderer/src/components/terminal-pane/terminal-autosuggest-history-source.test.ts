@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   createTerminalAutosuggestSessionPool,
-  parseShellHistoryContent
+  parseShellHistoryContent,
+  resolveParsableShellKindFromPath
 } from './terminal-autosuggest-history-source'
 
 describe('createTerminalAutosuggestSessionPool', () => {
@@ -50,5 +51,25 @@ describe('parseShellHistoryContent', () => {
     const result = parseShellHistoryContent(lines, 'bash')
     expect(result).toHaveLength(2000)
     expect(result[0]).toBe('cmd2499')
+  })
+})
+
+describe('resolveParsableShellKindFromPath', () => {
+  it('resolves bash and zsh from plain and versioned basenames', () => {
+    expect(resolveParsableShellKindFromPath('/bin/bash')).toBe('bash')
+    expect(resolveParsableShellKindFromPath('/usr/local/bin/bash-5.2')).toBe('bash')
+    expect(resolveParsableShellKindFromPath('/nix/store/abc/bin/zsh')).toBe('zsh')
+    expect(resolveParsableShellKindFromPath('zsh')).toBe('zsh')
+  })
+
+  it('handles Windows-style separators', () => {
+    expect(resolveParsableShellKindFromPath('C:\\msys64\\usr\\bin\\bash.exe')).toBe('bash')
+  })
+
+  it('returns null for shells without a parsable HISTFILE format', () => {
+    expect(resolveParsableShellKindFromPath('/usr/bin/fish')).toBeNull()
+    expect(resolveParsableShellKindFromPath('/usr/bin/pwsh')).toBeNull()
+    expect(resolveParsableShellKindFromPath('cmd.exe')).toBeNull()
+    expect(resolveParsableShellKindFromPath('')).toBeNull()
   })
 })

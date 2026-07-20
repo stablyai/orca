@@ -21,6 +21,22 @@ export function createTerminalAutosuggestSessionPool(maxSize: number = SESSION_P
 /** Shells whose HISTFILE this app writes today (see src/main/terminal-history.ts historyFilename). */
 export type ParsableShellKind = 'bash' | 'zsh'
 
+/** Resolve the parsable shell kind from a shell binary path, or null when the
+ *  shell has no HISTFILE format this app parses (fish/pwsh/cmd/unknown).
+ *  Mirrors resolveShellKind's basename + prefix match (src/main/terminal-history.ts)
+ *  but restricted to the two shells this renderer knows how to parse — kept
+ *  renderer-local (no node:path) so it works under contextIsolation. */
+export function resolveParsableShellKindFromPath(shellPath: string): ParsableShellKind | null {
+  const name = shellPath.split(/[/\\]/).pop()?.toLowerCase() ?? ''
+  if (name.startsWith('zsh')) {
+    return 'zsh'
+  }
+  if (name.startsWith('bash')) {
+    return 'bash'
+  }
+  return null
+}
+
 /** Parses a HISTFILE's raw content into most-recent-first commands, capped at PERSISTED_HISTORY_CAP. */
 export function parseShellHistoryContent(content: string, shell: ParsableShellKind): string[] {
   const rawLines = content.split('\n').filter((line) => line.length > 0)
