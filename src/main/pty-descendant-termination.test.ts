@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const execFileMock = vi.hoisted(() => vi.fn())
-vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+const execFileSyncMock = vi.hoisted(() => vi.fn())
+vi.mock('node:child_process', () => ({
+  execFile: execFileMock,
+  execFileSync: execFileSyncMock
+}))
 
 import {
   captureDescendantSnapshot,
@@ -12,6 +16,7 @@ import {
   killWithDescendantSweep,
   parseProcessTable,
   terminateDescendantSnapshot,
+  WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
   type ProcessTableCapture,
   type ProcessTableRow
 } from './pty-descendant-termination'
@@ -24,6 +29,8 @@ beforeEach(() => {
     const callback = args.at(-1) as (error: Error | null, stdout: string) => void
     callback(null, '10 1 10 Mon Jul 13 12:54:47 2026')
   })
+  execFileSyncMock.mockReset()
+  execFileSyncMock.mockReturnValue(Buffer.from(''))
 })
 
 function row(
@@ -115,10 +122,23 @@ describe('captureDescendantSnapshot', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('is a null no-op on Windows', async () => {
+  it('carries the root PID as a Windows tree-kill snapshot without a ps walk (#9045)', async () => {
     const readTable = vi.fn()
-    expect(await captureDescendantSnapshot(10, { readTable, platform: 'win32' })).toBeNull()
+    const result = await captureDescendantSnapshot(4321, { readTable, platform: 'win32' })
+    // Why: Windows reaps via taskkill /T at kill time, so the snapshot needs only
+    // the root PID — no ppid table read (which reparenting would invalidate anyway).
+    expect(result).toEqual({
+      rootPgid: null,
+      descendants: [],
+      capturedAtMs: expect.any(Number),
+      windowsRootPid: 4321
+    })
     expect(readTable).not.toHaveBeenCalled()
+  })
+
+  it('returns null on Windows for an invalid root PID', async () => {
+    expect(await captureDescendantSnapshot(0, { platform: 'win32' })).toBeNull()
+    expect(await captureDescendantSnapshot(-1, { platform: 'win32' })).toBeNull()
   })
 
   it('degrades to null when ps fails', async () => {
@@ -267,6 +287,53 @@ describe('terminateDescendantSnapshot', () => {
     expect(sendSignal).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('force-kills the whole Windows tree via taskkill and skips POSIX escalation (#9045)', () => {
+    const killWindowsProcessTree = vi.fn()
+    const sendSignal = vi.fn()
+    terminateDescendantSnapshot(
+      { rootPgid: null, descendants: [], capturedAtMs: CAPTURED_AT_MS, windowsRootPid: 4321 },
+      { killWindowsProcessTree, sendSignal }
+    )
+    // Why: taskkill /T reaps the tree in one shot — no per-descendant SIGTERM and
+    // no grace-window SIGKILL timer that the POSIX path arms.
+    expect(killWindowsProcessTree).toHaveBeenCalledWith(4321)
+    expect(sendSignal).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('runs a bounded, hidden taskkill /pid <root> /t /f by default (#9045)', () => {
+    terminateDescendantSnapshot({
+      rootPgid: null,
+      descendants: [],
+      capturedAtMs: CAPTURED_AT_MS,
+      windowsRootPid: 4321
+    })
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'taskkill',
+      ['/pid', '4321', '/t', '/f'],
+      expect.objectContaining({
+        timeout: WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
+        windowsHide: true,
+        stdio: 'ignore'
+      })
+    )
+  })
+
+  it('swallows an already-gone taskkill failure instead of throwing (#9045)', () => {
+    execFileSyncMock.mockImplementation(() => {
+      // Why: taskkill exits non-zero (execFileSync throws) when the tree is already dead.
+      throw new Error('ERROR: The process "4321" not found.')
+    })
+    expect(() =>
+      terminateDescendantSnapshot({
+        rootPgid: null,
+        descendants: [],
+        capturedAtMs: CAPTURED_AT_MS,
+        windowsRootPid: 4321
+      })
+    ).not.toThrow()
+  })
 })
 
 describe('createProcessTableSnapshotReader', () => {
@@ -378,6 +445,37 @@ describe('killWithDescendantSweep', () => {
 
     expect(ownsRoot).toHaveBeenCalledOnce()
     expect(sendSignal).not.toHaveBeenCalled()
+    expect(killRoot).toHaveBeenCalledOnce()
+  })
+
+  it('taskkills the Windows tree BEFORE closing the ConPTY root (#9045)', async () => {
+    const events: string[] = []
+    // Why: this ordering is the whole fix — killing the root (ConPTY close) first
+    // would break the child links and orphan the claude/node/cmd grandchildren.
+    const killWindowsProcessTree = vi.fn(() => events.push('tree-kill'))
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    await killWithDescendantSweep(4321, killRoot, {
+      platform: 'win32',
+      killWindowsProcessTree
+    })
+
+    expect(killWindowsProcessTree).toHaveBeenCalledWith(4321)
+    expect(killRoot).toHaveBeenCalledOnce()
+    expect(events).toEqual(['tree-kill', 'root-kill'])
+  })
+
+  it('still closes the Windows root when it no longer owns the tree (#9045)', async () => {
+    const killWindowsProcessTree = vi.fn()
+    const killRoot = vi.fn()
+
+    await killWithDescendantSweep(4321, killRoot, {
+      platform: 'win32',
+      killWindowsProcessTree,
+      ownsRoot: () => false
+    })
+
+    expect(killWindowsProcessTree).not.toHaveBeenCalled()
     expect(killRoot).toHaveBeenCalledOnce()
   })
 })

@@ -1,7 +1,10 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 
 export const DESCENDANT_KILL_GRACE_MS = 2_000
 export const DESCENDANT_SNAPSHOT_TIMEOUT_MS = 1_000
+// Why: taskkill reaping a live tree is quick, but the sync call must stay bounded
+// so a wedged taskkill can never outlast the worktree physical-stop deadline.
+export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 2_000
 // Why: a full process table on a busy host can exceed execFile's 1MB default;
 // truncation would silently drop descendants from the snapshot.
 const PS_MAX_BUFFER_BYTES = 32 * 1024 * 1024
@@ -21,6 +24,9 @@ export type DescendantSnapshot = {
   /** Wall-clock boundary for deciding whether ps's second-resolution lstart
    *  can safely distinguish this process from a later PID reuse. */
   capturedAtMs: number
+  /** Windows-only: the PTY root PID. Windows has no ppid pre-snapshot — taskkill /T
+   *  enumerates the live child tree at kill time — so the root alone is sufficient. */
+  windowsRootPid?: number
 }
 
 export type ProcessTableCapture = {
@@ -190,8 +196,9 @@ type SnapshotDeps = {
 /**
  * Snapshots a PTY root's live descendant tree. Must run BEFORE the root is
  * signalled: once the root dies, surviving descendants reparent to pid 1 and
- * can no longer be found by a ppid walk. Resolves null (never rejects) on
- * Windows, ps failure, or timeout — callers then degrade to today's
+ * can no longer be found by a ppid walk. On Windows there is no ppid walk —
+ * the snapshot just carries the root PID for a taskkill /T tree kill. Resolves
+ * null (never rejects) on ps failure or timeout — callers then degrade to a
  * shell-only kill.
  */
 export async function captureDescendantSnapshot(
@@ -199,8 +206,16 @@ export async function captureDescendantSnapshot(
   deps: SnapshotDeps = {}
 ): Promise<DescendantSnapshot | null> {
   const platform = deps.platform ?? process.platform
-  if (platform === 'win32' || !Number.isInteger(rootPid) || rootPid <= 0) {
+  if (!Number.isInteger(rootPid) || rootPid <= 0) {
     return null
+  }
+  if (platform === 'win32') {
+    // Why: a ConPTY close reaps only the direct shell, so agent grandchildren
+    // (claude→node/cmd) survive, keep the conout pipe open — node-pty's exit then
+    // never fires — and hold handles into the worktree dir (#9045). taskkill /T
+    // enumerates the live tree at kill time, so we carry only the root PID; a ppid
+    // pre-snapshot would be invalidated the moment the shell is signalled anyway.
+    return { rootPgid: null, descendants: [], capturedAtMs: Date.now(), windowsRootPid: rootPid }
   }
   const readTable = deps.readTable ?? readProcessTable
   const timeoutMs = deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
@@ -249,6 +264,29 @@ type TerminateDeps = {
   sendSignal?: SignalSender
   graceMs?: number
   timeoutMs?: number
+  killWindowsProcessTree?: (rootPid: number) => void
+}
+
+/**
+ * Force-kills a Windows PTY root and its whole descendant tree with `taskkill /T /F`.
+ * Synchronous on purpose: it must reap the tree BEFORE the caller closes the ConPTY —
+ * once the shell dies the child links break and taskkill can no longer reach the
+ * grandchildren, exactly the reparent hazard the POSIX snapshot-first path avoids.
+ */
+function killWindowsProcessTree(rootPid: number): void {
+  if (!Number.isInteger(rootPid) || rootPid <= 0) {
+    return
+  }
+  try {
+    execFileSync('taskkill', ['/pid', String(rootPid), '/t', '/f'], {
+      timeout: WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS,
+      windowsHide: true,
+      stdio: 'ignore'
+    })
+  } catch {
+    // Why: taskkill exits non-zero when the tree is already gone (the Windows
+    // analogue of ESRCH); a failure must never block the caller's root kill.
+  }
 }
 
 function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
@@ -271,6 +309,12 @@ export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
 ): void {
+  if (snapshot.windowsRootPid !== undefined) {
+    // Why: Windows has no captured descendant list — taskkill /T reaps the tree from
+    // the root in one shot (no grace/SIGKILL escalation, which is a POSIX-signal notion).
+    ;(deps.killWindowsProcessTree ?? killWindowsProcessTree)(snapshot.windowsRootPid)
+    return
+  }
   const sendSignal = deps.sendSignal ?? defaultSendSignal
   const readTable = deps.readTable ?? readProcessTable
   for (const row of snapshot.descendants) {
