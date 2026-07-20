@@ -9,6 +9,19 @@ import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 // or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
 const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
+// Why: the runtime sweep only stops renderer-graph terminals. If the runtime
+// can't resolve the worktree at all — headless/reloading (runtime_unavailable)
+// or a WSL UNC-alias id mismatch that misses resolveWorktreeSelector's
+// exact-string branch (selector_not_found, #9197) — there are no such terminals
+// to stop, so it must never fail-close a destructive delete. The provider and
+// registry sweeps remain the physical-stop proof for any PTY that truly exists.
+function isBenignRuntimeSweepError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message === 'runtime_unavailable' || error.message === 'selector_not_found')
+  )
+}
+
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
   localProvider: IPtyProvider
@@ -101,7 +114,7 @@ export async function killAllProcessesForWorktree(
         { stopped: 0 },
         deadline,
         deps.requirePhysicalStop ? deadlineError : undefined,
-        (error) => !(error instanceof Error && error.message === 'runtime_unavailable')
+        (error) => !isBenignRuntimeSweepError(error)
       )
     : Promise.resolve({ stopped: 0 })
   const providerSweep = settleBeforeDeadline(

@@ -581,6 +581,36 @@ describe('killAllProcessesForWorktree', () => {
     ).rejects.toThrow('runtime sweep failed')
   })
 
+  it('does not abort a destructive delete when the runtime cannot resolve the worktree (WSL selector_not_found, #9197)', async () => {
+    // On a WSL project the removal target's UNC form (\\wsl.localhost) can differ
+    // from the runtime's resolved id (\\wsl$), so resolveWorktreeSelector's
+    // exact-string branch throws selector_not_found before any PTY is touched.
+    // That means "no renderer-graph terminals to stop" — it must not fail-close
+    // the delete, while the provider sweep still tears down real PTYs.
+    const worktreeId = 'repo-1::\\\\wsl.localhost\\Ubuntu\\root\\orca\\workspaces\\wt'
+    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('selector_not_found'))
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [
+      { id: `${worktreeId}@@live-1`, cwd: '/wsl/wt', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree(worktreeId, {
+      runtime,
+      localProvider,
+      requirePhysicalStop: true
+    })
+
+    expect(result.runtimeStopped).toBe(0)
+    expect(result.providerStopped).toBe(1)
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      `${worktreeId}@@live-1`,
+      expect.objectContaining({ immediate: true })
+    )
+  })
+
   it('bounds the entire process sweep when a provider never settles', async () => {
     vi.useFakeTimers()
     try {
