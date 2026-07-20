@@ -30,6 +30,10 @@ import {
   removeWorktree
 } from '../git/worktree'
 import * as gitRunner from '../git/runner'
+import {
+  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
+  WORKTREE_TEARDOWN_RPC_MARGIN_MS
+} from './worktree-teardown'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
 import {
   createSetupRunnerScript,
@@ -3287,9 +3291,10 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('Cannot delete the project root workspace')
     deletedWorktreeId = result.worktree.id
     await expect(runtime.removeManagedWorktree(`id:${result.worktree.id}`)).resolves.toEqual({})
-    expect(localProvider.shutdown).toHaveBeenCalledWith(`${result.worktree.id}@@pty-1`, {
-      immediate: true
-    })
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      `${result.worktree.id}@@pty-1`,
+      expect.objectContaining({ immediate: true })
+    )
     expect(metaById[result.worktree.id]).toBeUndefined()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(result.worktree.id)
     expect(notifier.worktreesChanged).toHaveBeenCalledWith('folder-repo')
@@ -5140,7 +5145,10 @@ describe('OrcaRuntimeService', () => {
     }
 
     expect(gitProvider.removeWorktree).toHaveBeenCalledWith('/remote/feature', true)
-    expect(ptyProvider.shutdown).toHaveBeenCalledWith('pty-remote', { immediate: true })
+    expect(ptyProvider.shutdown).toHaveBeenCalledWith(
+      'pty-remote',
+      expect.objectContaining({ immediate: true })
+    )
     expect(ptyProvider.shutdown.mock.invocationCallOrder[0]).toBeLessThan(
       gitProvider.removeWorktree.mock.invocationCallOrder[0]
     )
@@ -25125,6 +25133,42 @@ describe('OrcaRuntimeService', () => {
     await expect(stopping).resolves.toEqual({ stopped: 1 })
   })
 
+  it('passes a deadline-bounded timeoutMs into stopAndWait for destructive teardown', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const stopAndWait = vi.fn(async () => true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: vi.fn(() => true),
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+    const stopPty = vi.fn(async (_ptyId: string, stop: () => boolean | Promise<boolean>) => ({
+      stopped: await stop(),
+      owner: true
+    }))
+
+    // Why: the runtime-graph sweep must bound the underlying shutdown/list RPCs
+    // below the sweep deadline, or a wedged daemon trips the outer sweep deadline.
+    const deadline = Date.now() + 10_000
+    await expect(
+      runtime.stopTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`, { deadline, stopPty })
+    ).resolves.toEqual({ stopped: 1 })
+
+    expect(stopAndWait).toHaveBeenCalledTimes(1)
+    const [ptyId, opts] = stopAndWait.mock.calls[0] as unknown as [
+      string,
+      { timeoutMs?: number } | undefined
+    ]
+    expect(ptyId).toBe('pty-1')
+    expect(opts?.timeoutMs).toBeGreaterThan(0)
+    // Pin the margin: the bound must sit at or below the sweep window minus the
+    // teardown RPC margin, not merely under the raw sweep timeout.
+    expect(opts?.timeoutMs).toBeLessThanOrEqual(
+      WORKTREE_PROCESS_SWEEP_TIMEOUT_MS - WORKTREE_TEARDOWN_RPC_MARGIN_MS
+    )
+  })
+
   it('fails terminal listing closed if the graph reloads during selector resolution', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -31076,7 +31120,11 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime, 'pty-1')
     vi.mocked(removeWorktree).mockResolvedValue({})
     removeWorktreeLinkedPathsMock.mockImplementationOnce(async () => {
-      expect(stopAndWait).toHaveBeenCalledWith('pty-1')
+      // Destructive teardown must bound the underlying RPCs below the sweep deadline.
+      expect(stopAndWait).toHaveBeenCalledWith(
+        'pty-1',
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
+      )
     })
 
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
@@ -32849,7 +32897,11 @@ describe('OrcaRuntimeService', () => {
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-      expect(stopAndWait).toHaveBeenCalledWith('pty-1')
+      // Destructive teardown must bound the underlying RPCs below the sweep deadline.
+      expect(stopAndWait).toHaveBeenCalledWith(
+        'pty-1',
+        expect.objectContaining({ timeoutMs: expect.any(Number) })
+      )
       // The provider-prefix sweep and the git removal must happen AFTER the
       // runtime-graph physical stop. Git removal must NOT start before it.
       const preflightIdx = callOrder.indexOf('preflight')
@@ -32908,9 +32960,10 @@ describe('OrcaRuntimeService', () => {
 
       // The post-daemon provider's prefix-matching session must have been
       // shut down, proving the thunk resolved lazily at call time.
-      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`, {
-        immediate: true
-      })
+      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
+        `${TEST_WORKTREE_ID}@@aaaaaaaa`,
+        expect.objectContaining({ immediate: true })
+      )
       expect(onPtyStopped).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`)
       // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()

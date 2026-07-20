@@ -3013,6 +3013,71 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
       })
 
+      it('splits the teardown budget so the liveness RPC gets only what shutdown left', async () => {
+        // Why: sequential RPCs must share one absolute deadline; otherwise both get
+        // the full ~9.5s bound and their sum overruns the 10s sweep deadline (Finding 1).
+        // Fake timers freeze Date.now() at entry, then let the shutdown RPC burn a
+        // deterministic slice of the budget so the recomputed verify bound is provable.
+        vi.useFakeTimers()
+        const shutdown = vi.fn(async () => {
+          await new Promise<void>((resolve) => setTimeout(resolve, 1000))
+        })
+        const listProcesses = vi.fn(async () => [])
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses,
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (
+            ptyId: string,
+            opts?: { keepHistory?: boolean; timeoutMs?: number }
+          ) => Promise<boolean>
+        }
+
+        const stopPromise = controller.stopAndWait('local-pty', { timeoutMs: 4321 })
+        await vi.advanceTimersByTimeAsync(1000)
+        await expect(stopPromise).resolves.toBe(true)
+
+        // The first RPC (daemon shutdown) receives the full remaining budget...
+        expect(shutdown).toHaveBeenCalledWith(
+          'local-pty',
+          expect.objectContaining({ immediate: true, timeoutMs: 4321 })
+        )
+        // ...and the SUBSEQUENT liveness list RPC gets strictly less: the 1000ms the
+        // shutdown consumed is gone, so 4321 - 1000 = 3321 remain.
+        const listCalls = listProcesses.mock.calls as unknown as Array<
+          [{ timeoutMs?: number } | undefined]
+        >
+        const listArgs = listCalls[0]?.[0]
+        expect(listArgs?.timeoutMs).toBeLessThan(4321)
+        expect(listArgs?.timeoutMs).toBe(3321)
+        vi.useRealTimers()
+      })
+
       it('runtime controller stopAndWait fails when keepHistory allows the PTY to revive', async () => {
         vi.useFakeTimers()
         const shutdown = vi.fn(async () => undefined)

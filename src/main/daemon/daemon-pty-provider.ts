@@ -64,8 +64,17 @@ export class DaemonPtyProvider {
     this.client.notify('resize', { sessionId: id, cols, rows })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; timeoutMs?: number }
+  ): Promise<void> {
+    // Why: destructive teardown passes a bound below its sweep deadline so a wedged
+    // daemon fails fast; undefined keeps the DaemonClient 30s default otherwise.
+    await this.client.request(
+      'kill',
+      { sessionId: id, immediate: opts.immediate ?? false },
+      opts.timeoutMs
+    )
   }
 
   onData(callback: (payload: { id: string; data: string }) => void): () => void {

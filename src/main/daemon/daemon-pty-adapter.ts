@@ -573,10 +573,21 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.client.notify('setSessionBackground', { sessionId: id, background: safeBackground })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; timeoutMs?: number }
+  ): Promise<void> {
+    // Why: destructive teardown shares one budget across connect + kill so a wedged
+    // handshake cannot burn the whole sweep deadline before the kill even starts;
+    // undefined keeps the default unbounded connect + 30s RPC for all other callers.
+    const shutdownDeadline = opts.timeoutMs !== undefined ? Date.now() + opts.timeoutMs : undefined
     // Why: shutdown can be the first lazy-client operation after restart; connect
     // before killing so a healthy daemon session is not orphaned (#7742).
-    await this.ensureConnected()
+    await this.ensureConnected(
+      shutdownDeadline !== undefined
+        ? { connectTimeoutMs: Math.max(1, shutdownDeadline - Date.now()) }
+        : undefined
+    )
     // Why: sleep/exact-stop kills the live PTY before the periodic checkpoint may run.
     // Force a final snapshot so wake can restore the pane users left.
     if (opts.keepHistory) {
@@ -606,7 +617,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.historyManager?.suspendSession(id)
       }
     }
-    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
+    // Why: destructive teardown passes what remains of its shared budget so a wedged
+    // daemon fails fast with an accurate error instead of tripping the outer deadline;
+    // undefined keeps the DaemonClient 30s default for all other callers.
+    await this.client.request(
+      'kill',
+      { sessionId: id, immediate: opts.immediate ?? false },
+      shutdownDeadline !== undefined ? Math.max(1, shutdownDeadline - Date.now()) : opts.timeoutMs
+    )
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     if (!opts.keepHistory) {
@@ -856,9 +874,21 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return { alive, killed }
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
-    await this.ensureConnected()
-    const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+  async listProcesses(opts?: { timeoutMs?: number }): Promise<PtyProcessInfo[]> {
+    // Why: destructive teardown shares one budget across connect + listSessions so a
+    // wedged handshake cannot burn the whole sweep deadline; undefined keeps the
+    // default unbounded connect + 30s RPC for all other callers.
+    const listDeadline = opts?.timeoutMs !== undefined ? Date.now() + opts.timeoutMs : undefined
+    await this.ensureConnected(
+      listDeadline !== undefined
+        ? { connectTimeoutMs: Math.max(1, listDeadline - Date.now()) }
+        : undefined
+    )
+    const result = await this.client.request<ListSessionsResult>(
+      'listSessions',
+      undefined,
+      listDeadline !== undefined ? Math.max(1, listDeadline - Date.now()) : opts?.timeoutMs
+    )
     return result.sessions
       .filter((s) => s.isAlive)
       .map((s) => ({
@@ -1058,9 +1088,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.client.disconnect()
   }
 
-  private async ensureConnected(): Promise<void> {
+  private async ensureConnected(opts?: { connectTimeoutMs?: number }): Promise<void> {
     try {
-      await this.client.ensureConnected()
+      // Why: destructive teardown bounds the handshake within its sweep budget so a
+      // wedged connect fails fast; undefined keeps the default unbounded connect.
+      await (opts?.connectTimeoutMs !== undefined
+        ? this.client.ensureConnectedWithin(opts.connectTimeoutMs)
+        : this.client.ensureConnected())
     } finally {
       // Why: a respawn launcher holds a temporary full pair until this adapter
       // has attempted its permanent reconnect, preventing both gaps and leaks.

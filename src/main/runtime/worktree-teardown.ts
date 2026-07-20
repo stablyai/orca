@@ -26,6 +26,16 @@ export type WorktreeTeardownResult = {
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
+// Why: margin so a bounded daemon RPC rejects BEFORE the sweep deadline and its
+// rejection can propagate — otherwise the outer deadline wins with a confusing
+// "Timed out waiting for physical PTY teardown" instead of the accurate stop failure.
+export const WORKTREE_TEARDOWN_RPC_MARGIN_MS = 500
+
+// Per-RPC bound derived from the remaining sweep budget; shrinks as time passes.
+export function boundedRpcTimeoutMs(deadline: number): number {
+  return Math.max(1, deadline - Date.now() - WORKTREE_TEARDOWN_RPC_MARGIN_MS)
+}
+
 /**
  * Kills every PTY we can prove belongs to `worktreeId`, across all three
  * registration surfaces (renderer graph, installed PTY provider session list,
@@ -198,8 +208,8 @@ async function sweepProviderByPrefix(
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   const sessions = failClosed
-    ? await provider.listProcesses()
-    : await provider.listProcesses().catch(() => [])
+    ? await provider.listProcesses({ timeoutMs: boundedRpcTimeoutMs(deadline) })
+    : await provider.listProcesses({ timeoutMs: boundedRpcTimeoutMs(deadline) }).catch(() => [])
   const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
@@ -225,7 +235,10 @@ async function sweepProviderByPrefix(
           return false
         }
         try {
-          await provider.shutdown(session.id, { immediate: true })
+          await provider.shutdown(session.id, {
+            immediate: true,
+            timeoutMs: boundedRpcTimeoutMs(deadline)
+          })
           return Date.now() < deadline
         } catch {
           return false
@@ -264,7 +277,10 @@ async function sweepRegistryForWorktree(
           return false
         }
         try {
-          await localProvider.shutdown(entry.ptyId, { immediate: true })
+          await localProvider.shutdown(entry.ptyId, {
+            immediate: true,
+            timeoutMs: boundedRpcTimeoutMs(deadline)
+          })
           return Date.now() < deadline
         } catch {
           return false

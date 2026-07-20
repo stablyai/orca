@@ -256,12 +256,21 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux.notify('pty.resize', { id: this.toRelayPtyId(id), cols, rows })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.mux.request('pty.shutdown', {
-      id: this.toRelayPtyId(id),
-      immediate: opts.immediate ?? false,
-      keepHistory: opts.keepHistory ?? false
-    })
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; timeoutMs?: number }
+  ): Promise<void> {
+    // Why: destructive teardown bounds the relay RPC within its sweep budget so a
+    // wedged relay fails fast; undefined keeps the multiplexer default timeout.
+    await this.mux.request(
+      'pty.shutdown',
+      {
+        id: this.toRelayPtyId(id),
+        immediate: opts.immediate ?? false,
+        keepHistory: opts.keepHistory ?? false
+      },
+      opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : undefined
+    )
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -314,8 +323,14 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
-    const result = await this.mux.request('pty.listProcesses')
+  async listProcesses(opts?: { timeoutMs?: number }): Promise<PtyProcessInfo[]> {
+    // Why: destructive teardown bounds the relay RPC within its sweep budget so a
+    // wedged relay fails fast; undefined keeps the multiplexer default timeout.
+    const result = await this.mux.request(
+      'pty.listProcesses',
+      undefined,
+      opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : undefined
+    )
     return (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)
