@@ -15,6 +15,7 @@ import {
   updateEnvironmentFromPairingCode
 } from '../../shared/runtime-environment-store'
 import { clearActiveRuntimeEnvironmentFocusIfMatches } from '../runtime-environment-focus-self-heal'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import {
   cleanupEphemeralVmRuntime,
   resumeEphemeralVmRuntime,
@@ -104,6 +105,10 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         try {
           removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
           clearActiveRuntimeEnvironmentFocusIfMatches(store, runtime.runtimeEnvironmentId)
+          // Why: same as the runtimeEnvironments:remove handler — drop the
+          // persisted terminal host partition so a later boot never resubscribes
+          // against this removed ephemeral-VM environment.
+          store.deleteHostWorkspaceSession(toRuntimeExecutionHostId(runtime.runtimeEnvironmentId))
         } catch {
           // Cleanup of provider resources matters more than hiding a stale local
           // environment row; users can still remove that manually.

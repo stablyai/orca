@@ -10,6 +10,7 @@ import {
   redactRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RemoteRuntimeSubscription } from '../../shared/remote-runtime-client'
@@ -103,6 +104,11 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       }
       clearActiveRuntimeEnvironmentFocusIfMatches(store, removed.id)
       closeSubscriptionsForEnvironment(removed.id)
+      // Why: drop the persisted terminal host partition so a later boot never
+      // restores tabs that resubscribe against the now-removed environment and
+      // flood 'Unknown environment'. Key on removed.id (the canonical env id):
+      // partitions live under runtime:<envId>, never the selector alias.
+      store.deleteHostWorkspaceSession(toRuntimeExecutionHostId(removed.id))
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
