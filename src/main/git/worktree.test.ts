@@ -33,6 +33,8 @@ import {
   WORKTREE_ADD_TIMEOUT_MS
 } from './worktree'
 
+const PARALLEL_CHECKOUT_GIT_ARGS = ['-c', 'checkout.workers=0']
+
 beforeEach(() => {
   clearGitCapabilityStateForTests()
 })
@@ -685,6 +687,7 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -710,16 +713,16 @@ describe('addWorktree', () => {
     ])
   })
 
-  it('checks out a selected existing local branch without creating a new branch', async () => {
+  it('places parallel config before worktree add for a selected existing branch', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
 
-    await addWorktree('/repo', '/repo-feature', 'feature/test', 'feature/test', false, false, {
+    await addWorktree('/repo', '/repo feature', 'feature/test', 'feature/test', false, false, {
       checkoutExistingBranch: true
     })
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [
-        ['worktree', 'add', '/repo-feature', 'feature/test'],
+        [...PARALLEL_CHECKOUT_GIT_ARGS, 'worktree', 'add', '/repo feature', 'feature/test'],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ]
     ])
@@ -736,7 +739,12 @@ describe('addWorktree', () => {
     })
 
     const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'worktree' && argv[1] === 'add'
+      ([argv]) =>
+        Array.isArray(argv) &&
+        argv[0] === '-c' &&
+        argv[1] === 'checkout.workers=0' &&
+        argv[2] === 'worktree' &&
+        argv[3] === 'add'
     )
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: WORKTREE_ADD_TIMEOUT_MS })
     expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
@@ -750,7 +758,15 @@ describe('addWorktree', () => {
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [
-        ['worktree', 'add', '--no-track', '-b', 'feature/no-base', '/repo-feature'],
+        [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
+          'worktree',
+          'add',
+          '--no-track',
+          '-b',
+          'feature/no-base',
+          '/repo-feature'
+        ],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }]
@@ -825,6 +841,7 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -863,6 +880,7 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -902,6 +920,7 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -942,6 +961,7 @@ describe('addWorktree', () => {
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'], { cwd: '/repo' }],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -992,6 +1012,7 @@ describe('addWorktree', () => {
       [['reset', '--hard', 'remote-main'], { cwd: '/repo' }],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -1229,6 +1250,7 @@ describe('addWorktree', () => {
       'refs/remotes/origin/main^{commit}'
     ])
     expect(gitExecFileAsyncMock.mock.calls[7]?.[0]).toEqual([
+      ...PARALLEL_CHECKOUT_GIT_ARGS,
       'worktree',
       'add',
       '--no-track',
@@ -1278,6 +1300,7 @@ describe('addWorktree', () => {
       ],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -1350,6 +1373,7 @@ describe('addWorktree', () => {
       ],
       [
         [
+          ...PARALLEL_CHECKOUT_GIT_ARGS,
           'worktree',
           'add',
           '--no-track',
@@ -1435,6 +1459,7 @@ describe('addWorktree', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
       ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
       [
+        ...PARALLEL_CHECKOUT_GIT_ARGS,
         'worktree',
         'add',
         '--no-track',
@@ -1543,6 +1568,7 @@ describe('addWorktree', () => {
     ])
     expect(gitExecFileAsyncMock.mock.calls[1]).toEqual([
       [
+        ...PARALLEL_CHECKOUT_GIT_ARGS,
         'worktree',
         'add',
         '--no-track',
@@ -1569,6 +1595,7 @@ describe('addWorktree', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
       ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
       [
+        ...PARALLEL_CHECKOUT_GIT_ARGS,
         'worktree',
         'add',
         '--no-track',
@@ -1610,6 +1637,7 @@ describe('addWorktree', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/release/main^{commit}'],
       ['rev-parse', '--verify', '--quiet', 'refs/heads/release/main^{commit}'],
       [
+        ...PARALLEL_CHECKOUT_GIT_ARGS,
         'worktree',
         'add',
         '--no-track',
@@ -1660,6 +1688,52 @@ describe('addWorktree', () => {
       'reset',
       '--hard',
       'remote-upstream-main'
+    ])
+  })
+
+  it('uses parallel checkout for sparse worktrees without changing argument boundaries', async () => {
+    resolveRemoteBase()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
+    resolveCreationBaseConfigWrite()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'true\n' }) // push.autoSetupRemote already set
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // sparse-checkout init
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // sparse-checkout set
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // checkout
+
+    await expect(
+      addSparseWorktree(
+        '/repo',
+        '/repo sparse feature',
+        'feature/sparse',
+        ['src folder', '--generated'],
+        'origin/main'
+      )
+    ).resolves.toEqual({})
+
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      [
+        ...PARALLEL_CHECKOUT_GIT_ARGS,
+        'worktree',
+        'add',
+        '--no-checkout',
+        '--no-track',
+        '-b',
+        'feature/sparse',
+        '/repo sparse feature',
+        'refs/remotes/origin/main'
+      ],
+      [
+        'config',
+        '--local',
+        '--replace-all',
+        'branch.feature/sparse.base',
+        'refs/remotes/origin/main'
+      ],
+      ['config', '--get', 'push.autoSetupRemote'],
+      ['sparse-checkout', 'init', '--cone'],
+      ['sparse-checkout', 'set', '--', 'src folder', '--generated'],
+      [...PARALLEL_CHECKOUT_GIT_ARGS, 'checkout', 'feature/sparse']
     ])
   })
 

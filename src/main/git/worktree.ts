@@ -84,6 +84,10 @@ const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 
+// Why: Git 2.32+ can overlap checkout writes across CPU cores, while older
+// versions safely ignore the unknown config and keep their serial path.
+const PARALLEL_CHECKOUT_GIT_ARGS = ['-c', 'checkout.workers=0'] as const
+
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
 // stall its checkout writes for minutes (STA-1292) — a stuck create then fails
 // fast instead of spinning forever. Generous enough not to kill a legit large
@@ -976,7 +980,7 @@ async function performAddWorktree(
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
-  const args = ['worktree', 'add']
+  const args = [...PARALLEL_CHECKOUT_GIT_ARGS, 'worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')
@@ -1126,7 +1130,10 @@ export async function addSparseWorktree(
       ['sparse-checkout', 'set', '--', ...directories],
       gitExecOptions(worktreePath, options)
     )
-    await gitExecFileAsync(['checkout', branch], gitExecOptions(worktreePath, options))
+    await gitExecFileAsync(
+      [...PARALLEL_CHECKOUT_GIT_ARGS, 'checkout', branch],
+      gitExecOptions(worktreePath, options)
+    )
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
