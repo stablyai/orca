@@ -264,10 +264,15 @@ import type {
   FolderWorkspacePathStatusRequest
 } from '../../shared/folder-workspace-path-status'
 import {
+  applyMetadataFallbackVisibility,
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree-ownership'
+import {
+  createAgentScratchWorktreePathMatcher,
+  type AgentScratchWorktreePathMatcher
+} from '../../shared/agent-scratch-worktrees'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -15279,11 +15284,29 @@ export class OrcaRuntimeService {
     }
     const resolved = await this.listResolvedWorktrees()
     const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
+    const checkoutPathsByRepoId = new Map<string, string[]>()
+    for (const worktree of resolved) {
+      const checkoutPaths = checkoutPathsByRepoId.get(worktree.repoId) ?? []
+      checkoutPaths.push(worktree.path)
+      checkoutPathsByRepoId.set(worktree.repoId, checkoutPaths)
+    }
+    const agentScratchMatchersByRepoId = new Map(
+      (this.store?.getRepos() ?? []).map((repo) => [
+        repo.id,
+        createAgentScratchWorktreePathMatcher([
+          repo.path,
+          ...(checkoutPathsByRepoId.get(repo.id) ?? [])
+        ])
+      ])
+    )
     const worktrees = resolved.filter((worktree) => {
       if (repoId && worktree.repoId !== repoId) {
         return false
       }
-      return this.isRuntimeWorktreeVisible(worktree)
+      return this.isRuntimeWorktreeVisible(
+        worktree,
+        agentScratchMatchersByRepoId.get(worktree.repoId)
+      )
     })
     return {
       worktrees: worktrees.slice(0, limit),
@@ -15312,19 +15335,23 @@ export class OrcaRuntimeService {
     if (scan.ok) {
       this.pruneLineageForMissingRepoWorktrees(repo, scan.worktrees)
     }
+    const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
+      repo.path,
+      ...scan.worktrees.map((worktree) => worktree.path)
+    ])
     const detected = scan.worktrees.map((gitWorktree) => {
       const worktreeId = `${repo.id}::${gitWorktree.path}`
       const meta = this.store?.getWorktreeMeta(worktreeId)
       const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
-      const detectedWorktree = this.toRuntimeDetectedWorktree(repo, worktree)
+      const detectedWorktree = this.toRuntimeDetectedWorktree(
+        repo,
+        worktree,
+        agentScratchWorktreePathMatcher
+      )
       if (scan.ok) {
         return detectedWorktree
       }
-      return {
-        ...detectedWorktree,
-        visible: true,
-        ownership: detectedWorktree.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
-      } satisfies DetectedWorktree
+      return applyMetadataFallbackVisibility(detectedWorktree)
     })
     return {
       repoId: repo.id,
@@ -15334,15 +15361,22 @@ export class OrcaRuntimeService {
     }
   }
 
-  private isRuntimeWorktreeVisible(worktree: Worktree): boolean {
+  private isRuntimeWorktreeVisible(
+    worktree: Worktree,
+    agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
+  ): boolean {
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo || !this.store) {
       return true
     }
-    return this.toRuntimeDetectedWorktree(repo, worktree).visible
+    return this.toRuntimeDetectedWorktree(repo, worktree, agentScratchWorktreePathMatcher).visible
   }
 
-  private toRuntimeDetectedWorktree(repo: Repo, worktree: Worktree): DetectedWorktree {
+  private toRuntimeDetectedWorktree(
+    repo: Repo,
+    worktree: Worktree,
+    agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
+  ): DetectedWorktree {
     const settings = this.store?.getSettings()
     if (!settings) {
       return {
@@ -15358,7 +15392,8 @@ export class OrcaRuntimeService {
       meta: this.store?.getWorktreeMeta(worktree.id),
       settings,
       knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
-      isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo)
+      isLegacyRepoForVisibility: isLegacyRepoForExternalWorktreeVisibility(repo),
+      agentScratchWorktreePathMatcher
     })
   }
 

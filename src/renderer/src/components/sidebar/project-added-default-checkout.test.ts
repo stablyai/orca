@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultOnboardingState } from '../../../../shared/constants'
-import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
+import type {
+  DetectedWorktree,
+  DetectedWorktreeListResult,
+  Worktree
+} from '../../../../shared/types'
 import {
   finishProjectAddWithDefaultCheckout,
   getProjectDefaultCheckout,
@@ -67,7 +71,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 
 function makeDetectedLinkedWorktrees(
   defaultCheckout: Worktree,
-  options: { linkedVisible?: boolean } = {}
+  options: { linkedVisible?: boolean; linkedOwnership?: DetectedWorktree['ownership'] } = {}
 ): DetectedWorktreeListResult {
   const linkedVisible = options.linkedVisible ?? false
   return {
@@ -89,7 +93,7 @@ function makeDetectedLinkedWorktrees(
           branch: 'refs/heads/feature',
           isMainWorktree: false
         }),
-        ownership: 'external',
+        ownership: options.linkedOwnership ?? 'external',
         selectedCheckout: false,
         visible: linkedVisible
       }
@@ -296,6 +300,26 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'loaded_default_checkout'
     })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+  })
+
+  it('does not flip visibility when the only hidden siblings are agent scratch', async () => {
+    const defaultCheckout = makeWorktree()
+    mocks.state.worktreesByRepo = {
+      'repo-1': [defaultCheckout]
+    }
+    mocks.state.detectedWorktreesByRepo = {
+      'repo-1': makeDetectedLinkedWorktrees(defaultCheckout, { linkedOwnership: 'agent-scratch' })
+    }
+
+    await openProjectDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'local_folder_picker',
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.state.updateRepo).not.toHaveBeenCalled()
+    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
   })
 

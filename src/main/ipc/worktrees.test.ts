@@ -2306,6 +2306,48 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('hides agent scratch created inside a linked checkout from desktop listings', async () => {
+    const linkedCheckoutPath = '/workspace/feature-x'
+    const scratchPath = `${linkedCheckoutPath}/.claude/worktrees/agent-a04ccaaa`
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: linkedCheckoutPath,
+        head: 'feature-head',
+        branch: 'refs/heads/feature-x',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: scratchPath,
+        head: 'scratch-head',
+        branch: 'refs/heads/worktree-agent-a04ccaaa',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const detected = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { worktrees: (Worktree & { ownership: string; visible: boolean })[] }
+    const visible = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as Worktree[]
+
+    expect(detected.worktrees.find((worktree) => worktree.path === scratchPath)).toMatchObject({
+      ownership: 'agent-scratch',
+      visible: false
+    })
+    expect(visible.map((worktree) => worktree.path)).toEqual([
+      '/workspace/repo',
+      linkedCheckoutPath
+    ])
+  })
+
   it('does not reuse host detected worktree scans for a selected WSL runtime', async () => {
     listWorktreesMock
       .mockResolvedValueOnce([

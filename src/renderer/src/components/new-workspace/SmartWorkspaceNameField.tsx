@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: the smart name field owns source tabs,
-search orchestration, and result rendering so the unified create flow stays
-in one predictable form control instead of splitting state across fragments. */
+/* eslint-disable max-lines -- Why: owns source tabs, search orchestration, and result rendering as one create-flow form control. */
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this component's existing reset effects need a dedicated refactor outside the Linear API compatibility change. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -94,8 +92,7 @@ type SmartWorkspaceNameFieldProps = {
   value: string
   onValueChange: (value: string) => void
   onGitHubItemSelect: (item: GitHubWorkItem) => void
-  /** Optional so callers that pre-date GitLab support don't need to wire
-   *  it. When omitted, GitLab paste-URL detection is silently skipped. */
+  /** Optional; when omitted, GitLab paste-URL detection is silently skipped. */
   onGitLabItemSelect?: (item: GitLabWorkItem) => void
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
@@ -180,8 +177,7 @@ export default function SmartWorkspaceNameField({
   crossRepoSwitchTarget = 'project',
   onActiveSourceModeChange
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
-  // Why: tab/filter labels use the lightweight translate() helper; subscribing
-  // here makes them refresh even when language changes don't remount the field.
+  // Why: subscribe so translate()-based tab/filter labels refresh on language change without a remount.
   useTranslation()
   const {
     addRepo,
@@ -311,9 +307,7 @@ export default function SmartWorkspaceNameField({
   const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
   const localInputFocusFrameRef = useRef<number | null>(null)
-  // Why: dialog autofocus and other programmatic .focus() calls can look
-  // user-initiated in Electron, so gate the source popover until the user
-  // actually interacts with this field or tabs from another composer control.
+  // Why: Electron makes programmatic .focus() look user-initiated, so gate the source popover until real interaction.
   const deferSourcePopoverUntilInteractionRef = useRef(true)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<{
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
@@ -398,8 +392,7 @@ export default function SmartWorkspaceNameField({
         return
       }
       focusedSelectedSourceKeyRef.current = selectedSourceFocusKey
-      // Why: after Enter accepts a source row, the input unmounts. Move focus
-      // to the pill immediately so the next Enter advances to Agent.
+      // Why: input unmounts after Enter accepts a row; move focus to the pill so the next Enter advances to Agent.
       node.focus({ preventScroll: true })
     },
     [selectedSourceFocusKey]
@@ -877,16 +870,11 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-    // Why: list/search actions are stable store methods; depending on them
-    // would refetch on unrelated store writes.
+    // Why: list/search are stable store methods; depending on them would refetch on unrelated store writes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery, disabled, linearSourceContext, linearStatus.connected, shouldQueryLinear])
 
-  // Why: GitLab paste-URL flow. Watches the debounced query for a GitLab
-  // issue/MR URL (parseGitLabIssueOrMRLink already filters non-GitLab URLs
-  // via the project-internal `/-/` separator) and resolves it to a
-  // GitLabWorkItem via the IPC. Skipped silently when the host hook
-  // hasn't supplied an onGitLabItemSelect handler.
+  // Why: GitLab paste-URL flow; parseGitLabIssueOrMRLink filters non-GitLab URLs via the project-internal `/-/` separator.
   const parsedGlLink = useMemo(
     () => (sourceQueryWithinLimit ? parseGitLabIssueOrMRLink(debouncedQuery) : null),
     [debouncedQuery, sourceQueryWithinLimit]
@@ -900,8 +888,7 @@ export default function SmartWorkspaceNameField({
     (mode === 'smart' || mode === 'gitlab')
   useEffect(() => {
     if (!shouldQueryGitlab || disabled || !onGitLabItemSelect) {
-      // Why: don't clobber list-mode items here — the listMRs effect below
-      // is the sole writer when the user is in 'gitlab' mode without a URL.
+      // Why: don't clobber list-mode items — the listMRs effect below is the sole writer in 'gitlab' mode without a URL.
       if (!shouldQueryGitlab || (parsedGlLink === null && mode !== 'gitlab')) {
         setGitlabItems([])
       }
@@ -924,8 +911,7 @@ export default function SmartWorkspaceNameField({
           repoPath: target.repo.path,
           repoId: target.repo.id,
           sourceContext: target.gitlabSourceContext,
-          // Why: self-hosted GitLab URLs must resolve against their pasted
-          // hostname; gitlab.com is only one possible GitLab instance.
+          // Why: self-hosted GitLab URLs must resolve against their pasted hostname, not gitlab.com.
           host: parsedGlLink.slug.host,
           path: parsedGlLink.slug.path,
           iid: parsedGlLink.number,
@@ -954,11 +940,7 @@ export default function SmartWorkspaceNameField({
     }
   }, [disabled, mode, onGitLabItemSelect, parsedGlLink, repoBackedSearchTargets, shouldQueryGitlab])
 
-  // Why: when the user is on the GitLab tab (or in 'smart' mix) and
-  // hasn't pasted a URL, surface the project's MRs filtered by the
-  // current state chip. Default 'opened' matches gitlab.com's default
-  // MR list view. Smart mode includes GitLab MRs alongside GitHub
-  // items so the unified picker actually surfaces both providers.
+  // Why: list the project's MRs by state chip when no URL pasted; default 'opened' matches gitlab.com's default MR view.
   useEffect(() => {
     if (!shouldQueryGitlab || disabled || !onGitLabItemSelect) {
       if (!shouldQueryGitlab) {
@@ -978,9 +960,7 @@ export default function SmartWorkspaceNameField({
     }
     let stale = false
     setGitlabLoading(true)
-    // Why: thread the typed query through so the GitLab API filters MRs by
-    // name/number (mirrors the GitHub effect). shouldQueryGitlab already
-    // gates on sourceQueryWithinLimit, so an oversized query never reaches here.
+    // Why: thread the typed query so the GitLab API filters MRs by name/number (shouldQueryGitlab already gates oversized queries).
     const trimmedQuery = debouncedQuery.trim() || undefined
     void Promise.all(
       repoBackedSearchTargets.map((target) =>
@@ -1071,28 +1051,14 @@ export default function SmartWorkspaceNameField({
     }
   }, [rows])
 
-  // Why: source rows (GitHub/branches/Linear) are driven by debouncedQuery,
-  // so they're stale until the user pauses typing for SEARCH_DEBOUNCE_MS.
-  // We don't want to filter them out (causes flicker as results appear and
-  // disappear with each keystroke), but we do need to prevent cmdk's Enter
-  // handler from auto-selecting a stale source row. Two cases:
-  //   - Smart/Branches: a typed-text row (use-name / create-branch) exists
-  //     and is pinned at the top — force the highlight onto it so Enter
-  //     commits the typed text instead of a stale issue/PR/branch.
-  //   - GitHub/Linear: no typed-text fallback row, so clear the highlight
-  //     entirely; the input's Enter handler falls through to onPlainEnter.
+  // Why: source rows lag debouncedQuery, so keep Enter off a stale row.
   const valueWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(value)
   const debouncedQueryWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(debouncedQuery)
   const trimmedValue = valueWithinSourceLimit ? value.trim() : ''
   const trimmedDebouncedQuery = debouncedQueryWithinSourceLimit ? debouncedQuery.trim() : ''
   const isQueryStale = trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
 
-  // Why: when the typed value is unambiguously a source reference — a
-  // GitHub issue/PR shorthand ("#1234"), a github.com issue/pull URL, or a
-  // Linear identifier ("STA-123") — the user is clearly looking up that
-  // specific source rather than naming a workspace. Once a matching row
-  // appears in the results, snap the highlight onto it so Enter picks it
-  // instead of the typed-text fallback.
+  // Why: when the typed value is an unambiguous source ref, snap the highlight to that row so Enter picks it over the typed-text fallback.
   const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
@@ -1126,15 +1092,12 @@ export default function SmartWorkspaceNameField({
   const handleSelect = useCallback(
     (row: RowEntry) => {
       if (row.kind === 'use-name' || row.kind === 'create-branch') {
-        // Why: "create new branch" has no existing ref to base from, so
-        // it follows the same path as a typed name — the workspace's branch
-        // is derived from `name` and `baseBranch` stays unset (default base).
+        // Why: "create new branch" has no ref to base from, so it uses the typed-name path (default base).
         onValueChange(row.name)
       } else if (row.kind === 'github') {
         onGitHubItemSelect(row.item)
       } else if (row.kind === 'gitlab') {
-        // Why: optional handler — guarded so the surface degrades to a
-        // no-op for hosts that haven't wired GitLab support yet.
+        // Why: optional handler — guarded so it no-ops for hosts without GitLab support.
         onGitLabItemSelect?.(row.item)
       } else if (row.kind === 'branch') {
         onBranchSelect(row.refName, row.localBranchName)
@@ -1327,11 +1290,7 @@ export default function SmartWorkspaceNameField({
               variant="line"
               className="h-7 w-full justify-start gap-4 px-0"
               onFocusCapture={(event) => {
-                // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
-                // the active trigger on every render, so we can't keep it out of
-                // the natural Tab order via props or a MutationObserver (race
-                // with React commits). Instead, intercept focus on entry into
-                // the tabs list so forward Tab goes straight to the input.
+                // Why: Radix Tabs roving focus re-applies tabindex=0 to the active trigger (races React commits), so forward Tab to the input.
                 const previous = event.relatedTarget as HTMLElement | null
                 const list = tabsListRef.current
                 const input = localInputRef.current
@@ -1375,10 +1334,7 @@ export default function SmartWorkspaceNameField({
           <PopoverAnchor asChild>
             <div className="relative min-w-0">
               {selectedSource ? (
-                // Why: min-w-0 + w-full lets the pill shrink to its flex
-                // parent; without them the inner truncate's intrinsic
-                // min-content (long PR title) propagates up and pushes the
-                // dialog wider than its max-w.
+                // Why: min-w-0 + w-full let the pill shrink; else the inner truncate's min-content (long PR title) widens the dialog past its max-w.
                 <div
                   ref={setSelectedSourceNode}
                   data-workspace-source-pill="true"
@@ -1478,10 +1434,7 @@ export default function SmartWorkspaceNameField({
                       }
                     }}
                     onFocus={(event) => {
-                      // Why: only open when focus moves from another composer
-                      // control (Tab/Shift+Tab). Dialog autofocus comes from
-                      // outside the composer root and stays suppressed until
-                      // click/type/tab-within-composer engagement above.
+                      // Why: only open on focus from another composer control (Tab); dialog autofocus from outside stays suppressed.
                       if (!isComposerFieldToFieldFocus(event)) {
                         return
                       }
@@ -1520,11 +1473,7 @@ export default function SmartWorkspaceNameField({
                             handleSelect(row)
                             return
                           }
-                          // No highlighted row (e.g., stale results in
-                          // GitHub/Linear modes where the highlight was
-                          // cleared to avoid auto-selecting a stale source).
-                          // Fall through to onPlainEnter so the keypress
-                          // doesn't feel inert.
+                          // No highlighted row (e.g. cleared stale GitHub/Linear results); fall through to onPlainEnter so the keypress isn't inert.
                         }
                         onPlainEnter?.()
                       }
@@ -1545,14 +1494,11 @@ export default function SmartWorkspaceNameField({
             align="start"
             sideOffset={4}
             className="popover-scroll-content flex w-[var(--radix-popover-trigger-width)] flex-col p-0"
-            // Why: this popover lives inside the create-workspace dialog; a
-            // taller result list can cover the submit footer while typing.
+            // Why: capped height so the result list can't cover the create-workspace dialog's submit footer while typing.
             style={{ maxHeight: 'min(var(--radix-popover-content-available-height,7rem),7rem)' }}
             onOpenAutoFocus={(event) => event.preventDefault()}
             onPointerDownOutside={(event) => {
-              // Why: the input is a PopoverAnchor, not a PopoverTrigger, so
-              // Radix treats clicks on it as outside the popover. Keep focus
-              // clicks and mode-tab clicks from immediately closing results.
+              // Why: input is a PopoverAnchor not Trigger, so Radix counts clicks on it as outside; keep input/mode-tab clicks from closing results.
               const target = event.target as Node
               if (
                 localInputRef.current?.contains(target) ||
@@ -1572,9 +1518,7 @@ export default function SmartWorkspaceNameField({
             }}
           >
             {mode === 'gitlab' ? (
-              // Why: GitLab MR-state filter — Open / Merged / Closed / All —
-              // mirrors the gitlab.com merge-requests page tab strip so users
-              // arriving from the web UI find a familiar control.
+              // Why: MR-state filter mirrors gitlab.com's merge-requests tab strip so web-UI users find a familiar control.
               <div
                 className="flex shrink-0 items-center gap-1 border-b border-border/40 px-2 py-1.5"
                 onMouseDown={(e) => e.preventDefault()}
@@ -1712,12 +1656,7 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
     )
   }
   if (row.kind === 'gitlab') {
-    // Why: GitLab MRs use GitMerge (arrow-merge-into-line) rather than
-    // GitPullRequest so the row visually disambiguates from branches
-    // (GitBranch's fork shape reads similar to GitPullRequest at this
-    // size). GitMerge also matches gitlab.com's own MR iconography,
-    // so users coming from the web UI find it familiar. Issues stay
-    // on CircleDot — the shape is provider-agnostic.
+    // Why: MRs use GitMerge (not GitPullRequest, which reads like GitBranch at this size) and match gitlab.com's MR iconography.
     return row.item.type === 'mr' ? (
       <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
     ) : (
@@ -1735,8 +1674,7 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
     return <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
   }
   if (kind === 'gitlab-mr') {
-    // Why: see RowIcon — GitMerge keeps MRs distinct from PRs and
-    // branches.
+    // Why: GitMerge keeps MRs distinct from PRs and branches (see RowIcon).
     return <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
   }
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
@@ -1787,9 +1725,7 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
     )
   }
   if (row.kind === 'gitlab') {
-    // Why: GitLab uses `!N` for MRs and `#N` for issues — show the
-    // appropriate prefix so the row is unambiguous to users coming from
-    // gitlab.com's UI.
+    // Why: GitLab uses `!N` for MRs and `#N` for issues (gitlab.com convention).
     const prefix = row.item.type === 'mr' ? '!' : '#'
     return (
       <span className="min-w-0 truncate">

@@ -1,15 +1,6 @@
-/* eslint-disable max-lines -- Why: this module is the canonical, transport-
-   agnostic agent-hook listener. The HTTP request parser, payload normalizer,
-   per-CLI extractors, and on-disk endpoint-file writer all share invariants
-   (size caps, warn-once Sets, shell-safe value rules) that must not drift
-   between Orca's main process and the relay. Splitting by line count would
-   force the same invariants to be re-derived in two places. */
+/* eslint-disable max-lines -- Why: canonical transport-agnostic listener; parser, normalizer, per-CLI extractors, and endpoint writer share invariants that must not drift between Orca's main process and the relay. */
 
-// Why: extracted from `src/main/agent-hooks/server.ts` so the relay can host
-// the same listener pipeline on the remote without dragging Electron in. The
-// module uses only Node builtins (http/fs/crypto/net/path/url/os) — none of
-// which pull `electron` — so it is safe to import from `src/relay/`. See
-// docs/design/agent-status-over-ssh.md §3 ("relay normalizes; Orca routes").
+// Why: extracted from src/main/agent-hooks/server.ts so the relay can host the pipeline without Electron (Node builtins only). See docs/design/agent-status-over-ssh.md §3.
 import type { IncomingMessage } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -67,19 +58,13 @@ import {
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
 
-/** Bound the warn-once Sets so a buggy/malicious local client that varies its
- *  `version` / `env` fields per request cannot grow them without bound for the
- *  process lifetime. */
+/** Bound the warn-once Sets so a client varying `version`/`env` per request can't grow them unbounded. */
 const MAX_WARNED_KEYS = 32
 
 /** Slowloris cap: drop requests that have not finished sending after 5 s. */
 export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
-/** Why: OpenCode plugin builds installed before the throttle/cap fix re-post
- *  the full accumulated reply text on every streamed part update (O(n²) bytes
- *  per turn). Capping at ingest bounds the per-event cost of the status
- *  compare, IPC fanout, renderer store update, and disk persist regardless of
- *  which plugin version is running inside the OpenCode process. */
+/** Why: old OpenCode plugin builds re-post the full accumulated reply on every streamed part (O(n²) bytes/turn); cap at ingest to bound per-event cost. */
 export const OPENCODE_HOOK_TEXT_MAX_CHARS = 8_000
 
 function capOpenCodeHookText(text: string): string {
@@ -88,15 +73,10 @@ function capOpenCodeHookText(text: string): string {
     : text
 }
 
-/** Bound paneKey size — `${tabId}:${leafUuid}` is well under 200 chars in
- *  practice; cap defends per-pane caches against pathological input.
- *  Exported so non-HTTP ingest paths (e.g. Orca's `ingestRemote`) can apply
- *  the same cap as defense-in-depth. */
+/** Bound paneKey size (real keys are well under 200); caps per-pane caches against pathological input. Exported so non-HTTP ingest (`ingestRemote`) applies the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
 
-/** Per-listener-instance state that holds caches needing per-PTY teardown
- *  (last prompt, last tool snapshot, last status replay). Both Orca's main
- *  process and the relay get their own instance — they never share. */
+/** Per-listener-instance caches needing per-PTY teardown; Orca's main process and the relay each get their own, never shared. */
 export type HookListenerState = {
   warnedVersions: Set<string>
   warnedEnvs: Set<string>
@@ -105,29 +85,18 @@ export type HookListenerState = {
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
   ampCompletedCacheKeys: Set<string>
-  /** Live subagents/teammates per Claude pane. Survives turn boundaries —
-   *  background children outlive the lead turn that spawned them. */
+  /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
-  /** Last state derived from the LEAD session's own events (subagent-origin
-   *  events carry `agent_id` and are excluded). Needed so a SubagentStop can
-   *  re-emit the pane status without inventing a lead state. `interrupted`
-   *  persists here because a gated 'working' emit clamps the flag away, and
-   *  the eventual done (when the last child drains) must still carry it. */
+  /** Last state from the LEAD session's own events (subagent events carry agent_id, excluded), so a SubagentStop can re-emit pane status; `interrupted` persists so the eventual done still carries it. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
 }
 
 export type ClaudeLeadTurnState = {
   state: AgentStatusState
   interrupted?: true
-  /** Set when the waiting state was induced by a subagent's PermissionRequest
-   *  or AskUserQuestion (those payloads carry `agent_id`). Only that agent's
-   *  next tool activity may clear the wait — other children's churn must not
-   *  dismiss a pending human-input card. */
+  /** Subagent that induced the wait; only its next tool activity may clear it, so other children's churn can't dismiss a pending human-input card. */
   waitingAgentId?: string
-  /** The lead state a child-induced wait displaced. Restored when the wait
-   *  clears — the lead may have already finished its turn, and inventing
-   *  'working' would leave the pane spinning after the roster drains (the
-   *  done-gate only ever downgrades done → working, never back). */
+  /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
   stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
 }
 
@@ -235,12 +204,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeLeadStateByPaneKey.clear()
 }
 
-/** Emit warn-once diagnostics for cross-build (`version`) and dev-vs-prod
- *  (`env`) mismatches. Shared between the local HTTP path
- *  (`normalizeHookPayload`) and the relay-forwarded path
- *  (`AgentHookServer.ingestRemote`) so a remote-sourced event triggers the
- *  same diagnostic noise as a local one. The relay's "remote" marker is a
- *  location tag, not a build env, so it must not look like stale local hooks. */
+/** Warn-once on cross-build (`version`) and dev-vs-prod (`env`) mismatches; the relay's "remote" env marker is a location tag, not a build env, so it must not warn as a stale local hook. */
 export function warnOnHookEnvOrVersionMismatch(
   state: HookListenerState,
   fields: { version?: string; env?: string; expectedEnv: string }
@@ -276,16 +240,11 @@ export type AgentHookEventPayload = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
-  /** Identifies the SSH connection the event arrived on, or null for local.
-   *  Stamped only on the remote-ingest path (Orca's `ingestRemote`); the
-   *  HTTP path always sets null because it cannot know which mux a request
-   *  came from. See docs/design/agent-status-over-ssh.md §5. */
+  /** SSH connection the event arrived on, or null for local (only ingestRemote stamps it; the HTTP path can't know the mux). See docs/design/agent-status-over-ssh.md §5. */
   connectionId: string | null
-  /** True when this hook event carried prompt text directly, instead of using
-   *  the listener's cached prompt from an earlier event in the same pane. */
+  /** True when the event carried prompt text directly, not the listener's cached prompt from an earlier event in the pane. */
   hasExplicitPrompt?: boolean
-  /** Stable per-turn key when a source exposes enough local hook context to
-   *  distinguish duplicate hook delivery from a same-text prompt rerun. */
+  /** Stable per-turn key to distinguish duplicate hook delivery from a same-text prompt rerun (when the source exposes enough context). */
   promptInteractionKey?: string
   /** Raw agent hook event name, used by main-process transition guards. */
   hookEventName?: string
@@ -297,8 +256,7 @@ export type AgentHookEventPayload = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
-  /** Session identity update with no turn-state transition. The receiver uses
-   *  this to refresh durable resume metadata without showing a fake status row. */
+  /** Session identity update with no turn-state transition; refreshes durable resume metadata without a fake status row. */
   providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
@@ -326,8 +284,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
       req.off('end', onEnd)
       req.off('error', onError)
       req.off('close', onClose)
-      // Why: detached parser closures release body chunks; keep a neutral
-      // error sink so a late IncomingMessage error cannot become unhandled.
+      // Why: keep a neutral error sink so a late IncomingMessage error after cleanup can't become unhandled.
       req.on('error', ignoreSettledRequestError)
     }
     const settleResolve = (value: unknown): void => {
@@ -347,8 +304,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
       reject(error)
     }
     const onData = (chunk: Buffer): void => {
-      // Why: check size in bytes (not UTF-16 code units) and stop accumulating
-      // after rejection so a malicious client cannot push memory past the cap.
+      // Why: bound by bytes (not UTF-16 units) and stop accumulating after rejection so a client can't push memory past the cap.
       if (byteLength + chunk.length > HOOK_REQUEST_MAX_BYTES) {
         settleReject(new Error('payload too large'))
         req.destroy()
@@ -359,8 +315,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
     }
     const onEnd = (): void => {
       try {
-        // Why: decode once via Buffer.concat so multi-byte UTF-8 characters
-        // that straddle a chunk boundary are reassembled correctly.
+        // Why: Buffer.concat before decode so multi-byte UTF-8 straddling a chunk boundary reassembles correctly.
         const body = chunks.length > 0 ? Buffer.concat(chunks).toString('utf8') : ''
         const contentType = req.headers['content-type'] ?? ''
         if (typeof contentType === 'string' && contentType.includes('application/json')) {
@@ -374,8 +329,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
           settleResolve(parseFormEncodedBody(body))
           return
         }
-        // Why: existing managed scripts POST JSON; updated POSIX scripts POST
-        // form-encoded. Default to JSON for unknown content types.
+        // Why: managed scripts POST JSON, updated POSIX scripts form-encoded; default to JSON for unknown content types.
         settleResolve(body ? JSON.parse(body) : {})
       } catch (error) {
         settleReject(error)
@@ -384,9 +338,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
     const onError = (err: Error): void => {
       settleReject(err)
     }
-    // Why: req.destroy() (called by the slowloris timer) emits 'close' but
-    // not 'end'/'error'. Without this handler the promise would never settle
-    // and the chunk buffers would be retained for the process lifetime.
+    // Why: req.destroy() (slowloris timer) emits 'close' but not 'end'/'error'; without this the promise never settles and buffers leak.
     const onClose = (): void => {
       settleReject(new Error('aborted'))
     }
@@ -415,9 +367,7 @@ type ExtractedPromptText = {
     | null
 }
 
-// Joins the `text` of an Anthropic-style content-block array ([{ type: 'text',
-// text }, ...]); plain string items are included too. Returns '' when nothing
-// textual is present so callers can fall through to the next prompt source.
+// Joins text of an Anthropic-style content-block array; returns '' when nothing textual so callers fall through to the next prompt source.
 function contentBlockArrayText(value: unknown[]): string {
   const parts: string[] = []
   for (const item of value) {
@@ -448,14 +398,10 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
   for (const key of candidateKeys) {
     const value = hookPayload[key]
     if (typeof value === 'string' && value.trim().length > 0) {
-      // Why: trim so prompts match what readStringField produces elsewhere —
-      // surrounding whitespace would otherwise leak into UI and caches.
+      // Why: trim so prompts match readStringField output — whitespace would otherwise leak into UI and caches.
       return { text: value.trim(), source: key as Exclude<ExtractedPromptText['source'], null> }
     }
-    // Why: Kimi Code sends UserPromptSubmit `prompt` as a content-block array
-    // ([{ type: 'text', text }]) rather than a string. Extract its text for the
-    // genuine prompt keys. `message` stays string-only: it is the ambiguous
-    // status/permission field that hasExplicitUserPrompt intentionally distrusts.
+    // Why: Kimi sends `prompt` as a content-block array, not a string; extract it for real prompt keys but skip `message` (ambiguous status field).
     if (key !== 'message' && Array.isArray(value)) {
       const text = contentBlockArrayText(value)
       if (text.length > 0) {
@@ -463,9 +409,7 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
       }
     }
   }
-  // Why: OpenCode's plugin sends MessagePart events with { role, text }. When
-  // role === 'user', the text *is* the prompt — surface it even though
-  // OpenCode has no UserPromptSubmit-equivalent.
+  // Why: OpenCode sends MessagePart { role, text } with no UserPromptSubmit; when role === 'user' the text is the prompt.
   if (hookPayload.role === 'user' && typeof hookPayload.text === 'string') {
     const trimmed = capOpenCodeHookText(hookPayload.text.trim())
     if (trimmed.length > 0) {
@@ -483,8 +427,7 @@ function stripGrokUserQueryWrapper(promptText: string): string {
   const closer = '</user_query>'
   const wrappedText = promptText.slice(opener.length)
   const text = wrappedText.endsWith(closer) ? wrappedText.slice(0, -closer.length) : wrappedText
-  // Why: Grok emits the submitted prompt wrapped in its internal
-  // `<user_query>` envelope; the status cache should hold the user text.
+  // Why: Grok wraps the submitted prompt in a `<user_query>` envelope; the status cache should hold the plain user text.
   return text.trim()
 }
 
@@ -494,11 +437,7 @@ function resolvePrompt(
   promptText: string,
   options?: { resetOnNewTurn?: boolean }
 ): string {
-  // Why: harness-injected turns (task notifications, system reminders) fire
-  // UserPromptSubmit but are not the user's ask — keep the cached real prompt
-  // instead of surfacing raw machinery tags in status labels. Match only known
-  // harness tags: a real prompt pasting a custom `<my-element>` must reset the
-  // turn, not be mistaken for machinery and leave the pane on a stale prompt.
+  // Why: harness-injected turns fire UserPromptSubmit but aren't the user's ask — keep cached prompt; match only known tags so real <tags> still reset the turn.
   if (isKnownHarnessInjectedUserTurnText(promptText)) {
     return state.lastPromptByPaneKey.get(paneKey) ?? ''
   }
@@ -515,10 +454,7 @@ function resolvePrompt(
 export type ToolSnapshot = {
   toolName?: string
   toolInput?: string
-  /** Full JSON of an AskUserQuestion tool input, set only on the event that
-   *  carries it. Deliberately NOT inherited across events in resolveToolState
-   *  so it clears the moment the agent moves to a different tool / state and a
-   *  stale prompt can't linger on the emitted payload. */
+  /** Full JSON of an AskUserQuestion tool input; set only on its own event and NOT inherited (resolveToolState) so no stale prompt lingers. */
   interactivePrompt?: string
   hasToolUpdate?: boolean
   hasToolInputField?: boolean
@@ -536,8 +472,7 @@ function resolveToolState(
     state.lastToolByPaneKey.delete(paneKey)
   }
   const previous = state.lastToolByPaneKey.get(paneKey) ?? {}
-  // Why: `undefined` can mean "no update" or "explicit input was not
-  // previewable"; extractor metadata decides whether stale input is inherited.
+  // Why: undefined means either "no update" or "input not previewable"; extractor metadata decides whether to inherit stale input.
   const clearsUnpreviewableInput =
     update.hasToolInputField === true && update.toolInput === undefined
   const clearsUnidentifiedTool =
@@ -555,9 +490,7 @@ function resolveToolState(
   const merged: ToolSnapshot = {
     toolName,
     toolInput,
-    // Why: do NOT inherit `previous.interactivePrompt`. The prompt is only
-    // valid for the single AskUserQuestion event that produced it; carrying it
-    // forward would leave a stale live card on the next tool/state change.
+    // Why: don't inherit previous.interactivePrompt — valid only for its one AskUserQuestion event; carrying it forward leaves a stale live card.
     interactivePrompt: update.interactivePrompt,
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
@@ -595,9 +528,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
-  // Why: Grok maps Bash/Edit/Write to snake_case first-party tool names
-  // (run_terminal_command, search_replace, …). Without these keys the status
-  // row shows a blank toolInput for the bulk of Grok tool turns.
+  // Why: Grok maps Bash/Edit/Write to snake_case tool names; without these keys the status row shows blank toolInput for most Grok turns.
   run_terminal_command: ['command'],
   search_replace: ['file_path', 'path', 'filePath'],
   write_to_file: ['TargetFile', 'path', 'file_path'],
@@ -737,10 +668,7 @@ function toolUpdate(
   }
 }
 
-/** Clear the active-tool metadata (name/input/prompt) so a just-failed tool
- *  stops looking in-flight. Why: the compact sidebar prioritizes current-tool
- *  metadata over the failure message, so a completed failed tool must no
- *  longer look active or the error text stays hidden behind the tool name. */
+/** Clear active-tool metadata so a failed tool stops looking in-flight (else the compact sidebar hides the error behind the tool name). */
 function clearActiveToolFieldsUpdate(): ToolSnapshot {
   return toolUpdate(
     { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
@@ -748,19 +676,13 @@ function clearActiveToolFieldsUpdate(): ToolSnapshot {
   )
 }
 
-/** Capture the full AskUserQuestion tool input as a JSON string when the tool
- *  is an AskUserQuestion variant; otherwise undefined so resolveToolState
- *  clears any prior prompt. Kept agent-generic: callers pass whatever raw
- *  tool-input object their hook payload exposed. */
-/** Drop the hook envelope keys a plugin merges into its event properties so
- *  the serialized interactive prompt holds only the question structure. */
+/** Drop the hook envelope keys a plugin merges into event properties so the serialized prompt holds only the question structure. */
 function stripHookEnvelopeKeys(record: Record<string, unknown>): Record<string, unknown> {
   const { hook_event_name: _h, hookEventName: _he, ...rest } = record
   return rest
 }
 
-/** Short, single-line description of a tool call for an approval card (the
- *  command for Bash, the path for file tools, else a clipped JSON preview). */
+/** One-line description of a tool call for an approval card (Bash command, file path, else clipped JSON). */
 function summarizeApprovalInput(toolInput: unknown): string {
   if (toolInput && typeof toolInput === 'object') {
     const obj = toolInput as Record<string, unknown>
@@ -777,19 +699,13 @@ function summarizeApprovalInput(toolInput: unknown): string {
   }
 }
 
-/** Capture a pending interactive prompt as a normalized JSON envelope:
- *  - AskUserQuestion → the raw `{ questions: [...] }` structure (kind inferred
- *    by the client from the `questions` key, kept stable for back-compat).
- *  - any other tool on a PermissionRequest → `{ approval: { tool, summary } }`
- *    so the client can render an Allow/Deny card.
- *  Returns undefined otherwise so resolveToolState clears any prior prompt. */
+/** Normalized JSON envelope for a pending prompt: AskUserQuestion → `{ questions }` (shape kept stable for back-compat); other tool on PermissionRequest → `{ approval }`; else undefined. */
 function deriveInteractivePrompt(
   toolName: string | undefined,
   toolInput: unknown,
   eventName?: unknown
 ): string | undefined {
-  // Why: providers vary event casing; any post-tool event means the question is
-  // no longer pending and must not recreate its answered live card.
+  // Why: providers vary casing; any post-tool event means the question is no longer pending — don't recreate its answered card.
   const normalizedEventName = normalizeHookEventName(eventName)
   const isPostToolEvent =
     normalizedEventName === 'post_tool_use' || normalizedEventName === 'post_tool_use_failure'
@@ -802,8 +718,7 @@ function deriveInteractivePrompt(
     try {
       return JSON.stringify(toolInput)
     } catch {
-      // Why: defend against circular/unserializable input from a buggy agent —
-      // a missing live card is better than throwing in the hook hot path.
+      // Why: circular/unserializable input from a buggy agent — a missing live card beats throwing in the hook hot path.
       return undefined
     }
   }
@@ -1184,8 +1099,7 @@ function readGrokSessionMetadata(
     ['cwd', 'workspaceRoot', 'workspace_root'],
     GROK_SESSION_CWD_MAX_LENGTH
   )
-  // Why: hook scripts report the effective per-PTY/remote home; old scripts
-  // fall back to the listener runtime's Grok home for compatibility.
+  // Why: hook scripts report the effective per-PTY/remote Grok home; old scripts fall back to the runtime's for compatibility.
   const sessionsDir = grokHome
     ? join(grokHome, 'sessions')
     : resolveGrokSessionsDir(process.env, homedir())
@@ -1212,9 +1126,7 @@ function getGrokChatHistoryPath(
   if (cached) {
     return cached
   }
-  // Why: hasPendingAgentResultText only needs a plausible on-disk target when
-  // the file may not exist yet (SessionEnd can race the last write). Prefer a
-  // short-cwd candidate when available; async discovery caches slug groups.
+  // Why: SessionEnd can race the last write; return a plausible on-disk candidate (short-cwd preferred) even if the file doesn't exist yet.
   if (!metadata.cwd) {
     return undefined
   }
@@ -1249,8 +1161,7 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     return false
   }
   if (source === 'copilot') {
-    // Why: Copilot Stop consumes generic `message` as its final assistant text;
-    // Grok and Antigravity use that field for status text instead.
+    // Why: Copilot Stop uses generic `message` as final assistant text; Grok/Antigravity use that field for status instead.
     if (hasNonEmptyString(record.message)) {
       return false
     }
@@ -1317,8 +1228,7 @@ export function preparePendingGrokResultDiscovery(
   if (!metadata) {
     return null
   }
-  // Why: the server can await this signal without moving filesystem discovery
-  // back into the synchronous hook normalization path.
+  // Why: lets the server await discovery without moving filesystem I/O back into synchronous hook normalization.
   return findGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId).then(
     () => undefined
   )
@@ -1591,8 +1501,7 @@ function extractAmpToolFields(
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments) ??
-      // Why: Amp plugin tools can have arbitrary names, so fall back to the
-      // obvious argument fields instead of rendering an empty tool preview.
+      // Why: Amp plugin tools can have arbitrary names; fall back to obvious arg fields instead of an empty tool preview.
       deriveFallbackToolInputPreview(hookPayload.input) ??
       deriveFallbackToolInputPreview(hookPayload.tool_input) ??
       deriveFallbackToolInputPreview(hookPayload.arguments)
@@ -1625,10 +1534,7 @@ function extractOpenCodeToolFields(
     }
   }
   if (eventName === 'AskUserQuestion') {
-    // Why: OpenCode posts the question.asked event's `event.properties` as the
-    // hook payload (the plugin merges `hook_event_name` into it). The structured
-    // input is that object — minus the hook envelope key — or its `tool_input`
-    // when wrapped. Capture the full JSON so clients render the live card.
+    // Why: OpenCode's payload is question.asked's event.properties (hook_event_name merged in); strip envelope or use tool_input, capture JSON for the card.
     const toolInputSource = hasOwnField(hookPayload, 'tool_input')
       ? hookPayload.tool_input
       : stripHookEnvelopeKeys(hookPayload)
@@ -1909,8 +1815,7 @@ function extractPiToolFields(
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
-    // Why: OMP shares this extractor. interactivePrompt derivation should
-    // only apply to Pi so OMP ask_user_question metadata stays unchanged.
+    // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
     const interactivePrompt =
       agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
         ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
@@ -1934,8 +1839,7 @@ function isDroidPermissionNotification(message: string | undefined): boolean {
     return false
   }
   const lower = message.toLowerCase()
-  // Why: 'confirm' is excluded — it false-positives on benign messages like
-  // "Confirmed configuration loaded" / "task confirmed" that aren't permission prompts.
+  // Why: 'confirm' is excluded — it false-positives on benign messages like "task confirmed" that aren't permission prompts.
   return lower.includes('permission') || lower.includes('approve') || lower.includes('approval')
 }
 
@@ -2097,9 +2001,7 @@ function extractGrokToolFields(
         hookPayload.arguments
       const toolInput =
         deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
-      // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
-      // (not PermissionRequest). Capture the full question payload so the live
-      // card path can render options instead of only a waiting Notification.
+      // Why: Grok's ask_user_question is auto-allowed via PreToolUse, not PermissionRequest; capture full payload for the live card.
       const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
       Object.assign(
         update,
@@ -2171,8 +2073,7 @@ function extractHermesToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.args) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
-      // Why: Hermes exposes many first-party/plugin tool names. When a new
-      // name appears, still show the obvious argument instead of a blank row.
+      // Why: Hermes has many tool names; fall back to obvious arg fields so a new name still shows a value, not a blank row.
       deriveFallbackToolInputPreview(hookPayload.tool_input) ??
       deriveFallbackToolInputPreview(hookPayload.args) ??
       deriveFallbackToolInputPreview(hookPayload.input) ??
@@ -2245,8 +2146,7 @@ function isGrokRoutinePermissionPromptNotification(
   message: string | undefined,
   level: string | undefined
 ): boolean {
-  // Why: Grok emits this info notification before each tool even under
-  // bypassPermissions; PreToolUse already captures progress without paging users.
+  // Why: Grok emits this before each tool even under bypassPermissions; PreToolUse already covers progress.
   return (
     isGrokEvent(notificationType, 'permission_prompt') &&
     message?.trim().toLowerCase() === 'tool permission requested' &&
@@ -2268,12 +2168,10 @@ function isGrokIdleNotification(message: string | undefined): boolean {
 }
 
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
-  // Why: exhaustive switch so adding a source to AgentHookSource fails
-  // typecheck here instead of silently falling through to `false`.
+  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
     case 'claude':
-    // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit
-    // is its new-turn boundary too.
+    // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
     case 'kimi':
       return eventName === 'UserPromptSubmit'
     case 'codex':
@@ -2305,9 +2203,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
     case 'devin':
-      // Why: SessionStart is handled by an early return in normalizeDevinEvent
-      // (clears turn cache, returns null) so it never reaches this branch.
-      // UserPromptSubmit is the real new-turn boundary for Devin.
+      // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
   }
 }
@@ -2325,9 +2221,7 @@ function hasExplicitUserPrompt(
     (extractedPrompt.source !== 'message' || hasTranscriptPromptEvidence) &&
     resolvedPromptText.trim().length > 0
   ) {
-    // Why: Command Code exposes the submitted prompt through its transcript
-    // rather than direct hook fields. Treat the transcript-backed prompt as
-    // explicit so hook telemetry covers real Command Code turns.
+    // Why: Command Code exposes the submitted prompt via its transcript, not direct hook fields; treat the transcript-backed prompt as explicit so telemetry covers real turns.
     return true
   }
   if (
@@ -2343,16 +2237,11 @@ function hasExplicitUserPrompt(
   if (extractedPrompt.text.length === 0) {
     return false
   }
-  // Why: harness-injected machinery turns are not proof of a user submit —
-  // they must not count for prompt-sent telemetry or permission stickiness.
-  // Match only known harness tags: a real prompt starting with a custom
-  // `<my-element>` is an explicit user turn and must survive interrupt recovery
-  // (a false "not explicit" leaves the agent visibly done after Ctrl+C).
+  // Why: harness-injected turns aren't a user submit (no prompt-sent telemetry or permission stickiness); match only KNOWN tags so a real `<my-element>` prompt still counts and survives interrupt recovery.
   if (isKnownHarnessInjectedUserTurnText(extractedPrompt.text)) {
     return false
   }
-  // Why: bare `message` fields often contain permission or status copy. They
-  // may update visible status prompts, but they are not proof of user submit.
+  // Why: bare `message` fields often carry permission/status copy — may update visible status prompts but aren't proof of a user submit.
   if (extractedPrompt.source === 'message') {
     return false
   }
@@ -2372,8 +2261,7 @@ function extractToolFields(
   hookPayload: Record<string, unknown>,
   options?: { grokHome?: string }
 ): ToolSnapshot {
-  // Why: exhaustive switch so adding a source to AgentHookSource fails
-  // typecheck here instead of silently routing through OpenCode's extractor.
+  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
@@ -2422,11 +2310,7 @@ function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-/** SubagentStart/SubagentStop/TeammateIdle don't map to a pane state by
- *  themselves; they update the roster and re-emit the lead's last known state
- *  with the fresh child list so the sidebar reflects spawn/finish immediately
- *  (a background child can outlive the lead turn by minutes with no other
- *  hook traffic). */
+/** SubagentStart/Stop/TeammateIdle update the roster and re-emit the lead's last known state with the fresh child list, so the sidebar reflects spawn/finish even when a background child outlives the lead turn with no other hook traffic. */
 function normalizeClaudeSubagentLifecycleEvent(
   state: HookListenerState,
   eventName: 'SubagentStart' | 'SubagentStop' | 'TeammateIdle',
@@ -2439,9 +2323,7 @@ function normalizeClaudeSubagentLifecycleEvent(
     if (!teammateName) {
       return null
     }
-    // Why: idle means not working, and only working children keep a row. This
-    // is the fallback finish signal for a named agent whose SubagentStop was
-    // lost — its background_tasks entry never stops reading "running".
+    // Why: only working children keep a row; TeammateIdle is the fallback finish signal when a named agent's SubagentStop was lost (its background_tasks never stops reading "running").
     removeClaudeTeammateByName(roster, teammateName)
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
@@ -2459,31 +2341,21 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      // Why: a finished child (one-shot, workflow lane, or named teammate)
-      // leaves the sidebar at once. SubagentStop is the reliable finish
-      // signal even for teammate-shaped ids — their background_tasks entries
-      // stay "running" forever — and a resumed teammate re-earns its row.
+      // Why: SubagentStop is the reliable finish signal even for teammate-shaped ids (their background_tasks stay "running" forever); a resumed teammate re-earns its row.
       finishClaudeSubagent(roster, agentId)
-      // Why: a blocked child that dies (killed, errored) without another tool
-      // event would otherwise pin its permission/question wait on the pane
-      // forever — nothing else references that agent again.
+      // Why: a blocked child that dies without another tool event would pin its permission/question wait on the pane forever — nothing else references that agent again.
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
   return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
 
-/** Sync the Claude lead-turn record when the SERVER infers an interrupt
- *  outside the hook stream (Ctrl+C with a missed Stop hook). Without this, a
- *  later child lifecycle event would re-emit the stale pre-interrupt lead
- *  state and resurrect a cancelled pane. */
+/** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
 }
 
-/** Rebuild a pane's working roster from a persisted status snapshot. Live
- *  activity confirms a seed after restart; a complete task inventory may reap
- *  an unconfirmed seed whose finish hook arrived while Orca was offline. */
+/** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while Orca was offline. */
 export function seedClaudeSubagentRosterFromSnapshots(
   state: HookListenerState,
   paneKey: string,
@@ -2494,9 +2366,7 @@ export function seedClaudeSubagentRosterFromSnapshots(
   }
   const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
   for (const snapshot of snapshots) {
-    // Why: the roster only tracks working children now. A persisted idle
-    // snapshot (from a build that kept idle rows) is a finished child — drop
-    // it so restart doesn't resurrect the stale pile this fix removes.
+    // Why: the roster tracks only working children now; a persisted idle snapshot (from a build that kept idle rows) is finished — drop it so restart doesn't resurrect the stale pile.
     if (snapshot.state !== 'working') {
       continue
     }
@@ -2504,19 +2374,13 @@ export function seedClaudeSubagentRosterFromSnapshots(
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
-      // Why: the seed can be a phantom (child finished while Orca was down,
-      // its SubagentStop lost). Let a PRESENT background_tasks list that
-      // omits the id remove it instead of gating the pane 'working' forever.
+      // Why: the seed can be a phantom (child finished while Orca was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.
       backgroundTasksAuthoritative: true
     })
   }
 }
 
-/** Drop a child-owned waiting state when that child stops/idles, restoring
- *  the lead state the wait displaced. Without a stash (the wait was the
- *  pane's first observed lead event) fall back to 'working' and let the next
- *  lead event resolve it — a transient spinner beats a permanently stuck
- *  card. */
+/** Drop a child-owned waiting state when the child stops/idles, restoring the displaced lead state; without a stash, fall back to 'working' (a transient spinner beats a permanently stuck card). */
 function clearClaudePendingWaitForAgent(
   state: HookListenerState,
   paneKey: string,
@@ -2529,13 +2393,7 @@ function clearClaudePendingWaitForAgent(
   state.claudeLeadStateByPaneKey.set(paneKey, lead.stateBeforeWait ?? { state: 'working' })
 }
 
-/** Clear an AskUserQuestion wait after the user's answer was typed into the
- *  terminal. Answering emits no hook event, so the caller infers it from the
- *  submit keystroke. Restores the stashed pre-wait lead state (child-induced
- *  question) or falls back to 'working' (lead question), and drops the cached
- *  question card so later child-driven refreshes cannot re-emit the stale
- *  wait. Returns the pane state to emit, gated up to 'working' while children
- *  still run. */
+/** Clear an AskUserQuestion wait after the answer is typed (answering emits no hook event; the caller infers it from the submit keystroke). Restores the stashed pre-wait lead state or 'working', drops the cached card, and returns the pane state to emit (gated up to 'working' while children run). */
 export function clearClaudeAnsweredQuestionWait(
   state: HookListenerState,
   paneKey: string
@@ -2559,19 +2417,14 @@ export function clearClaudeAnsweredQuestionWait(
     : restored
 }
 
-/** Emit a pane status refresh driven by child activity (lifecycle events and
- *  child-origin tool events): the lead's cached state is re-emitted — gated up
- *  to 'working' while a child works — without touching the lead's tool/prompt
- *  caches, so a live AskUserQuestion card or permission wait survives child
- *  churn. */
+/** Re-emit the lead's cached state on child activity — gated up to 'working' while a child works — without touching the lead's tool/prompt caches, so a live card or permission wait survives child churn. */
 function buildClaudeChildDrivenStatusPayload(
   state: HookListenerState,
   eventName: unknown,
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  // Why: default 'working' — a spawn is proof of activity even before the
-  // lead's first state-bearing event (e.g. Orca restarted mid-session).
+  // Why: default 'working' — a spawn proves activity even before the lead's first state-bearing event (e.g. Orca restarted mid-session).
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   const leadState = lead?.state ?? 'working'
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
@@ -2598,12 +2451,8 @@ function normalizeClaudeEvent(
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
-  // Why: Claude's AskUserQuestion tool is auto-allowed, so it emits PreToolUse
-  // (not PermissionRequest) while blocked on a human answer — Claude posts a
-  // Notification instead of PermissionRequest, and Orca does not register the
-  // Notification hook. Treat that PreToolUse as waiting so the sidebar shows the
-  // amber attention state instead of a working spinner that decays to grey while
-  // the question sits unanswered. Mirrors normalizeKimiEvent's handling.
+  // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.
+  // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
   const isAskUserQuestion =
     eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
   const stateName =
@@ -2623,15 +2472,8 @@ function normalizeClaudeEvent(
   }
 
   const eventAgentId = readString(hookPayload, 'agent_id')
-  // Why: hook events originating inside a subagent/teammate carry `agent_id`;
-  // the lead session's own events don't. Subagent tool activity keeps that
-  // child's row live but must not be mistaken for the lead's turn state, and
-  // must not overwrite the lead's tool/prompt caches (a live AskUserQuestion
-  // card would vanish when a background child ran its next tool). Two
-  // exceptions take the full path below: waiting-inducing events (a child's
-  // PermissionRequest/AskUserQuestion needs the human's attention on this
-  // pane), and the blocked child's own next tool event (approval granted —
-  // the wait must clear exactly as it does for the lead).
+  // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
+  // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's own next tool event (approval granted — clear the wait as for the lead).
   const isWaitingInducing = stateName === 'waiting'
   const subagentOriginId =
     !isWaitingInducing &&
@@ -2653,11 +2495,8 @@ function normalizeClaudeEvent(
     if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
       return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
     }
-    // Why: approval granted — update the tool snapshot exactly as the lead's
-    // own next tool event would (dropping the pending card), but restore the
-    // lead state the wait displaced instead of adopting this child event as
-    // the lead's 'working': the lead may already be done, and the done-gate
-    // never upgrades working back to done once the roster drains.
+    // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
+    // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
     const restored = lead.stateBeforeWait ?? { state: 'working' as const }
     state.claudeLeadStateByPaneKey.set(paneKey, restored)
     const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
@@ -2671,10 +2510,7 @@ function normalizeClaudeEvent(
     })
   }
 
-  // Why: lead events never carry agent_id, so a known child's id on a
-  // turn-boundary event (a CLI that stops converting child Stops to
-  // SubagentStop) must not retire or resurrect the pane as if the lead
-  // spoke — re-emit it as child activity instead.
+  // Why: lead events never carry agent_id, so a known child's id on a turn-boundary event must not retire/resurrect the pane as if the lead spoke — re-emit as child activity.
   if (
     eventAgentId &&
     !isWaitingInducing &&
@@ -2684,11 +2520,8 @@ function normalizeClaudeEvent(
   }
 
   if (eventName === 'Stop' || eventName === 'StopFailure') {
-    // Why: background_tasks is only trusted where unambiguous (empty list,
-    // id-exact matches, unmatched running one-shot subagents) — see
-    // foldClaudeBackgroundTasksIntoRoster. The lifecycle events own teammate
-    // state; teammates report "running" here even while idle. Older Claude
-    // builds without the field keep the incrementally tracked roster.
+    // Why: background_tasks is trusted only where unambiguous (see foldClaudeBackgroundTasksIntoRoster) — teammates report "running" here even while idle.
+    // Older Claude builds without the field keep the incrementally tracked roster.
     const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
     if (backgroundTasks.present) {
       foldClaudeBackgroundTasksIntoRoster(
@@ -2701,10 +2534,7 @@ function normalizeClaudeEvent(
   }
   const interrupted =
     eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
-  // Why: a child-induced wait displaces the lead's own state; stash it so
-  // clearing the wait restores reality (the lead may already be done). A
-  // second child wait carries the ORIGINAL stash forward, not the
-  // intermediate waiting state.
+  // Why: a child-induced wait displaces the lead state; stash it so clearing restores reality (lead may be done). A 2nd child wait carries the ORIGINAL stash, not the intermediate waiting state.
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   const stateBeforeWait =
     isWaitingInducing && eventAgentId && previousLead
@@ -2722,10 +2552,7 @@ function normalizeClaudeEvent(
     ...(stateBeforeWait ? { stateBeforeWait } : {})
   })
 
-  // Why: the lead ending its turn is not "done" while spawned subagents or
-  // teammates are still running — that reads as a finished ✅ in the sidebar
-  // while a background review loop is mid-flight. Claude wakes the lead when
-  // a child finishes, so a later Stop with an empty roster resolves to done.
+  // Why: a lead Stop isn't "done" while subagents/teammates run (would show a finished row mid-flight); Claude re-wakes the lead, so a later empty-roster Stop resolves to done.
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   const effectiveState =
     stateName === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : stateName
@@ -2745,24 +2572,18 @@ function buildClaudeStatusPayload(
   hookPayload: Record<string, unknown>,
   options: { stateName: AgentStatusState; updateToolSnapshot: boolean; interrupted?: boolean }
 ): ParsedAgentStatusPayload | null {
-  // Why: child-driven refreshes are roster bookkeeping, not lead tool
-  // activity. Read the cached tool snapshot without merging so they can't
-  // clear a live AskUserQuestion card or clobber the in-flight tool preview.
+  // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
   const snapshot = options.updateToolSnapshot
     ? resolveToolState(state, paneKey, extractToolFields('claude', eventName, hookPayload), {
         resetOnNewTurn: isNewTurnEvent('claude', eventName)
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
-  // Why: normalizeAgentStatusPayload validates the object directly — the
-  // JSON stringify/parse round trip the other normalizers use is pure
-  // overhead on this hot per-hook-event path. The normalizer clamps
-  // `interrupted` to done-state payloads, so a gated 'working' emit drops it
-  // while claudeLeadStateByPaneKey preserves it for the eventual done.
+  // Why: validate directly — the JSON stringify/parse round trip other normalizers use is pure overhead on this hot per-hook path.
+  // The normalizer clamps `interrupted` to done payloads, so a gated 'working' emit drops it; claudeLeadStateByPaneKey preserves it for the eventual done.
   return normalizeAgentStatusPayload({
     state: options.stateName,
-    // Why: only lead-origin events (updateToolSnapshot) may reset the prompt
-    // cache; a child-driven refresh must not blank the lead's prompt label.
+    // Why: only lead-origin events may reset the prompt cache; a child-driven refresh must not blank the lead's prompt label.
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
     }),
@@ -2776,9 +2597,7 @@ function buildClaudeStatusPayload(
   })
 }
 
-// Why: Devin uses Claude-compatible hook payload shapes but has its own
-// documented lifecycle event set. Keep attribution as Devin while normalizing
-// those event names into Orca's shared status states.
+// Why: Devin uses Claude-compatible payloads but its own lifecycle event set; normalize those event names while keeping Devin attribution.
 function normalizeDevinEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -2787,10 +2606,7 @@ function normalizeDevinEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   if (eventName === 'SessionStart') {
-    // Why: Devin emits SessionStart when the TUI opens/resumes while still idle.
-    // Only UserPromptSubmit or tool activity should create a visible working row —
-    // mapping SessionStart to 'working' made the sidebar show "Devin - Running"
-    // with a spinner before the user typed anything.
+    // Why: Devin emits SessionStart on idle TUI open/resume; mapping it to 'working' showed a spinner before the user typed, so only UserPromptSubmit/tool activity may create a row.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
@@ -2837,17 +2653,12 @@ function normalizeDevinEvent(
   )
 }
 
-// Why: Kimi's AskUserQuestion tool is auto-allowed, so it emits PreToolUse
-// instead of PermissionRequest while blocked on a human answer. Treat it as a
-// waiting state so the UI shows the attention icon instead of the working spinner.
+// Why: Kimi's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest) while awaiting an answer; treat as waiting so the UI shows the attention icon, not a spinner.
 function isKimiUserInputTool(toolName: string | undefined): boolean {
   return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
 }
 
-// Why: Kimi Code emits Claude-compatible hook payloads and reuses Claude's
-// lifecycle event names (UserPromptSubmit/PreToolUse/Stop/...). Normalize them
-// into Orca's shared status states while attributing the status to Kimi so the
-// sidebar shows the Kimi icon and label instead of falling back to Claude.
+// Why: Kimi Code emits Claude-compatible payloads/event names; normalize but attribute to Kimi so the sidebar shows Kimi's icon/label, not Claude's.
 function normalizeKimiEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -2908,8 +2719,7 @@ function normalizeGeminiEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  // Why: Gemini CLI's native pre-tool event is BeforeTool. PreToolUse/PostToolUse
-  // remain accepted for legacy Antigravity-compatible payloads on this endpoint.
+  // Why: Gemini CLI's native pre-tool event is BeforeTool; PreToolUse/PostToolUse still accepted for legacy Antigravity-compatible payloads.
   const stateName =
     eventName === 'BeforeAgent' ||
     eventName === 'BeforeTool' ||
@@ -2970,8 +2780,7 @@ function normalizeAntigravityEvent(
     eventName !== 'Stop' &&
     state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
   ) {
-    // Why: agy can emit a bookkeeping PostToolUse after Stop; ignore it so a
-    // finished row does not turn back into a yellow spinner.
+    // Why: agy can emit a bookkeeping PostToolUse after Stop; ignore it so a finished row doesn't turn back into a yellow spinner.
     return null
   }
 
@@ -2996,8 +2805,7 @@ function normalizeAntigravityEvent(
   }
 
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
-  // Why: Antigravity transcripts can grow during long tool-heavy turns. Once
-  // the prompt is cached for this pane, avoid rescanning the file per hook.
+  // Why: once the prompt is cached for this pane, avoid rescanning the (potentially large) Antigravity transcript per hook.
   const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
   const effectivePrompt =
     promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
@@ -3021,9 +2829,7 @@ function normalizeAntigravityEvent(
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
-  // Why: Antigravity can emit Stop with fullyIdle=false between tool steps.
-  // Only a fully idle Stop is terminal; otherwise the sidebar would bounce
-  // done -> working during tool-heavy turns and ignore later tool updates.
+  // Why: Antigravity can emit Stop with fullyIdle=false between tool steps; only a fully idle Stop is terminal, else the sidebar bounces done -> working and ignores later tool updates.
   if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
     state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
   }
@@ -3062,8 +2868,7 @@ function normalizeAmpEvent(
     (eventName === 'tool.call' || eventName === 'tool.result') &&
     state.ampCompletedCacheKeys.has(ampCacheKey)
   ) {
-    // Why: Amp status posts are fire-and-forget so tool requests cannot block
-    // the agent. Drop stale tool events that arrive after the thread ended.
+    // Why: Amp status posts are fire-and-forget, so drop stale tool events that arrive after the thread ended.
     return null
   }
 
@@ -3092,8 +2897,7 @@ function normalizeAmpEvent(
   const normalized = parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
-      // Why: Amp tool/result events may use `message` for tool output; only
-      // lifecycle events may treat it as the turn prompt.
+      // Why: Amp tool/result events may use `message` for tool output; only lifecycle events may treat it as the turn prompt.
       prompt: resolvePrompt(state, ampCacheKey, ampPromptText, {
         resetOnNewTurn: isNewTurnEvent('amp', eventName)
       }),
@@ -3120,8 +2924,7 @@ function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unknown>): 
     ['threadId', 'threadID', 'thread_id'],
     AMP_THREAD_ID_MAX_LENGTH
   )
-  // Why: Amp plugin processes can emit events for multiple threads in one
-  // pane. Cache by thread internally while keeping the visible paneKey stable.
+  // Why: Amp emits events for multiple threads per pane; cache by thread internally while keeping the visible paneKey stable.
   return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
 }
 
@@ -3157,9 +2960,7 @@ function pruneAmpThreadCacheKeys(
     return
   }
 
-  // Why: Amp can multiplex many thread IDs through one pane. Keep the current
-  // thread plus the most recent cache entries instead of retaining every
-  // completed thread until pane teardown.
+  // Why: Amp multiplexes many thread IDs through one pane; keep the current thread plus the most recent entries instead of retaining every completed thread until teardown.
   for (const key of scopedKeys) {
     if (overflow <= 0) {
       break
@@ -3294,8 +3095,7 @@ function normalizeCursorEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  // Why: Cursor can emit the final response text after `stop`; that should
-  // enrich the completed row, not resurrect the agent as working.
+  // Why: Cursor can emit final response text after `stop`; enrich the completed row, don't resurrect the agent as working.
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)?.payload
   const stateName =
     eventName === 'beforeSubmitPrompt' ||
@@ -3303,9 +3103,7 @@ function normalizeCursorEvent(
     eventName === 'preToolUse' ||
     eventName === 'postToolUse' ||
     eventName === 'postToolUseFailure' ||
-    // Why: these fire for every shell/MCP invocation as pre-execution gates,
-    // not only when the user is blocked on approval. Treat them like PreToolUse
-    // so a tool-heavy turn does not spam waiting-state notifications.
+    // Why: these fire on every shell/MCP invocation (pre-execution gates, not just approval); treat as working to avoid waiting-notification spam.
     eventName === 'beforeShellExecution' ||
     eventName === 'beforeMCPExecution'
       ? 'working'
@@ -3351,9 +3149,7 @@ function normalizeCursorEvent(
   )
 }
 
-// Why: PermissionRequest fires before Copilot's allow/ask/deny checks, so a
-// generic PermissionRequest stays working. `ask_user` itself is a user-input
-// boundary, and notification prompts are the async user-visible blocked signal.
+// Why: Copilot PermissionRequest fires before allow/ask/deny (stays working); ask_user and notification prompts are the real blocked signals.
 function normalizeCopilotEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -3424,15 +3220,12 @@ function normalizePiCompatibleEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   if (agentType === 'pi' && eventName === 'session_start') {
-    // Why: Pi emits session_start when the TUI opens or resumes; discard stale
-    // turn details without creating a visible working row before user activity.
+    // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
 
-  // Why: gate on the event's own tool_name (matching the Claude/Grok normalizers),
-  // not a merged snapshot, so a partial follow-up event can't inherit a stale
-  // ask_user_question name from the tool cache and spuriously re-enter blocked.
+  // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
   const isPiAskUserQuestion =
     agentType === 'pi' &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
@@ -3485,8 +3278,7 @@ function normalizeDroidEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   if (eventName === 'SessionStart') {
-    // Why: Droid emits SessionStart when the TUI opens/resumes while still idle.
-    // Only UserPromptSubmit or tool activity should create a visible working row.
+    // Why: Droid's SessionStart fires while idle (TUI open/resume); wait for real activity before a working row.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
@@ -3498,8 +3290,7 @@ function normalizeDroidEvent(
     eventName === 'PreToolUse' &&
     (isDroidAskUserTool(droidToolName) || isDroidHighRiskToolUse(hookPayload))
   ) {
-    // Why: Droid surfaces both AskUser and high-risk approval prompts as
-    // PreToolUse events; the observed approval path emits no Notification hook.
+    // Why: Droid surfaces AskUser and high-risk approvals as PreToolUse; the approval path emits no Notification hook.
     stateName = 'waiting'
   } else if (
     eventName === 'UserPromptSubmit' ||
@@ -3514,8 +3305,7 @@ function normalizeDroidEvent(
   } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
     stateName = 'waiting'
   } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {
-    // Why: Factory does not emit Stop when the user interrupts Droid, but it
-    // does emit an idle notification when Droid is ready for input again.
+    // Why: Droid emits no Stop on user-interrupt, only an idle notification when ready again.
     stateName = 'done'
   }
   if (!stateName) {
@@ -3529,9 +3319,7 @@ function normalizeDroidEvent(
     { resetOnNewTurn: isNewTurnEvent('droid', eventName) }
   )
 
-  // Why: Droid's Notification.message contains status text (e.g. "Droid is
-  // waiting for your input"), not the user's prompt. Pass '' so resolvePrompt
-  // falls back to the cached UserPromptSubmit value instead of overwriting it.
+  // Why: Droid Notification.message is status text, not the prompt; '' keeps resolvePrompt's cached UserPromptSubmit value.
   const effectivePrompt = eventName === 'Notification' ? '' : promptText
 
   return parseAgentStatusPayload(
@@ -3597,9 +3385,7 @@ function normalizeGrokEvent(
   grokHome?: string
 ): ParsedAgentStatusPayload | null {
   if (isGrokEvent(eventName, 'session_start')) {
-    // Why: Grok emits SessionStart when the TUI opens/resumes. It should reset
-    // stale per-turn details without creating a visible "working" row before a
-    // user prompt or tool event exists.
+    // Why: SessionStart resets stale per-turn state but must not create a working row before any prompt/tool event.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
@@ -3611,9 +3397,7 @@ function normalizeGrokEvent(
     readString(hookPayload, 'toolName') ??
     readString(hookPayload, 'tool_name') ??
     readString(hookPayload, 'name')
-  // Why: Grok's ask_user_question is auto-allowed, so it emits PreToolUse while
-  // blocked on a human answer (same shape as Kimi). Map that to waiting so the
-  // sidebar attention state matches Claude PermissionRequest UX.
+  // Why: Grok's ask_user_question is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting.
   const isUserInputPreTool =
     isGrokEvent(eventName, 'pre_tool_use') && isAskUserQuestionTool(preToolName)
 
@@ -3658,8 +3442,7 @@ function normalizeGrokEvent(
     { resetOnNewTurn: isNewTurnEvent('grok', eventName) }
   )
 
-  // Why: Grok Notification.message is status UI text, not necessarily the
-  // user's prompt. Preserve the cached UserPromptSubmit prompt for the row.
+  // Why: Grok Notification.message is status UI text, not the prompt; '' preserves the cached UserPromptSubmit.
   const effectivePrompt = isGrokEvent(eventName, 'notification')
     ? ''
     : stripGrokUserQueryWrapper(promptText)
@@ -3794,8 +3577,7 @@ export function normalizeHookPayload(
   const promptText = extractedPrompt.text
   let resolvedPromptText = promptText
   let hasTranscriptPromptEvidence = false
-  // Why: exhaustive switch so adding a source to AgentHookSource fails
-  // typecheck here instead of silently routing through OpenCode's normalizer.
+  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently misrouting.
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
     case 'claude':
@@ -3911,16 +3693,11 @@ export function normalizeHookPayload(
       break
   }
 
-  // Why: connectionId stays null at the listener layer. The local server keeps
-  // it null; the relay forwards null on the wire and Orca's `ingestRemote`
-  // stamps the real value from `mux` identity on receive. See
-  // docs/design/agent-status-over-ssh.md §5.
+  // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
   const providerSession = extractAgentProviderSession(source, hookPayloadRecord)
   const providerSessionOnly =
     source === 'pi' && eventName === 'session_start' && providerSession !== null
-  // Why: session_start establishes resume identity while Pi is idle. Carry a
-  // valid placeholder through the status-shaped transport; receivers discard
-  // it when providerSessionOnly is set, so no working/done row is fabricated.
+  // Why: Pi session_start carries resume identity while idle; providerSessionOnly makes receivers discard the placeholder row.
   const transportPayload =
     payload ??
     (providerSessionOnly
@@ -3986,16 +3763,12 @@ export function resolveHookSource(pathname: string): AgentHookSource | null {
 // ─── Endpoint-file writing ──────────────────────────────────────────
 
 export function getEndpointFileName(): string {
-  // Why: per-platform extension lets hook scripts source the file natively
-  // (`. "$file"` POSIX, `call "%file%"` Windows). The OpenCode plugin's regex
-  // accepts both shapes already.
+  // Why: per-platform extension lets hook scripts source the file natively (POSIX `. "$file"` / Windows `call "%file%"`); the OpenCode plugin regex accepts both shapes.
   return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
 
 export function isShellSafeEndpointValue(value: string): boolean {
-  // Why: every value in the endpoint file is sourced as shell. The `+`
-  // quantifier rejects empty strings as defense-in-depth — a sourced empty
-  // `KEY=` would clear the env var in the sourcing shell.
+  // Why: values are shell-sourced; the + rejects empty strings so a sourced `KEY=` can't clear the env var.
   return /^[A-Za-z0-9._:/-]+$/.test(value)
 }
 
@@ -4007,9 +3780,8 @@ export type EndpointFileFields = {
 }
 
 /** Atomically write the endpoint file at `endpointDir/<getEndpointFileName()>`.
- *  Returns true on success, false on any error (caller may fall back to PTY
- *  env). Mirrors `AgentHookServer.writeEndpointFile` and is shared verbatim by
- *  the relay's adapter. */
+ *  Returns true on success, false on error (caller may fall back to PTY env).
+ *  Kept in sync with `AgentHookServer.writeEndpointFile`. */
 export function writeEndpointFile(
   endpointDir: string,
   finalPath: string,
@@ -4035,20 +3807,17 @@ export function writeEndpointFile(
   const lines = [...valuesToWrite.map(([key, value]) => `${prefix}${key}=${value}`), '']
   let tmpWritten = false
   try {
-    // Why: 0o700 — match the file's owner-only policy so the directory does
-    // not leak the existence of this Orca/relay install to other local users.
+    // Why: 0o700 owner-only so the dir doesn't leak this install's existence to other local users.
     mkdirSync(endpointDir, { recursive: true, mode: 0o700 })
     if (process.platform !== 'win32') {
-      // Why: mkdirSync's mode only applies on creation — a pre-existing
-      // directory keeps its original perms. POSIX-only chmod fix.
+      // Why: mkdirSync mode only applies on creation; chmod fixes perms on a pre-existing dir (POSIX-only).
       try {
         chmodSync(endpointDir, 0o700)
       } catch {
         // best-effort
       }
     }
-    // Why: sweep stale `.endpoint-*.tmp` orphans older than 5 min so a crash
-    // between writeFileSync and renameSync cannot grow the dir unboundedly.
+    // Why: sweep stale .endpoint-*.tmp orphans (crash between write and rename) so the dir can't grow unbounded.
     try {
       const entries = readdirSync(endpointDir)
       const cutoff = Date.now() - 5 * 60 * 1000

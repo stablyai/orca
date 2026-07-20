@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: the tasks page keeps the repo selector,
-task source controls, and GitHub task list co-located so the wiring between the
-selected repo, the task filters, and the work-item list stays readable in one
-place while this surface is still evolving. */
+/* eslint-disable max-lines -- Why: repo selector, task-source controls, and task list stay co-located so their wiring reads in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
@@ -512,10 +509,7 @@ function getTaskPageRepoCacheInput(repo: Repo): {
   }
 }
 
-// Why: the sticky header's bg must be opaque (GITHUB_TASK_ROW_SURFACE_CLASS, not
-// bg-muted/50) or vertically-scrolled rows bleed through it. These left-sticky
-// cells additionally need a ::before gap-cover so horizontally-scrolled header
-// columns don't show through the row's px-3 padding strip.
+// Why: sticky header bg must be opaque or scrolled rows bleed through; the ::before gap-cover keeps horizontally-scrolled columns off the px-3 padding strip.
 const GITHUB_TASK_STICKY_ID_HEADER_CLASS = cn(
   'sticky left-3 z-30 before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
   GITHUB_TASK_ROW_SURFACE_CLASS
@@ -550,8 +544,7 @@ function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): bo
 }
 
 function normalizeGitHubTaskPreset(preset: TaskViewPresetId | null | undefined): TaskViewPresetId {
-  // Why: the split Issues/PRs tabs no longer have a mixed "All" view, so
-  // legacy saved defaults should land on the first tab instead of mixing rows.
+  // Why: the split Issues/PRs tabs dropped the mixed "All" view, so legacy saved defaults land on the first tab instead of mixing rows.
   return !preset || preset === 'all' ? 'issues' : preset
 }
 
@@ -576,9 +569,7 @@ function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
   return `${inferredKind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
-// Why: Intl.RelativeTimeFormat allocation is non-trivial, and previously we
-// built a new formatter per work-item row render. Hoisting to module scope
-// means all rows share one instance — zero per-row allocation cost.
+// Why: Intl.RelativeTimeFormat allocation is non-trivial; hoist to module scope so all rows share one instance instead of allocating per render.
 const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
 
 function formatRelativeTime(input: string): string {
@@ -1149,8 +1140,7 @@ function GHStatusCell({
 
   const resolvedStatusStateDraft = resolveTaskPageGitHubStatusStateDraft(statusStateDraft, item)
   if (resolvedStatusStateDraft !== statusStateDraft) {
-    // Why: item rows can refresh from the GitHub cache while this cell is still
-    // mounted; reconcile before paint instead of showing one stale status frame.
+    // Why: item rows can refresh from the cache while this cell is mounted; reconcile before paint to avoid one stale status frame.
     setStatusStateDraft(resolvedStatusStateDraft)
   }
   const localState = resolvedStatusStateDraft.localState
@@ -1181,8 +1171,7 @@ function GHStatusCell({
       updateLocalState(newState)
       patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
       const target = getActiveRuntimeTarget(sourceSettings)
-      // Why: issue rows can be sourced by owner/repo URL instead of the local
-      // repo context; slug-aware writes preserve close reasons and duplicates.
+      // Why: issue rows can be sourced by owner/repo URL, not local repo context; slug-aware writes preserve close reasons and duplicates.
       const updatePromise = parsedOwnerRepo
         ? target.kind === 'environment'
           ? callRuntimeRpc<{ ok?: boolean; error?: { message?: string } | string }>(
@@ -1521,9 +1510,7 @@ function ReviewChipAvatar({
   reviewer: GitHubPRPrimaryReviewer | null
 }): React.JSX.Element {
   if (reviewer?.login) {
-    // Why: `gh pr list --json reviewRequests` can return only logins. Prefer the
-    // API avatar_url so GHE renders; GitHubUserAvatar falls back to the login URL
-    // and then an initials placeholder when no avatar loads. See #8784.
+    // Why: gh pr list --json reviewRequests can return only logins; prefer API avatar_url so GHE renders (falls back to login URL, then initials). See #8784.
     return (
       <GitHubUserAvatar
         login={reviewer.login}
@@ -2154,8 +2141,7 @@ function PRReviewCell({
     [cancelReviewerInputFocusFrame]
   )
 
-  // Why: reviewer edits are optimistic, but item switches/refetches must clear
-  // stale local requests before paint; a passive Effect leaves one stale render.
+  // Why: reviewer edits are optimistic, but item switches/refetches must clear stale local requests before paint (a passive Effect leaves one stale frame).
   if (
     reviewRequestsSource.itemId !== item.id ||
     reviewRequestsSource.repoId !== item.repoId ||
@@ -2417,8 +2403,7 @@ function PRReviewCell({
   }
 
   const requestReviewer = async (reviewer: GitHubAssignableUser): Promise<void> => {
-    // Close the popover immediately so the UI feels responsive; the GitHub
-    // request/remove runs in the background and toasts on completion.
+    // Close the popover immediately for responsiveness; the GitHub request/remove runs in the background and toasts on completion.
     setOpen(false)
     setReviewerInput('')
     await (selectedReviewerLogins.has(reviewer.login.toLowerCase())
@@ -2929,9 +2914,7 @@ function PRMergeCell({
   )
 }
 
-// Why: builds the page number array with ellipsis gaps, matching GitHub's
-// pagination pattern: always show first page, last page, and a window of
-// pages around the current page with "..." gaps between distant ranges.
+// Builds the page-number array with ellipsis gaps: first, last, and a window around the current page.
 function getPageNumbers(current: number, total: number): (number | 'ellipsis')[] {
   if (total <= 9) {
     return Array.from({ length: total }, (_, i) => i)
@@ -3035,20 +3018,14 @@ function PaginationBar({
   )
 }
 
-// Why: type-guard predicate used to filter `perRepoSourceState` down to rows
-// whose issue-source and PR-source slugs differ. Hoisted to module scope so
-// the predicate isn't re-allocated on every TaskPage render.
+// Why: hoisted to module scope so the type-guard predicate isn't re-allocated on every TaskPage render.
 const hasDivergentSources = (
   s: TaskPageRepoSourceState
 ): s is TaskPageRepoSourceState & {
   sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
 } => !!s.sources?.issues && !!s.sources.prs && !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
 
-// Why: the selector keeps rendering even after the user picks 'upstream' (which
-// makes effective `sources.prs` point at upstream). Raw-candidate divergence is the
-// right render gate — a repo that has an `upstream` remote pointing somewhere
-// different from origin is always a candidate for the toggle, regardless of
-// the current effective preference.
+// Why: gate on raw origin/upstream candidate divergence, not effective sources, so the toggle keeps rendering after the user picks 'upstream'.
 const hasUpstreamCandidateDivergence = (
   s: TaskPageRepoSourceState
 ): s is TaskPageRepoSourceState & {
@@ -3081,10 +3058,7 @@ export default function TaskPage(): React.JSX.Element {
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
   const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
-  // Why: bumped by `setIssueSourcePreference` after cache eviction so the
-  // fetch effect below re-runs and repopulates work-items against the new
-  // source. Eviction alone isn't enough because the effect's deps don't
-  // include `workItemsCache`.
+  // Why: bumped after cache eviction to re-run the fetch effect — eviction alone won't, since its deps don't include workItemsCache.
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
@@ -3135,11 +3109,7 @@ export default function TaskPage(): React.JSX.Element {
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
-  // Why: initial selection resolution honors (1) an explicit preselection from
-  // the caller, (2) the persisted defaultRepoSelection (null = sticky-all,
-  // array = curated subset, empty after filter = fall back to all), (3) fall
-  // back to "all eligible". An explicit preselection wins so "open tasks for
-  // this specific repo" entry points still land on a single-repo view.
+  // Why: initial selection precedence — explicit preselection > persisted defaultRepoSelection > all eligible; preselection wins so "open tasks for this repo" lands single-repo.
   const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
     const preferred = pageData.preselectedRepoId
     if (preferred && eligibleRepos.some((repo) => repo.id === preferred)) {
@@ -3151,9 +3121,7 @@ export default function TaskPage(): React.JSX.Element {
       if (filtered.length > 0) {
         return normalizeTaskRepoSelection(eligibleRepos, new Set(filtered))
       }
-      // Why: empty after filtering (e.g. all persisted repos were removed)
-      // falls through to the automatic default so the page never renders with
-      // an empty selection — see the multi-combobox invariant.
+      // Why: empty after filtering (all persisted repos removed) falls through to the automatic default so the page never renders an empty selection.
     }
     return getDefaultTaskRepoSelection(eligibleRepos)
   }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
@@ -3168,10 +3136,7 @@ export default function TaskPage(): React.JSX.Element {
     [taskPickerGroups]
   )
 
-  // Why: prune selection when a previously-selected repo is removed, and
-  // preserve sticky-all (when the selection equaled every logical project
-  // pre-change, keep it equal to every logical project post-change). Recreating
-  // the Set every time eligibleRepos changes would churn the fetch effect.
+  // Why: prune removed repos and preserve sticky-all (selection == all projects stays == all), without recreating the Set each time and churning the fetch effect.
   const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
   useEffect(() => {
     const prevCount = prevTaskPickerCountRef.current
@@ -3205,9 +3170,7 @@ export default function TaskPage(): React.JSX.Element {
     [eligibleRepos, repoSelection]
   )
 
-  // Why: many affordances (new-issue dialog default, item dialog repo path lookup,
-  // optimistic stub) need *a* repo. First selected is used as the default;
-  // cross-repo dialogs still let the user override per-action.
+  // Why: many affordances need *a* repo; use the first selected as default, while cross-repo dialogs still let the user override per-action.
   const primaryRepo = selectedRepos[0] ?? null
   const linearWorkspaces = linearStatus.workspaces ?? []
   const selectedLinearWorkspaceId =
@@ -3268,8 +3231,7 @@ export default function TaskPage(): React.JSX.Element {
       const visibleWithoutProvider = preferredVisibleTaskProviders.filter(
         (visibleProvider) => visibleProvider !== provider
       )
-      // Why: an empty provider list normalizes back to "all providers"; keep
-      // one other source visible so opting out actually hides this provider.
+      // Why: an empty provider list normalizes to "all providers", so keep one other source visible or hiding this one has no effect.
       const nextVisibleTaskProviders: TaskProvider[] =
         visibleWithoutProvider.length > 0 ? visibleWithoutProvider : ['github']
       const nextDefaultTaskSource = resolveVisibleTaskProvider(
@@ -3291,11 +3253,7 @@ export default function TaskPage(): React.JSX.Element {
     [defaultTaskSource, preferredVisibleTaskProviders, updateSettings]
   )
 
-  // Why: seed the preset + query from the user's saved default synchronously
-  // so the first fetch effect issues exactly one request keyed to the final
-  // query. Previously a separate effect "re-seeded" these after mount, which
-  // caused a throwaway empty-query fetch followed by a second fetch for the
-  // real default — doubling the time-to-first-paint of the list.
+  // Why: seed preset + query synchronously so the first fetch issues one request; a prior post-mount re-seed caused a throwaway empty-query fetch, doubling time-to-first-paint.
   const defaultTaskViewPreset = normalizeGitHubTaskPreset(settings?.defaultTaskViewPreset ?? 'all')
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
@@ -3391,8 +3349,7 @@ export default function TaskPage(): React.JSX.Element {
       if (parsed?.kind !== 'runtime') {
         continue
       }
-      // Why: task sources can span multiple runtime hosts; each runtime owns
-      // its own gh/glab installation and auth state.
+      // Why: task sources can span multiple runtime hosts; each runtime owns its own gh/glab install and auth state.
       void callRuntimeRpc<PreflightStatus>(
         { kind: 'environment', environmentId: parsed.environmentId },
         'preflight.check',
@@ -3680,9 +3637,7 @@ export default function TaskPage(): React.JSX.Element {
   const jiraSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
-  // Why: pageData.taskSource changes when the user clicks a specific source
-  // icon in the sidebar while the task page is already open. useState only
-  // initializes once, so sync from the store when the value changes.
+  // Why: useState only inits once, so sync taskSource from the store when a sidebar source-icon click changes pageData.taskSource.
   useEffect(() => {
     const pageTaskSourceChanged = lastPageTaskSourceRef.current !== pageData.taskSource
     lastPageTaskSourceRef.current = pageData.taskSource
@@ -3700,9 +3655,7 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSourceManuallyChangedRef.current) {
       return
     }
-    // Why: GitLab/Linear availability hydrates after mount. If the saved
-    // default was unavailable during the first render, restore it once the
-    // relevant check proves the provider can be shown.
+    // Why: GitLab/Linear availability hydrates after mount; restore the saved default once its provider check proves it can be shown.
     if (visibleTaskProviders.includes(preferredTaskSource) && taskSource !== preferredTaskSource) {
       setTaskSource(preferredTaskSource)
     }
@@ -3714,30 +3667,21 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [settings?.defaultTaskSource, taskSource, visibleTaskProviders])
 
-  // Why: Project mode is a sub-tab within the GitHub source. Visible whenever
-  // the user is on the GitHub task source — actual entry into Project mode is
-  // gated on a non-null `activeProject` once they pick one.
+  // Why: Project mode is a GitHub sub-tab — visible on the GitHub source, but actual entry is gated on a non-null activeProject.
   const projectModeVisible = taskSource === 'github'
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
 
   // ── GitLab task-source state ──────────────────────────────────────
-  // Why: parallel to Linear's slim per-source state. Skips workItemsCache
-  // and cross-repo aggregation in v1 — the GitLab list fetches directly
-  // from `window.api.gl.listMRs` / `listIssues` for the primary repo.
+  // Why: parallel to Linear's slim per-source state — skips workItemsCache and cross-repo aggregation; fetches directly via window.api.gl for the primary repo.
   const [gitlabFilter, setGitlabFilter] = useState<GitLabTaskFilter | GitLabIssueFilter>('opened')
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [gitlabError, setGitlabError] = useState<string | null>(null)
   const [gitlabRefreshNonce, setGitlabRefreshNonce] = useState(0)
-  // Why: opens GitLabItemDialog when a row is clicked. Separate state from
-  // gitlabItems so the dialog target survives a list refresh that might
-  // remove the item from the visible filter (e.g. closing an MR while
-  // it's open in the dialog).
+  // Why: separate from gitlabItems so the dialog target survives a list refresh that removes the item from the visible filter (e.g. closing an MR).
   const [gitlabDialogItem, setGitlabDialogItem] = useState<GitLabWorkItem | null>(null)
 
-  // Why: GitLab tab has two sub-views — the project's MR/issue list,
-  // and the user's cross-project Todos (gitlab.com/dashboard/todos).
-  // 'project' is default; 'todos' fetches a separate stream.
+  // Why: GitLab tab has two sub-views — the project MR/issue list and the user's cross-project Todos (a separate stream).
   const [gitlabView, setGitlabView] = useState<'issues' | 'mrs' | 'todos'>('mrs')
   const [gitlabTodos, setGitlabTodos] = useState<GitLabTodo[]>([])
   const [gitlabTodosLoading, setGitlabTodosLoading] = useState(false)
@@ -3758,8 +3702,7 @@ export default function TaskPage(): React.JSX.Element {
         ? isGitLabMRFilter(gitlabFilter)
         : true
   const activeGitlabFilter = gitlabFilterIsValid ? gitlabFilter : 'opened'
-  // Why: Issues and MRs expose different filter sets; repair before commit so
-  // fetch Effects never issue `glab` with a stale filter from the other view.
+  // Why: Issues and MRs expose different filter sets; repair before commit so fetch effects never run glab with a stale filter from the other view.
   if (!gitlabFilterIsValid) {
     setGitlabFilter('opened')
   }
@@ -3784,40 +3727,26 @@ export default function TaskPage(): React.JSX.Element {
   const [tasksRefreshing, setTasksRefreshing] = useState(false)
   const [tasksFiltering, setTasksFiltering] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
-  // Why: per-repo failure count surfaced through the "N of M" banner. IPC-level
-  // rejections populate tasksError instead — the two are mutually exclusive so
-  // a successful-with-partial-failure read and a hard-reject don't double-show.
+  // Why: per-repo failure count for the "N of M" banner; IPC rejections use tasksError instead so partial-failure and hard-reject don't double-show.
   const [failedCount, setFailedCount] = useState(0)
-  // Why: when every selected refresh fails because GitHub is unreachable
-  // (outage / network / rate limit), attribute it to GitHub instead of making
-  // an empty or stale cached list look current.
+  // Why: when every refresh fails (GitHub outage/network/rate limit), attribute it to GitHub instead of showing an empty or stale list as current.
   const [githubUnavailable, setGithubUnavailable] = useState(false)
   const [taskRefreshNonce, setTaskRefreshNonce] = useState(0)
-  // Why: the fetch effect uses this to detect when a nonce bump is from the
-  // user clicking the refresh button (force=true) vs. re-running for any
-  // other reason — e.g. a repo change while the nonce happens to be > 0.
+  // Why: lets the fetch effect tell a user refresh-click nonce bump (force=true) from a re-run for another reason (e.g. repo change with nonce > 0).
   const lastFetchedNonceRef = useRef(-1)
-  // Why: analogous to `lastFetchedNonceRef` for the invalidation nonce. A
-  // preference flip should force the dispatch past fetch-dedupe (same repos +
-  // same query, cache just evicted — without `force: true` the fan-out could
-  // collapse onto a stale in-flight request that resolved against the
-  // pre-flip source).
+  // Why: invalidation-nonce analog of lastFetchedNonceRef; a preference flip must force past fetch-dedupe or the fan-out collapses onto a stale in-flight request from the pre-flip source.
   const lastFetchedInvalidationNonceRef = useRef(0)
   const paginationGenerationRef = useRef(0)
-  // Why: entering Tasks with fresh cache should still verify remote status
-  // once, but the result is reconciled into existing rows to avoid a full
-  // table shuffle when only status/key fields changed.
+  // Why: entering Tasks with fresh cache still verifies remote status once, reconciled into existing rows to avoid a full table shuffle.
   const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
-  // Why: divide the display budget between repos so one provider page maps to
-  // one UI page without truncating rows that later provider pages cannot return.
+  // Why: split the display budget across repos so one provider page maps to one UI page without truncating rows later pages can't return.
   const githubPerRepoPageLimit = getTaskPagePerRepoLimit(
     selectedRepos.length,
     PER_REPO_FETCH_LIMIT,
     CROSS_REPO_DISPLAY_LIMIT
   )
   const githubPageSize = githubPerRepoPageLimit * Math.max(1, selectedRepos.length)
-  // Why: null entries are pages not fetched yet. Numbered provider pages let a
-  // high-page click load that page directly without rate-limiting intermediate reads.
+  // Why: null entries are pages not fetched yet; numbered provider pages let a high-page click load directly without reading intermediate pages.
   const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
@@ -3852,10 +3781,7 @@ export default function TaskPage(): React.JSX.Element {
     setLoadingTargetPage(null)
   }, [selectedRepos, appliedTaskSearch, workItemsInvalidationNonce])
 
-  // Why: clicking a GitHub row (or completing the create-issue flow) opens
-  // this dialog for a read/review surface. The dialog's "Use" button routes
-  // through the same direct-launch flow as the row-level "Use" CTA so
-  // behavior is consistent regardless of entry point.
+  // Why: the dialog's "Use" button routes through the same direct-launch flow as the row-level "Use" CTA so behavior is consistent regardless of entry point.
   const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
   const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
   const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
@@ -3878,12 +3804,7 @@ export default function TaskPage(): React.JSX.Element {
     )
   )
 
-  // Why: derive the dialog's work item from the store cache so it reflects
-  // optimistic patches (e.g. table-cell status toggle). Falls back to the
-  // snapshot stored at click time for newly-created stubs not yet in the cache.
-  // Disambiguates by repoId so issues with the same number fetched from
-  // multiple repos (e.g. fork + non-fork, both routed through the same
-  // upstream) resolve to the clicked row's repo, not the first one scanned.
+  // Why: derive the dialog item from the cache for optimistic patches, falling back to the click-time snapshot for new stubs; key by repoId so same-number issues across repos resolve to the clicked row.
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )
@@ -4024,15 +3945,8 @@ export default function TaskPage(): React.JSX.Element {
     [patchTaskPageWorkItemRows]
   )
 
-  // Why: feature 1 — render the "Issues from {owner}/{repo}" indicator per
-  // selected repo whose issue-source and PR-source slugs differ, and surface
-  // a per-repo retryable banner when the issue-side fetch failed. Both derive
-  // from the same `workItemsCache` entry the list already consumes, so no
-  // extra IPC round-trip is needed. The `TaskPageRepoSourceState` shape lives
-  // with the cache selectors so the render and guard code share one contract.
-  // Why: subscribe only to the cache entries this page can render. The selector
-  // returns entry references so Zustand shallow equality filters unrelated
-  // cache writes before they re-render the full tasks page.
+  // Why: the per-repo issue-source indicator and retry banner both derive from the same workItemsCache entry, so no extra IPC.
+  // Why: subscribe only to entries this page renders; the selector returns entry refs so shallow equality filters unrelated cache writes.
   const perRepoSourceState = useMemo<TaskPageRepoSourceState[]>(
     () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
     [selectedRepos, selectedWorkItemsCacheEntries]
@@ -4042,18 +3956,13 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSource !== 'github' || githubMode !== 'items') {
       return
     }
-    // Why: inline/dialog edits patch `workItemsCache`; the paged table renders
-    // from a local snapshot so it needs the patched row objects copied across.
+    // Why: inline/dialog edits patch workItemsCache; the paged table renders from a local snapshot, so copy patched rows across.
     setPages((current) =>
       reconcileTaskPagePagesWithWorkItemsCache(current, selectedWorkItemsCacheEntries)
     )
   }, [githubMode, selectedWorkItemsCacheEntries, taskSource])
 
-  // Why: surface a one-time toast per session per repo when the user's
-  // preferred `'upstream'` is no longer configured and we fell back to
-  // origin. Gated on a ref-backed set so repeated list refreshes don't
-  // re-toast. We deliberately do NOT auto-reset the preference — the user
-  // may re-add `upstream` later and expect it to pick up again.
+  // Why: one-time toast per repo when the 'upstream' preference fell back to origin (ref-gated); deliberately don't auto-reset the preference so re-adding upstream later still applies.
   const fellBackToastedRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (taskSource !== 'github') {
@@ -4081,14 +3990,7 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [selectedRepos, selectedWorkItemsCacheEntries, taskSource])
 
-  // Why: on a partial-failure retry the cache still holds successful-side
-  // data, so `tasksLoading` (which is gated on `anyUncached`) never flips
-  // true and the Retry button would otherwise give no feedback. Track
-  // retry-in-flight per selected source so that clicking Retry
-  // on one banner only flips that source's button into its "Retrying…"
-  // state — other still-failing banners stay in their "Retry" state rather
-  // than misleadingly flipping in lockstep. The fetch effect clears the set
-  // when the nonce-driven refresh settles.
+  // Why: partial-failure retry leaves the cache populated so tasksLoading never flips, giving no feedback; track retry-in-flight per source so only the clicked banner shows "Retrying…".
   const [retryingSourceKeys, setRetryingSourceKeys] = useState<ReadonlySet<string>>(() => new Set())
 
   const handleRetryIssuesFetch = useCallback(
@@ -4097,12 +3999,7 @@ export default function TaskPage(): React.JSX.Element {
       if (!source) {
         return
       }
-      // Why: bumping the shared refresh nonce reuses the Tasks list's
-      // single fetch path — nonce changes are treated as force=true so
-      // retry doesn't silently dedupe onto a still-failing in-flight request.
-      // The nonce bump refreshes ALL selected repos, but the Retrying…
-      // state is scoped to the clicked source so other banners stay in their
-      // "Retry" state rather than misleadingly flipping to "Retrying…".
+      // Why: nonce bump reuses the fetch path as force=true so retry doesn't dedupe onto a still-failing in-flight request (refreshes all repos; Retrying… stays scoped to the clicked source).
       setRetryingSourceKeys((prev) => {
         const next = new Set(prev)
         next.add(source.sourceKey)
@@ -4123,20 +4020,11 @@ export default function TaskPage(): React.JSX.Element {
   const [newIssueAssignees, setNewIssueAssignees] = useState<GitHubAssignableUser[]>([])
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
   const [newIssueRepoId, setNewIssueRepoId] = useState<string | null>(null)
-  // Why: session-only draft slice backs recovery of an in-progress issue after
-  // an accidental dismissal (outside click/Escape/Cancel) and across a Tasks
-  // view unmount. Component `useState` stays the inputs' immediate source; the
-  // store is the durable-across-remount backing. See task-page-new-issue-draft.
-  // The draft value is read imperatively at open time (getState) rather than
-  // subscribed: it's only consumed in the `+` open handler, and the write-through
-  // rewrites it on every keystroke — subscribing would re-render all of TaskPage
-  // per keystroke while the modal is open. Actions are stable refs (no churn).
+  // Why: session-only draft recovers an in-progress issue across dismissal/remount; read imperatively (not subscribed) so per-keystroke writes don't re-render all of TaskPage.
   const setNewIssueDraft = useAppStore((s) => s.setNewIssueDraft)
   const clearNewIssueDraft = useAppStore((s) => s.clearNewIssueDraft)
 
-  // Why: resolve the target repo from the user's choice, falling back to the
-  // first selected repo if the chosen id drops out of the selection while the
-  // dialog is open — keeps submit always landing on a valid repo.
+  // Why: fall back to the first selected repo if the chosen id drops from the selection mid-dialog, so submit always has a valid target.
   const newIssueTargetRepo = useMemo(
     () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
     [selectedRepos, newIssueRepoId]
@@ -4177,13 +4065,7 @@ export default function TaskPage(): React.JSX.Element {
     { runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null }
   )
 
-  // Why: repo-scoped labels/assignees can't cross repos. A reactive clear keyed
-  // on the derived target id can't tell a restore apart from a user switch, so
-  // it would wipe just-restored fields and corrupt the recovery draft via the
-  // write-through below. Decompose by cause instead: this guard only handles the
-  // "chosen repo vanished from the selection" case (removed/deselected). A
-  // genuine user switch clears imperatively in the repo Select's handler; a
-  // restore always seeds an in-selection repoId, so neither path fires here.
+  // Why: only handles the "chosen repo vanished" case; a reactive clear keyed on target id can't tell a restore from a user switch and would wipe the recovery draft.
   useEffect(() => {
     const reset = resolveVanishedNewIssueRepoReset(
       newIssueRepoId,
@@ -4197,10 +4079,7 @@ export default function TaskPage(): React.JSX.Element {
     setNewIssueRepoId(reset.repoId)
   }, [newIssueRepoId, selectedRepos])
 
-  // Why: mirror the live fields into the session draft while the modal is open
-  // so an accidental dismissal doesn't lose input. Content-gate the write so an
-  // untouched open never pins a meaningless draft (repoId alone is not content),
-  // and clear any stale draft once the form is emptied back out.
+  // Why: content-gated mirror of live fields into the session draft while the modal is open, so dismissal doesn't lose input.
   useEffect(() => {
     if (!newIssueOpen) {
       return
@@ -4239,9 +4118,7 @@ export default function TaskPage(): React.JSX.Element {
     useState<LinearIssue | null>(null)
   const [selectedLinearIssueCanFloat, setSelectedLinearIssueCanFloat] = useState(false)
 
-  // Why: the Linear list keeps its own fetched array, while cell edits patch
-  // the shared caches. Subscribing to just the Linear caches lets the list and
-  // inline detail reflect optimistic mutations without a second durable cache.
+  // Why: subscribe to just the Linear caches so list and inline detail reflect optimistic cell edits without a second cache.
   const linearCacheSnapshot = useAppStore(
     useShallow((s) => ({
       issueCache: s.linearIssueCache,
@@ -4717,8 +4594,7 @@ export default function TaskPage(): React.JSX.Element {
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
 
-    // Why: settings and persisted UI hydrate asynchronously. Apply the restored
-    // Tasks context exactly once so later source/filter clicks remain local.
+    // Why: settings/UI hydrate async; apply the restored Tasks context exactly once so later source/filter clicks stay local.
     taskResumeAppliedRef.current = true
     setTaskResumeApplied(true)
   }, [
@@ -4825,9 +4701,7 @@ export default function TaskPage(): React.JSX.Element {
     taskSource
   ])
 
-  // Why: fetch the full team list from the Linear API so the selector shows
-  // all teams the user belongs to, not just teams with issues in the current
-  // fetch window. Fetched once when the Linear tab is active and connected.
+  // Why: fetch the full Linear team list so the selector shows all teams, not just those with issues in the fetch window.
   const [availableTeams, setAvailableTeams] = useState<LinearTeam[]>([])
   const [linearTeamRefreshNonce, setLinearTeamRefreshNonce] = useState(0)
 
@@ -4843,9 +4717,7 @@ export default function TaskPage(): React.JSX.Element {
     const cachedTeams = getCachedLinearTeams(selectedLinearWorkspaceId, {
       sourceContext: linearTaskSourceContext
     })
-    // Why: workspace switches must not leave the prior workspace's teams
-    // available for new-issue creation while the replacement fetch is pending,
-    // but a workspace-scoped cache can keep the selector usable immediately.
+    // Why: on a workspace switch, drop the prior workspace's teams during the pending fetch but seed from the workspace-scoped cache.
     setAvailableTeams(cachedTeams ?? [])
     void listLinearTeams(selectedLinearWorkspaceId, { sourceContext: linearTaskSourceContext })
       .then((teams) => {
@@ -4916,10 +4788,7 @@ export default function TaskPage(): React.JSX.Element {
     jiraTaskSourceContext
   ])
 
-  // Why: stable key for `selectedRepos` so the GitLab fetch effect below
-  // doesn't re-run on every parent re-render just because the array
-  // reference changed. The memoized string keys off id + path +
-  // connectionId — the only fields the effect actually reads.
+  // Why: stable string key for selectedRepos so the GitLab effect doesn't re-run on every parent render from a new array ref.
   const selectedReposKey = useMemo(
     () =>
       selectedRepos
@@ -4928,10 +4797,7 @@ export default function TaskPage(): React.JSX.Element {
     [selectedRepos]
   )
 
-  // Why: GitLab task-source data fetch. Issues and MRs are fetched
-  // separately (mirrors GitHub's separate Issues / PRs endpoints) so
-  // errors are isolated per tab and the backend doesn't need a combined
-  // merge+sort that can hide failures.
+  // Why: fetch GitLab Issues and MRs separately so errors stay isolated per tab (mirrors GitHub's split endpoints).
   useEffect(() => {
     if (taskSource !== 'gitlab') {
       return
@@ -4949,8 +4815,7 @@ export default function TaskPage(): React.JSX.Element {
     ) {
       return
     }
-    // Why: folder-mode repos have no remotes to derive a GitLab project from;
-    // SSH-backed Git repos go through the same provider-aware IPC path.
+    // Why: folder-mode repos lack remotes to derive a GitLab project from; SSH-backed repos use the same provider-aware IPC path.
     const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
@@ -4980,9 +4845,7 @@ export default function TaskPage(): React.JSX.Element {
                   items: GitLabWorkItem[]
                   error?: { type?: string; message: string }
                 }
-                // Why: not_found just means "this repo isn't a GitLab project"
-                // (e.g. a GitHub-only repo in a mixed selection). Drop it
-                // silently so the GitLab list doesn't show false errors.
+                // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
                 const error = typed.error?.type === 'not_found' ? undefined : typed.error
                 return { repoId: repo.id, items: typed.items, error }
               })
@@ -5027,9 +4890,7 @@ export default function TaskPage(): React.JSX.Element {
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
-        // Why: only surface an error banner when EVERY eligible repo failed.
-        // Mixed selections often include non-GitLab repos, and a partial
-        // banner would hide the working rows.
+        // Why: only banner when every eligible repo failed; a partial one would hide working rows in a mixed (non-GitLab) selection.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
         }
@@ -5045,9 +4906,7 @@ export default function TaskPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey encodes the only selectedRepos fields read above; keying off the array ref would re-run on every parent render.
   }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
 
-  // Why: Todos fetch lives in its own effect — different trigger
-  // condition from the project view (no chip filter dependence) and a
-  // different data path (`gl.todos` is user-scoped, not repo-scoped).
+  // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
   useEffect(() => {
     if (taskSource !== 'gitlab' || gitlabView !== 'todos') {
       return
@@ -5208,8 +5067,7 @@ export default function TaskPage(): React.JSX.Element {
     return teams.sort((a, b) => a.name.localeCompare(b.name))
   }, [displayedLinearIssues])
 
-  // Why: the full Linear team fetch is async and can temporarily be empty.
-  // Keep the selector usable from issue metadata until the complete list lands.
+  // Why: the full team fetch is async and briefly empty; keep the selector usable from issue metadata until the list lands.
   const linearTeamOptions = useMemo(() => {
     if (availableTeams.length === 0) {
       return linearIssueTeams
@@ -5226,8 +5084,7 @@ export default function TaskPage(): React.JSX.Element {
     })
   }, [availableTeams, linearIssueTeams])
 
-  // Why: team IDs belong to one Linear workspace. Switching workspaces while a
-  // saved subset exists must not leave the task list filtered by stale team IDs.
+  // Why: team IDs belong to one workspace, so a workspace switch must not leave the list filtered by stale team IDs.
   useEffect(() => {
     if (linearTeamOptions.length === 0) {
       return
@@ -5247,8 +5104,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const applyLinearAttributeFilter = useCallback((next: LinearIssueAttributeFilter) => {
-    // Why: batch filter + limit/page reset in one transition so the fetch
-    // effect never issues an old expanded-limit request for the new filter.
+    // Why: batch filter + limit/page reset so the fetch effect never issues an old expanded-limit request for the new filter.
     setLinearAttributeFilter(next)
     setLinearIssueLimit(LINEAR_ITEM_LIMIT)
     setLinearIssuePage(0)
@@ -5272,8 +5128,7 @@ export default function TaskPage(): React.JSX.Element {
     if (previousId === null || previousId === nextId) {
       return
     }
-    // Why: status/assignee/labels are team-scoped; clearing them is a filter change
-    // and must reset limit/page via applyLinearAttributeFilter (R6), not a bare set.
+    // Why: team-scoped facets; clearing them is a filter change, so reset limit/page via applyLinearAttributeFilter (R6), not a bare set.
     const next = teamDerivedFacetsForPrimaryTeamChange(linearAttributeFilter)
     if (
       linearIssueAttributeFilterSignature(linearAttributeFilter) ===
@@ -5292,8 +5147,7 @@ export default function TaskPage(): React.JSX.Element {
     if (activeLinearIssueContextLabel) {
       return displayedLinearIssues
     }
-    // Why: team options can be derived after issue rows render. Treat an
-    // empty selection as "all" until reconciliation has a concrete team set.
+    // Why: team options can arrive after issue rows render; treat an empty selection as "all" until reconciliation sets teams.
     if (displayedLinearIssues.length > 0 && linearTeamSelection.size === 0) {
       return displayedLinearIssues
     }
@@ -5374,9 +5228,7 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
-      // Why: unlike GitHub's cursor pages, Linear reads are cached as an
-      // expanded prefix. Jumping to a new page first expands the prefix, then
-      // commits the page when the fetch returns enough rows.
+      // Why: Linear reads are cached as an expanded prefix; a page jump expands it and commits once enough rows arrive.
       setActiveLinearIssueLoadingTargetPage(page)
       ensureActiveLinearIssueLimit((page + 1) * LINEAR_ITEM_LIMIT)
     },
@@ -5410,9 +5262,7 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
 
-    // Why: Linear can return more backend rows without immediately filling the
-    // next visible page after local team filtering. Keep expanding the prefix
-    // until the requested page exists or Linear reports exhaustion.
+    // Why: local filtering can leave the next page short, so keep expanding the prefix until the page exists or Linear is exhausted.
     ensureActiveLinearIssueLimit(activeLinearIssueLimit + LINEAR_ITEM_LIMIT)
   }, [
     activeLinearIssueCanRequestMore,
@@ -5461,8 +5311,7 @@ export default function TaskPage(): React.JSX.Element {
       next.delete(groupedProperty)
     }
 
-    // Why: a Team column repeats the same value when one team is selected.
-    // Keep it hidden until the user explicitly opts back into that property.
+    // Why: a Team column repeats the same value when one team is selected; keep it hidden until the user opts back in.
     if (linearTeamSelection.size <= 1 && !linearTeamPropertyTouched) {
       next.delete('team')
     } else if (linearTeamSelection.size > 1 && !linearTeamPropertyTouched) {
@@ -5795,8 +5644,7 @@ export default function TaskPage(): React.JSX.Element {
         }
       })
     return () => {
-      // Why: project lists are workspace-scoped; stale responses must not
-      // populate the composer after a team/workspace switch.
+      // Why: project lists are workspace-scoped; stale responses must not populate the composer after a team/workspace switch.
       cancelled = true
     }
   }, [
@@ -5809,8 +5657,7 @@ export default function TaskPage(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    // Why: the selected team can change indirectly when the available Linear
-    // teams/workspace list refreshes, even if the explicit picker value did not.
+    // Why: the selected team can change indirectly when the Linear teams/workspace list refreshes, even if the picker value didn't.
     setNewLinearIssueStateId(null)
     setNewLinearIssueAssigneeId(null)
     setNewLinearIssuePriority(0)
@@ -6132,8 +5979,7 @@ export default function TaskPage(): React.JSX.Element {
         }
       })
     return () => {
-      // Why: create fields are scoped to project + issue type; ignore late
-      // responses after the user switches either selector.
+      // Why: create fields are scoped to project + issue type; ignore late responses after switching either selector.
       cancelled = true
     }
   }, [
@@ -6145,9 +5991,7 @@ export default function TaskPage(): React.JSX.Element {
     jiraTaskSourceContext
   ])
 
-  // Why: defense-in-depth safety net applied to the current page's items.
-  // The active tab scopes requests to issues or PRs, and this keeps stale
-  // cache rows from leaking across the split tabs.
+  // Why: defense-in-depth — keep stale cache rows from leaking across the issue/PR split tabs.
   const applyTypeFilter = useCallback(
     (items: GitHubWorkItem[]) => {
       return items.filter((item) => {
@@ -6250,8 +6094,7 @@ export default function TaskPage(): React.JSX.Element {
       lastLoadedPageIndex = index
     }
   }
-  // Why: when counts fail, a full loaded page is enough evidence to expose one
-  // more page without pretending unfetched sparse entries are empty results.
+  // Why: when counts fail, a full loaded page is enough evidence to expose one more page without faking empty results.
   const lastLoadedPageFull =
     (pages[lastLoadedPageIndex]?.length ?? 0) >= Math.max(1, githubPageSize)
   const fallbackTotalPages = lastLoadedPageFull
@@ -6262,8 +6105,7 @@ export default function TaskPage(): React.JSX.Element {
       ? Math.max(pages.length, countedTotalPages)
       : fallbackTotalPages
 
-  // Why: numbered provider pages support random access. Load only the clicked
-  // page so a high-page jump does not exhaust GitHub's Search API rate bucket.
+  // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
   const handleLoadNextPage = useCallback(
     async (targetPage?: number) => {
       if (paginationLoading || selectedRepos.length === 0) {
@@ -6346,12 +6188,7 @@ export default function TaskPage(): React.JSX.Element {
       githubSearchPersistReadyRef.current = true
       return
     }
-    // Why: persist the debounced applied query regardless of the active
-    // preset. The preset-click handler writes the canonical query for that
-    // preset, so persisting again here is at worst idempotent. When the
-    // user types into the search box `handleTaskSearchChange` clears the
-    // preset, but persisting unconditionally also covers paths that change
-    // appliedTaskSearch without going through that handler.
+    // Why: persist the applied query unconditionally to cover paths that change appliedTaskSearch outside the preset handler.
     setTaskResumeState({
       githubItemsPreset: activeTaskPreset,
       githubItemsQuery: appliedTaskSearch.trim()
@@ -6362,11 +6199,7 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
-    // Why: both early-return branches must clear `retryingSourceKeys` — if the
-    // user clicks Retry and then switches `taskSource` away from 'github' (or
-    // somehow ends up with zero repos selected) before the fetch dispatches,
-    // neither the `.then` nor the `.catch` below will fire, and the Retry
-    // button would stay stuck in its disabled/Retrying state indefinitely.
+    // Why: both early-return branches must clear retryingSourceKeys — if they fire, neither .then nor .catch runs and Retry stays stuck.
     if (taskSource !== 'github' || githubMode !== 'items') {
       setRetryingSourceKeys(new Set())
       setTasksRefreshing(false)
@@ -6380,16 +6213,11 @@ export default function TaskPage(): React.JSX.Element {
       return
     } // unreachable — multi-combobox forbids empty
 
-    // Why: `repo:owner/name` qualifiers are silently dropped before fan-out
-    // because in cross-repo mode they would pin every per-repo fetch to a
-    // single repo and zero out the rest. See stripRepoQualifiers.
+    // Why: strip repo:owner/name qualifiers before fan-out — cross-repo they'd pin every fetch to one repo. See stripRepoQualifiers.
     const q = stripRepoQualifiers(appliedTaskSearch.trim())
     let cancelled = false
 
-    // Why: paint cached rows synchronously before awaiting the fan-out so
-    // selection changes don't leave the previous selection's rows on screen
-    // for a frame. Any repo without a cache entry simply contributes nothing
-    // to this pre-paint; the fetch will fill it in.
+    // Why: paint cached rows synchronously before the fan-out so a selection change doesn't leave the prior rows on screen for a frame.
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
     let anyRepoCached = false
@@ -6408,9 +6236,7 @@ export default function TaskPage(): React.JSX.Element {
         preMerged.push(...cached)
       }
     }
-    // Why: always replace — if preMerged is empty (e.g. query just changed and
-    // no repo has a cache entry for it), we clear the previous query's rows
-    // rather than leaving them on screen under the spinner.
+    // Why: always replace — an empty preMerged clears the previous query's rows instead of leaving them under the spinner.
     const page0 =
       preMerged.length > 0 ? sortWorkItemsByNumber(preMerged).slice(0, githubPageSize) : []
     setPages([page0])
@@ -6424,10 +6250,7 @@ export default function TaskPage(): React.JSX.Element {
     // Preserve the existing nonce-gated force behavior.
     const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
     lastFetchedNonceRef.current = taskRefreshNonce
-    // Why: a preference flip bumps `workItemsInvalidationNonce`. Treat that
-    // bump as a forced refresh so the fan-out bypasses the in-flight dedupe
-    // map — otherwise an overlapping request started before the flip could
-    // resolve the new fetch and repopulate the cache with pre-flip data.
+    // Why: treat a preference-flip nonce bump as a forced refresh so it bypasses the dedupe map and can't reuse pre-flip data.
     const preferenceInvalidated =
       workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
     lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
@@ -6447,27 +6270,16 @@ export default function TaskPage(): React.JSX.Element {
         landingRefreshKey
       ])
     }
-    // Why: manual refresh keeps cached rows visible, so the normal
-    // `tasksLoading` flag may stay false. Track the forced fetch separately
-    // so the toolbar still shows a refresh-in-progress affordance.
+    // Why: manual refresh keeps cached rows (tasksLoading stays false), so track forced fetch separately for the toolbar spinner.
     setTasksRefreshing(forcedFetch)
 
-    // Why: snapshot the retrying source keys at effect-dispatch so overlapping
-    // retries don't clear each other's pending state. An earlier cancelled
-    // effect settling after a newer retry starts would otherwise wipe the
-    // newer retry's source from the set. Clearing only the keys captured
-    // when this effect dispatched preserves later additions.
+    // Why: snapshot retrying keys at dispatch so an earlier settling effect doesn't wipe a newer retry's pending source.
     const dispatchedRetrySourceKeys = retryingSourceKeys
     void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
       ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding)
     })
       .then(({ items, failedCount: failed, githubUnavailable: unavailable }) => {
-        // Why: clear only the sources this effect was responsible for
-        // retrying (the snapshot captured at dispatch time). Overlapping
-        // retries — a second click while a prior fetch is still in flight
-        // — must not clear the newer source from the set, so we can't just
-        // reset the whole set here. The early-return branches above reset
-        // the whole set because those branches won't dispatch a fetch.
+        // Why: clear only the dispatch-time snapshot keys so an overlapping retry's newer source isn't wiped.
         setRetryingSourceKeys((prev) => {
           if (dispatchedRetrySourceKeys.size === 0) {
             return prev
@@ -6499,14 +6311,8 @@ export default function TaskPage(): React.JSX.Element {
         setTasksFiltering(false)
       })
       .catch((err) => {
-        // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a
-        // reject here means an IPC-level or programmer error — surface it.
-        // Clear only the sources this effect was responsible for retrying
-        // (the snapshot captured at dispatch time). Overlapping retries —
-        // a second click while a prior fetch is still in flight — must
-        // not clear the newer source from the set, so we can't just reset
-        // the whole set here. The early-return branches above reset the
-        // whole set because those branches won't dispatch a fetch.
+        // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a reject here is IPC/programmer error — surface it.
+        // Why: clear only the dispatch-time snapshot keys so an overlapping retry's newer source isn't wiped.
         setRetryingSourceKeys((prev) => {
           if (dispatchedRetrySourceKeys.size === 0) {
             return prev
@@ -6528,9 +6334,7 @@ export default function TaskPage(): React.JSX.Element {
         setTasksFiltering(false)
       })
 
-    // Why: fire-and-forget count query in parallel with the items fetch.
-    // The search API is cached 120s server-side so this doesn't add
-    // meaningful latency or rate-limit pressure.
+    // Why: fire-and-forget count query alongside the items fetch; the search API is cached 120s server-side so it adds little cost.
     void countWorkItemsAcrossRepos(
       selectedRepos.map((r) => ({
         repoId: r.id,
@@ -6549,10 +6353,7 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-    // Why: getCachedWorkItems and fetchWorkItemsAcrossRepos are stable zustand
-    // selectors; depending on them would re-run the effect on unrelated store
-    // updates. `workItemsInvalidationNonce` is explicitly included so a
-    // preference flip (which only evicts cache) re-dispatches this effect.
+    // Why: store selectors are stable (omit from deps); workItemsInvalidationNonce included so a preference flip re-dispatches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     selectedRepos,
@@ -6567,9 +6368,7 @@ export default function TaskPage(): React.JSX.Element {
   const applyPRFilterChange = useCallback(
     (change: PRFilterChange): void => {
       let next = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
-      // Why: each filter dropdown contributes an independent qualifier patch.
-      // `withQualifier` round-trips through parseTaskQuery so prior filters and
-      // free-text are preserved.
+      // Why: withQualifier round-trips through parseTaskQuery so each dropdown's patch preserves prior filters and free-text.
       if ('author' in change) {
         next = withQualifier(next, 'author', change.author ?? null)
       }
@@ -6589,9 +6388,7 @@ export default function TaskPage(): React.JSX.Element {
         next = withQualifier(next, 'draft', change.draft ? 'true' : 'false')
       }
       if ('reviewer' in change) {
-        // Why: the two reviewer qualifiers (review-requested vs reviewed-by) are
-        // mutually exclusive in the PR-list UX — clear the other axis whenever
-        // one is set so the chip's visible state matches the actual query.
+        // Why: the two reviewer qualifiers are mutually exclusive — clear the other whenever one is set so the chip matches the query.
         const reviewer = change.reviewer ?? null
         if (reviewer === null) {
           next = withQualifier(next, 'reviewRequested', null)
@@ -6608,9 +6405,7 @@ export default function TaskPage(): React.JSX.Element {
       setAppliedTaskSearch(next)
       setActiveTaskPreset(null)
       setTaskResumeState({ githubItemsPreset: null, githubItemsQuery: next })
-      // Why: filter changes replace the meaning of every row. Showing stale
-      // rows while the filtered query resolves reads like the filter did
-      // nothing, so render the same skeleton used for an uncached initial load.
+      // Why: a filter change replaces every row's meaning; show the load skeleton so stale rows don't read as if the filter did nothing.
       setTasksFiltering(true)
       setTaskRefreshNonce((current) => current + 1)
     },
@@ -6633,8 +6428,7 @@ export default function TaskPage(): React.JSX.Element {
       const scoped = scopeGitHubTaskSearch(next, activeGithubTaskKind)
       setTaskSearchInput(next)
       setActiveTaskPreset(null)
-      // Why: the visible rows are keyed by appliedTaskSearch, not the draft
-      // input. Hide stale rows as soon as the draft would change the query.
+      // Why: visible rows are keyed by appliedTaskSearch, not the draft input; hide stale rows once the draft changes the query.
       setTasksFiltering(scoped !== appliedTaskSearch)
     },
     [activeGithubTaskKind, appliedTaskSearch]
@@ -6642,9 +6436,7 @@ export default function TaskPage(): React.JSX.Element {
 
   const handleSetDefaultTaskPreset = useCallback(
     (presetId: TaskViewPresetId): void => {
-      // Why: the default task view is a durable preference, so right-clicking a
-      // preset updates the persisted settings instead of only changing the
-      // current page state.
+      // Why: the default task view is a durable preference, so persist it instead of only changing page state.
       void updateSettings({ defaultTaskViewPreset: presetId }).catch(() => {
         toast.error(
           translate('auto.components.TaskPage.fe380f306c', 'Failed to save default task view.')
@@ -6870,8 +6662,7 @@ export default function TaskPage(): React.JSX.Element {
               labels: newIssueLabels,
               assignees: newIssueAssignees.map((assignee) => assignee.login)
             },
-            // Why: oversized-body recovery can require two 30-second writes
-            // after GitHub rejects the initial create request.
+            // Why: oversized-body recovery can need two 30s writes after GitHub rejects the initial create.
             { timeoutMs: 65_000 }
           )
         : await window.api.gh.createIssue({
@@ -6913,8 +6704,7 @@ export default function TaskPage(): React.JSX.Element {
       }
       setNewIssueOpen(false)
       if (result.bodySaveWarning) {
-        // Why: retain the unsaved body for recovery, but clear the title so
-        // reopening the composer cannot repeat the create with one click.
+        // Why: keep the unsaved body for recovery but clear the title so reopening can't one-click repeat the create.
         setNewIssueTitle('')
         setNewIssueDraft({ title: '' })
       } else {
@@ -6922,16 +6712,13 @@ export default function TaskPage(): React.JSX.Element {
         setNewIssueBody('')
         setNewIssueLabels([])
         setNewIssueAssignees([])
-        // Why: only a complete success discards the recovery draft; a partial
-        // body save keeps the original text available without another create.
+        // Why: only a complete success discards the recovery draft; a partial body save keeps the text for recovery.
         clearNewIssueDraft()
       }
       // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
-      // Why: auto-open the new issue in the dialog so the user sees
-      // exactly what was filed. Use an optimistic stub first so the dialog
-      // has immediate content, then refine with the full `workItem` fetch.
+      // Why: auto-open the new issue with an optimistic stub for immediate content, then refine with the full workItem fetch.
       const stub: GitHubWorkItem = {
         id: `issue:${String(result.number)}`,
         repoId: newIssueTargetRepo.id,
@@ -6971,10 +6758,7 @@ export default function TaskPage(): React.JSX.Element {
       void fullIssuePromise
         .then((full) => {
           if (full) {
-            // Why: `full` is `Omit<GitHubWorkItem, 'repoId'>` (IPC shape).
-            // Cast through unknown: spreading a discriminated union loses the
-            // discriminant, so `{ ...full, repoId }` doesn't typecheck as
-            // GitHubWorkItem. The runtime shape is correct by construction.
+            // Why: cast through unknown — spreading the discriminated union loses the discriminant, so { ...full, repoId } won't typecheck.
             const withRepoId = { ...full, repoId: stubRepoId } as unknown as GitHubWorkItem
             setDialogWorkItem(withRepoId)
           }
@@ -7155,8 +6939,7 @@ export default function TaskPage(): React.JSX.Element {
       setLinearRefreshNonce((n) => n + 1)
       useAppStore.getState().recordFeatureInteraction('linear-tasks')
 
-      // Why: auto-select the new issue in the inline workspace so the user
-      // sees exactly what was filed, mirroring the GitHub create-issue flow.
+      // Why: auto-select the new issue so the user sees exactly what was filed (mirrors the GitHub create-issue flow).
       void linearGetIssue(
         linearTaskSourceContext ?? settings,
         result.id,
@@ -7255,8 +7038,7 @@ export default function TaskPage(): React.JSX.Element {
             return
           }
           if (full) {
-            // Why: the list cache may still be fresh after create; insert the
-            // new row locally before selecting it so the inspector stays open.
+            // Why: list cache may still be fresh after create; insert the new row locally before selecting so the inspector stays open.
             setJiraIssues((prev) => [full, ...prev.filter((issue) => issue.key !== full.key)])
             setSelectedJiraIssue(full)
           }
@@ -7308,9 +7090,7 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
-      // Why: Esc should first dismiss the focused control so users can back
-      // out of text entry without accidentally closing the whole page.
-      // Once focus is already outside an input, Esc closes the tasks page.
+      // Why: Esc first blurs a focused input so it doesn't accidentally close the whole page; only closes once focus is outside an input.
       if (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
@@ -7363,8 +7143,7 @@ export default function TaskPage(): React.JSX.Element {
     refreshPreflightStatus
   ])
 
-  // Why: debounce the Linear search input so we don't fire a request on every
-  // keystroke — matches the 300ms cadence used for GitHub search.
+  // Why: debounce the Linear search input so we don't fire a request per keystroke (300ms, matching GitHub search).
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -7399,8 +7178,7 @@ export default function TaskPage(): React.JSX.Element {
     taskSource
   ])
 
-  // Why: fetch Linear issues when the tab is active and connected. Empty search
-  // uses the plain `all` list with optional server-side attribute filters.
+  // Why: fetch Linear issues when the tab is active and connected; empty search uses the `all` list with server-side filters.
   useEffect(() => {
     if (!taskResumeApplied) {
       return
@@ -7480,8 +7258,7 @@ export default function TaskPage(): React.JSX.Element {
       ])
     }
 
-    // Why: cached rows should remain visible on navigation. Only an explicit
-    // refresh or a true cache miss needs the blocking loading state.
+    // Why: keep cached rows visible on navigation; only explicit refresh or a true cache miss shows the blocking loading state.
     setLinearLoading(forceRefresh || cachedResult === null)
 
     const request =
@@ -7542,8 +7319,7 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-    // Why: searchLinearIssues and listLinearIssues are stable zustand selectors;
-    // depending on them would re-run the effect on unrelated store updates.
+    // Why: searchLinearIssues/listLinearIssues are stable selectors; adding them would re-run the effect on unrelated store updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     taskSource,
@@ -7729,8 +7505,7 @@ export default function TaskPage(): React.JSX.Element {
     const force = linearRefreshNonce > 0
     setLinearCustomViewsLoading(force || !allCached)
     setLinearCustomViewsError(null)
-    // Why: the Views tab already has a Model column, so listing both view
-    // models avoids a second, redundant Issues/Projects switch.
+    // Why: the Views tab already has a Model column, so list both models rather than add a redundant Issues/Projects switch.
     void Promise.all(
       LINEAR_CUSTOM_VIEW_MODELS.map((model) =>
         listLinearCustomViews(model, LINEAR_ITEM_LIMIT, undefined, {
@@ -7843,10 +7618,7 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
 
-    // Why: the corrected Linear surface is list-first. Keep an open inspector
-    // only while its issue remains in the current filter instead of auto-opening
-    // the first row and turning the list back into navigation chrome. Related
-    // sub-issue navigation is allowed to stay open because it is user-directed.
+    // Why: list-first — keep an open inspector only while its issue stays in the filter, not auto-open row 1; user-directed sub-issue nav stays.
     if (
       selectedLinearIssueId &&
       !selectedLinearIssueCanFloat &&
@@ -7992,10 +7764,7 @@ export default function TaskPage(): React.JSX.Element {
     taskSource
   ])
 
-  // Why: for Linear issues the "Use" flow opens the composer with the issue
-  // info adapted to the LinkedWorkItemSummary shape. Linear identifiers are
-  // strings (e.g. "ENG-123") so we use 0 as a placeholder number since the
-  // provider-generic work item shape still expects numeric issue metadata.
+  // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
   const openComposerForLinearItem = useCallback(
     (issue: LinearIssue): void => {
       const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue)
@@ -8011,10 +7780,7 @@ export default function TaskPage(): React.JSX.Element {
 
   const handleUseLinearItem = useCallback(
     (issue: LinearIssue): void => {
-      // Why: same rationale as handleUseWorkItem — open the New Workspace
-      // dialog pre-filled rather than yolo-creating the worktree, so the
-      // user can confirm name / agent / setup before the worktree lands in
-      // the sidebar. Telemetry attribution flows via openComposerForLinearItem.
+      // Why: like handleUseWorkItem — open the pre-filled dialog instead of creating the worktree directly, so the user confirms name/agent/setup.
       useAppStore.getState().recordFeatureInteraction('linear-tasks')
       openComposerForLinearItem(issue)
     },
@@ -8129,12 +7895,7 @@ export default function TaskPage(): React.JSX.Element {
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Why: pt-1.5 vertically centers this row's 32px icon cluster (X +
-            source toggles) with the sidebar's "Tasks" nav row. Sidebar Tasks
-            center sits 22px below the titlebar (pt-2 + py-1.5 + half size-4
-            icon). Matching that here needs 6px top padding above the 32px
-            cluster (6 + 16 = 22). The previous pt-3 placed the cluster 6px
-            too low, breaking the visual band across the top chrome. */}
+        {/* Why: pt-1.5 (6px) aligns this 32px icon cluster's center with the sidebar Tasks row, 22px below the titlebar. */}
         <div className="mx-auto flex min-h-0 min-w-0 w-full flex-1 flex-col px-5 pt-1.5 pb-4 md:px-8 md:pt-1.5 md:pb-5">
           <div
             className={cn('flex-none flex flex-col gap-2', taskPageListChromeHidden && 'hidden')}
@@ -8146,10 +7907,7 @@ export default function TaskPage(): React.JSX.Element {
                     className="flex min-w-0 flex-wrap items-center gap-2"
                     data-contextual-tour-target="tasks-source-filters"
                   >
-                    {/* Why: Close is anchored left in the same row as the
-                        source icons so the top chrome is one compact band.
-                        Left-aligned keeps it clear of the app sidebar on the
-                        right edge. */}
+                    {/* Why: Close is anchored left with the source icons for one compact band, clear of the app sidebar on the right. */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -8371,8 +8129,7 @@ export default function TaskPage(): React.JSX.Element {
                         })}
                       </div>
                     ) : null}
-                    {/* Why: Project rows are now repo-scoped too, so the
-                        selection must stay visible in both GitHub modes. */}
+                    {/* Why: Project rows are repo-scoped, so the selection must stay visible in both GitHub modes. */}
                     <div className="min-w-0 max-w-[220px] shrink-0">
                       <TaskProjectSourceCombobox
                         groups={taskPickerGroups}
@@ -8545,11 +8302,7 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => {
-                                // Why: restore a content-non-empty draft instead
-                                // of resetting, so an accidental dismissal is
-                                // recoverable. The empty-default branch stays live
-                                // so a stale draft never hijacks a fresh open after
-                                // the user changed their primary/selected repo.
+                                // Why: restore a non-empty draft (accidental dismissal recoverable); empty default guards a stale draft after a repo change.
                                 const seed = resolveNewIssueOpenSeed({
                                   draft: useAppStore.getState().newIssueDraft,
                                   selectedRepoIds: selectedRepos.map((r) => r.id)
@@ -8619,13 +8372,7 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
 
                     {(() => {
-                      // Why: unify feature 1 (indicator) and feature 2 (selector)
-                      // into a single chip per repo. Rendering both separately
-                      // produced visually redundant output — two local-repo
-                      // badge labels, duplicate slugs. The selector's active pill
-                      // + tooltip already announce the source, so the "Issues
-                      // from {slug}" chip is only shown when the selector does
-                      // not render (no upstream remote — nothing to toggle).
+                      // Why: show the source-slug chip only when the selector can't render (no upstream to toggle); otherwise it duplicates the selector.
                       const rows = perRepoSourceState.filter(
                         (s) => hasUpstreamCandidateDivergence(s) || hasDivergentSources(s)
                       )
@@ -8638,10 +8385,7 @@ export default function TaskPage(): React.JSX.Element {
                             const repo = selectedRepos.find((r) => r.id === s.repoId)
                             const showRepoBadgeLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
-                            // Why: the static indicator has its own wrapping
-                            // chip styles, so we render it standalone and don't
-                            // nest it inside our own chip — nesting would
-                            // double-border it.
+                            // Why: render the indicator standalone — it has its own chip styles, so nesting it in our chip would double-border it.
                             if (!selectorRenderable && hasDivergentSources(s)) {
                               return (
                                 <IssueSourceIndicator
@@ -8659,12 +8403,7 @@ export default function TaskPage(): React.JSX.Element {
                             if (!selectorRenderable || !repo) {
                               return null
                             }
-                            // Why: must be a <div> (not <span>) because the child
-                            // <IssueSourceSelector> renders a <div role="group">, and
-                            // a block-level <div> nested inside an inline <span> is
-                            // invalid HTML — React emits a hydration warning and
-                            // browsers may auto-close the span. `issueSourceChipClass`
-                            // uses `inline-flex`, so the visual rendering is identical.
+                            // Why: <div> not <span> — the child selector renders a block <div> (div-in-span is invalid HTML); inline-flex class looks identical.
                             return (
                               <div key={s.repoId} className={issueSourceChipClass}>
                                 {showRepoBadgeLabel ? (
@@ -9267,9 +9006,7 @@ export default function TaskPage(): React.JSX.Element {
                 style={{ scrollbarGutter: 'stable' }}
               >
                 <div
-                  // Why: z-40 must beat the data rows' sticky left cells (z-20);
-                  // this container is a stacking context, so its z sets the whole
-                  // header's level — at z-10 the rows' sticky cells painted over it.
+                  // Why: z-40 must beat the rows' sticky left cells (z-20); this stacking context's z sets the whole header's level.
                   className={cn(
                     'sticky top-0 z-40 grid gap-2 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground',
                     GITHUB_TASK_ROW_SURFACE_CLASS,
@@ -9305,9 +9042,7 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 {!tasksError && githubUnavailable ? (
-                  // Why: attribute a GitHub availability failure explicitly so
-                  // an empty list doesn't read as an Orca bug. Takes priority
-                  // over the generic count banner below.
+                  // Why: name the GitHub outage explicitly so an empty list isn't misread as an Orca bug; takes priority over the count banner.
                   <div
                     role="alert"
                     className="border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
@@ -9320,8 +9055,7 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 {!tasksError && !githubUnavailable && failedCount > 0 ? (
-                  // Why: per-repo partial-failure signal — distinct from a hard
-                  // IPC reject (tasksError). The two are mutually exclusive.
+                  // Why: per-repo partial-failure signal, distinct from a hard IPC reject (tasksError); the two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
                     {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}{' '}
                     {selectedRepos.length}{' '}
@@ -9333,20 +9067,12 @@ export default function TaskPage(): React.JSX.Element {
                   .filter((s) => s.error)
                   .map((s) => {
                     const err = s.error!
-                    // Why: parent design doc §2 — when the issue fetch fails
-                    // (e.g. a 403 on a private upstream) we render a retryable
-                    // banner with slug-qualified copy instead of a silent
-                    // empty list. The [Retry] action re-invokes the fetch
-                    // with force=true via the shared refresh nonce so any
-                    // still-failing in-flight request is invalidated first.
+                    // Why: Retry re-fetches force=true via the shared refresh nonce, invalidating any still-failing in-flight request first.
                     return (
                       <div
                         key={`source-err-${s.repoId}`}
                         role="alert"
-                        // Why: aria-atomic ensures screen readers re-announce the full banner
-                        // when retry produces a new error on the same repo. Without it, React's
-                        // reconciliation (stable key per repo) may diff-only the changed text
-                        // node and some assistive tech will miss the update.
+                        // Why: aria-atomic re-announces the whole banner on a new same-repo error SRs would otherwise miss (stable key → text-only diff).
                         aria-atomic="true"
                         className="flex items-center justify-between gap-3 border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
                       >
@@ -9380,10 +9106,7 @@ export default function TaskPage(): React.JSX.Element {
                   })}
 
                 {showGitHubTaskSkeletons ? (
-                  // Why: render enough shimmer rows to fill a typical viewport
-                  // so the table doesn't visibly grow when results land. A
-                  // 3-row stub jumps to ~30 real rows; matching the steady-
-                  // state height keeps layout stable across the load.
+                  // Why: fill a typical viewport with shimmer rows so the table doesn't jump in height when results land.
                   <div className="divide-y divide-border/50">
                     {Array.from({ length: 12 }).map((_, i) => (
                       <div key={i} className={cn('grid gap-2 px-3 py-2', githubTaskGridClass)}>
@@ -9427,12 +9150,7 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
-                {/* Why: suppress the generic empty state when any error banner is
-                    visible (IPC reject via tasksError, GitHub-unavailable outage,
-                    cross-repo partial failure via failedCount, or per-repo
-                    issue-side error). Showing "No matching GitHub work" next to
-                    "Couldn't load issues from X/Y" is contradictory and misleads
-                    the user into thinking they typed the wrong query. */}
+                {/* Why: hide the empty state while any error banner shows, so "No matching work" doesn't contradict "Couldn't load issues". */}
                 {!showGitHubTaskSkeletons &&
                 filteredWorkItems.length === 0 &&
                 !tasksError &&
@@ -9486,18 +9204,9 @@ export default function TaskPage(): React.JSX.Element {
                         </span>
                       )
                       return (
-                        // Why: the row is a clickable container rather than a
-                        // <button> because it holds nested interactive elements
-                        // (Use button, ellipsis DropdownMenuTrigger, Radix
-                        // TooltipTrigger). A <button> ancestor of another
-                        // <button> is invalid HTML and triggers React hydration
-                        // errors that break rendering of the whole page.
+                        // Why: clickable div not a <button> — it nests buttons, and button-in-button is invalid HTML that breaks hydration.
                         <div
-                          // Why: combine repoId with item.id because two selected repos
-                          // that route issues through the same upstream (e.g. fork +
-                          // non-fork both resolving to stablyai/orca) surface the same
-                          // item.id under different repoIds. React treats a bare id as
-                          // a collision and warns + silently drops rows otherwise.
+                          // Why: key on repoId+item.id — repos sharing an upstream reuse item.id, so a bare key collides and React silently drops rows.
                           key={`${item.repoId}:${item.id}`}
                           role="button"
                           tabIndex={0}
@@ -9509,9 +9218,7 @@ export default function TaskPage(): React.JSX.Element {
                             }
                           }}
                           className={cn(
-                            // Why: hover uses the same opaque muted-70% mix as the sticky
-                            // ID/Title cells (GITHUB_TASK_ROW_HOVER_SURFACE_CLASS) so the
-                            // left columns don't show a different shade than the rest of the row.
+                            // Why: hover uses the same opaque muted-70% mix as the sticky ID/Title cells so the left columns match the rest of the row.
                             'group/github-task-row grid cursor-pointer gap-2 px-3 py-2 text-left transition-colors hover:[background:color-mix(in_srgb,var(--muted)_70%,var(--background))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                             githubTaskGridClass
                           )}
@@ -9543,8 +9250,7 @@ export default function TaskPage(): React.JSX.Element {
                                 />
                               ) : null}
                               {selectedRepos.length > 1 && itemRepo ? (
-                                // Why: disambiguate rows when multiple repos are in
-                                // the merged list — a single-repo view doesn't need it.
+                                // Why: disambiguate rows in the merged multi-repo list; a single-repo view doesn't need it.
                                 <RepoBadgeLabel
                                   name={itemRepo.displayName}
                                   color={itemRepo.badgeColor}
@@ -9732,8 +9438,7 @@ export default function TaskPage(): React.JSX.Element {
                             ) : (
                               <Button
                                 type="button"
-                                // Why: Open resumes an existing workspace — solid primary so it
-                                // reads as the stronger action vs outline Start (new workspace).
+                                // Why: Open resumes an existing workspace — solid primary reads stronger than outline Start (new workspace).
                                 variant={attachedWorkspace ? 'default' : 'outline'}
                                 size="xs"
                                 data-contextual-tour-target="tasks-start-workspace"
@@ -9810,9 +9515,7 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               </div>
 
-              {/* Why: pagination sits outside the scroll container so it
-                  remains pinned at the bottom of the panel rather than
-                  hiding below the last row inside the scrolling region. */}
+              {/* Why: pagination sits outside the scroll container so it stays pinned at the panel bottom instead of scrolling away. */}
               {filteredWorkItems.length > 0 && !showGitHubTaskSkeletons && totalPages > 1 ? (
                 <div className="flex-none border-t border-border/50 bg-muted/50">
                   <PaginationBar
@@ -9903,9 +9606,7 @@ export default function TaskPage(): React.JSX.Element {
                       }
                     >
                       <span className="text-xs text-muted-foreground">
-                        {/* Why: GitLab action_name uses snake_case (assigned,
-                            review_requested, build_failed). Replace _ with
-                            space so the row reads like a sentence. */}
+                        {/* Why: GitLab action_name is snake_case (review_requested); swap _ for space so the row reads like a sentence. */}
                         {todo.actionName.replace(/_/g, ' ')}
                       </span>
                       <span className="min-w-0 truncate text-sm">{todo.targetTitle}</span>
@@ -9942,10 +9643,7 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
                 {gitlabLoading && gitlabItems.length === 0 ? (
-                  // Why: matches the GitHub / Linear shimmer pattern so the card
-                  // never flashes empty during the initial fetch. Row count is
-                  // tuned to fill the viewport so the table doesn't visibly
-                  // grow when real rows land.
+                  // Why: shimmer rows fill the viewport so the card never flashes empty and the table doesn't jump when real rows land.
                   <div className="divide-y divide-border/50">
                     {Array.from({ length: 12 }).map((_, i) => (
                       <div
@@ -9975,11 +9673,7 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
                 <div className="divide-y divide-border/50">
                   {displayedGitLabItems.map((item) => (
-                    // Why: row uses a <div role="button"> rather than a
-                    // <button> because it nests an inner button for
-                    // open-in-browser. Native <button> nesting is invalid
-                    // HTML and React warns; the role + tabIndex + keyDown
-                    // handler preserve a11y semantics.
+                    // Why: div role="button" not a <button> — it nests an open-in-browser button, and button-in-button is invalid HTML.
                     <div
                       role="button"
                       tabIndex={0}
@@ -9998,9 +9692,7 @@ export default function TaskPage(): React.JSX.Element {
                       className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[80px_minmax(0,3fr)_120px_110px_50px] hover:bg-muted/50"
                     >
                       <span className="font-mono text-xs text-muted-foreground">
-                        {/* Why: GitLab's user-facing convention is `!N` for MRs
-                            and `#N` for issues — matches gitlab.com's UI so users
-                            scanning the list can map rows back to web links. */}
+                        {/* Why: GitLab uses !N for MRs and #N for issues — match gitlab.com so rows map to web links. */}
                         {item.type === 'mr' ? '!' : '#'}
                         {item.number}
                       </span>
@@ -11181,18 +10873,7 @@ export default function TaskPage(): React.JSX.Element {
               {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
             </DialogTitle>
             {(() => {
-              // Why: parent design doc §1 surface 2 — the composer is the
-              // non-negotiable surface because User D's regression (filing a
-              // personal TODO against upstream/fork after #1076 changed
-              // routing) is specifically about this dialog. The description
-              // line doubles as the source indicator: inlining the resolved
-              // `{owner}/{repo}` slug (e.g. "stablyai/orca") means the
-              // destination is impossible to miss before the user submits,
-              // without needing a secondary chip that duplicates the info.
-              // Falls back to the local displayName when the slug isn't
-              // resolved yet (pre-IPC cache hit, or non-GitHub remote). The
-              // multi-repo case uses the same computation — the Select below
-              // drives `newIssueTargetRepo`, so the active target is known.
+              // Why: inline the resolved {owner}/{repo} slug as the source indicator; fall back to displayName when unresolved.
               const entry = newIssueTargetRepo
                 ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
                 : undefined
@@ -11208,20 +10889,8 @@ export default function TaskPage(): React.JSX.Element {
               )
             })()}
             {(() => {
-              // Why: mirror the Tasks-view selector in the composer so User D
-              // (fork contributor filing a personal TODO against their own
-              // fork) can flip the target *at the moment of filing* — the
-              // only moment that matters for this regression. Reuses the
-              // same cache entry the description line reads so no extra
-              // IPC round-trip is needed.
-              //
-              // Why sibling of DialogDescription (not nested inside it):
-              // DialogDescription renders a <p>, and `IssueSourceSelector`
-              // renders a <div role="group"> with <button>s inside. Nesting
-              // a div inside a <p> is invalid HTML — React emits a hydration
-              // warning and some a11y tools flag it. Rendering the selector
-              // as a sibling keeps both surfaces in the same header band
-              // without the nesting violation.
+              // Why: mirror the Tasks-view target selector so a fork contributor can flip target at filing time (fork-routing regression #1076).
+              // Sibling (not nested) because DialogDescription renders a <p> and the selector a <div> — nesting is invalid HTML.
               if (!newIssueTargetRepo) {
                 return null
               }
@@ -11241,10 +10910,7 @@ export default function TaskPage(): React.JSX.Element {
                     origin={entry.sources.originCandidate}
                     upstream={entry.sources.upstreamCandidate}
                     disabled={newIssueSubmitting}
-                    // Why: the composer only files issues, so the "Issues from
-                    // <slug>" tooltip restates what the surrounding form already
-                    // implies. Keep it on the Tasks header (that page also lists
-                    // PRs, which the selector doesn't affect).
+                    // Why: composer only files issues, so the source tooltip is redundant here (kept on the Tasks header, which also lists PRs).
                     suppressTooltip
                     onChange={(next) => {
                       void setIssueSourcePreference(
@@ -11267,9 +10933,7 @@ export default function TaskPage(): React.JSX.Element {
                 <Select
                   value={newIssueRepoId ?? undefined}
                   onValueChange={(v) => {
-                    // Why: repo-scoped labels/assignees can't cross a genuine
-                    // user repo switch, so clear them imperatively here (co-located
-                    // with the cause). Restore never routes through this handler.
+                    // Why: repo-scoped labels/assignees can't survive a real repo switch, so clear them here (restore never routes through this handler).
                     setNewIssueRepoId(v)
                     const reset = resolveUserRepoSwitchReset()
                     setNewIssueLabels(reset.labels)
@@ -12661,9 +12325,7 @@ export default function TaskPage(): React.JSX.Element {
 
       <GitLabItemDialog
         item={gitlabDialogItem}
-        // Why: dialog's repoPath has to come from the clicked item's
-        // own repo, not primaryRepo — items may originate in any of
-        // the selected repos now that the GitLab fetch is multi-repo.
+        // Why: repoPath comes from the clicked item's own repo, not primaryRepo — the GitLab fetch is now multi-repo.
         repoPath={gitlabDialogRepo?.path ?? null}
         repoId={gitlabDialogItem?.repoId ?? null}
         sourceContext={gitlabDialogSourceContext}

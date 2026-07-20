@@ -1,5 +1,4 @@
-/* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
-protocol surface so local and SSH git behavior stay in one dispatch table. */
+/* eslint-disable max-lines -- Why: centralizes the git RPC protocol surface so local and SSH git behavior stay in one dispatch table. */
 import { execFile, spawn, type ExecFileOptions } from 'node:child_process'
 import { promisify } from 'node:util'
 import * as path from 'node:path'
@@ -101,9 +100,7 @@ function resolveRelayPath(repoPath: string, value: string): string {
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
     return value
   }
-  // Old git ignores `--path-format=absolute`, so a relative toplevel/git-dir
-  // must be resolved against the scanned repo path. Mirror worktree.ts's
-  // resolveRevParsePath: pick the win32/posix resolver from the repoPath shape.
+  // Old git ignores `--path-format=absolute`; resolve relative toplevel/git-dir against repoPath, picking the win32/posix resolver by its shape.
   return isWindowsAbsolutePath(repoPath)
     ? path.win32.resolve(repoPath, value)
     : path.posix.resolve(repoPath, value)
@@ -112,11 +109,8 @@ function resolveRelayPath(repoPath: string, value: string): string {
 type RelayRepoLocation = { topLevel: string; commonDir: string }
 
 function parseRelayRepoLocation(repoPath: string, output: string): RelayRepoLocation | undefined {
-  // Old git (pre `--path-format`) echoes the unrecognized flag to stdout and
-  // exits 0 rather than erroring, so drop any echoed `-`-prefixed lines and
-  // read the two trailing path lines (toplevel, then git-common-dir). Strip only
-  // the trailing CR, not surrounding spaces — git paths may legitimately start
-  // or end with a space.
+  // Old git (pre `--path-format`) echoes the unknown flag and exits 0; drop `-`-prefixed lines, take the last two paths.
+  // Strip only the trailing CR, not surrounding spaces — git paths may legitimately start or end with a space.
   const lines = output
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
@@ -170,17 +164,13 @@ export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
   private readonly gitCapabilities = new GitCapabilityCache()
-  // Why: large diff/exec responses are chunked onto the bulk lane so they do
-  // not head-of-line-block interactive pty.data echo on the shared SSH channel.
+  // Why: large diff/exec responses go on the bulk lane so they don't head-of-line-block interactive pty.data echo on the shared SSH channel.
   private readonly responseStreams = new GitResponseStreamRegistry()
 
-  // Why: configured submodule paths change rarely; an instance-level TTL cache
-  // avoids re-reading `.gitmodules` on every diff click over SSH, and being
-  // per-instance it stays bound to the connection lifecycle (no cross-test leak).
+  // Why: instance-level TTL cache avoids re-reading `.gitmodules` per diff click over SSH; per-instance so it can't leak across tests.
   private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
 
-  // Why: RelayContext is accepted for protocol back-compat (see
-  // docs/relay-fs-allowlist-removal.md) but no longer consulted on git ops.
+  // Why: RelayContext accepted for protocol back-compat (docs/relay-fs-allowlist-removal.md) but no longer consulted on git ops.
   constructor(
     dispatcher: RelayDispatcher,
     _context: RelayContext,
@@ -188,8 +178,7 @@ export class GitHandler {
   ) {
     this.dispatcher = dispatcher
     this.registerHandlers()
-    // Why: a detached client's git.responseAck frames will never arrive; wake
-    // any pump parked on the ack window so it re-checks staleness and exits.
+    // Why: a detached client's git.responseAck frames never arrive; wake any pump parked on the ack window so it re-checks staleness and exits.
     this.dispatcher.onClientDetached?.(() => this.responseStreams.wakeAll())
   }
 
@@ -266,11 +255,7 @@ export class GitHandler {
     }
   }
 
-  // Why: when the client opted into response streaming and the serialized result
-  // exceeds the threshold, chunk it onto the bulk lane and return a small
-  // sentinel as the RPC result. Old clients omit the flag (single-frame, as
-  // today); old relays never call this, so a new client falls back to the plain
-  // result they return.
+  // Why: opt-in streaming — old clients/relays omit the flag and fall back to the plain result.
   private maybeStreamResponse(
     result: unknown,
     params: Record<string, unknown>,
@@ -293,8 +278,7 @@ export class GitHandler {
   }
 
   private async runWithGitReadCacheClear<T>(run: () => Promise<T>): Promise<T> {
-    // Why: git mutations can stale existing and concurrently-started diff and
-    // .gitmodules reads. Clear before and after so later reads cannot join them.
+    // Why: git mutations can stale in-flight diff/.gitmodules reads; clear before and after so later reads cannot join them.
     this.clearGitMutationReadCaches()
     try {
       return await run()
@@ -349,10 +333,7 @@ export class GitHandler {
     return getStatusOp(this.git.bind(this), params, { signal: context.signal })
   }
 
-  // Why: the parent status only lists a single gitlink row per submodule. The
-  // renderer fetches inner per-file changes on demand by running a plain status
-  // inside the submodule's own worktree. Reject paths escaping the worktree to
-  // match the diff handler's traversal guard.
+  // Why: parent status lists one gitlink row per submodule; fetch inner per-file changes by running status inside the submodule's own worktree.
   private async getSubmoduleStatus(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const submodulePath = params.submodulePath as string
@@ -363,9 +344,7 @@ export class GitHandler {
       ...params,
       worktreePath: resolved
     })
-    // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface the
-    // files changed between the recorded and checked-out commits so the expanded
-    // submodule isn't empty. Mirrors getSubmoduleStatus in the local handler.
+    // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface files changed between recorded and checked-out commits so it isn't empty.
     const { fromOid, toOid } = await resolveSubmoduleCommitRange(
       this.git.bind(this),
       worktreePath,
@@ -410,8 +389,7 @@ export class GitHandler {
   private async getDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
-    // Why: filePath is relative to worktreePath and used in readWorkingFile via
-    // path.join. Without validation, ../../etc/passwd traverses outside the worktree.
+    // Why: filePath is relative and joined for readWorkingFile; validate or `../../etc/passwd` traverses outside the worktree.
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
     if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
@@ -419,14 +397,11 @@ export class GitHandler {
     }
     const staged = params.staged as boolean
     const compareAgainstHead = params.compareAgainstHead as boolean | undefined
-    // Why: register the in-flight dedupe synchronously (before any await) so
-    // concurrent identical reads coalesce; submodule routing happens inside.
+    // Why: register the in-flight dedupe synchronously (before any await) so concurrent identical reads coalesce; submodule routing happens inside.
     const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () => {
-        // Why: gitlink paths can't be read as blobs and submodule working dirs
-        // read as empty, so route the gitlink root → pointer diff and inner
-        // files → recurse into the submodule's own worktree (mirrors local).
+        // Why: gitlinks can't be read as blobs, so route the gitlink root to a pointer diff and inner files into the submodule's own worktree.
         const submodulePaths = await listSubmodulePathsCached(
           this.git.bind(this),
           worktreePath,
@@ -456,9 +431,7 @@ export class GitHandler {
               matchedSubmodule,
               staged
             )
-            // Why: a moved gitlink (clean worktree) keeps inner changes in
-            // committed history, so diff the two commits; otherwise read the
-            // working-tree blob.
+            // Why: a moved gitlink (clean worktree) keeps inner changes in committed history, so diff the two commits; otherwise read the working-tree blob.
             if (fromOid && toOid && fromOid !== toOid) {
               return buildSubmoduleInnerCommitRangeDiff(
                 this.gitBuffer.bind(this),
@@ -582,10 +555,7 @@ export class GitHandler {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const branch = params.branch as string
-    // Defense-in-depth: reject option-like branch tokens (the RPC schema also
-    // validates, but this relay entrypoint is reachable independently). The
-    // `startsWith('-')` guard is what prevents flag injection; the trailing `--`
-    // marks that no pathspecs follow so the token is treated as a branch ref.
+    // Defense-in-depth: reject `-`-prefixed branch tokens to block flag injection (this relay entrypoint is reachable independently of the RPC schema).
     if (typeof branch !== 'string' || branch.length === 0 || branch.startsWith('-')) {
       throw new Error('invalid_branch_name')
     }
@@ -637,8 +607,7 @@ export class GitHandler {
   private assertInWorktree(worktreePath: string, filePath: string): string {
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
-    // Why: empty rel or '.' means the path IS the worktree root — rm -rf would
-    // delete the entire worktree. Reject along with parent-escaping paths.
+    // Why: empty rel or '.' means the path IS the worktree root; reject (with parent-escaping paths) so a discard can't wipe the whole worktree.
     if (
       !rel ||
       rel === '.' ||
@@ -704,8 +673,7 @@ export class GitHandler {
           ['ls-files', '-z', '--', ...chunk.map((p) => this.literalPathspec(p))],
           worktreePath
         )
-        // Why: selecting a tracked directory can make `ls-files -z` return
-        // enough descendants for push(...split) to exceed the argument limit.
+        // Why: a selected tracked directory can make `ls-files -z` return enough descendants for push(...split) to exceed the argument limit.
         for (const trackedPathSpec of stdout.split('\0')) {
           if (trackedPathSpec) {
             trackedPathSpecs.push(trackedPathSpec)
@@ -770,15 +738,13 @@ export class GitHandler {
   private async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
-    // Why: a baseRef starting with '-' would be interpreted as a flag to
-    // git rev-parse, potentially leaking environment variables or config.
+    // Why: a baseRef starting with '-' would be read as a git rev-parse flag, potentially leaking environment variables or config.
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
-      // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8;
-      // without it parseBranchDiff would yield C-style octal-escaped paths.
+      // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8; without it parseBranchDiff would get C-style octal-escaped paths.
       const { stdout } = await gitBound(
         ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
         worktreePath
@@ -816,14 +782,11 @@ export class GitHandler {
         (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
       )
     } catch (error) {
-      // Why: we only swallow the 'no upstream configured' error — that's an
-      // expected state, not a failure. Other errors (auth, corruption, network)
-      // should surface to the user so they can act on them.
+      // Why: swallow only 'no upstream configured' (an expected state); other errors (auth, corruption, network) must surface to the user.
       if (isNoUpstreamError(error)) {
         return { hasUpstream: false, ahead: 0, behind: 0 }
       }
-      // Why: match fetch/push/pull normalization so execFile preamble and local
-      // paths don't leak to the renderer.
+      // Why: match fetch/push/pull normalization so execFile preamble and local paths don't leak to the renderer.
       throw new Error(normalizeGitErrorMessage(error, 'upstream'))
     }
   }
@@ -839,8 +802,7 @@ export class GitHandler {
       )
       return upstreamOnlyCommitsArePatchEquivalent(stdout)
     } catch {
-      // Why: this only identifies stale post-rebase upstreams. If the probe
-      // fails over SSH, keep the conservative pull-first sync path.
+      // Why: this only identifies stale post-rebase upstreams; if the probe fails over SSH, keep the conservative pull-first sync path.
       return false
     }
   }
@@ -859,9 +821,7 @@ export class GitHandler {
         }
         await this.git(['fetch', '--prune'], worktreePath)
       } catch (error) {
-        // Why: mirror the local gitFetch normalization so SSH users see the same
-        // actionable messages instead of raw git stderr (which varies across
-        // versions/locales and may embed credentials).
+        // Why: normalize like local gitFetch so SSH users get actionable messages, not raw stderr (may embed credentials).
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
       }
     } finally {
@@ -944,9 +904,7 @@ export class GitHandler {
           worktreePath
         )
       } catch (error) {
-        // Why: create-worktree needs a write-capable fetch, but generic git.exec
-        // intentionally rejects fetch. This narrow RPC keeps the relay allowlist
-        // tight while preserving the same safe error normalization as git.fetch.
+        // Why: create-worktree needs a write-capable fetch that generic git.exec rejects; narrow RPC keeps the allowlist tight.
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
       }
     } finally {
@@ -980,8 +938,7 @@ export class GitHandler {
         if (!remotes.includes(remote)) {
           throw new Error(`Remote "${remote}" is not configured.`)
         }
-        // Why: GitLab MR heads are not refs/heads/*, so the remote-tracking
-        // fetch RPC cannot represent fork MRs. Keep this write path MR-only.
+        // Why: GitLab MR heads aren't refs/heads/*, so the remote-tracking fetch RPC can't represent fork MRs; keep this write path MR-only.
         await this.git(
           ['fetch', '--no-tags', remote, `refs/merge-requests/${mergeRequestIid}/head`],
           worktreePath
@@ -997,8 +954,7 @@ export class GitHandler {
   private async push(params: Record<string, unknown>) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
-    // Why: mirror src/main/git/remote.ts. Push to a configured upstream when
-    // present so SSH worktrees with non-origin targets do not get repointed.
+    // Why: mirror src/main/git/remote.ts — push to a configured upstream when present so SSH worktrees with non-origin targets aren't repointed.
     void params.publish
     try {
       try {
@@ -1015,8 +971,7 @@ export class GitHandler {
         ]
         await this.git(args, worktreePath)
       } catch (error) {
-        // Why: mirror the local gitPush normalization so SSH users see the same
-        // "non-fast-forward / pull first" guidance instead of raw git stderr.
+        // Why: mirror local gitPush normalization so SSH users get "non-fast-forward / pull first" guidance instead of raw git stderr.
         throw new Error(normalizeGitErrorMessage(error, 'push'))
       }
     } finally {
@@ -1040,8 +995,7 @@ export class GitHandler {
       }
       const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
       if (upstream && !upstream.isConfiguredUpstream) {
-        // Why: legacy Orca branches may still track origin/main while pushes
-        // target origin/<branch>. Pull the same effective branch the UI reports.
+        // Why: legacy Orca branches may track origin/main while pushes target origin/<branch>; pull the same effective branch the UI reports.
         await this.git(
           ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
           worktreePath
@@ -1055,8 +1009,7 @@ export class GitHandler {
       try {
         await runPullWithDivergenceFallback(pullArgs, runPull)
       } catch (error) {
-        // Why: mirror the local gitPull normalization so SSH users see the same
-        // actionable messages instead of raw git stderr.
+        // Why: mirror local gitPull normalization so SSH users get actionable messages instead of raw git stderr.
         throw new Error(normalizeGitErrorMessage(error, 'pull'))
       }
     } finally {
@@ -1065,8 +1018,7 @@ export class GitHandler {
   }
 
   private async pull(params: Record<string, unknown>) {
-    // Why: plain `git pull` honors the user's configured merge/rebase/ff policy.
-    // If no policy exists, Git's policy error is normalized with setup guidance.
+    // Why: plain `git pull` honors the user's merge/rebase/ff policy; with none, Git's policy error is normalized with setup guidance.
     await this.pullWithArgs(params, [])
   }
 
@@ -1252,8 +1204,7 @@ export class GitHandler {
         throw new Error('Branch name must not start with "-".')
       }
       try {
-        // Why: generic git.exec intentionally blocks destructive branch flags.
-        // This narrow RPC permits only the already-checked current-branch rename.
+        // Why: generic git.exec blocks destructive branch flags; this narrow RPC permits only the already-checked current-branch rename.
         await this.git(['check-ref-format', '--branch', newBranch], worktreePath)
         await this.git(['branch', '-m', newBranch], worktreePath)
       } catch (error) {
@@ -1273,9 +1224,7 @@ export class GitHandler {
     ) {
       throw new Error('Invalid preserved branch force-delete request.')
     }
-    // Why: an empty repoPath would resolve `cwd` to the relay's own process
-    // directory, running the destructive update-ref against the wrong repo. NUL
-    // bytes cannot reach git safely either; reject both at the boundary.
+    // Why: empty repoPath would target the relay's own cwd with a destructive update-ref, and NUL bytes can't reach git safely — reject both.
     if (!repoPath || repoPath.includes('\0') || expectedHead.includes('\0')) {
       throw new Error('Invalid preserved branch force-delete request.')
     }
@@ -1304,8 +1253,7 @@ export class GitHandler {
             repoPath
           )
           if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
-            // Why: some old Git versions echo the unknown option and exit zero;
-            // remember that signal even though the trailing paths remain usable.
+            // Why: old Git echoes the unknown option and exits zero; remember the signal though the paths still parse.
             this.gitCapabilities.rememberUnsupported('rev-parse-path-format')
           }
           return parseRelayRepoLocation(repoPath, stdout)
@@ -1331,8 +1279,7 @@ export class GitHandler {
     const mainIndex = worktrees.findIndex((worktree) => worktree.isMainWorktree === true)
     const mainWorktree = worktrees[mainIndex]
     const mainPath = typeof mainWorktree?.path === 'string' ? mainWorktree.path : ''
-    // Expand `~` so the early-return matches git's absolute porcelain path for
-    // legacy SSH repos stored with a tilde, sparing them a rev-parse per poll.
+    // Expand `~` so legacy tilde SSH repo paths match git's absolute path, sparing a rev-parse per poll.
     const resolvedRepoPath = expandTilde(repoPath)
     if (!mainPath || areRelayWorktreePathsEqual(mainPath, resolvedRepoPath)) {
       return worktrees
@@ -1343,10 +1290,7 @@ export class GitHandler {
       return worktrees
     }
 
-    // Why: only a separate-git-dir/submodule main worktree reports the Git
-    // directory as the main entry — i.e. the main entry equals git-common-dir.
-    // A linked worktree's main entry is a real working root, so gating on this
-    // equality avoids overwriting it with the linked worktree's own toplevel.
+    // Why: only separate-git-dir/submodule repos have main entry == git-common-dir; gate on it so we don't clobber a linked worktree's real root.
     if (!areRelayWorktreePathsEqual(mainPath, location.commonDir)) {
       return worktrees
     }
@@ -1371,8 +1315,7 @@ export class GitHandler {
           )
         },
         async () => {
-          // Why: `-z` keeps newline-containing SSH worktree paths intact, but
-          // Git <2.36 requires the line-block parser.
+          // Why: Git <2.36 lacks worktree-list `-z`, so fall back to the newline-block parser (loses newline-in-path safety).
           try {
             const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
               signal: context?.signal
@@ -1381,11 +1324,7 @@ export class GitHandler {
               repoPath,
               parseWorktreeList(stdout)
             )
-            // Why: this `-z`-unsupported fallback (Git <2.36) also serves Git
-            // <2.31, which emits no `prunable` annotation; probe each linked
-            // worktree path instead of treating stale registrations as live.
-            // On Git 2.31–2.35 the annotation is already parsed, so the probe
-            // is a harmless backstop (issue #8389).
+            // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
             return annotatePrunableWorktreesByExistence(normalized)
           } catch {
             return []

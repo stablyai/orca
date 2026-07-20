@@ -33,10 +33,12 @@ import type {
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
+  applyMetadataFallbackVisibility,
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree-ownership'
+import { createAgentScratchWorktreePathMatcher } from '../../shared/agent-scratch-worktrees'
 import {
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
@@ -729,8 +731,14 @@ function buildDetectedGitWorktrees(
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
   // Why: a prunable registration has no working directory (issue #8389); only this listing omits it — cleanup flows list separately.
-  const liveWorktrees = gitWorktrees.filter((gitWorktree) => !gitWorktree.prunable)
-  return dedupeWorktreesByPath(liveWorktrees).map((gitWorktree) => {
+  const liveWorktrees = dedupeWorktreesByPath(
+    gitWorktrees.filter((gitWorktree) => !gitWorktree.prunable)
+  )
+  const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
+    repo.path,
+    ...liveWorktrees.map((worktree) => worktree.path)
+  ])
+  return liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     let meta = store.getWorktreeMeta(worktreeId)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
@@ -740,7 +748,8 @@ function buildDetectedGitWorktrees(
       meta,
       settings,
       knownOrcaLayouts,
-      isLegacyRepoForVisibility
+      isLegacyRepoForVisibility,
+      agentScratchWorktreePathMatcher
     })
     if (!detected.visible) {
       return detected
@@ -753,7 +762,8 @@ function buildDetectedGitWorktrees(
       meta,
       settings,
       knownOrcaLayouts,
-      isLegacyRepoForVisibility
+      isLegacyRepoForVisibility,
+      agentScratchWorktreePathMatcher
     })
   })
 }
@@ -945,6 +955,10 @@ function buildDisconnectedDetectedWorktrees(
   worktrees: Worktree[]
 ): DetectedWorktree[] {
   const settings = store.getSettings()
+  const agentScratchWorktreePathMatcher = createAgentScratchWorktreePathMatcher([
+    repo.path,
+    ...worktrees.map((worktree) => worktree.path)
+  ])
   return worktrees.map((worktree) => {
     const meta = store.getWorktreeMeta(worktree.id)
     const detected = toDetectedWorktree({
@@ -953,13 +967,10 @@ function buildDisconnectedDetectedWorktrees(
       meta,
       settings,
       knownOrcaLayouts: [],
-      isLegacyRepoForVisibility: true
+      isLegacyRepoForVisibility: true,
+      agentScratchWorktreePathMatcher
     })
-    return {
-      ...detected,
-      visible: true,
-      ownership: detected.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
-    }
+    return applyMetadataFallbackVisibility(detected)
   })
 }
 

@@ -99,6 +99,7 @@ export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
 }
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
+  invalidateConnectAttempt(targetId)
   if (!connectionManager) {
     return
   }
@@ -110,7 +111,8 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
   if (!sshStore) {
     return
   }
-  // Why: removal is destructive — dispose() (not detach()) so the relay shuts down and remote PTY leases are terminated, not preserved for a reattach.
+  invalidateConnectAttempt(targetId)
+  // Why: removal is destructive; dispose so remote PTYs cannot reattach to a deleted target.
   await disposeActiveSshSession(targetId)
   try {
     await connectionManager?.disconnect(targetId)
@@ -172,8 +174,33 @@ function relayGracePeriodForTarget(target: SshTarget | null | undefined): number
   return target?.relayGracePeriodSeconds
 }
 
-// Why: concurrent ssh:connect from multiple tabs would each create a session (leaking the first); hold the in-flight promise so the second awaits it.
-const connectInFlight = new Map<string, Promise<SshConnectionState>>()
+// Why: tabs must share one connect, while a disconnect must invalidate that
+// attempt so its late continuation cannot clobber a replacement.
+type ConnectAttempt = {
+  generation: number
+  promise: Promise<SshConnectionState>
+}
+
+const connectInFlight = new Map<string, ConnectAttempt>()
+const connectGenerationByTarget = new Map<string, number>()
+
+function currentConnectGeneration(targetId: string): number {
+  return connectGenerationByTarget.get(targetId) ?? 0
+}
+
+function invalidateConnectAttempt(targetId: string): void {
+  connectGenerationByTarget.set(targetId, currentConnectGeneration(targetId) + 1)
+  connectInFlight.delete(targetId)
+  credentialRequestedForTarget.delete(targetId)
+}
+
+function isCurrentConnectAttempt(targetId: string, generation: number): boolean {
+  return currentConnectGeneration(targetId) === generation
+}
+
+function connectCancelledError(): Error {
+  return new Error('SSH connection attempt was cancelled')
+}
 
 // Why: publish reset's teardown/force-stop/disconnect lifecycle so new connects and duplicate resets can't race it.
 const resetRelayInFlight = new Map<string, Promise<void>>()
@@ -732,6 +759,7 @@ export function registerSshHandlers(
   // ── Connection lifecycle ───────────────────────────────────────────
 
   async function connectTarget(targetId: string): Promise<SshConnectionState> {
+    const observedGeneration = currentConnectGeneration(targetId)
     const reset = resetRelayInFlight.get(targetId)
     if (reset) {
       await reset
@@ -740,15 +768,23 @@ export function registerSshHandlers(
     // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
     const existing = connectInFlight.get(targetId)
     if (existing) {
-      return existing
+      return existing.promise
+    }
+    if (currentConnectGeneration(targetId) !== observedGeneration) {
+      throw connectCancelledError()
     }
 
-    const promise = doConnect(targetId)
-    connectInFlight.set(targetId, promise)
+    const generation = observedGeneration + 1
+    connectGenerationByTarget.set(targetId, generation)
+    const promise = doConnect(targetId, generation)
+    const attempt = { generation, promise }
+    connectInFlight.set(targetId, attempt)
     try {
       return await promise
     } finally {
-      connectInFlight.delete(targetId)
+      if (connectInFlight.get(targetId) === attempt) {
+        connectInFlight.delete(targetId)
+      }
     }
   }
 
@@ -759,7 +795,7 @@ export function registerSshHandlers(
     return connectTarget(args.targetId)
   })
 
-  async function doConnect(targetId: string): Promise<SshConnectionState> {
+  async function doConnect(targetId: string, generation: number): Promise<SshConnectionState> {
     const target = sshStore!.getTarget(targetId)
     if (!target) {
       throw new Error(`SSH target "${targetId}" not found`)
@@ -788,6 +824,9 @@ export function registerSshHandlers(
     if (existingSession) {
       // Why: await port teardown before disposing, else the new session's restorePortForwards can hit EADDRINUSE on not-yet-released ports.
       await portForwardManager!.removeAllForwards(targetId)
+      if (!isCurrentConnectAttempt(targetId, generation)) {
+        throw connectCancelledError()
+      }
       existingSession.detach()
       activeSessions.delete(targetId)
       clearRelayLostBackoff(targetId)
@@ -805,14 +844,22 @@ export function registerSshHandlers(
     )
     configureRelaySessionCallbacks(session)
     activeSessions.set(targetId, session)
+    const ownsSession = (): boolean =>
+      isCurrentConnectAttempt(targetId, generation) && activeSessions.get(targetId) === session
 
     try {
       conn = await connectionManager!.connect(target)
+      if (!ownsSession()) {
+        throw connectCancelledError()
+      }
     } catch (err) {
       // Why: connect()'s internal state may not have reached the renderer; broadcast explicitly so the UI leaves 'connecting'.
       const errObj = err instanceof Error ? err : new Error(String(err))
       const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
-      // Why: clear this failed connect's credential flag so a later non-prompting connect can't persist lastRequiredPassphrase=true.
+      if (!ownsSession()) {
+        throw connectCancelledError()
+      }
+      // Why: clear this failed connect's flag so a later non-prompting connect isn't deferred.
       credentialRequestedForTarget.delete(targetId)
       activeSessions.delete(targetId)
       clearRelayLostBackoff(targetId)
@@ -835,6 +882,9 @@ export function registerSshHandlers(
       })
 
       await session.establish(conn, relayGracePeriodForTarget(target))
+      if (!ownsSession()) {
+        throw connectCancelledError()
+      }
 
       // Why: we manually pushed `deploying-relay`, so send `connected` straight to the renderer — routing through onStateChange would trigger reconnect logic.
       clearRelayStateOverride(targetId)
@@ -846,6 +896,9 @@ export function registerSshHandlers(
         supportsFolderDownload: conn.usesSystemSshTransport?.() !== true
       })
     } catch (err) {
+      if (!ownsSession()) {
+        throw connectCancelledError()
+      }
       activeSessions.delete(targetId)
       clearRelayLostBackoff(targetId)
       await connectionManager!.disconnect(targetId)
@@ -865,6 +918,7 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {
+    invalidateConnectAttempt(args.targetId)
     const session = activeSessions.get(args.targetId)
     const provider = getSshPtyProvider(args.targetId)
     const leasedIds = persistedStore!
@@ -931,8 +985,8 @@ export function registerSshHandlers(
     const inFlightConnect = connectInFlight.get(targetId)
     if (inFlightConnect) {
       try {
-        // Why: await the in-flight connect first; tearing down activeSessions mid-deploy would dispose the session doConnect is about to use.
-        await inFlightConnect
+        // Why: resetting activeSessions mid-deploy would dispose the session doConnect will use.
+        await inFlightConnect.promise
       } catch {
         // The reset can still recover a stale remote relay after a failed connect.
       }
@@ -1029,7 +1083,7 @@ export function registerSshHandlers(
     const inFlight = connectInFlight.get(args.targetId)
     if (inFlight) {
       try {
-        const state = await inFlight
+        const state = await inFlight.promise
         return { success: true, state }
       } catch (err) {
         return {
@@ -1177,6 +1231,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   }
   relayStateOverrides.clear()
   connectInFlight.clear()
+  connectGenerationByTarget.clear()
   resetRelayInFlight.clear()
   testingTargets.clear()
   credentialRequestedForTarget.clear()

@@ -126,6 +126,7 @@ import {
 } from './client'
 import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
+import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
 describe('checkOrcaStarred', () => {
   beforeEach(() => {
@@ -198,6 +199,9 @@ describe('getPRForBranch', () => {
     __resetTrackedUpstreamBranchCacheForTests()
     __resetPRConflictSummaryCachesForTests()
     resetMergedPRCommitMembershipCacheForTest()
+    // Why: the #9171 guard caches default-branch resolutions per repoPath;
+    // reset so non-open implicit lookups stay order-independent across tests.
+    __resetRepoDefaultBranchCacheForTests()
   })
 
   it('queries GitHub by head branch when the remote is on github.com', async () => {
@@ -924,7 +928,14 @@ describe('getPRForBranch', () => {
       }
     )
 
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    // Why: the merged-implicit head probe must use the supplied oid — no
+    // `rev-parse HEAD` shell-out. (The #9171 guard may still probe the repo
+    // default branch for this non-open implicit result; that is unrelated.)
+    expect(
+      gitExecFileAsyncMock.mock.calls.some(
+        (call) => call[0][0] === 'rev-parse' && call[0][1] === 'HEAD'
+      )
+    ).toBe(false)
     expect(outcome).toMatchObject({
       kind: 'found',
       pr: {

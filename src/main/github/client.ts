@@ -77,6 +77,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   getRememberedGhCwdResolutionFailure,
@@ -3037,6 +3038,23 @@ export async function getPRForBranchOutcome(
       (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
     // Why: a visible PR can be merged outside Orca; keep a caller-marked fallback fresh even when GitHub no longer reports it by branch (e.g. deleted heads).
     if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
+      return { kind: 'no-pr', fetchedAt: Date.now() }
+    }
+    // Why (#9171): on the default branch an implicit branch/fallback match must
+    // never surface a non-open PR — it overrides the merged-fallback
+    // preservation and merged-at-head carve-out on the trunk only. An exact
+    // linked lookup returns the linked number, so linked PRs are exempt.
+    if (
+      await shouldHideNonOpenReviewOnDefaultBranch({
+        state: mapPRState(data.state, data.isDraft),
+        reviewNumber: data.number,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions
+      })
+    ) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
 
