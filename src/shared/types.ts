@@ -314,7 +314,12 @@ export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
 
 export type FolderWorkspace = {
   id: string
+  /** Owning folder-scan project group, or the sentinel `mission:<missionId>`
+   *  for mission session workspaces (never a real group id, so group lookups
+   *  degrade to null everywhere). */
   projectGroupId: string
+  /** Set when this workspace is a mission session rooted at Mission.rootPath. */
+  missionId?: string
   name: string
   folderPath: string
   /** SSH target ID for folder workspaces whose folder path lives remotely. */
@@ -345,6 +350,49 @@ export type FolderWorkspaceLinkedTask = {
   linearIdentifier?: string
   jiraIdentifier?: string
   repoId?: string
+}
+
+// ─── Missions ───────────────────────────────────────────────
+export type MissionMember = {
+  repoId: string
+  /** Worktree created on the mission branch. `null` when creation failed or
+   *  the worktree disappeared; the UI offers per-member recreate. */
+  worktreeId: string | null
+  addedAt: number
+}
+
+export type Mission = {
+  id: string
+  name: string
+  /** Shared git branch for every member worktree, e.g. `mission/referral`.
+   *  Immutable after creation (renaming a branch across N repos is unsafe). */
+  branchName: string
+  members: MissionMember[]
+  tabOrder: number
+  /** Physical mission root holding symlinks to local member worktrees.
+   *  Resolved lazily on first session ensure; stable afterwards. */
+  rootPath?: string | null
+  /** Agent auto-launched in the mission session on first open. Persisted so a
+   *  failed eager session ensure can still honor the pick on lazy retry. */
+  sessionAgent?: TuiAgent
+  createdAt: number
+  updatedAt: number
+}
+
+export type MissionMemberResult = {
+  repoId: string
+  worktreeId: string | null
+  error?: string
+}
+
+export type MissionCreateResult = {
+  mission: Mission
+  memberResults: MissionMemberResult[]
+}
+
+export type MissionDeleteResult = {
+  deleted: boolean
+  memberResults: MissionMemberResult[]
 }
 
 export type NestedRepoScanOptions = {
@@ -3356,6 +3404,9 @@ export type PersistedUIState = {
    *  header drag; 'recent' orders by each project's most recent visible
    *  workspace activity. */
   projectOrderBy: ProjectOrderBy
+  /** Which list the left sidebar shows: the classic project tree or the
+   *  mission (task-group) list. Defaults to projects for existing users. */
+  sidebarListMode?: 'projects' | 'missions'
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
@@ -3669,6 +3720,7 @@ export type PersistedState = {
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
   folderWorkspaces: FolderWorkspace[]
+  missions: Mission[]
   /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
    *  presets are managed from the new-workspace composer and repo settings. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>

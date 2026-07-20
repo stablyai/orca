@@ -4,6 +4,7 @@ import type { Repo, Worktree } from '../../../../shared/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import { getMissionMemberWorktreeIds } from '../../../../shared/missions'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -29,6 +30,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const browserTabsByWorktree = useAppStore((s) =>
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
+  const missions = useAppStore((s) => s.missions)
+  const missionMemberWorktreeIds = useMemo(() => getMissionMemberWorktreeIds(missions), [missions])
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Why snapshot on the epoch: the always-mounted drawer must not scan every
   // agent on unrelated store writes; membership changes advance this tick.
@@ -57,6 +60,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         worktreeIdsWithLiveAgent,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
+        missionMemberWorktreeIds,
         repoMap,
         workspaceHostScope,
         visibleWorkspaceHostIds,
@@ -72,6 +76,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     filterRepoIds,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    missionMemberWorktreeIds,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,

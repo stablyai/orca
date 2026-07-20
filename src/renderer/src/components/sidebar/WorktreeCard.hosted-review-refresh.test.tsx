@@ -34,6 +34,7 @@ vi.mock('@/store', () => ({
       linearIssueCache: {},
       openModal,
       projectGroups: [],
+      missions: [],
       remoteBranchConflictByWorktreeId: {},
       settings: { experimentalNewWorktreeCardStyle: true },
       sshConnectionStates: new Map(),

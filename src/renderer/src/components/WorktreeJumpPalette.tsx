@@ -494,7 +494,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   // Why: the empty-query palette mirrors sidebar filters so opening Search
   // starts from the same quiet list. Typed search switches to the global
-  // non-archived scope below.
+  // non-archived scope below. Mission member worktrees are deliberately NOT
+  // filtered out: the Projects sidebar hides them, so the palette is the
+  // direct-access surface for jumping into a single mission workspace.
   const emptyQueryVisibleWorktrees = useMemo(
     () =>
       allWorktrees.filter((worktree) => {
