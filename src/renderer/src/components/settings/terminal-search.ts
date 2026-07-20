@@ -9,6 +9,7 @@ import {
   getTerminalPaneAppearanceSearchEntries,
   getTerminalPaneInteractionSearchEntries
 } from './terminal-pane-appearance-search'
+import { getTerminalBehaviorSearchEntries } from './terminal-behavior-search'
 import {
   getTerminalDarkThemeSearchEntries,
   getTerminalLightThemeSearchEntries,
@@ -43,6 +44,7 @@ export {
   getTerminalPaneAppearanceSearchEntries,
   getTerminalPaneInteractionSearchEntries
 } from './terminal-pane-appearance-search'
+export { getTerminalBehaviorSearchEntries } from './terminal-behavior-search'
 export {
   getTerminalDarkThemeSearchEntries,
   getTerminalLightThemeSearchEntries,
@@ -109,6 +111,7 @@ export function getTerminalPaneSearchEntries(platform: {
   return [
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
+    ...getTerminalBehaviorSearchEntries(),
     ...(isWindowsTerminalHost
       ? [
           ...getTerminalWindowsShellSearchEntry(),

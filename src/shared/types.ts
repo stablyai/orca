@@ -2820,6 +2820,9 @@ export type GlobalSettings = {
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
   terminalScopeHistoryByWorktree: boolean
+  /** Shows a dimmed inline suggestion completing the current input from prior
+   *  commands; accept with RightArrow/End at end-of-line. Defaults to true. */
+  terminalAutosuggestEnabled: boolean
   /** Kill switch for hidden terminal view parking — unmounting long-hidden
    *  terminal panes while a pane-less watcher keeps PTY side effects alive.
    *  Defaults to true; `false` disables parking entirely. */

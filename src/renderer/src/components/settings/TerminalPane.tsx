@@ -6,6 +6,7 @@ import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/p
 import {
   getManageSessionsSearchEntries,
   getTerminalAdvancedSearchEntries,
+  getTerminalBehaviorSearchEntries,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
   getTerminalPaneInteractionSearchEntries,
@@ -19,6 +20,7 @@ import {
 } from './terminal-windows-search'
 import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
+import { TerminalBehaviorSection } from './TerminalBehaviorSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './TerminalRenderingSection'
 import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
@@ -86,6 +88,9 @@ export function TerminalPane({
         updateSettings={updateSettings}
         searchQuery={searchQuery}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getTerminalBehaviorSearchEntries()) ? (
+      <TerminalBehaviorSection key="behavior" settings={settings} updateSettings={updateSettings} />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalSetupScriptSearchEntries()) ? (
       <TerminalSetupScriptSection
