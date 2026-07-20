@@ -702,9 +702,12 @@ const ProjectUpdateIpcArgs = z.object({
   projectId: z.string().min(1),
   updates: z.object({
     localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional(),
-    herdrSessionName: z.string().trim().min(1).max(64).optional(),
-    terminalBackendPreference: TerminalBackendPreferenceIpcArgs.optional(),
-    terminalBackendByHost: z.record(z.string(), TerminalBackendActivationIpcArgs).optional()
+    herdrSessionName: z.string().trim().min(1).max(64).nullable().optional(),
+    terminalBackendPreference: TerminalBackendPreferenceIpcArgs.nullable().optional(),
+    terminalBackendByHost: z
+      .record(z.string(), TerminalBackendActivationIpcArgs)
+      .nullable()
+      .optional()
   })
 })
 

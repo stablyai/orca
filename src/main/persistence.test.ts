@@ -552,7 +552,9 @@ describe('Store', () => {
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       projects: [project],
-      projectHostSetups: [makeProjectHostSetup({ id: 'setup-1', projectId: project.id, repoId: '' })]
+      projectHostSetups: [
+        makeProjectHostSetup({ id: 'setup-1', projectId: project.id, repoId: '' })
+      ]
     })
 
     const store = await createStore()
@@ -567,6 +569,34 @@ describe('Store', () => {
     expect(reloaded.getProjects()[0]?.terminalBackendByHost).toEqual({
       local: { backend: 'herdr', state: 'ready' }
     })
+  })
+
+  it('clears nullable Herdr project settings explicitly', async () => {
+    const project = makeProject({
+      id: 'project-1',
+      sourceRepoIds: ['r1'],
+      herdrSessionName: 'custom-session',
+      terminalBackendPreference: 'herdr',
+      terminalBackendByHost: { local: { backend: 'herdr', state: 'ready' } }
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [project],
+      projectHostSetups: [
+        makeProjectHostSetup({ id: 'setup-1', projectId: project.id, repoId: '' })
+      ]
+    })
+
+    const store = await createStore()
+    store.updateProject(project.id, {
+      herdrSessionName: null,
+      terminalBackendPreference: null,
+      terminalBackendByHost: null
+    })
+
+    expect(store.getProjects()[0]).not.toHaveProperty('herdrSessionName')
+    expect(store.getProjects()[0]).not.toHaveProperty('terminalBackendPreference')
+    expect(store.getProjects()[0]).not.toHaveProperty('terminalBackendByHost')
   })
 
   it('falls back safely when persisted terminal backend settings are malformed', async () => {

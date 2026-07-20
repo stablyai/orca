@@ -69,6 +69,8 @@ import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+import { shellEscape } from './ssh-connection-utils'
+import type { IPtyProvider } from '../providers/types'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -152,6 +154,8 @@ export class SshRelaySession {
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private forwardedReattachReplayByPty = new Map<string, ForwardedReplayFingerprint>()
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
+  private rawSshPtyProvider: SshPtyProvider | null = null
+  private routedSshPtyProvider: (IPtyProvider & { dispose?: () => void }) | null = null
 
   constructor(
     readonly targetId: string,
@@ -533,16 +537,20 @@ export class SshRelaySession {
 
     this.wireUpRemoteOrcaCli(mux)
 
-    const ptyProvider = new SshPtyProvider(this.targetId, mux, this.remoteCliBridgeEnv ?? undefined)
-    registerSshPtyProvider(
+    const rawPtyProvider = new SshPtyProvider(
       this.targetId,
-      createSshHerdrPtyProvider(
-        ptyProvider,
-        this.store,
-        this.requireReadyConnection(),
-        this.targetId
-      )
+      mux,
+      this.remoteCliBridgeEnv ?? undefined
     )
+    const routedPtyProvider = createSshHerdrPtyProvider(
+      rawPtyProvider,
+      this.store,
+      this.requireReadyConnection(),
+      this.targetId
+    )
+    this.rawSshPtyProvider = rawPtyProvider
+    this.routedSshPtyProvider = routedPtyProvider
+    registerSshPtyProvider(this.targetId, routedPtyProvider)
 
     const connection = this.requireReadyConnection()
     const createSftp =
@@ -582,7 +590,7 @@ export class SshRelaySession {
     )
     registerSshGitProvider(this.targetId, gitProvider)
 
-    this.wireUpPtyEvents(ptyProvider)
+    this.wireUpPtyEvents(routedPtyProvider)
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
     return true
@@ -843,10 +851,12 @@ export class SshRelaySession {
       agentHookServer.clearStatusEntriesForConnection(this.targetId)
     }
 
-    const ptyProvider = getSshPtyProvider(this.targetId)
-    if (ptyProvider && 'dispose' in ptyProvider) {
-      ;(ptyProvider as { dispose: () => void }).dispose()
+    this.routedSshPtyProvider?.dispose?.()
+    if (this.rawSshPtyProvider && this.rawSshPtyProvider !== this.routedSshPtyProvider) {
+      this.rawSshPtyProvider.dispose()
     }
+    this.routedSshPtyProvider = null
+    this.rawSshPtyProvider = null
     const fsProvider = getSshFilesystemProvider(this.targetId)
     if (fsProvider && 'dispose' in fsProvider) {
       ;(fsProvider as { dispose: () => void }).dispose()
@@ -926,7 +936,7 @@ export class SshRelaySession {
     }
   }
 
-  private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
+  private wireUpPtyEvents(ptyProvider: IPtyProvider): void {
     ptyProvider.onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
       const seq = this.runtime?.onPtyData(
@@ -1047,7 +1057,11 @@ export class SshRelaySession {
         ...leasedPtyIds
       ])
     )
-    const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    const ptyProvider =
+      this.routedSshPtyProvider === this.rawSshPtyProvider
+        ? ((getSshPtyProvider(this.targetId) as SshPtyProvider | undefined) ??
+          this.rawSshPtyProvider)
+        : this.rawSshPtyProvider
     if (!ptyProvider) {
       return
     }

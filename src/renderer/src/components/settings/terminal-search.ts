@@ -9,14 +9,7 @@ export function getTerminalBackendSearchEntries(): SettingsSearchEntry[] {
         'auto.components.settings.terminalSearch.runtimeDescription',
         'Choose Orca or Herdr as the terminal backend.'
       ),
-      keywords: [
-        translate('auto.components.settings.terminalSearch.terminal', 'terminal'),
-        translate('auto.components.settings.terminalSearch.runtime', 'runtime'),
-        translate('auto.components.settings.terminalSearch.backend', 'backend'),
-        translate('auto.components.settings.terminalSearch.herdr', 'herdr'),
-        translate('auto.components.settings.terminalSearch.multiplexer', 'multiplexer'),
-        translate('auto.components.settings.terminalSearch.persistence', 'persistence')
-      ]
+      keywords: ['terminal', 'runtime', 'backend', 'herdr', 'multiplexer', 'persistence']
     }
   ]
 }

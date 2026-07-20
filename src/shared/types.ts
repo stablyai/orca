@@ -136,15 +136,12 @@ export type Project = {
 
 export type ProjectUpdateArgs = {
   projectId: string
-  updates: Partial<
-    Pick<
-      Project,
-      | 'localWindowsRuntimePreference'
-      | 'herdrSessionName'
-      | 'terminalBackendPreference'
-      | 'terminalBackendByHost'
-    >
-  >
+  updates: {
+    localWindowsRuntimePreference?: Project['localWindowsRuntimePreference']
+    herdrSessionName?: string | null
+    terminalBackendPreference?: TerminalBackendPreference | null
+    terminalBackendByHost?: Project['terminalBackendByHost'] | null
+  }
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'

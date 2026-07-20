@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import type { Project } from '../../shared/types'
 import type { Store } from '../persistence'
 import { createLocalHerdrPtyTargetResolver } from './herdr-project-pty-target'
 
@@ -141,5 +142,68 @@ describe('Herdr PTY target resolution', () => {
     )
 
     expect(target?.graph.layoutsByTabId['floating-tab'].root).toEqual({ type: 'leaf', leafId })
+  })
+
+  it('keeps freshly resolved host and global project identity authoritative on reattach', async () => {
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'herdr' }),
+      getProjects: () => [],
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
+    } as unknown as Store
+
+    const target = await createLocalHerdrPtyTargetResolver(store)(floatingSpawnOptions(), {
+      hostId: 'ssh:stale-host',
+      projectId: 'stale-project',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      tabId: 'floating-tab',
+      leafId
+    })
+
+    expect(target?.identity).toMatchObject({ hostId: 'local', projectId: 'orca-global' })
+  })
+
+  it('resolves persisted project identity before metadata and repository fallbacks', async () => {
+    const worktreeId = 'repo-1::/tmp/worktree'
+    const makeProject = (id: string, sourceRepoIds: string[]): Project => ({
+      id,
+      displayName: id,
+      badgeColor: '#000000',
+      sourceRepoIds,
+      createdAt: 1,
+      updatedAt: 1
+    })
+    const projects = [
+      makeProject('repo-fallback', ['repo-1']),
+      makeProject('metadata-project', []),
+      makeProject('persisted-project', [])
+    ]
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'herdr' }),
+      getProjects: () => projects,
+      getWorktreeMeta: () => ({ projectId: 'metadata-project', hostId: 'local' }),
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} }),
+      updateProject: vi.fn()
+    } as unknown as Store
+
+    const target = await createLocalHerdrPtyTargetResolver(store)(
+      {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/worktree',
+        worktreeId,
+        tabId: 'tab-1',
+        paneKey: `tab-1:${leafId}`
+      },
+      {
+        hostId: 'ssh:stale-host',
+        projectId: 'persisted-project',
+        worktreeId,
+        tabId: 'tab-1',
+        leafId
+      }
+    )
+
+    expect(target?.project.id).toBe('persisted-project')
+    expect(target?.identity).toMatchObject({ hostId: 'local', projectId: 'persisted-project' })
   })
 })

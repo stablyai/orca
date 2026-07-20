@@ -6018,14 +6018,18 @@ export class OrcaRuntimeService {
         return { closed: true }
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
-        const herdrPtyIds = snapshot!.tabs.flatMap((candidate) => {
-          if (candidate.type !== 'terminal' || candidate.parentTabId !== tab.parentTabId) {
-            return []
-          }
-          const ptyId =
-            this.findPtyForMobileTerminalTab(worktreeId, candidate)?.ptyId ?? candidate.ptyId
-          return ptyId?.startsWith('herdr:') ? [ptyId] : []
-        })
+        const herdrPtyIds = Array.from(
+          new Set(
+            snapshot!.tabs.flatMap((candidate) => {
+              if (candidate.type !== 'terminal' || candidate.parentTabId !== tab.parentTabId) {
+                return []
+              }
+              const ptyId =
+                this.findPtyForMobileTerminalTab(worktreeId, candidate)?.ptyId ?? candidate.ptyId
+              return ptyId?.startsWith('herdr:') ? [ptyId] : []
+            })
+          )
+        )
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
         // arrives only after canonical retirement and a forced session flush.
         await this.notifier.closeTerminalTab(tab.parentTabId)
@@ -6044,7 +6048,7 @@ export class OrcaRuntimeService {
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           this.store?.flushOrThrow?.()
         }
-        await Promise.all(
+        const stopResults = await Promise.allSettled(
           herdrPtyIds.map(async (ptyId) => {
             if (this.ptyController?.stopAndWait) {
               await this.ptyController.stopAndWait(ptyId)
@@ -6053,6 +6057,14 @@ export class OrcaRuntimeService {
             }
           })
         )
+        for (const [index, result] of stopResults.entries()) {
+          if (result.status === 'rejected') {
+            console.warn(
+              `[runtime] Failed to stop Herdr PTY ${herdrPtyIds[index]} after closing terminal tab:`,
+              result.reason
+            )
+          }
+        }
         return { closed: true }
       }
       // Why: notifier implementations without the acknowledged relay may expose

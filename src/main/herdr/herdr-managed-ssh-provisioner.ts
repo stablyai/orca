@@ -10,19 +10,40 @@ import { joinRemotePath, normalizeRemoteHome, validateRemoteHome } from '../ssh/
 import { HerdrRuntimeError } from './herdr-runtime-contract'
 import { verifyManagedHerdrExecutable } from './herdr-binary-source'
 
+const MANAGED_HERDR_SSH_COMMAND_TIMEOUT_MS = 15_000
+
 async function runRemoteCommand(connection: SshConnection, command: string): Promise<string> {
   const channel = await connection.exec(command)
   return await new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
+    let settled = false
+    const finish = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      callback()
+    }
+    const timeout = setTimeout(() => {
+      finish(() => {
+        channel.close()
+        reject(
+          new Error(
+            `Remote Herdr provisioning command timed out after ${MANAGED_HERDR_SSH_COMMAND_TIMEOUT_MS}ms`
+          )
+        )
+      })
+    }, MANAGED_HERDR_SSH_COMMAND_TIMEOUT_MS)
     channel.on('data', (chunk: Buffer) => (stdout += chunk.toString('utf8')))
     channel.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')))
-    channel.once('error', reject)
+    channel.once('error', (error) => finish(() => reject(error)))
     channel.once('close', (code: number) => {
       if (code === 0) {
-        resolve(stdout)
+        finish(() => resolve(stdout))
       } else {
-        reject(new Error(stderr.trim() || `Remote command exited with code ${code}`))
+        finish(() => reject(new Error(stderr.trim() || `Remote command exited with code ${code}`)))
       }
     })
   })

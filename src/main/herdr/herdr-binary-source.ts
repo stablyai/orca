@@ -75,6 +75,7 @@ export function verifyManagedHerdrExecutable(
       !manifest.version?.trim() ||
       !manifest.sourceCommit?.trim() ||
       !manifest.sourceUrl?.trim() ||
+      typeof manifest.protocol !== 'number' ||
       manifest.protocol < 17
     ) {
       throw new Error('manifest identity or protocol is invalid')

@@ -6358,7 +6358,9 @@
           "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
-          "nestedHostLabel": "{{value0}} via {{value1}}"
+          "nestedHostLabel": "{{value0}} via {{value1}}",
+          "terminalBackend": "Terminal backend",
+          "terminalBackendDescription": "Choose Orca or Herdr for this project."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
@@ -9386,6 +9388,39 @@
           "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
           "legacyHelp": "Update this server manually once to enable remote updates."
+        },
+        "ProjectTerminalBackendSetting": {
+          "title": "Terminal backend",
+          "active": "Active: {{value0}}",
+          "herdr": "Herdr",
+          "orca": "Orca",
+          "preference": "Project preference",
+          "preferenceDescription": "Changing an active project requires an explicit migration. Running Orca PTYs block migration to Herdr.",
+          "aria": "Project terminal backend",
+          "inherit": "Inherit"
+        },
+        "TerminalBackendSection": {
+          "title": "Terminal runtime",
+          "description": "Choose which runtime owns new project terminal sessions.",
+          "defaultBackend": "Default backend",
+          "defaultDescription": "Existing projects keep their active backend until you migrate them explicitly.",
+          "defaultAria": "Default terminal backend",
+          "orca": "Orca",
+          "herdr": "Herdr",
+          "installation": "Herdr installation",
+          "installationDescription": "Managed uses Orca's verified sidecar. System resolves Herdr on the execution host PATH.",
+          "installationAria": "Herdr installation source",
+          "managed": "Managed",
+          "system": "System",
+          "custom": "Custom",
+          "customPath": "Custom Herdr path",
+          "customPathDescription": "Absolute executable path on the execution host.",
+          "customPathAria": "Custom Herdr executable path",
+          "customPathPlaceholder": "/usr/local/bin/herdr"
+        },
+        "terminalSearch": {
+          "runtimeTitle": "Terminal runtime",
+          "runtimeDescription": "Choose Orca or Herdr as the terminal backend."
         }
       },
       "right": {

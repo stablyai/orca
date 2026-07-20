@@ -3,8 +3,10 @@ import type { Store } from '../persistence'
 import type { IPtyProvider } from '../providers/types'
 import { HerdrCliHostTransport, localHerdrCommand } from './herdr-cli-host-transport'
 import { HerdrPtyProvider } from './herdr-pty-provider'
-import { createLocalHerdrPtyTargetResolver } from './herdr-project-pty-target'
-import { createHerdrPtyTargetResolver } from './herdr-project-pty-target'
+import {
+  createHerdrPtyTargetResolver,
+  createLocalHerdrPtyTargetResolver
+} from './herdr-project-pty-target'
 import type { SshConnection } from '../ssh/ssh-connection'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import { HerdrSshHostTransport } from './herdr-ssh-host-transport'
@@ -23,7 +25,7 @@ export function createLocalHerdrPtyProvider(
   const commandFor = (args: string[]) => {
     if (!executable) {
       const source = resolveHerdrBinarySource(store.getSettings(), 'local')
-      executable = resolveLocalHerdrExecutable({
+      const resolved = resolveLocalHerdrExecutable({
         source,
         isPackaged: app.isPackaged,
         resourcesPath: process.resourcesPath,
@@ -32,8 +34,9 @@ export function createLocalHerdrPtyProvider(
         developmentOverride: process.env.ORCA_HERDR_BINARY
       })
       if (source.kind === 'managed' && app.isPackaged) {
-        verifyManagedHerdrExecutable(executable)
+        verifyManagedHerdrExecutable(resolved)
       }
+      executable = resolved
     }
     return localHerdrCommand(executable)(args)
   }

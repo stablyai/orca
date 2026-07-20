@@ -121,6 +121,16 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
     let stdout = ''
     let released = false
 
+    const emitClosed = (event: HerdrTerminalClosed): void => {
+      if (closedListeners.size === 0) {
+        pendingClosed = event
+      } else {
+        for (const listener of closedListeners) {
+          listener(event)
+        }
+      }
+    }
+
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
       stdout += chunk
@@ -134,31 +144,35 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
         if (!line) {
           continue
         }
-        const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
-        if (event.type === 'terminal.frame') {
-          if (frameListeners.size === 0) {
-            pendingFrames.push(event)
-          } else {
-            for (const listener of frameListeners) {
-              listener(event)
+        try {
+          const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
+          if (event.type === 'terminal.frame') {
+            if (frameListeners.size === 0) {
+              pendingFrames.push(event)
+            } else {
+              for (const listener of frameListeners) {
+                listener(event)
+              }
             }
+          } else if (event.type === 'terminal.closed') {
+            emitClosed(event)
           }
-        } else if (event.type === 'terminal.closed') {
-          if (closedListeners.size === 0) {
-            pendingClosed = event
-          } else {
-            for (const listener of closedListeners) {
-              listener(event)
-            }
-          }
+        } catch (error) {
+          released = true
+          emitClosed({
+            type: 'terminal.closed',
+            reason: `Invalid Herdr terminal event: ${error instanceof Error ? error.message : String(error)}`
+          })
+          child.kill()
+          return
         }
       }
     })
     child.once('error', (error) => {
-      const event: HerdrTerminalClosed = { type: 'terminal.closed', reason: error.message }
-      for (const listener of closedListeners) {
-        listener(event)
+      if (released) {
+        return
       }
+      emitClosed({ type: 'terminal.closed', reason: error.message })
     })
     child.once('close', (code) => {
       if (released) {
@@ -168,9 +182,7 @@ export class HerdrCliHostTransport implements HerdrHostTransport {
         type: 'terminal.closed',
         reason: `Herdr terminal controller exited with code ${code ?? 'unknown'}`
       }
-      for (const listener of closedListeners) {
-        listener(event)
-      }
+      emitClosed(event)
     })
 
     const send = (message: unknown): void => {

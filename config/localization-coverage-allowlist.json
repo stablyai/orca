@@ -40,5 +40,47 @@
     "text": "Idioma",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "terminal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "runtime",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "backend",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "herdr",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "multiplexer",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/terminal-search.ts",
+    "kind": "object-property:keywords",
+    "text": "persistence",
+    "dynamic": false,
+    "count": 1
   }
 ]

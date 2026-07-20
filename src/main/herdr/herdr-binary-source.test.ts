@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -64,6 +64,15 @@ describe('Herdr binary source', () => {
       )
 
       expect(verifyManagedHerdrExecutable(executable).sourceCommit).toBe('abc123')
+      const manifestPath = join(directory, 'manifest.json')
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
+      delete manifest.protocol
+      writeFileSync(manifestPath, JSON.stringify(manifest))
+      expect(() => verifyManagedHerdrExecutable(executable)).toThrow(
+        'manifest identity or protocol is invalid'
+      )
+      manifest.protocol = 17
+      writeFileSync(manifestPath, JSON.stringify(manifest))
       writeFileSync(executable, 'tampered')
       expect(() => verifyManagedHerdrExecutable(executable)).toThrow('SHA-256 checksum mismatch')
     } finally {

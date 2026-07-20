@@ -2,7 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { muxRequestMock } = vi.hoisted(() => ({ muxRequestMock: vi.fn() }))
+const { muxRequestMock, routedProvider, rawProviderInstances } = vi.hoisted(() => ({
+  muxRequestMock: vi.fn(),
+  routedProvider: {
+    onData: vi.fn().mockReturnValue(() => {}),
+    onReplay: vi.fn().mockReturnValue(() => {}),
+    onExit: vi.fn().mockReturnValue(() => {}),
+    dispose: vi.fn()
+  },
+  rawProviderInstances: [] as unknown[]
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
 
@@ -32,7 +41,15 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     attach = vi.fn().mockResolvedValue(undefined)
     attachForReconnect = vi.fn().mockResolvedValue({})
     dispose = vi.fn()
+
+    constructor() {
+      rawProviderInstances.push(this)
+    }
   }
+}))
+
+vi.mock('../herdr/herdr-provider-factory', () => ({
+  createSshHerdrPtyProvider: vi.fn(() => routedProvider)
 }))
 
 vi.mock('../providers/ssh-filesystem-provider', () => ({
@@ -67,12 +84,14 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   unregisterSshGitProvider: vi.fn()
 }))
 
-const { registerSshPtyProvider } = await import('../ipc/pty')
+const { registerSshPtyProvider, getPtyIdsForConnection } = await import('../ipc/pty')
 
 describe('SshRelaySession data delivery', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    rawProviderInstances.length = 0
     muxRequestMock.mockResolvedValue([])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue(['relay-pty'])
     mockDeploySuccess()
   })
 
@@ -108,5 +127,17 @@ describe('SshRelaySession data delivery', () => {
       seq: 17,
       rawLength: 9
     })
+
+    const rawProvider = rawProviderInstances[0] as {
+      attachForReconnect: ReturnType<typeof vi.fn>
+      dispose: ReturnType<typeof vi.fn>
+    }
+    expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', routedProvider)
+    expect(rawProvider.attachForReconnect).toHaveBeenCalledTimes(1)
+
+    session.dispose()
+
+    expect(routedProvider.dispose).toHaveBeenCalledTimes(1)
+    expect(rawProvider.dispose).toHaveBeenCalledTimes(1)
   })
 })

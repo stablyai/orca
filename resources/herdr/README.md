@@ -9,4 +9,3 @@ protocol version, download URL, and SHA-256 checksum.
 Supported directory names are `darwin-x64`, `darwin-arm64`, `linux-x64`,
 `linux-arm64`, `win32-x64`, and `win32-arm64`. Built binaries and generated
 manifests are release inputs and must not be committed.
-

@@ -143,23 +143,35 @@ export class HerdrSshHostTransport implements HerdrHostTransport {
             if (!line) {
               continue
             }
-            const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
-            if (event.type === 'terminal.frame') {
-              if (frameListeners.size === 0) {
-                pendingFrames.push(event)
-              } else {
-                for (const listener of frameListeners) {
-                  listener(event)
+            try {
+              const event = JSON.parse(line) as HerdrTerminalFrame | HerdrTerminalClosed
+              if (event.type === 'terminal.frame') {
+                if (frameListeners.size === 0) {
+                  pendingFrames.push(event)
+                } else {
+                  for (const listener of frameListeners) {
+                    listener(event)
+                  }
                 }
+              } else if (event.type === 'terminal.closed') {
+                emitClosed(event)
               }
-            } else {
-              emitClosed(event)
+            } catch (error) {
+              released = true
+              emitClosed({
+                type: 'terminal.closed',
+                reason: `Invalid Herdr terminal event: ${error instanceof Error ? error.message : String(error)}`
+              })
+              opened.close()
+              return
             }
           }
         })
-        opened.once('error', (error: Error) =>
-          emitClosed({ type: 'terminal.closed', reason: error.message })
-        )
+        opened.once('error', (error: Error) => {
+          if (!released) {
+            emitClosed({ type: 'terminal.closed', reason: error.message })
+          }
+        })
         opened.once('close', (code: number) => {
           if (!released) {
             emitClosed({

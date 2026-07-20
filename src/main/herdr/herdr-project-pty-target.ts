@@ -180,7 +180,7 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
       )
       return {
         project,
-        identity: { hostId, projectId: project.id, ...partial },
+        identity: { ...partial, hostId, projectId: project.id },
         graph: {
           project,
           worktrees: [
@@ -209,14 +209,15 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
     if (meta?.hostId && meta.hostId !== hostId) {
       return null
     }
-    const project = store
-      .getProjects()
-      .find(
-        (candidate) =>
-          candidate.id === persistedIdentity?.projectId ||
-          candidate.id === meta?.projectId ||
-          candidate.sourceRepoIds.includes(parsed.repoId)
-      )
+    const projects = store.getProjects()
+    const project =
+      (persistedIdentity?.projectId
+        ? projects.find((candidate) => candidate.id === persistedIdentity.projectId)
+        : undefined) ??
+      (meta?.projectId
+        ? projects.find((candidate) => candidate.id === meta.projectId)
+        : undefined) ??
+      projects.find((candidate) => candidate.sourceRepoIds.includes(parsed.repoId))
     if (!project) {
       return null
     }
@@ -239,9 +240,9 @@ export function createHerdrPtyTargetResolver(store: Store, hostId: string): Herd
       partial.leafId
     )
     const identity: HerdrPtyIdentity = {
+      ...partial,
       hostId,
-      projectId: project.id,
-      ...partial
+      projectId: project.id
     }
 
     return {
