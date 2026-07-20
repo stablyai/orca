@@ -2,38 +2,33 @@ import React from 'react'
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, FolderPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import type { PinnedTerminalPanel } from '../../../../shared/types'
 import {
   PINNED_TERMINAL_PANELS_ROOT_FOLD,
   visiblePinnedTerminalPanels
 } from '../../../../shared/pinned-terminal-panels'
+import {
+  childrenOfGroup,
+  createPanelTreeGroup,
+  deletePanelTreeGroup,
+  migrateLegacyPanelGroups,
+  movePanelInTree,
+  PANEL_TREE_ROOT_NODES,
+  panelsInGroup,
+  renamePanelTreeGroup
+} from '../../../../shared/panel-tree'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { Button } from '@/components/ui/button'
 import {
   PanelLayoutButton,
   SortableTerminalPanelButton,
   SortableWebPanelButton
 } from './SidebarPanelRows'
 import { QuickAddTerminalPanelButton, QuickAddWebPanelButton } from './QuickAddPanelPopovers'
-
-function movedBefore<T extends { id: string }>(
-  items: readonly T[],
-  activeId: string,
-  overId: string
-): T[] | null {
-  const from = items.findIndex((item) => item.id === activeId)
-  const to = items.findIndex((item) => item.id === overId)
-  if (from === -1 || to === -1 || from === to) {
-    return null
-  }
-  const next = [...items]
-  const [moved] = next.splice(from, 1)
-  next.splice(to, 0, moved)
-  return next
-}
+import { NodeGroupBranch } from './SidebarNodeGroupBranch'
 
 /**
  * Why: the pinned web + terminal panel rails live below Projects (operator
@@ -84,47 +79,61 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
       }),
     [pinnedTerminalPanelsSetting, pinnedTerminalPanelsEnabled]
   )
+  const panelTreeGroups = useAppStore((s) => s.settings?.panelTreeGroups)
   const collapsedGroupsSetting = useAppStore((s) => s.settings?.collapsedPinnedTerminalPanelGroups)
   const collapsedTerminalPanelGroups = React.useMemo(
     () => new Set(collapsedGroupsSetting ?? []),
     [collapsedGroupsSetting]
   )
   const toggleTerminalPanelGroup = React.useCallback(
-    (group: string) => {
+    (groupKey: string) => {
       const next = new Set(collapsedTerminalPanelGroups)
-      if (next.has(group)) {
-        next.delete(group)
+      if (next.has(groupKey)) {
+        next.delete(groupKey)
       } else {
-        next.add(group)
+        next.add(groupKey)
       }
       void updateSettings({ collapsedPinnedTerminalPanelGroups: [...next].sort() })
     },
     [collapsedTerminalPanelGroups, updateSettings]
   )
-  // Why: sections keep first-appearance order from settings; panels stay in
-  // authored order inside their group so the rail mirrors the settings list.
-  const groupedTerminalPanels = React.useMemo(() => {
-    const sections: { group: string | null; panels: PinnedTerminalPanel[] }[] = []
-    const sectionByGroup = new Map<
-      string,
-      { group: string | null; panels: PinnedTerminalPanel[] }
-    >()
-    for (const panel of pinnedTerminalPanels) {
-      const group = panel.group ?? null
-      if (group === null) {
-        sections.push({ group: null, panels: [panel] })
-        continue
-      }
-      let section = sectionByGroup.get(group)
-      if (!section) {
-        section = { group, panels: [] }
-        sectionByGroup.set(group, section)
-        sections.push(section)
-      }
-      section.panels.push(panel)
+
+  // Why: one-shot migration from legacy string `group` labels into first-class
+  // panelTreeGroups + groupId (L0 structure only — no PTY moves).
+  React.useEffect(() => {
+    const terms = pinnedTerminalPanelsSetting ?? []
+    const webs = pinnedWebPanels ?? []
+    const groups = panelTreeGroups ?? []
+    const needs =
+      terms.some((p) => Boolean(p.group) && !p.groupId) ||
+      (groups.length === 0 && terms.some((p) => Boolean(p.group)))
+    if (!needs) {
+      return
     }
-    return sections
-  }, [pinnedTerminalPanels])
+    const migrated = migrateLegacyPanelGroups({
+      groups,
+      terminalPanels: terms,
+      webPanels: webs
+    })
+    void updateSettings({
+      panelTreeGroups: migrated.groups,
+      pinnedTerminalPanels: migrated.terminalPanels,
+      pinnedWebPanels: migrated.webPanels
+    })
+  }, [panelTreeGroups, pinnedTerminalPanelsSetting, pinnedWebPanels, updateSettings])
+
+  const nodeGroups = React.useMemo(
+    () => (panelTreeGroups ?? []).filter((g) => g.root === PANEL_TREE_ROOT_NODES),
+    [panelTreeGroups]
+  )
+  const topLevelNodeGroups = React.useMemo(
+    () => childrenOfGroup(nodeGroups, PANEL_TREE_ROOT_NODES, null),
+    [nodeGroups]
+  )
+  const ungroupedTerminals = React.useMemo(
+    () => panelsInGroup(pinnedTerminalPanels, null),
+    [pinnedTerminalPanels]
+  )
 
   const sensors = useSensors(
     // Why: an activation distance keeps panel rows clickable — a press only
@@ -141,43 +150,53 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
       }
       const webPanels = pinnedWebPanels ?? []
       if (webPanels.some((panel) => panel.id === activeId)) {
-        const next = movedBefore(webPanels, activeId, overId)
-        if (next) {
-          void updateSettings({ pinnedWebPanels: next })
+        const overWeb = webPanels.find((p) => p.id === overId)
+        if (!overWeb) {
+          return
+        }
+        const next = movePanelInTree(webPanels, activeId, overId, overWeb.groupId ?? null)
+        void updateSettings({ pinnedWebPanels: next })
+        return
+      }
+      // Why: terminal panels may move across groups (full tree reorg) — process
+      // identity is untouched (L0 only).
+      const persisted = pinnedTerminalPanelsSetting ?? []
+      const overPanel = persisted.find((p) => p.id === overId)
+      if (!overPanel) {
+        // Drop onto a group header id: group:<id>
+        if (overId.startsWith('group:')) {
+          const groupId = overId.slice('group:'.length)
+          const target = persisted.find((p) => p.groupId === groupId) ?? persisted[0]
+          if (!target) {
+            const solo = persisted.map((p) => (p.id === activeId ? { ...p, groupId, order: 0 } : p))
+            void updateSettings({ pinnedTerminalPanels: solo })
+            return
+          }
+          const next = movePanelInTree(persisted, activeId, target.id, groupId)
+          void updateSettings({ pinnedTerminalPanels: next })
         }
         return
       }
-      // Why: sidebar drags only reorder within one group — the full persisted
-      // list is rebuilt with that group's members re-sequenced in place, so
-      // cross-group placement (a settings concern) can't happen by accident.
-      const persisted = pinnedTerminalPanelsSetting ?? []
-      const groupOf = (id: string): string | null | undefined => {
-        const panel = persisted.find((p) => p.id === id)
-        return panel ? (panel.group ?? null) : undefined
-      }
-      const activeGroup = groupOf(activeId)
-      if (activeGroup === undefined || activeGroup !== groupOf(overId)) {
-        return
-      }
-      const members = persisted.filter((panel) => (panel.group ?? null) === activeGroup)
-      const reordered = movedBefore(members, activeId, overId)
-      if (!reordered) {
-        return
-      }
-      let cursor = 0
-      const next = persisted.map((panel) =>
-        (panel.group ?? null) === activeGroup ? reordered[cursor++] : panel
-      )
+      const next = movePanelInTree(persisted, activeId, overId, overPanel.groupId ?? null)
       void updateSettings({ pinnedTerminalPanels: next })
     },
     [pinnedWebPanels, pinnedTerminalPanelsSetting, updateSettings]
   )
 
+  const addNodeGroup = React.useCallback(() => {
+    const next = createPanelTreeGroup({
+      groups: panelTreeGroups ?? [],
+      root: PANEL_TREE_ROOT_NODES,
+      title: translate('auto.components.sidebar.SidebarPanelsNav.newGroup', 'New group')
+    })
+    void updateSettings({ panelTreeGroups: next })
+  }, [panelTreeGroups, updateSettings])
+
   const webPanelsCollapsed = useAppStore((s) => s.settings?.pinnedWebPanelsCollapsed === true)
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
   const hasLayouts = (panelLayouts ?? []).length > 0
-  const hasGroupedTerminals = groupedTerminalPanels.some((section) => section.group !== null)
+  const hasGroupedTerminals = topLevelNodeGroups.length > 0
   // Why: always mount the rails so User Panels / Nodes + buttons exist even
   // with zero panels (quick-add without Settings). Layouts still optional.
 
@@ -259,27 +278,6 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
               )}
             </p>
           )}
-          <SortableContext
-            items={groupedTerminalPanels
-              .filter((section) => section.group === null)
-              .flatMap((section) => section.panels.map((panel) => panel.id))}
-            strategy={verticalListSortingStrategy}
-          >
-            {groupedTerminalPanels
-              .filter((section) => section.group === null)
-              .flatMap((section) =>
-                section.panels.map((panel) => (
-                  <SortableTerminalPanelButton
-                    key={panel.id}
-                    panel={panel}
-                    active={
-                      activeView === 'terminal-panel' && activePinnedTerminalPanelId === panel.id
-                    }
-                    onOpen={openPinnedTerminalPanelPage}
-                  />
-                ))
-              )}
-          </SortableContext>
           <div className="flex w-full items-center gap-0.5">
             <button
               type="button"
@@ -301,6 +299,19 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                 {translate('auto.components.sidebar.SidebarNav.pinnedPanelNodes', 'Nodes')}
               </span>
             </button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="size-5 shrink-0 text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80"
+              aria-label={translate(
+                'auto.components.sidebar.SidebarPanelsNav.newGroup',
+                'New group'
+              )}
+              onClick={addNodeGroup}
+            >
+              <FolderPlus className="size-3.5" strokeWidth={2.25} />
+            </Button>
             <QuickAddTerminalPanelButton />
           </div>
           {collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD) ? null : (
@@ -313,57 +324,66 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                   )}
                 </p>
               ) : null}
-              {groupedTerminalPanels.map((section) => {
-                const { group } = section
-                return group === null ? null : (
-                  <div key={`group:${group}`}>
-                    <button
-                      type="button"
-                      onClick={() => toggleTerminalPanelGroup(group)}
-                      aria-expanded={!collapsedTerminalPanelGroups.has(group)}
-                      className={cn(
-                        'flex w-full items-center gap-1.5 rounded-md py-1 pr-2 pl-4 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
-                        collapsedTerminalPanelGroups.has(group) &&
-                          section.panels.some(
-                            (panel) =>
-                              activeView === 'terminal-panel' &&
-                              activePinnedTerminalPanelId === panel.id
-                          )
-                          ? 'text-worktree-sidebar-accent-foreground'
-                          : 'text-worktree-sidebar-foreground/40 hover:text-worktree-sidebar-foreground/70'
-                      )}
-                    >
-                      <ChevronRight
-                        className={cn(
-                          'size-3 shrink-0 transition-transform',
-                          !collapsedTerminalPanelGroups.has(group) && 'rotate-90'
-                        )}
-                        strokeWidth={2}
-                      />
-                      <span className="min-w-0 flex-1 truncate">{group}</span>
-                    </button>
-                    {!collapsedTerminalPanelGroups.has(group) ? (
-                      <SortableContext
-                        items={section.panels.map((panel) => panel.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        {section.panels.map((panel) => (
-                          <SortableTerminalPanelButton
-                            key={panel.id}
-                            panel={panel}
-                            nested
-                            active={
-                              activeView === 'terminal-panel' &&
-                              activePinnedTerminalPanelId === panel.id
-                            }
-                            onOpen={openPinnedTerminalPanelPage}
-                          />
-                        ))}
-                      </SortableContext>
-                    ) : null}
-                  </div>
-                )
-              })}
+              <SortableContext
+                items={ungroupedTerminals.map((panel) => panel.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {ungroupedTerminals.map((panel) => (
+                  <SortableTerminalPanelButton
+                    key={panel.id}
+                    panel={panel}
+                    active={
+                      activeView === 'terminal-panel' && activePinnedTerminalPanelId === panel.id
+                    }
+                    onOpen={openPinnedTerminalPanelPage}
+                  />
+                ))}
+              </SortableContext>
+              {topLevelNodeGroups.map((group) => (
+                <NodeGroupBranch
+                  key={group.id}
+                  group={group}
+                  allGroups={nodeGroups}
+                  panels={pinnedTerminalPanels}
+                  depth={0}
+                  collapsedKeys={collapsedTerminalPanelGroups}
+                  activeView={activeView}
+                  activePanelId={activePinnedTerminalPanelId}
+                  onToggle={toggleTerminalPanelGroup}
+                  onOpen={openPinnedTerminalPanelPage}
+                  onRename={(groupId, title) => {
+                    void updateSettings({
+                      panelTreeGroups: renamePanelTreeGroup(panelTreeGroups ?? [], groupId, title)
+                    })
+                  }}
+                  onDelete={(groupId) => {
+                    const result = deletePanelTreeGroup({
+                      groups: panelTreeGroups ?? [],
+                      groupId,
+                      terminalPanels: pinnedTerminalPanelsSetting ?? [],
+                      webPanels: pinnedWebPanels ?? []
+                    })
+                    void updateSettings({
+                      panelTreeGroups: result.groups,
+                      pinnedTerminalPanels: result.terminalPanels,
+                      pinnedWebPanels: result.webPanels
+                    })
+                  }}
+                  onAddChild={(parentId) => {
+                    void updateSettings({
+                      panelTreeGroups: createPanelTreeGroup({
+                        groups: panelTreeGroups ?? [],
+                        root: PANEL_TREE_ROOT_NODES,
+                        title: translate(
+                          'auto.components.sidebar.SidebarPanelsNav.newGroup',
+                          'New group'
+                        ),
+                        parentId
+                      })
+                    })
+                  }}
+                />
+              ))}
             </>
           )}
         </div>

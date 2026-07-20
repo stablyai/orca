@@ -2780,8 +2780,12 @@ export type GlobalSettings = {
   pinnedTerminalPanelsEnabled?: boolean
   /** Collapsed pinned-terminal-panel group labels — in settings (not
    *  per-window UI state) so rail folds survive relaunch and both windows
-   *  of a profile agree. */
+   *  of a profile agree. Accepts legacy titles or modern group ids. */
   collapsedPinnedTerminalPanelGroups?: string[]
+  /** First-class panel tree groups (User Panels / Nodes families). Optional
+   *  for older profiles; migrateLegacyPanelGroups mints groups from legacy
+   *  terminal `group` strings on first write. */
+  panelTreeGroups?: PanelTreeGroup[]
   /** Where new Floating Workspace terminal tabs start. Empty or '~' means
    *  the user's home directory; markdown notes use Orca's app-owned
    *  floating workspace under Electron userData. */
@@ -3340,6 +3344,10 @@ export type PinnedWebPanel = {
   title: string
   /** http(s) only — enforced by normalizePinnedWebPanels on every write. */
   url: string
+  /** Panel tree group id under the User Panels root; absent = top-level. */
+  groupId?: string
+  /** Sort order within the group (or root). */
+  order?: number
 }
 
 /** A user-configured observability command (nvtop, btop, watch …) pinned to
@@ -3353,12 +3361,26 @@ export type PinnedTerminalPanel = {
   command: string
   /** SSH target id to run the command on; absent means the local machine. */
   host?: string
-  /** Sidebar group label; panels sharing a group render under one
-   *  collapsible parent row. Absent panels render flat. */
+  /** Legacy sidebar group label (pre-panelTreeGroups). Migrated to groupId. */
   group?: string
+  /** Panel tree group id under the Nodes root; absent = top-level. */
+  groupId?: string
+  /** Sort order within the group (or root). */
+  order?: number
   /** Absent means enabled — only an explicit false hides the panel from the
    *  sidebar, so profiles saved before this field existed keep their panels. */
   enabled?: boolean
+}
+
+/** First-class sidebar group for User Panels / Nodes trees (nested families). */
+export type PanelTreeGroup = {
+  id: string
+  title: string
+  root: 'user-panels' | 'nodes'
+  /** null = top-level family under the root rail. */
+  parentId: string | null
+  order: number
+  collapsed?: boolean
 }
 
 /** One tile of a saved panel layout: a reference to a pinned panel. The

@@ -4799,7 +4799,10 @@
           "detachPanel": "Open in new window",
           "openInCanvas": "Open in canvas",
           "emptyUserPanels": "Pin a dashboard with +",
-          "emptyNodes": "Add an observability terminal with +"
+          "emptyNodes": "Add an observability terminal with +",
+          "newGroup": "New group",
+          "addChildGroup": "Add nested group",
+          "deleteGroup": "Delete group"
         },
         "SidebarPanelRows": {
           "renameLabel": "Rename"

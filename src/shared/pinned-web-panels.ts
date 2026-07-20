@@ -48,20 +48,26 @@ export function normalizePinnedWebPanels(value: unknown): PinnedWebPanel[] {
     if (typeof entry !== 'object' || entry === null) {
       continue
     }
-    const { id, title, url } = entry as Record<string, unknown>
+    const { id, title, url, groupId, order } = entry as Record<string, unknown>
     const normalizedUrl = normalizePinnedWebPanelUrl(url)
     if (typeof id !== 'string' || id.length === 0 || seenIds.has(id) || normalizedUrl === null) {
       continue
     }
     const trimmedTitle =
       typeof title === 'string' ? title.trim().slice(0, MAX_PANEL_TITLE_LENGTH) : ''
+    const trimmedGroupId =
+      typeof groupId === 'string' && groupId.trim().length > 0 ? groupId.trim() : ''
+    const orderNum =
+      typeof order === 'number' && Number.isFinite(order) ? Math.trunc(order) : undefined
     seenIds.add(id)
     panels.push({
       id,
       // Why: an empty title renders an unclickable-looking blank row; fall
       // back to the host so the entry stays identifiable.
       title: trimmedTitle.length > 0 ? trimmedTitle : new URL(normalizedUrl).host,
-      url: normalizedUrl
+      url: normalizedUrl,
+      ...(trimmedGroupId.length > 0 ? { groupId: trimmedGroupId } : {}),
+      ...(orderNum !== undefined ? { order: orderNum } : {})
     })
   }
   return panels

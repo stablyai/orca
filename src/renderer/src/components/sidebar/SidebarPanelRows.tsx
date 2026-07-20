@@ -20,7 +20,7 @@ import { buildSplitCandidates } from '@/lib/panel-split-candidates'
 
 /** Inline title editor shown in place of a row while renaming. Commits on
  *  Enter/blur, cancels on Escape; empty titles cancel instead of committing. */
-function RowRenameInput({
+export function RowRenameInput({
   initialTitle,
   indentClass,
   onCommit,

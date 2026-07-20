@@ -166,7 +166,10 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
     if (typeof entry !== 'object' || entry === null) {
       continue
     }
-    const { id, title, command, host, group, enabled } = entry as Record<string, unknown>
+    const { id, title, command, host, group, groupId, order, enabled } = entry as Record<
+      string,
+      unknown
+    >
     const normalizedCommand = normalizePinnedTerminalPanelCommand(command)
     if (
       typeof id !== 'string' ||
@@ -192,6 +195,10 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
     }
     const normalizedHost = trimmedHost.length > 0 ? trimmedHost : null
     seenIds.add(id)
+    const trimmedGroupId =
+      typeof groupId === 'string' && groupId.trim().length > 0 ? groupId.trim() : ''
+    const orderNum =
+      typeof order === 'number' && Number.isFinite(order) ? Math.trunc(order) : undefined
     panels.push({
       id,
       // Why: an empty title renders an unclickable-looking blank row; fall
@@ -201,6 +208,8 @@ export function normalizePinnedTerminalPanels(value: unknown): PinnedTerminalPan
       command: normalizedCommand,
       ...(normalizedHost !== null ? { host: normalizedHost } : {}),
       ...(trimmedGroup.length > 0 ? { group: trimmedGroup } : {}),
+      ...(trimmedGroupId.length > 0 ? { groupId: trimmedGroupId } : {}),
+      ...(orderNum !== undefined ? { order: orderNum } : {}),
       // Why: only an explicit false is persisted — enabled is the absent-field
       // default, so profiles stay minimal and older builds ignore the flag.
       ...(enabled === false ? { enabled: false } : {})

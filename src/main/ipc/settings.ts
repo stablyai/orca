@@ -24,6 +24,7 @@ import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { normalizePinnedWebPanels } from '../../shared/pinned-web-panels'
 import { normalizePinnedTerminalPanels } from '../../shared/pinned-terminal-panels'
+import { normalizePanelTreeGroups } from '../../shared/panel-tree'
 import { normalizePanelLayouts } from '../../shared/panel-layouts'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
@@ -133,6 +134,9 @@ export function registerSettingsHandlers(
     }
     if ('pinnedTerminalPanels' in args) {
       sanitizedArgs.pinnedTerminalPanels = normalizePinnedTerminalPanels(args.pinnedTerminalPanels)
+    }
+    if ('panelTreeGroups' in args) {
+      sanitizedArgs.panelTreeGroups = normalizePanelTreeGroups(args.panelTreeGroups)
     }
     if ('panelLayouts' in args) {
       sanitizedArgs.panelLayouts = normalizePanelLayouts(args.panelLayouts)
