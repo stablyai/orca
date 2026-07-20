@@ -6,6 +6,9 @@ import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
+  ClaudeUsageHourlyPoint,
+  ClaudeUsageHourlyQuery,
+  ClaudeUsageHourlyResult,
   ClaudeUsageRange,
   ClaudeUsageScanState,
   ClaudeUsageScope,
@@ -19,10 +22,9 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { ClaudeUsagePersistedState } from './types'
 import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
 
-// Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
-// caches either lack ownership or used narrower keys and can under/over-count
-// after fork reclaim (#8006).
-const SCHEMA_VERSION = 5
+// Why: v6 adds hour-of-day aggregates for the status-bar trends charts. Older
+// caches lack per-file hourly projections, so they must be reparsed.
+const SCHEMA_VERSION = 6
 const STALE_MS = 5 * 60_000
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -114,6 +116,7 @@ function getDefaultState(): ClaudeUsagePersistedState {
     processedFiles: [],
     sessions: [],
     dailyAggregates: [],
+    hourlyAggregates: [],
     scanState: {
       enabled: false,
       lastScanStartedAt: null,
@@ -276,7 +279,10 @@ function getRangeCutoff(range: ClaudeUsageRange): string | null {
   if (range === 'all') {
     return null
   }
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
+  return getDayCutoff(range === '7d' ? 7 : range === '30d' ? 30 : 90)
+}
+
+function getDayCutoff(days: number): string {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   now.setDate(now.getDate() - (days - 1))
@@ -284,6 +290,17 @@ function getRangeCutoff(range: ClaudeUsageRange): string | null {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function isValidDayKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(year, month - 1, day)
+  return (
+    parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+  )
 }
 
 function getLocalDay(timestamp: string): string | null {
@@ -441,6 +458,7 @@ export class ClaudeUsageStore {
         this.state.processedFiles = result.processedFiles
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
+        this.state.hourlyAggregates = result.hourlyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
@@ -556,6 +574,32 @@ export class ClaudeUsageStore {
       byDay.set(row.day, existing)
     }
     return [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
+  }
+
+  async getHourly(query: ClaudeUsageHourlyQuery): Promise<ClaudeUsageHourlyResult> {
+    await this.refresh(false)
+    return {
+      scanState: this.getScanState(),
+      points: this.buildHourly(query)
+    }
+  }
+
+  private buildHourly(query: ClaudeUsageHourlyQuery): ClaudeUsageHourlyPoint[] {
+    if ('days' in query) {
+      const days = Math.max(Math.floor(query.days) || 1, 1)
+      const cutoff = getDayCutoff(days)
+      return this.state.hourlyAggregates.filter((entry) => entry.day >= cutoff)
+    }
+    if (
+      !isValidDayKey(query.startDay) ||
+      !isValidDayKey(query.endDay) ||
+      query.startDay > query.endDay
+    ) {
+      return []
+    }
+    return this.state.hourlyAggregates.filter(
+      (entry) => entry.day >= query.startDay && entry.day <= query.endDay
+    )
   }
 
   async getBreakdown(

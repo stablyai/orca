@@ -19,11 +19,12 @@ import { OpenCodeUsageStore, normalizePersistedState } from './store'
 
 function getDefaultState(): OpenCodeUsagePersistedState {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     worktreeFingerprint: null,
     processedDatabases: [],
     sessions: [],
     dailyAggregates: [],
+    hourlyAggregates: [],
     scanState: {
       enabled: false,
       lastScanStartedAt: null,
@@ -284,6 +285,7 @@ describe('OpenCodeUsageStore', () => {
             size: 2,
             sessions: [makeSession()],
             dailyAggregates: [makeDaily()],
+            hourlyAggregates: [],
             ownedSessionIds: ['session-1'],
             hasDeferredClaims: false
           }
@@ -303,11 +305,36 @@ describe('OpenCodeUsageStore', () => {
             size: 2,
             sessions: [],
             dailyAggregates: [],
+            hourlyAggregates: [],
             ownedSessionIds: [],
             hasDeferredClaims: false
           }
         ]
       }).processedDatabases
     ).toHaveLength(1)
+  })
+
+  it('serves hourly points across a custom date range', async () => {
+    const point = (day: string, hour: number, inputTokens: number) => ({
+      day,
+      hour,
+      eventCount: 1,
+      inputTokens,
+      cachedInputTokens: 10,
+      outputTokens: 25,
+      reasoningOutputTokens: 10,
+      totalTokens: inputTokens + 25
+    })
+    const store = createStoreWithState({
+      hourlyAggregates: [
+        point('2025-11-01', 9, 500),
+        point('2026-04-08', 10, 100),
+        point('2026-04-09', 22, 50)
+      ]
+    })
+
+    const result = await store.getHourly({ startDay: '2025-11-01', endDay: '2025-11-30' })
+
+    expect(result.points).toEqual([point('2025-11-01', 9, 500)])
   })
 })

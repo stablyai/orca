@@ -11,6 +11,7 @@ import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   OpenCodeUsageAttributedEvent,
   OpenCodeUsageDailyAggregate,
+  OpenCodeUsageHourlyAggregate,
   OpenCodeUsageLocationBreakdown,
   OpenCodeUsageLocationModelBreakdown,
   OpenCodeUsageModelBreakdown,
@@ -408,7 +409,7 @@ function getDefaultProjectLabel(cwd: string | null): string {
   return parts.at(-1) ?? cwd
 }
 
-function localDayFromTimestamp(timestamp: string): string | null {
+function localDayAndHourFromTimestamp(timestamp: string): { day: string; hour: number } | null {
   const parsed = new Date(timestamp)
   if (Number.isNaN(parsed.getTime())) {
     return null
@@ -416,7 +417,7 @@ function localDayFromTimestamp(timestamp: string): string | null {
   const year = parsed.getFullYear()
   const month = String(parsed.getMonth() + 1).padStart(2, '0')
   const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return { day: `${year}-${month}-${day}`, hour: parsed.getHours() }
 }
 
 function isContainingPath(candidatePath: string, targetPath: string): boolean {
@@ -474,10 +475,11 @@ export async function attributeOpenCodeUsageEvent(
   event: OpenCodeUsageParsedEvent,
   worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[]
 ): Promise<OpenCodeUsageAttributedEvent | null> {
-  const day = localDayFromTimestamp(event.timestamp)
-  if (!day) {
+  const dayAndHour = localDayAndHourFromTimestamp(event.timestamp)
+  if (!dayAndHour) {
     return null
   }
+  const { day, hour } = dayAndHour
 
   let repoId: string | null = null
   let worktreeId: string | null = null
@@ -499,6 +501,7 @@ export async function attributeOpenCodeUsageEvent(
   return {
     ...event,
     day,
+    hour,
     projectKey,
     projectLabel,
     repoId,
@@ -653,12 +656,14 @@ function mergeLocationModelBreakdown(
   })
 }
 
-function aggregateOpenCodeUsage(events: OpenCodeUsageAttributedEvent[]): {
+export function aggregateOpenCodeUsage(events: OpenCodeUsageAttributedEvent[]): {
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
+  hourlyAggregates: OpenCodeUsageHourlyAggregate[]
 } {
   const sessionsById = new Map<string, OpenCodeUsageSession>()
   const dailyByKey = new Map<string, OpenCodeUsageDailyAggregate>()
+  const hourlyByKey = new Map<string, OpenCodeUsageHourlyAggregate>()
 
   for (const event of events) {
     const session = sessionsById.get(event.sessionId) ?? createEmptySession(event)
@@ -694,6 +699,30 @@ function aggregateOpenCodeUsage(events: OpenCodeUsageAttributedEvent[]): {
     daily.reasoningOutputTokens += event.reasoningOutputTokens
     daily.totalTokens += event.totalTokens
     daily.estimatedCostUsd = addCost(daily.estimatedCostUsd, event.estimatedCostUsd)
+
+    // Why: the status-bar trends chart compares an account's usage rhythm,
+    // not individual projects, so keep this compact projection dimension-free.
+    const hourlyKey = `${event.day}::${event.hour}`
+    const hourly = hourlyByKey.get(hourlyKey)
+    if (hourly) {
+      hourly.eventCount++
+      hourly.inputTokens += event.inputTokens
+      hourly.cachedInputTokens += event.cachedInputTokens
+      hourly.outputTokens += event.outputTokens
+      hourly.reasoningOutputTokens += event.reasoningOutputTokens
+      hourly.totalTokens += event.totalTokens
+    } else {
+      hourlyByKey.set(hourlyKey, {
+        day: event.day,
+        hour: event.hour,
+        eventCount: 1,
+        inputTokens: event.inputTokens,
+        cachedInputTokens: event.cachedInputTokens,
+        outputTokens: event.outputTokens,
+        reasoningOutputTokens: event.reasoningOutputTokens,
+        totalTokens: event.totalTokens
+      })
+    }
   }
 
   return {
@@ -702,7 +731,8 @@ function aggregateOpenCodeUsage(events: OpenCodeUsageAttributedEvent[]): {
       left.day === right.day
         ? left.projectLabel.localeCompare(right.projectLabel)
         : left.day.localeCompare(right.day)
-    )
+    ),
+    hourlyAggregates: sortHourlyAggregates(hourlyByKey)
   }
 }
 
@@ -841,6 +871,34 @@ function mergeDailyAggregates(
   }
 }
 
+function mergeHourlyAggregates(
+  target: Map<string, OpenCodeUsageHourlyAggregate>,
+  hourlyAggregates: OpenCodeUsageHourlyAggregate[]
+): void {
+  for (const aggregate of hourlyAggregates) {
+    const key = `${aggregate.day}::${aggregate.hour}`
+    const existing = target.get(key)
+    if (!existing) {
+      target.set(key, { ...aggregate })
+      continue
+    }
+    existing.eventCount += aggregate.eventCount
+    existing.inputTokens += aggregate.inputTokens
+    existing.cachedInputTokens += aggregate.cachedInputTokens
+    existing.outputTokens += aggregate.outputTokens
+    existing.reasoningOutputTokens += aggregate.reasoningOutputTokens
+    existing.totalTokens += aggregate.totalTokens
+  }
+}
+
+function sortHourlyAggregates(
+  hourlyByKey: Map<string, OpenCodeUsageHourlyAggregate>
+): OpenCodeUsageHourlyAggregate[] {
+  return [...hourlyByKey.values()].sort((left, right) =>
+    left.day === right.day ? left.hour - right.hour : left.day.localeCompare(right.day)
+  )
+}
+
 export async function parseOpenCodeUsageDatabase(
   dbPath: string,
   worktrees: (OpenCodeUsageWorktreeRef & { canonicalPath: string })[],
@@ -894,6 +952,7 @@ export async function scanOpenCodeUsageDatabases(
   processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
+  hourlyAggregates: OpenCodeUsageHourlyAggregate[]
 }> {
   const dbPaths = await listOpenCodeDatabases()
   const previousByPath = new Map(
@@ -924,6 +983,7 @@ export async function scanOpenCodeUsageDatabases(
       previous &&
       previous.mtimeMs === databaseInfo.mtimeMs &&
       previous.size === databaseInfo.size &&
+      Array.isArray(previous.hourlyAggregates) &&
       Array.isArray(previous.ownedSessionIds) &&
       typeof previous.hasDeferredClaims === 'boolean'
     if (canReuse) {
@@ -995,6 +1055,7 @@ export async function scanOpenCodeUsageDatabases(
   const processedDatabases: OpenCodeUsagePersistedDatabase[] = []
   const sessionsById = new Map<string, OpenCodeUsageSession>()
   const dailyByKey = new Map<string, OpenCodeUsageDailyAggregate>()
+  const hourlyByKey = new Map<string, OpenCodeUsageHourlyAggregate>()
   for (const dbPath of dbPaths) {
     const processed = reusedByPath.get(dbPath) ?? parsedByPath.get(dbPath)
     if (!processed) {
@@ -1003,6 +1064,7 @@ export async function scanOpenCodeUsageDatabases(
     processedDatabases.push(processed)
     mergeSessions(sessionsById, processed.sessions)
     mergeDailyAggregates(dailyByKey, processed.dailyAggregates)
+    mergeHourlyAggregates(hourlyByKey, processed.hourlyAggregates)
   }
 
   return {
@@ -1012,7 +1074,8 @@ export async function scanOpenCodeUsageDatabases(
       left.day === right.day
         ? left.projectLabel.localeCompare(right.projectLabel)
         : left.day.localeCompare(right.day)
-    )
+    ),
+    hourlyAggregates: sortHourlyAggregates(hourlyByKey)
   }
 }
 

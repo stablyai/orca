@@ -49,12 +49,23 @@ export type ClaudeUsageDailyAggregate = {
   cacheWriteTokens: number
 }
 
+export type ClaudeUsageHourlyAggregate = {
+  day: string
+  hour: number
+  turnCount: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+}
+
 export type ClaudeUsagePersistedState = {
   schemaVersion: number
   worktreeFingerprint: string | null
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
+  hourlyAggregates: ClaudeUsageHourlyAggregate[]
   scanState: {
     enabled: boolean
     lastScanStartedAt: number | null
@@ -66,6 +77,7 @@ export type ClaudeUsagePersistedState = {
 export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
+  hourlyAggregates: ClaudeUsageHourlyAggregate[]
   /** Dedupe keys (message.id:requestId) this file counted. Forked/resumed
    *  sessions copy earlier turns into new files; ownership keeps each turn
    *  counted by exactly one cached file across incremental scans. */
@@ -90,6 +102,7 @@ export type ClaudeUsageParsedTurn = {
 
 export type ClaudeUsageAttributedTurn = ClaudeUsageParsedTurn & {
   day: string
+  hour: number
   projectKey: string
   projectLabel: string
   repoId: string | null

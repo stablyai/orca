@@ -36,6 +36,23 @@ export type ClaudeUsageDailyPoint = {
   cacheWriteTokens: number
 }
 
+export type ClaudeUsageHourlyPoint = {
+  day: string
+  hour: number
+  turnCount: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+}
+
+export type ClaudeUsageHourlyQuery = { days: number } | { startDay: string; endDay: string }
+
+export type ClaudeUsageHourlyResult = {
+  scanState: ClaudeUsageScanState
+  points: ClaudeUsageHourlyPoint[]
+}
+
 export type ClaudeUsageBreakdownRow = {
   key: string
   label: string

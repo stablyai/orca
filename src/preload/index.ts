@@ -3778,6 +3778,8 @@ const api = {
       ipcRenderer.invoke('claudeUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:getDaily', args),
+    getHourly: (args: { days: number } | { startDay: string; endDay: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeUsage:getHourly', args),
     getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:getBreakdown', args),
     getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
@@ -3796,6 +3798,8 @@ const api = {
       ipcRenderer.invoke('codexUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexUsage:getDaily', args),
+    getHourly: (args: { days: number } | { startDay: string; endDay: string }): Promise<unknown> =>
+      ipcRenderer.invoke('codexUsage:getHourly', args),
     getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexUsage:getBreakdown', args),
     getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
@@ -3814,10 +3818,32 @@ const api = {
       ipcRenderer.invoke('openCodeUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getDaily', args),
+    getHourly: (args: { days: number } | { startDay: string; endDay: string }): Promise<unknown> =>
+      ipcRenderer.invoke('openCodeUsage:getHourly', args),
     getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getBreakdown', args),
     getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getRecentSessions', args)
+  },
+
+  geminiUsage: {
+    getScanState: (): Promise<unknown> => ipcRenderer.invoke('geminiUsage:getScanState'),
+    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiUsage:setEnabled', args),
+    refresh: (args?: { force?: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiUsage:refresh', args),
+    getHourly: (args: { days: number } | { startDay: string; endDay: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiUsage:getHourly', args)
+  },
+
+  kimiUsage: {
+    getScanState: (): Promise<unknown> => ipcRenderer.invoke('kimiUsage:getScanState'),
+    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiUsage:setEnabled', args),
+    refresh: (args?: { force?: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiUsage:refresh', args),
+    getHourly: (args: { days: number } | { startDay: string; endDay: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiUsage:getHourly', args)
   },
 
   aiVault: {

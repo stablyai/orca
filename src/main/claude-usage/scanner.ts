@@ -8,6 +8,7 @@ import type { Repo } from '../../shared/types'
 import type {
   ClaudeUsageAttributedTurn,
   ClaudeUsageDailyAggregate,
+  ClaudeUsageHourlyAggregate,
   ClaudeUsageLocationBreakdown,
   ClaudeUsageParsedTurn,
   ClaudeUsagePersistedFile,
@@ -358,7 +359,7 @@ async function readClaudeUsageScanFile(filePath: string): Promise<{
   }
 }
 
-function localDayFromTimestamp(timestamp: string): string | null {
+function localDayAndHourFromTimestamp(timestamp: string): { day: string; hour: number } | null {
   const parsed = new Date(timestamp)
   if (Number.isNaN(parsed.getTime())) {
     return null
@@ -366,7 +367,7 @@ function localDayFromTimestamp(timestamp: string): string | null {
   const year = parsed.getFullYear()
   const month = String(parsed.getMonth() + 1).padStart(2, '0')
   const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return { day: `${year}-${month}-${day}`, hour: parsed.getHours() }
 }
 
 export async function buildWorktreeLookup(
@@ -387,10 +388,11 @@ export async function attributeClaudeUsageTurns(
   const canonicalCwdByPath = new Map<string, string>()
 
   for (const turn of turns) {
-    const day = localDayFromTimestamp(turn.timestamp)
-    if (!day) {
+    const dayAndHour = localDayAndHourFromTimestamp(turn.timestamp)
+    if (!dayAndHour) {
       continue
     }
+    const { day, hour } = dayAndHour
 
     let repoId: string | null = null
     let worktreeId: string | null = null
@@ -419,6 +421,7 @@ export async function attributeClaudeUsageTurns(
     attributed.push({
       ...turn,
       day,
+      hour,
       projectKey,
       projectLabel,
       repoId,
@@ -492,6 +495,33 @@ function mergeClaudeDailyAggregates(
   }
 }
 
+function mergeClaudeHourlyAggregates(
+  target: Map<string, ClaudeUsageHourlyAggregate>,
+  hourlyAggregates: ClaudeUsageHourlyAggregate[]
+): void {
+  for (const aggregate of hourlyAggregates) {
+    const key = `${aggregate.day}::${aggregate.hour}`
+    const existing = target.get(key)
+    if (!existing) {
+      target.set(key, { ...aggregate })
+      continue
+    }
+    existing.turnCount += aggregate.turnCount
+    existing.inputTokens += aggregate.inputTokens
+    existing.outputTokens += aggregate.outputTokens
+    existing.cacheReadTokens += aggregate.cacheReadTokens
+    existing.cacheWriteTokens += aggregate.cacheWriteTokens
+  }
+}
+
+function sortClaudeHourlyAggregates(
+  hourlyByKey: Map<string, ClaudeUsageHourlyAggregate>
+): ClaudeUsageHourlyAggregate[] {
+  return [...hourlyByKey.values()].sort((left, right) =>
+    left.day === right.day ? left.hour - right.hour : left.day.localeCompare(right.day)
+  )
+}
+
 function finalizeClaudeSessions(
   sessionsById: Map<string, ClaudeUsageSession>
 ): ClaudeUsageSession[] {
@@ -516,9 +546,11 @@ function finalizeClaudeSessions(
 export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
+  hourlyAggregates: ClaudeUsageHourlyAggregate[]
 } {
   const sessionsById = new Map<string, ClaudeUsageSession>()
   const dailyByKey = new Map<string, ClaudeUsageDailyAggregate>()
+  const hourlyByKey = new Map<string, ClaudeUsageHourlyAggregate>()
 
   for (const turn of turns) {
     const existingSession = sessionsById.get(turn.sessionId)
@@ -579,6 +611,29 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
       })
     }
 
+    // Why: hour-of-day buckets power the status-bar trends charts, which show
+    // account-wide usage rhythm. Keeping the key project/model-free keeps the
+    // persisted cache small (at most 24 rows per active day per file).
+    const hourlyKey = `${turn.day}::${turn.hour}`
+    const existingHourly = hourlyByKey.get(hourlyKey)
+    if (existingHourly) {
+      existingHourly.turnCount++
+      existingHourly.inputTokens += turn.inputTokens
+      existingHourly.outputTokens += turn.outputTokens
+      existingHourly.cacheReadTokens += turn.cacheReadTokens
+      existingHourly.cacheWriteTokens += turn.cacheWriteTokens
+    } else {
+      hourlyByKey.set(hourlyKey, {
+        day: turn.day,
+        hour: turn.hour,
+        turnCount: 1,
+        inputTokens: turn.inputTokens,
+        outputTokens: turn.outputTokens,
+        cacheReadTokens: turn.cacheReadTokens,
+        cacheWriteTokens: turn.cacheWriteTokens
+      })
+    }
+
     const dailyKey = [turn.day, turn.model ?? 'unknown', turn.projectKey].join('::')
     const existingDaily = dailyByKey.get(dailyKey)
     if (existingDaily) {
@@ -614,7 +669,8 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
       left.day === right.day
         ? left.projectLabel.localeCompare(right.projectLabel)
         : left.day.localeCompare(right.day)
-    )
+    ),
+    hourlyAggregates: sortClaudeHourlyAggregates(hourlyByKey)
   }
 }
 
@@ -625,6 +681,7 @@ export async function scanClaudeUsageFiles(
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
+  hourlyAggregates: ClaudeUsageHourlyAggregate[]
 }> {
   const files = await listClaudeTranscriptFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
@@ -661,6 +718,7 @@ export async function scanClaudeUsageFiles(
           previous.size === fileInfo.size &&
           Array.isArray(previous.sessions) &&
           Array.isArray(previous.dailyAggregates) &&
+          Array.isArray(previous.hourlyAggregates) &&
           Array.isArray(previous.ownedDedupeKeys) &&
           typeof previous.hasDeferredClaims === 'boolean'
         return canReuse ? previous : null
@@ -734,6 +792,7 @@ export async function scanClaudeUsageFiles(
   const processedFiles: ClaudeUsagePersistedFile[] = []
   const sessionsById = new Map<string, ClaudeUsageSession>()
   const dailyByKey = new Map<string, ClaudeUsageDailyAggregate>()
+  const hourlyByKey = new Map<string, ClaudeUsageHourlyAggregate>()
   for (const filePath of files) {
     const processed = reusedByPath.get(filePath) ?? parsedByPath.get(filePath)
     if (!processed) {
@@ -742,6 +801,7 @@ export async function scanClaudeUsageFiles(
     processedFiles.push(processed)
     mergeClaudeSessions(sessionsById, processed.sessions)
     mergeClaudeDailyAggregates(dailyByKey, processed.dailyAggregates)
+    mergeClaudeHourlyAggregates(hourlyByKey, processed.hourlyAggregates)
   }
 
   return {
@@ -751,7 +811,8 @@ export async function scanClaudeUsageFiles(
       left.day === right.day
         ? left.projectLabel.localeCompare(right.projectLabel)
         : left.day.localeCompare(right.day)
-    )
+    ),
+    hourlyAggregates: sortClaudeHourlyAggregates(hourlyByKey)
   }
 }
 

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type {
   ClaudeUsageBreakdownKind,
+  ClaudeUsageHourlyQuery,
   ClaudeUsageRange,
   ClaudeUsageScope
 } from '../../shared/claude-usage-types'
@@ -28,6 +29,9 @@ export function registerClaudeUsageHandlers(claudeUsage: ClaudeUsageStore): void
     'claudeUsage:getDaily',
     (_event, args: { scope: ClaudeUsageScope; range: ClaudeUsageRange }) =>
       claudeUsage.getDaily(args.scope, args.range)
+  )
+  ipcMain.handle('claudeUsage:getHourly', (_event, args: ClaudeUsageHourlyQuery) =>
+    claudeUsage.getHourly(args)
   )
   ipcMain.handle(
     'claudeUsage:getBreakdown',

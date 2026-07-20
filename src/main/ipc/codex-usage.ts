@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type {
   CodexUsageBreakdownKind,
+  CodexUsageHourlyQuery,
   CodexUsageRange,
   CodexUsageScope
 } from '../../shared/codex-usage-types'
@@ -28,6 +29,9 @@ export function registerCodexUsageHandlers(codexUsage: CodexUsageStore): void {
     'codexUsage:getDaily',
     (_event, args: { scope: CodexUsageScope; range: CodexUsageRange }) =>
       codexUsage.getDaily(args.scope, args.range)
+  )
+  ipcMain.handle('codexUsage:getHourly', (_event, args: CodexUsageHourlyQuery) =>
+    codexUsage.getHourly(args)
   )
   ipcMain.handle(
     'codexUsage:getBreakdown',

@@ -83,9 +83,21 @@ export type CodexUsageDailyAggregate = {
   hasInferredPricing: boolean
 }
 
+export type CodexUsageHourlyAggregate = {
+  day: string
+  hour: number
+  eventCount: number
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+  reasoningOutputTokens: number
+  totalTokens: number
+}
+
 export type CodexUsagePersistedFile = CodexUsageProcessedFile & {
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
+  hourlyAggregates: CodexUsageHourlyAggregate[]
   /** Event keys this file counted. Resumed/forked rollouts copy earlier
    *  token_count records into new files; ownership keeps each record counted
    *  by exactly one cached file across incremental scans. */
@@ -102,6 +114,7 @@ export type CodexUsagePersistedState = {
   processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
+  hourlyAggregates: CodexUsageHourlyAggregate[]
   scanState: {
     enabled: boolean
     lastScanStartedAt: number | null
@@ -129,6 +142,7 @@ export type CodexUsageParsedEvent = {
 
 export type CodexUsageAttributedEvent = CodexUsageParsedEvent & {
   day: string
+  hour: number
   projectKey: string
   projectLabel: string
   repoId: string | null

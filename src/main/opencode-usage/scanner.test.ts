@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
 import {
   attributeOpenCodeUsageEvent,
+  aggregateOpenCodeUsage,
   parseOpenCodeUsageDatabase,
   parseOpenCodeUsageRow,
   scanOpenCodeUsageDatabases
 } from './scanner'
+import type { OpenCodeUsageAttributedEvent } from './types'
 
 const WORKTREE = '/workspace/repo'
 
@@ -171,6 +173,57 @@ describe('attributeOpenCodeUsageEvent', () => {
 
     expect(attributed?.projectKey).toBe('cwd:d:/other/repo')
     expect(attributed?.worktreeId).toBeNull()
+  })
+})
+
+describe('aggregateOpenCodeUsage', () => {
+  it('aggregates account-wide hourly token buckets across projects', () => {
+    const event = (
+      projectKey: string,
+      inputTokens: number,
+      hour = 10
+    ): OpenCodeUsageAttributedEvent => ({
+      sessionId: `session-${projectKey}`,
+      timestamp: '2026-04-09T10:00:00.000Z',
+      day: '2026-04-09',
+      hour,
+      cwd: `/workspace/${projectKey}`,
+      model: 'anthropic/claude-sonnet-4-5',
+      estimatedCostUsd: null,
+      projectKey,
+      projectLabel: projectKey,
+      repoId: null,
+      worktreeId: null,
+      inputTokens,
+      cachedInputTokens: 10,
+      outputTokens: 25,
+      reasoningOutputTokens: 10,
+      totalTokens: inputTokens + 25
+    })
+
+    expect(
+      aggregateOpenCodeUsage([event('one', 100), event('two', 50), event('three', 30, 22)])
+    ).toMatchObject({
+      hourlyAggregates: [
+        {
+          day: '2026-04-09',
+          hour: 10,
+          eventCount: 2,
+          inputTokens: 150,
+          cachedInputTokens: 20,
+          outputTokens: 50,
+          reasoningOutputTokens: 20,
+          totalTokens: 200
+        },
+        {
+          day: '2026-04-09',
+          hour: 22,
+          eventCount: 1,
+          inputTokens: 30,
+          totalTokens: 55
+        }
+      ]
+    })
   })
 })
 

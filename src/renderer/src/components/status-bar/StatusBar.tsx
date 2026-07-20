@@ -62,6 +62,7 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
+import { ProviderUsageTrendsPanel } from './ProviderUsageTrendsPanel'
 import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -839,6 +840,12 @@ function ClaudeSwitcherMenu({
           )}
         />
       }
+      sideContent={
+        // Why: the trends panel charts this desktop's local transcripts; with a
+        // remote runtime active the popover shows the remote account (#7973),
+        // so pairing it with local-disk charts would misattribute the data.
+        hasActiveRuntimeEnvironment ? undefined : <ProviderUsageTrendsPanel provider="claude" />
+      }
       open={open}
       onOpenChange={handleOpenChange}
     >
@@ -1515,6 +1522,11 @@ function CodexSwitcherMenu({
           )}
         />
       }
+      sideContent={
+        // Why: local Codex history belongs to this desktop, whereas the
+        // account bars can represent a remote runtime's separate account.
+        hasActiveRuntimeEnvironment ? undefined : <ProviderUsageTrendsPanel provider="codex" />
+      }
       open={open}
       onOpenChange={handleOpenChange}
     >
@@ -1720,6 +1732,7 @@ export function ProviderDetailsMenu({
   iconOnly,
   ariaLabel,
   topContent,
+  sideContent,
   hidePanelResetCredits = false,
   open,
   onOpenChange,
@@ -1730,6 +1743,8 @@ export function ProviderDetailsMenu({
   iconOnly: boolean
   ariaLabel: string
   topContent?: React.ReactNode
+  /** Optional panel rendered as a second column to the right of the usage bars. */
+  sideContent?: React.ReactNode
   hidePanelResetCredits?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -1789,7 +1804,7 @@ export function ProviderDetailsMenu({
         side="top"
         align="start"
         sideOffset={8}
-        className="w-[260px]"
+        className={sideContent ? 'w-[588px]' : 'w-[260px]'}
         onPointerDownOutside={() => {
           skipCloseAutoFocusRef.current = true
         }}
@@ -1802,21 +1817,31 @@ export function ProviderDetailsMenu({
           event.preventDefault()
         }}
       >
-        {topContent}
-        <div className="p-2">
-          {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-          <ProviderPanel
-            p={provider}
-            showResetCredits={!hidePanelResetCredits}
-            usagePercentageDisplay={usagePercentageDisplay}
-          />
+        <div className={sideContent ? 'flex items-stretch' : undefined}>
+          <div className={sideContent ? 'w-[250px] shrink-0' : undefined}>
+            {topContent}
+            <div className="p-2">
+              {/* Why: provider-specific action sections may render richer reset-credit UI. */}
+              <ProviderPanel
+                p={provider}
+                showResetCredits={!hidePanelResetCredits}
+                usagePercentageDisplay={usagePercentageDisplay}
+              />
+            </div>
+            {children ? (
+              <>
+                <DropdownMenuSeparator />
+                {children}
+              </>
+            ) : null}
+          </div>
+          {sideContent ? (
+            <>
+              <div className="my-1 w-px shrink-0 bg-border/70" />
+              <div className="min-w-0 flex-1">{sideContent}</div>
+            </>
+          ) : null}
         </div>
-        {children ? (
-          <>
-            <DropdownMenuSeparator />
-            {children}
-          </>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -1828,6 +1853,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
+  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
@@ -2035,6 +2061,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 provider={visibleGemini}
                 compact={compact}
                 iconOnly={iconOnly}
+                // Why: Gemini history is read from this desktop's ~/.gemini,
+                // never from the runtime whose quota bar may be remote.
+                sideContent={
+                  hasActiveRuntimeEnvironment ? undefined : (
+                    <ProviderUsageTrendsPanel provider="gemini" />
+                  )
+                }
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.d2375976eb',
                   'Open Gemini usage details'
@@ -2057,6 +2090,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 provider={visibleOpencodeGo}
                 compact={compact}
                 iconOnly={iconOnly}
+                // Why: OpenCode history is scanned from this desktop, so it
+                // must not be paired with a remote runtime's rate-limit account.
+                sideContent={
+                  hasActiveRuntimeEnvironment ? undefined : (
+                    <ProviderUsageTrendsPanel provider="openCode" />
+                  )
+                }
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.629251f4b6',
                   'Open OpenCode Go usage details'
@@ -2068,6 +2108,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 provider={visibleKimi}
                 compact={compact}
                 iconOnly={iconOnly}
+                // Why: Kimi wire history is local-only, so never associate it
+                // with a remote runtime account in the same popover.
+                sideContent={
+                  hasActiveRuntimeEnvironment ? undefined : (
+                    <ProviderUsageTrendsPanel provider="kimi" />
+                  )
+                }
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.fda8146810',
                   'Open Kimi usage details'

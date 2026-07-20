@@ -6,6 +6,9 @@ import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
   OpenCodeUsageDailyPoint,
+  OpenCodeUsageHourlyPoint,
+  OpenCodeUsageHourlyQuery,
+  OpenCodeUsageHourlyResult,
   OpenCodeUsageRange,
   OpenCodeUsageScanState,
   OpenCodeUsageScope,
@@ -18,9 +21,9 @@ import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-w
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
 import { createWorktreeRefs, scanOpenCodeUsageDatabases } from './scanner'
 
-// Why: v2 adds per-database session ownership (stale sibling-copy dedupe).
-// Older caches were built without it and can carry doubled sessions (#8006).
-const SCHEMA_VERSION = 2
+// Why: v3 adds compact hour-of-day projections for the status-bar trends
+// chart. Older per-database caches cannot answer that query without reparsing.
+const SCHEMA_VERSION = 3
 const STALE_MS = 5 * 60_000
 
 let _openCodeUsageFile: string | null = null
@@ -32,6 +35,7 @@ function getDefaultState(): OpenCodeUsagePersistedState {
     processedDatabases: [],
     sessions: [],
     dailyAggregates: [],
+    hourlyAggregates: [],
     scanState: {
       enabled: false,
       lastScanStartedAt: null,
@@ -75,6 +79,10 @@ function getRangeCutoff(range: OpenCodeUsageRange): string | null {
     return null
   }
   const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
+  return getDayCutoff(days)
+}
+
+function getDayCutoff(days: number): string {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   now.setDate(now.getDate() - (days - 1))
@@ -82,6 +90,17 @@ function getRangeCutoff(range: OpenCodeUsageRange): string | null {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function isValidDayKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(year, month - 1, day)
+  return (
+    parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+  )
 }
 
 function getLocalDay(timestamp: string): string | null {
@@ -258,6 +277,7 @@ export class OpenCodeUsageStore {
         this.state.processedDatabases = result.processedDatabases
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
+        this.state.hourlyAggregates = result.hourlyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
@@ -362,6 +382,32 @@ export class OpenCodeUsageStore {
       byDay.set(row.day, existing)
     }
     return [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
+  }
+
+  async getHourly(query: OpenCodeUsageHourlyQuery): Promise<OpenCodeUsageHourlyResult> {
+    await this.refresh(false)
+    return {
+      scanState: this.getScanState(),
+      points: this.buildHourly(query)
+    }
+  }
+
+  private buildHourly(query: OpenCodeUsageHourlyQuery): OpenCodeUsageHourlyPoint[] {
+    if ('days' in query) {
+      const days = Math.max(Math.floor(query.days) || 1, 1)
+      const cutoff = getDayCutoff(days)
+      return this.state.hourlyAggregates.filter((entry) => entry.day >= cutoff)
+    }
+    if (
+      !isValidDayKey(query.startDay) ||
+      !isValidDayKey(query.endDay) ||
+      query.startDay > query.endDay
+    ) {
+      return []
+    }
+    return this.state.hourlyAggregates.filter(
+      (entry) => entry.day >= query.startDay && entry.day <= query.endDay
+    )
   }
 
   async getBreakdown(
