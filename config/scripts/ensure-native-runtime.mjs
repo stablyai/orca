@@ -15,6 +15,7 @@ const NATIVE_MODULES = [
   'node-pty',
   ...(process.platform === 'win32' ? ['windows-native-registry'] : [])
 ]
+const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
@@ -265,10 +266,24 @@ function loadNodePtyNativeModule() {
   // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
   const native = loadNativeModule(nativeName)
-  if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native.dir)) {
+  assertNodePtyWindowsConptyRuntime(native?.dir)
+  if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
       `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
     )
+  }
+}
+
+function assertNodePtyWindowsConptyRuntime(nativeDir) {
+  if (process.platform !== 'win32' || !isNodePtyReleaseBuildDir(nativeDir)) {
+    return
+  }
+  const runtimeDir = resolve(projectDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty')
+  const missingFile = NODE_PTY_CONPTY_RUNTIME_FILES.find(
+    (filename) => !existsSync(resolve(runtimeDir, filename))
+  )
+  if (missingFile) {
+    throw new Error(`node-pty ConPTY runtime file is missing: ${resolve(runtimeDir, missingFile)}`)
   }
 }
 
