@@ -374,8 +374,9 @@ export type Mission = {
   branchName: string
   members: MissionMember[]
   tabOrder: number
-  /** Physical mission root holding local member worktree directories.
-   *  Resolved lazily on first session ensure; stable afterwards. */
+  /** Physical mission root holding direct-child worktrees for local members.
+   *  Legacy out-of-root members retain a compatibility link. Resolved lazily
+   *  on first session ensure; stable afterwards. */
   rootPath?: string | null
   /** Trusted parent captured with rootPath so changing workspaceDir does not
    *  make an existing Mission root unverifiable. */

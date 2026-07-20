@@ -92,11 +92,10 @@ export default function MissionCreateDialog(): React.JSX.Element {
     const context = { projects, settings }
     return {
       eligibleRepos: repos.filter((repo) => isRendererMissionEligibleRepo(repo, context)),
-      groupOptions: projectGroups.map((group) => ({
-        id: group.id,
-        name: group.name,
-        repoIds: getMissionEligibleGroupRepoIds(projectGroups, repos, group.id, context)
-      }))
+      groupOptions: projectGroups.flatMap((group) => {
+        const repoIds = getMissionEligibleGroupRepoIds(projectGroups, repos, group.id, context)
+        return repoIds.length > 0 ? [{ id: group.id, name: group.name, repoIds }] : []
+      })
     }
   }, [projectGroups, projects, repos, settings])
   const repoNameById = useMemo(

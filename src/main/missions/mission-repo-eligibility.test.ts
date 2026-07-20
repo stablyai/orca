@@ -1,5 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type * as MissionsModule from '../../shared/missions'
 import type { Repo } from '../../shared/types'
+
+const sharedEligibilityCalls = vi.hoisted(() => vi.fn())
+
+vi.mock('../../shared/missions', async (importOriginal) => {
+  const actual = await importOriginal<typeof MissionsModule>()
+  return {
+    ...actual,
+    isMissionEligibleRepo: (...args: Parameters<typeof actual.isMissionEligibleRepo>) => {
+      sharedEligibilityCalls(...args)
+      return actual.isMissionEligibleRepo(...args)
+    }
+  }
+})
+
 import {
   MISSION_NATIVE_LOCAL_ONLY_ERROR,
   isNativeLocalMissionRepo,
@@ -29,6 +44,15 @@ describe('Mission repo eligibility', () => {
   it('accepts native local Git repos', () => {
     const repo = makeRepo()
     expect(isNativeLocalMissionRepo(makeStore([repo]) as never, repo)).toBe(true)
+  })
+
+  it('delegates host and repo-kind checks to shared Mission eligibility', () => {
+    sharedEligibilityCalls.mockClear()
+    const repo = makeRepo({ connectionId: 'ssh-1' })
+
+    expect(isNativeLocalMissionRepo(makeStore([repo]) as never, repo)).toBe(false)
+    expect(sharedEligibilityCalls).toHaveBeenCalledOnce()
+    expect(sharedEligibilityCalls).toHaveBeenCalledWith(repo)
   })
 
   it.each([

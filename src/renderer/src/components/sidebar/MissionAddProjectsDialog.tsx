@@ -73,13 +73,18 @@ export function MissionAddProjectsDialog({
     }
     setSubmitting(true)
     setAddFailed(false)
-    const result = await addMissionMembers(mission.id, [...selected])
-    if (!result) {
+    try {
+      const result = await addMissionMembers(mission.id, [...selected])
+      if (!result) {
+        setAddFailed(true)
+        return
+      }
+      close()
+    } catch {
       setAddFailed(true)
+    } finally {
       setSubmitting(false)
-      return
     }
-    close()
   }
 
   return (

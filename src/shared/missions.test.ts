@@ -107,6 +107,27 @@ describe('createMission', () => {
     expect(mission.branchName).toBe('mission/custom')
   })
 
+  it('rejects an invalid explicit branch before constructing a Mission', () => {
+    expect(() =>
+      createMission({
+        name: 'Referral',
+        branchName: 'mission/bad..ref',
+        repoIds: ['r1'],
+        tabOrder: 0
+      })
+    ).toThrow('invalid_mission_branch_name')
+  })
+
+  it('keeps automatic slug generation when the optional branch is blank', () => {
+    const mission = createMission({
+      name: 'Referral',
+      branchName: '   ',
+      repoIds: ['r1'],
+      tabOrder: 0
+    })
+    expect(mission.branchName).toBe('mission/referral')
+  })
+
   it('disambiguates the default branch when a localized name has no ASCII slug', () => {
     const mission = createMission({ name: '결제 오류', repoIds: ['r1'], tabOrder: 0 })
     expect(mission.branchName).toMatch(/^mission\/task-[a-z0-9]{8}$/)

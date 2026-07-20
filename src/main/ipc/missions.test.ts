@@ -57,6 +57,27 @@ describe('missions IPC', () => {
     )
   })
 
+  it('rejects an invalid explicit branch before persisting the Mission', async () => {
+    const store = makeFakeStore()
+    const createMission = vi.spyOn(store, 'createMission')
+    const runtime = makeFakeRuntime(store)
+    registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
+
+    await expect(
+      handlers.get('missions:create')!(
+        {},
+        {
+          name: 'Referral',
+          branchName: 'mission/bad..ref',
+          repoIds: ['r1']
+        }
+      )
+    ).rejects.toThrow('invalid_mission_create_args')
+    expect(createMission).not.toHaveBeenCalled()
+    expect(store.getMissions()).toEqual([])
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
   it.each([
     { label: 'SSH', repoIds: ['r1', 'ssh'] },
     { label: 'missing', repoIds: ['r1', 'ghost'] }

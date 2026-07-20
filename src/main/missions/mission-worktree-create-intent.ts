@@ -53,6 +53,20 @@ function pathsMatch(left: string, right: string): boolean {
   return areWorktreePathsEqual(left, right)
 }
 
+function fsyncIntentDirectory(filePath: string): void {
+  // Why: Node cannot open/fsync directories on Windows; linkSync remains the
+  // atomic publish boundary there, while POSIX can durably commit its metadata.
+  if (process.platform === 'win32') {
+    return
+  }
+  const directory = openSync(path.dirname(filePath), 'r')
+  try {
+    fsyncSync(directory)
+  } finally {
+    closeSync(directory)
+  }
+}
+
 function assertIntentIdentity(
   root: MissionRootOwnership,
   intent: MissionWorktreeCreateIntent
@@ -168,6 +182,7 @@ export function writeMissionWorktreeCreateIntent(args: {
     // Why: publish the fully flushed intent without replacing a concurrent or
     // crash-left operation that must be recovered first.
     linkSync(temporaryPath, filePath)
+    fsyncIntentDirectory(filePath)
     return intent
   } catch (error) {
     throw new Error('mission_member_worktree_create_intent_write_failed', { cause: error })

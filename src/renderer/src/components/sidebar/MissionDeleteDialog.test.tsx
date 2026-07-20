@@ -116,6 +116,35 @@ describe('MissionDeleteDialog', () => {
     expect(rendered.querySelector('[role="status"]')).not.toBeNull()
   })
 
+  it('renders duplicate failure messages without duplicate React keys', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      mocks.deleteMission.mockResolvedValue({
+        deleted: false,
+        memberResults: [
+          { repoId: 'r1', worktreeId: 'wt-1', error: 'uncommitted changes' },
+          { repoId: 'r1', worktreeId: 'wt-2', error: 'uncommitted changes' }
+        ]
+      })
+      const rendered = renderDialog(makeMission('m1', 'Referral'))
+
+      await act(async () => {
+        getDeleteButton(rendered).click()
+      })
+
+      expect(
+        Array.from(rendered.querySelectorAll('li')).filter(
+          (item) => item.textContent === 'r1: uncommitted changes'
+        )
+      ).toHaveLength(2)
+      expect(
+        consoleError.mock.calls.some(([message]) => String(message).includes('same key'))
+      ).toBe(false)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   it('reseeds the failure banner and worktree checkbox on the next open', async () => {
     mocks.deleteMission.mockResolvedValue({ deleted: false, memberResults: [] })
     let rendered = renderDialog(makeMission('m1', 'Referral'))

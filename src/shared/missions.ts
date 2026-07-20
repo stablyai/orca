@@ -1,4 +1,5 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from './execution-host'
+import { isValidGitBranchName } from './git-branch-name'
 import { isFolderRepo } from './repo-kind'
 import { isTuiAgent } from './tui-agent-config'
 import type { Mission, MissionMember, Repo } from './types'
@@ -99,7 +100,14 @@ function normalizeMissionBranchName(
   missionId: string
 ): string {
   const trimmed = branchName?.trim()
-  return trimmed && trimmed.length > 0 ? trimmed : slugifyMissionBranch(name, missionId)
+  if (!trimmed) {
+    return slugifyMissionBranch(name, missionId)
+  }
+  // Why: Store.createMission persists immediately, before per-repo Git worktree validation runs.
+  if (!isValidGitBranchName(trimmed)) {
+    throw new Error('invalid_mission_branch_name')
+  }
+  return trimmed
 }
 
 export function createMission(input: {

@@ -1,8 +1,11 @@
 import { execFileSync } from 'node:child_process'
 import {
   existsSync,
+  fsyncSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -10,7 +13,7 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitWorktreeInfo } from '../../shared/types'
 import { ensureMissionRoot, removeMissionRoot } from './mission-root'
 import {
@@ -21,6 +24,22 @@ import {
   type MissionRootOwnership
 } from './mission-worktree-create-intent'
 import { readMissionWorktreeOwnershipMarker } from './mission-worktree-ownership-marker'
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<
+    Record<string, unknown> & {
+      fsyncSync: typeof fsyncSync
+      linkSync: typeof linkSync
+      openSync: typeof openSync
+    }
+  >()
+  return {
+    ...actual,
+    fsyncSync: vi.fn(actual.fsyncSync),
+    linkSync: vi.fn(actual.linkSync),
+    openSync: vi.fn(actual.openSync)
+  }
+})
 
 let temporaryDirectory: string
 let repoPath: string
@@ -72,6 +91,7 @@ beforeEach(() => {
     missionId: 'mission-1'
   }
   ensureMissionRoot({ ...root, links: [] })
+  vi.clearAllMocks()
 })
 
 afterEach(() => {
@@ -79,6 +99,42 @@ afterEach(() => {
 })
 
 describe('Mission worktree create intent', () => {
+  it.skipIf(process.platform === 'win32')(
+    'fsyncs the parent directory after publishing an intent on POSIX',
+    () => {
+      const worktreePath = path.join(root.rootPath, 'repo-durable')
+
+      writeIntent({ branchName: 'mission/durable', worktreePath })
+
+      expect(vi.mocked(openSync).mock.calls).toHaveLength(2)
+      expect(vi.mocked(openSync).mock.calls[1]).toEqual([root.rootPath, 'r'])
+      expect(vi.mocked(fsyncSync)).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(linkSync).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(fsyncSync).mock.invocationCallOrder[1]
+      )
+    }
+  )
+
+  it('does not require unsupported directory fsync when publishing on Windows', () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    if (!platformDescriptor) {
+      throw new Error('process_platform_descriptor_missing')
+    }
+    Object.defineProperty(process, 'platform', { ...platformDescriptor, value: 'win32' })
+    try {
+      const worktreePath = path.join(root.rootPath, 'repo-windows')
+
+      const intent = writeIntent({ branchName: 'mission/windows', worktreePath })
+
+      expect(readMissionWorktreeCreateIntent(root, 'repo-1')).toEqual(intent)
+      expect(vi.mocked(openSync)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(fsyncSync)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(linkSync)).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
+  })
+
   it('adopts an add-complete checkout and publishes its ownership marker', () => {
     const worktreePath = path.join(root.rootPath, 'repo-1')
     writeIntent({ branchName: 'mission/task', worktreePath })

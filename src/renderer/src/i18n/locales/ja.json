@@ -4343,7 +4343,7 @@
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
           "sidebarRowMissing": "対象はもう存在しません",
-          "failedUnnestWorkspace": "ワークスペースの展開に失敗しました",
+          "failedUnnestWorkspace": "ワークスペースのネスト解除に失敗しました",
           "3a2edfac81": "ミッションに追加"
         },
         "WorktreeMetaDialog": {

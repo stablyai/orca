@@ -4362,7 +4362,7 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo",
+          "failedUnnestWorkspace": "No se pudo desanidar el espacio de trabajo",
           "3a2edfac81": "Añadir a misión"
         },
         "WorktreeMetaDialog": {

@@ -145,8 +145,8 @@ export function MissionDeleteDialog({
             </p>
             {failureMessages.length > 0 ? (
               <ul className="max-h-24 list-disc space-y-0.5 overflow-y-auto pl-4 scrollbar-sleek">
-                {failureMessages.map((message) => (
-                  <li key={message} className="break-words">
+                {failureMessages.map((message, index) => (
+                  <li key={`${index}:${message}`} className="break-words">
                     {message}
                   </li>
                 ))}

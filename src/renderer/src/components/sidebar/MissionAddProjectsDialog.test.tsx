@@ -209,4 +209,33 @@ describe('MissionAddProjectsDialog', () => {
     expect(rendered.textContent).toContain('Could not add projects. Try again.')
     expect(mocks.onOpenChange).not.toHaveBeenCalled()
   })
+
+  it('recovers from a rejected add request and leaves the mounted dialog retryable', async () => {
+    mocks.repos = [{ id: 'local', path: '/repos/local', displayName: 'Local' }]
+    mocks.addMissionMembers
+      .mockRejectedValueOnce(new Error('transport unavailable'))
+      .mockResolvedValueOnce({ mission: MISSION, memberResults: [] })
+    const rendered = renderDialog()
+
+    act(() => {
+      rendered.querySelector<HTMLButtonElement>('[data-testid="repo-picker"]')?.click()
+    })
+    const addButton = Array.from(rendered.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Add'
+    )
+    expect(addButton).not.toBeUndefined()
+    await act(async () => addButton?.click())
+
+    expect(mocks.addMissionMembers).toHaveBeenCalledWith('mission-1', ['local'])
+    expect(rendered.textContent).toContain('Could not add projects. Try again.')
+    expect(addButton?.textContent).toBe('Add')
+    expect(addButton?.disabled).toBe(false)
+    expect(mocks.onOpenChange).not.toHaveBeenCalled()
+
+    await act(async () => addButton?.click())
+
+    expect(mocks.addMissionMembers).toHaveBeenCalledTimes(2)
+    expect(mocks.onOpenChange).toHaveBeenCalledWith(false)
+    expect(rendered.textContent).not.toContain('Could not add projects. Try again.')
+  })
 })

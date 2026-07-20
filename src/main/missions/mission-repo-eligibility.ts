@@ -1,7 +1,5 @@
 import type { Repo } from '../../shared/types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { isFolderRepo } from '../../shared/repo-kind'
-import { isWslUncPath } from '../../shared/wsl-paths'
+import { isMissionEligibleRepo } from '../../shared/missions'
 import { resolveLocalProjectRuntimeForRepo } from '../local-project-runtime-resolution'
 import type { Store } from '../persistence'
 
@@ -10,12 +8,7 @@ export const MISSION_NATIVE_LOCAL_ONLY_ERROR = 'mission_native_local_git_repos_o
 /** Mission roots are native filesystem projections in V1. A repo is eligible
  * only when both Git and the session run on the current native host. */
 export function isNativeLocalMissionRepo(store: Store, repo: Repo): boolean {
-  if (
-    isFolderRepo(repo) ||
-    Boolean(repo.connectionId) ||
-    getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
-    isWslUncPath(repo.path)
-  ) {
+  if (!isMissionEligibleRepo(repo)) {
     return false
   }
 

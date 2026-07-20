@@ -1,9 +1,15 @@
 import { z } from 'zod'
+import { isValidGitBranchName } from '../../shared/git-branch-name'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 
 export const MissionCreateArgs = z.object({
   name: z.string().min(1),
-  branchName: z.string().min(1).optional(),
+  // Why: reject untrusted IPC before Store.createMission can persist an unusable Mission.
+  branchName: z
+    .string()
+    .min(1)
+    .refine((value) => !value.trim() || isValidGitBranchName(value.trim()))
+    .optional(),
   repoIds: z.array(z.string().min(1)).min(1),
   sessionAgent: z.string().refine(isTuiAgent).optional()
 })
@@ -11,8 +17,8 @@ export const MissionCreateArgs = z.object({
 export const MissionUpdateArgs = z.object({
   missionId: z.string().min(1),
   updates: z.object({
-    name: z.string().optional(),
-    tabOrder: z.number().finite().optional()
+    name: z.string().min(1).optional(),
+    tabOrder: z.number().optional()
   })
 })
 

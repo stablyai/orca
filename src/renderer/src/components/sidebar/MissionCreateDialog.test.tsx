@@ -163,12 +163,20 @@ describe('MissionCreateDialog', () => {
   it('hands eligible group bulk-select options to the project picker', () => {
     mocks.projectGroups = [
       { id: 'g1', name: 'Platform', parentGroupId: null },
-      { id: 'g2', name: 'Nested', parentGroupId: 'g1' }
+      { id: 'g2', name: 'Nested', parentGroupId: 'g1' },
+      { id: 'g3', name: 'Folders only', parentGroupId: null }
     ]
     mocks.repos = [
       { id: 'r1', path: '/repos/dashboard', displayName: 'Dashboard', projectGroupId: 'g1' },
       { id: 'r2', path: '/repos/docs', displayName: 'Docs', projectGroupId: 'g2' },
-      { id: 'r3', path: '/repos/loose', displayName: 'Loose' }
+      { id: 'r3', path: '/repos/loose', displayName: 'Loose' },
+      {
+        id: 'r4',
+        path: '/repos/folder',
+        displayName: 'Folder',
+        kind: 'folder',
+        projectGroupId: 'g3'
+      }
     ]
     renderDialog()
 
