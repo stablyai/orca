@@ -52,6 +52,21 @@ describe('codex account auth warning', () => {
     ).toContain('access token could not be refreshed')
   })
 
+  it('does not warn an API-key-only account when rate limits need chatgpt auth', () => {
+    // Why: the app-server rejects account/rateLimits/read with this message for
+    // an account signed in via OPENAI_API_KEY only. That account is validly
+    // authenticated and must not surface a destructive re-auth banner (#8765).
+    expect(
+      getCodexAccountAuthWarning({
+        limits: codexLimits('chatgpt authentication required to read rate limits'),
+        target: { runtime: 'host', wslDistro: null },
+        runtime: { runtime: 'host' },
+        activeAccountId: 'account-1',
+        accountId: 'account-1'
+      })
+    ).toBeNull()
+  })
+
   it('does not warn for inactive accounts or a different runtime', () => {
     const limits = codexLimits(
       'Your access token could not be refreshed. Please log out and sign in again.'
