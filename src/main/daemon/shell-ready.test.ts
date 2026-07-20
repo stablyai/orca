@@ -378,16 +378,21 @@ describePosix('daemon shell-ready launch config', () => {
   )
 
   itWithZsh(
-    'still runs user add-zle-hook-widget line-init hooks after the marker',
+    'waits for user add-zle-hook-widget line-init hooks before emitting the marker',
     async () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-azhw-'))
-      const userHookOutput = 'ORCA-TEST-USER-HOOK'
+      const userHookStarted = 'ORCA-TEST-USER-HOOK-STARTED'
+      const userHookFinished = 'ORCA-TEST-USER-HOOK-FINISHED'
       writeFileSync(
         join(tempHome, '.zshrc'),
         [
-          `__orca_test_line_init_hook() { printf "${userHookOutput}" }`,
+          '__orca_test_line_init_hook() {',
+          `  printf "${userHookStarted}"`,
+          '  sleep 0.1',
+          `  printf "${userHookFinished}"`,
+          '}',
           'autoload -Uz add-zle-hook-widget',
           'zle -N __orca_test_line_init_hook',
           'add-zle-hook-widget line-init __orca_test_line_init_hook',
@@ -399,14 +404,15 @@ describePosix('daemon shell-ready launch config', () => {
           tempHome,
           wrapperZdotdir: config.env.ZDOTDIR,
           isDone: (current) =>
-            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
+            current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookFinished)
         })
         // Why: the marker widget chains to the previously installed widget, so
-        // an azhw dispatcher registered by user config must keep dispatching.
+        // a slow azhw dispatcher must finish before Orca can safely type input.
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
-        expect(output).toContain(userHookOutput)
-        expect(output.indexOf(SHELL_READY_MARKER_OUTPUT)).toBeLessThan(
-          output.indexOf(userHookOutput)
+        expect(output).toContain(userHookStarted)
+        expect(output).toContain(userHookFinished)
+        expect(output.indexOf(userHookFinished)).toBeLessThan(
+          output.indexOf(SHELL_READY_MARKER_OUTPUT)
         )
       } finally {
         rmSync(tempHome, { recursive: true, force: true })
@@ -445,8 +451,8 @@ describePosix('daemon shell-ready launch config', () => {
         })
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output).toContain(userHookOutput)
-        expect(output.indexOf(SHELL_READY_MARKER_OUTPUT)).toBeLessThan(
-          output.indexOf(userHookOutput)
+        expect(output.indexOf(userHookOutput)).toBeLessThan(
+          output.indexOf(SHELL_READY_MARKER_OUTPUT)
         )
         // Why: idempotent — the marker must fire exactly once per prompt, not
         // duplicated by the second registration.

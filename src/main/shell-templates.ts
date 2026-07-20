@@ -130,8 +130,8 @@ fi
 // when an earlier hook exits non-zero, and a pre-existing raw user widget
 // (e.g. oh-my-zsh vi-mode without VI_MODE_SET_CURSOR) is preserved as the
 // first hook and fails — silently suppressing the marker and stalling every
-// startup command on the pre-ready timeout. Instead, own zle-line-init: emit
-// the marker first, then chain to whatever widget was installed before.
+// startup command on the pre-ready timeout. Instead, own zle-line-init, run
+// the prior widget ourselves, then emit the marker even if that widget fails.
 export function getZshShellReadyMarkerRegistrationBlock(escapedMarker: string): string {
   return `if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   # Why: capture the prior zle-line-init so the marker chains to it. On a
@@ -148,12 +148,13 @@ export function getZshShellReadyMarkerRegistrationBlock(escapedMarker: string): 
     __orca_prev_line_init_fn=""
   fi
   __orca_prompt_mark() {
-    printf "${escapedMarker}"
     # Why: call the prior hook as a plain function, not an aliased widget, so
-    # $WIDGET stays zle-line-init for add-zle-hook-widget dispatchers.
+    # $WIDGET stays zle-line-init for add-zle-hook-widget dispatchers. Readiness
+    # comes afterward because a slow hook means zle cannot accept input yet.
     if [[ -n "\${__orca_prev_line_init_fn:-}" ]]; then
-      "\${__orca_prev_line_init_fn}" "$@"
+      "\${__orca_prev_line_init_fn}" "$@" || true
     fi
+    printf "${escapedMarker}"
   }
   zle -N zle-line-init __orca_prompt_mark
 fi
