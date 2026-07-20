@@ -6,7 +6,7 @@ import { errorMessage } from './session-scanner-values'
 
 export async function discoverFiles(args: {
   rootDir: string
-  limit: number
+  limit?: number
   agent: AiVaultAgent
   issues: AiVaultScanIssue[]
   extensions: string[]
@@ -35,10 +35,11 @@ export async function discoverFiles(args: {
       args.issues.push({ agent: args.agent, path, message: errorMessage(err) })
     }
   }
+  const sortedFiles = files.sort((left, right) => right.mtimeMs - left.mtimeMs)
   return {
     agent: args.agent,
     rootDir: args.rootDir,
-    files: files.sort((left, right) => right.mtimeMs - left.mtimeMs).slice(0, args.limit)
+    files: typeof args.limit === 'number' ? sortedFiles.slice(0, args.limit) : sortedFiles
   }
 }
 

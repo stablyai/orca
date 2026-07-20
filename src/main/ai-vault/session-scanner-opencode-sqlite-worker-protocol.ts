@@ -10,6 +10,7 @@ export type OpenCodeSqliteListRequest = {
   kind: 'list'
   dbPaths: readonly string[]
   limit: number
+  source?: 'opencode'
 }
 
 export type OpenCodeSqliteParseRequest = {
@@ -18,9 +19,39 @@ export type OpenCodeSqliteParseRequest = {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  source?: 'opencode'
 }
 
-export type OpenCodeSqliteWorkerRequest = OpenCodeSqliteListRequest | OpenCodeSqliteParseRequest
+export type HermesSqliteListRequest = {
+  id: number
+  kind: 'list'
+  dbPaths: readonly string[]
+  limit?: number
+  profileNames?: readonly (string | null)[]
+  source: 'hermes'
+}
+
+export type HermesSqliteParseRequest = {
+  id: number
+  kind: 'parse'
+  dbPath: string
+  sessionId: string
+  platform: NodeJS.Platform
+  profileName?: string | null
+  source: 'hermes'
+}
+
+export type OpenCodeSqliteWorkerRequest =
+  | OpenCodeSqliteListRequest
+  | OpenCodeSqliteParseRequest
+  | HermesSqliteListRequest
+  | HermesSqliteParseRequest
+
+export type OpenCodeSqliteWorkerRequestBody =
+  | Omit<OpenCodeSqliteListRequest, 'id'>
+  | Omit<OpenCodeSqliteParseRequest, 'id'>
+  | Omit<HermesSqliteListRequest, 'id'>
+  | Omit<HermesSqliteParseRequest, 'id'>
 
 // The list leg returns candidates plus the issues it accumulated; the worker
 // mutates a local array and hands it back so the caller can merge it into the

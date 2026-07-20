@@ -114,6 +114,9 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       grokSessionsDir: join(root, 'grok-sessions'),
       devinTranscriptsDir: join(root, 'devin-transcripts'),
       hermesSessionsDir: join(root, 'hermes-sessions'),
+      // Keep this Codex-only fixture hermetic: never discover the user's real
+      // ~/.hermes/state.db while asserting unrelated scan issues.
+      hermesDbPaths: [],
       rovoSessionsDir: join(root, 'rovo-sessions'),
       openclawStateDir: join(root, 'openclaw-state'),
       openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),

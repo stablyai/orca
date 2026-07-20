@@ -272,16 +272,17 @@ export async function consumeOpenCodeMessages(
 
 export async function parseHermesSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  options: ParserSessionOptions & { profileName?: string | null } = {}
 ): Promise<AiVaultSession | null> {
-  return parseHermesSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+  return parseHermesSessionContent(file, await readFile(file.path, 'utf-8'), platform, options)
 }
 
 export async function parseHermesSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {}
+  options: ParserSessionOptions & { profileName?: string | null } = {}
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {

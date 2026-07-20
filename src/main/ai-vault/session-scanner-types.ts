@@ -25,6 +25,10 @@ export type AiVaultScanOptions = {
   grokSessionsDir?: string
   devinTranscriptsDir?: string
   hermesSessionsDir?: string
+  hermesHomeDir?: string
+  hermesDbPath?: string
+  hermesDbPaths?: readonly string[]
+  hermesProfileName?: string
   rovoSessionsDir?: string
   openclawStateDir?: string
   openclawLegacyStateDir?: string
@@ -61,6 +65,7 @@ export type SessionFileCandidate = {
   agent: AiVaultAgent
   file: FileWithMtime
   codexHome: string | null
+  profileName?: string
   antigravityHistoryPath?: string
 }
 
@@ -68,6 +73,8 @@ export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  profileName?: string
+  profileNamesByFilePath?: Readonly<Record<string, string>>
 }
 
 export type SessionParseResult = {

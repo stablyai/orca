@@ -79,6 +79,7 @@ export function finalizeSession(
     codexHome?: string | null
     executionHostId?: ExecutionHostId
     executionHostPlatform?: NodeJS.Platform | null
+    profileName?: string | null
   } = {}
 ): AiVaultSession | null {
   const sessionId = accumulator.sessionId.trim()
@@ -103,6 +104,7 @@ export function finalizeSession(
     title,
     cwd: accumulator.cwd,
     branch: accumulator.branch,
+    ...(options.profileName !== undefined ? { profileName: options.profileName } : {}),
     model: accumulator.model,
     filePath: accumulator.filePath,
     codexHome: accumulator.agent === 'codex' ? (options.codexHome ?? null) : null,
@@ -120,6 +122,7 @@ export function finalizeSession(
       resumeFilePath: accumulator.filePath,
       cwd: accumulator.cwd,
       platform,
+      profileName: options.profileName,
       codexHome: options.codexHome
     }),
     subagent: null

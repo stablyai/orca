@@ -6,7 +6,11 @@ import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
-import { parseOpenCodeSqliteSessionViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
+import {
+  parseHermesSqliteSessionViaWorker,
+  parseOpenCodeSqliteSessionViaWorker
+} from './session-scanner-opencode-sqlite-worker-spawn'
+import { splitHermesSqliteCandidate } from './session-scanner-hermes-sqlite-paths'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
@@ -60,8 +64,20 @@ export async function parseAgentSessionFile(
     }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform)
-    case 'hermes':
-      return parseHermesSessionFile(candidate.file, platform)
+    case 'hermes': {
+      const sqliteCandidate = splitHermesSqliteCandidate(candidate.file.path)
+      if (sqliteCandidate) {
+        return parseHermesSqliteSessionViaWorker({
+          dbPath: sqliteCandidate.dbPath,
+          sessionId: sqliteCandidate.sessionId,
+          platform,
+          profileName: candidate.profileName
+        })
+      }
+      return parseHermesSessionFile(candidate.file, platform, {
+        profileName: candidate.profileName
+      })
+    }
     case 'rovo':
       return parseRovoSessionFile(candidate.file, platform)
     case 'openclaw':
