@@ -78,6 +78,52 @@ function PetStatusSegmentInner(): React.JSX.Element {
     }
   }
 
+  const handleSeedPetdexStarter = async (): Promise<void> => {
+    if (!window.api?.pet?.seedPetdexStarter) {
+      toast.error(
+        translate(
+          'auto.components.status.bar.PetStatusSegment.seed-needs-restart',
+          'Petdex seed needs a full app restart (not just reload).'
+        )
+      )
+      return
+    }
+    try {
+      toast.message(
+        translate(
+          'auto.components.status.bar.PetStatusSegment.seed-start',
+          'Installing Petdex starter pack…'
+        )
+      )
+      const models = await window.api.pet.seedPetdexStarter()
+      for (const model of models) {
+        addCustomPet(model)
+      }
+      if (models[0]) {
+        if (!petVisible) {
+          setPetVisible(true)
+        }
+        setPetId(models[0].id)
+      }
+      toast.success(
+        translate(
+          'auto.components.status.bar.PetStatusSegment.seed-done',
+          'Installed {count} Petdex pets'
+        ).replace('{count}', String(models.length))
+      )
+    } catch (error) {
+      console.error('[pet-overlay] petdex seed error', error)
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.status.bar.PetStatusSegment.seed-fail',
+              'Petdex seed failed'
+            )
+      )
+    }
+  }
+
   const handleImportPetBundle = async (): Promise<void> => {
     if (!window.api?.pet?.importPetBundle) {
       toast.error(
@@ -267,6 +313,17 @@ function PetStatusSegmentInner(): React.JSX.Element {
                 {translate(
                   'auto.components.status.bar.PetStatusSegment.ed176ad68f',
                   'Import .codex-pet bundle…'
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleSeedPetdexStarter()
+                }}
+              >
+                <PackageOpen className="size-3.5" aria-hidden />
+                {translate(
+                  'auto.components.status.bar.PetStatusSegment.seed-petdex',
+                  'Install Petdex starter pack…'
                 )}
               </DropdownMenuItem>
             </DropdownMenuSubContent>

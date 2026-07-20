@@ -13,6 +13,7 @@ import {
   type PetManifestLike,
   type ResolvedPetManifest
 } from './pet-bundle'
+import { installPetdexStarterPack } from '../pet/petdex-install'
 
 // Why: image-only pet uploads. Static + animated variants render natively
 // via <img>, so no 3D engine is needed. Main owns the accepted-format table as
@@ -258,6 +259,24 @@ export function registerPetHandlers(): void {
       mimeType: classified.mimeType,
       kind: 'image'
     }
+  })
+
+  /**
+   * Install the curated Petdex starter pack into userData/sidekicks/custom.
+   * Returns the new CustomPet index rows — renderer merges into store + UI.
+   */
+  ipcMain.handle('pet:seedPetdexStarter', async (): Promise<CustomPet[]> => {
+    const customPetsDir = getPetsDir()
+    const result = await installPetdexStarterPack({
+      customPetsDir,
+      onProgress: (msg) => console.log(`[petdex-seed] ${msg}`)
+    })
+    if (result.installed.length === 0) {
+      throw new Error(
+        `Petdex seed installed 0 pets (${result.skipped.length} skipped). Check network / petdex.dev.`
+      )
+    }
+    return result.installed
   })
 
   ipcMain.handle('pet:importPetBundle', async (event): Promise<CustomPet | null> => {

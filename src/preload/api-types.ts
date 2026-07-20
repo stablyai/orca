@@ -2342,6 +2342,8 @@ export type PreloadApi = {
   pet: {
     import: () => Promise<CustomPet | null>
     importPetBundle: () => Promise<CustomPet | null>
+    /** Install curated Petdex starter pack into sidekicks/custom; returns new index rows. */
+    seedPetdexStarter: () => Promise<CustomPet[]>
     read: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<ArrayBuffer | null>
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
   }
