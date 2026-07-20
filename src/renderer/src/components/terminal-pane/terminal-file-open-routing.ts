@@ -197,10 +197,11 @@ export function openDetectedFilePath(
     )
 
     if (line !== null) {
-      let fileId: string | undefined
+      const openedStore = useAppStore.getState()
+      // Why: scope the reveal to the opened editor tab id so owner-qualified tabs
+      // across local/SSH/runtime contexts get it instead of an ambiguous path key.
+      const fileId = openedStore.activeFileIdByWorktree[worktreeId] ?? mappedFilePath
       if (language === 'markdown') {
-        const openedStore = useAppStore.getState()
-        fileId = openedStore.activeFileIdByWorktree[worktreeId] ?? mappedFilePath
         // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
         openedStore.setMarkdownViewMode(fileId, 'source')
       }
@@ -212,7 +213,7 @@ export function openDetectedFilePath(
         }
         store.setPendingEditorReveal({
           filePath: mappedFilePath,
-          ...(fileId ? { fileId } : {}),
+          fileId,
           line,
           column: targetColumn,
           matchLength: 0
