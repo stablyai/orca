@@ -26,6 +26,9 @@ export type ParsableShellKind = 'bash' | 'zsh'
  *  Mirrors resolveShellKind's basename + prefix match (src/main/terminal-history.ts)
  *  but restricted to the two shells this renderer knows how to parse — kept
  *  renderer-local (no node:path) so it works under contextIsolation. */
+// Why: unused in production since shell-kind resolution moved main-side into
+// readTerminalHistoryFile; kept for the planned WSL/SSH follow-up that will
+// need renderer-side resolution again — see task-10 report.
 export function resolveParsableShellKindFromPath(shellPath: string): ParsableShellKind | null {
   const name = shellPath.split(/[/\\]/).pop()?.toLowerCase() ?? ''
   if (name.startsWith('zsh')) {

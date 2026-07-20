@@ -75,11 +75,7 @@ describe('createTerminalAutosuggestLineTracker', () => {
   })
 
   it('captures the prompt-end column and reads the line up to the cursor', () => {
-    const terminal = makeFakeTerminal('$ git st', 8)
-    const tracker = createTerminalAutosuggestLineTracker(terminal)
-    tracker.onPromptEndFact() // cursor is at col 2 ("$ " prompt) when ;B fires — simulate via a second fake
-    // Re-simulate: prompt-end fires when cursor is right after "$ " (col 2); user has since typed up to col 8.
-    // For this unit test we directly drive the two-phase capture:
+    // Prompt-end fires when cursor is right after "$ " (col 2).
     const promptOnlyTerminal = makeFakeTerminal('$ ', 2)
     const tracker2 = createTerminalAutosuggestLineTracker(promptOnlyTerminal)
     tracker2.onPromptEndFact()
