@@ -4811,7 +4811,11 @@
           "canvasSplitRight": "Add to canvas (split right)",
           "canvasSplitDown": "Add to canvas (split down)",
           "deleteLayout": "Delete layout",
-          "layouts": "Layouts"
+          "layouts": "Layouts",
+          "renamePanel": "Rename"
+        },
+        "SidebarPanelRows": {
+          "renameLabel": "Rename"
         }
       },
       "shared": {

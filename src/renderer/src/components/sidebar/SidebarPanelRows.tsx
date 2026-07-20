@@ -11,6 +11,49 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { Input } from '@/components/ui/input'
+
+/** Inline title editor shown in place of a row while renaming. Commits on
+ *  Enter/blur, cancels on Escape; empty titles cancel instead of committing. */
+function RowRenameInput({
+  initialTitle,
+  indentClass,
+  onCommit,
+  onDone
+}: {
+  initialTitle: string
+  indentClass?: string
+  onCommit: (title: string) => void
+  onDone: () => void
+}): React.JSX.Element {
+  const [title, setTitle] = React.useState(initialTitle)
+  const commit = (): void => {
+    const trimmed = title.trim()
+    if (trimmed.length > 0 && trimmed !== initialTitle) {
+      onCommit(trimmed)
+    }
+    onDone()
+  }
+  return (
+    <div className={cn('flex w-full items-center py-0.5 pr-2', indentClass ?? 'pl-2')}>
+      <Input
+        autoFocus
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commit()
+          } else if (event.key === 'Escape') {
+            onDone()
+          }
+        }}
+        className="h-6 w-full text-[13px]"
+        aria-label={translate('auto.components.sidebar.SidebarPanelRows.renameLabel', 'Rename')}
+      />
+    </div>
+  )
+}
 
 function sortableRowStyle(
   transform: { x: number; y: number } | null,
@@ -29,10 +72,12 @@ function sortableRowStyle(
 function PanelCanvasContextMenu({
   kind,
   panelId,
+  onRename,
   children
 }: {
   kind: 'terminal' | 'web'
   panelId: string
+  onRename: () => void
   children: React.ReactNode
 }): React.JSX.Element {
   const openPanelInCanvas = useAppStore((s) => s.openPanelInCanvas)
@@ -40,6 +85,9 @@ function PanelCanvasContextMenu({
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent>
+        <ContextMenuItem onSelect={onRename}>
+          {translate('auto.components.sidebar.SidebarPanelsNav.renamePanel', 'Rename')}
+        </ContextMenuItem>
         <ContextMenuItem onSelect={() => openPanelInCanvas({ kind, panelId }, 'row')}>
           {translate(
             'auto.components.sidebar.SidebarPanelsNav.canvasSplitRight',
@@ -69,8 +117,25 @@ export function SortableWebPanelButton({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: panel.id
   })
+  const [renaming, setRenaming] = React.useState(false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  if (renaming) {
+    return (
+      <RowRenameInput
+        initialTitle={panel.title}
+        indentClass="pl-8"
+        onCommit={(title) => {
+          const panels = useAppStore.getState().settings?.pinnedWebPanels ?? []
+          void updateSettings({
+            pinnedWebPanels: panels.map((p) => (p.id === panel.id ? { ...p, title } : p))
+          })
+        }}
+        onDone={() => setRenaming(false)}
+      />
+    )
+  }
   return (
-    <PanelCanvasContextMenu kind="web" panelId={panel.id}>
+    <PanelCanvasContextMenu kind="web" panelId={panel.id} onRename={() => setRenaming(true)}>
       <button
         ref={setNodeRef}
         style={sortableRowStyle(transform, transition)}
@@ -111,8 +176,25 @@ export function SortableTerminalPanelButton({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: panel.id
   })
+  const [renaming, setRenaming] = React.useState(false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  if (renaming) {
+    return (
+      <RowRenameInput
+        initialTitle={panel.title}
+        indentClass={nested ? 'pl-8' : 'pl-2'}
+        onCommit={(title) => {
+          const panels = useAppStore.getState().settings?.pinnedTerminalPanels ?? []
+          void updateSettings({
+            pinnedTerminalPanels: panels.map((p) => (p.id === panel.id ? { ...p, title } : p))
+          })
+        }}
+        onDone={() => setRenaming(false)}
+      />
+    )
+  }
   return (
-    <PanelCanvasContextMenu kind="terminal" panelId={panel.id}>
+    <PanelCanvasContextMenu kind="terminal" panelId={panel.id} onRename={() => setRenaming(true)}>
       <button
         ref={setNodeRef}
         style={sortableRowStyle(transform, transition)}
@@ -151,6 +233,22 @@ export function PanelLayoutButton({
   onOpen: (layout: PanelLayout) => void
   onDelete: (layoutId: string) => void
 }): React.JSX.Element {
+  const [renaming, setRenaming] = React.useState(false)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  if (renaming) {
+    return (
+      <RowRenameInput
+        initialTitle={layout.title}
+        onCommit={(title) => {
+          const layouts = useAppStore.getState().settings?.panelLayouts ?? []
+          void updateSettings({
+            panelLayouts: layouts.map((l) => (l.id === layout.id ? { ...l, title } : l))
+          })
+        }}
+        onDone={() => setRenaming(false)}
+      />
+    )
+  }
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -173,6 +271,9 @@ export function PanelLayoutButton({
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        <ContextMenuItem onSelect={() => setRenaming(true)}>
+          {translate('auto.components.sidebar.SidebarPanelsNav.renamePanel', 'Rename')}
+        </ContextMenuItem>
         <ContextMenuItem variant="destructive" onSelect={() => onDelete(layout.id)}>
           {translate('auto.components.sidebar.SidebarPanelsNav.deleteLayout', 'Delete layout')}
         </ContextMenuItem>
