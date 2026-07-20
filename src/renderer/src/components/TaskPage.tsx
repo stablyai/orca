@@ -9323,7 +9323,7 @@ export default function TaskPage(): React.JSX.Element {
                   // Why: per-repo partial-failure signal — distinct from a hard
                   // IPC reject (tasksError). The two are mutually exclusive.
                   <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
-                    {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}
+                    {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}{' '}
                     {selectedRepos.length}{' '}
                     {translate('auto.components.TaskPage.d1766fd62d', 'projects failed to load')}
                   </div>

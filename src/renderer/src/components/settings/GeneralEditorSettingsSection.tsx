@@ -170,7 +170,7 @@ export function GeneralEditorSettingsSection({
             {translate(
               'auto.components.settings.GeneralEditorSettingsSection.8112cd6dcf',
               'How long Orca waits after your last edit before saving automatically. First launch defaults to'
-            )}
+            )}{' '}
             {DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS}{' '}
             {translate('auto.components.settings.GeneralEditorSettingsSection.fc5c5306ff', 'ms.')}
           </p>
