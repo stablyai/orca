@@ -60,6 +60,9 @@ import { TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
+import { TerminalAutosuggestOverlay } from './TerminalAutosuggestOverlay'
+import type { PaneAutosuggestAccess } from './pty-connection'
+import type { ActiveAutosuggestState } from './terminal-autosuggest-active-state'
 import NativeChatView from '../native-chat/NativeChatView'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
@@ -393,6 +396,9 @@ export default function TerminalPane({
   // Why: pane reorders can move panes without changing count or size, so
   // overlay rects need an explicit layout-change render trigger.
   const [paneLayoutRevision, setPaneLayoutRevision] = useState(0)
+  // Why: ghost-text command suggestion for the focused pane, derived from that
+  // pane's binding and recomputed on prompt/cursor/resize events (see effect).
+  const [autosuggestState, setAutosuggestState] = useState<ActiveAutosuggestState | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const searchOpenRef = useRef(false)
   searchOpenRef.current = searchOpen
@@ -1866,6 +1872,63 @@ export default function TerminalPane({
 
   useTerminalFontZoom({ isActive, containerRef, managerRef, paneFontSizesRef, settingsRef })
 
+  const autosuggestEnabled = settings?.terminalAutosuggestEnabled !== false
+
+  const getPaneAutosuggestBinding = useCallback(
+    (paneId: number): PaneAutosuggestAccess | undefined =>
+      panePtyBindingsRef.current.get(paneId) as PaneAutosuggestAccess | undefined,
+    [panePtyBindingsRef]
+  )
+
+  // Why: gates the bare RightArrow/End accept shortcut — only the focused pane's
+  // live suggestion (already end-of-line-scoped by computeActiveAutosuggestState).
+  const hasActiveAutosuggestAtEndOfLine = useCallback((): boolean => {
+    if (!autosuggestEnabled) {
+      return false
+    }
+    const manager = managerRef.current
+    const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    if (!activePane) {
+      return false
+    }
+    return getPaneAutosuggestBinding(activePane.id)?.getAutosuggestActiveState() != null
+  }, [autosuggestEnabled, managerRef, getPaneAutosuggestBinding])
+
+  const getAutosuggestRemainderForPane = useCallback(
+    (paneId: number): string | null =>
+      getPaneAutosuggestBinding(paneId)?.getAutosuggestActiveState()?.remainder ?? null,
+    [getPaneAutosuggestBinding]
+  )
+
+  // Why: subscribe the overlay to the focused pane's binding, re-subscribing when
+  // focus moves (paneLayoutRevision) or panes change (paneCount). The binding
+  // fans in prompt-transition, cursor-move, and resize events so the ghost text
+  // tracks typing and clears on a stale pixel offset.
+  useEffect(() => {
+    if (!autosuggestEnabled) {
+      setAutosuggestState(null)
+      return
+    }
+    const manager = managerRef.current
+    const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+    if (!activePane) {
+      setAutosuggestState(null)
+      return
+    }
+    const binding = getPaneAutosuggestBinding(activePane.id)
+    if (!binding) {
+      setAutosuggestState(null)
+      return
+    }
+    const recompute = (): void => setAutosuggestState(binding.getAutosuggestActiveState())
+    recompute()
+    const unsubscribe = binding.subscribeAutosuggest(recompute)
+    return () => {
+      unsubscribe()
+      setAutosuggestState(null)
+    }
+  }, [autosuggestEnabled, paneLayoutRevision, paneCount, managerRef, getPaneAutosuggestBinding])
+
   useTerminalKeyboardShortcuts({
     tabId,
     worktreeId,
@@ -1892,6 +1955,8 @@ export default function TerminalPane({
     searchStateRef,
     macOptionAsAltRef,
     paneKittyKeyboardModesRef,
+    hasActiveAutosuggestAtEndOfLine,
+    getAutosuggestRemainderForPane,
     keybindings,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
   })
@@ -3276,6 +3341,15 @@ export default function TerminalPane({
         onRenameCancel={handleRenameCancel}
         onRenameBlur={handleRenameBlur}
       />
+      {autosuggestEnabled && autosuggestState ? (
+        <TerminalAutosuggestOverlay
+          terminal={autosuggestState.terminal}
+          row={autosuggestState.row}
+          cursorCol={autosuggestState.cursorCol}
+          suggestionRemainder={autosuggestState.remainder}
+          foregroundColor={autosuggestState.foregroundColor}
+        />
+      ) : null}
       {managedPanes.map((pane) => {
         // Why: pane IDs can collide across tabs (e.g. tab 0 pane 1 and tab 1
         // pane 1). Using the transport's actual ptyId avoids showing banners
