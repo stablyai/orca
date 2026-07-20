@@ -11,7 +11,8 @@ import {
   RefreshCw,
   PowerOff,
   Edit3,
-  ListTodo
+  ListTodo,
+  Mic
 } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
@@ -733,12 +734,21 @@ export default function HomeScreen() {
           </View>
           <Text style={styles.brandName}>Orca</Text>
         </View>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={() => router.push('/settings')}
-        >
-          <Settings size={18} color={colors.textSecondary} />
-        </Pressable>
+        <View style={styles.topBarActions}>
+          <Pressable
+            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+            onPress={() => router.push('/voice')}
+            accessibilityLabel="Voice"
+          >
+            <Mic size={18} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+            onPress={() => router.push('/settings')}
+          >
+            <Settings size={18} color={colors.textSecondary} />
+          </Pressable>
+        </View>
       </View>
 
       {hosts.length === 0 ? (
@@ -1125,6 +1135,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minWidth: 0
+  },
+  topBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center'
   },
   logoMark: {
     marginRight: spacing.sm
