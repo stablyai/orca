@@ -19,6 +19,7 @@ import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
+import { activateWorkspaceNumberShortcut } from '@/lib/workspace-number-shortcut-activation'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type {
   TerminalLayoutSnapshot,
@@ -1327,7 +1328,7 @@ export function useIpcEvents(): void {
         }
         const visibleIds = getVisibleWorktreeIds()
         if (index < visibleIds.length) {
-          activateAndRevealWorktree(visibleIds[index])
+          activateWorkspaceNumberShortcut(visibleIds[index])
         }
       })
     )

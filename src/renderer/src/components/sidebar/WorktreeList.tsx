@@ -77,7 +77,6 @@ import {
 } from './smart-attention'
 import { track } from '@/lib/telemetry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import {
   type Row,
@@ -117,6 +116,7 @@ import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import {
   computeClearFilterActions,
   computeVisibleWorktreeIds,
+  registerVisibleWorktreeIdsPublisher,
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
@@ -127,6 +127,10 @@ import {
   getVisibleWorktreeTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
 import { selectWorktreeListReviewCacheInputs } from './worktree-list-review-cache-inputs'
+import {
+  getAgentSendEffectiveCollapsedGroups,
+  getEligibleAgentSendTargetWorktreeId
+} from './rendered-workspace-shortcut-order'
 import {
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   useVirtualizedScrollAnchor,
@@ -5237,19 +5241,13 @@ const WorktreeList = React.memo(function WorktreeList({
     if (!agentSendPopoverTargetMode) {
       return null
     }
-    const targets = deriveRunningAgentSendTargets(
-      {
-        agentStatusByPaneKey: agentTargetStatusByPaneKey,
-        tabsByWorktree: agentTargetTabsByWorktree,
-        terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
-        ptyIdsByTabId: agentTargetPtyIdsByTabId,
-        runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId
-      },
-      agentSendPopoverTargetMode.worktreeId
-    )
-    return targets.some((target) => target.status === 'eligible')
-      ? agentSendPopoverTargetMode.worktreeId
-      : null
+    return getEligibleAgentSendTargetWorktreeId(agentSendPopoverTargetMode, {
+      agentStatusByPaneKey: agentTargetStatusByPaneKey,
+      tabsByWorktree: agentTargetTabsByWorktree,
+      terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
+      ptyIdsByTabId: agentTargetPtyIdsByTabId,
+      runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId
+    })
   }, [
     // Why: eligibility can flip when the stale-boundary scheduler bumps this epoch without replacing the status map.
     agentTargetStatusEpoch,
@@ -5531,63 +5529,35 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
-  const effectiveCollapsedGroups = useMemo(() => {
-    if (!agentSendTargetWorktreeId) {
-      return collapsedGroups
-    }
-    const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
-    if (!targetWorktree) {
-      return collapsedGroups
-    }
-    const next = new Set(collapsedGroups)
-    if (targetWorktree.isPinned) {
-      next.delete(PINNED_GROUP_KEY)
-    } else {
-      for (const groupKey of getGroupKeysForWorktree(
+  const effectiveCollapsedGroups = useMemo(
+    () =>
+      getAgentSendEffectiveCollapsedGroups({
+        targetWorktreeId: agentSendTargetWorktreeId,
+        collapsedGroups,
         groupBy,
-        targetWorktree,
+        worktreeMap,
         repoMap,
         prCache,
         workspaceStatuses,
         settings,
         projectGroups,
-        projectGrouping
-      )) {
-        next.delete(groupKey)
-      }
-    }
-
-    const seen = new Set<string>()
-    let current: Worktree | undefined = targetWorktree
-    while (current && !seen.has(current.id)) {
-      seen.add(current.id)
-      const lineage = worktreeLineageById[current.id]
-      const parent = lineage ? worktreeMap.get(lineage.parentWorktreeId) : undefined
-      if (
-        !lineage ||
-        !parent ||
-        current.instanceId !== lineage.worktreeInstanceId ||
-        parent.instanceId !== lineage.parentWorktreeInstanceId
-      ) {
-        break
-      }
-      next.delete(getLineageGroupKey(parent.id))
-      current = parent
-    }
-    return next
-  }, [
-    agentSendTargetWorktreeId,
-    collapsedGroups,
-    groupBy,
-    prCache,
-    projectGroups,
-    projectGrouping,
-    repoMap,
-    settings,
-    workspaceStatuses,
-    worktreeLineageById,
-    worktreeMap
-  ])
+        projectGrouping,
+        worktreeLineageById
+      }),
+    [
+      agentSendTargetWorktreeId,
+      collapsedGroups,
+      groupBy,
+      prCache,
+      projectGroups,
+      projectGrouping,
+      repoMap,
+      settings,
+      workspaceStatuses,
+      worktreeLineageById,
+      worktreeMap
+    ]
+  )
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
   const visibleHostIdSet = useMemo(() => {
     const visibleHostIds =
@@ -5936,10 +5906,11 @@ const WorktreeList = React.memo(function WorktreeList({
     activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
+  useLayoutEffect(registerVisibleWorktreeIdsPublisher, [])
   useLayoutEffect(() => {
+    // Why: this last rendered order remains authoritative while the sidebar is
+    // closed; clearing it on unmount makes shortcuts bypass Smart sort settling.
     setVisibleWorktreeIds(renderedWorktreeIds)
-    // Why: unmounting the list clears the rendered-order cache so shortcuts fall back to the live store snapshot.
-    return () => setVisibleWorktreeIds([])
   }, [renderedWorktreeIds])
 
   const handleCreateForRepo = useCallback(

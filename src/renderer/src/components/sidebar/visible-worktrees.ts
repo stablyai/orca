@@ -2,6 +2,7 @@ import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../s
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import {
@@ -11,6 +12,8 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRenderedWorkspaceShortcutIds } from './rendered-workspace-shortcut-order'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -246,60 +249,51 @@ function addVisibleLineageAncestors(
  * position. By caching the IDs that WorktreeList actually rendered, the
  * shortcut numbering always matches the sidebar card order.
  */
-let _cachedVisibleIds: string[] = []
+let _cachedOrderIds: string[] | null = null
+let _cachedCatalogIds: Set<string> | null = null
+let _visibleIdsPublisherCount = 0
+
+function getWorkspaceCatalogIds(state: AppState): string[] {
+  const ids = getAllWorktreesFromState(state)
+    .filter((worktree) => !worktree.isArchived)
+    .map((worktree) => worktree.id)
+  for (const folderWorkspace of state.folderWorkspaces ?? []) {
+    if (!folderWorkspace.isArchived) {
+      ids.push(folderWorkspaceKey(folderWorkspace.id))
+    }
+  }
+  return ids
+}
 
 /**
  * Called by WorktreeList after computing visible worktrees so the Cmd+1–9
  * handler can read the exact same ordering the user sees on screen.
  */
 export function setVisibleWorktreeIds(ids: string[]): void {
-  _cachedVisibleIds = ids
+  _cachedOrderIds = [...ids]
+  const catalogIds = new Set(getWorkspaceCatalogIds(useAppStore.getState()))
+  // Hidden catalog rows remain pending so host/group changes can make them
+  // eligible after the sidebar unmounts.
+  _cachedCatalogIds = new Set(ids.filter((id) => catalogIds.has(id)))
 }
 
-/**
- * Compute the visible worktree IDs on-demand from the current Zustand store
- * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
- * store snapshot at call time).
- *
- * If WorktreeList has rendered at least once, returns the cached IDs so the
- * shortcut numbering matches the sidebar. Falls back to a live recomputation
- * only before WorktreeList's first render (e.g. app startup).
- */
-export function getVisibleWorktreeIds(): string[] {
-  // Prefer the cached IDs that mirror the rendered sidebar order.
-  if (_cachedVisibleIds.length > 0) {
-    return _cachedVisibleIds
+export function registerVisibleWorktreeIdsPublisher(): () => void {
+  _visibleIdsPublisherCount += 1
+  let registered = true
+  return () => {
+    if (!registered) {
+      return
+    }
+    registered = false
+    _visibleIdsPublisherCount -= 1
   }
+}
 
-  // Fallback: live recomputation for the window before WorktreeList renders.
-  const state = useAppStore.getState()
-  const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
-
-  // Hoist repoMap so it's built once and reused across all branches below.
-  const repoMap = getRepoMapFromState(state)
-
-  let sortedIds: string[]
-
-  if (state.sortBy === 'smart') {
-    sortedIds = sortWorktreesSmart(
-      allWorktrees,
-      state.tabsByWorktree,
-      repoMap,
-      state.agentStatusByPaneKey,
-      state.runtimePaneTitlesByTabId,
-      state.ptyIdsByTabId,
-      state.migrationUnsupportedByPtyId,
-      state.terminalLayoutsByTabId
-    ).map((w) => w.id)
-  } else {
-    // Why empty map: non-smart branches don't read attentionByWorktree, but
-    // the param is required to keep smart-mode callers honest at the type level.
-    const sorted = [...allWorktrees].sort(
-      buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map())
-    )
-    sortedIds = sorted.map((w) => w.id)
-  }
-
+function computeStoreVisibleWorktreeIds(
+  state: AppState,
+  sortedIds: string[],
+  repoMap: Map<string, Repo>
+): string[] {
   return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
@@ -319,4 +313,83 @@ export function getVisibleWorktreeIds(): string[] {
     defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById
   })
+}
+
+function getLiveSortedWorktreeIds(
+  state: AppState,
+  allWorktrees: Worktree[],
+  repoMap: Map<string, Repo>
+): string[] {
+  if (state.sortBy === 'smart') {
+    return sortWorktreesSmart(
+      allWorktrees,
+      state.tabsByWorktree,
+      repoMap,
+      state.agentStatusByPaneKey,
+      state.runtimePaneTitlesByTabId,
+      state.ptyIdsByTabId,
+      state.migrationUnsupportedByPtyId,
+      state.terminalLayoutsByTabId
+    ).map((worktree) => worktree.id)
+  }
+
+  return [...allWorktrees]
+    .sort(buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map()))
+    .map((worktree) => worktree.id)
+}
+
+/**
+ * Compute the visible worktree IDs on-demand from the current Zustand store
+ * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
+ * store snapshot at call time).
+ *
+ * If WorktreeList has rendered at least once, returns the cached IDs so the
+ * shortcut numbering matches the sidebar. Falls back to a live recomputation
+ * only before WorktreeList's first render (e.g. app startup).
+ */
+export function getVisibleWorktreeIds(): string[] {
+  // Why: only the mounted renderer knows transient row state such as host drag collapse.
+  if (_visibleIdsPublisherCount > 0 && _cachedOrderIds !== null) {
+    return _cachedOrderIds
+  }
+
+  const state = useAppStore.getState()
+  const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
+  const repoMap = getRepoMapFromState(state)
+  const currentCatalogIds = getWorkspaceCatalogIds(state)
+
+  if (_cachedOrderIds !== null) {
+    const currentCatalogIdSet = new Set(currentCatalogIds)
+    const liveSortedIds = getLiveSortedWorktreeIds(state, allWorktrees, repoMap)
+    const liveVisibleWorktreeIds = computeStoreVisibleWorktreeIds(state, liveSortedIds, repoMap)
+    const renderedIds = getRenderedWorkspaceShortcutIds(state, liveVisibleWorktreeIds)
+    const renderedIdSet = new Set(renderedIds)
+    // Agent-send can intentionally render an otherwise ineligible target.
+    // Keep that temporary row addressable until the shared renderer drops it.
+    for (const id of renderedIds) {
+      currentCatalogIdSet.add(id)
+    }
+    const knownCatalogIds = _cachedCatalogIds ?? new Set<string>()
+    _cachedOrderIds = _cachedOrderIds.filter((id) => currentCatalogIdSet.has(id))
+    _cachedCatalogIds = new Set([...knownCatalogIds].filter((id) => currentCatalogIdSet.has(id)))
+    for (const id of renderedIds) {
+      if (!currentCatalogIdSet.has(id) || _cachedCatalogIds.has(id)) {
+        continue
+      }
+      _cachedOrderIds.push(id)
+      _cachedCatalogIds.add(id)
+    }
+
+    // Why: the sidebar is unmounted while closed. Reconcile catalog changes
+    // without discarding the slots of rows hidden by temporary filters.
+    _cachedOrderIds = [...new Set(_cachedOrderIds)]
+    return _cachedOrderIds.filter((id) => renderedIdSet.has(id))
+  }
+
+  // Fallback: live recomputation only before WorktreeList's first render.
+  const sortedIds = getLiveSortedWorktreeIds(state, allWorktrees, repoMap)
+  return getRenderedWorkspaceShortcutIds(
+    state,
+    computeStoreVisibleWorktreeIds(state, sortedIds, repoMap)
+  )
 }
