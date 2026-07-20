@@ -48,12 +48,14 @@ import type {
   DiffComment,
   GitBranchChangeEntry,
   GitDiffResult,
-  GitStatusEntry
+  GitStatusEntry,
+  PRComment
 } from '../../../../shared/types'
 import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
+import { isPRCommentsCacheKey, prCommentsToDecoratedDiffComments } from '@/lib/diff-comment-compat'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,
@@ -161,6 +163,7 @@ const COMBINED_DIFF_OVERSCAN = 5
 const COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT = 64
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
+const EMPTY_PR_COMMENTS: PRComment[] = []
 let combinedDiffCollapsedPreference: boolean | null = null
 let combinedDiffSideBySidePreference: boolean | null = null
 let combinedDiffFileTreeCollapsedPreference: boolean | null = null
@@ -235,10 +238,73 @@ export default function CombinedDiffViewer({
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
+  const fetchPRComments = useAppStore((s) => s.fetchPRComments)
+  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const diffCommentsForWorktree = useAppStore((s) =>
     selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
   )
+
+  const worktree = useAppStore((s) =>
+    file.worktreeId ? s.getKnownWorktreeById(file.worktreeId) : undefined
+  )
+  const wtPath = worktree?.path
+  const wtBranch = worktree?.branch
+  const wtLinkedPR = worktree?.linkedPR
+  const wtRepoId = worktree?.repoId
+
+  // Why: fetch PR comments in the background when the combined diff viewer mounts.
+  // The dev server restart clears the transient in-memory commentsCache; fetching on
+  // mount ensures review comments are available in the editor even if the right-sidebar
+  // ChecksPanel was never opened in this session.
+  useEffect(() => {
+    if (!wtPath) {
+      return
+    }
+    const load = async () => {
+      let pr = wtLinkedPR
+      if (!pr && wtBranch) {
+        const prInfo = await fetchPRForBranch(wtPath, wtBranch, { repoId: wtRepoId })
+        if (prInfo) {
+          pr = prInfo.number
+        }
+      }
+      if (pr) {
+        void fetchPRComments(wtPath, pr, { repoId: wtRepoId })
+      }
+    }
+    void load()
+  }, [wtPath, wtBranch, wtLinkedPR, wtRepoId, fetchPRComments, fetchPRForBranch])
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
+  // Why: the selector must be self-contained — closing over component-scoped
+  // linkedPR/worktree and returning a bare `[]` on the falsy branch caused an
+  // infinite re-render loop because each `[]` is a new reference and Zustand's
+  // Object.is comparison treated it as a change every time.
+  const prComments = useAppStore((s) => {
+    const wt = s.getKnownWorktreeById(file.worktreeId)
+    if (!wt || !wt.repoId) {
+      return EMPTY_PR_COMMENTS
+    }
+    let pr = wt.linkedPR
+    if (!pr && wt.branch) {
+      const keys = Object.keys(s.prCache)
+      const targetKey = keys.find(
+        (k) => k.toLowerCase().includes(wt.repoId.toLowerCase()) && k.endsWith(`::${wt.branch}`)
+      )
+      const cachedPR = targetKey ? s.prCache[targetKey]?.data : null
+      if (cachedPR) {
+        pr = cachedPR.number
+      }
+    }
+    if (!pr) {
+      return EMPTY_PR_COMMENTS
+    }
+    // Why: commentsCache keys may be prefixed by host/runtime environment
+    // scope or contain the full prRepo name in the middle. Match keys
+    // dynamically to find the correct entry regardless of caching scopes.
+    const keys = Object.keys(s.commentsCache)
+    const targetKey = keys.find((k) => isPRCommentsCacheKey(k, wt, pr))
+    return (targetKey ? s.commentsCache[targetKey]?.data : null) ?? EMPTY_PR_COMMENTS
+  })
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -254,6 +320,36 @@ export default function CombinedDiffViewer({
         .sort((a, b) => a.filePath.localeCompare(b.filePath) || a.lineNumber - b.lineNumber)
         .slice(0, 4),
     [diffCommentsForWorktree]
+  )
+
+  // Why: create a memoized map of PR comments by file path for efficient lookup
+  // when rendering inline comments in diff sections. Normalizes paths for cross-platform
+  // slash/leading-slash/case-insensitivity consistency.
+  const prCommentsByFilePath = React.useMemo(() => {
+    const byPath = new Map<string, PRComment[]>()
+    for (const comment of prComments) {
+      if (comment.path) {
+        const normPath = comment.path.replace(/\\/g, '/').replace(/^\//, '').toLowerCase()
+        const existing = byPath.get(normPath) ?? []
+        existing.push(comment)
+        byPath.set(normPath, existing)
+      }
+    }
+    return byPath
+  }, [prComments])
+
+  // Why: memoize the function that transforms PR comments for a specific file path
+  // to avoid recreating it on every render. This is used in the virtual list render.
+  const getInlineCommentsForSection = React.useCallback(
+    (sectionPath: string) => {
+      const normPath = sectionPath.replace(/\\/g, '/').replace(/^\//, '').toLowerCase()
+      return prCommentsToDecoratedDiffComments(
+        prCommentsByFilePath.get(normPath) ?? [],
+        sectionPath,
+        file.worktreeId
+      )
+    },
+    [prCommentsByFilePath, file.worktreeId]
   )
 
   const [sections, setSections] = useState<DiffSection[]>([])
@@ -1969,16 +2065,21 @@ export default function CombinedDiffViewer({
                         setSections={setSections}
                         modifiedEditorsRef={modifiedEditorsRef}
                         handleSectionSaveRef={handleSectionSaveRef}
-                        renderHeaderTrailingContent={(section) => {
+                        inlineComments={
+                          isBranchMode || (isAllMode && section.area === undefined)
+                            ? getInlineCommentsForSection(section.path)
+                            : []
+                        }
+                        renderHeaderTrailingContent={(headerSection) => {
                           const fileNotes = diffCommentsForWorktree.filter(
-                            (comment) => comment.filePath === section.path
+                            (comment) => comment.filePath === headerSection.path
                           )
                           return fileNotes.length > 0 ? (
                             <DiffNotesSendMenu
                               worktreeId={file.worktreeId}
                               groupId={activeGroupId ?? file.worktreeId}
                               comments={diffCommentsForWorktree}
-                              filePath={section.path}
+                              filePath={headerSection.path}
                               showFileScope
                               triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
                             />
