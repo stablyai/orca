@@ -2914,28 +2914,20 @@ describe('createWorktree base status merge', () => {
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
-    await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'feature',
-        'origin/main',
-        'inherit',
-        undefined,
-        'sidebar',
-        'Feature Title',
-        123,
-        456,
-        undefined,
-        'codex',
-        'ENG-123',
-        undefined,
-        'in-review',
-        undefined,
-        undefined,
-        undefined,
-        true
-      )
+    await store.getState().createWorktree({
+      repoId: 'repo1',
+      name: 'feature',
+      baseBranch: 'origin/main',
+      setupDecision: 'inherit',
+      telemetrySource: 'sidebar',
+      displayName: 'Feature Title',
+      linkedIssue: 123,
+      linkedPR: 456,
+      createdWithAgent: 'codex',
+      linkedLinearIssue: 'ENG-123',
+      workspaceStatus: 'in-review',
+      pendingFirstAgentMessageRename: true
+    })
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2990,7 +2982,9 @@ describe('createWorktree base status merge', () => {
       })
     )
 
-    await store.getState().createWorktree('repo-remote', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo-remote', name: 'feature', baseBranch: 'origin/main' })
 
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-remote']?.[0]).toEqual({
@@ -3018,7 +3012,9 @@ describe('createWorktree base status merge', () => {
     } as Partial<AppState>)
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt, workspaceLineage })
 
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo1', name: 'feature', baseBranch: 'origin/main' })
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3048,7 +3044,9 @@ describe('createWorktree base status merge', () => {
     } as Partial<AppState>)
     mockApi.worktrees.create.mockResolvedValue({ worktree: createdWorktree })
 
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo1', name: 'feature', baseBranch: 'origin/main' })
 
     expect(store.getState().worktreesByRepo.repo1).toHaveLength(1)
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
@@ -3090,7 +3088,9 @@ describe('createWorktree base status merge', () => {
       }
     })
 
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo1', name: 'feature', baseBranch: 'origin/main' })
 
     expect(toast.warning).toHaveBeenCalledWith('Local main was not refreshed', {
       description: expect.stringContaining(expectedReason)
@@ -3116,7 +3116,9 @@ describe('createWorktree base status merge', () => {
       }
     })
 
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo1', name: 'feature', baseBranch: 'origin/main' })
 
     expect(toast.warning).not.toHaveBeenCalled()
   })
@@ -3137,7 +3139,9 @@ describe('createWorktree base status merge', () => {
       }
     })
 
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo1', name: 'feature', baseBranch: 'origin/main' })
 
     // The button workflow (Keep main up to date / Settings link) lives in the
     // toast component's own test; here we just assert the sticky nudge is raised.
@@ -3163,7 +3167,9 @@ describe('createWorktree base status merge', () => {
       localBaseRefUpdateSuggestion: { baseRef: 'origin/main', localBranch: 'main', behind: 2 }
     })
 
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo1', name: 'feature', baseBranch: 'origin/main' })
 
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
@@ -3189,7 +3195,9 @@ describe('createWorktree base status merge', () => {
       localBaseRefUpdateSuggestion: { baseRef: 'origin/main', localBranch: 'main', behind: 1 }
     })
 
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+    await store
+      .getState()
+      .createWorktree({ repoId: 'repo1', name: 'feature', baseBranch: 'origin/main' })
 
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
@@ -3217,7 +3225,7 @@ describe('createWorktree base status merge', () => {
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
     try {
-      await store.getState().createWorktree('repo1', 'feature')
+      await store.getState().createWorktree({ repoId: 'repo1', name: 'feature' })
     } finally {
       nowSpy.mockRestore()
     }
@@ -3242,23 +3250,13 @@ describe('createWorktree base status merge', () => {
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
-    await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'feature/something',
-        'origin/main',
-        'inherit',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'feature/something'
-      )
+    await store.getState().createWorktree({
+      repoId: 'repo1',
+      name: 'feature/something',
+      baseBranch: 'origin/main',
+      setupDecision: 'inherit',
+      branchNameOverride: 'feature/something'
+    })
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3284,23 +3282,13 @@ describe('createWorktree base status merge', () => {
     mockApi.worktrees.create.mockRejectedValueOnce(error)
     mockApi.worktrees.create.mockResolvedValueOnce({ worktree: wt })
 
-    await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'feature/something',
-        'origin/main',
-        'inherit',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'feature/something'
-      )
+    await store.getState().createWorktree({
+      repoId: 'repo1',
+      name: 'feature/something',
+      baseBranch: 'origin/main',
+      setupDecision: 'inherit',
+      branchNameOverride: 'feature/something'
+    })
 
     expect(mockApi.worktrees.create).toHaveBeenCalledTimes(2)
     expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
@@ -3344,7 +3332,7 @@ describe('createWorktree base status merge', () => {
       }
     })
 
-    await store.getState().createWorktree('repo1', 'feature')
+    await store.getState().createWorktree({ repoId: 'repo1', name: 'feature' })
 
     expect(store.getState().baseStatusByWorktreeId[wt.id]).toMatchObject({
       status: 'drift',
@@ -3996,20 +3984,18 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
 
-    const result = await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'feature',
-        'origin/main',
-        'skip',
-        { directories: ['src'], presetId: 'preset-1' },
-        'sidebar',
-        'Feature title',
-        123,
-        456,
-        { remoteName: 'fork', branchName: 'feature' }
-      )
+    const result = await store.getState().createWorktree({
+      repoId: 'repo1',
+      name: 'feature',
+      baseBranch: 'origin/main',
+      setupDecision: 'skip',
+      sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
+      telemetrySource: 'sidebar',
+      displayName: 'Feature title',
+      linkedIssue: 123,
+      linkedPR: 456,
+      pushTarget: { remoteName: 'fork', branchName: 'feature' }
+    })
 
     expect(result).toEqual({ worktree: wt })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -4051,35 +4037,23 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
 
-    await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'agent-startup',
-        undefined,
-        'skip',
-        undefined,
-        'sidebar',
-        'Launch agent',
-        undefined,
-        undefined,
-        undefined,
-        'codex',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
-          command: "codex 'summarize repo'",
-          env: { ORCA_AGENT_MODE: 'direct' },
-          launchConfig: {
-            agentCommand: 'codex',
-            agentArgs: '--model gpt-5',
-            agentEnv: { ORCA_AGENT_MODE: 'direct' }
-          }
+    await store.getState().createWorktree({
+      repoId: 'repo1',
+      name: 'agent-startup',
+      setupDecision: 'skip',
+      telemetrySource: 'sidebar',
+      displayName: 'Launch agent',
+      createdWithAgent: 'codex',
+      startup: {
+        command: "codex 'summarize repo'",
+        env: { ORCA_AGENT_MODE: 'direct' },
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--model gpt-5',
+          agentEnv: { ORCA_AGENT_MODE: 'direct' }
         }
-      )
+      }
+    })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -4119,35 +4093,23 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
 
-    await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'local-agent-startup',
-        undefined,
-        'skip',
-        undefined,
-        'sidebar',
-        'Launch local agent',
-        undefined,
-        undefined,
-        undefined,
-        'claude',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
-          command: "claude --prefill 'summarize repo'",
-          env: { ORCA_AGENT_MODE: 'direct' },
-          telemetry: {
-            agent_kind: 'claude-code',
-            launch_source: 'new_workspace_composer',
-            request_kind: 'new'
-          }
+    await store.getState().createWorktree({
+      repoId: 'repo1',
+      name: 'local-agent-startup',
+      setupDecision: 'skip',
+      telemetrySource: 'sidebar',
+      displayName: 'Launch local agent',
+      createdWithAgent: 'claude',
+      startup: {
+        command: "claude --prefill 'summarize repo'",
+        env: { ORCA_AGENT_MODE: 'direct' },
+        telemetry: {
+          agent_kind: 'claude-code',
+          launch_source: 'new_workspace_composer',
+          request_kind: 'new'
         }
-      )
+      }
+    })
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -4191,23 +4153,13 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
 
-    await store
-      .getState()
-      .createWorktree(
-        'repo1',
-        'feature/something',
-        'origin/main',
-        'skip',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'feature/something'
-      )
+    await store.getState().createWorktree({
+      repoId: 'repo1',
+      name: 'feature/something',
+      baseBranch: 'origin/main',
+      setupDecision: 'skip',
+      branchNameOverride: 'feature/something'
+    })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(

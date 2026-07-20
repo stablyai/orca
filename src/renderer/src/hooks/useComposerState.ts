@@ -3732,41 +3732,39 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           )
         )
       }
-      const result = await createWorktree(
+      const result = await createWorktree({
         repoId,
-        workspaceName,
-        selectedRepoIsGit ? submitBaseBranch : undefined,
-        effectiveSetupDecision,
-        selectedRepoIsGit && sparseEnabled
-          ? {
-              directories: normalizedSparseDirectories,
-              ...(effectivePresetId ? { presetId: effectivePresetId } : {})
-            }
-          : undefined,
+        name: workspaceName,
+        baseBranch: selectedRepoIsGit ? submitBaseBranch : undefined,
+        setupDecision: effectiveSetupDecision,
+        sparseCheckout:
+          selectedRepoIsGit && sparseEnabled
+            ? {
+                directories: normalizedSparseDirectories,
+                ...(effectivePresetId ? { presetId: effectivePresetId } : {})
+              }
+            : undefined,
         telemetrySource,
-        createDisplayName,
-        submitLinkedIssueNumber ?? undefined,
-        submitLinkedPR ?? undefined,
-        submitPushTarget,
-        tuiAgent,
+        displayName: createDisplayName,
+        linkedIssue: submitLinkedIssueNumber ?? undefined,
+        linkedPR: submitLinkedPR ?? undefined,
+        pushTarget: submitPushTarget,
+        createdWithAgent: tuiAgent,
         linkedLinearIssue,
-        effectiveBranchNameOverride,
-        resolvedInitialWorkspaceStatus,
-        smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
-        smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
-        backendStartup,
+        branchNameOverride: effectiveBranchNameOverride,
+        workspaceStatus: resolvedInitialWorkspaceStatus,
+        linkedGitLabMR:
+          smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
+        linkedGitLabIssue:
+          smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
+        startup: backendStartup,
         pendingFirstAgentMessageRename,
-        undefined,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
-        undefined,
-        undefined,
-        undefined,
-        submitCompareBaseRef,
-        undefined,
+        compareBaseRef: submitCompareBaseRef,
         linkedClickUpTaskId,
         linkedClickUpWorkspaceId
-      )
+      })
       const worktree = result.worktree
 
       const trimmedNote = note.trim()

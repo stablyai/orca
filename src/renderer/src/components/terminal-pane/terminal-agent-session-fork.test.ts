@@ -130,19 +130,15 @@ describe('forkAgentSessionFromPane', () => {
       groupId: 'group-1'
     })
 
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
-      'repo-1',
-      'auth-feature-fork',
-      'feature/auth',
-      'inherit',
-      undefined,
-      'terminal_context_menu',
-      'Fork of auth-feature',
-      undefined,
-      undefined,
-      undefined,
-      'codex'
-    )
+    expect(mockCreateWorktree).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      name: 'auth-feature-fork',
+      baseBranch: 'feature/auth',
+      setupDecision: 'inherit',
+      telemetrySource: 'terminal_context_menu',
+      displayName: 'Fork of auth-feature',
+      createdWithAgent: 'codex'
+    })
 
     expect(mockLaunchAgentInNewTab).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -332,19 +328,15 @@ describe('forkAgentSessionFromPane', () => {
       groupId: null
     })
 
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
-      'repo-1',
-      'auth-feature-fork',
-      'feature/auth',
-      'inherit',
-      undefined,
-      'terminal_context_menu',
-      'Fork of auth-feature',
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    )
+    expect(mockCreateWorktree).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      name: 'auth-feature-fork',
+      baseBranch: 'feature/auth',
+      setupDecision: 'inherit',
+      telemetrySource: 'terminal_context_menu',
+      displayName: 'Fork of auth-feature',
+      createdWithAgent: undefined
+    })
     expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
       sidebarRevealBehavior: 'auto'
