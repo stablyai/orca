@@ -1,14 +1,20 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../src/shared/types'
+import { useCallback, useRef, useState } from 'react'
+import type {
+  ClickUpTask,
+  GitHubWorkItem,
+  GitLabWorkItem,
+  LinearIssue
+} from '../../../src/shared/types'
 import { resolveComposerManualBranchNameChange } from '../../../src/shared/composer-branch-selection'
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  buildClickUpLinkedWorkItem,
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
   buildLinearLinkedWorkItem,
-  buildSmartNameSelection,
+  buildSmartNameSelectionFor,
   resolveComposerBranchPick,
   resolveComposerCreateSelection,
   resolveLinearAutoName,
@@ -20,12 +26,7 @@ import {
   resolveComposerPrBase,
   type ComposerHostedBase
 } from './composer-source-base-resolve'
-import type {
-  ComposerBaseState,
-  MobileComposerCreateSelection,
-  MobileLinkedWorkItem,
-  SmartNameSelection
-} from './mobile-composer-source-types'
+import type { ComposerBaseState, MobileLinkedWorkItem } from './mobile-composer-source-types'
 const EMPTY_BASE: ComposerBaseState = {}
 
 export type UseMobileComposerSourceArgs = {
@@ -213,6 +214,14 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     [clearBaseAndBranch, name]
   )
 
+  function handleSmartClickUpTaskSelect(task: ClickUpTask): void {
+    resolveTokenRef.current += 1
+    const linked = buildClickUpLinkedWorkItem(task)
+    setLinkedWorkItem(linked)
+    applyAutoName(resolveWorkItemAutoName(linked), name)
+    clearBaseAndBranch()
+  }
+
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string) => {
       resolveTokenRef.current += 1
@@ -241,19 +250,16 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
 
   // Picking "Create branch <name>": name the workspace and mark a new-branch
   // intent so the typed (possibly slashy) name is kept verbatim as the git branch.
-  const handleSmartCreateBranch = useCallback(
-    (branchName: string) => {
-      resolveTokenRef.current += 1
-      setLinkedWorkItem(null)
-      clearBaseAndBranch()
-      setNameState(branchName)
-      lastAutoNameRef.current = branchName
-      setBranchCreateIntent(true)
-    },
-    [clearBaseAndBranch]
-  )
+  function handleSmartCreateBranch(branchName: string): void {
+    resolveTokenRef.current += 1
+    setLinkedWorkItem(null)
+    clearBaseAndBranch()
+    setNameState(branchName)
+    lastAutoNameRef.current = branchName
+    setBranchCreateIntent(true)
+  }
 
-  const handleClearSmartNameSelection = useCallback(() => {
+  function handleClearSmartNameSelection(): void {
     resolveTokenRef.current += 1
     setLinkedWorkItem(null)
     clearBaseAndBranch()
@@ -262,7 +268,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
       setNameState('')
       lastAutoNameRef.current = ''
     }
-  }, [clearBaseAndBranch, name])
+  }
 
   const handleBranchNameOverrideChange = useCallback(
     (value: string) => {
@@ -281,29 +287,19 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     [base, forkPushWarning]
   )
 
-  const smartNameSelection = useMemo<SmartNameSelection | null>(
-    () => buildSmartNameSelection({ linkedWorkItem, baseBranch: base.baseBranch }),
-    [base.baseBranch, linkedWorkItem]
-  )
-
-  const createSelection = useMemo<MobileComposerCreateSelection | null>(
-    () =>
-      resolveComposerCreateSelection({
-        linkedWorkItem,
-        base,
-        branch: branchSelectionRef.current,
-        reuseEligibleBranch,
-        reuseSelectedBranch,
-        branchCreateIntent,
-        name
-      }),
-    [base, branchCreateIntent, linkedWorkItem, name, reuseEligibleBranch, reuseSelectedBranch]
-  )
+  const smartNameSelection = buildSmartNameSelectionFor(linkedWorkItem, base.baseBranch)
+  const createSelection = resolveComposerCreateSelection({
+    linkedWorkItem,
+    base,
+    branch: branchSelectionRef.current,
+    reuseEligibleBranch,
+    reuseSelectedBranch,
+    branchCreateIntent,
+    name
+  })
 
   // Auto-managed until the user edits the name away from the last derived value;
   // desktop suppresses the workspace displayName once the name is user-edited.
-  const isNameAutoManaged = !name.trim() || name === lastAutoNameRef.current
-
   return {
     name,
     setName,
@@ -315,12 +311,13 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     setReuseSelectedBranch,
     forkPushWarning,
     resolvingBase,
-    isNameAutoManaged,
+    isNameAutoManaged: !name.trim() || name === lastAutoNameRef.current,
     smartNameSelection,
     createSelection,
     handleSmartGitHubItemSelect,
     handleSmartGitLabItemSelect,
     handleSmartLinearIssueSelect,
+    handleSmartClickUpTaskSelect,
     handleSmartBranchSelect,
     handleSmartCreateBranch,
     handleClearSmartNameSelection

@@ -304,7 +304,8 @@ function NewWorktreeModalContent({
     hasRepo: selectedRepo != null,
     githubAvailable: availableProviders.includes('github'),
     gitlabAvailable: availableProviders.includes('gitlab'),
-    linearAvailable: availableProviders.includes('linear')
+    linearAvailable: availableProviders.includes('linear'),
+    clickUpAvailable: availableProviders.includes('clickup')
   }
   const pasteRepos = useMemo<PasteRepoCandidate[]>(
     () =>
@@ -377,7 +378,8 @@ function NewWorktreeModalContent({
       // can't discard the already-resolved critical settings/ui results.
       const probes = Promise.allSettled([
         client.sendRequest('preflight.check'),
-        client.sendRequest('linear.status')
+        client.sendRequest('linear.status'),
+        client.sendRequest('clickup.status')
       ])
       const okResult = (entry: PromiseSettledResult<RpcResponse>): RpcSuccess | null =>
         entry.status === 'fulfilled' && entry.value.ok ? (entry.value as RpcSuccess) : null
@@ -409,7 +411,7 @@ function NewWorktreeModalContent({
         setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
       }
 
-      const [preflightRes, linearRes] = await probes
+      const [preflightRes, linearRes, clickUpRes] = await probes
       if (stale) {
         return
       }
@@ -418,13 +420,16 @@ function NewWorktreeModalContent({
           ?.installed === true
       const linearConnected =
         (okResult(linearRes)?.result as { connected?: boolean } | undefined)?.connected === true
+      const clickUpConnected =
+        (okResult(clickUpRes)?.result as { connected?: boolean } | undefined)?.connected === true
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       setAvailableProviders(
         // Drop filterAvailableTaskProviders' forced 'github' fallback when the user
         // hid GitHub; the Branch tab always guarantees at least one tab remains.
         filterAvailableTaskProviders(visibleProviders, {
           gitlabInstalled: glabInstalled,
-          linearConnected
+          linearConnected,
+          clickUpConnected
         }).filter((provider) => visibleProviders.includes(provider))
       )
     })()

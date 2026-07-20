@@ -134,6 +134,49 @@ describe('createWorkspaceFromComposerSource', () => {
     })
   })
 
+  it('creates a ClickUp workspace without entering hosted review base resolution', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-clickup' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'work-item',
+      item: {
+        provider: 'clickup',
+        type: 'issue',
+        number: 0,
+        title: 'CU-42 Ship mobile parity',
+        url: 'https://app.clickup.com/t/86abc123',
+        clickUpTaskId: '86abc123',
+        clickUpWorkspaceId: 'team-1'
+      }
+    }
+    await createWorkspaceFromComposerSource({ client, selection, ...baseArgs })
+    expect(calls.map((call) => call.method)).toEqual(['worktree.create'])
+    expect(calls[0]!.params).toMatchObject({
+      repo: 'id:repo-1',
+      linkedClickUpTaskId: '86abc123',
+      linkedClickUpWorkspaceId: 'team-1'
+    })
+  })
+
+  it('rejects a ClickUp composer source that lost its task identity', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'unexpected' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'work-item',
+      item: {
+        provider: 'clickup',
+        type: 'issue',
+        number: 0,
+        title: 'Missing task',
+        url: 'https://app.clickup.com/t/86abc123'
+      }
+    }
+    await expect(
+      createWorkspaceFromComposerSource({ client, selection, ...baseArgs })
+    ).rejects.toThrow('missing its task ID')
+    expect(calls).toEqual([])
+  })
+
   it('reuses an existing branch with a single attempt (no suffix retry)', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => new Error('Branch "feature" already exists.'), calls)

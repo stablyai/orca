@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../src/shared/types'
+import type {
+  ClickUpTask,
+  GitHubWorkItem,
+  GitLabWorkItem,
+  LinearIssue
+} from '../../../src/shared/types'
 import {
+  buildClickUpLinkedWorkItem,
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
   buildLinearLinkedWorkItem,
@@ -48,6 +54,28 @@ describe('linked work item builders', () => {
       linearIdentifier: 'ENG-9',
       linearWorkspaceId: 'ws-1',
       linearOrganizationUrlKey: 'acme'
+    })
+  })
+
+  it('maps a ClickUp task with task and Workspace routing', () => {
+    const linked = buildClickUpLinkedWorkItem({
+      id: '86abc123',
+      customId: 'CU-42',
+      workspaceId: 'team-1',
+      name: 'Ship mobile parity',
+      url: 'https://app.clickup.com/t/86abc123',
+      status: { name: 'open', color: '#123456', type: 'open', orderIndex: 1 },
+      assignees: [],
+      tags: [],
+      list: { id: 'list-1', name: 'Backlog' },
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-02T00:00:00.000Z'
+    })
+    expect(linked).toMatchObject({
+      provider: 'clickup',
+      title: 'CU-42 Ship mobile parity',
+      clickUpTaskId: '86abc123',
+      clickUpWorkspaceId: 'team-1'
     })
   })
 })
@@ -126,6 +154,21 @@ describe('buildSmartNameSelection', () => {
         baseBranch: undefined
       })
     ).toEqual({ kind: 'linear', label: 'ENG-9 Ship', url: 'u' })
+  })
+
+  it('maps ClickUp with a bare task-reference label', () => {
+    expect(
+      buildSmartNameSelection({
+        linkedWorkItem: base({
+          provider: 'clickup',
+          type: 'issue',
+          number: 0,
+          title: 'CU-42 Ship',
+          clickUpTaskId: '86abc123'
+        }),
+        baseBranch: undefined
+      })
+    ).toEqual({ kind: 'clickup', label: 'CU-42 Ship', url: 'u' })
   })
 
   it('falls back to a branch pill', () => {
@@ -240,4 +283,4 @@ describe('resolveComposerBranchPick', () => {
 })
 
 // Keep the exported type aliases referenced so the module surface stays covered.
-export type _Ref = [GitHubWorkItem, GitLabWorkItem, LinearIssue]
+export type _Ref = [ClickUpTask, GitHubWorkItem, GitLabWorkItem, LinearIssue]

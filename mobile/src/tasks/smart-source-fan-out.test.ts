@@ -29,8 +29,10 @@ const smartArgs = {
   githubAvailable: true,
   gitlabAvailable: true,
   linearAvailable: true,
+  clickUpAvailable: true,
   mrStateFilter: 'opened' as const,
-  linearWorkspaceId: null
+  linearWorkspaceId: null,
+  clickUpWorkspaceId: null
 }
 
 describe('fanOutSmartSearch', () => {
@@ -41,12 +43,14 @@ describe('fanOutSmartSearch', () => {
         'github.listWorkItems': { items: [{ id: 'g1', type: 'issue', number: 1, title: 'A' }] },
         'gitlab.listWorkItems': { items: [{ id: 'gl1', type: 'mr', number: 2, title: 'B' }] },
         'linear.searchIssues': { items: [{ id: 'l1', identifier: 'ENG-1', title: 'C' }] },
+        'clickup.searchTasks': [{ id: 'cu1', name: 'D' }],
         'repo.searchRefs': { refDetails: [{ refName: 'main', localBranchName: 'main' }] }
       },
       calls
     )
     const result = await fanOutSmartSearch({ client, ...smartArgs })
     expect(calls.map((c) => c.method).sort()).toEqual([
+      'clickup.searchTasks',
       'github.listWorkItems',
       'gitlab.listWorkItems',
       'linear.searchIssues',
@@ -55,6 +59,7 @@ describe('fanOutSmartSearch', () => {
     expect(result.githubItems[0]).toMatchObject({ number: 1, repoId: 'repo-1' })
     expect(result.gitlabItems[0]).toMatchObject({ number: 2, repoId: 'repo-1' })
     expect(result.linearIssues[0]).toMatchObject({ identifier: 'ENG-1' })
+    expect(result.clickUpTasks[0]).toMatchObject({ id: 'cu1' })
     expect(result.branches).toEqual([{ refName: 'main', localBranchName: 'main' }])
     expect(result.error).toBe('')
   })
@@ -66,6 +71,7 @@ describe('fanOutSmartSearch', () => {
         'github.listWorkItems': new Error('gh down'),
         'gitlab.listWorkItems': { items: [{ id: 'gl1', type: 'mr', number: 2, title: 'B' }] },
         'linear.searchIssues': { items: [] },
+        'clickup.searchTasks': [],
         'repo.searchRefs': { refDetails: [] }
       },
       calls
@@ -106,6 +112,7 @@ describe('fanOutSmartSearch', () => {
       githubItems: [],
       gitlabItems: [],
       linearIssues: [],
+      clickUpTasks: [],
       branches: []
     })
   })

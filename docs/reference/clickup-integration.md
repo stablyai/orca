@@ -22,7 +22,7 @@ encryption when the host supports it. If encryption is unavailable, it writes
 the token to a host-local file with owner-only permissions and emits a warning.
 Tokens are never included in CLI output.
 
-## Desktop and Mobile
+## Desktop
 
 Select **ClickUp** from the Tasks source picker to:
 
@@ -32,9 +32,12 @@ Select **ClickUp** from the Tasks source picker to:
 - create tasks in a selected ClickUp List;
 - update a task and start a linked Orca workspace.
 
-A paired mobile client uses the selected runtime's ClickUp connection. This
-keeps SSH and remote behavior consistent with the desktop app: the runtime that
-answers the mobile RPC owns the credential and performs the ClickUp request.
+A paired mobile client can search assigned ClickUp tasks, read descriptions and
+comments, open the task in ClickUp, and start a linked Orca workspace in a
+selected Git repository. Task creation and metadata editing remain on desktop.
+The mobile client uses the selected runtime's ClickUp connection. This keeps SSH
+and remote behavior consistent with the desktop app: the runtime that answers
+the mobile RPC owns the credential and performs the ClickUp request.
 
 When a ClickUp task is linked to an Orca workspace, the task reference appears
 in workspace context. Board moves can update ClickUp only when the destination
