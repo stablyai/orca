@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: MarkdownPreview owns rendering, link interception,
-search, and viewport state for the preview surface in one place so markdown
-behavior stays coherent across split panes and preview tabs. */
+/* eslint-disable max-lines -- Why: MarkdownPreview keeps rendering, link interception, search, and viewport state together so preview behavior stays coherent. */
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: search match state is synchronized with DOM highlights inserted into the rendered markdown body. */
 import React, {
   useCallback,
@@ -296,9 +294,7 @@ const markdownPreviewSanitizeSchema = {
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
   protocols: {
     ...defaultSchema.protocols,
-    // Why: markdown preview owns file:// click routing and authorizes the
-    // user-selected path before opening it in Orca. Sanitization must preserve
-    // the target so the click handler can make that security decision.
+    // Why: keep file:// through sanitize so the click handler can authorize and open the target (the security decision lives there).
     href: [...(defaultSchema.protocols?.href ?? []), 'file'],
     src: [...(defaultSchema.protocols?.src ?? []), 'file']
   },
@@ -484,22 +480,19 @@ export default function MarkdownPreview({
     if (!input) {
       return
     }
-    // Why: opening preview search should select the query once, while typing
-    // and match-count updates must not keep re-selecting the field.
+    // Why: select the query once on open; typing and match-count updates must not keep re-selecting the field.
     input.focus()
     input.select()
   }, [])
   const matchesRef = useRef<Range[]>([])
-  // Stable token identifying this preview in the document-global highlight
-  // registry, so split/floating previews don't clobber each other's Find paint.
+  // Stable per-preview token in the doc-global highlight registry so split/floating previews don't clobber each other's Find paint.
   const searchInstanceRef = useRef<object>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
   const pendingEditorRevealFrameIdsRef = useRef<number[]>([])
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
-  // Bumps whenever the match ranges are recomputed, so the active-highlight
-  // effect re-runs even when a streamed rerender yields the same count/index.
+  // Bumps when ranges recompute so the active-highlight effect re-runs even when a rerender yields the same count/index.
   const [searchRevision, setSearchRevision] = useState(0)
   const [activeMatchIndex, setActiveMatchIndex] = useState(-1)
   const isMac = navigator.userAgent.includes('Mac')
@@ -608,11 +601,7 @@ export default function MarkdownPreview({
   }, [renderedContent, filePath, imageRuntimeContext])
 
   const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
-  // Why: building the table of contents runs a full-document remark parse on
-  // every content change, and the preview's content churns on streamed/external
-  // file writes. The result is only used while the panel is open (closed by
-  // default), so gate the parse on visibility; showTableOfContents in the deps
-  // rebuilds the outline the moment it opens.
+  // Why: TOC parse is a full-document remark pass; gate on the (default-closed) panel's visibility so it only runs while open.
   const tableOfContentsItems = useMemo(
     () => selectMarkdownTableOfContents(showTableOfContents, renderedContent),
     [renderedContent, showTableOfContents]
@@ -630,21 +619,18 @@ export default function MarkdownPreview({
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
-  // Why: front matter shows by default and is toggled off from the markdown
-  // preview actions menu; the store map only carries per-file hide overrides.
+  // Why: front matter is visible by default; the store map only carries per-file hide overrides.
   const toggleableSourceFileId: string | null = sourceFileId ?? null
   const frontmatterVisible = toggleableSourceFileId
     ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? true)
     : true
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const activeAnnotationBlockKeyRef = useRef(activeAnnotationBlockKey)
-  // Why: mirrored in an effect (not the render body) so a discarded render
-  // pass cannot leak into the ref; keydown paths still write it eagerly.
+  // Why: mirror in an effect (not render body) so a discarded render can't leak into the ref; keydown paths still write eagerly.
   useEffect(() => {
     activeAnnotationBlockKeyRef.current = activeAnnotationBlockKey
   }, [activeAnnotationBlockKey])
-  // Why: line-derived block keys can go stale after content renumbers; drop them
-  // when the block no longer mounts so the shortcut cannot lock out forever.
+  // Why: line-derived block keys go stale after content renumbers; drop unmounted ones so the shortcut can't lock out forever.
   useEffect(() => {
     if (!activeAnnotationBlockKey) {
       return
@@ -653,18 +639,15 @@ export default function MarkdownPreview({
     if (!root || previewHasAnnotationBlockKey(root, activeAnnotationBlockKey)) {
       return
     }
-    // Why: the mirror effect above re-syncs the ref once this setState commits;
-    // only the same-tick keydown paths need an eager manual write.
+    // Why: the mirror effect re-syncs the ref after this commits; only same-tick keydown paths need an eager write.
     setActiveAnnotationBlockKey(null)
-    // Why: keyed on renderedContent (not content) — the DOM the block keys live
-    // in derives from it and can lag content during external-edit preservation.
+    // Why: key on renderedContent (not content) since block keys live in the DOM derived from it and can lag content.
   }, [activeAnnotationBlockKey, renderedContent])
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
   const [copiedReviewNoteId, setCopiedReviewNoteId] = useState<string | null>(null)
   const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
   const copiedReviewNoteResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after the preview unmounts; skip copied
-  // feedback instead of starting a reset timer on a stale preview.
+  // Why: clipboard IPC can resolve after unmount; skip copied feedback instead of starting a reset timer on a stale preview.
   const reviewNotesCopyMountedRef = useRef(false)
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
@@ -696,9 +679,7 @@ export default function MarkdownPreview({
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
   )
 
-  // Why: each split pane needs its own markdown preview viewport even when the
-  // underlying file is shared. The caller passes a pane-scoped cache key so
-  // duplicate tabs do not overwrite each other's preview scroll state.
+  // Why: split panes share the file but each needs its own scroll viewport, so the caller passes a pane-scoped cache key.
 
   // Save scroll position with trailing throttle and synchronous unmount snapshot.
   useLayoutEffect(() => {
@@ -721,9 +702,7 @@ export default function MarkdownPreview({
 
     container.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      // Why: During React StrictMode double-mount (or rapid mount/unmount before
-      // react-markdown renders content), scrollHeight equals clientHeight and
-      // scrollTop is 0. Saving that would clobber a valid cached position.
+      // Why: on StrictMode double-mount scrollHeight==clientHeight and scrollTop is 0; saving that would clobber a valid cached position.
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       }
@@ -745,10 +724,7 @@ export default function MarkdownPreview({
     let frameId = 0
     let attempts = 0
 
-    // Why: react-markdown renders asynchronously, so scrollHeight may still be
-    // too small on the first frame. Retry up to 30 frames (~500ms at 60fps) to
-    // accommodate content loading. This matches CombinedDiffViewer's proven
-    // pattern for dynamic-height content restoration.
+    // Why: react-markdown renders async so scrollHeight lags; retry up to 30 frames (~500ms at 60fps) until content is tall enough.
     const tryRestore = (): void => {
       const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
       const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
@@ -766,9 +742,7 @@ export default function MarkdownPreview({
 
     tryRestore()
     return () => window.cancelAnimationFrame(frameId)
-    // Why: content is included so the restore loop re-triggers when markdown
-    // content arrives or changes (e.g., async file load), since scrollHeight
-    // depends on rendered content and may not be large enough until then.
+    // Why: renderedContent is a dep so the restore re-triggers when async content arrives and scrollHeight finally grows.
   }, [scrollCacheKey, renderedContent])
 
   const moveToMatch = useCallback((direction: 1 | -1) => {
@@ -812,8 +786,7 @@ export default function MarkdownPreview({
   }, [])
 
   const cleanupPreviewSurfaceTimers = useCallback((): void => {
-    // Why: reveal/copy timers are event-owned, but the final cancellation
-    // belongs to the preview surface unmount.
+    // Why: reveal/copy timers are event-owned, but the final cancellation belongs to preview-surface unmount.
     cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
     clearMarkdownPreviewTimeout(attentionReviewCommentTimeoutRef)
     clearReviewNotesCopiedResetTimer()
@@ -877,9 +850,7 @@ export default function MarkdownPreview({
       return
     }
 
-    // Search decorations are painted via the CSS Custom Highlight API (Ranges,
-    // no DOM mutation) because the rendered preview is owned by react-markdown;
-    // splitting its nodes to inject <mark> corrupted react's tree (crash 237acef1).
+    // Why: paint via CSS Custom Highlight API (no DOM mutation) — injecting <mark> into react-markdown's tree crashed react (237acef1).
     const matches = applyMarkdownPreviewSearchHighlights(instanceId, body, query)
     matchesRef.current = matches
     setMatchCount(matches.length)
@@ -959,8 +930,7 @@ export default function MarkdownPreview({
         return
       }
       if (reviewNoteKey.action === 'clear-stale-and-ignore') {
-        // Why: drop a line-derived key that no longer mounts a composer so the
-        // shortcut cannot stay permanently consumed after content renumbers.
+        // Why: drop a stale line-derived key with no mounted composer so the shortcut can't stay consumed after content renumbers.
         activeAnnotationBlockKeyRef.current = null
         setActiveAnnotationBlockKey(null)
         return
@@ -1362,10 +1332,7 @@ export default function MarkdownPreview({
             return
           }
 
-          // Why: Cmd/Ctrl+Shift-click is the OS escape hatch — always hand the
-          // link to the system default handler, bypassing the classifier. For a
-          // dangling in-worktree .md, pre-check existence so the user sees a
-          // toast instead of the silent no-op from shell.openFileUri.
+          // Why: Cmd/Ctrl+Shift-click is the OS escape hatch — bypass the classifier; pre-check a dangling .md so the user gets a toast, not a silent openFileUri no-op.
           if (isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
             if (sourceOwner.kind === 'unknown') {
               return
@@ -1402,8 +1369,7 @@ export default function MarkdownPreview({
                   { connectionId: sourceConnectionId }
                 )
               ) {
-                // Why: modifier-open delegates to the client OS. Server-local
-                // file:// targets from remote runtime/SSH worktrees cannot be opened locally.
+                // Why: modifier-open delegates to the client OS; server-local file:// from remote runtime/SSH worktrees can't open locally.
                 showLocalPathOpenBlockedToast()
                 return
               }
@@ -1412,8 +1378,7 @@ export default function MarkdownPreview({
                 classified?.kind === 'markdown' ||
                 (classified?.kind === 'file' && classified.line !== undefined)
               ) {
-                // Why: use the classifier's stripped absolutePath (no `:line:col`
-                // or `#L10` suffix) so the OS handler receives a clean file URI.
+                // Why: use the classifier's stripped absolutePath (no `:line:col`/`#L10`) so the OS handler gets a clean file URI.
                 const cleanUri = absolutePathToFileUri(classified.absolutePath)
                 void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
                   if (!exists) {
@@ -1441,10 +1406,7 @@ export default function MarkdownPreview({
           }
 
           if (target.protocol === 'http:' || target.protocol === 'https:') {
-            // Why: route through openHttpLink (not raw shell.openUrl) so a plain
-            // click honors the "open links in Orca" setting; openHttpLink keeps
-            // remote runtimes on the system browser. (Cmd/Ctrl+Shift-click is
-            // handled above; this path only sees non-escape-hatch clicks.)
+            // Why: route through openHttpLink (not shell.openUrl) so a plain click honors "open links in Orca"; remote runtimes stay on the system browser.
             openHttpLink(
               target.toString(),
               resolveMarkdownPreviewHttpOpenOptions(
@@ -1473,10 +1435,7 @@ export default function MarkdownPreview({
               ? { line: classifiedFileTarget.line, column: classifiedFileTarget.column }
               : parseLineTarget(target.hash)
 
-          // Why: same-file anchors need no ownership/filesystem resolution (e.g.
-          // `./README.md#heading` when this file is README.md). Run before the
-          // unknown-ownership guard so ambiguous folder-workspace ownership still
-          // scrolls within the open document.
+          // Why: same-file anchors need no ownership resolution; run before the unknown-ownership guard so ambiguous ownership still scrolls in-doc.
           if (absolutePath === filePath && target.hash && !lineTarget) {
             void scrollToAnchor(target.hash.slice(1))
             return
@@ -1494,9 +1453,7 @@ export default function MarkdownPreview({
           )
           if (!targetWorktree) {
             if (sourceRoutingWorktreeId && worktreeRoot) {
-              // Why: floating markdown files are owned by a synthetic workspace,
-              // so there may be no repo worktree even though Orca can stat/open
-              // links relative to the source file root.
+              // Why: floating markdown lives in a synthetic workspace with no repo worktree, though Orca can still open links relative to the source root.
               void activateMarkdownLink(href, {
                 sourceFilePath: filePath,
                 worktreeId: sourceRoutingWorktreeId,
@@ -1515,8 +1472,7 @@ export default function MarkdownPreview({
                 { connectionId: sourceConnectionId }
               )
             ) {
-              // Why: without a workspace match, opening a file URI delegates to
-              // the client OS. Remote runtime/SSH paths are not local files.
+              // Why: without a workspace match, opening a file URI delegates to the client OS; remote runtime/SSH paths aren't local files.
               showLocalPathOpenBlockedToast()
               return
             }
@@ -1567,8 +1523,7 @@ export default function MarkdownPreview({
             return
           }
 
-          // Why: line targets like #L10 and path.ts:10 should reveal in Monaco,
-          // not open a preview tab or a literal path with the suffix included.
+          // Why: line targets like #L10 and path.ts:10 should reveal in Monaco, not open a preview tab or a literal suffixed path.
           if (lineTarget) {
             openFile({
               filePath: absolutePath,
@@ -1640,9 +1595,7 @@ export default function MarkdownPreview({
         )
       },
       img: function MarkdownImg({ src, alt, ...props }) {
-        // eslint-disable-next-line react-hooks/rules-of-hooks -- react-markdown
-        // instantiates component overrides as regular React components, so hooks
-        // are valid here despite the lowercase function name.
+        // eslint-disable-next-line react-hooks/rules-of-hooks -- react-markdown instantiates overrides as regular components, so hooks are valid despite the lowercase name.
         const resolvedSrc = useLocalImageSrc(src, filePath, undefined, imageRuntimeContext)
         const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
           if (!isMarkdownPreviewOpenModifier(event, isMac)) {
@@ -1664,16 +1617,10 @@ export default function MarkdownPreview({
           })
         }
 
-        // Why: display uses IPC-backed blob URLs, but Cmd/Ctrl-click should open
-        // the original markdown target so local and SSH worktree images route
-        // through the same editor path as normal file links.
+        // Why: display uses IPC blob URLs, but Cmd/Ctrl-click opens the original target so local/SSH images use the normal file-link path.
         return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
-      // Why: Intercept code elements to detect mermaid fenced blocks. rehype-highlight
-      // sets className="language-mermaid" on the <code> inside <pre> for ```mermaid blocks.
-      // We render those as SVG diagrams instead of highlighted source. Markdown preview
-      // opts out of Mermaid HTML labels because this path sanitizes the SVG before
-      // injection, and sanitized foreignObject labels disappear on some platforms.
+      // Why: render language-mermaid blocks as SVG; opt out of Mermaid HTML labels since sanitized foreignObject labels disappear on some platforms.
       code: ({ className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
           return (
@@ -1686,11 +1633,7 @@ export default function MarkdownPreview({
           </code>
         )
       },
-      // Why: Wrap <pre> blocks with a positioned container so a copy button can
-      // overlay the code block. Mermaid diagrams are detected and passed through
-      // unwrapped — MermaidBlock renders via useEffect/innerHTML, not React children,
-      // so CodeBlockCopyButton's extractText() would copy an empty string, and a
-      // <div> inside <pre> produces invalid HTML.
+      // Why: wrap <pre> for the copy button, but pass MermaidBlock through unwrapped (it renders via innerHTML so extractText copies nothing, and <div> in <pre> is invalid HTML).
       pre: ({ node, children, ...props }) => {
         const child = React.Children.toArray(children)[0]
         if (React.isValidElement(child) && child.type === MermaidBlock) {
@@ -1739,8 +1682,7 @@ export default function MarkdownPreview({
               }`.trim()}
               data-source-line={range.startLine}
               data-source-end-line={range.endLine}
-              // Why: only advertise the block to the add-review-note shortcut
-              // when the composer can actually render (mirrors wrapAnnotatedBlock).
+              // Why: only advertise the block to the add-review-note shortcut when the composer can render (mirrors wrapAnnotatedBlock).
               data-annotation-block-key={controls ? blockKey : undefined}
               onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
             >
@@ -1805,9 +1747,7 @@ export default function MarkdownPreview({
         )
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the `img` override calls useLocalImageSrc
-    // which is a hook, so react-markdown must see a stable component identity. The deps listed here
-    // cover every value the overrides actually close over; slugger is a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- img override calls useLocalImageSrc (a hook) so identity must stay stable; deps cover every closed-over value.
   }, [
     filePath,
     activateMarkdownLink,
@@ -1994,13 +1934,9 @@ export default function MarkdownPreview({
             ) : null}
           </div>
         ) : null}
-        {/* Why: translate="no" keeps browser/OS page-translation from swapping
-            text nodes react owns, which otherwise triggers the same
-            insertBefore/removeChild reconciliation crash (237acef1). */}
+        {/* Why: translate="no" stops OS page-translation swapping react-owned text nodes → insertBefore/removeChild crash (237acef1). */}
         <div ref={bodyRef} className="markdown-body" translate="no">
-          {/* Why: remarkFrontmatter strips front matter from normal markdown
-        output. When the user opts in from the preview actions menu, render the
-        raw metadata as a compact read-only block above the document body. */}
+          {/* Why: remarkFrontmatter strips front matter, so render it as a read-only block when the user opts in. */}
           {frontMatter && frontmatterVisible ? (
             <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -2013,8 +1949,7 @@ export default function MarkdownPreview({
           ) : null}
           <Markdown
             components={components}
-            // Why: react-markdown filters file:// after rehype-sanitize; preview
-            // click handlers need the target so they can authorize and open it.
+            // Why: react-markdown filters file:// after sanitize; click handlers need the target to authorize and open it.
             urlTransform={markdownPreviewUrlTransform}
             remarkPlugins={[
               remarkGfm,
@@ -2023,10 +1958,7 @@ export default function MarkdownPreview({
               remarkMath,
               remarkMarkdownDocLinks
             ]}
-            // Why: raw HTML must be sanitized before any trusted renderer expands
-            // it into richer DOM. Running KaTeX and syntax highlighting after
-            // sanitize preserves VS Code-style math/code rendering without having
-            // to whitelist KaTeX's generated markup in the user-content schema.
+            // Why: sanitize raw HTML before KaTeX/highlight expand it, so their generated markup needn't be whitelisted in the schema.
             rehypePlugins={[
               rehypeRaw,
               [rehypeSanitize, markdownPreviewSanitizeSchema],
@@ -2093,9 +2025,7 @@ function MarkdownAnnotationComposer({
   const mountedRef = useMountedRef()
   const composerRef = useRef<HTMLDivElement | null>(null)
 
-  // Why: product B — composer focus is in the textarea, so consume the bindable
-  // add-review-note chord on the composer subtree (same guard as
-  // DiffCommentPopover) rather than window, so other surfaces keep their chord.
+  // Why: scope the add-review-note chord (product B) to the composer subtree like DiffCommentPopover, not window, so other surfaces keep theirs.
   useEffect(() => {
     const composer = composerRef.current
     if (!composer) {
@@ -2105,8 +2035,7 @@ function MarkdownAnnotationComposer({
   }, [])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
-    // Why: opening an annotation composer should focus the draft field on the
-    // mount edge; no external subscription is needed.
+    // Why: callback ref focuses on the mount edge, so no effect subscription is needed.
     textarea?.focus()
   }, [])
 

@@ -237,8 +237,7 @@ const BROWSER_ANNOTATION_INTENT_OPTIONS = [
   }
 ] as const
 
-// Why: priority remains in the persisted annotation shape for backwards
-// compatibility, but the annotation UI no longer exposes urgency choices.
+// Why: priority stays in the persisted annotation shape for backwards compat, though the UI no longer exposes urgency choices.
 const DEFAULT_BROWSER_ANNOTATION_PRIORITY: BrowserAnnotationPriority = 'important'
 const BROWSER_PAGE_ZOOM_FEEDBACK_MS = 1400
 
@@ -330,8 +329,7 @@ function createBrowserAnnotationId(): string {
 function createBrowserAnnotationPayload(payload: BrowserGrabPayload): BrowserAnnotationPayload {
   return {
     ...payload,
-    // Why: annotations are persisted renderer state; screenshot data is a
-    // transient copy action payload and can be megabytes per selection.
+    // Why: annotations are persisted; screenshot data is a transient copy payload that can be megabytes per selection.
     screenshot: null
   }
 }
@@ -709,10 +707,7 @@ function getOpenableExternalUrl(
     try {
       currentUrl = webview.getURL() || fallbackUrl
     } catch {
-      // Why: restored browser tabs render before the guest emits dom-ready.
-      // Electron throws if toolbar code queries navigation state too early, and
-      // that renderer exception blanks the whole IDE on launch. Fall back to the
-      // persisted tab URL until the guest is fully attached.
+      // Why: querying nav state before dom-ready throws and blanks the whole IDE on launch; fall back to the persisted URL.
       currentUrl = fallbackUrl
     }
   }
@@ -725,9 +720,7 @@ function getCurrentBrowserUrl(webview: Electron.WebviewTag | null, fallbackUrl: 
     try {
       currentUrl = webview.getURL() || fallbackUrl
     } catch {
-      // Why: toolbar actions still need a stable URL during early guest attach
-      // and restore. Fall back to the persisted tab URL instead of throwing
-      // and dropping browser actions on freshly restored tabs.
+      // Why: toolbar actions need a stable URL during early guest attach/restore; fall back to the persisted URL instead of throwing.
       currentUrl = fallbackUrl
     }
   }
@@ -750,12 +743,7 @@ function retryBrowserTabLoad(
     return
   }
 
-  // Why: once Chromium lands on chrome-error://chromewebdata/, reload() can
-  // simply refresh the internal error page instead of retrying the original
-  // destination. Force navigation back to the attempted URL so Retry and the
-  // toolbar reload button actually re-attempt the failed page. Keep the last
-  // failure visible until a real success arrives so retry does not briefly
-  // drop the user back to a blank black guest surface.
+  // Why: after chrome-error://, reload() only refreshes the error page — force navigation back to the attempted URL; keep the failure visible until success.
   onUpdatePageState(browserTab.id, {
     loading: true,
     title: retryUrl
@@ -788,9 +776,7 @@ export default function BrowserPane({
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
   const mobileDrivenPageIds = useBrowserMobileDrivenPageIds(browserPageIds)
-  // Why: inactive Electron webviews must stay mounted in their original DOM
-  // parent. Parking them by unmounting/reparenting loses form text and SPA
-  // state on normal tab switches.
+  // Why: inactive webviews must stay mounted in their original DOM parent; unmounting/reparenting loses form text and SPA state.
   const renderedBrowserPages = browserPages.filter(
     (page) => !getBrowserPageRuntimeEnvironmentId(page, activeRuntimeEnvironmentId)
   )
@@ -949,10 +935,7 @@ function RemoteBrowserPagePane({
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const keybindings = useAppStore((state) => state.keybindings)
 
-  // Why: a remote runtime that predates browser.certificate-trust.v1 cannot
-  // honor a proceed request, so the "Proceed Anyway (Unsafe)" affordance stays
-  // hidden until the connected runtime positively advertises support (design
-  // doc: older runtimes never show an enabled proceed action).
+  // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
   const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
   const remoteCertificateEnvironmentId = remotePageHandle?.environmentId ?? null
   const certificateChallengeId = certificateFailure?.challengeId ?? null
@@ -1045,8 +1028,7 @@ function RemoteBrowserPagePane({
       clearStreamFrame()
       setRemoteError(null)
       setBusy(false)
-      // Why: a runtime-side tab close is the remote equivalent of closing the
-      // visible browser tab; don't leave a dead pane behind with a not-found RPC.
+      // Why: a runtime-side tab close mirrors closing the visible tab; don't leave a dead pane behind.
       const workspacePageCount = state.browserPagesByWorkspace[browserTab.workspaceId]?.length ?? 0
       if (workspacePageCount <= 1) {
         closeBrowserTab(browserTab.workspaceId)
@@ -1128,8 +1110,7 @@ function RemoteBrowserPagePane({
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       )
       try {
-        // Why: the streamed bitmap can include the host compositor surface,
-        // while CDP input wants the guest page's CSS viewport coordinates.
+        // Why: the streamed bitmap can include the host compositor surface, but CDP input wants the guest page's CSS viewport coords.
         const viewport = await callRuntimeRpc(
           target,
           'browser.eval',
@@ -1209,10 +1190,7 @@ function RemoteBrowserPagePane({
   )
 
   useEffect(() => {
-    // Why: StrictMode (and any real remount) runs mount→cleanup→mount. The
-    // cleanup sets mountedRef false; without re-arming it on mount, every
-    // subsequent operation token reads as stale (isCurrentRemoteOperationToken
-    // gates on mountedRef) and the pane wedges on "Opening remote browser".
+    // Why: StrictMode's mount→cleanup→mount leaves mountedRef false; re-arm or operation tokens read stale and the pane wedges.
     mountedRef.current = true
     return () => {
       mountedRef.current = false
@@ -1243,11 +1221,7 @@ function RemoteBrowserPagePane({
   }, [clearPendingRemoteWheel])
 
   useEffect(() => {
-    // Why: only reset the visible frame/wheel when the pane's identity changes.
-    // The stream/operation generations are owned solely by the streaming effect
-    // below — bumping them here too races that effect (e.g. under StrictMode's
-    // mount→cleanup→mount), leaving its captured token permanently one behind so
-    // the pane wedges on "Opening remote browser" while frames are available.
+    // Why: only reset frame/wheel on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
     remoteStreamViewportSizeRef.current = null
     clearPendingRemoteWheel()
     clearStreamFrame()
@@ -1352,8 +1326,7 @@ function RemoteBrowserPagePane({
       if (!removedHandle) {
         return
       }
-      // Why: remote browser tabs outlive React components on the daemon. Close
-      // only when the local page is gone or its owning runtime environment is.
+      // Why: remote tabs outlive React components on the daemon; close only when the local page or its runtime environment is gone.
       void callRuntimeRpc(
         { kind: 'environment', environmentId: removedHandle.environmentId },
         'browser.tabClose',
@@ -1643,9 +1616,7 @@ function RemoteBrowserPagePane({
       streamSubscriptionRef.current = null
       activeStreamTokenRef.current = null
       remoteStreamViewportSizeRef.current = null
-      // Why: browser navigation can close and recreate the screencast stream.
-      // Keep the last frame visible during restart so remote browser panes do
-      // not flash back to the generic loading placeholder on every navigation.
+      // Why: navigation recreates the screencast stream; keep the last frame during restart so panes don't flash the loading placeholder.
       if (!restart) {
         clearStreamFrame()
       }
@@ -1787,9 +1758,7 @@ function RemoteBrowserPagePane({
         return
       }
 
-      // Why: the runtime stream validates frames against the viewport it was
-      // started with. After a pane resize, restart media so new-size frames are
-      // accepted instead of leaving the renderer on the last old-size bitmap.
+      // Why: the runtime stream validates frames against its start viewport, so restart media after resize or new-size frames get rejected.
       streamGenerationRef.current += 1
       activeStreamTokenRef.current = null
       streamSubscriptionRef.current = null
@@ -2001,8 +1970,7 @@ function RemoteBrowserPagePane({
         setRemoteError(message)
         onUpdatePageState(browserTab.id, {
           loading: false,
-          // Why: validatedUrl crosses process/persistence boundaries, so redact a
-          // Kagi session token the same way the main-process failure path does.
+          // Why: validatedUrl is persisted, so redact the Kagi session token like the main-process failure path does.
           loadError: {
             code: 0,
             description: message,
@@ -2037,8 +2005,7 @@ function RemoteBrowserPagePane({
   )
 
   // Browser history shortcuts for SSH/runtime browsers.
-  // Why: remote browser panes have no local webview ref, so history shortcuts
-  // must route through the runtime RPC methods rather than desktop WebContents.
+  // Why: remote panes have no local webview ref, so route history through runtime RPC instead of WebContents.
   useEffect(() => {
     if (!isActive) {
       return
@@ -2413,8 +2380,7 @@ function RemoteBrowserPagePane({
     if (!image || !frameUrl) {
       return
     }
-    // Why: React delegates wheel listeners passively in Chromium, so native
-    // non-passive binding is required to prevent page scroll and console noise.
+    // Why: React binds wheel listeners passively in Chromium, so bind natively non-passive to preventDefault scroll.
     image.addEventListener('wheel', handleRemoteScreenshotWheel, { passive: false })
     return () => image.removeEventListener('wheel', handleRemoteScreenshotWheel)
   }, [frameUrl, handleRemoteScreenshotWheel])
@@ -2427,9 +2393,7 @@ function RemoteBrowserPagePane({
     remoteFailureUrl !== 'about:blank' &&
     remoteFailureUrl !== ORCA_BROWSER_BLANK_URL
 
-  // Why: markup works on remote panes by snapshotting the already-displayed
-  // screencast <img> — no in-page injection needed, so it is enabled here even
-  // though element-grab annotations are not.
+  // Why: markup snapshots the displayed screencast <img> (no injection), so it works on remote panes even though element-grab doesn't.
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const element = imageRef.current
@@ -2847,9 +2811,7 @@ function BrowserPagePane({
   inputLockedRef.current = inputLocked
   const navigateBrowserHistoryRef = useRef<(direction: 'back' | 'forward') => void>(() => {})
   navigateBrowserHistoryRef.current = (direction: 'back' | 'forward'): void => {
-    // Why: Logitech Options+ side-button remaps on macOS arrive as these
-    // keyboard shortcuts. This local pane owns the webview ref, so route the
-    // remap through the same navigation path as the toolbar buttons.
+    // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
     if (direction === 'back') {
       webviewRef.current?.goBack()
     } else {
@@ -2872,18 +2834,11 @@ function BrowserPagePane({
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
   const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError)
-  // Why: CDP viewport emulation does not survive all renderer process swaps
-  // (cross-origin navigations, crashes). We reapply on every dom-ready from
-  // this ref so the persisted preset survives reloads without re-running the
-  // webview lifecycle effect whenever the preset changes.
+  // Why: CDP viewport emulation doesn't survive renderer process swaps, so reapply the preset from this ref on every dom-ready.
   const viewportPresetIdRef = useRef(browserTab.viewportPresetId ?? null)
   viewportPresetIdRef.current = browserTab.viewportPresetId ?? null
   const trackNextLoadingEventRef = useRef(false)
-  // Why: tracks the most recent URL the webview has navigated to or been
-  // observed at, from any source (navigation events, address bar, initial
-  // load). The URL sync effect checks this ref to avoid force-navigating
-  // the webview to an intermediate redirect URL — which would restart the
-  // redirect chain and cause an infinite loop.
+  // Most-recent observed webview URL; URL sync checks it to avoid force-navigating to an intermediate redirect (which would loop the redirect chain).
   const lastKnownWebviewUrlRef = useRef<string | null>(null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const onSetUrlRef = useRef(onSetUrl)
@@ -3026,10 +2981,7 @@ function BrowserPagePane({
 
   const keepAddressBarFocusRef = useRef(false)
 
-  // Inline toast that appears near the grabbed element instead of the global
-  // bottom-right toaster, so feedback feels spatially connected to the action.
-  // Why: positioned below (or above, if near viewport bottom) so it doesn't
-  // occlude the element the user just selected.
+  // Inline toast near the grabbed element (below, or above near the viewport bottom) so it doesn't occlude the selection.
   const [grabToast, setGrabToast] = useState<{
     message: string
     type: 'success' | 'error'
@@ -3056,10 +3008,7 @@ function BrowserPagePane({
   const dismissGrabToast = useCallback(() => {
     clearTimeout(grabToastTimerRef.current)
     setGrabToast(null)
-    // Why: only rearm if the grab state is still 'confirming', meaning the
-    // auto-copy toast is dismissing naturally. If the user already triggered
-    // a shortcut (C/S) that called rearm, the state will be 'armed' and we
-    // skip to avoid a double-rearm race.
+    // Why: only rearm while 'confirming'; if a C/S shortcut already rearmed (state 'armed'), skip to avoid a double-rearm race.
     if (
       grabRef.current.state === 'confirming' &&
       !(grabIntentRef.current === 'annotate' && pendingAnnotationPayloadRef.current)
@@ -3098,9 +3047,7 @@ function BrowserPagePane({
     [dismissGrabToast]
   )
 
-  // Why: the same in-guest picker powers two flows. Cmd/Ctrl+C preserves the
-  // original one-click copy behavior, while the toolbar annotation action turns
-  // the selected element into a pending feedback note.
+  // Why: the same in-guest picker powers two flows — Cmd/Ctrl+C copies, the toolbar action creates a pending annotation.
   useEffect(() => {
     if (grab.state !== 'confirming' || !grab.payload) {
       return
@@ -3164,10 +3111,7 @@ function BrowserPagePane({
   }, [browserTab.id, browserTab.url])
 
   useEffect(() => {
-    // Why: if the user is actively typing in the address bar (focused), do not
-    // clobber their in-progress query when an async URL update lands (e.g., the
-    // configured default URL resolving after a new tab opens). Syncing will
-    // resume on the next legitimate URL change after the input loses focus.
+    // Why: don't clobber an in-progress address-bar query when an async URL update lands; syncing resumes once the input blurs.
     if (document.activeElement === addressBarInputRef.current) {
       return
     }
@@ -3218,13 +3162,7 @@ function BrowserPagePane({
       if (event.browserPageId !== browserTab.id) {
         return
       }
-      // Why: convert the OS screen cursor position to the renderer's CSS
-      // viewport coordinates. This is the only approach immune to coordinate
-      // space mismatches between the guest process and the renderer (caused
-      // by UI zoom, DPI scaling, or Electron version differences).
-      // window.screenX/Y gives the window origin in the same screen
-      // coordinate system that screen.getCursorScreenPoint() uses. Dividing
-      // by the zoom factor converts screen points to CSS pixels.
+      // Why: convert OS screen cursor coords to renderer CSS pixels — immune to guest/renderer coordinate-space mismatches from zoom/DPI.
       const zoomFactor = Math.pow(1.2, window.api.ui.getZoomLevel())
       const x = Math.round((event.screenX - window.screenX) / zoomFactor)
       const y = Math.round((event.screenY - window.screenY) / zoomFactor)
@@ -3271,12 +3209,7 @@ function BrowserPagePane({
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [contextMenu])
 
-  // Why: position: fixed can be offset by ancestor CSS properties (backdrop-filter,
-  // transform, will-change) that create new containing blocks. Even with a Portal to
-  // document.body, global CSS or Electron chrome can shift the element. Measuring the
-  // actual rendered position and correcting before paint is immune to all of these.
-  // Additionally, flip the menu when it would overflow the viewport edge so right-clicking
-  // near the screen border keeps the entire menu visible.
+  // Why: ancestor CSS (transform/backdrop-filter) can shift position:fixed even via a body Portal, so measure/correct before paint; also flip on viewport overflow.
   useLayoutEffect(() => {
     const el = contextMenuRef.current
     if (!el || !contextMenu) {
@@ -3286,8 +3219,7 @@ function BrowserPagePane({
     el.style.top = `${contextMenu.y}px`
     const rect = el.getBoundingClientRect()
 
-    // Why: CSS containing blocks can shift "fixed" elements. Capture the offset
-    // between where we asked CSS to place the element and where it actually rendered.
+    // Why: CSS containing blocks can shift "fixed" elements; capture the offset between requested and actual position.
     const offsetX = contextMenu.x - rect.left
     const offsetY = contextMenu.y - rect.top
 
@@ -3414,12 +3346,7 @@ function BrowserPagePane({
       return
     }
     keepAddressBarFocusRef.current = true
-    // Why: terminal activation restores xterm focus on a later animation frame
-    // when the surface changes. A single address-bar focus attempt can lose
-    // that race, leaving the new browser tab on <body>. Retry briefly across a
-    // few frames so a freshly opened blank tab still lands in the location bar,
-    // but keep the request one-shot so revisiting the tab later does not steal
-    // focus back from the user.
+    // Why: terminal activation re-grabs focus a frame later; retry a few frames to win the race, but stay one-shot so revisiting the tab doesn't steal focus.
     let cancelled = false
     let frameId = 0
     let attempts = 0
@@ -3473,9 +3400,7 @@ function BrowserPagePane({
         frameId = window.requestAnimationFrame(runFocus)
       }
     }
-    // Why: jump-palette browser focus can be queued before the target page
-    // pane mounts. Persisting the request outside React lets the active page
-    // claim it once mounted instead of depending on a transient event race.
+    // Why: focus can be queued before the pane mounts; persisting outside React lets it be claimed on mount instead of racing an event.
     frameId = window.requestAnimationFrame(runFocus)
     return () => {
       cancelled = true
@@ -3497,8 +3422,7 @@ function BrowserPagePane({
         return
       }
       if (focusTarget === 'address-bar') {
-        // Why: palette-triggered address-bar focus has to survive the same
-        // follow-up browser load events as the existing blank-tab path.
+        // Why: palette-triggered address-bar focus must survive the same follow-up load events as the blank-tab path.
         keepAddressBarFocusRef.current = true
         focusAddressBarNow()
         return
@@ -3506,19 +3430,14 @@ function BrowserPagePane({
       keepAddressBarFocusRef.current = false
       focusWebviewNow()
     }
-    // Why: queued focus lets a page claim a request after mount, but palette
-    // re-selecting an already-active page never remounts. Listening for the
-    // matching event lets the active pane consume the durable request
-    // immediately without regressing the mount/activation path above.
+    // Why: an already-active page never remounts, so listen for the event to consume the durable focus request immediately.
     window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
     return () =>
       window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
   }, [browserTab.id, focusAddressBarNow, focusWebviewNow, isActive])
 
   // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
-  // Why: unlike grab-mode shortcuts (bare C/S) which skip editable targets,
-  // Cmd+F is a modified chord that should always open find — even from the
-  // address bar. This matches Chrome/Safari behavior.
+  // Why: unlike bare C/S grab shortcuts, Cmd+F should always open find even from the address bar (matches Chrome/Safari).
   useEffect(() => {
     if (!isActive) {
       return
@@ -3537,9 +3456,7 @@ function BrowserPagePane({
   }, [isActive, keybindings])
 
   // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
-  // Why: a focused webview guest is a separate Chromium process so the renderer
-  // keydown handler above never fires. Main intercepts the chord and sends it
-  // back here so find works whether focus is on the toolbar or the page.
+  // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -3550,9 +3467,7 @@ function BrowserPagePane({
   }, [isActive])
 
   // Browser history shortcuts (renderer path: focus on browser chrome)
-  // Why: macOS cannot deliver Logitech side-button navigation to Electron, but
-  // Logi Options+ can remap those buttons to standard browser history chords.
-  // Handle the chords here when focus is on the toolbar or address bar.
+  // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
   useEffect(() => {
     if (!isActive) {
       return
@@ -3576,9 +3491,7 @@ function BrowserPagePane({
   }, [isActive, keybindings])
 
   // Browser history shortcuts (IPC path: focus inside webview guest)
-  // Why: a focused webview is a separate WebContents. Main forwards the same
-  // remapped history chords back here so page focus and toolbar focus behave
-  // identically.
+  // Why: a focused webview is a separate WebContents, so main forwards the chords back here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -3596,10 +3509,7 @@ function BrowserPagePane({
   }, [isActive])
 
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
-  // Why: when focus is inside the renderer chrome (address bar, toolbar buttons)
-  // rather than the webview guest, the guest shortcut forwarding in main never
-  // fires. Handle the chord directly here so reload works regardless of where
-  // focus sits within the browser pane.
+  // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -3632,9 +3542,7 @@ function BrowserPagePane({
   }, [isActive, keybindings])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
-  // Why: a focused webview guest is a separate Chromium process so the renderer
-  // keydown handler above never fires. Main intercepts the chord and sends it
-  // back here so reload works whether focus is on the toolbar or the page.
+  // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -3694,18 +3602,12 @@ function BrowserPagePane({
             webview.getTitle(),
             webview.getURL() || browserTabUrlRef.current
           ),
-          // Why: webview attach can transiently report isLoading() even
-          // when no user-visible navigation happened. If we sync that into the
-          // tab model on every activation, switching tabs flashes the blue
-          // loading dot and makes hidden tabs look like they are reloading.
-          // Only explicit navigation/load events should drive Orca's loading UI.
+          // Why: attach can transiently report isLoading() with no real navigation; syncing it would flash the loading dot on tab switches.
           canGoBack: webview.canGoBack(),
           canGoForward: webview.canGoForward()
         })
       } catch {
-        // Why: Electron only exposes these getters after the guest fully
-        // attaches. Ignoring the transient failure avoids crashing Orca while
-        // the webview guest becomes ready.
+        // Why: these getters only exist after the guest fully attaches; ignore the transient failure during attach.
       }
     },
     [browserTab.id]
@@ -3713,8 +3615,7 @@ function BrowserPagePane({
 
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
     const pendingAnnotationPayload = pendingAnnotationPayloadRef.current
-    // Why: existing annotation badges are rendered in the guest process for
-    // compositor-smooth scroll; only the pending dialog needs viewport messages.
+    // Why: existing badges render in-guest for smooth scroll; only the pending dialog needs viewport messages.
     const markers = browserAnnotationsRef.current.map((annotation, index) => ({
       id: annotation.id,
       index,
@@ -3732,16 +3633,11 @@ function BrowserPagePane({
         token: annotationViewportBridgeTokenRef.current
       })
       .catch(() => {
-        // The viewport bridge is visual-only; stale markers are less bad than
-        // breaking the browser pane on a navigated or destroyed guest.
+        // The viewport bridge is visual-only; stale markers beat breaking the pane on a destroyed guest.
       })
   }, [browserTab.id])
 
-  // Why: this effect manages the full lifecycle of the webview DOM element —
-  // creation, event wiring, and teardown. browserTab.url is
-  // intentionally excluded — it changes on every navigation, and including it
-  // would destroy and recreate the webview on every page load. URL-dependent
-  // logic inside the effect reads from browserTabUrlRef instead.
+  // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- see comment above
   useEffect(() => {
     let container = ensureBrowserPageViewport(browserTab.id, workspaceId)?.container ?? null
@@ -3766,25 +3662,16 @@ function BrowserPagePane({
     let needsInitialDefaultZoom = ensuredWebview.created
 
     if (!ensuredWebview.created) {
-      // pointerEvents is already applied inside ensureBrowserPageWebview for the
-      // reused-webview path, so it isn't repeated here.
+      // pointerEvents already applied inside ensureBrowserPageWebview for the reused-webview path.
       syncNavigationState(webview)
-      // Why: seed the ref with the store URL so the URL sync effect does not
-      // force-navigate an already-mounted webview that is on the right page.
-      // getURL() can throw briefly during attach, so use the store URL from the
-      // last navigation event.
+      // Why: seed from the store URL (getURL() can throw during attach) so URL sync won't force-navigate an already-correct webview.
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserTabUrlRef.current) ?? null
     }
 
     webviewRef.current = webview
 
-    // Why: the viewport shell is created display:none and the lifecycle cleanup
-    // parks it; the separate visibility layout effect (deps isActive/isPaintable)
-    // does NOT re-run when the viewport first appears (slotViewportReady flip) or
-    // on remount, so the shell must be un-parked here — before the initial
-    // `webview.src` is assigned — or the guest navigates while hidden and stays
-    // blank/about:blank.
+    // Why: un-park the shell before webview.src is assigned or the guest navigates while hidden and stays blank (the visibility layout effect doesn't re-run on first appear).
     applyBrowserPageViewportLayout(browserTab.id, { paintable: isPaintable, active: isActive })
 
     const onContainerDragOver = (event: globalThis.DragEvent): void => {
@@ -3823,8 +3710,7 @@ function BrowserPagePane({
           }
           return registered
         })
-        // Why: normalize IPC rejection to false so the dom-ready fallback can
-        // retry attach-policy races without an unhandled promise rejection.
+        // Why: normalize IPC rejection to false so the dom-ready fallback can retry attach-policy races.
         .catch(() => false)
         .finally(() => {
           if (registrationInFlight?.promise === promise) {
@@ -3836,9 +3722,7 @@ function BrowserPagePane({
     }
 
     const handleDidAttach = (): void => {
-      // Why: certificate failures can happen before dom-ready. Register at
-      // attach so main can map the initial failure to this page; dom-ready below
-      // remains an idempotent fallback for attach-policy races.
+      // Why: register at attach since cert failures can precede dom-ready; the dom-ready path stays an idempotent fallback.
       void registerGuest().finally(() => syncBrowserAnnotationViewportBridge())
     }
 
@@ -3862,17 +3746,10 @@ function BrowserPagePane({
         }
         needsInitialDefaultZoom = false
       }
-      // Why: CDP Emulation.setDeviceMetricsOverride and related overrides are
-      // scoped to the guest's debugger session and do not survive all
-      // cross-origin navigations (renderer swaps). Reapplying on dom-ready is
-      // idempotent, so users who picked a viewport preset keep it after
-      // reloads, SPA navigations, and persisted-session restoration.
+      // Why: CDP viewport overrides are scoped to the debugger session and don't survive cross-origin nav, so reapply (idempotently) on dom-ready.
       const presetId = viewportPresetIdRef.current
       const preset = getBrowserViewportPreset(presetId)
-      // Why: always reapply on dom-ready (including null) because
-      // Emulation.setDeviceMetricsOverride can persist across same-origin navigations
-      // within the same renderer. Sending null ensures CDP matches the store state
-      // instead of showing a stale emulated viewport after the user picks "Default".
+      // Why: reapply even null so CDP matches store state; setDeviceMetricsOverride persists across same-origin nav and would leave a stale viewport.
       void window.api.browser.setViewportOverride({
         browserPageId: browserTab.id,
         override: preset ? browserViewportPresetToOverride(preset) : null
@@ -3880,8 +3757,7 @@ function BrowserPagePane({
     }
 
     const handleDidStartLoading = (): void => {
-      // Why: reloads replace the document without changing URL, invalidating
-      // captured element rects and DOM context just like navigation does.
+      // Why: a reload replaces the document without changing the URL, invalidating captured element rects like a navigation does.
       clearBrowserPageAnnotationsRef.current(browserTab.id)
       setPendingAnnotationPayload(null)
       setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
@@ -3926,10 +3802,7 @@ function BrowserPagePane({
           normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
         if (normalizedAttemptedUrl === normalizedCurrentUrl) {
           trackNextLoadingEventRef.current = false
-          // Why: some webview failures still emit did-stop-loading on the
-          // original destination URL. If we clear loadError here, the failed
-          // navigation falls back to a blank Chromium surface even though Orca
-          // already knows this exact load failed.
+          // Why: some failures still emit did-stop-loading on the original URL; keep loadError so the known-failed load isn't cleared to a blank surface.
           onUpdatePageStateRef.current(browserTab.id, {
             loading: false,
             title: getBrowserDisplayTitle(webview.getTitle(), browserModelUrl),
@@ -3946,8 +3819,7 @@ function BrowserPagePane({
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
       rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
-      // Why: don't overwrite in-progress typing. See comment on the
-      // browserTab.url sync effect above.
+      // Why: don't overwrite in-progress typing (see the browserTab.url sync effect above).
       if (document.activeElement !== addressBarInputRef.current) {
         setAddressBarValue(toDisplayUrl(browserModelUrl))
       }
@@ -4025,9 +3897,7 @@ function BrowserPagePane({
         return
       }
       if (event.errorCode === -3) {
-        // Why: Chromium reports redirect/cancel races as ERR_ABORTED (-3) even
-        // when the replacement navigation succeeds. Ignore that noise so Orca
-        // does not show a false load failure for a working page.
+        // Why: Chromium reports redirect/cancel races as ERR_ABORTED (-3) even when the replacement navigation succeeds; ignore to avoid a false failure.
         return
       }
       trackNextLoadingEventRef.current = false
@@ -4070,10 +3940,7 @@ function BrowserPagePane({
     webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
-    // Why: separate handler registered only on 'did-navigate' (full page loads),
-    // NOT on 'did-navigate-in-page'. The shared handleDidNavigate is registered
-    // on both events, so adding find-close logic there would also close on SPA
-    // hash changes and pushState calls, which fire constantly on single-page apps.
+    // Why: close find only on full 'did-navigate', not the shared handler, which also fires on SPA in-page hash/pushState changes.
     const handleFindCloseOnNavigate = (): void => {
       setFindOpen(false)
     }
@@ -4087,10 +3954,7 @@ function BrowserPagePane({
     webview.addEventListener('console-message', handleAnnotationViewportMessage)
 
     if (needsInitialNavigation) {
-      // Why: connection-refused localhost tabs can fail before Electron wires up
-      // event delivery if src is assigned too early. Attach listeners first so
-      // Orca never misses the initial did-fail-load signal for a new tab.
-      // Only non-blank initial tabs should light up Orca's loading indicator.
+      // Why: set src only after listeners attach so a fast localhost failure isn't missed; only non-blank tabs show the loading indicator.
       const initialUrl =
         normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
       trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
@@ -4118,18 +3982,12 @@ function BrowserPagePane({
         webviewRef.current = null
       }
 
-      // Why: park the viewport when chrome unmounts (worktree switch) so the
-      // guest stays alive. Destruction is reserved for explicit close paths.
+      // Why: park the viewport on chrome unmount (worktree switch) to keep the guest alive; destroy only on explicit close.
       moveFocusToRendererBeforeWebviewDetach(webview)
       parkBrowserPageViewport(browserTab.id)
     }
-    // Why: this effect mounts and wires up webview event listeners once per tab
-    // identity. browserTab.url is intentionally excluded: re-running on URL
-    // changes would detach/reattach the webview, cancelling in-progress
-    // navigations. Callbacks use refs so they always see current values.
-    // webviewPartition IS included: switching profiles changes the partition,
-    // which requires destroying and recreating the webview since Electron does
-    // not allow changing a webview's partition after creation.
+    // Why: wire listeners once per tab identity. browserTab.url is excluded (re-running would detach/reattach and cancel navigations; callbacks use refs).
+    // webviewPartition IS included: Electron can't change a webview's partition after creation, so a profile switch must recreate it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTab.id,
@@ -4163,9 +4021,7 @@ function BrowserPagePane({
     return () => {
       resizeObserver?.disconnect()
     }
-    // Why: slotViewportReady gates viewport creation. Re-run once the viewport
-    // exists so visibility AND the chrome-inset measurement land on a real shell
-    // (the first render no-ops because ensureBrowserPageViewport returned null).
+    // Why: re-run once slotViewportReady flips so visibility and chrome-inset land on a real viewport (first render no-ops).
   }, [browserTab.id, isActive, isPaintable, slotViewportReady])
 
   useEffect(() => {
@@ -4187,12 +4043,7 @@ function BrowserPagePane({
     if (!normalizedUrl) {
       return
     }
-    // Why: navigation events (did-navigate, did-stop-loading) update both the
-    // store URL and this ref to the same value. If they match, the store URL
-    // change came from a navigation event — not a user action — so there is
-    // nothing to navigate to. Skipping here prevents the sync effect from
-    // force-navigating the webview back to an intermediate redirect URL, which
-    // would restart the redirect chain and cause an infinite loop.
+    // Why: navigation events set both the store URL and this ref; a match means the change came from navigation, so skip to avoid a redirect infinite loop.
     if (lastKnownWebviewUrlRef.current === normalizedUrl) {
       return
     }
@@ -4200,9 +4051,7 @@ function BrowserPagePane({
     try {
       liveUrl = webview.getURL() || null
     } catch {
-      // Why: newly attached guests can briefly reject getURL() before the
-      // underlying guest is fully ready. Skip entirely so we do not
-      // misinterpret a transient error as a URL mismatch and force-navigate.
+      // Why: a newly attached guest can reject getURL(); skip so a transient error isn't misread as a mismatch and force-navigated.
       return
     }
     const normalizedLiveUrl = liveUrl ? (normalizeBrowserNavigationUrl(liveUrl) ?? liveUrl) : null
@@ -4212,9 +4061,7 @@ function BrowserPagePane({
       webview.src !== normalizedUrl &&
       declaredSrc !== normalizedUrl
     ) {
-      // Why: browserTab.url changes are Orca-driven navigations (address bar,
-      // terminal link open, retry target update). Gate the next did-start-loading
-      // event so only real navigations, not tab activation churn, show loading UI.
+      // Why: browserTab.url changes are Orca-driven navigations; gate did-start-loading so only real navigations show loading UI.
       trackNextLoadingEventRef.current = normalizedUrl !== ORCA_BROWSER_BLANK_URL
       lastKnownWebviewUrlRef.current = normalizedUrl
       webview.src = normalizedUrl
@@ -4256,17 +4103,11 @@ function BrowserPagePane({
           }
         })
       } catch {
-        // Why: the guest can still be mid-attach while the loading spinner is
-        // visible. Polling is only a fallback for missed failure events, so
-        // transient getURL() errors should be ignored until the next tick.
+        // Why: ignore transient getURL() errors from a mid-attach guest; this poll is only a fallback.
       }
     }
 
-    // Why: some Electron builds paint Chromium's internal chrome-error page
-    // without delivering a timely did-fail-load event to the renderer webview.
-    // Polling only while the active tab is "loading" gives Orca a last-resort
-    // path to swap the black guest surface without waking every retained
-    // inactive browser pane on a 250ms loop.
+    // Why: some Electron builds paint chrome-error pages without a did-fail-load event; poll only while the active tab loads as a fallback.
     detectChromiumErrorPage()
     const intervalId = window.setInterval(detectChromiumErrorPage, 250)
     return () => window.clearInterval(intervalId)
@@ -4292,29 +4133,19 @@ function BrowserPagePane({
     [grab, grabIntent, recordFeatureInteraction]
   )
 
-  // CmdOrCtrl+C toggles grab mode
-  // Why: Cmd+C is deliberately repurposed inside the browser pane so that the
-  // most natural "copy" gesture enters grab mode, letting the user visually
-  // pick and copy an element.  Normal text copy inside the webview guest is
-  // handled by the guest page itself (Chromium's built-in Cmd+C) and never
-  // reaches the host renderer keydown listener.
+  // Why: Cmd+C is repurposed as the grab-mode gesture; native text copy in the guest is handled by Chromium and never reaches here.
   useEffect(() => {
-    // Why: without the isActive gate, every mounted BrowserPagePane registers
-    // a global keydown listener, so Cmd+C would toggle grab mode on all panes
-    // simultaneously — not just the active one.
+    // Why: gate on isActive so only the active pane's global keydown listener toggles grab mode.
     if (!isActive) {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
-      // Why: let native Cmd+C work in text inputs (address bar, search fields,
-      // contentEditable regions). Only intercept when focus is on a non-input
-      // element so grab-mode toggle doesn't swallow copy in form controls.
+      // Why: don't intercept in editable targets so native Cmd+C still copies in inputs/contentEditable.
       if (isEditableKeyboardTarget(e.target)) {
         return
       }
-      // Why: while the markup overlay is open, don't let the grab shortcut start
-      // the in-guest picker behind it — matching the disabled grab toolbar buttons.
+      // Why: don't start the in-guest picker behind an open markup overlay (matches the disabled toolbar buttons).
       if (
         !markup.isActive &&
         keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
@@ -4336,9 +4167,7 @@ function BrowserPagePane({
       if (!keybindingMatchesAction('browser.focusAddressBar', e, shortcutPlatform, keybindings)) {
         return
       }
-      // Why: Cmd/Ctrl+L is a browser-local focus command. Capture it before
-      // the surrounding workspace or any embedded editor surface can treat the
-      // same chord as something else.
+      // Why: capture Cmd/Ctrl+L before the workspace or an embedded editor can claim the same chord.
       e.preventDefault()
       e.stopPropagation()
       focusAddressBarNow()
@@ -4347,10 +4176,7 @@ function BrowserPagePane({
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [focusAddressBarNow, isActive, keybindings])
 
-  // Why: a focused webview guest receives Cmd/Ctrl+C inside Chromium, not the
-  // host renderer window. Main forwards the chord back only when the page
-  // would not use it for native copy, so grab mode still toggles from web
-  // content without stealing real copy from inputs or selections.
+  // Why: a focused guest gets Cmd/Ctrl+C inside Chromium; main forwards it back only when the page wouldn't use it for native copy.
   useEffect(() => {
     return window.api.browser.onGrabModeToggle((tabId) => {
       if (tabId === browserTab.id) {
@@ -4359,12 +4185,7 @@ function BrowserPagePane({
     })
   }, [browserTab.id, startGrabIntent])
 
-  // Why: single-key shortcuts (C / S) let the user copy the hovered element
-  // without clicking. During 'armed'/'awaiting' state, the shortcut calls the
-  // extractHoverPayload IPC to read the currently hovered element directly.
-  // During 'confirming' state, it uses the already-captured payload instead.
-  // The shortcuts only fire when grab mode is active, so they don't interfere
-  // with normal typing elsewhere.
+  // C / S copy the hovered element without clicking: extract via IPC while armed/awaiting, else use the captured payload.
   const grabPayloadRef = useRef(grab.payload)
   grabPayloadRef.current = grab.payload
   const handleGrabActionShortcut = useCallback(
@@ -4391,8 +4212,7 @@ function BrowserPagePane({
       }
 
       if (grab.state === 'confirming') {
-        // Why: left-click auto-copies, so only S (screenshot) is useful.
-        // But right-click (contextMenu) skips auto-copy, so C must still work.
+        // Why: right-click (contextMenu) skips the left-click auto-copy, so C must still work here.
         if (grab.contextMenu && key === 'c') {
           const currentPayload = grabPayloadRef.current
           if (currentPayload) {
@@ -4475,9 +4295,7 @@ function BrowserPagePane({
     })
   }, [browserTab.id, grab.state, handleGrabActionShortcut])
 
-  // Why: Radix DropdownMenu fires onOpenChange(false) before onSelect, so
-  // the rearm in onOpenChange would clear the payload before the handler runs.
-  // This ref lets onOpenChange skip the rearm when a menu action was taken.
+  // Why: Radix fires onOpenChange(false) before onSelect, so this flag lets onOpenChange skip the rearm that would clear the payload first.
   const grabMenuActionTakenRef = useRef(false)
 
   // Handlers for the right-click context dropdown menu
@@ -4759,8 +4577,7 @@ function BrowserPagePane({
             'auto.components.browser.pane.BrowserPane.87eb75f7d2',
             'Enter a valid http(s) or localhost URL.'
           ),
-          // Why: the user may have pasted a Kagi URL with a token; redact
-          // before persisting it into BrowserPage.loadError.
+          // Why: redact a possible Kagi session token before persisting into loadError.
           validatedUrl: redactKagiSessionToken(addressBarValue.trim()) || 'about:blank'
         }
       })
@@ -4769,9 +4586,7 @@ function BrowserPagePane({
     navigateToUrl(nextUrl)
   }
 
-  // Why: the store initially holds 'about:blank', but once the webview loads
-  // with the safe data: URL, handleDidStopLoading writes the resolved URL back.
-  // Match both so the "New Browser Tab" overlay stays visible for blank tabs.
+  // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
   const currentBrowserUrl = getCurrentBrowserUrl(webviewRef.current, browserTab.url)
@@ -4796,8 +4611,7 @@ function BrowserPagePane({
     if (!webview) {
       return
     }
-    // Why: desktop reclaim uses a React overlay, but Electron webviews can
-    // keep receiving native input unless their own hit testing is disabled.
+    // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
     webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
   }, [inputLocked])
 
@@ -4806,10 +4620,7 @@ function BrowserPagePane({
     if (!webview) {
       return
     }
-    // Why: Electron webviews render in their own compositor layer, so a React
-    // overlay can sit "under" a failed guest and still look like a black page.
-    // Fully removing the guest from layout is more reliable than visibility
-    // toggles here; some Electron builds keep painting a hidden guest layer.
+    // Why: some Electron builds keep painting a hidden guest layer, so drop it from layout (display:none) instead of just hiding it.
     webview.style.display = showFailureOverlay ? 'none' : 'flex'
   }, [showFailureOverlay])
 
@@ -4831,8 +4642,7 @@ function BrowserPagePane({
       event.preventDefault()
       event.stopPropagation()
 
-      // Why: browser drops open one URL; multi-path drags must not silently
-      // degrade into opening whichever selected file happened to lead.
+      // Why: a browser opens one URL, so reject multi-path drags rather than silently opening the lead file.
       const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer, { maxPaths: 1 })
       if (dragPaths.status === 'rejected') {
         setResourceNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
@@ -4924,14 +4734,11 @@ function BrowserPagePane({
             ? 'pointer-events-none z-0 opacity-0'
             : 'pointer-events-none hidden'
       )}
-      // Why: automation-visible and mobile-driven webviews must stay paintable,
-      // but hidden toolbar and guest content cannot stay keyboard-focusable.
+      // Why: hidden panes stay paintable (automation/mobile) but must not stay keyboard-focusable.
       inert={!isActive}
       aria-hidden={!isActive}
     >
-      {/* IPC-driven context menu — rendered in a Portal so position: fixed is
-          relative to the viewport, not affected by ancestor backdrop-filter or
-          transform properties that create new containing blocks. */}
+      {/* IPC-driven context menu in a Portal so position:fixed escapes ancestor transform/backdrop-filter containing blocks. */}
       {contextMenu
         ? createPortal(
             <>
@@ -5180,10 +4987,7 @@ function BrowserPagePane({
 
           <Tooltip>
             <TooltipTrigger asChild>
-              {/* Why: wrap the disabled button in a span so pointer events still
-                reach the tooltip trigger — Radix (and the DOM) drop hover
-                events on disabled <button>, which is why the previous native
-                `title` attribute fired inconsistently. */}
+              {/* Why: disabled <button> drops hover events, so wrap in a span so the tooltip trigger still fires. */}
               <span className="inline-flex">
                 <Button
                   size="icon"
@@ -5784,14 +5588,12 @@ function BrowserPagePane({
                   </div>
                 </div>
               ) : null}
-              {/* Right-click context dropdown: positioned at the element's center,
-            shown when grab.contextMenu is true (user right-clicked). */}
+              {/* Right-click context dropdown, positioned at the grabbed element's center. */}
               <DropdownMenu
                 open={grab.state === 'confirming' && grab.contextMenu && grabIntent === 'copy'}
                 onOpenChange={(open) => {
                   if (!open && grab.state === 'confirming') {
-                    // Why: skip rearm if a menu action (Copy/Screenshot) already
-                    // handled the rearm — see grabMenuActionTakenRef.
+                    // Why: skip rearm if a menu action already handled it — see grabMenuActionTakenRef.
                     if (grabMenuActionTakenRef.current) {
                       grabMenuActionTakenRef.current = false
                       return
@@ -5853,10 +5655,7 @@ function BrowserPagePane({
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Inline toast bubble (left-click auto-copy feedback). Positioned
-            below (or above if near viewport bottom) so it doesn't occlude
-            the element. The "···" button opens the same action dropdown as
-            right-click for users who prefer clicking. */}
+              {/* Inline toast bubble; flips above the element when near the viewport bottom so it doesn't occlude it. */}
               {grabToast ? (
                 <div
                   className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"

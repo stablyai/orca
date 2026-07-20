@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: the registry is the single source of truth for
-   browser session profiles, partition allowlisting, cookie import staging, and
-   per-partition permission/download policies. Splitting further would scatter the
-   security boundary across modules. */
+/* eslint-disable max-lines -- Why: single source of truth for browser session profiles, partition allowlisting, cookie staging, and per-partition policies; splitting scatters the security boundary. */
 import { app, session } from 'electron'
 import type { Session } from 'electron'
 import { randomUUID } from 'node:crypto'
@@ -52,10 +49,7 @@ const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
 const LEGACY_BROWSER_SESSION_PARTITION_RE =
   /^persist:orca-browser-session-[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/
 
-// Why: the registry is the single source of truth for which Electron partitions
-// are valid. will-attach-webview consults it to decide whether a guest's
-// requested partition is allowed. This prevents a compromised renderer from
-// smuggling an arbitrary partition string into a guest surface.
+// Why: source of truth for valid partitions; will-attach-webview consults it so a compromised renderer can't smuggle in an arbitrary partition.
 
 class BrowserSessionRegistry {
   private readonly profiles = new Map<string, BrowserSessionProfile>()
@@ -86,10 +80,7 @@ class BrowserSessionRegistry {
     })
   }
 
-  // Why: the default profile's source metadata (what browser was imported,
-  // when) must survive app restarts so the Settings UI can show the import
-  // status. Cookies themselves persist in the Electron partition's SQLite DB,
-  // but the registry is in-memory only.
+  // Why: source metadata must persist across restarts (for the Settings import status) since the registry is in-memory only.
   private get metadataPath(): string {
     return (
       this.metadataPathOverride ?? join(app.getPath('userData'), BROWSER_SESSION_META_FILE_NAME)
@@ -103,13 +94,11 @@ class BrowserSessionRegistry {
   private static partitionCookiesPath(partition: string): string {
     const partitionName = partition.replace('persist:', '')
     const partitionDir = join(app.getPath('userData'), 'Partitions', partitionName)
-    // Why: replay must overwrite the same modern or legacy database that the
-    // importing Electron partition already uses.
+    // Why: replay must overwrite the same (modern or legacy) DB the importing partition already uses.
     return resolveChromiumCookiesPath(partitionDir) ?? join(partitionDir, 'Cookies')
   }
 
-  // Why: write-to-temp-then-rename is atomic on all supported platforms.
-  // A crash mid-write would only lose the temp file, not corrupt the live one.
+  // Why: write-temp-then-rename is atomic, so a crash mid-write can't corrupt the live file.
   private persistMeta(updates: Partial<BrowserSessionMeta>): void {
     try {
       const existing = this.loadPersistedMeta()
@@ -129,8 +118,7 @@ class BrowserSessionRegistry {
     })
   }
 
-  // Why: non-default profiles are in-memory only unless explicitly persisted.
-  // Without this, created profiles vanish on app restart.
+  // Why: non-default profiles are in-memory only; without this they vanish on restart.
   private persistProfiles(): void {
     const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
     this.persistMeta({ profiles: nonDefault })
@@ -178,16 +166,8 @@ class BrowserSessionRegistry {
     }
   }
 
-  // Why: browser sessions must be initialized BEFORE any webview loads.
-  // Permission/download policies must exist before sites request capabilities,
-  // and the User-Agent must be set before the first request so imported session
-  // cookies are not invalidated by Electron's default UA.
-  //
-  // Why this also refreshes defaultSource: the singleton constructor runs at
-  // module-import time, which may be before app.isReady(). app.getPath('userData')
-  // is not guaranteed before ready, so the constructor's loadPersistedSource()
-  // silently returns null. Re-reading here after app readiness ensures the
-  // default profile's source is populated.
+  // Why: run before any webview loads, and set the UA before the first request or Electron's default UA invalidates imported cookies.
+  // Why re-read defaultSource: the constructor may run before app.isReady() (userData path unavailable), so loadPersistedSource() returned null.
   initializeBrowserSessionsFromPersistedState(): void {
     const meta = this.loadPersistedMeta()
     if (meta.defaultSource) {
@@ -200,11 +180,7 @@ class BrowserSessionRegistry {
       this.hydrateFromPersisted(meta.profiles)
     }
 
-    // Why: the default partition is created in the constructor but never gets
-    // session policies (permission handlers, download handlers, etc.) because
-    // hydrateFromPersisted skips the default partition and createProfile never
-    // targets it. Without this, clipboard permissions and other guest policies
-    // are denied by default in the default browser partition.
+    // Why: nothing else installs policies on the default partition (hydrate skips it), so without this its guest permissions would be denied.
     this.setupSessionPolicies(this.defaultPartition)
 
     const partitions = new Set([
@@ -221,8 +197,7 @@ class BrowserSessionRegistry {
           continue
         }
 
-        // Why: even without an imported session, the default Electron UA contains
-        // "Electron/X.X.X" and the app name which trip Cloudflare Turnstile.
+        // Why: the default Electron UA leaks "Electron/X.X.X" + app name, which trips Cloudflare Turnstile.
         const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
         sess.setUserAgent(cleanUA)
         setupClientHintsOverride(sess, cleanUA)
@@ -232,10 +207,7 @@ class BrowserSessionRegistry {
     }
   }
 
-  // Why: the import writes cookies to a staging DB because CookieMonster holds
-  // the live DB's data in memory and would overwrite our changes on its next
-  // flush. This method MUST run before any session.fromPartition() call so
-  // CookieMonster reads the staged cookies instead of the stale live DB.
+  // Why: must run before any session.fromPartition() so CookieMonster reads the staged cookies instead of overwriting them from its in-memory DB.
   applyPendingCookieImport(): void {
     try {
       const meta = this.loadPersistedMeta()
@@ -243,8 +215,7 @@ class BrowserSessionRegistry {
       if (pendingEntries.length === 0) {
         return
       }
-      // Why: replay writes to partition-derived file paths, so corrupted
-      // metadata must pass the same validation as the webview allowlist.
+      // Why: replay writes to partition-derived paths, so corrupted metadata must pass the same validation as the webview allowlist.
       const knownPartitions = new Set([this.defaultPartition])
       for (const profile of meta.profiles) {
         if (this.isValidPersistedProfile(profile)) {
@@ -267,9 +238,7 @@ class BrowserSessionRegistry {
         try {
           mkdirSync(join(liveCookiesPath, '..'), { recursive: true })
           copyFileSync(stagedPath, liveCookiesPath)
-          // Why: SQLite WAL mode stores uncommitted data in sidecar files.
-          // Stale WAL/SHM from a previous session could corrupt CookieMonster's
-          // read of the freshly swapped DB.
+          // Why: stale WAL/SHM sidecars would corrupt CookieMonster's read of the freshly swapped DB.
           let sidecarCopyFailed = false
           for (const suffix of ['-wal', '-shm']) {
             try {
@@ -288,8 +257,7 @@ class BrowserSessionRegistry {
             }
           }
           if (sidecarCopyFailed) {
-            // Why: sidecar copy failures can leave an inconsistent replay state.
-            // Keep this entry for retry and preserve unrelated entries.
+            // Why: sidecar copy failed → inconsistent replay; keep this entry for retry.
             continue
           }
           for (const ext of ['', '-wal', '-shm']) {
@@ -301,8 +269,7 @@ class BrowserSessionRegistry {
           }
           delete remainingEntries[partition]
         } catch {
-          // Why: failed replay for one partition should not drop unrelated entries.
-          // Keep this entry for retry next launch.
+          // Why: keep this entry for retry — one partition's failed replay shouldn't drop unrelated entries.
         }
       }
       this.persistMeta({
@@ -365,26 +332,19 @@ class BrowserSessionRegistry {
 
   resolveKnownPartition(profileId: string | null | undefined): string | null {
     if (!profileId) {
-      // Why: must track the active Orca profile's default partition, not the
-      // legacy constant, or non-default profiles would resolve local-default's
-      // cookie jar.
+      // Why: use the active Orca profile's default partition, not the legacy constant, or profiles resolve local-default's cookie jar.
       return this.defaultPartition
     }
     return this.profiles.get(profileId)?.partition ?? null
   }
 
   createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile | null {
-    // Why: only the constructor may create the default profile. Allowing the
-    // renderer to pass scope:'default' would create a second profile sharing
-    // the active default partition, causing confusion on delete (clearing storage
-    // for the shared partition).
+    // Why: block scope:'default' here — only the constructor makes the default profile; a second one sharing the partition breaks delete.
     if (scope === 'default') {
       return null
     }
     const id = randomUUID()
-    // Why: partition names are deterministic from the profile id so main can
-    // reconstruct the allowlist on restart from persisted profile metadata
-    // without needing a separate partition→profile mapping.
+    // Why: deterministic partition-from-id lets main rebuild the allowlist on restart without a separate partition→profile map.
     const partition = getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, id)
     const profile: BrowserSessionProfile = {
       id,
@@ -436,27 +396,22 @@ class BrowserSessionRegistry {
       userAgent: userAgentByPartition[this.defaultPartition] ?? null
     })
 
-    // Why: clearing the partition's storage prevents orphaned cookies/cache from
-    // lingering after the user deletes an imported or isolated session profile.
+    // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
     try {
       const sess = session.fromPartition(profile.partition)
       this.clearSessionPolicies(profile.partition, sess)
       await sess.clearStorageData()
       await sess.clearCache()
     } catch {
-      // Why: partition cleanup is best-effort. The profile is already removed
-      // from the registry so it won't be allowed by will-attach-webview.
+      // Why: cleanup is best-effort — the profile is already out of the registry, so will-attach-webview blocks it regardless.
     }
     return true
   }
 
-  // Why: clearing cookies from the default partition lets users undo a cookie
-  // import without deleting the default profile itself.
+  // Why: lets users undo a cookie import without deleting the default profile itself.
   async clearDefaultSessionCookies(): Promise<boolean> {
     try {
-      // Why: persist metadata BEFORE clearing storage so that if the app quits
-      // mid-clear, the next launch won't show a stale "imported from X" badge
-      // for cookies that were partially or fully removed.
+      // Why: persist metadata before clearing storage so a mid-clear quit doesn't leave a stale "imported from X" badge.
       const defaultProfile = this.profiles.get('default')
       if (defaultProfile) {
         this.profiles.set('default', { ...defaultProfile, source: null })
@@ -482,13 +437,7 @@ class BrowserSessionRegistry {
     }
   }
 
-  // Why: on startup, main must reconstruct the set of valid partitions from
-  // persisted session profiles so restored webviews are not denied by
-  // will-attach-webview before the renderer mounts them.
-  // Why: profiles are deserialized from a JSON file on disk. A corrupted or
-  // tampered file could inject an arbitrary partition into the allowlist that
-  // will-attach-webview trusts, so we validate the expected shape before
-  // registering anything.
+  // Why: validate on-disk profile shape so a tampered JSON file can't inject an arbitrary partition into the will-attach-webview allowlist.
   private isValidPersistedProfile(profile: unknown): profile is BrowserSessionProfile {
     if (!profile || typeof profile !== 'object') {
       return false
@@ -533,9 +482,7 @@ class BrowserSessionRegistry {
     }
   }
 
-  // Why: every browser partition needs the same deny-by-default permission
-  // and download policies. Keeping the installer here prevents the default
-  // partition and imported/isolated partitions from drifting apart.
+  // Why: one shared installer keeps every partition's deny-by-default permission/download policies from drifting apart.
   private readonly configuredPartitions = new Set<string>()
   private readonly handleWillDownload = (
     _event: Electron.Event,
@@ -558,12 +505,7 @@ class BrowserSessionRegistry {
       setupClientHintsOverride(sess, cleanUA)
     }
     sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
-      // Why: `media` (camera/mic) must defer to macOS TCC instead of being
-      // denied outright. Denying at the session layer would make pages inside
-      // isolated browser profiles throw NotAllowedError even after the user
-      // granted Camera/Microphone to Orca — the same bug we fixed for the
-      // default partition. macOS TCC still gates the actual stream, so
-      // granting here only forwards what the OS has already authorized.
+      // Why: defer media to macOS TCC; denying at the session layer throws NotAllowedError even after the user granted Camera/Mic to the OS.
       if (permission === 'media') {
         void requestSystemMediaAccess(
           details as Electron.MediaAccessPermissionRequest | undefined
@@ -619,9 +561,7 @@ class BrowserSessionRegistry {
   }
 
   private clearSessionPolicies(partition: string, sess: Session): void {
-    // Why: isolated/imported browser partitions can be deleted while the
-    // Electron Session object survives; clear policy callbacks and listener
-    // bookkeeping so removed profiles do not leave retained closures behind.
+    // Why: the Electron Session survives partition deletion; clear callbacks/listeners so removed profiles don't retain closures.
     this.configuredPartitions.delete(partition)
     browserManager.removeCertificateRequestGuard(sess)
     sess.removeListener('will-download', this.handleWillDownload)

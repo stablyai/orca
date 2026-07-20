@@ -50,10 +50,7 @@ import { logStartupMilestone } from '../startup/startup-diagnostics'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
-// Why: updater setup is deferred past first paint, but a manual check (app
-// menu or updater:check IPC) can arrive inside that window — it must run
-// against a configured updater (listeners, autoDownload=false, window ref),
-// so those entry points force the pending setup first.
+// Why: a manual check can arrive before deferred setup runs, so entry points force this pending setup to configure the updater first.
 let pendingAutoUpdaterSetup: (() => void) | null = null
 
 export function ensureAutoUpdaterConfigured(): void {
@@ -102,28 +99,13 @@ export function attachMainWindowServices(
       isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
     }
   )
-  // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
-  // uses a narrow `pty:management:*` IPC surface that reads the live
-  // DaemonPtyRouter via getDaemonProvider(). Registering here — after
-  // registerPtyHandlers — keeps this wiring alongside the rest of the PTY IPC
-  // and ensures the handlers are re-installed on macOS app re-activation when
-  // the main window is recreated.
+  // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
   registerDaemonManagementHandlers()
-  // Why: do not enumerate repo paths from background GC. `git worktree list`
-  // can re-touch protected folders on macOS and trigger folder-access prompts.
+  // Why: don't enumerate repo paths in background GC — `git worktree list` can touch protected macOS folders and trigger access prompts.
   scheduleHistoryGc(async () => {
     return getKnownWorktreeIdsForHistoryGc(store)
   })
-  // Why: warm-reattach gap.
-  // Daemon-hosted PTYs survive renderer restarts on purpose, so on a fresh
-  // Orca launch the daemon's `listSessions()` returns sessions that
-  // `pty:spawn` hasn't re-registered yet. Without this hydration, the
-  // memory snapshot omits those PTYs and the renderer mislabels their
-  // workspaces as `· REMOTE` while showing `—` for CPU/Memory.
-  // `hydrateLocalPtyRegistryAtBoot` is idempotent (no-op after the first
-  // call), so calling it on every macOS dock re-activation — when this
-  // function re-runs as the main window is recreated — does not redo the
-  // git I/O or daemon RPC.
+  // Why: daemon PTYs survive renderer restarts, so at boot they're unregistered; hydrate so they aren't mislabeled REMOTE (idempotent, safe to re-run).
   void hydrateLocalPtyRegistryAtBoot(store)
   const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
   if (localPtyStartupReady) {
@@ -139,11 +121,7 @@ export function attachMainWindowServices(
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
-  // Why: setupAutoUpdater's first getAutoUpdater() call synchronously
-  // require()s electron-updater in packaged builds — seconds on a cold
-  // Windows disk under Defender scanning (part of issue #7225's pre-paint
-  // stall) — so defer it past first paint. The timer fallback keeps update
-  // checks alive for renderers that crash-loop before ever painting.
+  // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
   let updaterSetupDone = false
   const setupAutoUpdaterDeferred = (): void => {
     if (updaterSetupDone || mainWindow.isDestroyed()) {
@@ -165,12 +143,7 @@ export function attachMainWindowServices(
       getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
       getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
       setPendingUpdateNudgeId: (id) => {
-        // Why: the nudge lifecycle is owned by the main process. When applying a
-        // new campaign, persist the pending id AND clear the version dismissal
-        // together so relaunches cannot resurrect the old hidden-card state
-        // between nudge apply and renderer sync. When clearing (id is null),
-        // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
-        // would silently un-dismiss an update if the flow ever changes.
+        // Why: only the apply branch also nulls dismissedUpdateVersion so relaunch can't resurrect the old hidden card; clearing must not, or it un-dismisses.
         if (id) {
           store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
         } else {
@@ -212,9 +185,7 @@ export function attachMainWindowServices(
   )
 
   mainWindow.on('closed', () => {
-    // Why: browser webviews are renderer-owned guest surfaces. Clearing
-    // main-owned guest registrations on window close prevents stale
-    // tab→webContents ids from leaking across app relaunch or hot-reload cycles.
+    // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
     browserManager.unregisterAll()
   })
 }
@@ -223,8 +194,7 @@ function registerAppReloadHandler(
   mainWindow: BrowserWindow,
   onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
 ): void {
-  // Why: the process-global IPC handler can outlive the BrowserWindow, so keep
-  // the registered WebContents and guard both lifetimes before using it.
+  // Why: the process-global IPC handler can outlive the window, so guard both lifetimes before using the WebContents.
   const handlerToken = ++appReloadHandlerTokenCounter
   activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
@@ -244,8 +214,7 @@ function registerAppReloadHandler(
     if (activeAppReloadHandlerToken !== handlerToken) {
       return
     }
-    // Why: macOS can keep the process alive with no window, and this global
-    // handler otherwise keeps the closed BrowserWindow reachable until reopen.
+    // Why: macOS keeps the process alive with no window; this handler would otherwise retain the closed window until reopen.
     ipcMain.removeHandler('app:reload')
     activeAppReloadHandlerToken = null
   })
@@ -265,8 +234,7 @@ function registerRuntimeWindowLifecycle(
   }
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
-      // Why: clear detected-worktree scan caches before renderer listeners
-      // handle this event, preventing stale TTL reads after mutations.
+      // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
       runWorktreeChangeInvalidators(repoId)
       send('worktrees:changed', renamed ? { repoId, renamed } : { repoId })
     },
@@ -308,8 +276,7 @@ function registerRuntimeWindowLifecycle(
           event: Electron.IpcMainEvent,
           reply: { requestId: string; tabId?: string; title?: string; error?: string }
         ): void => {
-          // Why: requestId is renderer-supplied; only the targeted main window
-          // may satisfy the reveal and provide the tab handle.
+          // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
           if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
@@ -334,9 +301,7 @@ function registerRuntimeWindowLifecycle(
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
-          // Why: pre-minted tabId from main keeps the renderer's tab id aligned
-          // with the paneKey baked into the PTY env at spawn time, so hook
-          // events route to the right slot.
+          // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
           ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
@@ -402,18 +367,14 @@ function registerRuntimeWindowLifecycle(
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver })
   })
-  // Why: the runtime must fail closed while the renderer graph is being torn
-  // down or rebuilt, otherwise future CLI calls could act on stale terminal
-  // mappings during reload transitions.
+  // Why: fail closed during renderer reload so CLI calls can't act on stale terminal mappings.
   mainWindow.webContents.on('did-start-loading', () => {
     runtime.markRendererReloading(mainWindow.id)
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {
-      // Why: the notifier closes over the BrowserWindow for mobile/CLI UI
-      // relays; clear it during the no-window gap so the runtime does not
-      // retain destroyed window graphs.
+      // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.
       runtime.setNotifier(null)
       activeRuntimeNotifierToken = null
     }
@@ -436,14 +397,12 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
       return
     }
 
-    // Why: relay exactly one IPC event per drop gesture so the renderer
-    // receives the full batch of paths without timer-based reconstruction.
+    // Why: one IPC event per drop gesture so the renderer gets the full path batch without timer-based reconstruction.
     mainWindow.webContents.send('terminal:file-drop', args)
   }
   ipcMain.on(channel, relayFileDrop)
   mainWindow.on('closed', () => {
-    // Why: macOS can keep the app process alive after the window closes; drop
-    // the relay closure so a destroyed BrowserWindow is not retained.
+    // Why: macOS keeps the process alive after window close; drop the closure so the destroyed window isn't retained.
     ipcMain.removeListener(channel, relayFileDrop)
   })
 }

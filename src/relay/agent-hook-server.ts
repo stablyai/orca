@@ -1,16 +1,8 @@
-/* eslint-disable max-lines -- Why: relay hook parsing, replay cache, endpoint
-   writing, and assistant-message retry state are one lifecycle unit; splitting
-   them would obscure cleanup ordering across remote PTY reconnects. */
-// Why: relay-side adapter for the shared agent-hook listener pipeline. Hosts
-// a loopback HTTP server (same shape as Orca's main-process server: bind
-// 127.0.0.1:0, bearer-token auth, /hook/<source> routing) and forwards every
-// parsed payload via a callback so `relay.ts` can re-emit it as an
-// `agent.hook` JSON-RPC notification across the existing SSH channel.
-//
-// Per-instance state (warn-once Sets, last-status cache, last-prompt /
-// last-tool caches) lives on `HookListenerState`. The cache is bounded to one
-// entry per paneKey — see docs/design/agent-status-over-ssh.md §5 (Path 3,
-// request-driven replay) for the rationale.
+/* eslint-disable max-lines -- Why: parsing, replay cache, endpoint writing, and retry state are one lifecycle unit; splitting obscures cleanup ordering across reconnects. */
+// Relay-side adapter for the shared agent-hook listener: hosts a loopback HTTP server and
+// forwards each parsed payload via a callback so `relay.ts` re-emits it as an `agent.hook`
+// JSON-RPC notification over the SSH channel. Replay cache is bounded one-entry-per-paneKey —
+// see docs/design/agent-status-over-ssh.md §5 (Path 3, request-driven replay) for the rationale.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
@@ -40,25 +32,16 @@ import {
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
-// Why: relay's userData equivalent. Lives under $HOME so each user on a
-// shared dev box gets their own dir, owned 0o700. Mirrors RELAY_REMOTE_DIR
-// from `ssh-relay-deploy.ts` but stays local to this module — the hook
-// server is the only consumer.
+// Why: relay's userData equivalent under $HOME so each user on a shared dev box gets their own 0o700 dir.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
 
-// Why: cap env/version metadata at 64 chars so a misbehaving agent CLI
-// cannot grow lastEnvelopeMetaByPaneKey unboundedly per pane via the cache
-// + replay path. Canonical values are short ('production'/'development',
-// '1'/'999'); anything longer is treated as absent.
+// Why: cap env/version at 64 chars so a misbehaving agent CLI can't grow the meta cache unboundedly; canonical values are short.
 const MAX_HOOK_META_LEN = 64
 
-// Why: the WSL relay has no per-pane teardown signal (PTYs live on the
-// Windows host, so nothing calls clearPaneState), and the replay cache would
-// otherwise grow for the relay's lifetime. Recency-cap it; backstop for the
-// SSH relay too.
+// Why: WSL relay has no per-pane teardown (PTYs live on the Windows host), so the replay cache would grow forever without a recency cap.
 const MAX_CACHED_PANES = 256
 
 function defaultEndpointDir(): string {
@@ -88,20 +71,13 @@ export function endpointDirForRelaySocket(sockPath: string): string {
 export type RelayHookServerOptions = {
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
   endpointDir?: string
-  /** Env tag forwarded into hook payloads. Defaults to "remote", a relay
-   *  location marker that main excludes from dev-vs-prod mismatch warnings. */
+  /** Env tag forwarded into hook payloads. Defaults to "remote", which main excludes from dev-vs-prod mismatch warnings. */
   env?: string
-  /** Fixed auth token. The WSL relay passes the host-issued token that
-   *  already crossed into guest env via WSLENV, so unmodified hook clients
-   *  authenticate without any re-coordination. Defaults to a fresh UUID. */
+  /** Fixed auth token. WSL relay passes the host-issued token (already in guest env via WSLENV) so unmodified hook clients authenticate. Defaults to a fresh UUID. */
   token?: string
-  /** Preferred bind port. The WSL relay passes the Windows listener's port —
-   *  free inside the guest under NAT, so env-sourced client coords stay
-   *  truthful. Occupied (e.g. mirrored networking) → fall back to :0 and rely
-   *  on the endpoint file for re-coordination. Defaults to :0. */
+  /** Preferred bind port. WSL relay passes the Windows listener's port so env-sourced client coords stay truthful; falls back to :0 if occupied. Defaults to :0. */
   preferredPort?: number
-  /** Called once per parsed payload. The relay wires this to
-   *  `dispatcher.notify('agent.hook', envelope)`. */
+  /** Called once per parsed payload; the relay wires this to `dispatcher.notify('agent.hook', envelope)`. */
   forward: RelayHookForward
 }
 
@@ -118,13 +94,8 @@ export class RelayAgentHookServer {
   private endpointFilePath: string
   private endpointFileWritten = false
   private state: HookListenerState = createHookListenerState()
-  // Why: the shared `HookListenerState.lastStatusByPaneKey` cache only stores
-  // `AgentHookEventPayload` (no wire-envelope fields). Replay must still emit
-  // the original `source`/`env`/`version` so Orca's warn-once diagnostics fire
-  // identically to the live POST path. Keep this as a per-instance sidecar map
-  // so the shared listener type stays unchanged. Invariant: every key present
-  // in `state.lastStatusByPaneKey` must also be present here — populated and
-  // cleared in lockstep on the live POST path, clearPaneState, and stop().
+  // Why: shared status cache drops wire-envelope fields; this sidecar holds source/env/version so replay matches the live POST path.
+  // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey: Map<
     string,
     { source: AgentHookSource; env?: string; version?: string }
@@ -154,10 +125,7 @@ export class RelayAgentHookServer {
     try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
-      // Why: the preferred port is best-effort (WSL relay: the Windows
-      // listener's port — occupied under mirrored networking, or by an
-      // unrelated guest process). Fall back to an ephemeral port; clients
-      // re-coordinate through the endpoint file.
+      // Why: preferred port is best-effort; on EADDRINUSE fall back to ephemeral and let clients re-coordinate via the endpoint file.
       if (this.preferredPort > 0 && (err as NodeJS.ErrnoException)?.code === 'EADDRINUSE') {
         this.portFallbackApplied = true
         await this.listenOn(0)
@@ -170,8 +138,7 @@ export class RelayAgentHookServer {
     }
   }
 
-  /** True when the preferred port was occupied and the server fell back to
-   *  an ephemeral bind — diagnostics for the host-side relay manager. */
+  /** True when the preferred port was occupied and the server fell back to an ephemeral bind. */
   get usedPortFallback(): boolean {
     return this.portFallbackApplied
   }
@@ -181,10 +148,7 @@ export class RelayAgentHookServer {
     return new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
-        // Why: null the server reference on bind failure so a subsequent
-        // start() can retry. Without this, a failed bind (e.g. EMFILE) leaves
-        // this.server populated and the early-return at the top of start()
-        // wedges the relay into a permanently broken state until stop() runs.
+        // Why: null the server ref on bind failure so a later start() can retry (else the early-return at top of start() wedges it).
         this.server = null
         reject(err)
       }
@@ -200,8 +164,7 @@ export class RelayAgentHookServer {
         resolve()
       }
       this.server!.once('error', onStartupError)
-      // Why: loopback only — the agent CLI inside the same remote box reaches
-      // us via curl 127.0.0.1:PORT; nobody outside the box can.
+      // Why: loopback only — reachable by the in-box agent CLI (127.0.0.1), not from outside the box.
       this.server!.listen(port, '127.0.0.1', onListening)
     })
   }
@@ -234,20 +197,13 @@ export class RelayAgentHookServer {
     this.lastEnvelopeMetaByPaneKey.clear()
   }
 
-  /** Request-driven replay: walks the per-paneKey last-payload cache and
-   *  forwards each entry as a fresh notification. Called after Orca has
-   *  re-wired its `agent.hook` handler on the new mux post-`--connect`.
-   *  The relay-driver issues the replay forwards BEFORE returning from the
-   *  request handler so the response strictly trails all replayed
-   *  notifications on the dispatcher's single write callback. */
+  /** Request-driven replay: re-forwards each cached paneKey payload as a fresh notification. Forwards are
+   *  issued before the request handler returns, so the response trails all replayed notifications. */
   replayCachedPayloadsForPanes(): number {
     let count = 0
     for (const [paneKey, event] of this.state.lastStatusByPaneKey.entries()) {
       const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
-      // Why: invariant — every paneKey in the shared status cache is populated
-      // in lockstep with `lastEnvelopeMetaByPaneKey`. If meta is missing,
-      // something has drifted; skip rather than fall back to a guessed source
-      // that would mis-tag the event downstream.
+      // Why: invariant — status-cache keys always have meta; if it drifted, skip rather than guess a source that mis-tags downstream.
       if (!meta) {
         continue
       }
@@ -257,17 +213,14 @@ export class RelayAgentHookServer {
     return count
   }
 
-  /** Drop a paneKey's cached entries on PTY exit so a terminated pane never
-   *  resurfaces as a ghost event on a later reconnect. Symmetric with the
-   *  local server's clearPaneState on PTY teardown. */
+  /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
   clearPaneState(paneKey: string): void {
     this.clearAssistantMessageRetry(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
 
-  /** Env vars to inject into every relay-spawned PTY so the hook script /
-   *  in-process plugin POSTs to this loopback server. */
+  /** Env vars to inject into relay-spawned PTYs so the hook script/plugin POSTs back to this loopback server. */
   buildPtyEnv(): Record<string, string> {
     if (this.port <= 0 || !this.token) {
       return {}
@@ -316,8 +269,7 @@ export class RelayAgentHookServer {
       }
       const event = normalizeHookPayload(this.state, source, body, this.env)
       if (event) {
-        // TODO: once normalizeHookPayload returns validated env/version, drop
-        // bodyEnv/bodyVersion and source those from the listener result instead.
+        // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
         this.applyEvent(event, source, env, version)
@@ -326,10 +278,7 @@ export class RelayAgentHookServer {
       res.writeHead(204)
       res.end()
     } catch (err) {
-      // Why: agent hooks must fail open — return success on parse / size /
-      // timeout errors so a buggy agent script never blocks the agent run.
-      // Log the swallowed error to stderr so future programmer bugs are not
-      // invisible (the 204 response would otherwise mask them entirely).
+      // Why: hooks fail open (204 on any error) so a buggy agent never blocks the run; still log so the 204 doesn't mask bugs.
       process.stderr.write(
         `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
       )
@@ -377,8 +326,7 @@ export class RelayAgentHookServer {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.clearAssistantMessageRetry(event.paneKey)
     }
-    // Why: delete-then-set keeps Map insertion order equal to last-update
-    // recency, so the cache cap below always evicts the longest-idle pane.
+    // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
     this.state.lastStatusByPaneKey.delete(event.paneKey)
     this.state.lastStatusByPaneKey.set(event.paneKey, event)
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
@@ -422,8 +370,7 @@ export class RelayAgentHookServer {
     if (!discoveryReady) {
       const discovery = preparePendingGrokResultDiscovery(source, body)
       if (discovery) {
-        // Why: remote slug-group discovery can outlive the bounded transcript-
-        // flush timers, so completion itself drives the first retry.
+        // Why: slug-group discovery can outlive the bounded flush timers, so its completion drives the first retry.
         void discovery
           .then(() => {
             if (this.server) {

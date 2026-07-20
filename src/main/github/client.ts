@@ -1,5 +1,4 @@
-/* eslint-disable max-lines -- Why: co-locating all GitHub client functions keeps the
-concurrency acquire/release pattern and error handling consistent across operations. */
+/* eslint-disable max-lines -- Why: co-locating all GitHub client functions keeps acquire/release and error handling consistent. */
 import type {
   ClassifiedError,
   GitPushTarget,
@@ -66,8 +65,7 @@ import {
   type LocalGitExecOptions,
   type OwnerRepo
 } from './gh-utils'
-// Import the pure error-parsing helpers from the lightweight module, not
-// `./gh-utils`, so tests that mock gh-utils still resolve the real functions.
+// Why: import from the lightweight module (not ./gh-utils) so tests mocking gh-utils still get the real functions.
 import { extractExecError, parseRetryAfterMs } from '../git/exec-error'
 import {
   isCommitPartOfMergedPR,
@@ -120,8 +118,7 @@ type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOpti
 
 const ORCA_REPO = 'stablyai/orca'
 const PR_CHECK_LOG_TAIL_JOB_LIMIT = 5
-// Why: each entry holds up to 16KB of log text; bound the cache so a long
-// session reviewing many failing checks can't grow it without limit.
+// Why: each entry holds up to 16KB of log text; bound the cache so a long session can't grow it unbounded.
 const PR_CHECK_LOG_TAIL_CACHE_MAX_ENTRIES = 128
 const prCheckLogTailCache = new Map<string, string | null>()
 
@@ -197,9 +194,7 @@ function prRefreshUpstreamError(
     message: safePRRefreshErrorMessage(errorType),
     fetchedAt: Date.now()
   }
-  // Why: a rate limit that carries a Retry-After is a real cooldown — surface it
-  // as the retry schedule so the renderer disables manual Retry until the reset
-  // and shows a truthful auto-retry time, instead of retrying into another 429.
+  // Why: a Retry-After is a real cooldown — surface it as the retry schedule so the renderer doesn't retry into another 429.
   if (errorType === 'rate_limited') {
     const retryAfterMs = parseRetryAfterMs(extractExecError(err).stderr)
     if (retryAfterMs !== null && retryAfterMs > 0) {
@@ -268,9 +263,8 @@ function sanitizeRemoteName(owner: string, repo: string): string {
 }
 
 /**
- * A fork push target plus the PR's `maintainer_can_modify` flag. The flag rides
- * alongside the target (rather than inside {@link GitPushTarget}) so it never
- * leaks into the persisted, validated push-target shape.
+ * A fork push target plus the PR's `maintainer_can_modify` flag, kept outside
+ * {@link GitPushTarget} so it never leaks into the persisted push-target shape.
  */
 export type PullRequestPushTarget = {
   pushTarget: GitPushTarget
@@ -309,9 +303,7 @@ export async function getPullRequestPushTarget(
         prStdout = stdout
         break
       } catch (error) {
-        // Why: in fork workflows `origin` is often the contributor fork while
-        // the PR number belongs to `upstream`; probe all known PR repos before
-        // deciding this PR number is unavailable.
+        // Why: origin is often the contributor fork while the PR belongs to upstream; probe all PR repos before giving up.
         if (isNotFoundGhError(error)) {
           continue
         }
@@ -421,22 +413,17 @@ export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
   }
 }
 
-// Why: main-process maps omit repoId because the IPC handler never receives
-// a repo identifier beyond path. Exported because runtime consumers receive
-// listWorkItems results before the renderer stamps repoId.
+// Why: omit repoId — the main process only has the path; the renderer stamps repoId after IPC.
 export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
-// Why: issue numbers follow creation order within a repository. Pinning this
-// sort keeps gh's rich PR rows aligned with numbered Search API issue pages.
+// Why: issue numbers follow creation order, so this sort aligns gh's PR rows with numbered Search API issue pages.
 const WORK_ITEM_NUMBER_SORT_QUALIFIER = 'sort:created-desc'
 
 const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
 
-// Why: these fields are intentionally excluded from `gh pr list` because
-// statusCheckRollup/review decision/PR-specific merge metadata fan out into
-// expensive GraphQL work across every row. Requested reviewers are kept in the
-// list payload because the Tasks table renders that column on first paint.
+// Why: kept out of `gh pr list` — statusCheckRollup/reviewDecision/merge metadata fan out into expensive per-row GraphQL.
+// Requested reviewers stay in the list payload because Tasks renders that column on first paint.
 const WORK_ITEM_PR_DETAIL_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,statusCheckRollup,mergeable,mergeStateStatus,autoMergeRequest,maintainerCanModify'
 
@@ -464,12 +451,8 @@ function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
 }
 
 /**
- * Derive both the author login and its API avatar_url in one place so GHE
- * avatars render (the login-only `github.com/{login}.png` URL 404s on GHE).
- *
- * REST exposes `user.avatar_url`; gh/GraphQL expose `author.avatarUrl`. `gh pr
- * view` omits the avatar entirely, so authorAvatarUrl is left undefined and the
- * UI falls back to the login URL then a placeholder. See #8784.
+ * Derive author login + avatar_url together so GHE avatars render — the login-only
+ * `{login}.png` URL 404s on GHE. REST uses `user.avatar_url`, gh/GraphQL `author.avatarUrl` (#8784).
  */
 function authorFieldsFromUnknown(
   item: Record<string, unknown>
@@ -505,8 +488,7 @@ function extractHeadOwnerLogin(item: Record<string, unknown>): string | null {
         }
       }
     }
-    // Why: when a fork is deleted or made inaccessible, GitHub can return
-    // `head.repo = null` but still include `head.user`/`head.label`.
+    // Why: a deleted/inaccessible fork returns head.repo = null but still has head.user/head.label.
     const user = head.user
     if (typeof user === 'object' && user !== null) {
       const login = (user as { login?: unknown }).login
@@ -682,14 +664,9 @@ function mapPullRequestWorkItem(
   item: Record<string, unknown>,
   baseOwnerRepo: OwnerRepo | null = null
 ): MainWorkItem {
-  // Why: fork PRs are disabled in the Start-from picker. We compare the PR head's
-  // owner to the selected repo's owner; when the base repo is unknown we default
-  // to false so non-picker call sites see the same shape as before.
+  // Why: fork PRs are disabled in the Start-from picker; compare head owner to the selected repo's owner.
   const headOwnerLogin = extractHeadOwnerLogin(item)
-  // Why: only emit isCrossRepository when we actually know the head owner. If
-  // the gh response lacks `headRepositoryOwner` (older callers, tests without
-  // that fixture, or gh not returning it), leave the field undefined instead
-  // of falsely claiming "not a fork".
+  // Why: leave isCrossRepository undefined when the head owner is unknown, rather than falsely claiming "not a fork".
   const isCrossRepository =
     headOwnerLogin !== null && baseOwnerRepo !== null
       ? headOwnerLogin !== baseOwnerRepo.owner
@@ -787,8 +764,7 @@ async function hydrateWorkItemRepositoryMergeMetadata(
   if (!ownerRepo || !hasPullRequest) {
     return items
   }
-  // Why: merge method settings are repository-level, so one cached metadata
-  // probe can keep Tasks rows accurate without per-PR GraphQL fan-out.
+  // Why: merge settings are repo-level, so one cached probe keeps Tasks rows accurate without per-PR GraphQL fan-out.
   const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, undefined, ghOptions)
   if (!mergeMetadata.mergeMethodSettings && mergeMetadata.autoMergeAllowed === null) {
     return items
@@ -835,9 +811,7 @@ async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
-// REST /pulls/{n} has requested_reviewers but not latestReviews. When the JSON
-// `gh pr view` path fails, still pull review fields from gh so mobile/desktop
-// reviewer lists (CodeRabbit COMMENTED, etc.) are not silently empty.
+// Why: REST /pulls/{n} lacks latestReviews, so pull review fields from gh so reviewer lists aren't silently empty.
 const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
 
 async function fetchPullRequestReviewFields(
@@ -896,9 +870,7 @@ async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
-      // Why: merge-metadata GraphQL is best-effort. A failure here must not fall
-      // through to the REST path below — that path drops latestReviews and blanks
-      // the mobile/desktop reviewer list for bots that only left a review.
+      // Why: merge-metadata GraphQL is best-effort — don't fall through to REST, which drops latestReviews and blanks bot-only reviewer lists.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       try {
         const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
@@ -1010,8 +982,7 @@ function buildWorkItemListRequest(args: {
     }
   }
 
-  // Why: search/issues omits the PR fields used by the Tasks management
-  // columns. Fetch through gh's rich PR list and slice its stable created sort.
+  // Why: search/issues omits the PR fields the Tasks columns need; use gh's rich PR list on a stable created sort.
   searchParts.push(WORK_ITEM_NUMBER_SORT_QUALIFIER)
   const out = [
     'pr',
@@ -1030,11 +1001,7 @@ function buildWorkItemListRequest(args: {
   return { args: out, offset: (page - 1) * limit }
 }
 
-// Why: internal shape shared by listRecentWorkItems / listQueriedWorkItems so
-// listWorkItems can lift per-side errors into the IPC envelope. The issue-side
-// error is the specific new class of silent wrongness introduced by #1076 —
-// PR-side errors existed before and are explicitly out of scope for this
-// feature per the parent design doc §6.
+// Why: shared shape so listWorkItems can lift the issue-side error (#1076 silent wrongness) into the IPC envelope; PR errors out of scope (§6).
 type PartialWorkItemsResult = {
   items: MainWorkItem[]
   issuesError?: ClassifiedError
@@ -1048,8 +1015,7 @@ function assertSshRepoHasResolvedGitHubSource(args: {
   if (!args.connectionId || args.issueOwnerRepo || args.prOwnerRepo) {
     return
   }
-  // Why: SSH repo paths are remote-only, so gh cannot use cwd to infer repo
-  // context. Without a resolved owner/repo, running gh would query local state.
+  // Why: SSH repo paths are remote-only, so without a resolved owner/repo gh would query local state.
   throw new Error(GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE)
 }
 
@@ -1066,8 +1032,7 @@ async function resolvePrWorkItemSource(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedPrWorkItemSource> {
   const [originCandidate, upstreamCandidate] = await Promise.all([
-    // Why: this caller combines both remotes itself, so it needs origin
-    // specifically (getOwnerRepo is upstream-first since #7331).
+    // Why: this caller combines both remotes itself, so it needs origin specifically (getOwnerRepo is upstream-first since #7331).
     getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions),
     getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
   ])
@@ -1077,10 +1042,8 @@ async function resolvePrWorkItemSource(
 }
 
 /**
- * gh exec for calls that rely on gh's own cwd→repo resolution (no explicit
- * owner/repo). Serves a remembered deterministic resolution failure without
- * spawning, so a remote-less repo costs one gh spawn per config change/TTL
- * instead of two per Tasks refresh.
+ * gh exec relying on gh's own cwd→repo resolution. Serves a remembered resolution failure
+ * without spawning, so a remote-less repo costs one gh spawn per config change/TTL, not two per refresh.
  */
 async function ghCwdResolvedExec(
   context: GitHubRepoContext,
@@ -1135,9 +1098,7 @@ async function listRecentWorkItems(
     issueRequest.args.splice(1, 2)
   }
   if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
-    // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
-    // PR half — the UI renders partial results plus a banner for the failing
-    // side, matching the parent design doc's partial-failure rule (§2).
+    // Why: allSettled so a 403 on the issue side doesn't zero the PR half — partial results + banner (parent doc §2).
     const [issuesSettled, prsSettled] = await Promise.allSettled([
       issueOwnerRepo
         ? ghExecFileAsync(issueRequest.args, ghOptions)
@@ -1155,9 +1116,7 @@ async function listRecentWorkItems(
     let issuesError: ClassifiedError | undefined
     if (issuesSettled.status === 'fulfilled') {
       issues = (JSON.parse(issuesSettled.value.stdout) as Record<string, unknown>[])
-        // Why: the GitHub search/issues endpoint may still return PRs with a
-        // pull_request marker even when queried with is:issue. Filter them out
-        // here to keep the issue and PR buckets clean.
+        // Why: search/issues can still return PRs (pull_request marker) even with is:issue; filter them out.
         .filter((item) => !('pull_request' in item))
         .map(mapIssueWorkItem)
     } else {
@@ -1175,15 +1134,8 @@ async function listRecentWorkItems(
         .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       prs = await hydrateWorkItemRepositoryMergeMetadata(prs, prOwnerRepo, ghOptions)
     } else {
-      // Why: PR-side failures must preserve the pre-diff behavior of
-      // Promise.all by re-throwing so the rejection propagates up through
-      // listWorkItems to the renderer's cross-repo aggregator (which counts
-      // the repo as failed). This feature is scoped to the issue-side silent
-      // wrongness from #1076; PR errors must not be silently swallowed here.
-      // Why: if the issue side ALSO failed, the classified issuesError would
-      // otherwise be silently dropped when we throw the PR reason. Log it so
-      // debugging both-sides-failed scenarios (e.g. 403 on both endpoints)
-      // isn't blind to the issue-side classification.
+      // Why: re-throw PR errors so the cross-repo aggregator counts the repo failed; this feature only fixes issue-side swallowing (#1076).
+      // Why: log issuesError first so a both-sides-failed case isn't blind to the classification we're about to drop.
       if (issuesError) {
         console.warn(
           'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
@@ -1200,13 +1152,7 @@ async function listRecentWorkItems(
     }
   }
 
-  // Why: the fallback path (non-GitHub remote — neither issueOwnerRepo nor
-  // prOwnerRepo resolved) intentionally stays on Promise.all rather than the
-  // Promise.allSettled + per-side classification used above. There are no
-  // `sources` to surface on this branch and nothing for the partial-failure
-  // banner to render, so a single-side failure here means the whole call is
-  // effectively unusable for the feature — reject-all matches reality. If
-  // non-GitHub remotes ever grow source metadata, revisit this symmetry.
+  // Why: non-GitHub remotes have no sources for a partial-failure banner, so keep Promise.all (reject-all) instead of allSettled.
   const [issuesResult, prsResult] = await Promise.all([
     ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
     ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
@@ -1249,9 +1195,7 @@ async function listQueriedWorkItems(
   let nonAvailabilityFailureCount = 0
   let availabilityError: unknown
 
-  // Why: run the issue and PR fetches in parallel but surface the
-  // issue-side error separately so the IPC envelope can carry it up. PR-side
-  // failures retain the prior swallow-and-log behavior per parent doc §6.
+  // Why: surface the issue-side error separately for the IPC envelope; PR-side keeps prior swallow-and-log (parent doc §6).
   const issueFetch = (async (): Promise<PartialWorkItemsResult> => {
     if (!issueScope) {
       return { items: [] }
@@ -1327,9 +1271,7 @@ async function listQueriedWorkItems(
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
   if (availabilityError && successfulRequestCount === 0 && nonAvailabilityFailureCount === 0) {
-    // Why: combined queries normally preserve either successful half. When
-    // every attempted half hit the same availability class, propagate one of
-    // those existing failures so Tasks can distinguish an outage from no data.
+    // Why: when every half hit the same availability failure, propagate it so Tasks can distinguish an outage from no data.
     throw availabilityError
   }
   return {
@@ -1369,10 +1311,7 @@ export async function listWorkItems(
   const prOwnerRepo = prResolved.source
   await acquire()
   try {
-    // Why: errors propagate to IPC so the renderer's cross-repo aggregator can
-    // count this repo as failed and surface the partial-failure banner. A
-    // catch-all here would make an auth/network failure indistinguishable from
-    // an empty result and silently under-report per-repo failures.
+    // Why: let errors propagate to IPC — a catch-all would make failure indistinguishable from empty and under-report per-repo failures.
     const partial = !trimmedQuery
       ? await listRecentWorkItems(
           repoPath,
@@ -1425,8 +1364,7 @@ function buildSearchQueryString(
   if (query.state === 'open') {
     parts.push('is:open')
   } else if (query.state === 'closed') {
-    // Why: GitHub search treats merged PRs as closed. Exclude merged so the
-    // "Closed" filter actually means closed-without-merge.
+    // Why: GitHub search treats merged PRs as closed; exclude merged so "Closed" means closed-without-merge.
     parts.push('is:closed')
     if (query.scope !== 'issue') {
       parts.push('-is:merged')
@@ -1482,16 +1420,13 @@ async function countWorkItemsForQuery(
     ],
     ghOptions
   )
-  // Why: over-counts gh cache hits, which is the safe direction — the search
-  // bucket is only 30/min and the next probe corrects the estimate.
+  // Why: over-counting cache hits is the safe direction — the next probe corrects the estimate.
   noteRateLimitSpend('search')
   return Number.parseInt(stdout.trim(), 10) || 0
 }
 
 function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean {
-  // Why: GitHub treats owner and repo names as case-insensitive, so remotes
-  // with different casing (StablyAI/Orca vs stablyai/orca) point at the same
-  // repo and should not split into two search queries.
+  // Why: GitHub owner/repo names are case-insensitive, so differently-cased remotes are the same repo (don't split into two searches).
   return (
     left?.owner.toLowerCase() === right?.owner.toLowerCase() &&
     left?.repo.toLowerCase() === right?.repo.toLowerCase()
@@ -1512,9 +1447,7 @@ function defaultOpenWorkItemQuery(): ParsedTaskQuery {
   }
 }
 
-// Why: uses GitHub's search API to get total_count without fetching items.
-// This powers the pagination bar so the user sees total pages upfront.
-// Cached for 120s to avoid burning the search rate limit (30 req/min).
+// Why: cached 120s to avoid burning the 30/min search rate limit that backs the pagination total.
 export async function countWorkItems(
   repoPath: string,
   query?: string,
@@ -1540,10 +1473,7 @@ export async function countWorkItems(
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
 
-  // Why: counts are decorative (pagination totals). The search bucket is only
-  // 30/min, so a multi-repo Tasks page must stop counting when the budget is
-  // gone instead of converting the remaining repos into 403 spawns. getRateLimit
-  // is 30s-cached and single-flight, so priming here is one spawn per window.
+  // Why: counts are decorative, so stop when the 30/min search budget is gone rather than spawn into 403s (getRateLimit is 30s-cached).
   await getRateLimit()
   if (rateLimitGuard('search').blocked) {
     return 0
@@ -1562,9 +1492,7 @@ export async function countWorkItems(
     }
 
     const counts: Promise<number>[] = []
-    // Why: `draft`, `reviewRequested`, and `reviewedBy` are PR-only predicates.
-    // When present, the issue half would always return 0 and wastes a search
-    // API call — skip the issue half entirely in that case.
+    // Why: draft/reviewRequested/reviewedBy are PR-only, so the issue half would always return 0 — skip it to save a search call.
     const hasPrOnlyFilter =
       effectiveQuery.draft ||
       effectiveQuery.reviewRequested !== null ||
@@ -1596,9 +1524,7 @@ export async function countWorkItems(
         )
       )
     }
-    // Why: allSettled so a single failing search (e.g. transient network, rate
-    // limit on one side) doesn't silently zero out the total; sum only the
-    // fulfilled halves instead.
+    // Why: allSettled so one failing search side doesn't zero the total; sum only fulfilled halves.
     const results = await Promise.allSettled(counts)
     let total = 0
     for (const r of results) {
@@ -1622,9 +1548,7 @@ export async function getRepoSlug(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<{ owner: string; repo: string } | null> {
-  // Why: the slug is the checkout's own identity (renderer display, icon
-  // autodetect), so it must stay origin-based — getOwnerRepo became
-  // upstream-first for PR reads in #7331.
+  // Why: the slug is the checkout's own identity, so it must stay origin-based (getOwnerRepo is upstream-first since #7331).
   return getOwnerRepoForRemote(
     repoPath,
     'origin',
@@ -1634,11 +1558,8 @@ export async function getRepoSlug(
 }
 
 /**
- * Resolve a fork's upstream/parent owner/repo, or null when the repo is not a
- * fork. Why: a fork's `origin` points at the personal copy, so repo identity
- * (notably the avatar) should prefer the upstream. Fast-paths the `upstream`
- * remote (offline); otherwise asks the GitHub API for the fork parent. The API
- * call targets the explicit origin slug, so it works for SSH repos too.
+ * Resolve a fork's upstream/parent owner/repo, or null when not a fork.
+ * Why: a fork's `origin` is the personal copy, so repo identity (avatar) should prefer upstream.
  * Best-effort: any failure (offline, unauthed, non-GitHub) resolves to null.
  */
 export async function getRepoUpstream(
@@ -1648,8 +1569,7 @@ export async function getRepoUpstream(
 ): Promise<OwnerRepo | null> {
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
-  // Why: must be origin specifically — the fork-parent fast-path below compares
-  // it against the upstream remote (getOwnerRepo is upstream-first since #7331).
+  // Why: must be origin — the fast-path compares it against upstream (getOwnerRepo is upstream-first since #7331).
   const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, ...localGitArgs)
   if (!origin) {
     return null
@@ -1667,8 +1587,7 @@ export async function getRepoUpstream(
   try {
     const { stdout } = await ghExecFileAsync(
       ['repo', 'view', `${origin.owner}/${origin.repo}`, '--json', 'isFork,parent'],
-      // Why: best-effort fork lookup runs at add-time; cap latency so a stalled
-      // gh process can't hold up repo creation.
+      // Why: cap latency so a stalled gh process can't hold up repo creation.
       {
         ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
         timeout: 10_000
@@ -1753,8 +1672,7 @@ function parseCreatePRPayload(stdout: string): { number: number; url: string } |
   } catch {
     // Fall through to URL parsing for older gh versions without --json support.
   }
-  // Why: gh prints the PR URL (not JSON) here; match any host, not just
-  // github.com, so a GitHub Enterprise Server URL still parses directly (#8312).
+  // Why: match any host (not just github.com) so a GHES PR URL still parses (#8312).
   const urlMatch = trimmed.match(/https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/)
   if (!urlMatch) {
     return null
@@ -1762,11 +1680,7 @@ function parseCreatePRPayload(stdout: string): { number: number; url: string } |
   return { number: Number(urlMatch[1]), url: urlMatch[0] }
 }
 
-// Why: `gh --repo OWNER/REPO` resolves the shorthand against gh's default host
-// (usually github.com), not the repo's remote — so a GHES repo would target a
-// same-named github.com repo, or fail. Qualify with the host for GHES so gh hits
-// the Enterprise server; this is the only host signal for SSH repos, which run
-// gh with no cwd context (#8312). github.com keeps the bare shorthand.
+// Why: bare OWNER/REPO resolves against gh's default host, so qualify with host for GHES; the only host signal for cwd-less SSH repos (#8312).
 function ghRepoArg(slug: { owner: string; repo: string; host?: string }): string {
   return slug.host && slug.host.toLowerCase() !== 'github.com'
     ? `${slug.host}/${slug.owner}/${slug.repo}`
@@ -1860,11 +1774,8 @@ export async function createGitHubPullRequest(
     }
   }
 
-  // Why: github.com-only slug parsing returns null for GHES, so fall back to the
-  // enterprise resolver (gh-authenticated custom host) before giving up (#8312).
-  // Creation targets origin: the head branch is unqualified, so `gh pr create`
-  // must run against the repo the branch was pushed to, not the fork parent
-  // (getOwnerRepo became upstream-first for PR reads in #7331).
+  // Why: github.com-only slug parsing returns null for GHES; fall back to the enterprise resolver (#8312).
+  // Why: use origin, not the fork parent — the unqualified head branch was pushed there (getOwnerRepo upstream-first since #7331).
   const ownerRepo =
     (await getOwnerRepoForRemote(
       repoPath,
@@ -2029,11 +1940,7 @@ export async function getWorkItem(
         return issue
       }
     } catch (err) {
-      // Why: a transient failure (5xx, rate limit, network flake) on issue #N would
-      // silently fall through to PR #N — potentially a completely unrelated item.
-      // Only fall through when the issue genuinely doesn't exist (404); re-throw everything
-      // else so the outer catch returns null and the caller sees a real failure instead of
-      // a wrong item. classifyGhError centralizes the 404/"not found" pattern-matching.
+      // Why: only fall through to PR #N on a genuine 404; re-throw transient errors so a flake can't surface an unrelated PR.
       const stderr = err instanceof Error ? err.message : String(err)
       if (classifyGhError(stderr).type !== 'not_found') {
         throw err
@@ -2130,8 +2037,7 @@ const GITHUB_AUTO_MERGE_METHODS: Record<GitHubPRMergeMethod, 'MERGE' | 'SQUASH' 
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
-  // Why: compare merged implicit PRs against the inspected worktree HEAD, not
-  // the main repo HEAD, without adding a worktree-scoped git call.
+  // Why: compare merged implicit PRs against the worktree HEAD, not main repo HEAD, without a worktree-scoped git call.
   currentHeadOid?: string | null
 }
 
@@ -2172,9 +2078,7 @@ function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
 }
 
 function isMergedImplicitPR(data: PullRequestLookupData, linkedPRNumber?: number | null): boolean {
-  // Why: merged PRs are historical branch matches unless the worktree has an
-  // explicit PR link. Showing them as implicit review context leaves nothing
-  // meaningful to unlink after the branch has been rebased or merged.
+  // Why: a merged PR without an explicit link is just a historical branch match, not implicit review context.
   return typeof linkedPRNumber !== 'number' && mapPRState(data.state, data.isDraft) === 'merged'
 }
 
@@ -2205,8 +2109,7 @@ function shouldHideMergedImplicitPR(
   if (!data || !isMergedImplicitPR(data, linkedPRNumber)) {
     return false
   }
-  // Why: keep hiding historical merged branch matches, but preserve the merged
-  // PR for the exact commit currently checked out in the sidebar.
+  // Why: keep hiding historical merged branch matches, but preserve the merged PR for the exact commit currently checked out.
   return !currentHeadOid || data.headRefOid !== currentHeadOid
 }
 
@@ -2228,8 +2131,7 @@ function cacheRepositoryMergeMetadata(
 ): void {
   const now = Date.now()
   pruneRepositoryMergeMetadataCache(now)
-  // Why: merge metadata is keyed by user-controlled branch names. Keep the
-  // per-session cache bounded even if many short-lived branches are inspected.
+  // Why: merge metadata is keyed by user-controlled branch names; keep the cache bounded across many short-lived branches.
   repositoryMergeMetadataCache.delete(cacheKey)
   repositoryMergeMetadataCache.set(cacheKey, {
     value,
@@ -2321,8 +2223,7 @@ async function detectRepositoryMergeMetadata(
     cacheRepositoryMergeMetadata(cacheKey, value, MERGE_QUEUE_CACHE_TTL_MS)
     return value
   } catch {
-    // Why: failed merge-queue probes should stay conservative without
-    // retrying GraphQL on every status poll while GitHub/network is unhappy.
+    // Why: cache a conservative result for failed merge-queue probes so we don't retry GraphQL on every poll while GitHub/network is unhappy.
     const value: GitHubRepositoryMergeMetadata = {
       mergeQueueRequired: null,
       autoMergeAllowed: null
@@ -2445,8 +2346,7 @@ function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
 }
 
 function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol): void {
-  // Why: generations only guard an active probe; retaining completed repo keys
-  // leaks worktree/runtime identities after the short-lived snapshot TTL expires.
+  // Why: generations only guard an active probe; retaining completed keys leaks worktree/runtime identities past the snapshot TTL.
   if (trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
     trackedUpstreamSnapshotGenerations.delete(cacheKey)
   }
@@ -2458,8 +2358,7 @@ function pruneTrackedUpstreamSnapshotCache(now: number): void {
       trackedUpstreamSnapshotCache.delete(cacheKey)
     }
   }
-  // Why: workspace/runtime churn can create unbounded unique keys within one
-  // TTL window, so expiry sweeping alone is not a memory bound.
+  // Why: workspace/runtime churn can create unbounded unique keys within one TTL window, so expiry sweeping alone isn't a memory bound.
   while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
     const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
     if (oldestKey === undefined) {
@@ -2549,8 +2448,7 @@ async function getTrackedUpstreamBranch(
     if (result.upstreamsByBranchName.has(branchName)) {
       return result.upstreamsByBranchName.get(branchName) ?? null
     }
-    // Why: a concurrent snapshot may finish before this branch exists in git.
-    // Re-probe instead of returning a one-shot synthetic null.
+    // Why: a concurrent snapshot may finish before this branch exists in git; re-probe instead of returning a synthetic null.
     const retryInFlight = trackedUpstreamSnapshotInFlight.get(cacheKey)
     if (retryInFlight) {
       const retryResult = await retryInFlight
@@ -2558,9 +2456,7 @@ async function getTrackedUpstreamBranch(
     }
   }
 
-  // Why: PR polling can ask about hundreds of local worktree branches at once.
-  // Read the branch upstream snapshot in one git process per repo/runtime
-  // instead of spawning one failing `branch@{upstream}` probe per branch.
+  // Why: PR polling asks about hundreds of branches at once; read all upstreams in one git process per repo/runtime, not one probe per branch.
   const probeGeneration = beginTrackedUpstreamSnapshotProbe(cacheKey)
   const probe = probeTrackedUpstreamSnapshot(repoPath, connectionId, localGitOptions)
   trackedUpstreamSnapshotInFlight.set(cacheKey, probe)
@@ -2615,8 +2511,7 @@ async function probeTrackedUpstreamSnapshot(
   const gitConfigSignature =
     startingGitConfigSignature === endingGitConfigSignature ? endingGitConfigSignature : undefined
   return {
-    // Why: transient git failures must not cache an empty snapshot that forces
-    // every branch lookup to delete and re-probe on the next refresh tick.
+    // Why: don't cache an empty snapshot after a transient git failure, or every branch lookup re-probes on the next refresh tick.
     cacheable: !configSignatureChanged && !probeFailed,
     probeFailed,
     ...(gitConfigSignature ? { gitConfigSignature } : {}),
@@ -2627,8 +2522,7 @@ async function probeTrackedUpstreamSnapshot(
 function getCacheableTrackedUpstreamSnapshot(
   upstreamsByBranchName: Map<string, TrackedUpstreamBranch | null>
 ): Map<string, TrackedUpstreamBranch | null> {
-  // Why: SSH/WSL cannot cheaply inspect remote .git/config here. The short TTL
-  // still bounds stale positives, while repeated PR refreshes share one scan.
+  // Why: SSH/WSL can't cheaply inspect remote .git/config here; the short TTL bounds stale positives while refreshes share one scan.
   return upstreamsByBranchName
 }
 
@@ -2744,8 +2638,7 @@ async function lookupPRByBranchName(args: {
               args.ghOptions
             )
           : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
-        // Why: REST/list branch lookup identifies the PR cheaply; exact
-        // `gh pr view` carries review, merge queue, and auto-merge state.
+        // Why: REST/list branch lookup identifies the PR cheaply; exact `gh pr view` carries review, merge-queue, and auto-merge state.
         const data = await hydrateBranchLookupWithExactPR(candidate, branchData, args.ghOptions)
         if (data) {
           return { data, dataRepo: candidate }
@@ -2777,8 +2670,7 @@ async function lookupPRByBranchName(args: {
         }
       }
     }
-    // Why: branch-list failures are ambiguous for fork discovery, but exact
-    // fallback-number recovery should still get a chance before surfacing error.
+    // Why: branch-list failures are ambiguous for fork discovery; give exact fallback-number recovery a chance before surfacing the error.
     return hasPendingError
       ? { data: null, dataRepo: null, pendingError }
       : { data: null, dataRepo: null }
@@ -2837,8 +2729,7 @@ async function getPRByNumber(
       ghOptions
     )
   } catch (err) {
-    // Why: deleted or manually edited linked PR metadata should fall back to
-    // branch discovery; quota/auth/network failures get one cheaper REST exact lookup.
+    // Why: deleted/edited linked PR metadata falls back to branch discovery; quota/auth/network failures get one cheaper REST exact lookup.
     if (isNotFoundGhError(err)) {
       return null
     }
@@ -2892,8 +2783,7 @@ async function lookupPRByNumber(args: {
     }
   } catch (err) {
     if (isNoPullRequestError(err)) {
-      // Why: stale cached fallback numbers should not turn every poll into an
-      // error when the PR was deleted or belonged to a different repo.
+      // Why: stale cached fallback numbers shouldn't error every poll when the PR was deleted or belongs to another repo.
       return { data: null, dataRepo: null }
     }
     throw err
@@ -2941,10 +2831,7 @@ export async function getPRForBranch(
   return outcome.kind === 'found' ? outcome.pr : null
 }
 
-// Why: the exact-linked fallback (`gh pr view` with no resolved repo candidates)
-// returns dataRepo=null, which would leave the merged-PR membership probe unable
-// to run. Derive the PR's own repo from its web URL so a diverged merged linked
-// PR can still be confirmed and cleared. Host-agnostic to cover GitHub Enterprise.
+// Why: exact-linked fallback returns dataRepo=null; derive the PR's repo from its web URL (host-agnostic for GHE) so the merged-PR membership probe can run.
 function ownerRepoFromPullRequestUrl(url: string): OwnerRepo | null {
   const match = url.match(/^https?:\/\/[^/\s]+\/([^/\s]+)\/([^/\s]+)\/pull\/\d+/)
   return match ? { owner: match[1], repo: match[2] } : null
@@ -2958,10 +2845,8 @@ export async function getPRForBranchOutcome(
   fallbackPRNumber?: number | null,
   options: GitHubPRBranchLookupOptions = {}
 ): Promise<PRRefreshOutcome> {
-  // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
-  // Why: detached HEAD cannot use branch lookup, but an exact linked/fallback
-  // PR number remains safe to query and keeps review state visible.
+  // Why: detached HEAD can't use branch lookup, but an exact linked/fallback PR number is still safe to query and keeps review state visible.
   if (!branchName && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber !== 'number') {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
@@ -3028,8 +2913,7 @@ export async function getPRForBranchOutcome(
         explicitCurrentHeadOid
       )
       if (membership === 'not-contained') {
-        // explicitCurrentHeadOid is non-null here (guarded above); record the
-        // exact head so consumers only clear the worktree that actually diverged.
+        // explicitCurrentHeadOid is non-null here (guarded above); record the exact diverged head so consumers clear only that worktree.
         headDivergedFromMergedPRAtOid = explicitCurrentHeadOid
       }
     }
@@ -3040,9 +2924,7 @@ export async function getPRForBranchOutcome(
       if (!candidate || !isMergedImplicitPR(candidate, linkedPRNumber)) {
         return false
       }
-      // Why: prefer the caller-supplied worktree HEAD; only shell out (against
-      // the main repo path) when no explicit oid is available, matching legacy
-      // behavior. This keeps merged-at-head PRs visible for secondary worktrees.
+      // Why: prefer the caller's worktree HEAD; only shell out (main repo path) when no explicit oid, keeping merged-at-head PRs visible for secondary worktrees.
       currentHeadOidForMergedImplicit ??=
         explicitCurrentHeadOid !== null
           ? explicitCurrentHeadOid
@@ -3050,10 +2932,7 @@ export async function getPRForBranchOutcome(
       if (!shouldHideMergedImplicitPR(candidate, linkedPRNumber, currentHeadOidForMergedImplicit)) {
         return false
       }
-      // Why: a worktree can sit behind its own PR's final head (update-branch
-      // merges, web-committed suggestions). A head that is one of the PR's own
-      // commits is the same line of work, not a reused branch name — keep the
-      // merged PR visible instead of offering "create a pull request".
+      // Why: a head that is one of the PR's own commits (update-branch/web commits) is the same work, not a reused branch name — keep the merged PR visible.
       return (
         (await mergedPRContainsHead(candidate, candidateRepo, currentHeadOidForMergedImplicit)) !==
         'contained'
@@ -3069,8 +2948,7 @@ export async function getPRForBranchOutcome(
       data = exactLookup.data
       dataRepo = exactLookup.dataRepo
     } else if (branchName) {
-      // During a rebase the worktree is in detached HEAD and branch is empty.
-      // An empty --head filter causes gh to return an arbitrary PR.
+      // During a rebase (detached HEAD) branch is empty; an empty --head filter makes gh return an arbitrary PR.
       const branchLookup = await lookupPRByBranchName({
         candidates,
         headRepo,
@@ -3084,8 +2962,7 @@ export async function getPRForBranchOutcome(
         hasPendingBranchLookupError = true
       }
       if (!data) {
-        // Why: the tracked upstream can identify the real PR head by branch
-        // name or by fork owner even when branch names match locally.
+        // Why: the tracked upstream identifies the real PR head by branch name or fork owner even when local branch names match.
         const upstreamBranch = await getTrackedUpstreamBranch(
           repoPath,
           branchName,
@@ -3154,16 +3031,11 @@ export async function getPRForBranchOutcome(
       explicitCurrentHeadOid !== null &&
       shouldHideMergedImplicitPR(data, linkedPRNumber, explicitCurrentHeadOid) &&
       (await mergedPRContainsHead(data, dataRepo, explicitCurrentHeadOid)) !== 'contained'
-    // Why no lazy-HEAD re-check on preservation: fallback numbers come from
-    // callers that already gated them on head equality or confirmed
-    // containment; re-hiding against the main-repo HEAD would blank
-    // deleted-head merged PRs that are deliberately kept visible.
+    // Why no lazy-HEAD re-check: fallback numbers were already gated on head equality/containment; re-hiding would blank kept deleted-head merged PRs.
     const shouldPreserveMergedFallback =
       !explicitHeadHidesMergedImplicitPR &&
       (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
-    // Why: a currently visible PR can be merged outside Orca; when the caller
-    // marks the fallback as visible review state, keep its lifecycle fresh even
-    // if GitHub no longer reports it by branch (for example deleted heads).
+    // Why: a visible PR can be merged outside Orca; keep a caller-marked fallback fresh even when GitHub no longer reports it by branch (e.g. deleted heads).
     if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
       return { kind: 'no-pr', fetchedAt: Date.now() }
     }
@@ -3440,8 +3312,7 @@ function mapGraphQLPendingApprovalCheckSuite(
     name: getPendingApprovalCheckSuiteName(suite, headSha, index),
     status: 'completed',
     conclusion: 'action_required',
-    // Why: suite-only approval blockers have no check run; use the suite page
-    // as the actionable destination when GraphQL exposes one.
+    // Why: suite-only approval blockers have no check run; link the suite page when GraphQL exposes one.
     url:
       nullableString(suite.url) ??
       (headSha ? getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.databaseId) : null)
@@ -3472,8 +3343,7 @@ function mapGraphQLPRChecksResponse(
       .map((context) => nullableNumber(context.checkSuite?.databaseId))
       .filter((id): id is number => id !== null)
   )
-  // Why: mixed-CI repos expose Jenkins/Prow/Tide as legacy status contexts
-  // inside the same rollup as check runs. Keep check-run metadata on collisions.
+  // Why: mixed-CI repos expose Jenkins/Prow/Tide as legacy status contexts in the same rollup; keep check-run metadata on name collisions.
   const legacyStatuses = contexts
     .filter(isGraphQLStatusContext)
     .map(mapGraphQLStatusContext)
@@ -3544,8 +3414,7 @@ async function getPRChecksViaRestFallback(
         .map(mapRestCommitStatus)
         .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
     } catch (err) {
-      // Why: the REST fallback is already degraded; keep richer check-run rows
-      // if the legacy-status enrichment fails.
+      // Why: REST fallback is already degraded; keep the richer check-run rows if legacy-status enrichment fails.
       console.warn('getPRChecks REST status fallback failed:', err)
     }
 
@@ -3612,8 +3481,7 @@ export async function getPRChecks(
       }
       const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
         const { stderr } = extractExecError(err)
-        // Why: `gh pr checks` exits non-zero when a PR genuinely has no check
-        // runs yet. Treat that as an empty optional section, not a load failure.
+        // Why: `gh pr checks` exits non-zero when a PR has no check runs yet; treat that as empty, not a load failure.
         if (stderr.toLowerCase().includes('no checks reported')) {
           return { stdout: '[]', stderr }
         }
@@ -3644,8 +3512,7 @@ export async function getPRChecks(
     if (canUseGraphQLRollup) {
       await acquire()
       try {
-        // Why: --cache 60s saves rate-limit budget during polling, but when the
-        // user explicitly clicks refresh we must skip it so gh fetches fresh data.
+        // Why: --cache 60s saves rate-limit budget during polling; explicit refresh skips it for fresh data.
         const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
         const { stdout } = await ghExecFileAsync(
           [
@@ -3672,8 +3539,7 @@ export async function getPRChecks(
           return checks
         }
       } catch (err) {
-        // Why: if GitHub's richer rollup query is unavailable, the older gh
-        // command still returns the combined check/status list for display.
+        // Why: fall back to older `gh pr checks` when GitHub's richer rollup query is unavailable.
         console.warn('getPRChecks via GraphQL rollup failed, falling back to gh pr checks:', err)
       } finally {
         release()
@@ -3821,8 +3687,7 @@ async function attachFailedJobLogTails(
     })
     .slice(0, PR_CHECK_LOG_TAIL_JOB_LIMIT)
 
-  // Why: failed workflows can have many jobs; cap log fetches so details remain
-  // a lazy, bounded follow-up request instead of a burst of hosted log downloads.
+  // Why: cap log fetches so failed-job details stay a bounded follow-up, not a burst of hosted log downloads.
   for (const job of failedJobs) {
     const cacheKey = getCheckJobLogTailCacheKey(job)
     if (!cacheKey) {
@@ -4042,9 +3907,7 @@ export async function rerunPRChecks(
   }
 }
 
-// Why: review thread resolution status and thread IDs are only available via
-// GraphQL. The REST pulls/{n}/comments endpoint does not expose them, so we
-// use GraphQL for review threads and REST for issue-level comments.
+// Why: review thread resolution status + thread IDs are GraphQL-only (REST pulls/{n}/comments omits them).
 const REVIEW_THREADS_QUERY = `
 query($owner: String!, $repo: String!, $pr: Int!) {
   repository(owner: $owner, name: $repo) {
@@ -4114,15 +3977,11 @@ export async function getPRComments(
   await acquire()
   try {
     if (ownerRepo) {
-      // Why: --cache 60s saves rate-limit budget during normal loads, but when the
-      // user explicitly clicks refresh we must skip it so gh fetches fresh data.
+      // Why: --cache 60s saves rate-limit budget on normal loads; explicit refresh skips it for fresh data.
       const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
       const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
 
-      // Why: use allSettled so a single failing endpoint (e.g. GraphQL
-      // permissions, transient network error) doesn't blank out all comments.
-      // Each source is parsed independently; failed sources contribute zero
-      // comments instead of aborting the entire fetch.
+      // Why: allSettled so one failing endpoint doesn't blank out all comments; failed sources contribute zero.
       const reviewThreadsGuard = rateLimitGuard('graphql')
       let reviewThreadsFetch: Promise<{ stdout: string; stderr: string } | null>
       if (reviewThreadsGuard.blocked) {
@@ -4151,10 +4010,7 @@ export async function getPRComments(
           ghOptions
         ),
         reviewThreadsFetch,
-        // Why: review summaries (approve, request changes, general comments) live
-        // under pulls/{n}/reviews, not under issue comments or review threads.
-        // Without this, a reviewer who submits "LGTM" without inline threads
-        // would have their comment silently dropped from the panel.
+        // Why: review summaries (approve/request-changes/general) live under pulls/{n}/reviews, not issue comments or threads.
         ghExecFileAsync(
           ['api', ...cacheArgs, `${base}/pulls/${prNumber}/reviews?per_page=100`],
           ghOptions
@@ -4260,9 +4116,7 @@ export async function getPRComments(
               threadId: thread.id,
               isResolved: thread.isResolved,
               isOutdated: thread.line == null,
-              // Why: GitHub nulls out line/startLine when the commented code is
-              // outdated (e.g. after a force-push). Fall back to originalLine which
-              // always preserves the line numbers from when the comment was created.
+              // Why: GitHub nulls line/startLine when the commented code is outdated (e.g. force-push); originalLine preserves the original numbers.
               line: thread.line ?? thread.originalLine ?? undefined,
               startLine: thread.startLine ?? thread.originalStartLine ?? undefined
             })
@@ -4274,8 +4128,7 @@ export async function getPRComments(
         }
       }
 
-      // Parse review summaries (REST) — only include reviews with a body,
-      // since empty-body reviews (e.g. approvals with no comment) add noise.
+      // Review summaries (REST); skip empty-body reviews (e.g. approvals with no comment) as noise.
       type RESTReview = {
         id: number
         user: { login: string; avatar_url: string; type?: string } | null
@@ -4581,9 +4434,7 @@ export async function mergePR(
       return { ok: false, error: mergeBlocker }
     }
 
-    // Don't use --delete-branch: it tries to delete the local branch which
-    // fails when the user's worktree is checked out on it. Branch cleanup
-    // is handled by worktree deletion (local) and GitHub's auto-delete setting (remote).
+    // Don't use --delete-branch: it deletes the local branch, which fails while the worktree is checked out on it.
     const args = ['pr', 'merge', String(prNumber), `--${method}`]
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
@@ -4636,9 +4487,7 @@ export async function setPRAutoMerge(
   }
 }
 
-// Why: GitHub rejects enabling auto-merge on a PR that can already merge with
-// "Pull request is in clean status". Surface the actionable next step (merge
-// directly) instead of the raw GraphQL error.
+// Why: GitHub rejects auto-merge on an already-mergeable PR ("clean status"); surface an actionable message instead of the raw error.
 function classifySetAutoMergeError(message: string): string {
   if (/in clean status/i.test(message)) {
     return 'This pull request can already be merged. Use Merge instead of auto-merge.'
@@ -4734,8 +4583,7 @@ async function enablePRAutoMerge(
   if (pr.headRefOid) {
     args.push('-f', `expectedHeadOid=${pr.headRefOid}`)
   }
-  // Why: `gh pr merge --auto` can perform an immediate merge; this mutation
-  // only creates GitHub's auto-merge request and lets branch requirements gate it.
+  // Why: `gh pr merge --auto` can merge immediately; this mutation only creates the auto-merge request, letting branch requirements gate it.
   await ghExecFileAsync(args, {
     ...ghOptions,
     env: { ...process.env, GH_PROMPT_DISABLED: '1' }
@@ -4769,8 +4617,7 @@ async function getPRMergeBlocker(
     if (pr.mergeQueueRequired === true) {
       return 'This pull request must be merged through GitHub merge queue. Use Merge when ready instead.'
     }
-    // Why: conflict summaries shell out to local git; SSH repo paths are remote-only
-    // until that helper is routed through the SSH git provider.
+    // Why: conflict summaries shell out to local git; skip for SSH repos until that helper routes through the SSH provider.
     if (
       connectionId ||
       pr.mergeable !== 'CONFLICTING' ||
@@ -4790,8 +4637,7 @@ async function getPRMergeBlocker(
     )
     return formatMergeConflictBlocker(pr.baseRefName, summary)
   } catch {
-    // Why: conflict preflight should improve stale UI diagnostics, not make
-    // merge impossible when the lookup endpoint has a transient failure.
+    // Why: conflict preflight should improve stale UI diagnostics, not block merge on a transient lookup failure.
     return null
   }
 }
@@ -4827,8 +4673,7 @@ export async function updatePRState(
   await acquire()
   try {
     const cmd = updates.state === 'closed' ? 'close' : 'reopen'
-    // Why: GitHub can reject REST pull state PATCHes for reopen paths with a
-    // generic 422; gh's PR commands use GitHub's supported reopen flow.
+    // Why: gh's PR commands use GitHub's supported reopen flow; REST state PATCH can 422 on reopen.
     await ghExecFileAsync(
       ['pr', cmd, String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
       {

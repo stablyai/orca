@@ -92,12 +92,18 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         return s
       }
       next.set(targetId, state)
+      const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
+      let blockedConnections = s.transientClearedAgentStatusConnectionIds
+      if (didReconnect && targetId in blockedConnections) {
+        blockedConnections = { ...blockedConnections }
+        delete blockedConnections[targetId]
+      }
       return {
         sshConnectionStates: next,
-        sshConnectedGeneration:
-          previous?.status !== 'connected' && state.status === 'connected'
-            ? s.sshConnectedGeneration + 1
-            : s.sshConnectedGeneration
+        sshConnectedGeneration: didReconnect
+          ? s.sshConnectedGeneration + 1
+          : s.sshConnectedGeneration,
+        transientClearedAgentStatusConnectionIds: blockedConnections
       }
     }),
 

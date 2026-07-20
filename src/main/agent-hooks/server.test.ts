@@ -157,9 +157,7 @@ describe('AgentHookServer listener replay', () => {
             state: 'working',
             prompt: 'review loop',
             agentType: 'claude',
-            // Why: a working pane can be child-driven (lead already idle).
-            // Ctrl+C does not stop background children, so no terminal done
-            // may be inferred while one is still running.
+            // Why: a working pane can be child-driven while the lead is idle; Ctrl+C doesn't stop children, so no terminal-done may be inferred here.
             subagents: [{ id: 'a1', state: 'working', startedAt: 900 }]
           }
         },
@@ -2571,9 +2569,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  // Why: agent-status-over-SSH §3 — ingestRemote must run the same warn-once
-  // cross-build diagnostics the local HTTP path runs, so a remote source of
-  // genuinely stale hooks emits the same signal locally.
+  // Why (agent-status-over-SSH §3): ingestRemote must run the same warn-once diagnostics as the local HTTP path so stale remote hooks signal locally.
   it('runs warn-once env/version diagnostics on relay-forwarded events', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -2631,9 +2627,7 @@ describe('AgentHookServer listener replay', () => {
         'conn-1'
       )
       expect(warn.mock.calls.length).toBe(warnsAfterFirst)
-      // Why: pin both invariants — warn-once dedupe AND fanout still fires for
-      // the second event. Without the second assertion, a future refactor that
-      // drops the second event silently would still leave warn-count unchanged.
+      // Why: assert fanout still fires on the second event too, else a refactor that drops it would pass on warn-count alone.
       expect(listener).toHaveBeenCalledTimes(2)
     } finally {
       server.stop()
@@ -3843,9 +3837,7 @@ describe('Claude hook normalization', () => {
   })
 
   it('PostToolUse for an unknown tool surfaces the name without input', () => {
-    // Why: we use a per-tool allowlist to decide which field to preview.
-    // Tools we do not recognize render as name-only rather than guessing at
-    // a field, which avoids noisy/misleading previews (e.g. an opaque ID).
+    // Why: a per-tool allowlist picks the preview field; unrecognized tools render name-only to avoid guessing a misleading field (e.g. an opaque ID).
     const result = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -3860,9 +3852,7 @@ describe('Claude hook normalization', () => {
   })
 
   it('PostToolUse for TaskUpdate does not produce a misleading input preview', () => {
-    // Why: TaskUpdate's tool_input (e.g. { task_id: "3", status: "in_progress" })
-    // has no meaningful preview — rendering "3" is actively confusing. The
-    // allowlist approach leaves toolInput undefined for unlisted tools.
+    // Why: TaskUpdate's tool_input has no meaningful preview (rendering "3" is confusing), so the allowlist leaves toolInput undefined.
     const result = _internals.normalizeHookPayload(
       'claude',
       buildBody({
@@ -4144,9 +4134,7 @@ describe('Claude hook normalization', () => {
     })
 
     it('finds an assistant reply that sits past the first chunk boundary', () => {
-      // Why: a turn with many large tool_result entries pushes the final text
-      // reply well past the first 64 KB chunk; the chunked scan should keep
-      // reading backward until it finds it.
+      // Why: large tool_result entries push the final reply past the first 64 KB chunk; the scan must keep reading backward to find it.
       const filler = 'x'.repeat(70_000)
       const lines = [
         { role: 'assistant', message: { role: 'assistant', content: 'deeply buried reply' } },
@@ -4208,8 +4196,7 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
-    // Stop event has no tool fields of its own — merged snapshot should still
-    // carry the earlier PreToolUse values.
+    // Stop event has no tool fields, so the merged snapshot must keep the earlier PreToolUse values.
     const stop = _internals.normalizeHookPayload(
       'claude',
       buildBody({ hook_event_name: 'Stop' }),
@@ -4236,10 +4223,7 @@ describe('Codex hook normalization', () => {
   })
 
   it('PreToolUse surfaces tool name + input preview and stays in working state', () => {
-    // Why: Codex's PreToolUse is NOT an approval prompt — it fires for every
-    // tool call. We map it to `working` (never `waiting`) and use it only to
-    // give the dashboard a live readout during the gap between prompt and
-    // Stop. Real approval signals flow through PermissionRequest.
+    // Why: Codex's PreToolUse fires for every tool call (not an approval), so map it to `working` not `waiting`; approvals flow through PermissionRequest.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -4255,10 +4239,7 @@ describe('Codex hook normalization', () => {
   })
 
   it('PermissionRequest maps to waiting and surfaces the pending tool input', () => {
-    // Why: Codex asks for user attention through PermissionRequest. Orca's
-    // sidebar red dot depends on this becoming `waiting`; treating it like
-    // PreToolUse would leave the pane looking busy while it is blocked on the
-    // user.
+    // Why: PermissionRequest must map to `waiting` (sidebar red dot); treating it like PreToolUse would leave the pane looking busy while blocked on the user.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -4275,9 +4256,7 @@ describe('Codex hook normalization', () => {
   })
 
   it('UserPromptSubmit does not extract tool fields even when the payload carries them', () => {
-    // Why: UserPromptSubmit is a turn-boundary event; any tool_name on it
-    // would be leftover noise and should not leak into the working-state
-    // preview. Tool extraction is gated to PreToolUse/PostToolUse.
+    // Why: UserPromptSubmit is a turn boundary; tool extraction is gated to Pre/PostToolUse so stray tool_name can't leak into the preview.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -4419,11 +4398,7 @@ describe('OpenCode hook normalization', () => {
   })
 
   it('SessionBusy does NOT clear the cached user prompt', () => {
-    // Why: OpenCode emits the user's MessagePart (message.updated) *before*
-    // SessionBusy fires — the session goes idle→busy only after OpenCode begins
-    // processing the prompt. So the cached prompt at SessionBusy is the current
-    // turn's prompt, not the previous turn's. Clearing on SessionBusy would
-    // clobber the data the dashboard needs to render for this turn.
+    // Why: OpenCode caches the user's MessagePart before SessionBusy fires, so the cached prompt is this turn's; clearing it would clobber the dashboard.
     _internals.normalizeHookPayload(
       'opencode',
       buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'new prompt' }),
@@ -4458,12 +4433,7 @@ describe('OpenCode hook normalization', () => {
   })
 
   it('AskUserQuestion maps to waiting', () => {
-    // Why: OpenCode emits `question.asked` when the agent uses an ask-the-user
-    // tool (distinct from `permission.asked`, which blocks on tool approval).
-    // Both leave the agent idle-but-waiting on a human, so both must render
-    // the same red "needs attention" indicator. Without this mapping the pane
-    // silently stays in `working` and the user has no visual cue that the
-    // agent is waiting on them.
+    // Why: AskUserQuestion leaves the agent idle-but-waiting on a human, so it must map to `waiting` (red dot) like permission.asked, not stay `working`.
     const result = _internals.normalizeHookPayload(
       'opencode',
       buildBody({ hook_event_name: 'AskUserQuestion' }),
@@ -4514,10 +4484,7 @@ describe('OpenCode hook normalization', () => {
   })
 
   it('caps oversized MessagePart text from stale (pre-throttle) plugin builds', () => {
-    // Why: plugin builds installed before the throttle/cap fix re-post the
-    // full accumulated reply on every streamed part update. The listener must
-    // bound the text so each event's status compare, IPC fanout, and renderer
-    // store update stay O(cap) instead of O(reply length).
+    // Why: stale plugin builds re-post the full reply on every part update, so the listener must cap the text to keep per-event work O(cap).
     const assistant = _internals.normalizeHookPayload(
       'opencode',
       buildBody({
@@ -4529,9 +4496,7 @@ describe('OpenCode hook normalization', () => {
     )
     expect(assistant?.payload.lastAssistantMessage?.length).toBe(8_000)
 
-    // Why: prompt has always been single-line-capped at 200 by
-    // normalizeAgentStatusObject; this asserts the oversized input still
-    // flows through without blowing past that bound.
+    // Why: prompt is capped at 200 by normalizeAgentStatusObject; assert oversized input still stays within that bound.
     const user = _internals.normalizeHookPayload(
       'opencode',
       buildBody({
@@ -4656,8 +4621,7 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
-    // Why: keeping toolName set would let the compact sidebar show the tool
-    // instead of the failure text, hiding the error from the user.
+    // Why: keeping toolName would let the compact sidebar show the tool instead of the failure text, hiding the error.
     expect(failed?.payload).toMatchObject({
       state: 'working',
       lastAssistantMessage: 'file not found'
@@ -5193,8 +5157,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'message_end', role: 'user', text: 'hi' }),
       'production'
     )
-    // Why: pi captures the user prompt via before_agent_start, not via
-    // message_end. A user-role message_end should not flip lastAssistantMessage.
+    // Why: pi captures the user prompt via before_agent_start, so a user-role message_end must not flip lastAssistantMessage.
     expect(result?.payload.lastAssistantMessage).toBeUndefined()
   })
 
@@ -5214,8 +5177,7 @@ describe('Pi hook normalization', () => {
       buildBody({ hook_event_name: 'session_shutdown' }),
       'production'
     )
-    // Why: Pi also emits shutdown when reloading or replacing its in-process
-    // session while the PTY stays alive; only agent_end proves turn completion.
+    // Why: Pi emits shutdown on reload/replace while the PTY stays alive; only agent_end proves turn completion.
     expect(result).toBeNull()
   })
 
@@ -5324,8 +5286,7 @@ describe('Copilot hook normalization', () => {
       }),
       'production'
     )
-    // Why: keeping toolName set would let the compact sidebar show the tool
-    // instead of the failure text, hiding the error from the user.
+    // Why: keeping toolName would let the compact sidebar show the tool instead of the failure text, hiding the error.
     expect(failed?.payload).toMatchObject({
       state: 'working',
       lastAssistantMessage: 'command not found'
@@ -5715,9 +5676,7 @@ describe('Endpoint file lifecycle', () => {
     await server.start({ env: 'production', userDataPath })
     try {
       const filePath = server.endpointFilePath!
-      // Why: mask off type/setuid bits so we assert only the rwx octet that
-      // writeFileSync(mode:0o600) sets. A leaky umask at dir-create time can
-      // leave group/other bits on the *parent* dir but not on the file itself.
+      // Why: mask to the rwx octet so we assert only the file's mode:0o600, not umask-leaked bits on the parent dir.
       const mode = statSync(filePath).mode & 0o777
       expect(mode).toBe(0o600)
     } finally {
@@ -5739,19 +5698,11 @@ describe('Endpoint file lifecycle', () => {
       const secondToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
       // Path is stable (so PTYs stamped before restart can still find the file)
       expect(secondPath).toBe(firstPath)
-      // But contents are refreshed with the new token (and port) — that is the
-      // whole point of the design: survivors reading a stale-env file reach the
-      // live server. Why token-first: the token is randomUUID()-minted per
-      // start(), so it is guaranteed to differ across restarts. The port comes
-      // from listen(0) and the kernel can legitimately reassign the same
-      // ephemeral port, so asserting port-inequality would be a latent flake.
+      // Contents refresh with a new token so stale-env survivors reach the live server.
       expect(secondToken).toBeTruthy()
       expect(secondToken).not.toBe(firstToken)
       const contents = readFileSync(secondPath!, 'utf8')
-      // Why: token-based content check is the rewrite signal. A strict
-      // "contents does NOT contain firstPort" assertion would flake on the
-      // (rare but legitimate) case where listen(0) reuses the same ephemeral
-      // port across restarts. The token is randomUUID() and cannot collide.
+      // Why: assert on token (randomUUID, can't collide), not port — listen(0) may legitimately reuse the ephemeral port and flake a port check.
       expect(contents).toContain(`ORCA_AGENT_HOOK_PORT=${secondPort}`)
       expect(contents).toContain(`ORCA_AGENT_HOOK_TOKEN=${secondToken}`)
       expect(contents).not.toContain(`ORCA_AGENT_HOOK_TOKEN=${firstToken}`)
@@ -5761,13 +5712,7 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('leaves the endpoint file in place on stop()', async () => {
-    // Why: stop() deliberately does NOT unlink the endpoint file. A stale file
-    // points at a dead port — the fail-open path (hook POSTs silently fail,
-    // same as pre-endpoint-file). Unlinking would introduce a TOCTOU race with a
-    // concurrent Orca instance sharing userData that could rewrite the file
-    // between our token check and unlink. The next successful start()
-    // overwrites the file atomically; tmp-file orphan hygiene is handled by
-    // the sweep inside writeEndpointFile().
+    // Why: stop() leaves the file (stale = fail-open); unlinking would race a concurrent Orca instance rewriting it between token-check and unlink (TOCTOU).
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
     const filePath = server.endpointFilePath!
@@ -5825,9 +5770,7 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('buildPtyEnv omits ORCA_AGENT_HOOK_ENDPOINT when no userDataPath was provided', async () => {
-    // Why: the endpoint file is opt-in via start({ userDataPath }). In tests
-    // and in the packaged main-process path where userData is unset for any
-    // reason, hooks should fall back to the v1 behavior (no ENDPOINT key).
+    // Why: the endpoint file is opt-in via userDataPath; without it, hooks fall back to v1 behavior (no ENDPOINT key).
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -5846,10 +5789,7 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('sweeps stale .endpoint-*.tmp orphans older than 5 minutes on start', async () => {
-    // Why: writeEndpointFile() writes to a unique tmp path then renames. A crash
-    // between write and rename leaves an orphan tmp; the sweep inside
-    // writeEndpointFile() must drop ones older than 5 min without touching
-    // fresh ones (a concurrent writer's in-flight tmp).
+    // Why: a crash between tmp-write and rename orphans a tmp; sweep must drop stale ones (>5min) but spare a concurrent writer's fresh in-flight tmp.
     const dir = join(userDataPath, 'agent-hooks')
     mkdirSync(dir, { recursive: true })
     const staleTmp = join(dir, '.endpoint-999-stale.tmp')
@@ -5870,12 +5810,7 @@ describe('Endpoint file lifecycle', () => {
   })
 
   it('refuses to write the endpoint file when a value contains shell metacharacters', async () => {
-    // Why: every value written is sourced as shell. The isShellSafeEndpointValue
-    // allowlist must reject a metacharacter-bearing value so a future caller
-    // cannot command-inject via the sourced file. `env` is the only caller-
-    // provided field we can easily poison from a test — feed it a semicolon
-    // and assert the file is not written and buildPtyEnv() omits the ENDPOINT
-    // key (gated on endpointFileWritten).
+    // Why: written values are sourced as shell, so isShellSafeEndpointValue must reject metacharacters to prevent command injection.
     const server = new AgentHookServer()
     await server.start({ env: 'bad;value', userDataPath })
     try {
@@ -5960,10 +5895,7 @@ describe('Endpoint file lifecycle', () => {
     try {
       const filePath = server.endpointFilePath!
       const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
-      // Why: sources the file in a subshell and echoes the resulting env var,
-      // exactly as the managed hook script does at runtime. If the file shape
-      // ever drifts from `KEY=VALUE` (e.g. someone adds shell metacharacters
-      // without quoting), this test catches it before users do.
+      // Why: source the file exactly as the managed hook script does, catching drift from the KEY=VALUE shape before users do.
       const out = execFileSync('/bin/sh', ['-c', `. "${filePath}" && echo "$ORCA_AGENT_HOOK_PORT"`])
         .toString()
         .trim()
@@ -5989,9 +5921,7 @@ describe('Last-status persistence', () => {
     return join(userDataPath, 'agent-hooks', 'last-status.json')
   }
 
-  // Why: hydrate now drops entries older than 7d (HYDRATE_MAX_AGE_MS). Use
-  // a recent-but-not-Date.now() timestamp in fixtures so the tests assert
-  // hydration behavior rather than racing the wall clock.
+  // Why: use a recent-but-not-now timestamp so fixtures survive hydrate's 7d drop (HYDRATE_MAX_AGE_MS) without racing the wall clock.
   function recentTs(offsetMs = 0): number {
     return Date.now() - 60 * 60 * 1000 + offsetMs
   }
@@ -6305,8 +6235,7 @@ describe('Last-status persistence', () => {
           subagents: undefined
         })
       ])
-      // Why: make the migration one-time; otherwise every launch reparses and
-      // re-prunes the same persisted idle rows.
+      // Why: migration must be one-time, else every launch re-prunes the same persisted idle rows.
       const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(persisted.entries[PANE].payload.subagents).toBeUndefined()
     } finally {
@@ -6614,9 +6543,7 @@ describe('Last-status persistence', () => {
         entries: {
           [TAB_A_PANE]: {
             paneKey: TAB_A_PANE,
-            // Why: deliberately divergent — paneKey says tab-A, the entry
-            // claims tab-B. Sanitizer must drop rather than hydrate this
-            // inconsistent row.
+            // Why: paneKey says tab-A but entry claims tab-B; sanitizer must drop the inconsistent row, not hydrate it.
             tabId: 'tab-B',
             receivedAt: recentTs(),
             stateStartedAt: recentTs(-1000),
@@ -6676,14 +6603,10 @@ describe('Last-status persistence', () => {
       server.flushStatusPersistSync()
       const firstMtime = statSync(lastStatusPath()).mtimeMs
 
-      // Why: a no-op clearPaneState on a paneKey not in the cache is a
-      // mutation site that should NOT trigger a redundant write. (clear was
-      // designed to bail when nothing was evicted.)
+      // Why: clearPaneState on a paneKey not in the cache must not trigger a redundant write (clear bails when nothing was evicted).
       server.clearPaneState(makePaneKey('non-existent', LEAF_5))
       server.flushStatusPersistSync()
-      // Touch back to the same mtime would let the test pass spuriously, so
-      // assert no rewrite happened by checking that mtime is unchanged after
-      // a forced sync flush.
+      // Assert no rewrite happened: mtime unchanged after a forced sync flush.
       const secondMtime = statSync(lastStatusPath()).mtimeMs
       expect(secondMtime).toBe(firstMtime)
     } finally {
@@ -6706,8 +6629,7 @@ describe('Last-status persistence', () => {
     } finally {
       server.stop()
     }
-    // Why: file written even though we never explicitly flushed before stop —
-    // stop() must synchronously drain the pending trailing-debounced timer.
+    // Why: stop() must synchronously drain the pending trailing-debounced timer even though we never explicitly flushed.
     expect(existsSync(lastStatusPath())).toBe(true)
     const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
     expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')
@@ -7114,9 +7036,7 @@ describe('AgentHookServer ingestRemote', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setListener(listener)
-    // Why: bypass parseAgentStatusPayload (which itself rejects bad states) by
-    // constructing an obviously-invalid payload — `ingestRemote` is the trust
-    // boundary we're testing, not the parser.
+    // Why: bypass parseAgentStatusPayload with an invalid payload — ingestRemote is the trust boundary under test, not the parser.
     server.ingestRemote(
       {
         paneKey: PANE,
@@ -7281,10 +7201,7 @@ describe('AgentHookServer ingestRemote', () => {
   })
 
   it('normalizes inner payload via normalizeAgentStatusPayload — clamps oversized prompt', () => {
-    // Why: the relay normally normalizes the payload on the wire, but a buggy
-    // or malicious relay could forward an over-cap field. ingestRemote must
-    // re-run the canonical normalizer so the AGENT_STATUS_MAX_FIELD_LENGTH
-    // cap (200 chars) is enforced at the trust boundary.
+    // Why: a buggy/malicious relay could forward an over-cap field, so ingestRemote re-runs the normalizer to enforce the AGENT_STATUS_MAX_FIELD_LENGTH cap at the trust boundary.
     const server = new AgentHookServer()
     const listener = vi.fn()
     server.setListener(listener)

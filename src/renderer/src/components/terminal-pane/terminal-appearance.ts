@@ -25,65 +25,34 @@ import { publishTerminalViewAttributes } from './terminal-view-attributes-publis
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 
-// Why Pick<IParser, ...> over a hand-rolled structural type: keeps the helper
-// tied to xterm's canonical signature so any upstream tightening (added
-// fields on IFunctionIdentifier, narrower param type) surfaces here instead
-// of silently accepting a stale shape.
+// Why Pick over a hand-rolled type: stays tied to xterm's canonical signature so upstream tightening surfaces here.
 type Mode2031Parser = Pick<IParser, 'registerCsiHandler'>
 
 type Mode2031HandlerDeps = {
   paneId: number
   parser: Mode2031Parser
-  /** Called when a real (non-replayed) `CSI ?2031h` arrives, after the
-   *  subscribe flag has been set. Kept as a callback so the lifecycle hook
-   *  can keep its transport-aware `pushMode2031ForPane` closure intact. */
+  /** Called when a real (non-replayed) `CSI ?2031h` arrives, after the subscribe flag is set.
+   *  A callback so the lifecycle hook keeps its transport-aware `pushMode2031ForPane` closure. */
   onSubscribe: () => void
   isReplaying: () => boolean
   paneMode2031: Map<number, boolean>
   paneLastThemeMode: Map<number, 'dark' | 'light'>
 }
 
-// Why split out from the lifecycle hook: the CSI handlers are the defense
-// against a restored xterm buffer pushing `\x1b[?997;1n` into the fresh zsh
-// on cold restore (the "random characters on restart" bug). Keeping them in
-// a pure function lets the tests drive a real xterm parser end-to-end so we
-// catch regressions in the parser-path guard, not just a mock.
+// Why a pure function: lets tests drive a real xterm parser end-to-end against the "random characters on restart" guard.
 export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[] {
   const hasMode2031 = (params: (number | number[])[]): boolean =>
     params.some((p) => (Array.isArray(p) ? p.includes(2031) : p === 2031))
 
-  // Why return false from both handlers: we only observe mode 2031.
-  // Returning false lets xterm's built-in DEC private mode handler
-  // continue processing the same sequence, so compound sequences like
-  // `CSI ?25;2031h` still update cursor visibility correctly.
+  // Why return false: we only observe mode 2031; false lets xterm's built-in DEC handler still process compound sequences.
   return [
     deps.parser.registerCsiHandler(
       { prefix: '?', final: 'h' },
       guardParserHandler('csi-mode2031-subscribe', (params) => {
         if (hasMode2031(params)) {
-          // Why: a restored xterm buffer may contain `CSI ?2031h` emitted by
-          // the previous session's TUI (e.g. Claude Code). Replaying that
-          // buffer runs this handler, and without the guard we'd push
-          // `CSI ?997;1n` via transport.sendInput into a fresh shell that has
-          // no TUI consuming it — zsh then echoes the literal escape sequence
-          // onto the prompt. The replay guard in pty-connection.ts only covers
-          // xterm's own onData auto-replies, not handler-triggered sends, so
-          // gate explicitly here. We also skip recording the subscribe bit:
-          // the fresh shell is not actually subscribed, so a later theme flip
-          // must not push either. A real TUI that starts up after restore will
-          // re-emit `?2031h` itself and register normally.
-          //
-          // Why this broad guard is safe across all replay sources: the only
-          // replay path that can carry raw `?2031h` is cold-restore scrollback
-          // (pty-connection.ts), which is disk-replayed PTY output against a
-          // fresh shell — the case this guard targets. Daemon snapshot payloads
-          // (`rehydrateSequences + SerializeAddon.serialize()`) and persisted
-          // scrollback (`SerializeAddon.serialize()`) never contain `?2031`:
-          // SerializeAddon's _serializeModes whitelists only ?1h/?66h/?2004h/
-          // [4h/?6h/?45h/?1004h/?7l/mouse modes/?25l, and buildRehydrateSequences
-          // emits only ?1049h/?2004h/?1h/mouse reporting modes. If xterm ever
-          // adds ?2031 to that whitelist, this guard would start suppressing
-          // legitimate subscribes during snapshot reattach — revisit then.
+          // Why gate on isReplaying: a restored buffer's replayed `?2031h` would push `?997;1n` into a fresh shell with no
+          // TUI, which echoes it as literal text; pty-connection's guard covers only xterm auto-replies, not handler sends.
+          // Return early (before recording the subscribe bit) so a later theme flip won't push into a shell that isn't subscribed.
           if (deps.isReplaying()) {
             return false
           }
@@ -93,10 +62,7 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
         return false
       })
     ),
-    // Why no replay guard on the unsubscribe branch: clearing stale bookkeeping
-    // is harmless. We only push CSI 997 on subscribe, never on unsubscribe, so
-    // even if a cold-restore replay carries `?2031l`, this handler just deletes
-    // map entries that a later real `?2031h` will re-populate normally.
+    // Why no replay guard here: we only push CSI 997 on subscribe; unsubscribe just clears map entries, so replay is harmless.
     deps.parser.registerCsiHandler(
       { prefix: '?', final: 'l' },
       guardParserHandler('csi-mode2031-unsubscribe', (params) => {
@@ -128,9 +94,7 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
 }
 
-// Why: extracted from applyTerminalAppearance so the settings preview can
-// derive the same composed theme without depending on PaneManager. Keep
-// pure — no DOM, no manager, no side effects.
+// Why extracted: lets the settings preview compose the same theme without depending on PaneManager. Keep pure.
 export function composeActiveTerminalTheme(
   baseTheme: ITheme | null,
   settings: Pick<
@@ -141,12 +105,8 @@ export function composeActiveTerminalTheme(
   if (!baseTheme) {
     return null
   }
-  // Why: setting scrollbar.width enables xterm's overview ruler, whose border
-  // defaults to the foreground color and paints a bright vertical line beside
-  // the scrollbar. We only want the slimmer scrollbar, not the ruler chrome.
-  // Why: xterm's default slider alpha (~0.2) is nearly invisible on dark
-  // backgrounds; raise the contrast so the thumb reads. Placed before the
-  // spread so an explicit theme value still wins.
+  // Why transparent ruler border: scrollbar.width enables xterm's overview ruler, whose border would paint a bright line.
+  // Why raised slider alpha: xterm's default (~0.2) is nearly invisible on dark bg. Before the spread so explicit theme wins.
   let theme: ITheme = {
     overviewRulerBorder: 'transparent',
     scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
@@ -154,23 +114,18 @@ export function composeActiveTerminalTheme(
     scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
     ...baseTheme
   }
-  // Why: merge user-imported Ghostty color overrides on top of the resolved
-  // base theme so individual colors can be tweaked without losing the rest.
+  // Why: merge Ghostty color overrides atop the base theme so individual colors can be tweaked without losing the rest.
   if (settings.terminalColorOverrides) {
     theme = { ...theme, ...settings.terminalColorOverrides }
   }
-  // Why: Ghostty's background-opacity controls the terminal's base alpha.
-  // Convert the hex background to rgba so xterm honors it when allowTransparency
-  // is also set on the Terminal instance.
+  // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.
   if (settings.terminalBackgroundOpacity !== undefined && theme.background) {
     theme = {
       ...theme,
       background: hexToRgba(theme.background, settings.terminalBackgroundOpacity)
     }
   }
-  // Why: Ghostty's cursor-opacity applies alpha to the cursor color. Only
-  // converted when the resolved cursor is a hex value; named CSS colors are
-  // left untouched because hexToRgba expects a hex input.
+  // Why hex-only: hexToRgba expects a hex input, so named CSS cursor colors are left untouched.
   if (settings.terminalCursorOpacity !== undefined && theme.cursor && isHexColor(theme.cursor)) {
     theme = {
       ...theme,
@@ -180,12 +135,8 @@ export function composeActiveTerminalTheme(
   return theme
 }
 
-/** App-start publication (terminal-query-authority.md §Phase 6
- *  prerequisites): hidden-at-launch PTYs can query OSC 10/11 before any
- *  terminal pane mounts, and main's responder is silent-until-first-push.
- *  Composes the same theme applyTerminalAppearance would and publishes it
- *  through the same deduped publisher, so the later pane-mount apply is a
- *  no-op re-push. Returns whether a publish actually went out. */
+/** Publishes composed terminal appearance at app start so hidden-at-launch PTYs can query OSC 10/11
+ *  before any pane mounts (terminal-query-authority.md §Phase 6). Returns whether a publish went out. */
 export function publishTerminalViewAttributesAtAppStart(
   settings: GlobalSettings | null | undefined,
   systemPrefersDark: boolean,
@@ -202,8 +153,7 @@ export function publishTerminalViewAttributesAtAppStart(
     : publishTerminalViewAttributes(theme, appearance.mode, settings)
 }
 
-// Value equality over composed ITheme objects (flat string slots plus the
-// extendedAnsi string array), used to gate the per-pane options.theme write.
+// Value equality over composed ITheme objects (flat string slots plus the extendedAnsi array); gates the options.theme write.
 function composedTerminalThemesEqual(a: ITheme | undefined, b: ITheme): boolean {
   if (!a) {
     return false
@@ -242,10 +192,7 @@ export function applyTerminalAppearance(
   const paneStyles = resolvePaneStyleOptions(settings)
   const baseTheme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
   const theme = composeActiveTerminalTheme(baseTheme, settings)
-  // View-attribute bridge (Phase 5 slice 2): this is the single point where
-  // the composed app-global terminal appearance exists, so publish it to
-  // main's hidden-PTY query responder here. Deduped inside the publisher —
-  // per-pane re-applies and attribute-neutral tweaks do not re-push.
+  // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
 
@@ -256,19 +203,11 @@ export function applyTerminalAppearance(
   )
 
   for (const pane of manager.getPanes()) {
-    // Why value-gated: xterm's OptionsService fires on object identity, and
-    // ThemeService._setTheme rebuilds the palette, discarding TUI OSC
-    // 4/10/11/12 SET mutations. Attribute-neutral applies (font size/family,
-    // line height, padding, per-pane zoom) compose a fresh-but-identical
-    // theme; skipping the write keeps visible-pane mutations alive (a
-    // pre-existing loss this also fixes) and matches the hidden responder's
-    // deduped overlay behavior, so hidden and visible no longer drift.
+    // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
     if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
       pane.terminal.options.theme = theme
     }
-    // Why: xterm's allowTransparency has measurable rendering cost, so clear
-    // it explicitly when opacity is at (or above) 1 to avoid a stale `true`
-    // bleeding in from a prior opacity setting that has since been reset.
+    // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
     pane.terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
@@ -286,24 +225,13 @@ export function applyTerminalAppearance(
     pane.terminal.options.fastScrollSensitivity = normalizeTerminalFastScrollSensitivity(
       settings.terminalFastScrollSensitivity
     )
-    // Why: xterm's macOptionIsMeta only flips on the 'true' mode. 'left' and
-    // 'right' are handled in the keydown policy (terminal-shortcut-policy),
-    // which needs Option to stay composable at the xterm level for the
-    // non-Meta side. Treating only 'true' as Meta here matches the pre-
-    // detection behavior; the detection layer simply decides *what* value
-    // `effectiveMacOptionAsAlt` carries.
+    // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
     pane.terminal.options.lineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
-    // Why call unconditionally: the per-pane helper is a no-op when the
-    // current addon state already matches, so passing the resolved value on
-    // every appearance apply keeps newly-created panes in sync without a
-    // separate hook and lets live toggles (settings change, font swap)
-    // land immediately.
+    // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     const transport = paneTransports.get(pane.id)
-    // Why: skip PTY resize when a mobile-fit override is active — the PTY
-    // is already at the correct phone dimensions and must not be resized
-    // back to desktop dimensions by an appearance change.
+    // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
     const appearancePtyId = transport?.getPtyId()
     if (transport?.isConnected() && (!appearancePtyId || !getFitOverrideForPty(appearancePtyId))) {
       maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)

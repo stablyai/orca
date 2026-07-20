@@ -5,12 +5,7 @@
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role. When STYLEGUIDE.md is silent, follow the resolution order in its final section.
 
 ## Code Comments: Document the "Why", Briefly
-
-When writing or modifying code driven by a design doc or non-obvious constraint, add a comment explaining **why** the code behaves the way it does.
-
-Keep comments short — one or two lines. Capture only the non-obvious reason (safety constraint, compatibility shim, design-doc rule). Don't restate what the code does, narrate the mechanism, cite design-doc sections verbatim, or explain adjacent API choices unless they're the point.
-
-The comment's audience is the next person reading that line, not a PR description. If a comment lists call sites, recounts the crash/history, or re-describes the code below it, cut it to the one non-obvious fact:
+When code is non-obvious, Add code comments explaining **why** (not HOW). BE CONCISE — ideally 1 line.
 
 ```ts
 // 🚫 Over-explained — narrates the crash, the mechanism, where the helper lives, and every caller:

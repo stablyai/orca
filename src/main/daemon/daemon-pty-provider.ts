@@ -64,8 +64,17 @@ export class DaemonPtyProvider {
     this.client.notify('resize', { sessionId: id, cols, rows })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
+    // Why: convert the absolute teardown deadline to a relative timeout only here,
+    // at the RPC leaf; undefined keeps the DaemonClient 30s default.
+    await this.client.request(
+      'kill',
+      { sessionId: id, immediate: opts.immediate ?? false },
+      opts.deadlineMs !== undefined ? Math.max(1, opts.deadlineMs - Date.now()) : undefined
+    )
   }
 
   onData(callback: (payload: { id: string; data: string }) => void): () => void {

@@ -11,21 +11,14 @@ import { translate } from '@/i18n/i18n'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
-// Why: rendered as a DOM sibling overlay inside the editor container rather
-// than as a Monaco content widget because it owns a React textarea with
-// auto-resize behaviour. Positioning mirrors what useDiffCommentDecorator does
-// for the "+" button so scroll updates from the parent keep the popover
-// aligned with its anchor line.
+// Why: a DOM sibling overlay rather than a Monaco content widget, so it can own a React auto-resizing textarea.
 
 type Props = {
   lineNumber: number
   startLine?: number
   top: number
   left?: number
-  // Height of the anchor line, used to flip the popover above it when it would
-  // overflow the bottom of the viewport. Defaults to 0 for callers that don't
-  // anchor to a Monaco line (e.g. markdown annotations): the popover still
-  // clamps inside the viewport, it just doesn't offset by the line's height.
+  // Anchor line height, used to flip the popover above the line near the viewport bottom; 0 for non-Monaco callers.
   lineHeight?: number
   title?: string
   placeholder?: string
@@ -53,46 +46,22 @@ export function DiffCommentPopover({
   onSubmit
 }: Props): React.JSX.Element {
   const [body, setBody] = useState('')
-  // Why: mirror the draft into a ref so the document mousedown listener (empty
-  // dep array, see below) can read the freshest body without re-registering on
-  // every keystroke. Used to keep the popover open on outside-click when the
-  // user has typed something, so an accidental click never discards a draft.
+  // Why: mirror the draft into a ref so the mousedown listener reads it fresh without re-registering each keystroke.
   const bodyRef = useRef(body)
   bodyRef.current = body
-  // Why: `submitting` prevents duplicate note rows when the user
-  // double-clicks the Add note button or hits Enter twice before the
-  // IPC round-trip resolves. Iteration 1 made submission async and keeps the
-  // popover open on failure (to preserve the draft); that widened the window
-  // between the first click and `setPopover(null)` during which a second
-  // trigger would call `addDiffComment` again and produce a second row with a
-  // fresh id/createdAt. Tracked in React state (not a ref) so the button can
-  // reflect the in-flight status to the user.
+  // Why: block duplicate note rows from double-click/Enter during the async submit; state (not a ref) so the button shows in-flight.
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const popoverRef = useRef<HTMLDivElement | null>(null)
-  // Why: stash onCancel in a ref so the document mousedown listener below can
-  // read the freshest callback without listing `onCancel` in its dependency
-  // array. Parents (DiffSectionItem, DiffViewer) pass a new arrow function on
-  // every render and the popover re-renders frequently (scroll tracking updates
-  // `top`, font zoom, etc.), which would otherwise tear down and re-attach the
-  // document listener on every parent render. Mirrors the pattern in
-  // useDiffCommentDecorator.tsx.
+  // Why: keep onCancel in a ref so the mousedown listener reads it fresh without re-attaching when parents pass a new callback each render.
   const onCancelRef = useRef(onCancel)
   onCancelRef.current = onCancel
-  // Why: stable id per-instance so multiple popovers (should they ever coexist)
-  // don't collide on aria-labelledby references. Screen readers announce the
-  // "Line N" label as the dialog's accessible name.
+  // Why: stable per-instance id so coexisting popovers don't collide on aria-labelledby references.
   const labelId = useId()
-  // Why: `top` anchors the popover just below the selected line. Near the
-  // bottom of the editor viewport that downward box gets clipped by the pane's
-  // overflow container, so the resolved top may flip the popover above the line
-  // (see resolveDiffCommentPopoverTop). Start at `top` so the first paint is
-  // correct when there is room below; the layout effect refines it otherwise.
+  // Why: seed at `top` for a correct first paint when there's room below; the layout effect flips it above the line if clipped.
   const [resolvedTop, setResolvedTop] = useState(top)
 
-  // Why: read the freshest anchor inside `measure` (a stable callback) so the
-  // ResizeObserver below can stay mounted once instead of tearing down on every
-  // scroll frame, which updates `top` continuously while the popover is open.
+  // Why: mirror `top` into a ref so the measure callback stays stable and the ResizeObserver isn't re-mounted each scroll frame.
   const topRef = useRef(top)
   topRef.current = top
   const lineHeightRef = useRef(lineHeight)
@@ -115,15 +84,12 @@ export function DiffCommentPopover({
     )
   }, [])
 
-  // Why: re-resolve placement before paint whenever the anchor moves (scroll,
-  // font zoom) so the flip/clamp tracks the selected line without flicker.
+  // Why: re-resolve placement before paint when the anchor moves (scroll, font zoom) so flip/clamp tracks without flicker.
   useLayoutEffect(() => {
     measureResolvedTop()
   }, [top, lineHeight, measureResolvedTop])
 
-  // Why: the textarea auto-grows as the user types and the editor pane can be
-  // resized; observe both so a growing draft re-resolves and never ends up
-  // clipped at the bottom edge.
+  // Why: observe textarea auto-grow and pane resize so a growing draft re-resolves and never clips at the bottom.
   useEffect(() => {
     const popover = popoverRef.current
     const container = popover?.parentElement
@@ -137,14 +103,11 @@ export function DiffCommentPopover({
   }, [measureResolvedTop])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
-    // Why: the draft field should receive focus as soon as the popover mounts;
-    // no external system needs a post-render Effect for this.
+    // Why: focus on mount via the ref callback so no post-render Effect is needed.
     textarea?.focus()
   }, [])
 
-  // Why: product B — the composer autofocuses its textarea, so a second
-  // add-review-note chord must not remount the draft; consume it on the
-  // popover subtree (not window) so other panes/surfaces keep their chord.
+  // Why: consume the add-review-note chord on the popover subtree, not window, so a repeat chord doesn't remount the draft.
   useEffect(() => {
     const popover = popoverRef.current
     if (!popover) {
@@ -153,11 +116,7 @@ export function DiffCommentPopover({
     return installOpenDraftAddReviewNoteGuard(popover)
   }, [])
 
-  // Why: Monaco's editor area does not bubble a synthetic React click up to
-  // the popover's onClick. Without a document-level mousedown listener, the
-  // popover has no way to detect clicks outside its own bounds. We keep the
-  // `onMouseDown={ev.stopPropagation()}` on the popover root so that this
-  // listener sees outside-clicks only.
+  // Why: Monaco's editor doesn't bubble React clicks up, so detect outside-clicks with a document-level mousedown listener.
   useEffect(() => {
     const onDocumentMouseDown = (ev: MouseEvent): void => {
       if (!popoverRef.current) {
@@ -166,14 +125,11 @@ export function DiffCommentPopover({
       if (popoverRef.current.contains(ev.target as Node)) {
         return
       }
-      // Why: outside-click is a soft dismiss, so preserve any non-whitespace
-      // draft even when submit's bounded scanner would reject it as too large.
+      // Why: soft dismiss — keep any non-whitespace draft even when submit's bounded scanner would reject it as too large.
       if (hasDraftText(bodyRef.current)) {
         return
       }
-      // Why: read the latest onCancel from the ref rather than closing over it
-      // so the listener does not need to be re-registered on every parent
-      // render (see onCancelRef comment above).
+      // Why: read the latest onCancel from the ref so the listener isn't re-registered on every parent render (see onCancelRef above).
       onCancelRef.current()
     }
     document.addEventListener('mousedown', onDocumentMouseDown)
@@ -257,16 +213,7 @@ export function DiffCommentPopover({
               onCancel()
               return
             }
-            // Why: plain Enter submits so the note popover behaves like a
-            // single-field form. Shift+Enter inserts a newline (browser default)
-            // so multi-line notes are still possible. We also accept
-            // Cmd/Ctrl+Enter as a submit alias so users who learned the old
-            // shortcut aren't silently broken. IME composition (isComposing) is
-            // excluded because Enter during composition only confirms the
-            // conversion candidate — submitting then would send a half-typed
-            // note for CJK/IME users. We guard against a second Enter while an
-            // earlier submit is still awaiting IPC — otherwise it would enqueue
-            // a duplicate addDiffComment call.
+            // Why: Shift+Enter inserts a newline; skip isComposing so IME composition Enter doesn't submit a half-typed CJK note.
             if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
               e.preventDefault()
               if (submitting) {

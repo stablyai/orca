@@ -1,17 +1,7 @@
 /* eslint-disable max-lines -- Why: this is the single source of truth for every telemetry event schema, enum, and the cohort-injection set predicates. Splitting it would scatter the .strict() / Zod-first doctrine across files and break the EventMap derivation that makes adding an event a one-line change. */
 // Single source of truth for telemetry event names, schemas, and enums.
-//
-// Zod-first: every event schema is declared once and the compile-time
-// `EventMap` is `z.infer`-derived from the same record the runtime validator
-// consumes. There is no parallel `EVENT_SPEC` / hand-rolled union to drift
-// out of sync with. Adding an event means adding a schema to `eventSchemas`;
-// `EventMap` picks it up automatically and call sites that reference an
-// unknown event name fail `tsc`.
-//
-// `.strict()` on every object schema is the runtime counterpart to "no extra
-// keys." Free-form string fields carry an explicit `.max(N)` cap at the
-// schema — the cap and the schema are the same thing; the validator does not
-// re-check string length.
+// Zod-first: `EventMap` is `z.infer`-derived from the same `eventSchemas` record the runtime validator consumes — no parallel union to drift.
+// `.strict()` on every object schema is the runtime "no extra keys"; free-form strings carry an explicit `.max(N)` cap.
 
 import { z } from 'zod'
 import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
@@ -62,12 +52,7 @@ import type {
 
 // ── Shared property enums ───────────────────────────────────────────────
 
-// Mirrors the shipped `TuiAgent` launch surface, with one deliberate shift:
-// `claude` in settings/launch state ↔ `claude-code` here (product, not CLI
-// string) so dashboards read cleanly.
-//
-// `other` remains as a telemetry escape hatch, but project-owned TuiAgents
-// should map to concrete values; see `tuiAgentToAgentKind`.
+// Mirrors `TuiAgent` launch surface; `claude`↔`claude-code` (product, not CLI string). `other` is the escape hatch; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
   'claude-agent-teams',
@@ -108,31 +93,15 @@ export const AGENT_KIND_VALUES = [
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
 export type AgentKind = z.infer<typeof agentKindSchema>
 
-// Trimmed to a small set of values Orca's PTY-typed-command launch architecture
-// can emit:
-//   - `binary_not_found` — `provider.spawn` ENOENT (the *shell* binary is
-//     missing). The agent CLI being missing is invisible: Orca spawns a
-//     healthy shell and types the command, and bash/zsh's "command not found"
-//     surfaces only as terminal output.
-//   - `paste_readiness_timeout` — bracketed-paste readiness wait timed out.
-//     The agent process spawned but its TUI input box didn't reach a ready
-//     state before the watchdog deadline, so the queued draft was dropped.
-//   - `unknown` — every other thrown error (env-build failures,
-//     unclassifiable shell-spawn errors).
-// Provider-side errors (`auth_expired`, `rate_limited`, `network_timeout`,
-// `provider_*`) happen inside the agent CLI subprocess and are not observable
-// to Orca — see telemetry-plan.md §Decision: Defer per-incident error fields.
-// Adding a new value is additive-safe; do it when the call site lands, not in
-// anticipation.
+// Small set: only failures Orca's PTY-typed-command launch can observe (`binary_not_found` = shell ENOENT, `paste_readiness_timeout`, `unknown`).
+// Provider-side errors (auth/rate-limit/network) happen inside the agent CLI subprocess and are invisible to Orca. See telemetry-plan.md §Defer per-incident error fields.
 export const errorClassSchema = z.enum(['binary_not_found', 'paste_readiness_timeout', 'unknown'])
 export type ErrorClass = z.infer<typeof errorClassSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
 export type RepoMethod = z.infer<typeof repoMethodSchema>
 
-// Historical setup-step affordances users could pick after `repo_added` fired.
-// Current Add Project flows skip that choice screen and auto-open the default
-// checkout, but the schema stays for pre-rollout rows and compatibility.
+// Historical setup-step choices (current flows skip that screen); kept for pre-rollout rows and compatibility.
 export const addRepoSetupStepActionSchema = z.enum([
   'open_primary',
   'create_worktree',
@@ -183,11 +152,7 @@ export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
 export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)
 export type SetupScriptImportProviderTelemetry = z.infer<typeof setupScriptImportProviderSchema>
 
-// Deliberately a separate enum from `errorClassSchema` (PTY-spawn taxonomy):
-// different domain — this one buckets git/filesystem failures thrown by
-// `createLocalWorktree` / `createRemoteWorktree`. Merging the two would lock
-// both domains to the union forever, which the schema-evolution comment
-// below warns against.
+// Separate enum from `errorClassSchema` — different domain (git/filesystem worktree-create failures); merging would couple the two forever.
 export const workspaceCreateErrorClassSchema = z.enum([
   'git_failed',
   'path_collision',
@@ -256,36 +221,15 @@ export type FeatureWallTourDepthStepTelemetry = z.infer<typeof featureWallTourDe
 export const featureWallExitActionSchema = z.enum(FEATURE_WALL_EXIT_ACTIONS)
 export type FeatureWallExitActionTelemetry = z.infer<typeof featureWallExitActionSchema>
 
-// `env_var` is deliberately absent — env-var and CI paths override consent at
-// runtime only (see consent.ts); they never mutate `optedIn` and therefore
-// never fire a `telemetry_opted_in/out` event. If a future path explicitly
-// persists an env-var-driven opt-out, add `env_var` back here together with
-// the call site.
-//
-// `first_launch_notice` (new-user disclosure toast) is deliberately absent —
-// the new-user cohort has no first-launch surface (see telemetry-plan.md
-// §First-launch experience). Opt-outs from new users come through
-// `via: 'settings'`.
+// `env_var` absent — env-var/CI paths override consent at runtime only, never firing an opt-in/out event.
+// `first_launch_notice` absent — the new-user cohort has no first-launch surface; those opt-outs come via `'settings'`.
 export const optInViaSchema = z.enum(['first_launch_banner', 'settings'])
 export type OptInVia = z.infer<typeof optInViaSchema>
 
-// Whitelist of settings whose `setting_key` may be emitted on
-// `settings_changed`. If a setting isn't in this list, we do not emit.
-//
-// Keys are camelCase to match the actual field names in `GlobalSettings`.
-// `orca_channel` is intentionally absent — it is a build-time common
-// property baked in from `ORCA_BUILD_IDENTITY`, not a user-togglable setting.
-//
-// Intentionally does NOT include the telemetry opt-in toggle — that is
-// covered by the dedicated `telemetry_opted_in` / `telemetry_opted_out`
-// events, which carry `via` context that a plain `settings_changed` could
-// not. Listing it here would double-fire.
-//
-// Kept as an `as const` tuple so the Zod enum below and any call-site usage
-// share one array — typo-drift is impossible.
+// Whitelist of settings emittable on `settings_changed`. `orca_channel` (build-time, not user-togglable) is absent.
+// The telemetry opt-in toggle is also absent — it fires dedicated `telemetry_opted_in/out` events; listing it would double-fire.
 type BooleanGlobalSettingsKey = {
-  // Why: new persisted toggles may be optional for legacy-settings compatibility
-  // while still being boolean settings once defaults are applied.
+  // Why: new toggles may be optional for legacy-settings compat but are still boolean once defaulted.
   [Key in keyof GlobalSettings]-?: NonNullable<GlobalSettings[Key]> extends boolean ? Key : never
 }[keyof GlobalSettings]
 export const SETTINGS_CHANGED_WHITELIST = [
@@ -305,18 +249,8 @@ export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
 
 // ── Per-event schemas ───────────────────────────────────────────────────
-//
-// `.strict()` on every object is what enforces "no extra keys" at runtime —
-// the validator does not need a separate extra-key check because zod rejects
-// unknown keys at parse time. This is the runtime counterpart to the
-// compile-time "unions of string literals, no raw `string`" rule.
 
-// Cohort signal — see docs/onboarding-funnel-cohort-addendum.md. One integer
-// shared across the events listed in `COHORT_EXTENDED` below: the count of
-// repos the user has at emit time, read from `store.getRepos().length`.
-// `.int().nonnegative()` constrains malformed values to the floor;
-// `.optional()` lets the classifier's fail-soft fallback (returning
-// `undefined`) validate cleanly so a read error never crashes a track call.
+// Cohort signal (repo count at emit time); `.optional()` lets a fail-soft `undefined` validate. See docs/onboarding-funnel-cohort-addendum.md.
 const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 
 const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
@@ -343,12 +277,7 @@ const featureInteractionUsageBucketReachedSchema = z
   })
 
 const repoAddedSchema = z
-  // Why: `is_git_repo` is the real git-vs-folder signal, sourced from git
-  // detection at the add point. It moved here from `onboarding_completed`
-  // once project selection left onboarding (1.4.46). `.optional()` so
-  // SSH/remote or any path that genuinely can't determine git-ness validates
-  // cleanly instead of crashing the track call — same fail-soft intent as
-  // `nthRepoAddedSchema`. Never default-guess `false`; omit instead.
+  // Why: `.optional()` so paths that can't detect git-ness validate cleanly; never default-guess `false` — omit instead.
   .object({
     method: repoMethodSchema,
     is_git_repo: z.boolean().optional(),
@@ -422,11 +351,7 @@ const agentPromptSentSchema = z
   })
   .strict()
 
-// Enum-only by design for both fields. `error_message` and `error_stack` are
-// deliberately absent — `.strict()` rejects either key if a call site ever
-// tries to attach one, which fails the validator and drops the event. Raw
-// error strings carry arbitrary user/workspace/path content; keeping them off
-// the wire is the only way to guarantee we never transmit them by accident.
+// Enum-only by design: `.strict()` blocks `error_message`/`error_stack`, keeping raw user/path content off the wire.
 const agentErrorSchema = z
   .object({
     error_class: errorClassSchema,
@@ -435,11 +360,7 @@ const agentErrorSchema = z
   })
   .strict()
 
-// Why: emitted when the terminal daemon cannot start and terminals fall back to
-// the (non-persistent) local provider. Enum-only `error_class` — the raw daemon
-// stderr tail stays in local logs and never reaches the wire (paths/usernames).
-// A spike in this event is the fleet-wide signal for a daemon outage like
-// v1.4.129-rc.1, which was otherwise invisible until users filed bug reports.
+// Why: daemon start-failure signal (fleet-wide outage like v1.4.129-rc.1); enum-only so raw stderr never reaches the wire.
 const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
 const settingsChangedSchema = z
@@ -449,9 +370,7 @@ const settingsChangedSchema = z
   })
   .strict()
 
-// Native chat view (per-tab terminal⇄chat toggle) adoption signals.
-// `agent_kind` reuses the shared closed enum so dashboards can slice adoption
-// by agent. The view-mode enum mirrors `Tab.viewMode` in shared/types.ts.
+// Native chat (terminal⇄chat toggle) adoption; view-mode enum mirrors `Tab.viewMode` in shared/types.ts.
 const nativeChatViewModeSchema = z.enum(['terminal', 'chat'])
 const nativeChatToggledSchema = z
   .object({
@@ -460,8 +379,7 @@ const nativeChatToggledSchema = z
     agent_kind: agentKindSchema
   })
   .strict()
-// `runtime` records whether the agent PTY runs locally or over an SSH/remote
-// runtime; `'unknown'` when the owning runtime cannot be resolved at send time.
+// `runtime`: local vs SSH/remote agent PTY; `'unknown'` when unresolved at send time.
 const nativeChatRuntimeSchema = z.enum(['local', 'remote', 'unknown'])
 export type NativeChatRuntime = z.infer<typeof nativeChatRuntimeSchema>
 const nativeChatMessageSentSchema = z
@@ -609,10 +527,7 @@ const addRepoDefaultCheckoutHandoffSchema = z
   })
   .strict()
 
-// Why: same enum-only discipline as `agent_error` — `.strict()` rejects raw
-// error strings if a future call site tries to attach `error_message` /
-// `error_stack`. The classifier in worktrees.ts reads `error.message` to
-// bucket into the enum, but those strings never cross the wire.
+// Why: enum-only like `agent_error` — `.strict()` blocks raw error strings from ever crossing the wire.
 const workspaceCreateFailedSchema = z
   .object({
     source: workspaceSourceSchema,
@@ -625,8 +540,7 @@ const setupScriptPromptModeSchema = z.enum(['import_available', 'configure_neede
 const setupScriptCountBucketSchema = z.enum(['0', '1', '2-3', '4+'])
 const setupScriptPromptContextSchema = {
   mode: setupScriptPromptModeSchema,
-  // Why: cohort injection probes top-level ZodObject shapes; superRefine
-  // keeps that path while still rejecting impossible mode/provider pairs.
+  // Why: superRefine (not transform) keeps the top-level ZodObject shape that cohort injection probes.
   provider: setupScriptImportProviderSchema.optional(),
   file_count_bucket: setupScriptCountBucketSchema,
   unsupported_field_count_bucket: setupScriptCountBucketSchema,
@@ -658,8 +572,7 @@ function validateSetupScriptPromptProvider(
     })
   }
 }
-// Why: setup-candidate telemetry is for a retention cohort, not debugging a
-// user's repo, so it carries only closed enums and count buckets.
+// Why: retention-cohort telemetry, not repo debugging — closed enums and count buckets only.
 const setupScriptPromptShownSchema = z
   .object(setupScriptPromptContextSchema)
   .strict()
@@ -721,21 +634,11 @@ const setupScriptPromptActionSchema = z
   .strict()
   .superRefine(validateSetupScriptPromptAction)
 
-// Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
-// hook installation only targets the agents in `AGENT_HOOK_TARGETS` and the
-// labels here match the `*HookService.install()` call sites in
-// `src/main/index.ts`. `claude` (not `claude-code`) is intentional — the
-// failure is about Claude Code's `~/.claude/settings.json`, not the broader
-// product taxonomy. Sourced from `AGENT_HOOK_TARGETS` so the wire enum and
-// the IPC `AgentHookTarget` type cannot drift as new hook-install agents
-// are added.
+// Managed-hook installer label from `AGENT_HOOK_TARGETS`, distinct from `AGENT_KIND_VALUES`; `claude` (not `claude-code`) is intentional.
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
-// Why: install failures are config-file-shape errors (malformed JSON, missing
-// keys, ACL denials on `~/.claude` etc.) — not user content. The 200-char
-// cap is the truncation contract; callers must truncate before calling
-// `track`, and the validator will drop overlength strings via `.max(200)`.
+// Why: config-shape errors (not user content); callers must truncate before `track` — `.max(200)` drops overlength strings.
 const agentHookInstallFailedSchema = z
   .object({
     agent: hookInstallAgentSchema,
@@ -743,27 +646,14 @@ const agentHookInstallFailedSchema = z
   })
   .strict()
 
-// Why: regression signal for paneKey attribution. A hook event whose paneKey
-// does not correspond to any tab in `tabsByWorktree` indicates the renderer
-// could not route the event to a pane. Pre-fix this fired routinely for
-// CLI-spawned terminals (empty paneKey); post-fix it should be near-zero in
-// normal use. The lone `reason` field reflects what the producer can observe
-// at emission time: an empty paneKey on the wire (pre-fix CLI shape) vs. any
-// non-empty paneKey that fails to resolve to a known tab in `tabsByWorktree`
-// (stale tab id, malformed value, or wrong-worktree id all bucket here).
-// See docs/cli-terminal-hook-pane-key.md.
+// Why: regression signal for paneKey attribution — a hook event that can't route to a pane. See docs/cli-terminal-hook-pane-key.md.
 const agentHookUnattributedSchema = z
   .object({ reason: z.enum(['empty_pane_key', 'unknown_tab_id']) })
   .strict()
 
 // ── Onboarding ──────────────────────────────────────────────────────────
-//
-// Closed enums only — no raw paths, repo names, clone URLs, or error
-// strings. The funnel exists to measure activation, not to debug specific
-// user repos.
-// Why: active onboarding now has fewer steps, but these event names already
-// carried seven-step payloads. Keep validation backward-compatible for old rows
-// unless a future versioned event replaces the historical schema.
+// Closed enums only — no raw paths/repo names/URLs/error strings (measures activation, not repo debugging).
+// Why: event names still carry legacy seven-step payloads; keep validation backward-compatible for old rows.
 const ONBOARDING_TELEMETRY_LEGACY_MAX_STEP = 7
 const onboardingStepSchema = z.number().int().min(1).max(ONBOARDING_TELEMETRY_LEGACY_MAX_STEP)
 const onboardingPathSchema = z.enum(['open_folder', 'clone_url', 'add_project_modal'])
@@ -807,10 +697,7 @@ const onboardingWindowsTerminalShellSchema = z.enum([
 ])
 const onboardingWindowsTerminalRightClickSchema = z.enum(['paste', 'menu'])
 const onboardingWindowsTerminalExitActionSchema = z.enum(['continue', 'skip_to_project_setup'])
-// `dismissed` from `OnboardingChecklistState` is intentionally excluded —
-// it is a UI panel-visibility flag, not an activation event, so it never
-// fires `activation_checklist_item_completed`. Keep this list in sync with
-// the activation keys of `OnboardingChecklistState` in shared/types.ts.
+// `dismissed` is intentionally excluded — it's a UI panel-visibility flag, not an activation event.
 const onboardingChecklistItemSchema = z.enum([
   'addedRepo',
   'addedFolder',
@@ -852,17 +739,13 @@ const onboardingFeatureSetupSelectedCountRefinement = {
 function hasMatchingOnboardingFeatureSetupSelectedCount(
   props: OnboardingFeatureSetupSelectionTelemetry
 ): boolean {
-  // Why: Linear ticket setup is a recommended add-on and must not affect
-  // onboarding progress metrics.
+  // Why: Linear ticket setup is a recommended add-on and excluded from progress metrics.
   const selectedCount =
     (props.browser_use ? 1 : 0) + (props.computer_use ? 1 : 0) + (props.orchestration ? 1 : 0)
   return props.selected_count === selectedCount
 }
 
-// Why: compile-time guard that the enum above stays in lockstep with the
-// activation keys of OnboardingChecklistState (everything except the UI-only
-// `dismissed` flag). Adding/removing a checklist key without updating this
-// schema breaks the build here rather than silently dropping telemetry.
+// Compile-time guard: enum must match OnboardingChecklistState activation keys (minus UI-only `dismissed`); drift breaks the build.
 type _OnboardingChecklistItemSync =
   z.infer<typeof onboardingChecklistItemSchema> extends Exclude<
     keyof OnboardingChecklistState,
@@ -877,14 +760,7 @@ type _OnboardingChecklistItemSync =
 const _onboardingChecklistItemSyncCheck: _OnboardingChecklistItemSync = true
 void _onboardingChecklistItemSyncCheck
 
-// Cohort discriminator threaded onto every onboarding-wizard event by the
-// IPC `telemetry:track` handler (mirrors `nth_repo_added`). `.optional()` is
-// load-bearing: the classifier returns `undefined` when settings can't be
-// read, and `.strict()` would otherwise reject the event entirely.
-//
-// Adding a new onboarding event: include `cohort: cohortSchema` on its
-// schema. The injection set in `telemetry:track` is derived from
-// `'cohort' in schema.shape`, so there is no parallel hand-maintained list.
+// Cohort discriminator for onboarding events; `.optional()` is load-bearing so `.strict()` accepts the `undefined` fallback.
 const cohortSchema = z.enum(['fresh_install', 'upgrade_backfill']).optional()
 
 const nestedRepoTelemetrySurfaceSchema = z.enum(NESTED_REPO_TELEMETRY_SURFACES)
@@ -930,8 +806,7 @@ function validateNestedRepoCountBuckets(
 }
 
 const nestedRepoTelemetryBaseSchema = {
-  // Why: high-cardinality by design, but random and non-persistent. It lets
-  // dashboards count scan -> action -> result attempts without path-derived IDs.
+  // Why: high-cardinality but random and non-persistent — correlates scan→action→result without path-derived IDs.
   attempt_id: nestedRepoAttemptIdSchema,
   surface: nestedRepoTelemetrySurfaceSchema,
   runtime_kind: nestedRepoTelemetryRuntimeKindSchema,
@@ -984,10 +859,7 @@ const addRepoNestedImportResultSchema = z
   .strict()
   .superRefine(validateNestedRepoCountBuckets)
 
-// `'button' | 'keyboard'` records whether the user advanced via a footer
-// button click, Cmd/Ctrl+Enter, or an equivalent keyboard exit like Escape.
-// The uniform shape lets keyboard skip/dismiss paths arrive without a
-// schema migration.
+// Uniform button/keyboard shape lets keyboard skip/dismiss paths arrive without a schema migration.
 const advancedViaSchema = z.enum(['button', 'keyboard']).optional()
 
 const onboardingStartedSchema = z
@@ -1121,21 +993,11 @@ const activationChecklistItemCompletedSchema = z
   })
   .strict()
 
-// Why: see docs/agent-on-path-detection.md. Disambiguates `on_path: false`
-// rows on dashboard 1562016 — distinguishes shell-hydration failure (where
-// `on_path` is misleading because Orca's view of PATH is incomplete) from
-// genuinely-not-on-PATH (where the field is reporting accurately). Closed
-// enum kept in lockstep with `ShellHydrationFailureReason` via a compile-time
-// guard below.
+// Why: disambiguates `on_path:false` rows on dashboard 1562016 (shell-hydration failure vs genuinely-not-on-PATH). See docs/agent-on-path-detection.md.
 const pathSourceSchema = z.enum(['shell_hydrate', 'sync_seed_only'])
 const pathFailureReasonSchema = z.enum(['none', 'no_shell', 'timeout', 'spawn_error', 'empty_path'])
 
-// Compile-time guard: schema enum must match `ShellHydrationFailureReason`.
-// Adding a new failure mode in `hydrate-shell-path.ts` without updating both
-// the shared alias and this schema breaks the build here. Without the guard,
-// a new enum value would ship `failureReason` strings the strict validator
-// rejects, dropping the entire `onboarding_agent_picked` event at parse time
-// and losing the `agent_kind`/`on_path` data on that pick.
+// Compile-time guard: schema enum must match `ShellHydrationFailureReason`; drift breaks the build, not runtime parsing.
 type _PathFailureReasonSync =
   z.infer<typeof pathFailureReasonSchema> extends ShellHydrationFailureReason
     ? ShellHydrationFailureReason extends z.infer<typeof pathFailureReasonSchema>
@@ -1154,42 +1016,27 @@ type _PathSourceSync =
 const _pathSourceSyncCheck: _PathSourceSync = true
 void _pathSourceSyncCheck
 
-// Fired at click time from `setSelectedAgentInteractive` so we capture
-// mind-changes within the step rather than just the final pick. `agent_kind`
-// uses `tuiAgentToAgentKind` so the wire enum stays closed even when stale
-// persisted settings present a string outside `TuiAgent` (the fallback is
-// `'other'`).
+// Fired at click time (captures mind-changes); `agent_kind` uses `tuiAgentToAgentKind` to keep the wire enum closed.
 const onboardingAgentPickedSchema = z
   .object({
     agent_kind: agentKindSchema,
     on_path: z.boolean(),
     detected_count: z.number().int().nonnegative(),
-    // `'pending'` when the merged isDetectingAgents/isRefreshingAgents flag
-    // is truthy at click time — distinguishes "picked the only detected
-    // agent" from "picked before detection finished."
+    // `'pending'` when detection is still running at click time (picked-before-detection vs picked-the-only-agent).
     detection_state: z.enum(['complete', 'pending']),
-    // `true` when the selected agent lived under the `<details>` disclosure
-    // ("Show N more"). Signals whether users go looking for less-popular
-    // agents — input for catalog ordering decisions.
+    // `true` when the agent lived under the "Show N more" disclosure — signals demand for less-popular agents.
     from_collapsed_section: z.boolean(),
-    // Why: instrumentation for the `on_path:false` triage. `.optional()` is
-    // load-bearing — events emitted before this deploy validate cleanly under
-    // `.strict()`. See docs/agent-on-path-detection.md.
+    // Why: `.optional()` is load-bearing so pre-deploy events validate under `.strict()`. See docs/agent-on-path-detection.md.
     path_source: pathSourceSchema.optional(),
     path_failure_reason: pathFailureReasonSchema.optional(),
     cohort: cohortSchema
   })
   .strict()
 
-// Mirrors the renderer's DiscoveryState taxonomy in ThemeStep.tsx. `failed`
-// is intentionally NOT a discovery state — it is the outcome of an Import
-// attempt, reported by `onboarding_ghostty_import_failed`.
+// Mirrors ThemeStep.tsx DiscoveryState; `failed` is intentionally absent (it's an import outcome, see onboarding_ghostty_import_failed).
 const ghosttyDiscoveryStateSchema = z.enum(['found', 'absent', 'imported'])
 
-// Compile-time guard: every member of ghosttyDiscoveryStateSchema must be a
-// discovery `status` the renderer can actually emit. Adding a new
-// DiscoveryState member in ThemeStep.tsx without updating the schema (or
-// vice versa) breaks the build here rather than silently dropping telemetry.
+// Compile-time guard: schema enum must stay in sync with the renderer's DiscoveryState; drift breaks the build, not runtime.
 type _GhosttyDiscoveryStateSync =
   z.infer<typeof ghosttyDiscoveryStateSchema> extends DiscoveryStatusEmitted
     ? DiscoveryStatusEmitted extends z.infer<typeof ghosttyDiscoveryStateSchema>
@@ -1202,23 +1049,14 @@ void _ghosttyDiscoveryStateSyncCheck
 const onboardingGhosttyDiscoveredSchema = z
   .object({
     state: ghosttyDiscoveryStateSchema,
-    // Bucketed, not raw, count: exact group counts are an environment
-    // fingerprint (heavy customizers are uniquely identifiable). Buckets
-    // cover the nine possible group labels in `humanFields()` without
-    // re-emitting the count itself.
+    // Bucketed not raw: exact group counts fingerprint heavy customizers.
     field_group_count_bucket: z.enum(['0', '1-3', '4-7', '8+']),
     cohort: cohortSchema
   })
   .strict()
 const onboardingGhosttyImportClickedSchema = z.object({ cohort: cohortSchema }).strict()
 
-// Why: smart-sort telemetry. The class distribution event tells us whether
-// real users have meaningful Class 1/2/3 populations (signal that the
-// redesign is doing work) or whether everyone collapses to Class 4 (signal
-// that hook coverage is too low). The Class 1 promotion event distinguishes
-// hook-driven attention from the title-heuristic fallback so we can tell
-// whether Edge case 9 is carrying weight. The smart→recent switch event is
-// our regression signal: users abandoning Smart for Recent.
+// Smart-sort telemetry: measures whether the redesign concentrates users in Class 1-3, and flags Smart→Recent abandonment as a regression.
 const smartSortClassDistributionSchema = z
   .object({
     class_1: z.number().int().nonnegative(),
@@ -1233,18 +1071,11 @@ const smartSortClass1PromotionSchema = z
     cause: z.enum(['blocked', 'waiting', 'title-heuristic'])
   })
   .strict()
-// Why a placeholder field instead of `z.object({})`: an empty zod object
-// infers as TS `{}` (which in TS means "anything non-null/undefined"). That
-// upsets the `keyof EventMap[N]` probes used by COHORT_EXTENDED_SET and
-// ONBOARDING_COHORT_SET, breaking their compile-time roster sync checks.
-// Carrying a single optional `_v` discriminator dodges the issue and
-// preserves room to add future fields without renaming the event.
+// Why `_v` not `z.object({})`: empty zod object infers as TS `{}` ("anything"), breaking the `keyof EventMap[N]` roster probes.
 const smartToRecentSwitchSchema = z.object({ _v: z.literal(1).optional() }).strict()
 const onboardingGhosttyImportFailedSchema = z
   .object({
-    // `'no_config'` is reserved for a future explicit "preview returned
-    // found:false" branch. Today's call sites emit `'empty_diff'` (the
-    // import resolved to no changes) or `'unknown'` (caught throw).
+    // `'no_config'` is reserved for future use; call sites currently emit `'empty_diff'` or `'unknown'`.
     reason: z.enum(['no_config', 'empty_diff', 'unknown']),
     cohort: cohortSchema
   })
@@ -1266,8 +1097,7 @@ const onboardingFeatureSetupRunSchema = z
     warning_count: z.number().int().nonnegative(),
     cohort: cohortSchema
   })
-  // Why: selected_count is derived analytics data; validate the relationship
-  // at the untrusted IPC boundary instead of trusting renderer callers.
+  // Why: validate derived selected_count at the untrusted IPC boundary rather than trust renderer callers.
   .refine(
     hasMatchingOnboardingFeatureSetupSelectedCount,
     onboardingFeatureSetupSelectedCountRefinement
@@ -1386,9 +1216,7 @@ const terminalPaneSplitSchema = z
   })
   .strict()
 
-// Why: measures the changed-on-disk conflict flow (issue #7265) — how often
-// conflicts surface per transport (false-banner detection on ssh/runtime
-// echoes) and which resolution users pick. Deliberately path-free.
+// Why: measures the changed-on-disk conflict flow (issue #7265) per transport; deliberately path-free.
 const editorExternalChangeConflictShownSchema = z
   .object({
     surface: z.enum(['edit', 'unstaged-diff']),
@@ -1406,18 +1234,7 @@ const editorExternalChangeConflictActionSchema = z
   .strict()
 
 // ── Event registry: the one record the validator consumes ───────────────
-//
-// The validator does `eventSchemas[name].safeParse(props)`. `EventMap` is
-// `z.infer`-derived from this record, so there is exactly one source of
-// truth for both compile-time types and runtime validation.
-//
-// Schema-evolution / versioning doctrine:
-// Breaking changes (renaming a field, changing an enum's meaning, removing a
-// required key) require a new event name (e.g. `agent_started_v2`), not an
-// in-place edit. Additive-optional fields (`z.field().optional()`) are safe
-// to add in place. This keeps PostHog funnels clean — an in-place breaking
-// change silently blends pre- and post-change rows under one event name,
-// which cannot be unmixed after the fact.
+// Versioning: breaking changes (rename/re-mean/remove a key) need a new event name; in-place edits blend pre/post rows unmixably. Additive-optional fields are safe.
 export const eventSchemas = {
   app_opened: appOpenedSchema,
   app_starred_orca: appStarredOrcaSchema,
@@ -1510,20 +1327,14 @@ export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof event
 export type EventName = keyof EventMap
 export type EventProps<N extends EventName> = EventMap[N]
 
-// Why: events whose schemas declare a given property name. Extracted so the
-// cast (Object.entries → [EventName, ZodTypeAny]) stays in one place; if the
-// schema-registry shape ever changes, only one site needs to update.
-// Safely skips non-`ZodObject` schemas (e.g. a future `z.discriminatedUnion`
-// or `z.union`) — those have no `.shape`, and probing `key in undefined`
-// would throw at module load and take the telemetry module down on import.
+// Why: non-`ZodObject` schemas have no `.shape`; return null so `key in undefined` can't throw at module load.
 function eventSchemaShape(schema: z.ZodTypeAny): z.ZodRawShape | null {
   if (schema instanceof z.ZodObject) {
     return schema.shape
   }
 
   const shapeBearingSchema = schema as { shape?: unknown }
-  // Why: refined object schemas may still expose `.shape` even if a Zod
-  // version stops preserving `instanceof ZodObject` through refinement.
+  // Why: refined object schemas may expose `.shape` even when refinement breaks `instanceof ZodObject`.
   if (shapeBearingSchema.shape && typeof shapeBearingSchema.shape === 'object') {
     return shapeBearingSchema.shape as z.ZodRawShape
   }
@@ -1541,23 +1352,11 @@ function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
   )
 }
 
-// Events whose schemas declare `nth_repo_added`. Derived from `eventSchemas`
-// at module load by probing each schema's `.shape` — there is no parallel
-// hand-maintained list to drift out of sync. The IPC `telemetry:track`
-// handler injects the cohort property only when the incoming event name is
-// in this set: the schemas are `.strict()`, so injecting `nth_repo_added`
-// on an event whose schema does not declare it would fail validation and
-// silently drop the entire event.
-//
-// Schema-additions checklist for adding a new cohort-extended event:
-//   add `nth_repo_added: nthRepoAddedSchema` to the event's schema above.
-//   That is the *only* step — this set updates automatically.
+// Cohort injection is gated on this derived set because `.strict()` schemas drop events that don't declare `nth_repo_added`.
 const COHORT_EXTENDED_SET = eventsWithShapeKey('nth_repo_added')
 export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_SET)
 
-// Compile-time roster of events that must declare `nth_repo_added`. Same
-// rationale as `_OnboardingCohortRosterSync` below — guards the runtime
-// injection set against silent schema drift.
+// Compile-time roster guarding the runtime injection set against silent schema drift.
 type _CohortExtendedRoster =
   | 'app_opened'
   | 'app_starred_orca'
@@ -1582,9 +1381,7 @@ type _CohortExtendedRoster =
   | 'orca_cli_feature_tip_setup_result'
   | 'cmd_j_palette_feature_tip_shown'
   | 'cmd_j_palette_feature_tip_acknowledged'
-// Why: `z.object({}).strict()` infers a string index signature, which would
-// make every key appear present. Ignore index-signature-only keys here so
-// strict empty event payloads do not get pulled into keyed telemetry rosters.
+// Why: strict empty payloads infer a string index signature; ignore index-only keys so they aren't pulled into keyed rosters.
 type _KnownPayloadKeys<T> = string extends keyof T ? never : keyof T
 type _DerivedCohortExtendedEvents = {
   [N in EventName]: 'nth_repo_added' extends _KnownPayloadKeys<EventMap[N]> ? N : never
@@ -1601,26 +1398,12 @@ export function isCohortExtendedEvent(name: EventName): boolean {
   return COHORT_EXTENDED_SET.has(name)
 }
 
-// Onboarding events — derived the same way as `COHORT_EXTENDED_SET`: probe
-// each schema's `.shape` for the `cohort` key. The IPC `telemetry:track`
-// handler injects the onboarding cohort property only when the incoming
-// event name is in this set; schemas are `.strict()`, so injecting `cohort`
-// on an event whose schema does not declare it would fail validation and
-// silently drop the entire event.
-//
-// Adding a new onboarding event: include `cohort: cohortSchema` on its
-// schema. This set updates automatically.
+// Events whose schema declares `cohort`: the IPC handler injects cohort only for these — a `.strict()` schema without it would reject the event.
 const ONBOARDING_COHORT_SET = eventsWithShapeKey('cohort')
 // `NonNullable` strips `undefined` introduced by `cohortSchema`'s `.optional()`.
 export type OnboardingCohort = NonNullable<z.infer<typeof cohortSchema>>
 
-// Compile-time roster of events that must declare `cohort`. If a schema
-// refactor drops the field from one of these, this fails tsc rather than
-// silently dropping the event from the runtime injection set above (which
-// the `.optional()` schema would tolerate without any test failure).
-//
-// Adding a new onboarding event: add its name here AND declare
-// `cohort: cohortSchema` on its schema. Both are required.
+// Compile-time roster: dropping `cohort` from any of these fails tsc, rather than silently at runtime (`.optional()` would tolerate that).
 type _OnboardingCohortRoster =
   | 'onboarding_started'
   | 'onboarding_step_viewed'
@@ -1656,30 +1439,15 @@ export function isOnboardingEvent(name: EventName): boolean {
   return ONBOARDING_COHORT_SET.has(name)
 }
 
-// Common props attached by the client — declared here so the validator knows
-// which keys to allow on every outgoing event.
-//
-// No `env: 'prod' | 'dev'` property. Every transmitted event is by
-// construction from an official CI build, so a wire discriminator would be
-// redundant. Contributor / `pnpm dev` builds do not transmit at all; they
-// console-mirror.
-//
-// Every string field carries the 64-char cap directly — this is what the
-// validator's "string-length cap" rule is made of; there is no separate
-// post-parse length check to keep in sync with the schema.
+// No `env` discriminator: every transmitted event is from an official CI build (dev/contributor builds only console-mirror).
+// The per-field `.max(64)` is the validator's string-length cap — there is no separate post-parse length check.
 export const commonPropsSchema = z
   .object({
     app_version: z.string().max(64),
     platform: z.string().max(64),
     arch: z.string().max(64),
     os_release: z.string().max(64),
-    // `install_id` is used as PostHog's `distinctId` and `session_id` is the
-    // per-process correlation key — an empty string on either would collapse
-    // unrelated events into a single synthetic "user" / "session" and
-    // silently corrupt analytics. `.min(1)` rejects that actual observed
-    // failure mode without pinning the shape to UUIDs (both ids come from
-    // `randomUUID()` today, but forward-compatibility with a future id
-    // scheme is cheap to preserve).
+    // `.min(1)`: an empty install_id/session_id would collapse unrelated events into one synthetic user/session, corrupting analytics.
     install_id: z.string().min(1).max(64),
     session_id: z.string().min(1).max(64),
     orca_channel: z.enum(['stable', 'rc'])

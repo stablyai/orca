@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: parallel to src/main/github/client.ts —
-co-locating GitLab MR/issue/work-item operations keeps the concurrency
-acquire/release pattern obvious across operations. */
+/* eslint-disable max-lines -- co-locates GitLab MR/issue/work-item operations sharing one acquire/release pattern. */
 import type {
   ClassifiedError,
   GitLabAssignableUser,
@@ -48,8 +46,7 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 
-// Why: glab REST API addresses projects by URL-encoded path. Centralized
-// so call sites don't forget the slash escapes for nested groups.
+// Why: glab REST addresses projects by URL-encoded path; escapes slashes for nested groups.
 function encodedProject(projectPath: string): string {
   return encodeURIComponent(projectPath)
 }
@@ -67,9 +64,8 @@ function hostedReviewLocalGitOptionArgs(
 }
 
 /**
- * Get the authenticated GitLab viewer. Mirrors getAuthenticatedViewer
- * from the GitHub client — returns null when glab is unavailable, the
- * user is unauthenticated, or the lookup fails.
+ * Get the authenticated GitLab viewer.
+ * Returns null when glab is unavailable, unauthenticated, or the lookup fails.
  */
 export async function getAuthenticatedViewer(): Promise<GitLabViewer | null> {
   await acquire()
@@ -202,8 +198,7 @@ function rememberGitLabRateLimitSnapshot(
   snapshot: GitLabRateLimitSnapshot
 ): void {
   pruneGitLabRateLimitCache()
-  // Why: self-managed GitLab hostnames come from repo config; keep this
-  // process cache bounded even across many transient hosts.
+  // Why: self-managed hostnames come from repo config; keep this cache bounded across many transient hosts.
   gitLabRateLimitCache.delete(cacheKey)
   gitLabRateLimitCache.set(cacheKey, snapshot)
   pruneGitLabRateLimitCache()
@@ -223,9 +218,7 @@ export async function getRateLimit(options?: {
 
   await acquire()
   try {
-    // Why: GitLab.com and self-managed GitLab instances expose REST budget
-    // headers inconsistently. Query a cheap authenticated endpoint and report
-    // the headers when present; a null bucket means this host omitted them.
+    // Why: GitLab exposes REST budget headers inconsistently; a null bucket means this host omitted them.
     const args = host ? ['--hostname', host, 'user'] : ['user']
     const { headers } = await glabApiWithHeaders(args)
     const snapshot = parseGitLabRateLimitSnapshot(headers, host)
@@ -239,10 +232,7 @@ export async function getRateLimit(options?: {
   }
 }
 
-/**
- * Resolve a project's full GitLab project ref (host + path). Mirrors
- * github/getRepoSlug. Returns null for non-GitLab remotes.
- */
+/** Resolve a project's full GitLab project ref (host + path); null for non-GitLab remotes. */
 export async function getProjectSlug(
   repoPath: string,
   connectionId?: string | null,
@@ -254,9 +244,8 @@ export async function getProjectSlug(
 }
 
 /**
- * Fetch a single merge request with the pipeline status rolled up.
- * Returns null when the MR doesn't exist or glab fails — callers
- * decide whether to surface "not found" UI.
+ * Fetch a single merge request with pipeline status rolled up.
+ * Returns null when the MR doesn't exist or glab fails.
  */
 export async function getMergeRequest(
   repoPath: string,
@@ -285,9 +274,7 @@ export async function getMergeRequest(
       head_pipeline?: { status?: string } | null
       pipeline?: { status?: string } | null
     }
-    // Why: GitLab's MR detail surfaces the head pipeline directly.
-    // Older instances expose `pipeline` instead of `head_pipeline` — try
-    // both. If neither is set the rollup falls back to neutral.
+    // Why: older GitLab instances expose `pipeline` instead of `head_pipeline`; try both.
     const pipelineStatus = derivePipelineStatus(data.head_pipeline ?? data.pipeline ?? null)
     return mapMRInfo(data, pipelineStatus)
   } catch {
@@ -298,11 +285,8 @@ export async function getMergeRequest(
 }
 
 /**
- * Find the merge request whose source branch matches the given branch
- * name. Mirrors github/getPRForBranch — returns the most recently
- * updated MR for the branch, or null when none exists. The branch is the
- * local checkout's current ref (Orca strips refs/heads/ prefix upstream
- * so we don't need to here).
+ * Find the merge request whose source branch matches the given name.
+ * Returns the most recently updated MR for the branch, or null when none exists.
  */
 export async function getMergeRequestForBranch(
   repoPath: string,
@@ -310,9 +294,7 @@ export async function getMergeRequestForBranch(
   linkedMRIid?: number | null,
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {},
-  // Why: the existing-review lookup behind Create must distinguish a real glab
-  // transport/auth failure from an accepted "no MR". When true, a failed lookup
-  // throws instead of collapsing to null so callers never report false not_found.
+  // Why: when true, a failed lookup throws instead of returning null, so callers never report a false not_found.
   throwOnFailure = false
 ): Promise<MRInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
@@ -343,8 +325,7 @@ export async function getMergeRequestForBranch(
       })[]
       if (Array.isArray(data) && data.length > 0) {
         const raw = data[0]
-        // Why: older GitLab list payloads expose `pipeline` instead of
-        // `head_pipeline`, matching the detail endpoint compatibility path.
+        // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
         const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
         return mapMRInfo(raw, pipelineStatus)
       }
@@ -352,9 +333,7 @@ export async function getMergeRequestForBranch(
     if (typeof linkedMRIid !== 'number') {
       return null
     }
-    // Why: create-from-MR worktrees may use a fresh local branch name rather
-    // than the MR source branch. Fall back to the durable linked iid so the
-    // core review status still follows the workspace.
+    // Why: create-from-MR worktrees may rename the branch; fall back to the durable linked iid.
     const { stdout } = await glabExecFileAsync(
       [
         'api',
@@ -380,9 +359,7 @@ export async function getMergeRequestForBranch(
 }
 
 /**
- * Existing-review lookup that surfaces glab transport/auth failures instead of
- * collapsing them to null, so a failed lookup becomes
- * `reviewLookupOutcome: 'unavailable'` rather than a false "No merge request found".
+ * Like getMergeRequestForBranch but throws glab failures instead of returning null, so callers report 'unavailable' not a false "not found".
  */
 export function getMergeRequestForBranchOrThrow(
   repoPath: string,
@@ -407,10 +384,7 @@ function mrListStateFlags(state: MRListState): string[] {
   }
 }
 
-/**
- * List merge requests for a project. Uses glab CLI pagination because
- * it handles self-hosted auth and project selection consistently.
- */
+/** List merge requests for a project via glab CLI, which handles self-hosted auth and project selection. */
 export async function listMergeRequests(
   repoPath: string,
   state: MRListState = 'opened',
@@ -422,10 +396,7 @@ export async function listMergeRequests(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
-  // Why: MRs sit on `origin` in the fork model (the user's fork is where
-  // they push branches and submit MRs). Mirror github's `getOwnerRepo`
-  // call site by going through the upstream/origin preference resolver
-  // so cross-fork workflows reuse the same plumbing.
+  // Why: MRs live on the user's fork (origin); route through the preference resolver so fork workflows share plumbing.
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -435,8 +406,7 @@ export async function listMergeRequests(
   )
   if (!projectRef) {
     if (connectionId) {
-      // Why: SSH-backed repos have no local cwd for glab to infer from.
-      // Running cwd-less could resolve an unrelated local project instead.
+      // Why: SSH-backed repos have no local cwd; a cwd-less glab could resolve an unrelated project.
       return {
         items: [],
         page,
@@ -449,14 +419,9 @@ export async function listMergeRequests(
         }
       }
     }
-    // Why: fallback — let glab infer project from cwd, same as listIssues.
-    // Used when the repo's remote host is not in getGlabKnownHosts(connectionId)
-    // (e.g. a fresh self-hosted instance), but glab itself can still
-    // resolve it from the local git config.
+    // Why: fallback — let glab infer the project from cwd when the host isn't in getGlabKnownHosts.
     const stateFlag = mrListStateFlags(state)
-    // Why: the cwd-inferred fallback must honor the same search the API path
-    // does, otherwise typing a query against a self-hosted / unresolved-projectRef
-    // repo silently returns the unfiltered list (the original #6263 symptom).
+    // Why: apply the same search as the API path, else queries are silently ignored on cwd-inferred repos (#6263).
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
     await acquire()
     try {
@@ -484,8 +449,7 @@ export async function listMergeRequests(
         items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
         page,
         perPage,
-        // Why: the CLI doesn't return x-total headers, so totals are
-        // approximate. For the Tasks UI this is acceptable.
+        // Why: the CLI omits x-total headers, so totals are approximate.
         totalCount: data.length,
         totalPages: data.length < perPage ? page : page + 1
       }
@@ -503,8 +467,7 @@ export async function listMergeRequests(
       release()
     }
   }
-  // Why: 'all' is exposed as the picker filter but GitLab's API expects
-  // no state param to mean "any state". Drop the param when 'all'.
+  // Why: GitLab's API uses an absent state param to mean "any"; drop it for 'all'.
   const stateParam = state === 'all' ? '' : `&state=${state}`
   const searchParam = query?.trim() ? `&search=${encodeURIComponent(query.trim())}` : ''
   const path =
@@ -524,8 +487,7 @@ export async function listMergeRequests(
       page,
       perPage,
       totalCount: parseHeaderInt(headers['x-total'], 0),
-      // Why: when 'all' state is requested or the per_page is large,
-      // GitLab may not include x-total-pages; fall back to ceil(total/perPage).
+      // Why: GitLab may omit x-total-pages for 'all' or large per_page; fall back to ceil(total/perPage).
       totalPages:
         parseHeaderInt(headers['x-total-pages'], 0) ||
         Math.max(1, Math.ceil(parseHeaderInt(headers['x-total'], 0) / perPage))
@@ -554,10 +516,8 @@ function parseHeaderInt(value: string | undefined, fallback: number): number {
 }
 
 /**
- * Fetch a work item (MR or issue) given an explicit project ref +
- * iid + type. Mirrors github/getWorkItemByOwnerRepo — used by the
- * paste-URL flow in the picker where the URL determines the project
- * directly rather than going through the local repo's remotes.
+ * Fetch a work item (MR or issue) by explicit project ref + iid + type.
+ * Used by the paste-URL flow, where the URL determines the project directly.
  */
 export async function getWorkItemByProjectRef(
   repoPath: string,
@@ -573,8 +533,7 @@ export async function getWorkItemByProjectRef(
     const { stdout } = await glabExecFileAsync(
       [
         'api',
-        // Why: pasted GitLab URLs carry an explicit host; preserve it even for
-        // local/runtime-local repos so cwd remotes cannot redirect the lookup.
+        // Why: preserve the pasted URL's explicit host so cwd remotes can't redirect the lookup.
         ...(projectRef.host ? ['--hostname', projectRef.host] : []),
         `projects/${encodedProject(projectRef.path)}/${resource}/${iid}`
       ],
@@ -593,9 +552,7 @@ export async function getWorkItemByProjectRef(
 }
 
 function mrStateToIssueState(state: MRListState): IssueListState | null {
-  // Why: GitLab issues don't have a 'merged' state. When the user is
-  // filtering MRs to merged, return null so listWorkItems can skip the
-  // issues fetch entirely instead of mis-mapping to opened/closed.
+  // Why: issues have no 'merged' state; return null so the issues fetch is skipped, not mis-mapped.
   switch (state) {
     case 'opened':
       return 'opened'
@@ -640,16 +597,8 @@ export async function listWorkItems(
       }
     }
   }
-  // Why: fan out the two read calls so the response time is the slower
-  // of the two, not their sum. Errors classify per-side; an MR-side
-  // failure with a successful issues fetch still surfaces issues with
-  // an error envelope.
-  //
-  // Why we don't go through `listIssues` here: that function returns
-  // IssueInfo, which deliberately strips the raw glab fields (notably
-  // `updated_at`). The combined sort needs updatedAt, so we read the
-  // raw issues API directly and run mapIssueToWorkItem against the
-  // raw payload instead.
+  // Why: fan out both reads so latency is the slower of the two, not the sum.
+  // Why read the raw issues API (not listIssues): IssueInfo strips updated_at, which the combined sort needs.
   const [mrs, issues] = await Promise.all([
     listMergeRequests(
       repoPath,
@@ -680,20 +629,13 @@ export async function listWorkItems(
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
   )
-  // Why: combine error envelopes — the renderer's banner cares about
-  // any failed fetch, not which one. MR-side error wins because it's
-  // strictly more informative than an issues-side error in most
-  // permission scenarios (issues can be disabled per project).
+  // Why: MR-side error wins — issues can be disabled per project, making its error less informative.
   const error: ClassifiedError | undefined = mrs.error ?? issues.error
   return {
     items: merged,
     page,
     perPage,
-    // Why: approximate totals — an exact combined-pagination total would
-    // require a server-side ordering primitive across two distinct
-    // resources, which the GitLab API doesn't offer. MR total is the
-    // right direction; the UI's "Page X of Y" reads as a hint, not a
-    // strict count.
+    // Why: approximate totals — GitLab can't paginate across MRs+issues as one set, so MR totals stand in.
     totalCount: mrs.totalCount,
     totalPages: mrs.totalPages,
     ...(error ? { error } : {})
@@ -739,14 +681,7 @@ export async function fetchIssuesAsWorkItems(
 
 /**
  * List the authenticated user's GitLab todos (gitlab.com/dashboard/todos).
- * Cross-project — `glab api todos` is user-scoped so the cwd doesn't
- * affect the result; callers may pass any registered repo path so the
- * IPC handler's path-validation guard has something to check.
- *
- * Why: GitLab's todos surface is the closest GitLab-native analogue of
- * GitHub's notifications/inbox. Surfacing it in Orca lets users start
- * work directly from a mention/assignment without going to gitlab.com
- * first.
+ * User-scoped, so cwd is irrelevant; repoPath only satisfies the IPC handler's path-validation guard.
  */
 export async function listTodos(
   repoPath: string,
@@ -764,9 +699,7 @@ export async function listTodos(
   }
   await acquire()
   try {
-    // Why: per_page=50 keeps this user-scoped cross-project view cheap. The UI
-    // shows the highest-priority todos first, so avoid walking every pending
-    // todo page from large GitLab accounts.
+    // Why: per_page=50 keeps this cross-project view cheap; the UI only shows top-priority todos.
     const { stdout } = await glabExecFileAsync(
       [
         'api',
@@ -805,9 +738,7 @@ export async function listTodos(
       state: t.state === 'done' ? 'done' : 'pending'
     }))
   } catch {
-    // Why: silent empty-list on auth/network failures matches the rest
-    // of the read-side surface (`listLabels`, `listAssignableUsers`).
-    // The caller's banner / loading-state UI signals connectivity issues.
+    // Why: silent empty-list on auth/network failure matches the read-side surface; caller UI signals connectivity.
     return []
   } finally {
     release()
@@ -815,9 +746,6 @@ export async function listTodos(
 }
 
 // ── MR mutations ──────────────────────────────────────────────────
-// Why: mirror the GitHub-side actions (mergePR, updatePRTitle, close
-// via gh issue close, etc.) for the GitLab dialog footer. All take a
-// repoPath + iid and resolve the project ref via the existing helper.
 
 async function withProjectRef<T>(
   repoPath: string,
@@ -875,9 +803,7 @@ export async function closeMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // Why: glab returns a non-zero exit when the MR is already
-        // closed — treat that as success since the desired state is
-        // reached.
+        // Why: glab exits non-zero when the MR is already closed — treat as success.
         if (msg.toLowerCase().includes('already')) {
           return { ok: true }
         }
@@ -951,9 +877,7 @@ export async function mergeMR(
     async (projectRef, repoFlag) => {
       await acquire()
       try {
-        // Why: glab mr merge accepts --squash and --rebase flags;
-        // omitting both does a regular merge commit. Map our union
-        // to the right glab flag.
+        // Why: omitting both --squash and --rebase yields a regular merge commit.
         const methodFlag =
           method === 'squash' ? ['--squash'] : method === 'rebase' ? ['--rebase'] : []
         await glabExecFileAsync(
@@ -1148,8 +1072,7 @@ export async function resolveMRDiscussion(
       }
       await acquire()
       try {
-        // Why: GitLab resolves/reopens the whole discussion thread, not a single
-        // note; this mirrors GitHub's thread-level resolve mutation.
+        // Why: GitLab resolves/reopens the whole discussion thread, not a single note.
         await glabExecFileAsync(
           [
             'api',
@@ -1429,7 +1352,5 @@ export {
   updateIssue
 } from './issues'
 
-// Why: surface the upstream-aware project-ref helper so non-issue call
-// sites that need the resolved project (e.g. the paste-URL UI) don't
-// have to import from gl-utils directly.
+// Re-exported so paste-URL call sites don't import getProjectRefForRemote from gl-utils directly.
 export { getProjectRefForRemote }

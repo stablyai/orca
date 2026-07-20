@@ -61,8 +61,7 @@ export function configureElectronNetworkCompatibility(
   if (!shouldDisableHttp2ForElectronNetworking(options)) {
     return
   }
-  // Why: Chromium's HTTP/2 switch is process-wide and only works before the
-  // first session exists, so read the persisted setting during early startup.
+  // Why: Chromium's HTTP/2 switch is process-wide and only applies before the first session exists, so set it during early startup.
   app.commandLine.appendSwitch('disable-http2')
 }
 
@@ -75,11 +74,7 @@ function requestDevParentShutdown(): void {
   app.quit()
 
   const forceExitTimer = setTimeout(() => {
-    // Why: in dev, losing the supervising parent means this Electron process is
-    // already orphaned from the terminal session. We try app.quit() first so
-    // normal cleanup still runs, but fall back to app.exit() when macOS quit
-    // handlers or window-close guards stall and would otherwise leave Orca
-    // hanging after Ctrl+C ends `pnpm dev`.
+    // Why: app.quit() may stall on macOS quit handlers or window-close guards, so force-exit after a grace period to avoid a hung dev app.
     app.exit(0)
   }, DEV_PARENT_SHUTDOWN_GRACE_MS)
 
@@ -107,9 +102,7 @@ export function installUncaughtPipeErrorGuard(): void {
     }
 
     process.off('uncaughtException', onUncaughtException)
-    // Why: throwing inside an uncaughtException handler makes Node exit with
-    // status 7, hiding the original fault. Re-throw on the next tick so the
-    // default fatal-exception path reports the real status and stack.
+    // Why: throwing inside an uncaughtException handler exits with status 7 and hides the fault; re-throw next tick for the real stack.
     setImmediate(() => {
       throw error
     })
@@ -142,25 +135,14 @@ export function patchPackagedProcessPath(): void {
         join(home, 'bin'),
         join(home, '.local/bin'),
         join(home, '.nix-profile/bin'),
-        // Why: several agent CLIs ship install scripts that drop binaries into
-        // tool-specific ~/.<name>/bin directories (opencode's documented fallback,
-        // Pi's vite-plus installer). GUI-launched Electron inherits a minimal PATH
-        // without shell rc files, so these stay invisible to `which` probes — and
-        // the Agents settings page reports them as "Not installed" even when the
-        // user can run them from Terminal. See stablyai/orca#829.
+        // Why: some agent CLIs install into ~/.<name>/bin; GUI-launched Electron's minimal PATH misses them (stablyai/orca#829).
         join(home, '.opencode/bin'),
         join(home, '.vite-plus/bin')
       )
     }
   }
 
-  // Why: CLI tools installed via Node version managers (nvm, volta, asdf, fnm,
-  // pnpm, yarn, bun) use #!/usr/bin/env node shebangs that need `node` in PATH.
-  // resolveCodexCommand() can locate the codex binary in these directories, but
-  // spawning it still fails if node itself isn't in PATH. Adding version manager
-  // bin paths here fixes all spawn sites (login, rate limits, usage tracking).
-  // On Windows this also seeds user-local installer dirs, since shell hydration
-  // is POSIX-only and Start Menu launches can miss user-level PATH updates.
+  // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail (also seeds Windows user-local dirs).
   extraPaths.push(...getVersionManagerBinPaths())
 
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
@@ -179,10 +161,7 @@ export function patchPackagedProcessPath(): void {
 export function configureDevUserDataPath(isDev: boolean): void {
   const e2eConfig = getMainE2EConfig()
   if (e2eConfig.userDataDir) {
-    // Why: the E2E suite launches a fresh Electron app for each spec. A
-    // dedicated userData path per launch prevents persisted repos, worktrees,
-    // and session state from leaking between tests through the shared dev
-    // profile while still leaving the user's real packaged profile untouched.
+    // Why: a per-launch userData path stops E2E specs leaking persisted repos/worktrees/session state through the shared dev profile.
     app.setPath('userData', e2eConfig.userDataDir)
     return
   }
@@ -192,34 +171,22 @@ export function configureDevUserDataPath(isDev: boolean): void {
   }
   const overrideUserDataPath = process.env.ORCA_DEV_USER_DATA_PATH
   if (overrideUserDataPath) {
-    // Why: automated Electron repros need an isolated profile so persisted
-    // tabs/worktrees from the developer's normal `orca-dev` session do not
-    // change startup behavior and hide or create window-management bugs.
+    // Why: automated repros need an isolated profile so the dev's persisted tabs/worktrees don't skew startup and hide window bugs.
     app.setPath('userData', overrideUserDataPath)
     return
   }
-  // Why: development runs share the same machine as packaged Orca, and both
-  // publish runtime bootstrap files under userData. Without a dev-only path,
-  // `pnpm dev` can overwrite the packaged app's runtime pointer and make the
-  // public `orca` CLI look broken even though the packaged app is still open.
+  // Why: without a dev-only path, pnpm dev overwrites the packaged app's runtime pointer under userData and breaks the orca CLI.
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 
 export function configureOrcaUserDataPathEnv(): void {
-  // Why: app relaunches can inherit an ORCA_USER_DATA_PATH from an older CLI or
-  // updater process. Main must canonicalize it before CLI-shared modules build
-  // runtime-home paths, or migrations can bridge two Orca app-data directories.
+  // Why: relaunches can inherit a stale ORCA_USER_DATA_PATH; canonicalize before CLI-shared modules build runtime-home paths.
   process.env.ORCA_USER_DATA_PATH = app.getPath('userData')
 }
 
 export function shouldInstallManagedHooks(isDev: boolean): boolean {
   void isDev
-  // Why: managed hook installation now targets Orca-owned, environment-scoped
-  // homes for Codex rather than the user's default ~/.codex state, so plain
-  // dev runs need the install path enabled to keep hook-backed agent statuses
-  // accurate without an opt-in flag. The remaining agents still rely on the
-  // shared startup installer loop, so keep the policy uniformly on until
-  // they are migrated to more granular ownership seams.
+  // Why: managed hooks now target Orca-owned Codex homes, not ~/.codex, so keep install on for all agents until each gets its own seam.
   return true
 }
 
@@ -228,10 +195,7 @@ export function installDevParentDisconnectQuit(isDev: boolean): void {
     return
   }
 
-  // Why: electron-vite dev controls the Electron app over Node IPC so it can
-  // hot-restart the main process. On macOS, Ctrl+C can stop that parent process
-  // without terminating the app window, so in dev we quit explicitly when the
-  // supervising IPC channel disconnects instead of leaving a stray Electron app.
+  // Why: on macOS Ctrl+C can stop the electron-vite parent without closing the window, so quit when the IPC channel disconnects.
   process.once('disconnect', () => {
     requestDevParentShutdown()
   })
@@ -268,11 +232,7 @@ export function installDevParentWatchdog(isDev: boolean): void {
 
     if (parentPidChanged || parentMissing) {
       clearInterval(timer)
-      // Why: electron-vite's dev runner starts Electron with plain spawn() and
-      // inherited stdio, not an IPC channel. On macOS that means Ctrl+C can end
-      // the dev runner while leaving Orca open. Watching the original parent PID
-      // keeps dev shutdown coupled to the terminal session without affecting the
-      // packaged app, which is not supervised by electron-vite.
+      // Why: the dev runner spawns Electron without IPC, so on macOS Ctrl+C leaves Orca open; watch the parent PID to couple shutdown.
       requestDevParentShutdown()
     }
   }, 1000)
@@ -286,9 +246,7 @@ export function installDevParentSignalQuit(isDev: boolean): void {
   }
 
   const onSignal = (): void => {
-    // Why: run-electron-vite-dev forwards terminal shutdown signals to the
-    // Electron process group; those are dev-supervisor shutdowns too, so the
-    // detached daemon should not be preserved for warm reattach.
+    // Why: run-electron-vite-dev forwards terminal shutdown signals here, so don't preserve the detached daemon for warm reattach.
     requestDevParentShutdown()
   }
 
@@ -298,19 +256,14 @@ export function installDevParentSignalQuit(isDev: boolean): void {
 
 export function enableMainProcessGpuFeatures(): void {
   if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
-    // Why: Ubuntu/Xvfb runners can fail Electron startup with
-    // "GPU process isn't usable" before Playwright sees the first window.
-    // E2E coverage does not depend on GPU compositing, so keep CI on the
-    // software path instead of retrying around a crashed app process.
+    // Why: Ubuntu/Xvfb runners fail Electron startup with "GPU process isn't usable"; E2E needs no GPU, so use the software path.
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu')
     return
   }
 
-  // Why: Blink force-loses the oldest WebGL context past 16 per renderer, and
-  // each attached terminal pane holds one — a busy worktree (tabs × splits)
-  // can exceed that, silently downgrading evicted panes to the DOM renderer.
-  // 128 covers real layouts while keeping a bound so context leaks surface.
+  // Why: Blink evicts the oldest WebGL context past 16/renderer and each terminal pane holds one, silently downgrading panes to DOM.
+  // 128 raises the ceiling for real layouts while staying bounded so context leaks still surface.
   app.commandLine.appendSwitch('max-active-webgl-contexts', '128')
 
   const ozonePlatform = (app.commandLine.getSwitchValue('ozone-platform') ?? '').toLowerCase()
@@ -325,17 +278,13 @@ export function enableMainProcessGpuFeatures(): void {
       ozonePlatformHint === 'wayland' ||
       ozonePlatform === 'wayland')
   if (isLinuxWaylandSession) {
-    // Why: #5319 reproduces when Wayland loses the eager GPU channel. Keep
-    // acceleration available, but drop the GPU sandbox and let Chromium open
-    // the GPU channel lazily on this compositor path.
+    // Why: #5319 — Wayland loses the eager GPU channel; drop the GPU sandbox so Chromium opens it lazily.
     app.commandLine.appendSwitch('disable-gpu-sandbox')
   }
 
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
-    // Why: mirror VS Code's conservative Electron GPU-channel startup flags
-    // instead of opting into Vulkan/SkiaGraphite/unsafe WebGPU globally.
-    // Terminal acceleration is controlled by xterm WebGL in the renderer.
+    // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
     ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     existingFeatures
   ]
@@ -346,12 +295,8 @@ export function enableMainProcessGpuFeatures(): void {
   }
 
   const existingDisabledFeatures = app.commandLine.getSwitchValue('disable-features')
-  // Why: with main-window background throttling on, Chromium's intensive mode
-  // clamps hidden-page timers to 1/min after 5 minutes, delaying agent-done and
-  // bell notifications by up to 60s. Keep the normal 1s hidden clamp (rAF and
-  // rendering still stop) but opt out of the 1/min tier. Callers skip this
-  // function under GPU fallback (win32-only today); if throttling ever extends
-  // to Windows, this opt-out must move out of the GPU-gated path.
+  // Why: IntensiveWakeUpThrottling clamps hidden-page timers to 1/min after 5min, delaying agent-done/bell notifications ~60s.
+  // This opt-out is skipped under GPU fallback (win32-only today); if throttling ever reaches Windows it must move out of this path.
   const disabledFeatures = ['IntensiveWakeUpThrottling', existingDisabledFeatures]
     .filter(Boolean)
     .join(',')
