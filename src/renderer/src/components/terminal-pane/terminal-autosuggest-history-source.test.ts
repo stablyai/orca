@@ -46,6 +46,14 @@ describe('parseShellHistoryContent', () => {
     expect(parseShellHistoryContent(content, 'zsh')).toEqual(['not-a-valid-zsh-line', 'git status'])
   })
 
+  it('strips trailing carriage returns from CRLF-terminated lines', () => {
+    const content = 'git status\r\nls -la\r\n'
+    const result = parseShellHistoryContent(content, 'bash')
+    expect(result).toEqual(['ls -la', 'git status'])
+    // Why: a trailing \r sent to the pty on accept would submit the line early.
+    expect(result.every((line) => !line.includes('\r'))).toBe(true)
+  })
+
   it('caps at the most recent 2000 entries', () => {
     const lines = Array.from({ length: 2500 }, (_, i) => `cmd${i}`).join('\n')
     const result = parseShellHistoryContent(lines, 'bash')

@@ -13,8 +13,11 @@ export function cellToPixelPosition(
   const rect = (screenElement as HTMLElement).getBoundingClientRect()
   const cellWidth = rect.width / terminal.cols
   const cellHeight = rect.height / terminal.rows
+  // Why: row is the absolute scrollback row (buffer.baseY + cursorY), which
+  // grows unboundedly — subtract viewportY to get the on-screen row.
+  const viewportRow = row - terminal.buffer.active.viewportY
   return {
-    top: rect.top + row * cellHeight,
+    top: rect.top + viewportRow * cellHeight,
     left: rect.left + col * cellWidth
   }
 }

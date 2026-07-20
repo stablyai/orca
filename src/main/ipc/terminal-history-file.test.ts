@@ -164,6 +164,19 @@ describe('registerTerminalHistoryFileHandlers', () => {
     expect(readFile).not.toHaveBeenCalled()
   })
 
+  it('returns null without touching the filesystem when wslDistro is not a string', async () => {
+    const handler = getRegisteredHandler()
+
+    const result = await handler(
+      {},
+      { worktreeId: 'w1', shellPath: '/bin/bash', wslDistro: 123 }
+    )
+
+    expect(result).toBeNull()
+    expect(ensureHistoryDirMock).not.toHaveBeenCalled()
+    expect(readFile).not.toHaveBeenCalled()
+  })
+
   it('accepts a worktreeId with no shellPath and resolves the default shell', async () => {
     ensureHistoryDirMock.mockReturnValue('/fake/history/dir')
     vi.stubEnv('SHELL', '/bin/zsh')

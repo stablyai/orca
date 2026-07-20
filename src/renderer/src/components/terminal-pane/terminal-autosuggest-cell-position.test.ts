@@ -27,4 +27,17 @@ describe('cellToPixelPosition', () => {
     // cellWidth = 800/80 = 10, cellHeight = 480/24 = 20
     expect(cellToPixelPosition(terminal, 2, 5)).toEqual({ top: 20 + 2 * 20, left: 10 + 5 * 10 })
   })
+
+  it('subtracts viewportY so an absolute (scrollback) row maps to its on-screen position', () => {
+    const rect = { width: 800, height: 480, left: 10, top: 20 }
+    const screenEl = { getBoundingClientRect: () => rect }
+    const terminal = {
+      cols: 80,
+      rows: 24,
+      element: { querySelector: (sel: string) => (sel === '.xterm-screen' ? screenEl : null) },
+      buffer: { active: { viewportY: 4998 } }
+    } as unknown as Terminal
+    // Absolute row 5000 with viewportY 4998 is on-screen row 2, not 5000 cells down.
+    expect(cellToPixelPosition(terminal, 5000, 5)).toEqual({ top: 20 + 2 * 20, left: 10 + 5 * 10 })
+  })
 })

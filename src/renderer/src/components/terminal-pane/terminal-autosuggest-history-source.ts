@@ -42,7 +42,9 @@ export function resolveParsableShellKindFromPath(shellPath: string): ParsableShe
 
 /** Parses a HISTFILE's raw content into most-recent-first commands, capped at PERSISTED_HISTORY_CAP. */
 export function parseShellHistoryContent(content: string, shell: ParsableShellKind): string[] {
-  const rawLines = content.split('\n').filter((line) => line.length > 0)
+  // Why: a trailing \r from CRLF-terminated files would otherwise be sent to
+  // the pty on accept and submit the line early.
+  const rawLines = content.split(/\r?\n/).filter((line) => line.length > 0)
   const commands =
     shell === 'zsh'
       ? rawLines.map((line) => {

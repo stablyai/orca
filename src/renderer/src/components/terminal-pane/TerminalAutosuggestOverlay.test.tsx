@@ -13,7 +13,8 @@ function makeFakeTerminal() {
   return {
     cols: 80,
     rows: 24,
-    element: { querySelector: () => screenEl }
+    element: { querySelector: () => screenEl },
+    buffer: { active: { viewportY: 0 } }
   } as unknown as Terminal
 }
 

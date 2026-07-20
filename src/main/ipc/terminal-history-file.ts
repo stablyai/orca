@@ -77,6 +77,9 @@ export function registerTerminalHistoryFileHandlers(): void {
       if (args.shellPath !== undefined && typeof args.shellPath !== 'string') {
         return null
       }
+      if (args.wslDistro !== undefined && typeof args.wslDistro !== 'string') {
+        return null
+      }
       return readTerminalHistoryFile(args)
     }
   )
