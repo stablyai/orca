@@ -17,7 +17,8 @@ import { translate } from '@/i18n/i18n'
 import {
   getLandingPreflightIssues,
   hasGitHubBackedProject,
-  type PreflightIssue
+  type PreflightIssue,
+  type LandingPreflightStatus
 } from './landing-preflight-issues'
 
 type ShortcutItem = {
@@ -27,6 +28,16 @@ type ShortcutItem = {
 }
 
 const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
+
+async function checkLandingPreflight(force = false): Promise<LandingPreflightStatus | null> {
+  try {
+    return await window.api.preflight.check(force ? { force: true } : undefined)
+  } catch (error) {
+    // Why: an offline remote runtime should retain the last-known banner state.
+    console.warn('[Landing] preflight check unavailable:', error)
+    return null
+  }
+}
 
 type StarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
 
@@ -242,19 +253,14 @@ export default function Landing(): React.JSX.Element {
   useEffect(() => {
     let cancelled = false
     const refreshPreflight = (force = false): void => {
-      // Why: a remote-runtime preflight rejects when the server is unreachable;
-      // keep the last-known issues instead of surfacing an unhandled rejection.
-      window.api.preflight
-        .check(force ? { force: true } : undefined)
-        .then((status) => {
-          if (cancelled) {
-            return
-          }
-          setPreflightIssues(
-            getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
-          )
-        })
-        .catch(() => {})
+      void checkLandingPreflight(force).then((status) => {
+        if (cancelled || !status) {
+          return
+        }
+        setPreflightIssues(
+          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+        )
+      })
     }
 
     // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: preflight status is read from an external IPC probe on mount and focus.
@@ -287,19 +293,14 @@ export default function Landing(): React.JSX.Element {
     // Why: some users complete `gh auth login` without ever leaving the Orca
     // window. Poll only while a warning is visible so the banner self-clears.
     const intervalId = window.setInterval(() => {
-      // Why: a remote-runtime preflight rejects when the server is unreachable;
-      // keep the last-known issues instead of surfacing an unhandled rejection.
-      window.api.preflight
-        .check({ force: true })
-        .then((status) => {
-          if (cancelled) {
-            return
-          }
-          setPreflightIssues(
-            getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
-          )
-        })
-        .catch(() => {})
+      void checkLandingPreflight(true).then((status) => {
+        if (cancelled || !status) {
+          return
+        }
+        setPreflightIssues(
+          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+        )
+      })
     }, 30000)
 
     return () => {
