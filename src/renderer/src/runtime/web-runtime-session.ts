@@ -35,8 +35,7 @@ export {
 export function isWebRuntimeSessionActive(
   activeRuntimeEnvironmentId: string | null | undefined
 ): boolean {
-  // Why: headless serve sessions are owned by the remote runtime, regardless
-  // of whether the attaching client is web or desktop Electron.
+  // Why: headless serve sessions are owned by the remote runtime, whether the client is web or desktop Electron.
   return Boolean(activeRuntimeEnvironmentId?.trim())
 }
 
@@ -95,8 +94,7 @@ export async function createWebRuntimeSessionTerminal(args: {
       response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
     )
     if (args.activate !== false) {
-      // Why: record focus intent so the reconcile follows the snapshot's active
-      // tab to THIS new terminal, instead of sticky-keeping the prior tab.
+      // Why: record focus intent so the reconcile follows to this new terminal instead of sticky-keeping the prior tab.
       recordWebSessionFocusIntent(args.worktreeId, createdTerminal.tab.id)
     }
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
@@ -139,24 +137,17 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
         url: args.url,
         profileId: args.profileId ?? undefined,
-        // Why: this is the user clicking "New Browser Tab", so focus it. On a
-        // headless host this marks the tab active in the session snapshot so the
-        // reconcile keeps focus on it instead of snapping back to a terminal.
+        // Why: user clicked "New Browser Tab", so mark it active in the snapshot, else the reconcile snaps back to a terminal.
         activate: true,
-        // Why: place the new browser in the split group whose "+" was clicked,
-        // so the host snapshot is authoritative for its group (no left-snap).
+        // Why: place the new browser in the clicked split group so the host snapshot is authoritative for it (no left-snap).
         ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
-        // Why: paired web clients need the local tab immediately. The remote
-        // pane will stream once the host webview registers; waiting here makes
-        // the workspace appear to close while the host finishes mounting.
+        // Why: web clients need the local tab now; waiting for host webview registration makes the workspace appear to close.
         waitForRegistration: false
       },
       timeoutMs: 15_000
     })
     const created = unwrapRuntimeRpcResult(response as RuntimeRpcResponse<BrowserTabCreateResult>)
-    // Why: record focus intent (browser session tab id === browserPageId on a
-    // headless host) so the reconcile follows the snapshot's active tab to this
-    // new browser tab rather than sticky-keeping the prior one.
+    // Why: record focus intent (tab id === browserPageId on a headless host) so the reconcile follows to the new browser tab.
     recordWebSessionFocusIntent(args.worktreeId, created.browserPageId)
     stageWebRuntimeBrowserTab({
       environmentId,
@@ -212,9 +203,7 @@ function stageWebRuntimeBrowserTab(args: {
   }
 
   const url = args.url?.trim() || 'about:blank'
-  // Why: paired web browser tabs are host-owned, but the session snapshot can
-  // arrive after React has already rendered a fallback workspace. Stage the
-  // remote handle immediately so the current worktree stays selected.
+  // Why: the snapshot can arrive after React renders a fallback; stage the handle now so the worktree stays selected.
   const browserTab = useAppStore.getState().createBrowserTab(args.worktreeId, url, {
     title: url === 'about:blank' ? 'New Browser Tab' : url,
     focusAddressBar: true,
@@ -270,14 +259,12 @@ async function refreshWebRuntimeSessionTabsSnapshot(
     const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
       await import('./web-session-tabs-sync')
     applyWebSessionTabsStorePatch((state) => {
-      // Why: eager refreshes can resolve after the user has selected another
-      // worktree; session parity should update tabs without stealing focus.
+      // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
       const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, environmentId)
       return patch === state ? state : patch
     })
   } catch (error) {
-    // Why: browser creation already succeeded on the host. If the eager parity
-    // refresh fails, the long-lived session.tabs subscription can still catch up.
+    // Why: host creation already succeeded; the long-lived session.tabs subscription catches up if this eager refresh fails.
     console.warn(
       '[web-runtime-session] failed to refresh browser tab snapshot:',
       error instanceof Error ? error.message : String(error)
@@ -350,10 +337,7 @@ export async function moveWebRuntimeSessionTab(
   }
 
   if (args.kind === 'reorder') {
-    // Why: record the intended LOCAL order synchronously, before the async host
-    // resolution below, so an in-flight pre-move snapshot carrying the old order
-    // can't snap the tab back. The reconcile applies this until the host echoes
-    // the new order. (tabOrder here is already local unified tab ids.)
+    // Why: record local order synchronously before async host resolution, so a pre-move snapshot can't snap the tab back.
     recordWebSessionReorderIntent(args.worktreeId, args.targetGroupId, args.tabOrder, Date.now())
   }
 
@@ -401,9 +385,7 @@ export async function moveWebRuntimeSessionTab(
         ? {
             ...base,
             kind: 'reorder' as const,
-            // Why: paired web groups can contain local-only tabs alongside
-            // host-mirrored tabs. The host reorder API only accepts host tab
-            // ids, so local ids must be omitted from the mirrored order.
+            // Why: the host reorder API only accepts host tab ids, so local-only tabs must be omitted from the mirrored order.
             tabOrder: reorderedHostTabOrder
           }
         : args.kind === 'split'
@@ -415,8 +397,7 @@ export async function moveWebRuntimeSessionTab(
           : {
               ...base,
               kind: 'move-to-group' as const,
-              // Why: web groups can contain local-only tabs. Host insertion
-              // indexes must be counted in the filtered host-backed order.
+              // Why: web groups can contain local-only tabs, so host insertion indexes count only the filtered host-backed order.
               index: targetHostIndex
             }
     const response = await window.api.runtimeEnvironments.call({
@@ -453,12 +434,7 @@ async function callWebRuntimeSessionTabMethod(
   }
 
   if (method === 'session.tabs.close') {
-    // Why: the caller prunes the local mirror synchronously, but the precise
-    // host id resolution below sits behind an async import. A host snapshot
-    // published in that gap would re-materialize the just-closed tab before any
-    // intent exists to suppress it (the immediate "flash back"). Record a
-    // best-effort intent synchronously now — the resolved-id record below then
-    // covers any id the static decode couldn't recover.
+    // Why: sync best-effort intent before the async id resolution, so a snapshot in that gap can't flash the closed tab back.
     recordWebSessionCloseIntent(args.worktreeId, toHostSessionTabId(args.tabId), Date.now())
   }
 
@@ -472,9 +448,7 @@ async function callWebRuntimeSessionTabMethod(
         tabId: args.tabId
       }) ?? toHostSessionTabId(args.tabId)
     if (method === 'session.tabs.close') {
-      // Why: the local mirror is pruned before this resolves, so suppress this
-      // host tab in the reconcile until the host snapshot confirms removal —
-      // otherwise an in-flight pre-close snapshot makes the tab flash back.
+      // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
       recordWebSessionCloseIntent(args.worktreeId, hostTabId, Date.now())
     }
     const response = await window.api.runtimeEnvironments.call({
@@ -514,9 +488,7 @@ export function splitWebRuntimeTerminal(
     return false
   }
 
-  // Why: split requests from the paired web client must run on the host pane.
-  // A local split would mint a web-only pane and the host would mirror it back
-  // as a separate tab instead of preserving the terminal split layout.
+  // Why: split must run on the host pane; a local split mints a web-only pane the host mirrors back as a tab, not a split.
   const pendingMirrorSuppressionId = reservePendingWebRuntimeSplitMirrorTelemetry(ptyId, direction)
   const releasePendingMirrorSuppression = schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
     ptyId,
@@ -632,9 +604,7 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
     return false
   }
 
-  // Why: host-session mirror panes are detached locally in the browser, but
-  // the host owns the real pane graph. Close the host terminal first so later
-  // session snapshots cannot resurrect the locally removed pane.
+  // Why: host owns the real pane graph; close the host terminal first so later snapshots can't resurrect the removed pane.
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,
@@ -656,10 +626,7 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
   return true
 }
 
-// Why: pane geometry inside a tab (split ratios, expanded pane, pane titles) is
-// host-authoritative for remote-server tabs, so a local-only divider drag /
-// expand / pane-rename reverts on the next snapshot. Push the structure to the
-// host so it persists. tabId is the local web tab id; we resolve the host id.
+// Why: pane geometry is host-authoritative for remote tabs; local-only changes revert on next snapshot, so push to host.
 export async function updateWebRuntimePaneLayout(args: {
   worktreeId: string
   tabId: string
@@ -699,9 +666,7 @@ export async function updateWebRuntimePaneLayout(args: {
   }
 }
 
-// Why: tab color/pin are host-authoritative for remote-server tabs; mirror the
-// change to the host so it persists and survives the next snapshot. Pass only
-// the fields that changed (undefined = leave as-is on the host).
+// Why: tab color/pin are host-authoritative; mirror the change so it persists (undefined field = leave as-is on host).
 export function setWebRuntimeTabProps(args: {
   worktreeId: string
   tabId: string
@@ -748,9 +713,7 @@ export function setWebRuntimeTabProps(args: {
   return true
 }
 
-// Why: clearing scrollback locally (pane.terminal.clear()) is undone by the next
-// host snapshot/re-subscribe, which replays the host buffer. Clear the host
-// buffer too so the clear actually sticks on a remote-server pane.
+// Why: local pane.terminal.clear() is undone by the next host snapshot replay; clear the host buffer so it sticks.
 export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined): boolean {
   if (!ptyId) {
     return false

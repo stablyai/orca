@@ -13,6 +13,11 @@ const BASE_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass'
 // whole CI job times out. Callers can override via opts.timeout.
 const DEFAULT_SYNC_TIMEOUT_MS = 60_000
 
+/** Quote a value as a PowerShell single-quoted literal. */
+export function quotePowerShellLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`
+}
+
 /**
  * Run a .ps1 file synchronously and return { code, stdout, stderr }.
  * scriptArgs is an array of string arguments passed after -File.

@@ -75,12 +75,7 @@ type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
 let submodulePathsCacheGeneration = 0
 
-// Why: the effective-upstream resolution chain (symbolic-ref + rev-parse ×2-3
-// + config snapshot) costs 4-5 subprocess spawns and only changes when branch
-// or git config changes. Ahead/behind is a pure function of the two rev-list
-// endpoints, so a recently-resolved name can be revalidated with one rev-list
-// spawn per poll tick; a failed rev-list (deleted ref) falls back to a full
-// re-resolve. Issue #7576: this path dominated idle main-process spawn churn.
+// Why: cache the upstream name to skip its 4-5-spawn resolution chain each poll; revalidate via one rev-list (issue #7576).
 const RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS = 60_000
 
 type ResolvedUpstreamNameCacheEntry = {
@@ -97,9 +92,7 @@ const gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult>()
 const effectiveUpstreamStatusWriteGeneration = new Map<string, number>()
 const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
 
-// Why: a mutation invalidates both in-flight diff reads and in-flight status
-// coalescing; clearing only the diff dedupe would let a post-mutation
-// getStatus() join a pre-mutation read and return stale entries.
+// Why: clear both diff and status in-flight caches; clearing only diff would let getStatus() join a pre-mutation read.
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   statusReadsInFlight.clear()
@@ -113,8 +106,7 @@ export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>):
   try {
     return await run()
   } finally {
-    // Why: a read that started during the mutation can be stale too, so the
-    // post-mutation boundary retires both pre-existing and overlapping reads.
+    // Why: a read that started mid-mutation can be stale too, so invalidate again after.
     invalidateGitReadCaches()
   }
 }
@@ -125,8 +117,7 @@ export function clearSubmodulePathsCacheForTests(): void {
 
 function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
-  // Why: a pre-mutation .gitmodules read must not repopulate the cache after
-  // the mutation invalidated it.
+  // Why: bump the generation so a pre-mutation read can't repopulate the invalidated cache.
   submodulePathsCacheGeneration += 1
 }
 
@@ -139,8 +130,7 @@ function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {
 }
 
 function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOptions): string {
-  // Why: the same path string can refer to different filesystem views across
-  // WSL distros, so the `.gitmodules` cache must follow runtime routing.
+  // Why: the same path can map to different WSL-distro filesystems, so key the cache by runtime routing.
   return [worktreePath, ...gitRuntimeOptionsKey(options)].join('\0')
 }
 
@@ -182,8 +172,7 @@ function rememberSubmodulePaths(cacheKey: string, paths: string[], now: number):
   trimSubmodulePathsCache()
 }
 
-// Why: status tests reuse this reset hook, so every cross-call memoization layer
-// must reset together even though the historical name mentions upstream only.
+// Why: tests reuse this hook, so every memoization layer resets together despite the upstream-only name.
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
   effectiveUpstreamStatusInFlight.clear()
@@ -222,8 +211,7 @@ export async function getStatus(
   if (options.signal) {
     return runGetStatus(worktreePath, options)
   }
-  // Why: dedupe only concurrent identical reads; after settle, callers must
-  // execute a fresh status read rather than observing a cached result.
+  // Why: dedupe only concurrent identical reads; after settle, callers must run a fresh read.
   const cacheKey = getStatusReadKey(worktreePath, options)
   const inFlightStatus = statusReadsInFlight.get(cacheKey)
   if (inFlightStatus) {
@@ -265,21 +253,15 @@ async function runGetStatus(
   const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
-  // Why: a negative/fractional/NaN limit would trigger spurious early-stop or
-  // inconsistent truncation; fall back to the default unless it's a valid
-  // non-negative integer (0 explicitly disables the cap).
+  // Why: a bad limit (negative/fractional/NaN) breaks early-stop; require a valid non-negative int (0 disables the cap).
   const limit =
     typeof options.limit === 'number' && Number.isInteger(options.limit) && options.limit >= 0
       ? options.limit
       : DEFAULT_GIT_STATUS_LIMIT
 
-  // Why: detectConflictOperation (4 existsSync + readFile) and git status are
-  // independent. Running them concurrently saves one round-trip of I/O latency.
+  // Why: detectConflictOperation and git status are independent, so run them concurrently to save I/O latency.
   const conflictPromise = detectConflictOperation(worktreePath)
-  // Why: -c core.quotePath=false keeps non-ASCII filenames (Japanese, emoji,
-  // etc.) as raw UTF-8 instead of git's default C-style octal escapes wrapped
-  // in double quotes. Without it, the parsed entry.path is unreadable in the
-  // sidebar and downstream `git show :"docs/\346..."` lookups silently miss.
+  // Why: core.quotePath=false keeps non-ASCII paths as raw UTF-8, not octal escapes, so entry.path is readable and lookups match.
   const statusArgs = [
     '-c',
     'core.quotePath=false',
@@ -292,9 +274,7 @@ async function runGetStatus(
     statusArgs.push('--ignored=matching')
   }
 
-  // Why: stream + parse incrementally and stop git the moment the entry count
-  // crosses `limit`, so a repo with an enormous un-ignored folder never buffers
-  // a status listing big enough to crash the process. See StatusPorcelainParser.
+  // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.
   const parser = new StatusPorcelainParser()
   let didHitLimit = false
   const conflictOperation = await conflictPromise
@@ -303,8 +283,7 @@ async function runGetStatus(
     const { stoppedEarly } = await gitStreamStdout(statusArgs, {
       cwd: worktreePath,
       wslDistro: options.wslDistro,
-      // Why: status polling is read-like; avoid refreshing the index and racing
-      // terminal Git commands on `.git/worktrees/*/index.lock`.
+      // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
       env: gitOptionalLocksDisabledEnv(),
       signal: options.signal,
       onStdout: (chunk) => parser.update(chunk, limit)
@@ -315,22 +294,18 @@ async function runGetStatus(
     didHitLimit = stoppedEarly
     statusSucceeded = true
   } catch (error) {
-    // Why: an aborted scan must reject, not resolve — swallowing here would let
-    // a cancelled request be mistaken for a completed (empty) status result.
+    // Why: an aborted scan must reject, not resolve as an empty result.
     if (options.signal?.aborted) {
       throw error
     }
     // Not a git repo or git not available
   }
 
-  // Why: the parser stops one entry past the limit (it checks after pushing), so
-  // trim back to exactly `limit` for a stable "first N shown" contract.
+  // Why: the parser overshoots by one (checks after pushing), so trim to exactly `limit`.
   const entries = didHitLimit ? parser.entries.slice(0, limit) : parser.entries
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
 
-  // Why: unmerged (`u`) records need async per-file git lookups, so the parser
-  // collected their raw lines; resolve them now. Conflicts are rare and never
-  // the source of huge output, so this stays off the streamed hot path.
+  // Why: unmerged (`u`) records need async per-file lookups; resolve them off the hot path (conflicts are rare).
   if (!didHitLimit) {
     for (const line of parser.unmergedLines) {
       const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
@@ -350,11 +325,7 @@ async function runGetStatus(
         options
       )
       try {
-        // Why: the probe promise and its name/negative caches are shared by
-        // concurrent status reads, so one caller's abort must not reject the
-        // shared probe or evict warm cache state for the others. The probe is
-        // small and its cached result stays useful, so run it unbound from
-        // this request's signal.
+        // Why: the shared probe/caches serve concurrent reads, so run it unbound from this signal — one abort mustn't reject it for others.
         const { signal: _requestSignal, ...sharedProbeOptions } = options
         effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
           cacheKey,
@@ -364,18 +335,12 @@ async function runGetStatus(
           options.bypassEffectiveUpstreamNegativeCache === true
         )
       } catch {
-        // Why: git status polling should not fail just because the richer
-        // upstream probe hit a transient ref/read error; the explicit
-        // upstream-status path will surface those failures when invoked.
+        // Why: don't fail status polling on a transient upstream-probe error; the explicit upstream path surfaces those.
       }
     }
   }
 
-  // Why: attach per-area line counts for the sidebar. Diffs run after status
-  // (we need the entry list first) and only for areas that have entries, so a
-  // clean tree costs zero extra git calls. Skipped when the limit was hit —
-  // running numstat over a huge change set would reintroduce the cost the limit
-  // exists to avoid, matching how a "huge" repo disables extra git features.
+  // Why: line counts run only for areas with entries (clean tree = 0 calls); skip past the limit to avoid numstat over a huge set.
   if (!didHitLimit) {
     await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,
@@ -390,8 +355,7 @@ async function runGetStatus(
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 
-  // Why: abort after the stream (e.g. during unmerged/upstream/line-stats work)
-  // must still reject — never resolve a cancelled scan as a completed result.
+  // Why: an abort after the stream (unmerged/upstream/line-stats work) must still reject, not resolve.
   if (options.signal?.aborted) {
     const error = new Error('The operation was aborted.')
     error.name = 'AbortError'
@@ -423,15 +387,13 @@ async function runGetStatus(
 }
 
 function getStatusLineStatsCacheKey(worktreePath: string, options: GitRuntimeOptions = {}): string {
-  // Why: identical path strings can address different Linux filesystems in
-  // different WSL distros, so derived stats must follow Git's execution host.
+  // Why: identical paths can map to different WSL-distro filesystems, so key stats by Git's execution host.
   return `${options.wslDistro ?? 'native'}\0${worktreePath}`
 }
 
 /**
  * Resolve a submodule's own worktree path from a parent worktree + relative
- * submodule path, rejecting anything that escapes the parent. Shared by the
- * on-demand submodule status query and the submodule-aware diff router.
+ * submodule path, rejecting anything that escapes the parent.
  */
 export function resolveSubmoduleWorktreePath(worktreePath: string, submodulePath: string): string {
   if (!submodulePath || submodulePath.includes('\0') || path.isAbsolute(submodulePath)) {
@@ -446,11 +408,8 @@ export function resolveSubmoduleWorktreePath(worktreePath: string, submodulePath
 }
 
 /**
- * Run a plain status inside a submodule's own worktree. Used by the lazy
- * "expand submodule" flow — the parent status only reports a single gitlink
- * row, so the inner per-file changes are fetched on demand here. Entry paths
- * are relative to the submodule root; the renderer prefixes them with the
- * submodule path.
+ * Run a plain status inside a submodule's own worktree (lazy "expand submodule"
+ * flow). Entry paths are relative to the submodule root; the renderer prefixes them.
  */
 export async function getSubmoduleStatus(
   worktreePath: string,
@@ -459,9 +418,7 @@ export async function getSubmoduleStatus(
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
   const workingResult = await getStatus(submoduleWorktreePath, options)
-  // Why: a moved gitlink (clean worktree) has no uncommitted status rows; its
-  // real changes live between the parent-recorded commit and the checked-out
-  // commit. Surface those as inner rows so the expansion isn't empty.
+  // Why: a moved gitlink (clean worktree) has no status rows; surface the parent-commit→checkout range as inner rows.
   const fromOid = options.staged
     ? await readGitlinkOidFromTree(worktreePath, 'HEAD', submodulePath, options)
     : (await readGitlinkOidFromIndex(worktreePath, submodulePath, options)) ||
@@ -494,9 +451,8 @@ export async function getSubmoduleStatus(
 }
 
 /**
- * List files changed between two submodule commits as status rows. Used when a
- * gitlink pointer moved so the expanded submodule shows the committed file
- * changes (each row diffs the file across the two commits).
+ * List files changed between two submodule commits as status rows — used when a
+ * gitlink pointer moved so the expanded submodule shows committed changes.
  */
 async function computeSubmoduleRangeEntries(
   submoduleWorktreePath: string,
@@ -567,15 +523,11 @@ async function runNumstat(
     )
     return parseNumstat(stdout)
   } catch (error) {
-    // Why: an aborted pass must reject so a cancelled scan is never treated as
-    // a completed one; only a genuine (non-abort) numstat failure degrades to
-    // uncounted rows below.
+    // Why: an aborted pass must reject; only a genuine numstat failure degrades to uncounted rows.
     if (options.signal?.aborted) {
       throw error
     }
-    // Why: a numstat failure (e.g. transient lock) should leave rows without
-    // counts rather than break the whole status refresh. Null (vs an empty
-    // map) tells the caller the pass is incomplete and must not be cached.
+    // Why: a numstat failure leaves rows uncounted; null (not empty map) flags the pass incomplete and uncacheable.
     return null
   }
 }
@@ -708,8 +660,7 @@ function rememberEffectiveUpstreamStatus(
   probedSameNameOriginRef: boolean,
   writeGeneration: number
 ): void {
-  // Why: hasConfiguredPushTarget gates a write action. Re-probe it each poll
-  // rather than keeping a stale positive target after branch config changes.
+  // Why: hasConfiguredPushTarget gates a write action; re-probe each poll rather than cache a stale positive.
   if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
     effectiveUpstreamStatusWriteGeneration.set(cacheKey, writeGeneration + 1)
@@ -722,8 +673,7 @@ function rememberEffectiveUpstreamStatus(
   if (!probedSameNameOriginRef) {
     return
   }
-  // Why: a stable no-upstream branch should not spawn failed git probes every
-  // source-control poll, but remote refs can appear after push/fetch.
+  // Why: cache the negative so a stable no-upstream branch doesn't re-probe every poll (TTL lets push/fetch refs appear).
   effectiveUpstreamStatusCache.set(cacheKey, {
     status,
     expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
@@ -758,8 +708,7 @@ async function readOrProbeEffectiveUpstreamStatus(
     }
   }
 
-  // Why: source-control mount and root git refresh can overlap during startup.
-  // Coalesce the richer upstream probe so a stable missing ref fails once.
+  // Why: overlapping refreshes at startup — coalesce the upstream probe so a stable missing ref fails once.
   const writeGeneration = effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0
   const probe = probeOrRevalidateEffectiveUpstreamStatus(
     cacheKey,
@@ -809,8 +758,7 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
       )
       return { status, probedSameNameOriginRef: false }
     } catch (error) {
-      // Why: an aborted probe says nothing about the ref; evicting the warm
-      // name cache here would force a pointless full re-resolve next scan.
+      // Why: an aborted probe says nothing about the ref; don't evict the warm name cache.
       if (options.signal?.aborted) {
         throw error
       }
@@ -889,12 +837,7 @@ async function parseUnmergedEntry(
   worktreePath: string,
   line: string
 ): Promise<GitStatusEntry | null> {
-  // Why: porcelain v2 unmerged entries are fully space-separated (like type-1
-  // ordinary entries), NOT tab-separated. The format is:
-  //   u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
-  // The path starts at field index 10 and may contain spaces, so we join the
-  // remaining fields. The earlier tab-based parsing silently dropped all
-  // unmerged entries because the tab was never present.
+  // Why: porcelain v2 `u` records are space-separated (not tab); path is field 10+ and may contain spaces, so join the tail.
   const parts = line.split(' ')
   const xy = parts[1]
   const modeStage1 = parts[3]
@@ -905,9 +848,7 @@ async function parseUnmergedEntry(
     return null
   }
 
-  // Why: submodule conflicts (mode 160000) are out of scope for v1.
-  // Presenting them with normal file-conflict UX would be misleading because
-  // submodule resolution requires different Git commands and user mental model.
+  // Why: submodule conflicts (mode 160000) are out of scope for v1 — they need different resolution UX.
   if ([modeStage1, modeStage2, modeStage3].some((mode) => mode === '160000')) {
     return null
   }
@@ -917,9 +858,7 @@ async function parseUnmergedEntry(
     return null
   }
 
-  // Why: porcelain v2 `u` records do not provide rename-origin metadata (unlike
-  // `2` records), so oldPath is intentionally omitted. v1 should not promise
-  // rename ancestry in conflict rows without a separate Git query.
+  // Why: porcelain v2 `u` records lack rename-origin metadata, so oldPath is intentionally omitted.
   return {
     path: filePath,
     area: 'unstaged',
@@ -950,16 +889,8 @@ function parseConflictKind(xy: string): GitConflictKind | null {
   }
 }
 
-// Why: the `status` field on conflict entries is a *rendering compatibility*
-// choice for existing icon/color plumbing, not a semantic claim about the file.
-// The conflict badge and subtype carry the real meaning. We use 'modified' when
-// a working-tree file exists and 'deleted' when it does not, so that downstream
-// consumers (file explorer decorations, tab badges) get a reasonable fallback
-// without needing conflict-aware upgrades in v1.
-//
-// For `deleted_by_us` / `deleted_by_them` and the `added_by_*` variants, Git's
-// behavior depends on the merge strategy, so we check the filesystem rather
-// than hardcoding an assumption.
+// Why: `status` here is a rendering-compat choice for icon/color plumbing, not semantic; the conflict badge carries the real meaning.
+// Why: for deleted_by_*/added_by_* variants Git's result depends on merge strategy, so check the filesystem.
 async function getConflictCompatibilityStatus(
   worktreePath: string,
   filePath: string,
@@ -976,25 +907,13 @@ async function getConflictCompatibilityStatus(
   try {
     return existsSync(path.join(worktreePath, filePath)) ? 'modified' : 'deleted'
   } catch {
-    // Why: if the filesystem check throws (permissions error, unmounted path,
-    // etc.), 'modified' is the safer fallback. It avoids suppressing the row
-    // from the sidebar and avoids a misleading 'deleted' when we simply could
-    // not check. The conflict badge still carries the real semantics.
+    // Why: on an fs check failure, 'modified' is safer — it keeps the row visible rather than falsely showing 'deleted'.
     return 'modified'
   }
 }
 
-// Why: there is an inherent race between the `git status` call and these
-// fs.existsSync checks — the HEAD file may not yet exist or may already be
-// cleaned up by the time we check. In that case we fall back to 'unknown' for
-// one poll cycle, which is acceptable. The renderer uses this to label the
-// merge summary ("Merge conflicts" vs "Rebase conflicts" vs generic "Conflicts").
-//
-// Why rebase detection relies on rebase-merge/ or rebase-apply/ directories
-// instead of REBASE_HEAD: those directories persist for the entire rebase, so
-// they cover both conflicting and non-conflicting steps. REBASE_HEAD, by
-// contrast, only exists on some steps and can also be left behind after a
-// completed rebase, which would make the UI show a stale "Rebasing" badge.
+// Why: the git-status → existsSync race can miss a transient HEAD; fall back to 'unknown' for one poll cycle.
+// Why: detect rebase from rebase-merge/ or rebase-apply/ dirs (persist all steps), not REBASE_HEAD (partial, lingers → stale badge).
 export async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
   const gitDir = await resolveGitDir(worktreePath)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')
@@ -1061,9 +980,8 @@ export async function resolveGitDir(worktreePath: string): Promise<string> {
 }
 
 /**
- * List configured submodule paths (relative, forward-slash) for a worktree,
- * cached briefly. Read from `.gitmodules` so a single diff click doesn't pay
- * for an index-wide `ls-files` scan. Used to route gitlink/inner diffs.
+ * List configured submodule paths (relative, forward-slash) for a worktree, cached
+ * briefly. Read from `.gitmodules` to avoid an index-wide `ls-files` scan.
  */
 export async function listSubmodulePaths(
   worktreePath: string,
@@ -1075,8 +993,7 @@ export async function listSubmodulePaths(
   if (cached) {
     return cached
   }
-  // Why: prune on misses so removed worktrees do not accumulate while hot
-  // cache hits stay O(1).
+  // Why: prune on misses so removed worktrees don't accumulate; hot hits stay O(1).
   pruneExpiredSubmodulePathsCache(now)
   const cacheGeneration = submodulePathsCacheGeneration
   let paths: string[] = []
@@ -1174,9 +1091,8 @@ async function readWorkingSubmoduleHead(
 }
 
 /**
- * Synthesize a gitlink pointer diff. Git represents submodule commit changes as
- * a one-line `Subproject commit <oid>` swap, so feeding the old/new oids through
- * the normal text differ matches git's own rendering.
+ * Synthesize a gitlink pointer diff: Git represents submodule commit changes as a
+ * one-line `Subproject commit <oid>` swap, so the old/new oids feed the text differ.
  */
 async function buildSubmodulePointerDiff(
   worktreePath: string,
@@ -1184,8 +1100,7 @@ async function buildSubmodulePointerDiff(
   staged: boolean,
   compareAgainstHead: boolean,
   options: GitRuntimeOptions,
-  // Why: default to the validated resolver so every caller (not just loadDiff)
-  // is protected from a .gitmodules path escaping the parent worktree.
+  // Why: default to the validated resolver so every caller is guarded against path escape.
   submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
 ): Promise<GitDiffResult> {
   let leftOid = ''
@@ -1212,9 +1127,8 @@ async function buildSubmodulePointerDiff(
 }
 
 /**
- * Diff a file inside a submodule across two of its commits. Used when the parent
- * gitlink moved but the submodule worktree is clean — the change is committed,
- * so compare the recorded commit's blob against the checked-out commit's blob.
+ * Diff a file inside a submodule across two of its commits — used when the parent
+ * gitlink moved but the submodule worktree is clean (change is committed).
  */
 async function buildSubmoduleInnerCommitRangeDiff(
   submoduleWorktreePath: string,
@@ -1256,8 +1170,7 @@ export async function getDiff(
   compareAgainstHead = false,
   options: GitRuntimeOptions = {}
 ): Promise<GitDiffResult> {
-  // Why: register the in-flight dedupe synchronously (before any await) so
-  // concurrent identical reads coalesce; submodule routing happens inside.
+  // Why: register the dedupe synchronously (before any await) so concurrent identical reads coalesce.
   return gitDiffReadDedupe.run(
     stableInFlightKey([
       'diff',
@@ -1278,17 +1191,12 @@ async function loadDiff(
   compareAgainstHead: boolean,
   options: GitRuntimeOptions
 ): Promise<GitDiffResult> {
-  // Why: gitlink paths can't be read as blobs (`git show HEAD:<sub>` is a "bad
-  // object") and a submodule working dir reads as empty, so route submodule
-  // diffs explicitly: the gitlink root → pointer diff, inner files → recurse
-  // into the submodule's own worktree.
+  // Why: gitlink paths can't be read as blobs, so route submodule diffs explicitly (root → pointer, inner → recurse).
   const submodulePaths = await listSubmodulePaths(worktreePath, options)
   if (submodulePaths.length > 0) {
     const matchedSubmodule = findContainingSubmodule(submodulePaths, filePath)
     if (matchedSubmodule) {
-      // Why: matchedSubmodule originates from .gitmodules, so validate it against
-      // the worktree boundary before any inner read — a crafted submodule path
-      // must not let the diff escape the selected repo.
+      // Why: validate the .gitmodules-derived path against the worktree boundary so a crafted one can't escape the repo.
       const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, matchedSubmodule)
       const normalizedFilePath = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
       if (normalizedFilePath === matchedSubmodule) {
@@ -1309,9 +1217,7 @@ async function loadDiff(
       const toOid = staged
         ? await readGitlinkOidFromIndex(worktreePath, matchedSubmodule, options)
         : await readWorkingSubmoduleHead(submoduleWorktreePath, options)
-      // Why: when the gitlink moved but the submodule worktree is clean, the
-      // file's change lives in committed history — diff the two commits. Only
-      // fall back to the working-tree blob read when the commit didn't move.
+      // Why: a moved gitlink with a clean submodule worktree means the change is committed — diff the two commits.
       if (fromOid && toOid && fromOid !== toOid) {
         return buildSubmoduleInnerCommitRangeDiff(
           submoduleWorktreePath,
@@ -1362,8 +1268,7 @@ async function loadDiff(
     modifiedIsBinary,
     filePath
   )
-  // Why: mark a proven deletion so previewers can fall back to the original bytes
-  // without mistaking a read failure's empty modified side for a deletion.
+  // Why: mark a proven deletion so previewers don't mistake a read failure's empty side for one.
   if (result.kind === 'binary' && modifiedDeleted) {
     return { ...result, modifiedDeleted: true }
   }
@@ -1387,8 +1292,7 @@ export async function getBranchCompare(
 
   const compareRef = await resolveCompareRef(worktreePath, options)
   summary.compareRef = compareRef
-  // Why: short remote display refs like "origin/main" can collide with a local
-  // branch of the same name. Compare against the proven remote-tracking ref.
+  // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
   const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
     hasWorktreeBaseCommitRef(worktreePath, qualifiedRef, options)
   )
@@ -1402,16 +1306,13 @@ export async function getBranchCompare(
     try {
       baseOid = await resolveRefOid(worktreePath, resolvedBaseRef, options)
       summary.baseOid = baseOid
-      // Why: new remote worktrees can be on an unborn branch until the first
-      // commit. There are no committed branch changes yet; surfacing this as a
-      // compare error makes the source-control panel look broken.
+      // Why: an unborn branch (new remote worktree) has no changes yet; a compare error would look broken.
       summary.changedFiles = 0
       summary.commitsAhead = 0
       summary.status = 'ready'
       return { summary, entries: [] }
     } catch {
-      // Preserve the existing unborn-head message when even the base is not
-      // resolvable; callers cannot compare or present a useful empty state.
+      // Preserve the unborn-head message when even the base is unresolvable.
     }
     summary.status = 'unborn-head'
     summary.errorMessage =
@@ -1637,14 +1538,12 @@ async function loadBranchChanges(
   headOid: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBranchChangeEntry[]> {
-  // Why: see core.quotePath=false rationale in getStatus — same reason here so
-  // branch-diff entries render with their real UTF-8 paths.
+  // Why: core.quotePath=false keeps real UTF-8 paths — see getStatus rationale.
   const gitOptions = {
     ...gitOptionsForWorktree(worktreePath, options),
     maxBuffer: MAX_GIT_SHOW_BYTES
   }
-  // Why: both diffs walk the same range and are independent, so start them
-  // together instead of serializing two potentially large git operations.
+  // Why: both diffs are independent, so run them concurrently instead of serializing.
   const [{ stdout }, { stdout: numstat }] = await Promise.all([
     gitExecFileAsync(
       ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
@@ -1658,8 +1557,7 @@ async function loadBranchChanges(
   const statsByPath = parseNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
-  // [Fix]: Split by /\r?\n/ instead of '\n' to handle Git CRLF output on Windows,
-  // preventing trailing \r characters in extracted file paths.
+  // Why: split on /\r?\n/ so Git's CRLF output on Windows leaves no trailing \r in paths.
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
       continue
@@ -1678,8 +1576,7 @@ async function loadCommitChanges(
   commitOid: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitBranchChangeEntry[]> {
-  // Why: root commits have no parent tree; diff-tree --root asks git to
-  // compare against the repository's empty tree without hardcoding hash format.
+  // Why: root commits have no parent tree; diff-tree --root uses git's empty tree, avoiding a hardcoded hash-format-specific oid.
   const args = parentOid
     ? ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', parentOid, commitOid]
     : [
@@ -1713,8 +1610,7 @@ async function loadCommitChanges(
     ...gitOptionsForWorktree(worktreePath, options),
     maxBuffer: MAX_GIT_SHOW_BYTES
   }
-  // Why: commit diff rows need metadata and line counts, but those git queries
-  // do not depend on each other.
+  // Why: the two git queries are independent, so run them in parallel.
   const [{ stdout }, { stdout: numstat }] = await Promise.all([
     gitExecFileAsync(args, gitOptions),
     gitExecFileAsync(numstatArgs, gitOptions)
@@ -1872,9 +1768,7 @@ async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult>
   try {
     fileStat = await stat(filePath)
   } catch (error) {
-    // Why: ENOENT means the working-tree file is genuinely gone (a deletion);
-    // any other stat error is a read failure, which must not be reported as an
-    // absence since callers fall back to the original bytes only for deletions.
+    // Why: only ENOENT is a real deletion; other stat errors are read failures, not absence.
     return {
       content: '',
       isBinary: false,
@@ -1885,8 +1779,7 @@ async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult>
     return { content: '', isBinary: false, exists: false }
   }
   if (fileStat.size > MAX_GIT_SHOW_BYTES) {
-    // Why: git blob reads are capped through maxBuffer; mirror that bound for
-    // unstaged working-tree content before readFile can pull in huge assets.
+    // Why: mirror git's maxBuffer cap for working-tree reads so readFile can't pull in huge assets.
     return { content: '', isBinary: true, exists: true }
   }
   try {
@@ -1932,15 +1825,12 @@ function buildDiffResult(
       modifiedContent,
       originalIsBinary,
       modifiedIsBinary,
-      // Why: binary diff previews were originally image-only, so the renderer
-      // still checks `isImage` before showing a preview component. Preserve
-      // that legacy flag for PDFs until the wider contract is renamed.
+      // Why: renderer still checks legacy `isImage` before previewing, so set it for PDFs too until the contract is renamed.
       ...(mimeType ? { isImage: true, mimeType } : {})
     } as GitDiffResult
   }
 
-  // Why: if the diff exceeds safe render limits, avoid sending large text
-  // payloads and return metadata so the renderer can show fallback UI.
+  // Why: over the render limit, return metadata instead of huge text so the renderer can show fallback UI.
   const largeDiffRenderLimit = getLargeDiffRenderLimit({ originalContent, modifiedContent })
   if (largeDiffRenderLimit.limited) {
     return {
@@ -2049,9 +1939,7 @@ export async function getStagedCommitContext(
     if (!isMaxBufferOverflowError(error)) {
       throw error
     }
-    // Why: a very large staged diff overflows maxBuffer (ENOBUFS). The patch is
-    // optional context that gets truncated to STAGED_DIFF_BYTE_BUDGET anyway, so
-    // degrade to the file-name summary instead of failing commit-message generation.
+    // Why: staged patch is optional context (truncated later anyway); degrade to file-name summary rather than fail.
     console.warn(
       '[git] Staged patch too large to read; using file summary only:',
       describeMaxBufferOverflowError(error)
@@ -2075,9 +1963,7 @@ export async function commitChanges(
     await gitExecFileAsync(['commit', '-m', message], gitOptionsForWorktree(worktreePath, options))
     return { success: true }
   } catch (error) {
-    // Why: surface whichever channel carries the useful message. Pre-commit/GPG
-    // hook failures write to stderr; "nothing to commit, working tree clean"
-    // writes to stdout. Try stderr first, fall back to stdout, then error.message.
+    // Why: useful message may be on stderr (hook/GPG failures) or stdout ("nothing to commit"), so try both then message.
     const readStringField = (field: string): string | null => {
       if (typeof error === 'object' && error && field in error) {
         const v = (error as Record<string, unknown>)[field]
@@ -2149,8 +2035,7 @@ function normalizeGitPathForCompare(filePath: string): string {
 }
 
 function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
-  // Why: Windows validation produces backslashes, but Git running inside WSL
-  // needs POSIX paths. Host paths stay untouched so POSIX filenames remain literal.
+  // Why: Git inside WSL needs POSIX paths, but host paths must stay literal, so convert backslashes only for WSL.
   const runtimePath = options.wslDistro ? filePath.replace(/\\/g, '/') : filePath
   return `:(literal)${runtimePath}`
 }
@@ -2177,8 +2062,7 @@ async function listTrackedPathSpecs(
         ...gitOptionsForWorktree(worktreePath, options)
       }
     )
-    // Why: a tracked directory can contain enough paths for push(...split)
-    // to exceed the JavaScript argument limit before discard decisions run.
+    // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
     for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {
         trackedPaths.push(trackedPath)

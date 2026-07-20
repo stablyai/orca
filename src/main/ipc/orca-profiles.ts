@@ -1,5 +1,6 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
+import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -153,9 +154,9 @@ async function runBeforeProfileRelaunch(
   }
 }
 
-function scheduleProfileRelaunch(): void {
+function scheduleProfileRelaunch(reason: Extract<AppRelaunchReason, `profile-${string}`>): void {
   setTimeout(() => {
-    app.relaunch()
+    relaunchApp(reason)
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
     // renderer scrollback capture, PTY kill, stats flush, and daemon final
     // checkpoints must not be skipped on a profile switch.
@@ -215,7 +216,7 @@ export function registerOrcaProfileHandlers(
       store.flush()
       setActiveOrcaProfile(profileId)
 
-      scheduleProfileRelaunch()
+      scheduleProfileRelaunch('profile-switch')
 
       return { status: 'relaunching' }
     }
@@ -244,7 +245,7 @@ export function registerOrcaProfileHandlers(
           store.freezeWrites()
           await runBeforeProfileRelaunch(options.onBeforeRelaunch)
           setActiveOrcaProfile(args.targetProfileId)
-          scheduleProfileRelaunch()
+          scheduleProfileRelaunch('profile-transfer')
           return { ...result, willRelaunch: true }
         }
         return result

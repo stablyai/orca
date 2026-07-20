@@ -46,16 +46,13 @@ export function MobileSourceControlPanel({
   onOpenedFileDiff
 }: MobileSourceControlPanelProps) {
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
-  // Track first visit so Changes/History keep scroll state across segment switches
-  // without paying the mount cost until the user actually opens them. PR unmounts
-  // when inactive (WebViews / comment tree) but its controller state stays for the chip.
+  // Track first visit so Changes/History stay mounted (keep scroll) after first open; PR still unmounts when inactive.
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<SourceControlHubTab>>(
     () => new Set<SourceControlHubTab>([initialTab])
   )
   const [historyRefreshNonce, setHistoryRefreshNonce] = useState(0)
 
-  // Deep-link / push with a different `tab` param should adopt the new segment
-  // (expo-router can reuse the screen instance when only query params change).
+  // expo-router reuses the screen instance when only query params change, so adopt the new tab.
   useEffect(() => {
     setActiveTab(initialTab)
     setVisitedTabs((prev) => {
@@ -119,13 +116,7 @@ export function MobileSourceControlPanel({
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
   const ready = screenState.kind === 'ready'
 
-  // One PR controller feeds both the branch-card chip and the Pull Request
-  // segment, so the chip's rollup can never disagree with the checks list it
-  // links to. Branch + head come from the already-loaded git.status — no second
-  // status read. The chip loads independently, so it never blocks the file list.
-  // Keep last-known identity across a transient status unload (disconnect /
-  // failed refresh) so the controller does not wipe ready → hidden → cold start.
-  // Head SHA matches the review path: status.head ?? branchCompare headOid.
+  // Keep last-known branch/head across a transient status unload so the PR controller isn't wiped ready → hidden → cold start.
   const lastPrBranchRef = useRef<string | null>(null)
   const lastPrHeadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -134,8 +125,7 @@ export function MobileSourceControlPanel({
   }, [worktreeId])
   const statusBranch = status?.branch ?? null
   const statusHead = status?.head ?? branchCompareResult?.summary.headOid ?? null
-  // Write last-known identity in an effect, not the render body: a discarded
-  // concurrent render must not leave the fallback holding a never-committed value.
+  // Write last-known identity in an effect, not render: a discarded concurrent render must not leave the fallback stale.
   useEffect(() => {
     if (statusBranch) {
       lastPrBranchRef.current = statusBranch
@@ -163,8 +153,7 @@ export function MobileSourceControlPanel({
   const ensurePrDetailsRef = useRef(ensurePrDetails)
   ensurePrDetailsRef.current = ensurePrDetails
 
-  // Chip bootstrap: phase-1 only (PR + checks). Full comment payload waits until
-  // the Pull Request segment is open — opening SC to stage must not pull details.
+  // Chip bootstrap: phase-1 only (PR + checks); full payload waits for the PR segment so opening SC to stage doesn't pull details.
   useEffect(() => {
     if (activeTab === 'pr') {
       return
@@ -174,22 +163,14 @@ export function MobileSourceControlPanel({
     }
   }, [activeTab, prBranch, isHostedRepo, prSidebarKind])
 
-  // Number of the ready PR whose phase-2 details are still missing (null when
-  // none). Keyed by PR number — not a boolean — so a same-branch PR swap during a
-  // chip-only soft refresh re-arms phase 2 for the new PR instead of leaving its
-  // comments on a forever-spinner (a stale ensure bails on the number mismatch).
-  // Placeholder details (failed phase 2) also count as missing so reopening the
-  // PR tab retries instead of leaving empty Description/Comments forever.
+  // Keyed by PR number, not a boolean, so a same-branch PR swap re-arms phase 2 for the new PR.
   const prDetailsMissingFor =
     prController.prSidebarState.kind === 'ready' &&
     prSidebarDetailsNeedFetch(prController.prSidebarState.data.details)
       ? prController.prSidebarState.data.pr.number
       : null
 
-  // PR segment: full load or phase-2 fill-in. Body only mounts while active.
-  // Guarded (and keyed) on prBranch so a branch that arrives while the segment is
-  // already open — e.g. mounted on a detached HEAD, then checkout — still loads;
-  // kind stays 'hidden' through that transition, so kind alone can't re-fire this.
+  // PR segment full load / phase-2 fill-in; key on prBranch so a branch arriving while open still loads (kind stays 'hidden').
   useEffect(() => {
     if (activeTab !== 'pr' || !isHostedRepo || !prBranch) {
       return
@@ -204,9 +185,7 @@ export function MobileSourceControlPanel({
   }, [activeTab, isHostedRepo, prBranch, prSidebarKind, prDetailsMissingFor])
 
   const prChip = useMemo(() => {
-    // No branch (detached HEAD / mid-rebase) never runs a PR load, so the shared
-    // state stays 'hidden' — which the chip would render as a forever spinner.
-    // Hide the chip instead; the Pull Request segment shows "branch unavailable".
+    // No branch (detached HEAD / mid-rebase) never loads a PR, so state stays 'hidden'; hide the chip or it spins forever.
     if (!isHostedRepo || !prBranch) {
       return null
     }
@@ -217,9 +196,7 @@ export function MobileSourceControlPanel({
     return buildMobilePrChipSummary(prController.prSidebarState, commentCount)
   }, [isHostedRepo, prBranch, prController.prSidebarState])
 
-  // Design: refresh the active segment's body work, plus git.status for the shared
-  // branch card (counts/sync stay honest even while on History). Preserve ready
-  // status on a failed refresh so PR chip identity is not wiped to hidden.
+  // Refresh the active segment plus git.status (branch card stays honest on History); preserve ready on failure so the PR chip isn't wiped.
   const onRefresh = useCallback(() => {
     void loadStatus({ preserveReadyOnFailure: true })
     if (activeTab === 'history') {
@@ -237,11 +214,9 @@ export function MobileSourceControlPanel({
     void refetchPr({ includeDetails: false })
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
 
-  // Embedded mode docks beside the terminal: close the dock instead of popping
-  // a route, and skip the full-screen safe-area chrome (the dock column owns it).
+  // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip safe-area chrome (the dock column owns it).
   const onBack = embedded ? (onRequestClose ?? (() => router.back())) : () => router.back()
-  // Chromeless PR body has no panel header — surface open-on-web on the hub chrome
-  // while the Pull Request segment is active (same affordance as the old /pr route).
+  // Chromeless PR body has no header, so surface open-on-web on the hub chrome while the PR segment is active.
   const prWebUrl =
     activeTab === 'pr' &&
     prController.prSidebarState.kind === 'ready' &&
@@ -277,10 +252,7 @@ export function MobileSourceControlPanel({
           <Pressable
             style={styles.retryButton}
             onPress={() => {
-              // Why: retrying the request is useless while the transport's
-              // reconnect loop is parked at its give-up cap — revive the
-              // connection instead (issue #5049). loadStatus re-runs via
-              // its connState effect once the new client connects.
+              // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
               if (connState !== 'connected' && hostId) {
                 void forceReconnect(hostId)
                 return
@@ -294,13 +266,10 @@ export function MobileSourceControlPanel({
       </View>
     ) : null
 
-  // History only needs the RPC client — do not block it behind git.status.
-  // Changes/PR need status (branch, file list, head SHA), so they stay gated.
+  // History only needs the RPC client, so it isn't gated on git.status; Changes/PR need status (branch, files, head).
   const showChanges = ready && (activeTab === 'changes' || visitedTabs.has('changes'))
   const showHistory = activeTab === 'history' || visitedTabs.has('history')
-  // Why: only mount the PR body while its segment is active. Keep-mounting retained
-  // Mermaid WebViews and re-rendered the comment tree on every commit keystroke.
-  // Controller + chip state still live for instant re-open without a full cold start.
+  // Only mount PR body while active: keep-mounting retained Mermaid WebViews and re-rendered the comment tree per keystroke.
   const showPrBody = ready && activeTab === 'pr'
   const conflictOperation = status?.conflictOperation ?? null
   // Git status always reports a conflictOperation enum; 'unknown' means none.
@@ -319,10 +288,7 @@ export function MobileSourceControlPanel({
 
       <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
 
-      {/* Branch card + PR chip are the Changes/Commits glance layer. On the PR
-          tab they duplicate the ready PR body (#, state, checks rollup, branch
-          trajectory), so hide the whole card there and let the PR panel own it —
-          unless a merge/rebase conflict is active, which only this card can abort. */}
+      {/* On the PR tab the branch card duplicates the ready PR body, so hide it there — unless a conflict is active, which only this card can abort. */}
       {ready && (activeTab !== 'pr' || hasActiveConflict) ? (
         <MobileSourceControlBranchCard
           branchLabel={branchLabel}
@@ -357,8 +323,7 @@ export function MobileSourceControlPanel({
             headSha={prHeadSha}
             gitStatus={status}
             isGithubRepo={isHostedRepo}
-            // Gate on the probe too: isGithubRepo=false mid-probe must render as
-            // loading, not flash "unavailable for this provider" (old /pr parity).
+            // Gate on the probe too: isGithubRepo=false mid-probe must render loading, not flash "unavailable".
             branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
             controller={prController}
           />

@@ -114,6 +114,8 @@ export type SshConnectionState = {
   error: string | null
   /** Number of reconnection attempts since last disconnect. */
   reconnectAttempt: number
+  /** Folder downloads require ssh2 SFTP and are unavailable on system SSH. */
+  supportsFolderDownload?: boolean
   /** Remote OS detected by the SSH relay once available. */
   remotePlatform?: SshRemotePlatform
 }

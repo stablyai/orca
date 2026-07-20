@@ -1,8 +1,6 @@
 /**
  * Status and conflict-detection operations extracted from git-handler.ts.
- *
- * Why: oxlint max-lines (300) requires splitting large files.
- * These functions are pure data operations on git state — no class coupling.
+ * Why: split to satisfy oxlint max-lines (300); pure data ops on git state, no class coupling.
  */
 import * as path from 'node:path'
 import { existsSync } from 'node:fs'
@@ -79,8 +77,7 @@ export async function getStatusOp(
   const lineStatsCacheKey = `relay\0${worktreePath}`
   const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
-  // Why: reject non-finite/negative limits so the cap guard stays reliable
-  // (NaN would silently disable capping; negatives would over-truncate).
+  // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
   const rawLimit = params.limit
   const limit =
     typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit >= 0
@@ -96,10 +93,7 @@ export async function getStatusOp(
   let statusLength = 0
 
   try {
-    // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8 in
-    // git's stdout instead of C-style octal escapes; without it the parsed
-    // entry.path renders as gibberish in the source-control sidebar and
-    // downstream blob lookups miss.
+    // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
     const statusArgs = [
       '-c',
       'core.quotePath=false',
@@ -112,8 +106,7 @@ export async function getStatusOp(
       statusArgs.push('--ignored=matching')
     }
     const { stdout } = await git(statusArgs, worktreePath, {
-      // Why: status polling is read-like; avoid refreshing the index and racing
-      // terminal Git commands on `.git/worktrees/*/index.lock`.
+      // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
       disableOptionalLocks: true,
       signal: options.signal
     })
@@ -123,10 +116,7 @@ export async function getStatusOp(
     upstreamStatus = parsed.upstreamStatus
     ignoredPaths = parsed.ignoredPaths
     statusLength = parsed.entries.length
-    // Why: cap the entry count to match the local path. A repo with an enormous
-    // un-ignored folder would otherwise push tens of thousands of rows through
-    // every poll; truncating keeps the SCM view (and its "too many changes"
-    // state) consistent across local and SSH repos.
+    // Why: cap entry count so an enormous un-ignored folder can't push tens of thousands of rows through every poll.
     if (limit !== 0 && parsed.entries.length > limit) {
       didHitLimit = true
       for (let i = 0; i < limit; i++) {
@@ -143,9 +133,7 @@ export async function getStatusOp(
         const branchName = getShortBranchName(branch)
         if (branchName) {
           try {
-            // Why: this probe coalesces across concurrent status reads, so one
-            // request's abort must not reject the shared in-flight promise for
-            // the others; the probe is small and its cached result stays useful.
+            // Why: this probe coalesces across concurrent status reads, so one request's abort must not reject the shared in-flight promise.
             upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
               { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
               (args) => git(args, worktreePath),
@@ -154,8 +142,7 @@ export async function getStatusOp(
               }
             )
           } catch {
-            // Why: status polling should keep returning working-tree entries even
-            // if the richer upstream probe hits a transient SSH/git ref error.
+            // Why: keep returning working-tree entries even if the upstream probe hits a transient SSH/git ref error.
           }
         }
       }
@@ -168,19 +155,14 @@ export async function getStatusOp(
       }
     }
   } catch (error) {
-    // Why: an aborted scan must reject, not resolve — swallowing here would let
-    // a cancelled request be mistaken for a completed (empty) status result.
+    // Why: an aborted scan must reject, not resolve as a completed (empty) status result.
     if (options.signal?.aborted) {
       throw error
     }
     // not a git repo or git not available
   }
 
-  // Why: attach per-area line counts for the sidebar. Diffs run after status
-  // (we need the entry list first) and only for areas that have entries, so a
-  // clean tree costs zero extra git calls. Skipped when the limit was hit —
-  // running numstat over a huge change set would reintroduce the cost the limit
-  // exists to avoid.
+  // Why: skip line-stats when the limit was hit — numstat over a huge change set would reintroduce the cost the limit avoids.
   if (!didHitLimit) {
     await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,
@@ -195,8 +177,7 @@ export async function getStatusOp(
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
 
-  // Why: abort after the porcelain read (e.g. during unmerged/upstream/line-stats
-  // work) must still reject — never resolve a cancelled scan as completed.
+  // Why: a late abort (during unmerged/upstream/line-stats work) must still reject, not resolve as completed.
   if (options.signal?.aborted) {
     const error = new Error('The operation was aborted.')
     error.name = 'AbortError'
@@ -228,15 +209,11 @@ async function runNumstat(
     )
     return parseNumstat(stdout)
   } catch (error) {
-    // Why: an aborted pass must reject so a cancelled scan is never treated as
-    // a completed one; only a genuine (non-abort) numstat failure degrades to
-    // uncounted rows below.
+    // Why: an aborted pass must reject so a cancelled scan is never treated as completed.
     if (signal?.aborted) {
       throw error
     }
-    // Why: a numstat failure should leave rows without counts rather than break
-    // the whole status refresh. Null (vs an empty map) tells the caller the
-    // pass is incomplete and must not be cached.
+    // Why: null (vs an empty map) tells the caller the pass is incomplete and must not be cached.
     return null
   }
 }

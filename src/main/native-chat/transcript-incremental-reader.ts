@@ -1,5 +1,5 @@
 import { open, stat } from 'node:fs/promises'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
@@ -28,7 +28,9 @@ export async function readIncrementalTranscriptMessages(
   filePath: string,
   state: IncrementalTranscriptState,
   decode: NativeChatLineDecoder,
-  onBatch?: (messages: NativeChatMessage[]) => void
+  onBatch?: (messages: NativeChatMessage[]) => void,
+  decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
+  onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void
 ): Promise<NativeChatMessage[]> {
   const end = (await stat(filePath)).size
   if (end <= state.offset) {
@@ -91,7 +93,12 @@ export async function readIncrementalTranscriptMessages(
     if (!line) {
       return
     }
-    const message = decode(line, transcriptFallbackId(filePath, state.pendingStart))
+    const fallbackId = transcriptFallbackId(filePath, state.pendingStart)
+    const lifecycle = decodeLifecycle?.(line, fallbackId)
+    if (lifecycle) {
+      onLifecycle?.(lifecycle)
+    }
+    const message = decode(line, fallbackId)
     if (!message) {
       return
     }

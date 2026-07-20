@@ -49,6 +49,21 @@ describe('SshPtyProvider', () => {
       expect(result).toEqual({ id: scopedPty1 })
     })
 
+    it('gates fresh startup intent with the relay ingress capability version', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-1' })
+      const startupIngress = {
+        colors: { foreground: '#eeeeee', background: '#111111' },
+        deadlineMs: 5_000
+      }
+
+      await provider.spawn({ cols: 80, rows: 24, startupIngress })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.spawn',
+        expect.objectContaining({ startupIngressVersion: 1, startupIngress })
+      )
+    })
+
     it('passes cwd and env through', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 
@@ -324,6 +339,26 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('never sends fresh startup intent on relay reattach', async () => {
+      mux.request.mockResolvedValue({ replay: 'restored' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: scopedPty1,
+        startupIngress: {
+          colors: { foreground: '#eeeeee', background: '#111111' },
+          deadlineMs: 5_000
+        }
+      })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.attach',
+        expect.not.objectContaining({ startupIngress: expect.anything() })
+      )
+      expect(mux.request).not.toHaveBeenCalledWith('pty.spawn', expect.anything())
+    })
+
     it('reattaches scoped app ids using raw relay ids', async () => {
       mux.request.mockResolvedValue({ replay: 'buffered-output' })
 
@@ -437,20 +472,44 @@ describe('SshPtyProvider', () => {
 
   it('shutdown sends pty.shutdown request', async () => {
     await provider.shutdown(scopedPty1, { immediate: true })
-    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
-      id: 'pty-1',
-      immediate: true,
-      keepHistory: false
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: false
+      },
+      undefined
+    )
   })
 
   it('shutdown forwards keepHistory: true over the relay', async () => {
     await provider.shutdown(scopedPty1, { immediate: true, keepHistory: true })
-    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
-      id: 'pty-1',
-      immediate: true,
-      keepHistory: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: true
+      },
+      undefined
+    )
+  })
+
+  it('shutdown bounds the relay RPC by the teardown deadline', async () => {
+    // Why: freeze Date.now() so the leaf conversion deadline -> remaining relative
+    // timeout is exact and the mux receives precisely the leftover budget.
+    vi.useFakeTimers()
+    try {
+      await provider.shutdown(scopedPty1, { immediate: true, deadlineMs: Date.now() + 4321 })
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.shutdown',
+        { id: 'pty-1', immediate: true, keepHistory: false },
+        { timeoutMs: 4321 }
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('sendSignal sends pty.sendSignal request', async () => {
@@ -511,6 +570,18 @@ describe('SshPtyProvider', () => {
     expect(result).toEqual([
       { id: scopedPty1, cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }
     ])
+    expect(mux.request).toHaveBeenCalledWith('pty.listProcesses', undefined, undefined)
+  })
+
+  it('listProcesses bounds the relay RPC by the teardown deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      mux.request.mockResolvedValue([])
+      await provider.listProcesses({ deadlineMs: Date.now() + 4321 })
+      expect(mux.request).toHaveBeenCalledWith('pty.listProcesses', undefined, { timeoutMs: 4321 })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('getDefaultShell returns shell path', async () => {
@@ -529,6 +600,28 @@ describe('SshPtyProvider', () => {
       notifHandler('pty.data', { id: 'pty-1', data: 'output' })
 
       expect(handler).toHaveBeenCalledWith({ id: scopedPty1, data: 'output' })
+    })
+
+    it('forwards empty transformed relay spans without reinterpreting them', () => {
+      const handler = vi.fn()
+      provider.onData(handler)
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+
+      notifHandler('pty.data', {
+        id: 'pty-1',
+        data: '',
+        rawLength: 9,
+        seq: 9,
+        transformed: true
+      })
+
+      expect(handler).toHaveBeenCalledWith({
+        id: scopedPty1,
+        data: '',
+        sequenceChars: 9,
+        seq: 9,
+        transformed: true
+      })
     })
 
     it('forwards pty.replay notifications to replay listeners', () => {

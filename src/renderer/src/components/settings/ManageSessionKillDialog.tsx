@@ -66,7 +66,7 @@ export function ManageSessionKillDialog({
                 {translate(
                   'auto.components.settings.ManageSessionKillDialog.8401328fed',
                   'Force-quits'
-                )}
+                )}{' '}
                 <span className="font-medium text-foreground">{session.sessionId}</span>
                 {translate(
                   'auto.components.settings.ManageSessionKillDialog.ad9832aa26',

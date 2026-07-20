@@ -813,7 +813,7 @@ export function RuntimeEnvironmentsPane({
                   className="h-8 min-w-0 font-mono text-xs"
                 />
                 <p id="runtime-server-pairing-code-help" className="text-xs text-muted-foreground">
-                  {translate('auto.components.settings.RuntimeEnvironmentsPane.163671f7b5', 'Run')}
+                  {translate('auto.components.settings.RuntimeEnvironmentsPane.163671f7b5', 'Run')}{' '}
                   <span className="font-mono">
                     {translate(
                       'auto.components.settings.RuntimeEnvironmentsPane.960e901ae4',

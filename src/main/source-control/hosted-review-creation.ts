@@ -1,11 +1,11 @@
-/* eslint-disable max-lines -- Why: provider detection, eligibility, and creation
-   preflight share one boundary so renderer and main-process gating cannot drift. */
+/* eslint-disable max-lines -- Why: detection, eligibility, and creation preflight share one boundary so gating can't drift. */
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
   HostedReviewCreationBlockedReason,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
+  HostedReviewLookupOutcome,
   HostedReviewProvider
 } from '../../shared/hosted-review'
 import {
@@ -42,9 +42,7 @@ import {
 
 type HostedReviewCreationEligibilityInput = HostedReviewCreationEligibilityArgs & {
   connectionId?: string | null
-  // Why: only the create-time preflight enforces base-on-remote as a hard block;
-  // the renderer's eligibility probe passes the base as a candidate and relies on
-  // Change 1 to correct a local-only parent, so it must never set this.
+  // Why: only the create-time preflight sets this; the renderer's probe leaves it unset to auto-correct a local-only parent.
   enforceBaseOnRemote?: boolean
 } & HostedReviewExecutionOptions
 
@@ -64,11 +62,7 @@ async function isGitHubAuthenticated(
   connectionId?: string | null,
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
-  // Why: a GHES remote is only routed to the GitHub provider once detection has
-  // confirmed gh is authenticated to its enterprise host, so a non-null slug
-  // already means authenticated — skip a redundant, rate-limited gh probe.
-  // Reaching the github.com check below therefore means the remote is github.com
-  // (its own custom host would have resolved above) (#8312).
+  // Why: a non-null enterprise slug already means gh is authenticated there, so skip a redundant probe (#8312).
   if (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options)) {
     return true
   }
@@ -141,14 +135,7 @@ async function getDefaultBaseRef(
  * Whether the candidate base resolves to a remote-tracking branch on the
  * executing host.
  *
- * Why: a stacked worktree's `worktree.baseRef` is typically a bare parent
- * branch name with no remote qualifier, so the probe must match the branch
- * under *any* configured remote rather than assume `origin` — otherwise fork
- * workflows (`upstream/main`) would be missed. Runs through
- * `runGitForHostedReview` so it evaluates on the same host that will run the
- * provider create (native/WSL/SSH/relay). This reads the local remote-tracking
- * snapshot, not the live remote; see the design doc's Open Questions for the
- * ls-remote/staleness tradeoff left as a follow-up.
+ * Why: matches under *any* remote (not just origin) and reads the local tracking snapshot, not the live remote.
  */
 async function baseRefExistsOnRemote(
   candidate: string,
@@ -164,18 +151,13 @@ async function baseRefExistsOnRemote(
     runGitForHostedReview(repoPath, argv, connectionId, options)
 
   const patterns = [`refs/remotes/*/${base}`]
-  // Non-origin remote-qualified candidate (e.g. `fork/main`): the wildcard glob
-  // above only matches a branch literally named that because `*` does not cross `/`.
-  // Include the exact tracking ref directly.
+  // `*` does not cross `/`, so a remote-qualified candidate (e.g. `fork/main`) needs its exact tracking ref too.
   if (base.includes('/')) {
     patterns.push(`refs/remotes/${base}`)
   }
 
   try {
-    // for-each-ref exits 0 whether or not the pattern matches, so a clean empty
-    // result is an authoritative "absent" while a thrown error is a transport
-    // failure. Never conflate the two: on an unreachable host, preserve the
-    // candidate rather than silently demoting a legitimately-pushed parent base.
+    // for-each-ref exits 0 on no match: empty means absent, a thrown error means transport failure (preserve the candidate).
     const { stdout } = await run(['for-each-ref', '--count=1', '--format=%(refname)', ...patterns])
     return stdout.trim().length > 0
   } catch {
@@ -209,15 +191,13 @@ async function hasUncommittedChanges(
         'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
       )
     }
-    // Why: the relay intentionally restricts generic git.exec. Use the
-    // structured status RPC for SSH dirty checks instead of raw `git status`.
+    // Why: the relay restricts generic git.exec, so use the structured status RPC for SSH dirty checks.
     return (await provider.getStatus(repoPath)).entries.length > 0
   }
   const { stdout } = await gitExecFileAsync(['status', '--porcelain'], {
     cwd: repoPath,
     ...getHostedReviewLocalGitOptions(options),
-    // Why: create-PR validation should not take Git's optional index lock while
-    // the user may be running fetch/pull/rebase from a terminal.
+    // Why: don't take Git's optional index lock while the user may be running fetch/pull/rebase in a terminal.
     env: gitOptionalLocksDisabledEnv()
   })
   return stdout.trim().length > 0
@@ -236,8 +216,7 @@ async function getHostedReviewUpstreamStatus(
     throw new Error('Remote connection dropped. Click Reconnect on the SSH target before retrying.')
   }
   try {
-    // Why: SSH exposes upstream divergence through a dedicated relay RPC;
-    // generic git.exec intentionally does not allow rev-list/status plumbing.
+    // Why: the relay blocks generic git.exec, so use its dedicated upstream RPC for SSH divergence.
     return await provider.getUpstreamStatus(repoPath)
   } catch (error) {
     if (isNoUpstreamError(error)) {
@@ -430,13 +409,19 @@ async function validateCurrentBranchCanCreateReview(
       ahead: upstreamStatus.ahead,
       behind: upstreamStatus.behind,
       connectionId,
-      // Why: this is the last gate before the provider create, which targets the
-      // submitted base verbatim — enforce that the base exists on the remote here.
+      // Why: last gate before the create, which targets the submitted base verbatim — enforce it exists on the remote.
       enforceBaseOnRemote: true,
       ...options
     })
-    // Why: renderer eligibility can be stale by submit time; the main process
-    // is the last chance to avoid creating a PR from an out-of-date remote head.
+    // Why: an unavailable lookup might hide a real PR — refuse rather than risk a duplicate (design invariant 8).
+    if (eligibility.reviewLookupOutcome === 'unavailable') {
+      return {
+        ok: false,
+        code: 'validation',
+        error: `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
+      }
+    }
+    // Why: renderer eligibility can be stale by submit time; main process is the last gate before an out-of-date create.
     return blockedEligibilityToCreateResult(eligibility, submittedBase)
   } catch (error) {
     console.warn('Hosted review creation preflight failed:', error)
@@ -457,11 +442,7 @@ export async function getHostedReviewCreationEligibility(
     connectionId: args.connectionId,
     ...hostedReviewExecutionContext(args)
   })
-  // Why: an incoming base is only a *candidate* for the default merge target. A
-  // stacked worktree's parent base resolves on the remote only when it was
-  // actually pushed; a local-only parent must fall back to the repo default so
-  // the PR targets a ref the remote can resolve. Never regress to "no base" —
-  // keep the candidate if the repo default itself is unavailable.
+  // Why: the base is only a candidate; fall back to repo default so a local-only parent targets a remote-resolvable ref.
   const candidateBase = args.base?.trim() || null
   const candidateBaseOnRemote =
     candidateBase != null &&
@@ -475,6 +456,8 @@ export async function getHostedReviewCreationEligibility(
   }
   const baseBranch = defaultBaseRef ? normalizeHostedReviewBaseRef(defaultBaseRef) : null
   let review: Awaited<ReturnType<typeof getHostedReviewForBranch>> = null
+  // Why: track lookup failure so a swallowed error isn't mistaken for authoritative no-review evidence.
+  let lookupFailed = false
   try {
     review = await getHostedReviewForBranch({
       repoPath: args.repoPath,
@@ -489,23 +472,20 @@ export async function getHostedReviewCreationEligibility(
       ...hostedReviewExecutionContext(args)
     })
   } catch (error) {
-    const canReturnLocalBlocker =
-      branch &&
-      branch !== 'HEAD' &&
-      supportsHostedReviewCreation(provider) &&
-      (!baseBranch || branch.toLowerCase() !== baseBranch.toLowerCase()) &&
-      (args.hasUncommittedChanges || args.hasUpstream !== true || (args.behind ?? 0) > 0)
-    if (!canReturnLocalBlocker) {
-      throw error
-    }
-    // Why: local blockers still let the UI offer Create PR preparation; a
-    // flaky existing-review lookup should not hide the affordance entirely.
-    console.warn('Hosted review lookup failed while resolving local review blocker:', error)
+    // Why: a failed lookup might hide a real PR, so record unavailable and fall through rather than rethrow.
+    lookupFailed = true
+    console.warn('Hosted review lookup failed; treating existing-review as unavailable:', error)
   }
 
+  const reviewLookupOutcome: HostedReviewLookupOutcome = review
+    ? 'found'
+    : lookupFailed
+      ? 'unavailable'
+      : 'not_found'
   const baseResult = {
     provider,
     review: review ? { number: review.number, url: review.url } : null,
+    reviewLookupOutcome,
     defaultBaseRef,
     head: branch || null
   }
@@ -561,12 +541,7 @@ export async function getHostedReviewCreationEligibility(
   if ((args.ahead ?? 0) > 0) {
     return { ...baseResult, canCreate: false, blockedReason: 'needs_push', nextAction: 'push' }
   }
-  // Why: at create-time, `gh pr create` (and the other providers) target the
-  // submitted base verbatim — Change 1 only corrects the *default*, not a stale
-  // renderer's submitted value. Block a local-only submitted base here so it
-  // fails with actionable copy instead of the provider's opaque error. Only the
-  // create-time preflight enforces this; the renderer's eligibility probe leaves
-  // enforceBaseOnRemote unset so a local-only parent is silently auto-corrected.
+  // Why: providers target the submitted base verbatim; block a local-only base here with actionable copy.
   if (args.enforceBaseOnRemote && candidateBase && !candidateBaseOnRemote) {
     return {
       ...baseResult,
@@ -575,7 +550,13 @@ export async function getHostedReviewCreationEligibility(
       nextAction: null
     }
   }
-  return { ...baseResult, canCreate: Boolean(baseBranch), blockedReason: null, nextAction: null }
+  // Why: a failed lookup leaves review existence unproven, so the happy path must not claim canCreate.
+  return {
+    ...baseResult,
+    canCreate: lookupFailed ? false : Boolean(baseBranch),
+    blockedReason: null,
+    nextAction: null
+  }
 }
 
 export async function createHostedReview(

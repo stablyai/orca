@@ -1,5 +1,5 @@
 /**
- * Phase 5 model query responder (docs/reference/terminal-query-authority.md):
+ * Phase 5 model query responder:
  * reply parity through the runtime emulator, the per-chunk ownership matrix,
  * the main-side replay guard, and the ingestion-time capture race.
  */

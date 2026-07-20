@@ -46,24 +46,13 @@ type DownloadTotals = { totalBytes: number }
 type ContentRange = { start: number; end: number; totalBytes?: number }
 
 const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
-// Why: flaky networks and scanning proxies commonly kill long CDN transfers
-// near the end (reported as "stuck at 90%, then fails"); resuming with a Range
-// request lets those connections finish instead of failing the same way on
-// every full restart.
+// Why: flaky networks/proxies often kill long CDN transfers near the end; Range-resume lets them finish.
 const DOWNLOAD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000]
-// Why: abandon a download only after this many CONSECUTIVE attempts make no
-// forward progress. A resume that keeps advancing (even across many mid-stream
-// drops) is never given up on — that is the whole point of resumable downloads
-// for large models over flaky networks, and a fixed all-time failure budget
-// would wrongly kill a steadily-progressing large download.
+// Why: count only CONSECUTIVE no-progress attempts, so a download still advancing across drops is never abandoned.
 const MAX_NO_PROGRESS_ATTEMPTS = DOWNLOAD_RETRY_DELAYS_MS.length + 1
-// Why: an absolute backstop so a server handing back pathologically tiny (or
-// zero-net) segments cannot loop forever; sized to cover the largest (~1GB)
-// model even if a proxy caps each range response near ~256KB, far below any
-// real CDN chunk.
+// Why: absolute backstop against a tiny-segment server; 4096 covers the ~1GB model even at a proxy's ~256KB min range.
 const MAX_TOTAL_DOWNLOAD_REQUESTS = 4_096
-// Why: a longer server window should be surfaced for a later manual retry,
-// rather than leaving the settings download looking stuck for minutes.
+// Why: cap honored Retry-After; a longer server window is surfaced for manual retry, not a multi-minute stall.
 const MAX_RETRY_AFTER_MS = 120_000
 const RETRYABLE_NET_ERROR =
   /net::ERR_(CONTENT_LENGTH_MISMATCH|INCOMPLETE_CHUNKED_ENCODING|CONNECTION_(RESET|CLOSED|ABORTED|REFUSED|TIMED_OUT)|EMPTY_RESPONSE|NETWORK_CHANGED|TIMED_OUT|INTERNET_DISCONNECTED|ADDRESS_UNREACHABLE|NAME_NOT_RESOLVED|SOCKET_NOT_CONNECTED|HTTP2_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)\b/
@@ -172,8 +161,7 @@ export class ModelManager {
     const prepared = this.prepareModelsDir(requestedModelsDir)
     this.modelsDir = prepared.modelsDir
     this.migrationSourceDir = prepared.migrationSourceDir
-    // Why: migrating a non-ASCII cache copies large model files; run it off the
-    // main thread and gate model-state reads on it so the UI stays responsive.
+    // Why: migration copies large model files, so run it async and gate state reads on it to keep the UI responsive.
     this.migrationReady = migrateSpeechModelCacheIfNeeded(
       prepared.migrationSourceDir,
       prepared.modelsDir
@@ -181,8 +169,7 @@ export class ModelManager {
   }
 
   setProgressCallback(cb: ProgressCallback): () => void {
-    // Why: concurrent settings windows can observe the same download; a
-    // returned unsubscribe prevents one window from replacing another.
+    // Why: return an unsubscribe so concurrent settings windows don't replace each other's callback.
     this.progressCallbacks.add(cb)
     return () => {
       this.progressCallbacks.delete(cb)
@@ -274,10 +261,7 @@ export class ModelManager {
   }
 
   async downloadModel(modelId: string): Promise<void> {
-    // Why: no migration await here — migration only copies dirs already present
-    // in the old cache (surfaced as ready via getModelState before download is
-    // offered), so it never races a download, and awaiting would defer the
-    // synchronous request setup that cancelDownload relies on.
+    // Why: no migration await — it never races a download, and awaiting would defer setup cancelDownload relies on.
     if (this.activeDownloads.has(modelId)) {
       return
     }
@@ -302,8 +286,7 @@ export class ModelManager {
     this.updateState(modelId, 'downloading', 0)
 
     const archivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
-    // Why: resume appends to the partial archive from this download run only;
-    // a leftover file from a crashed run would corrupt the resumed archive.
+    // Why: resume appends, so a leftover archive from a crashed run would corrupt the download.
     try {
       if (existsSync(archivePath)) {
         rmSync(archivePath)
@@ -317,8 +300,7 @@ export class ModelManager {
     const handle: DownloadHandle = {
       abort: () => {
         aborted = true
-        // Why: a stalled HTTPS request may never deliver another data chunk;
-        // cancellation must tear down the request immediately.
+        // Why: a stalled HTTPS request may never deliver another chunk, so tear it down immediately.
         abortController.abort()
       }
     }
@@ -355,9 +337,7 @@ export class ModelManager {
       }
 
       if (!this.validateModelFiles(manifest, modelDir)) {
-        // Why: some archives nest files inside a subdirectory matching the
-        // archive name. If the expected files aren't at the top-level model
-        // dir, scan one level down and move them up.
+        // Why: some archives nest files in a subdir; scan one level down and move them up.
         await this.flattenNestedDir(modelDir, manifest)
       }
 
@@ -378,8 +358,7 @@ export class ModelManager {
       }
       this.cleanup(modelId, archivePath)
       if (!aborted) {
-        // Why: the settings UI awaits this promise to show download failures;
-        // cancellation stays quiet, but real failures must reach the caller.
+        // Why: the settings UI awaits this to surface failures; stay quiet on cancellation, rethrow real errors.
         throw err
       }
     } finally {
@@ -416,9 +395,7 @@ export class ModelManager {
     if (existsSync(modelDir)) {
       await rm(modelDir, { recursive: true, force: true })
     }
-    // Why: also delete the pre-migration copy (awaited above, so the copy has
-    // finished) — otherwise the next launch re-migrates it and resurrects the
-    // model the user just deleted.
+    // Why: also delete the pre-migration copy, or the next launch re-migrates it and resurrects the model.
     if (this.migrationSourceDir) {
       const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
       if (existsSync(sourceModelDir)) {
@@ -436,8 +413,7 @@ export class ModelManager {
   ): void {
     const state: SpeechModelState = { id: modelId, status, progress, error }
     this.modelStates.set(modelId, state)
-    // Why: notify the renderer on every state change (not just download
-    // progress) so the UI updates for extracting/ready/error transitions.
+    // Why: notify on every state change (not just progress) so extracting/ready/error transitions reach the UI.
     const progressValue = progress ?? (status === 'extracting' ? 0.95 : -1)
     for (const callback of this.progressCallbacks) {
       callback(modelId, progressValue)
@@ -466,13 +442,11 @@ export class ModelManager {
     for (;;) {
       requestCount += 1
       const offset = this.getPartialArchiveBytes(archivePath)
-      // Why: the transport can fail after the final byte reached disk; the
-      // caller's SHA-256 check is the authoritative completion test.
+      // Why: transport can fail after the last byte hits disk; the SHA-256 check is the real completion test.
       if (offset === totals.totalBytes) {
         return
       }
-      // Why: absolute backstop against a server that never lets the download
-      // finish; the stall and abort paths handle the common cases first.
+      // Why: absolute backstop against a server that never lets the download finish.
       if (requestCount > MAX_TOTAL_DOWNLOAD_REQUESTS) {
         throw describeInterruptedDownload(
           new Error('too many download requests'),
@@ -482,8 +456,7 @@ export class ModelManager {
         )
       }
       try {
-        // Why: each attempt restarts from the canonical URL rather than the
-        // last redirect target, because CDN redirect URLs are signed and expire.
+        // Why: restart from the canonical URL, not the last redirect, because signed CDN redirect URLs expire.
         await this.downloadFile(
           url,
           archivePath,
@@ -508,10 +481,7 @@ export class ModelManager {
           `Model download response ended at ${receivedBytes} of ${totals.totalBytes} bytes`
         )
         if (receivedBytes > offset) {
-          // Why: some proxies return a valid but bounded range segment; request
-          // the next segment immediately instead of failing checksum or waiting.
-          // Forward progress resets the stall counter; the total-request ceiling
-          // at the loop top bounds a pathological tiny-segment server.
+          // Why: some proxies cap each range segment; request the next immediately and reset the stall counter.
           noProgressStreak = 0
           continue
         }
@@ -530,8 +500,7 @@ export class ModelManager {
         if (!isRetryableDownloadError(err)) {
           throw err
         }
-        // Why: give up only on a genuine stall (repeated no forward progress);
-        // a download that keeps advancing across drops is allowed to continue.
+        // Why: give up only on a genuine stall; a download still advancing across drops keeps going.
         if (noProgressStreak >= MAX_NO_PROGRESS_ATTEMPTS) {
           throw describeInterruptedDownload(err, receivedBytes, totals.totalBytes, requestCount)
         }
@@ -697,8 +666,7 @@ export class ModelManager {
           (parsedLength <= 0 || parsedLength === contentRange.end - contentRange.start + 1)
 
         if (resumeOffset > 0 && response.statusCode === 206 && !resumed) {
-          // Why: appending an unverified range can silently corrupt the archive;
-          // discard it so the canonical URL is retried from byte zero.
+          // Why: appending an unverified range can silently corrupt the archive; discard and retry from byte zero.
           try {
             rmSync(dest)
           } catch {
@@ -716,8 +684,7 @@ export class ModelManager {
 
         if (response.statusCode !== 200 && !resumed) {
           if (response.statusCode === 416) {
-            // Why: the server rejected our resume offset; drop the partial so
-            // the retry loop can restart this download from scratch.
+            // Why: 416 means the server rejected our resume offset; drop the partial to restart from scratch.
             try {
               rmSync(dest)
             } catch {
@@ -729,17 +696,14 @@ export class ModelManager {
           statusError.httpStatusCode = response.statusCode
           statusError.retryAfterMs = parseRetryAfterMs(response.headers['retry-after'])
           rejectOnce(statusError)
-          // Why: retrying must not leave a prior error body draining without
-          // cancellation or idle-timeout ownership.
+          // Why: abort so a retry doesn't leave the error-response body draining unowned.
           activeRequest?.abort()
           return
         }
 
-        // Why: a 200 despite our Range request means the server restarted the
-        // transfer from byte zero, so the partial file must be overwritten.
+        // Why: a 200 to our Range request means the server restarted from byte zero, so overwrite the partial.
         const progressBase = resumed ? resumeOffset : 0
-        // Why: Content-Length on a 206 describes only this segment; when
-        // Content-Range uses '*', retain the known complete archive size.
+        // Why: Content-Length on a 206 is only this segment; on Content-Range '*' keep the known full size.
         const totalSize = resumed
           ? (contentRange?.totalBytes ?? totals?.totalBytes ?? expectedSize)
           : parsedLength > 0
@@ -789,8 +753,7 @@ export class ModelManager {
         request.setHeader('Range', `bytes=${resumeOffset}-`)
       }
 
-      // Why: Electron's net stack honors app proxy settings, unlike Node's
-      // https client, but it does not expose request.setTimeout().
+      // Why: Electron net honors app proxy settings (unlike Node https) but exposes no setTimeout, so time out manually.
       resetIdleTimeout()
       request.on('error', onRequestError)
       request.on('response', onResponse)
@@ -838,8 +801,7 @@ export class ModelManager {
       const onEnd = (): void => {
         const actualSha256 = hash.digest('hex')
         if (actualSha256 !== expectedSha256.toLowerCase()) {
-          // Why: these archives feed native model parsers; filename checks do
-          // not protect against compromised or redirected release assets.
+          // Why: archives feed native parsers, so verify contents against compromised/redirected release assets.
           settleReject(new Error('Downloaded model archive failed integrity verification'))
           return
         }
@@ -862,10 +824,7 @@ export class ModelManager {
     mkdirSync(modelDir, { recursive: true })
 
     return new Promise((resolve, reject) => {
-      // Why: spawn instead of exec because exec buffers all stdout/stderr
-      // (1MB default maxBuffer). bzip2 decompression is slow (~1-5 min for
-      // 170MB archives) and exec can silently kill the process if stderr
-      // exceeds the buffer. spawn streams output without buffering.
+      // Why: spawn (not exec) so slow bzip2 stderr can't overflow exec's 1MB maxBuffer and silently kill the process.
       const tarExecutable = resolveTarExecutable()
       const child = spawn(
         tarExecutable,
@@ -929,8 +888,7 @@ export class ModelManager {
       }, 600_000)
       abortPoll = setInterval(() => {
         if (isAborted()) {
-          // Why: if the extraction child wedges and never emits close/error,
-          // the abort poller must still clear itself when we reject.
+          // Why: a wedged child may never emit close/error, so abort must kill it here.
           fail(new Error('Aborted'), true)
         }
       }, 250)

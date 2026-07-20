@@ -1,12 +1,6 @@
-// Versioned-install plumbing for the remote relay.
-//
-// Why this exists: the relay used to install into a single shared directory
-// (~/.orca-remote/relay-v0.1.0) which the deploy step would overwrite in place
-// on every cross-version push. A daemon already loaded into memory then served
-// new clients off rewritten on-disk code, producing protocol drift and a
-// reconnect loop. We now install each (RELAY_VERSION + content-hash) bundle
-// into its own directory and never mutate it after the install finishes,
-// matching VS Code's `~/.vscode-server/bin/<commit>/` layout.
+// Versioned-install plumbing for the remote relay: each (RELAY_VERSION + content-hash)
+// bundle installs into its own immutable dir (like VS Code's ~/.vscode-server/bin/<commit>/)
+// so an in-memory daemon never serves new clients off overwritten on-disk code.
 //
 // See: docs/ssh-relay-versioned-install-dirs.md
 
@@ -44,17 +38,10 @@ import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
-// Why: the GC pass and the version-dir parser must agree on what counts as a
-// relay install dir. Single source of truth for both. The pattern matches the
-// new layout `relay-${RELAY_VERSION}+${hash}` and the legacy `relay-v${VERSION}`
-// so the GC eventually drains the old layout once its daemons idle out.
+// Single source of truth for GC and the version-dir parser; matches both the new and legacy relay-dir layouts.
 const RELAY_VERSION_DIR_REGEX = /^relay-(v?\d+\.\d+\.\d+(\+[0-9a-f]+)?)$/
 
-// Why: legacy dirs from before `.install-complete` was introduced (i.e. the
-// `relay-v0.1.0` shape with no content-hash suffix). They are missing the
-// install-complete sentinel by definition and need a separate liveness-only
-// GC check so they actually drain after the legacy daemon dies, instead of
-// living on remote disks forever.
+// Legacy dirs predate `.install-complete`; they need a liveness-only GC check so they eventually drain.
 const LEGACY_RELAY_DIR_REGEX = /^relay-v\d+\.\d+\.\d+$/
 
 const INSTALL_COMPLETE_NAME = '.install-complete'
@@ -78,11 +65,9 @@ function execHostCommand(
 }
 
 /**
- * Read the local relay's content-hashed version (e.g. "0.1.0+0a5fe134d020")
- * from `${localRelayDir}/.version`. Throws on missing/empty so the caller
- * never silently falls back to a path where a daemon from a different code
- * generation may already be running — that fallback is the failure mode the
- * versioned-install design exists to prevent.
+ * Read the local relay's content-hashed version (e.g. "0.1.0+0a5fe134d020") from
+ * `${localRelayDir}/.version`. Throws on missing/empty so the caller can't
+ * silently fall back to a path where a stale-generation daemon may be running.
  */
 export function readLocalFullVersion(localRelayDir: string): string {
   const versionFile = join(localRelayDir, '.version')
@@ -119,11 +104,9 @@ export function computeRemoteRelayDir(
 }
 
 /**
- * Probe whether a fully-installed relay already exists at remoteRelayDir.
- *
- * "Fully installed" means: the directory contains relay.js, its isolated
- * relay-watcher.js child, and the .install-complete sentinel written at the
- * end of a successful install. Missing artifacts force a complete re-deploy.
+ * Probe whether a fully-installed relay exists at remoteRelayDir — meaning
+ * relay.js, its relay-watcher.js child, and the .install-complete sentinel are
+ * all present. Missing artifacts force a complete re-deploy.
  */
 export async function isRelayAlreadyInstalled(
   conn: SshConnection,
@@ -149,9 +132,9 @@ export async function isRelayAlreadyInstalled(
 }
 
 /**
- * Mark the install as complete, then normally release the lock. Deploy keeps
- * the lock through first launch so cross-version GC cannot move the directory
- * between finalization and daemon liveness becoming observable.
+ * Mark the install complete, then normally release the lock. Deploy keeps the
+ * lock through first launch so cross-version GC can't move the dir before daemon
+ * liveness is observable.
  */
 export async function finalizeInstall(
   conn: SshConnection,
@@ -173,9 +156,8 @@ export async function finalizeInstall(
 }
 
 /**
- * Release the install lock without writing the completion sentinel. Called
- * from the failure path so the dir remains a recoverable partial that the
- * next deploy detects (alreadyInstalled=false) and re-runs upload+install.
+ * Release the install lock without writing the completion sentinel, leaving the
+ * dir as a recoverable partial the next deploy re-installs.
  */
 export async function abandonInstall(
   conn: SshConnection,
@@ -187,17 +169,9 @@ export async function abandonInstall(
 }
 
 /**
- * Garbage-collect old version directories. Removes a sibling dir under
- * `${remoteHome}/${RELAY_REMOTE_DIR}/` only if ALL of:
- *
- *   - it matches the relay-version-dir regex (allowlist)
- *   - it is NOT the current version dir
- *   - it has no live `relay-*.sock` (pgrep + connectability probe)
- *   - it contains `.install-complete` (a fully-installed dir, not a partial)
- *   - it does NOT contain `.install-lock` (no in-progress install)
- *
- * Best-effort: any error is logged and swallowed; GC must never block the
- * user from connecting.
+ * Garbage-collect old version directories: remove an idle, fully-installed,
+ * unlocked sibling version dir (never the current one). Best-effort — errors
+ * are swallowed so GC never blocks the user from connecting.
  */
 export async function gcOldRelayVersions(
   conn: SshConnection,
@@ -242,8 +216,7 @@ export async function gcOldRelayVersions(
         kept.push(name)
         continue
       }
-      // Why: the claim is a sibling, so it survives moving/deleting the
-      // candidate and lets installers back out before mutating the old path.
+      // Why: the claim is a sibling, so it survives moving/deleting the candidate and lets installers back out first.
       const gcClaimToken = await tryAcquireRelayGcClaim(conn, dir, host)
       if (!gcClaimToken) {
         kept.push(name)
@@ -252,8 +225,7 @@ export async function gcOldRelayVersions(
       let preserveGcClaim = false
       let gcClaimReleaseNeeded = true
       try {
-        // Recheck under the stable claim. New installers probe the claim both
-        // before and after creating their in-tree lock, closing both orders.
+        // Recheck under the stable claim; installers probe it before and after creating their lock, closing both orders.
         if (!(await isCandidateSafeToRemove(conn, dir, name, host, options))) {
           kept.push(name)
           continue
@@ -268,8 +240,7 @@ export async function gcOldRelayVersions(
           kept.push(name)
           continue
         }
-        // Once renamed, a fresh install at the original path is isolated from
-        // deletion of the tombstone, so the sibling claim can be released.
+        // Once renamed, a fresh install at the original path is isolated from the tombstone's deletion, so release the claim.
         const release = await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
         gcClaimReleaseNeeded = release === 'unknown'
         await execHostCommand(conn, host, removeRemoteTreeCommand(host, tombstone))
@@ -326,22 +297,14 @@ async function isCandidateSafeToRemove(
   const locked = lockState === 'LOCKED'
 
   if (locked) {
-    // Why: a locked dir is normally unsafe to remove — but a STALE lock
-    // (remote age older than INSTALL_LOCK_STALE_MS) means the previous installer
-    // crashed and is never coming back. If the dir also has the
-    // .install-complete sentinel (touch succeeded but the rm-lock at the
-    // end of finalizeInstall failed), removing the dir is safe — no
-    // installer is racing us, and the daemon (if any) keeps running off
-    // its already-loaded code regardless of disk state.
+    // Why: stale lock = crashed installer; finalize can leave a dir .install-complete yet locked (lock-rm failed), so it's reclaimable.
     if (!(await isRelayInstallLockStale(conn, lockDir, host))) {
       return false
     }
     process.stderr.write?.(`[ssh-relay] GC: lock at ${lockDir} is stale; treating as recoverable\n`)
   }
 
-  // Legacy dirs (relay-v0.1.0) predate .install-complete. Skip the sentinel
-  // check for them and rely solely on the live-socket probe — that's the
-  // only signal we have that a legacy daemon is still serving clients.
+  // Legacy dirs predate .install-complete; skip the sentinel and rely on the live-socket probe alone.
   if (!isLegacy) {
     const completePath = joinRemotePath(host, dir, INSTALL_COMPLETE_NAME)
     const completeProbe = await execHostCommand(
@@ -372,10 +335,7 @@ async function hasLiveRelaySocket(
   }
 ): Promise<boolean> {
   try {
-    // Why: `ls -1 dir/relay-*.sock 2>/dev/null` lists socket files. For each,
-    // we test -S to confirm it's a socket inode. We do NOT attempt to open
-    // the socket here — `test -S` is sufficient for the GC decision and a
-    // connect-and-close probe would race with a daemon that's about to idle.
+    // Why: `test -S` only — a connect-and-close probe would race with a daemon about to idle.
     const windowsOptions =
       isWindowsRemoteHost(host) && options?.windowsNodePath
         ? {

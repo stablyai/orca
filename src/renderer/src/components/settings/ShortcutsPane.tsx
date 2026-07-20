@@ -343,7 +343,10 @@ export function ShortcutsPane(): React.JSX.Element {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+        {/* Below xl the rail stacks above the list in one column; pin the rail
+            row to its content (auto) and let the list row take the rest, so the
+            rail can't spill over the list the way two equal auto rows would. */}
+        <div className="grid min-h-0 flex-1 gap-6 max-xl:grid-rows-[auto_minmax(0,1fr)] xl:grid-cols-[16rem_minmax(0,1fr)]">
           <ShortcutFilterRail
             query={shortcutQuery}
             onQueryChange={setShortcutQuery}

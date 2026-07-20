@@ -55,29 +55,27 @@ export function nativeChatSessionOptionDisabledReason(
         'components.native-chat.composer.availableAfterSessionStarts',
         'Available after the session starts.'
       )
-    default:
+    case undefined:
       return null
   }
 }
 
 export function nativeChatModelPillLabel(descriptor: SessionOptionDescriptor): string {
-  const modelLabel = translate('components.native-chat.composer.model', 'Model')
+  // Why: show the value only (Codex/Conductor style). "Model:" is redundant —
+  // the control's aria-label/tooltip already names the category.
   if (
     descriptor.valueSource === 'unknown' ||
     descriptor.kind.type !== 'select' ||
     !descriptor.kind.currentValue
   ) {
-    return modelLabel
+    return translate('components.native-chat.composer.model', 'Model')
   }
-  const valueLabel = nativeChatSessionChoiceLabel(
+  return nativeChatSessionChoiceLabel(
     descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue) ?? {
       value: descriptor.kind.currentValue,
       label: descriptor.kind.currentValue
     }
   )
-  return translate('components.native-chat.composer.modelWithValue', 'Model: {{value0}}', {
-    value0: valueLabel
-  })
 }
 
 export function nativeChatOptionsPillTitle(
@@ -119,14 +117,9 @@ export function nativeChatOptionsPillLabel(
       )
     }
   }
+  // Why: value-only pill (no "Effort:" prefix) — category lives on the tooltip.
   if (labels.length > 0) {
-    const joinedLabels = labels.join(' · ')
-    if (effort) {
-      return translate('components.native-chat.composer.effortWithValue', 'Effort: {{value0}}', {
-        value0: joinedLabels
-      })
-    }
-    return joinedLabels
+    return labels.join(' · ')
   }
   if (effort) {
     return nativeChatSessionOptionLabel(effort)

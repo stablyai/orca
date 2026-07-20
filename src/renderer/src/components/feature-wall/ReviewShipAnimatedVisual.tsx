@@ -303,7 +303,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
               {translate(
                 'auto.components.feature.wall.ReviewShipAnimatedVisual.e725000cd7',
                 'Changes'
-              )}
+              )}{' '}
               <span className="ravs-sc-changes-count">{SHIP_FILES.length}</span>
             </span>
             <span className="ravs-sc-view-all">

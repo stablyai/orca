@@ -10,6 +10,7 @@ import type {
   BrowserLoadError
 } from '../../../../shared/types'
 import { isEligibleLocalCertificateHost } from '../../../../shared/browser-url'
+import { normalizeCertificateError } from '../../../../shared/browser-certificate-errors'
 import {
   formatLoadFailureDescription,
   formatLoadFailureRecoveryHint,
@@ -49,13 +50,6 @@ function getLoadErrorMetadata(loadError: BrowserLoadError): LoadFailureMeta {
   } catch {
     return { host: null, isLocalhostLike: false }
   }
-}
-
-function normalizeCertificateError(error: string): string {
-  return error
-    .trim()
-    .replace(/^net::/i, '')
-    .toUpperCase()
 }
 
 function getMatchingCertificateFailure(args: {

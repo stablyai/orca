@@ -11,6 +11,7 @@ import { useAppStore } from '@/store'
 import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 
 export async function observeExistingAutomationSession(args: {
   ptyId: string
@@ -38,7 +39,13 @@ export async function observeExistingAutomationSession(args: {
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
       if (!mainOwnsAgentStatusWrites) {
-        useAppStore.getState().setAgentStatus(paneKey, payload, undefined)
+        const state = useAppStore.getState()
+        const routing = resolveLiveAgentStatusConnectionRouting({ state, paneKey, ptyId })
+        // Why: a delayed reuse observer must not write into a pane that has
+        // since rebound to another host's colliding tab/pane identifiers.
+        if (routing) {
+          state.setAgentStatus(paneKey, payload, undefined, undefined, routing)
+        }
       }
       args.onAgentStatus(payload)
     }

@@ -90,6 +90,16 @@ function decodedIssueSearchPath(callIndex: number): string {
   return decodeURIComponent(apiPath ?? '')
 }
 
+// Route resolvePrWorkItemSource's per-remote probes: origin delegates to
+// getOwnerRepoMock (so existing tests keep defining origin through it) and
+// upstream returns the given candidate.
+function mockUpstreamCandidate(upstream: { owner: string; repo: string } | null): void {
+  getOwnerRepoForRemoteMock.mockImplementation(
+    async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+      remoteName === 'upstream' ? upstream : getOwnerRepoMock(repoPath, connectionId, opts)
+  )
+}
+
 describe('GitHub issue source split', () => {
   beforeEach(() => {
     execFileAsyncMock.mockReset()
@@ -113,10 +123,15 @@ describe('GitHub issue source split', () => {
       source: await getIssueOwnerRepoMock(),
       fellBack: false
     }))
-    // Default the upstream-candidate lookup to null so existing tests that
-    // only mock `getIssueOwnerRepo` + `getOwnerRepo` don't need to think
-    // about it. Tests that care set it explicitly.
-    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    // Why: since #7331 `resolvePrWorkItemSource` fetches origin through
+    // `getOwnerRepoForRemote` (getOwnerRepo became upstream-first). Route the
+    // origin probe to `getOwnerRepoMock` so existing tests keep defining the
+    // origin candidate through it; default upstream to null. Tests that care
+    // about upstream override with their own implementation.
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (repoPath: string, remoteName: string, connectionId?: string | null, opts = {}) =>
+        remoteName === 'origin' ? getOwnerRepoMock(repoPath, connectionId, opts) : null
+    )
     _resetOwnerRepoCache()
   })
 
@@ -228,13 +243,44 @@ describe('GitHub issue source split', () => {
     )
   })
 
+  it.each(['is:issue', 'is:pr'])(
+    'propagates GitHub outages for scoped %s queries',
+    async (query) => {
+      getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+
+      await expect(listWorkItems('/repo-root', 10, query)).rejects.toThrow(
+        'HTTP 503: Service Unavailable'
+      )
+
+      // The outage signal reuses the failed request; it must not add retry subprocesses.
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('propagates an outage when both sides of a combined query are unavailable', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
+      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
+
+    await expect(listWorkItems('/repo-root', 10, 'is:open')).rejects.toThrow(
+      'HTTP 503: Service Unavailable'
+    )
+
+    // Classification must reuse the issue and PR requests, not retry the outage.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
   it("uses upstream for recent PRs when preference='upstream'", async () => {
     resolveIssueSourceMock.mockResolvedValueOnce({
       source: { owner: 'stablyai', repo: 'orca' },
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
       stdout: '[]'
     })
@@ -252,7 +298,7 @@ describe('GitHub issue source split', () => {
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
     await listWorkItems('/repo-root', 10, 'is:pr is:open', undefined, 'upstream')
@@ -269,7 +315,7 @@ describe('GitHub issue source split', () => {
       fellBack: false
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '9\n' })
 
     const count = await countWorkItems('/repo-root', 'is:pr is:open', 'upstream')
@@ -295,7 +341,8 @@ describe('GitHub issue source split', () => {
       fellBack: true
     })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    // beforeEach default: upstream probe resolves null, origin delegates to
+    // getOwnerRepoMock.
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
 
     const result = await listWorkItems('/repo-root', 10, 'is:pr', undefined, 'upstream')
@@ -606,7 +653,7 @@ describe('GitHub issue source split', () => {
         fellBack: false
       })
       getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-      getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
       ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
         stdout: '[]'
       })
@@ -627,7 +674,7 @@ describe('GitHub issue source split', () => {
         fellBack: false
       })
       getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
-      getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      mockUpstreamCandidate({ owner: 'stablyai', repo: 'orca' })
       ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
         stdout: '[]'
       })

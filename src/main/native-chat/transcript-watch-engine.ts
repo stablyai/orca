@@ -1,42 +1,18 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
-import type { ResolveSessionFileOptions } from './session-file-resolver'
+import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import {
   readIncrementalTranscriptMessages,
   resetIncrementalTranscriptState,
   type IncrementalTranscriptState
 } from './transcript-incremental-reader'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
-
-export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
-  agent: AgentType
-  sessionId: string
-  onAppend: (messages: NativeChatMessage[]) => void
-  onInitialSnapshot?: (
-    messages: NativeChatMessage[],
-    hasMore: boolean,
-    beforeOffset: number,
-    /** Set when the initial drain could not deliver a transcript; the subscriber
-     *  surfaces it as an error snapshot so a watching client never sticks on
-     *  'loading'. Empty messages accompany it. */
-    error?: string
-  ) => void
-  onReplace?: (messages: NativeChatMessage[], hasMore: boolean, beforeOffset: number) => void
-  initialLimit?: number
-  filePath?: string
-  debounceMs?: number
-  /** Overrides the resolve-poll interval (see subscribeViaResolvePoll) so tests
-   *  don't wait out the production backoff. Production ignores this and backs
-   *  off from 500ms to a 5s cap. */
-  resolvePollIntervalMs?: number
-}
-
-export type NativeChatTranscriptSubscription = {
-  unsubscribe: () => void
-  watching: boolean
-}
+import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-contract'
 
 const DEFAULT_DEBOUNCE_MS = 40
 const ROTATION_RETRY_MS = 25
@@ -87,6 +63,7 @@ export async function installTranscriptWatcher(
     return null
   }
   const { onAppend, onInitialSnapshot, onReplace, initialLimit, debounceMs } = args
+  const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
 
   const state: IncrementalTranscriptState = {
     offset: 0,
@@ -138,6 +115,7 @@ export async function installTranscriptWatcher(
   }
 
   async function readAndEmitAppends(): Promise<void> {
+    let lifecycle: NativeChatTurnLifecycle | undefined
     const remaining = await readIncrementalTranscriptMessages(
       filePath,
       state,
@@ -146,10 +124,14 @@ export async function installTranscriptWatcher(
         if (!closed) {
           onAppend(messages)
         }
+      },
+      decodeLifecycle ?? undefined,
+      (nextLifecycle) => {
+        lifecycle = nextLifecycle
       }
     )
-    if (!closed && remaining.length > 0) {
-      onAppend(remaining)
+    if (!closed && (remaining.length > 0 || lifecycle)) {
+      onAppend(remaining, lifecycle)
     }
   }
 
@@ -176,7 +158,14 @@ export async function installTranscriptWatcher(
       // Why: 0 is a valid window — an explicit undefined check keeps an empty
       // snapshot empty instead of falling back to an unbounded incremental read.
       contentReplaced && !initialDrain && onReplace && initialLimit !== undefined
-        ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
+        ? await readNativeChatTranscriptTailFile(
+            filePath,
+            initialLimit,
+            decode,
+            false,
+            undefined,
+            decodeLifecycle
+          )
         : null
     if (closed) {
       return
@@ -187,7 +176,8 @@ export async function installTranscriptWatcher(
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
-        replacementSnapshot.beforeOffset
+        replacementSnapshot.beforeOffset,
+        replacementSnapshot.lifecycle
       )
       await readAndEmitAppends()
       watchedBoundary = await boundaryFingerprint(filePath, state.offset)
@@ -197,7 +187,14 @@ export async function installTranscriptWatcher(
 
     const initialSnapshot =
       initialDrain && onInitialSnapshot && initialLimit !== undefined
-        ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
+        ? await readNativeChatTranscriptTailFile(
+            filePath,
+            initialLimit,
+            decode,
+            false,
+            undefined,
+            decodeLifecycle
+          )
         : null
     if (closed) {
       return
@@ -210,12 +207,24 @@ export async function installTranscriptWatcher(
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,
-          initialSnapshot.beforeOffset
+          initialSnapshot.beforeOffset,
+          undefined,
+          initialSnapshot.lifecycle
         )
         await readAndEmitAppends()
       } else {
-        const messages = await readIncrementalTranscriptMessages(filePath, state, decode)
-        onInitialSnapshot(messages, false, 0)
+        let lifecycle: NativeChatTurnLifecycle | undefined
+        const messages = await readIncrementalTranscriptMessages(
+          filePath,
+          state,
+          decode,
+          undefined,
+          decodeLifecycle ?? undefined,
+          (nextLifecycle) => {
+            lifecycle = nextLifecycle
+          }
+        )
+        onInitialSnapshot(messages, false, 0, undefined, lifecycle)
       }
     } else {
       initialDrain = false

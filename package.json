@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.144-rc.4",
+  "version": "1.4.147-rc.4",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -90,6 +90,7 @@
     "test:e2e:ssh-docker-watcher-isolation": "node config/scripts/run-ssh-docker-watcher-isolation-e2e.mjs",
     "test:e2e:source-control-scale": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/source-control-large-file-count.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "win-update-e2e": "node tools/win-update-e2e/run.mjs",
+    "win-crash-survival-e2e": "node tools/win-crash-survival-e2e/run.mjs",
     "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
     "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts",
@@ -193,6 +194,7 @@
     "oxlint-plugin-react-doctor": "0.2.10",
     "oxlint-tsgolint": "0.23.0",
     "pdfjs-dist": "^5.7.284",
+    "pngjs": "^7.0.0",
     "radix-ui": "^1.6.2",
     "react": "^19.2.7",
     "react-colorful": "^5.7.0",
@@ -228,7 +230,8 @@
     "sherpa-onnx-darwin-x64": "1.12.37",
     "sherpa-onnx-linux-arm64": "1.12.37",
     "sherpa-onnx-linux-x64": "1.12.37",
-    "sherpa-onnx-win-x64": "1.12.37"
+    "sherpa-onnx-win-x64": "1.12.37",
+    "windows-native-registry": "3.2.2"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
@@ -272,7 +275,8 @@
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
       "@xterm/addon-ligatures@0.11.0-beta.287": "config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch",
       "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch",
-      "@xterm/addon-serialize@0.15.0-beta.287": "config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch"
+      "@xterm/addon-serialize@0.15.0-beta.287": "config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch",
+      "@xterm/xterm@6.1.0-beta.287": "config/patches/@xterm__xterm@6.1.0-beta.287.patch"
     }
   },
   "reactDoctor": {

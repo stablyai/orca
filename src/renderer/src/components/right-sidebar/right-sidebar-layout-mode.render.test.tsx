@@ -72,10 +72,7 @@ vi.mock('./right-sidebar-panel-content', () => ({
   RightSidebarPanelContent: () => <div data-panel-content />
 }))
 
-function renderSidebar(options: {
-  layoutMode?: RightSidebarLayoutMode
-  open?: boolean
-}): string {
+function renderSidebar(options: { layoutMode?: RightSidebarLayoutMode; open?: boolean }): string {
   mockAppState.state = {
     rightSidebarOpen: options.open ?? true,
     rightSidebarWidth: 350,

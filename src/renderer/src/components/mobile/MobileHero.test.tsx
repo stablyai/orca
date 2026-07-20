@@ -57,7 +57,10 @@ describe('HeroFlow height', () => {
     }
   })
 
-  function renderFlow(stepIdx: StepIndex) {
+  function renderFlow(
+    stepIdx: StepIndex,
+    overrides: Partial<React.ComponentProps<typeof HeroFlow>> = {}
+  ) {
     return render(
       <HeroFlow
         stepIdx={stepIdx}
@@ -71,10 +74,12 @@ describe('HeroFlow height', () => {
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
         pairingUrl={null}
+        relayDegraded={false}
         pairLoading={false}
         connectionMode="automatic"
         onConnectionModeChange={vi.fn()}
         onRegeneratePairing={vi.fn()}
+        canGeneratePairing
         onCopyPairingCode={vi.fn()}
         networkInterfaces={[]}
         selectedAddress={undefined}
@@ -83,6 +88,7 @@ describe('HeroFlow height', () => {
         refreshingNetworkInterfaces={false}
         onBack={vi.fn()}
         onContinue={vi.fn()}
+        {...overrides}
       />
     )
   }
@@ -106,10 +112,12 @@ describe('HeroFlow height', () => {
         onCopyInstallUrl={vi.fn()}
         pairQrDataUrl={null}
         pairingUrl={null}
+        relayDegraded={false}
         pairLoading={false}
         connectionMode="automatic"
         onConnectionModeChange={vi.fn()}
         onRegeneratePairing={vi.fn()}
+        canGeneratePairing
         onCopyPairingCode={vi.fn()}
         networkInterfaces={[]}
         selectedAddress={undefined}
@@ -123,5 +131,21 @@ describe('HeroFlow height', () => {
 
     expect(viewport).toHaveStyle({ height: '520px' })
     expect(screen.getByText('Step 1 of 2').closest('.mp-flow-screen')).toHaveAttribute('inert')
+  })
+
+  it('flags a degraded Anywhere code and always shows the Relay beta note', () => {
+    renderFlow(1, {
+      pairQrDataUrl: 'data:image/png;base64,qr',
+      relayDegraded: true
+    })
+    expect(screen.getByTestId('relay-degraded-notice')).toHaveTextContent(
+      'only works on your local network'
+    )
+    expect(screen.getByText('Orca Relay is in beta.')).toBeInTheDocument()
+  })
+
+  it('hides the degradation notice when the code encodes what was selected', () => {
+    renderFlow(1, { pairQrDataUrl: 'data:image/png;base64,qr' })
+    expect(screen.queryByTestId('relay-degraded-notice')).not.toBeInTheDocument()
   })
 })
