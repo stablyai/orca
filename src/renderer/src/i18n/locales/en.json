@@ -13380,6 +13380,9 @@
           "91b5c8d7e6": "GitLab"
         }
       }
+    },
+    "common": {
+      "cancel": "Cancel"
     }
   },
   "components": {

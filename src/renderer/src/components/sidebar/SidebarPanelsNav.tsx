@@ -186,6 +186,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   }, [panelTreeGroups, updateSettings])
 
   const webPanelsCollapsed = useAppStore((s) => s.settings?.pinnedWebPanelsCollapsed === true)
+  const layoutsCollapsed = useAppStore((s) => s.settings?.panelLayoutsCollapsed === true)
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
   const hasLayouts = (panelLayouts ?? []).length > 0
@@ -202,20 +203,41 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
         <div className="flex flex-col gap-0.5">
           {hasLayouts ? (
             <>
-              <div className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase text-worktree-sidebar-foreground/50">
+              <button
+                type="button"
+                onClick={() => void updateSettings({ panelLayoutsCollapsed: !layoutsCollapsed })}
+                aria-expanded={!layoutsCollapsed}
+                className={cn(
+                  'flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
+                  layoutsCollapsed &&
+                    activeView === 'panel-canvas' &&
+                    (panelLayouts ?? []).some((layout) => activePanelLayoutId === layout.id)
+                    ? 'text-worktree-sidebar-accent-foreground'
+                    : 'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
+                )}
+              >
+                <ChevronRight
+                  className={cn(
+                    'size-3 shrink-0 transition-transform',
+                    !layoutsCollapsed && 'rotate-90'
+                  )}
+                  strokeWidth={2}
+                />
                 <span className="min-w-0 flex-1 truncate">
                   {translate('auto.components.sidebar.SidebarPanelsNav.layouts', 'Layouts')}
                 </span>
-              </div>
-              {(panelLayouts ?? []).map((layout) => (
-                <PanelLayoutButton
-                  key={layout.id}
-                  layout={layout}
-                  active={activeView === 'panel-canvas' && activePanelLayoutId === layout.id}
-                  onOpen={openPanelLayoutInCanvas}
-                  onDelete={deletePanelLayout}
-                />
-              ))}
+              </button>
+              {layoutsCollapsed
+                ? null
+                : (panelLayouts ?? []).map((layout) => (
+                    <PanelLayoutButton
+                      key={layout.id}
+                      layout={layout}
+                      active={activeView === 'panel-canvas' && activePanelLayoutId === layout.id}
+                      onOpen={openPanelLayoutInCanvas}
+                      onDelete={deletePanelLayout}
+                    />
+                  ))}
             </>
           ) : null}
           <div className="flex w-full items-center gap-0.5">

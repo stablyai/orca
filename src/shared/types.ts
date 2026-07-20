@@ -2766,6 +2766,9 @@ export type GlobalSettings = {
    *  the pinned web panels — in settings (not per-window UI state) so the
    *  fold survives relaunch, matching the terminal-panel group folds. */
   pinnedWebPanelsCollapsed?: boolean
+  /** Collapsed state of the sidebar's "Layouts" disclosure — in settings so
+   *  the fold survives relaunch, matching User Panels / Nodes. */
+  panelLayoutsCollapsed?: boolean
   /** Named split-window arrangements of pinned panels ("all nodes btop"),
    *  sanitized by normalizePanelLayouts on every write. Optional for profiles
    *  saved before this setting existed; readers default to none. */
