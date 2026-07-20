@@ -332,7 +332,9 @@ export function useAutomationDispatchEvents(): void {
           const settleLateResult = (result: Promise<void>): void => {
             // Why: status/exit callbacks have no awaitable caller; the result
             // path already releases ownership before propagating persistence errors.
-            void result.catch(() => {})
+            void result.catch((error) => {
+              console.error('[automations] Failed to persist late automation result:', error)
+            })
           }
           const handleAgentDone = (): void => {
             if (completionMarked) {

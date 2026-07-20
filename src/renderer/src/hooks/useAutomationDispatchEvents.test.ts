@@ -448,11 +448,11 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  it('contains a late completed-persistence rejection after releasing ownership', async () => {
+  it('diagnoses a late completed-persistence rejection once without terminal cleanup', async () => {
     let onAgentStatus: ((payload: { state: string }) => void) | undefined
-    mockMarkDispatchResult
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('late completion persistence unavailable'))
+    const persistenceError = new Error('late completion persistence unavailable')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mockMarkDispatchResult.mockResolvedValueOnce(undefined).mockRejectedValueOnce(persistenceError)
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       onAgentStatus = args.onAgentStatus
       return {
@@ -469,9 +469,19 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
     await registerAndDispatch()
     onAgentStatus?.({ state: 'done' })
-    await vi.waitFor(() => expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce())
+    onAgentStatus?.({ state: 'done' })
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalledOnce())
 
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[automations] Failed to persist late automation result:',
+      persistenceError
+    )
+    expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    expect(
+      mockMarkDispatchResult.mock.calls.filter(([result]) => result.status === 'completed')
+    ).toHaveLength(1)
+    errorSpy.mockRestore()
   })
 
   it('preserves a fresh reuse-enabled session as the future reuse seed', async () => {
