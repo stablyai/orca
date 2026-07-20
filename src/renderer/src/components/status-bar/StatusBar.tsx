@@ -2086,7 +2086,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   return (
     <div
       ref={containerRefCallback}
-      className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0 relative"
+      // Why: whitespace-nowrap — when many provider CLIs are detected the full
+      // labels can exceed the width thresholds' assumptions, and wrapped text
+      // spills outside the fixed-height bar; clipping the (shrinkable) usage
+      // cluster is the graceful failure instead.
+      className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0 relative whitespace-nowrap"
       onContextMenuCapture={(event) => {
         if (!shouldOpenStatusBarContextMenu(event.target)) {
           return
@@ -2104,7 +2108,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
         setMenuOpen(true)
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 shrink items-center gap-3 overflow-hidden">
         {isEmptyUsageState ? (
           showEmptyUsageCta ? (
             <StatusBarUsageEmptyCta />
@@ -2214,7 +2218,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
       <div className="flex-1" />
 
-      <div className="flex items-center gap-3">
+      {/* Why: the right cluster (ports/SSH/hosts) never shrinks — the usage
+          cluster clips first when the bar runs out of room. */}
+      <div className="flex shrink-0 items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
           {petEnabled ? <PetStatusSegment /> : null}
