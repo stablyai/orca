@@ -49,6 +49,10 @@ const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
+// Why: Codex emits Stop between intermediate responses, so a 'done' followed by more output is a mid-task turn boundary, not the end of the request (#9333).
+const HOOK_DONE_OUTPUT_QUIET_MS = 1_500
+// Why: ceiling on that deferral. A TUI that never stops redrawing must delay the notification, never swallow it — no completion is worse than an early one (#9333).
+const HOOK_DONE_MAX_DEFER_MS = 15_000
 // Why: under "Approve for me" Codex resumes almost immediately, so debounce the OS attention notification so a self-resolving pause raises no false banner (#8387).
 const CODEX_ATTENTION_QUIET_MS = 1_500
 
@@ -111,6 +115,9 @@ export function createAgentCompletionCoordinator(
   // Why: cadence tier the armed poll timer was scheduled at, so a shift to a faster tier can re-arm promptly instead of waiting out the long delay.
   let pollTimerTier: PollCadenceTier | null = null
   let lastPaneActivityAt = 0
+  // Why: output after a hook 'done' means the turn is still producing work (#9333); the deadline bounds how long that may defer the notification.
+  let lastOutputActivityAt = 0
+  let pendingHookDoneDeadline = 0
 
   function clearPollTimer(): void {
     if (pollTimer === null) {
@@ -136,6 +143,13 @@ export function createAgentCompletionCoordinator(
     }
     pendingHookDoneTitle = null
     pendingHookDonePayload = null
+    pendingHookDoneDeadline = 0
+  }
+
+  // Why: defer only while output is still arriving AND the ceiling is unspent, so a permanently chatty pane cannot swallow the completion (#9333).
+  function hookDoneShouldDeferForOutput(): boolean {
+    const now = Date.now()
+    return now < pendingHookDoneDeadline && now - lastOutputActivityAt < HOOK_DONE_OUTPUT_QUIET_MS
   }
 
   function clearPendingCodexAttention(): void {
@@ -350,6 +364,9 @@ export function createAgentCompletionCoordinator(
   function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
     pendingHookDoneTitle = title
     pendingHookDonePayload = payload
+    if (pendingHookDoneDeadline === 0) {
+      pendingHookDoneDeadline = Date.now() + HOOK_DONE_MAX_DEFER_MS
+    }
     if (pendingHookDoneTimer !== null) {
       return
     }
@@ -361,6 +378,11 @@ export function createAgentCompletionCoordinator(
       pendingHookDoneTitle = null
       pendingHookDonePayload = null
       if (pendingTitle) {
+        if (pendingPayload && hookDoneShouldDeferForOutput()) {
+          // Why: the pane is still printing, so this 'done' was an intermediate Codex Stop. Re-arm; the deadline guarantees it still fires (#9333).
+          scheduleHookDoneCompletion(pendingTitle, pendingPayload)
+          return
+        }
         const hookIdentity = pendingPayload ? hookCompletionIdentity(pendingPayload) : null
         dispatchCompletion('hook', pendingTitle, {
           quietedHookDone: true,
@@ -681,6 +703,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function observeOutputActivity(): void {
+    lastOutputActivityAt = Date.now()
     recordPaneActivity()
   }
 
