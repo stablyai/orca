@@ -3,6 +3,7 @@ import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixture
 import {
   getAzureDevOpsAuthStatus,
   getAzureDevOpsPullRequestForBranch,
+  getAzureDevOpsPullRequestForBranchOrThrow,
   normalizeAzureDevOpsApiBaseUrl
 } from './client'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
@@ -120,6 +121,37 @@ describe('Azure DevOps client', () => {
       '/acme/Project/_apis/git/repositories/repo-guid/pullRequests',
       '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/18/statuses'
     ])
+  })
+
+  it('getAzureDevOpsPullRequestForBranchOrThrow surfaces a list failure instead of null (finding 4)', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        return new Response(
+          JSON.stringify({
+            id: 'repo-guid',
+            webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      // The pull-request list lookup fails (auth/transport).
+      return new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })
+    }) as never
+
+    // The swallowing variant collapses the failure into a false "no PR".
+    await expect(
+      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
+    ).resolves.toBeNull()
+    _resetAzureDevOpsRepoRefCache()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No pull request found".
+    await expect(
+      getAzureDevOpsPullRequestForBranchOrThrow('/repo', 'refs/heads/feature/azure')
+    ).rejects.toThrow(/Azure DevOps request failed/)
   })
 
   it('uses the most recent branch PR instead of preferring stale active PRs', async () => {

@@ -109,6 +109,7 @@ import {
   getPRComments,
   getPRForBranch,
   getPRForBranchOutcome,
+  getRepoSlug,
   getRepoUpstream,
   getWorkItem,
   getPullRequestPushTarget,
@@ -1265,6 +1266,34 @@ describe('getPRForBranch', () => {
       ['api', 'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=1'],
       { cwd: '/repo-root' }
     )
+  })
+
+  it('propagates a Retry-After cooldown into the rate-limited retry schedule', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: null
+    })
+    // gh puts the diagnostic on `.stderr`; a secondary limit carries Retry-After.
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('gh exited with 1.'), {
+          stderr: 'HTTP 403: You have exceeded a secondary rate limit\nRetry-After: 120'
+        })
+      )
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+
+    const before = Date.now()
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+    expect(outcome.kind).toBe('upstream-error')
+    if (outcome.kind !== 'upstream-error') {
+      throw new Error('expected upstream-error')
+    }
+    expect(outcome.errorType).toBe('rate_limited')
+    // ~120s cooldown surfaced as both the manual gate and the auto-retry time.
+    expect(outcome.retryDisabledUntil).toBeDefined()
+    expect(outcome.nextAutoRetryAt).toBe(outcome.retryDisabledUntil)
+    expect(outcome.retryDisabledUntil ?? 0).toBeGreaterThanOrEqual(before + 119_000)
+    expect(outcome.retryDisabledUntil ?? 0).toBeLessThanOrEqual(Date.now() + 121_000)
   })
 
   it('reports no PR when fallback branch discovery cleanly misses', async () => {
@@ -3498,9 +3527,24 @@ describe('getPRForBranch', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
+  it('keeps getRepoSlug origin-based on a fork checkout (#7331)', async () => {
+    // The slug is the checkout's own identity (renderer display, icon
+    // autodetect); it must not flip to the upstream parent.
+    getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remoteName: string) =>
+      remoteName === 'origin'
+        ? { owner: 'fsdwen', repo: 'orca' }
+        : { owner: 'stablyai', repo: 'orca' }
+    )
+
+    await expect(getRepoSlug('/repo-root')).resolves.toEqual({ owner: 'fsdwen', repo: 'orca' })
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'origin', undefined)
+  })
+
   it('resolves a distinct upstream remote as the repo upstream', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    // getRepoUpstream probes origin then upstream via getOwnerRepoForRemote (#7331).
+    getOwnerRepoForRemoteMock
+      .mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+      .mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
 
     await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
       owner: 'stablyai',
@@ -3511,8 +3555,9 @@ describe('getPRForBranch', () => {
   })
 
   it('does not treat a same-repository upstream remote as a fork', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'StablyAI', repo: 'Orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoForRemoteMock
+      .mockResolvedValueOnce({ owner: 'StablyAI', repo: 'Orca' })
+      .mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({ isFork: false, parent: null })
     })
@@ -3526,17 +3571,20 @@ describe('getPRForBranch', () => {
   })
 
   it('does not mark an upstream-only GitHub remote as a fork', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce(null)
+    // Missing origin short-circuits before the upstream probe.
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
 
     await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
 
-    expect(getOwnerRepoForRemoteMock).not.toHaveBeenCalled()
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledTimes(1)
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/repo-root', 'origin', undefined)
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('falls back to the GitHub parent when no upstream remote is configured', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    getOwnerRepoForRemoteMock
+      .mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+      .mockResolvedValueOnce(null)
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
         isFork: true,

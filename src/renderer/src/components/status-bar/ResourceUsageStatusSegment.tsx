@@ -1,9 +1,4 @@
-/* eslint-disable max-lines -- Why: consolidating memory + sessions into one
-   surface deliberately co-locates the sparkline, worktree tree, session list,
-   daemon actions, and kill-confirm dialog so the popover body and badge stay
-   consistent. Splitting across files would scatter render-state that only
-   exists to serve this one status-bar segment. See
-   docs/resource-usage-merge-spec.md for the full design. */
+/* eslint-disable max-lines -- Why: one status-bar segment co-locates sparkline, worktree tree, session list, daemon actions, and kill-confirm; see docs/resource-usage-merge-spec.md. */
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
@@ -88,10 +83,7 @@ type SortOption = 'memory' | 'cpu' | 'name'
 const METRIC_COLUMNS_CLS = 'flex items-center shrink-0 tabular-nums'
 const CPU_COLUMN_CLS = 'w-12 text-right'
 const MEM_COLUMN_CLS = 'w-16 text-right'
-// Why: every row (session, worktree, repo, app) AND the column header
-// reserve this same trailing gutter so the CPU/Memory columns line up
-// regardless of whether a row carries a kill-X. The X button sits inside
-// this gutter for session rows; other rows leave it blank.
+// Why: every row and the header reserve this trailing gutter so CPU/Memory columns align whether or not the row has a kill-X.
 const ROW_TRAILING_GUTTER_CLS = 'w-5 shrink-0 flex items-center justify-end'
 
 // ─── Formatters ─────────────────────────────────────────────────────
@@ -319,8 +311,7 @@ function AppSection({
 // ─── Sorting ────────────────────────────────────────────────────────
 
 function compareMetricDesc(a: Metric, b: Metric): number {
-  // Why: null metrics (remote rows) sort last regardless of direction so
-  // they don't pollute the "biggest CPU/memory consumers" view.
+  // Why: null metrics (remote rows) sort last regardless of direction so they don't pollute the "biggest consumers" view.
   if (a === null && b === null) {
     return 0
   }
@@ -359,8 +350,7 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
 
 // ─── Session row ────────────────────────────────────────────────────
 
-// Exported (with WorktreeRow) for row-level regression tests pinning the kill
-// affordance and remote-chip presentation for SSH/orphan rows.
+// Exported (with WorktreeRow) for row-level regression tests pinning the kill affordance and remote-chip presentation.
 export function SessionRow({
   session,
   worktreeId,
@@ -410,11 +400,7 @@ export function SessionRow({
         {session.label}
       </span>
       <MetricPair cpu={session.cpu} memory={session.memory} size="small" />
-      {/* Why: kill X lives inside the shared trailing gutter so CPU/Memory
-          columns stay aligned with the column header (whose gutter is empty).
-          Bound sessions hide the X until the row is hovered/focused (calm
-          list); orphan sessions show it always so the "this is reclaimable"
-          affordance survives. Mirrors Settings > Manage Sessions. */}
+      {/* Why: kill X sits in the shared gutter for column alignment; bound rows reveal it on hover/focus, orphan rows always show it as reclaimable. */}
       <span className={ROW_TRAILING_GUTTER_CLS}>
         <button
           type="button"
@@ -476,17 +462,11 @@ export function WorktreeRow({
   navigateToTab: (tabId: string, paneKey: string | null) => void
 }): React.JSX.Element {
   const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
-  // Why: synthetic buckets (orphan/unattributed) have no sidebar target to
-  // reveal. Real and SSH-resolved worktrees both qualify for navigation —
-  // navigateToWorktree handles the no-store-record case internally by
-  // bailing out of activateAndRevealWorktree if the worktree isn't known.
+  // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
   const isNavigable = !isSynthetic
-  // Why: Delete acts on a sidebar worktree record; without
-  // one (synthesized SSH rows whose worktreeId isn't in worktreeById, or
-  // synthetic buckets), or for the active worktree, we hide it but keep the
-  // row clickable for navigation.
+  // Why: Delete needs a sidebar worktree record; hidden for synthetic/SSH-only rows and the active worktree, but the row stays navigable.
   const showWorktreeActions =
     !isSynthetic && storeRecord !== null && worktree.worktreeId !== activeWorktreeId
   const isMainWorktree = storeRecord?.isMainWorktree ?? false
@@ -536,10 +516,7 @@ export function WorktreeRow({
           disabled={!isNavigable}
         >
           <span className="text-xs font-medium truncate">{rowLabel}</span>
-          {/* Why: chip is gated on the repo's SSH connectionId, not on
-              missing data. Warm-reattached local PTYs used to land here
-              with hasLocalSamples=false even though they're plainly
-              local. */}
+          {/* Why: gate the chip on SSH connectionId, not missing data — warm-reattached local PTYs land here with hasLocalSamples=false. */}
           {worktree.isRemote && (
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
               {translate(
@@ -551,8 +528,7 @@ export function WorktreeRow({
         </button>
         <div className="flex items-center gap-2 shrink-0 pr-3">
           <div className="relative">
-            {/* Why: no-hover devices show the action overlay by default, so
-                the sparkline yields there just like it does during hover. */}
+            {/* Why: no-hover devices show the action overlay by default, so the sparkline yields there just like on hover. */}
             <span
               className={cn(
                 'block transition-opacity',
@@ -783,9 +759,7 @@ export function ResourceUsageStatusSegment({
       lastSeenScannedAt: workspaceSpaceScannedAt
     })
   )
-  // Why: tab titles can update on terminal keystrokes. The resource popover's
-  // merged tree needs them only while open, so closed status-bar badges should
-  // not subscribe to those high-churn maps.
+  // Why: tab titles churn on every keystroke; subscribe to those maps only while open so closed badges don't rerender.
   const runtimePaneTitlesByTabId = useAppStore((s) =>
     getResourceUsageRuntimePaneTitlesByTabId(s, open)
   )
@@ -793,13 +767,11 @@ export function ResourceUsageStatusSegment({
   const allWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, open))
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, open))
   const browserTabsByWorktree = useAppStore((s) => getResourceUsageBrowserTabsByWorktree(s, open))
-  // Why: the closed trigger owns a scalar selector. Full binding maps stay
-  // behind open sentinels so unchanged counts do not rerender the segment.
+  // Why: full binding maps stay behind open sentinels so unchanged counts don't rerender the closed segment.
   const ptyIdsByTabId = useAppStore((s) => getResourceUsagePtyIdsByTabId(s, open))
   const terminalLayoutsByTabId = useAppStore((s) => getResourceUsageTerminalLayoutsByTabId(s, open))
   const resourceSnapshot = snapshot
-  // Why: ptyIdsByTabId intentionally tracks mounted/live panes only. Resource
-  // Manager also reads restored wake hints, but only for classification.
+  // Why: ptyIdsByTabId tracks mounted/live panes only; Resource Manager reads restored wake hints only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
     () => ({
       ptyIdsByTabId,
@@ -810,9 +782,7 @@ export function ResourceUsageStatusSegment({
     [ptyIdsByTabId, tabsByWorktree, terminalLayoutsByTabId, workspaceSessionReady]
   )
 
-  // Why: after a kill confirms and the session unmounts, focus would otherwise
-  // fall to <body>. We park a ref on the popover body so we can restore focus
-  // somewhere stable for keyboard users.
+  // Why: after a kill unmounts the session, focus would fall to <body>; park a ref on the popover body to restore it stably for keyboard users.
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
   const popoverBodyFocusFrameRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
@@ -862,8 +832,7 @@ export function ResourceUsageStatusSegment({
     }
   })
 
-  // Why: Space scans can finish after the user backs out of the full page or
-  // closes this popover; the status-bar trigger becomes the handoff point.
+  // Why: Space scans can finish after the user closes the full page/popover; the status-bar trigger becomes the handoff point.
   const nextSpaceScanSnapshot = resolveResourceUsageSpaceScanReady({
     snapshot: spaceScanSnapshot,
     open,
@@ -876,25 +845,19 @@ export function ResourceUsageStatusSegment({
     nextSpaceScanSnapshot.previousScanning !== spaceScanSnapshot.previousScanning ||
     nextSpaceScanSnapshot.lastSeenScannedAt !== spaceScanSnapshot.lastSeenScannedAt
   ) {
-    // Why: keep the scan transition render-time without mutating refs during
-    // render; React can safely retry this guarded state update before commit.
+    // Why: guarded render-time state update (no ref mutation during render); React can safely retry it before commit.
     setSpaceScanSnapshot(nextSpaceScanSnapshot)
   }
   const spaceScanReady = nextSpaceScanSnapshot.ready
 
-  // Poll memory when popover is open. Sessions are refreshed on open and after
-  // session actions; a closed status-bar badge must not globally inventory
-  // daemon PTYs because large preserved-session sets make that visible while
-  // typing.
+  // Poll memory only while open; a closed badge must not inventory daemon PTYs (large preserved-session sets stall typing).
   useEffect(() => {
     if (!open) {
       return
     }
     void fetchSnapshot()
     void refreshSessions()
-    // Why: only the memory snapshot keeps an interval while the popover is
-    // open. Session inventory is explicit-on-open/action because it can be
-    // expensive with many daemon-preserved terminals.
+    // Why: only memory polls on an interval; session inventory is explicit on open/action since it's expensive with many terminals.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
@@ -914,11 +877,7 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
-  // Why: drives the `· remote` chip predicate. A repo with a non-null
-  // connectionId is SSH-backed and its PTYs run on a remote host; that's
-  // the only honest signal for "remote." Building the map from the
-  // canonical store list avoids re-deriving remoteness from a missing
-  // memory sample.
+  // Why: non-null connectionId is the only honest "remote" signal (SSH PTYs run remote); build from the store, not a missing memory sample.
   const repoConnectionIdById = useMemo(() => {
     const map = new Map<string, string | null>()
     for (const repo of repos) {
@@ -927,8 +886,7 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
-  // Why: runtime-hosted repos never have local daemon samples or killable
-  // local sessions; this map drives their per-row exclusion in the merge.
+  // Why: runtime-hosted repos have no local daemon samples or killable sessions; this map drives their per-row exclusion in the merge.
   const repoRuntimeScopedById = useMemo(() => {
     const map = new Map<string, boolean>()
     for (const repo of repos) {
@@ -959,11 +917,7 @@ export function ResourceUsageStatusSegment({
     return count
   }, [allWorktrees, repoById])
 
-  // Why: skip the merge entirely when the popover is closed. The merged
-  // tree is only ever displayed inside <PopoverContent>; computing it on
-  // every store mutation (e.g. runtimePaneTitlesByTabId, which changes on
-  // every keystroke in any open terminal pane) was making the whole app
-  // feel laggy because the segment is always mounted in the status bar.
+  // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
     () =>
       open
@@ -997,8 +951,7 @@ export function ResourceUsageStatusSegment({
     ]
   )
 
-  // Why: orphan detection needs daemon inventory. Keep it open-only so the
-  // closed badge never reintroduces a background global session scan.
+  // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.
   const orphanCount = useMemo(() => {
     if (!open || !workspaceSessionReady) {
       return 0
@@ -1020,15 +973,9 @@ export function ResourceUsageStatusSegment({
     }
   }, [resourceSnapshot])
 
-  // Why: memorySnapshotError is null both for "last fetch succeeded" and
-  // "never fetched". If session refresh fails before a memory snapshot exists,
-  // treat that as daemon-unreachable too.
+  // Why: memorySnapshotError null means "succeeded" OR "never fetched"; a sessions failure before any snapshot still counts as daemon-unreachable.
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
-  // Why: a partial failure where the sessions IPC fails but the snapshot
-  // IPC still works was silently invisible after the merge — the old
-  // SessionsTabPanel surfaced it as "Terminal sessions unavailable". Show
-  // a slim inline notice so the user understands why the session list is
-  // empty/stale even though the resource numbers look fine.
+  // Why: sessions IPC can fail while snapshot IPC works; flag it so the empty session list isn't mistaken for healthy.
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
     memoryLabel: memBadgeLabel,
@@ -1064,9 +1011,7 @@ export function ResourceUsageStatusSegment({
     })
   }, [])
 
-  // Why: worktree navigation leaves the popover open so users can browse the
-  // tree without reopening it; bound terminal rows close explicitly because
-  // focus transfer is intentionally suppressed by onFocusOutside below.
+  // Why: keep popover open on worktree navigation so users can browse; onFocusOutside suppresses the bound-row focus transfer.
   const navigateToWorktree = useCallback((worktreeId: string): void => {
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
@@ -1099,16 +1044,10 @@ export function ResourceUsageStatusSegment({
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
-      // Why: orphan sessions have no tab in this Orca instance, so there's
-      // no "unsaved work in that pane" the user could lose by killing them.
-      // Skip the confirm dialog for orphans and fire the kill straight away
-      // (with optimistic removal) — same UX as a one-off kill from the
-      // bulk "Kill orphan terminals" button. Bound sessions still confirm.
+      // Why: orphan sessions have no tab here (no unsaved work to lose), so skip the confirm dialog; bound sessions still confirm.
       if (!session.bound) {
         setSessions((prev) => prev.filter((s) => s.id !== session.sessionId))
-        // Why: await the kill before refreshing — otherwise the optimistic
-        // removal races a refresh that re-reads the daemon list before the
-        // kill lands and re-adds the row that was just removed.
+        // Why: await the kill before refreshing, else the refresh re-reads the daemon list before the kill lands and re-adds the row.
         void (async () => {
           try {
             await window.api.pty.kill(session.sessionId)
@@ -1133,8 +1072,7 @@ export function ResourceUsageStatusSegment({
     if (orphans.length === 0) {
       return
     }
-    // Why: optimistic removal so rows disappear immediately instead of waiting
-    // for the next explicit daemon-side list refresh.
+    // Why: optimistic removal so rows disappear immediately instead of waiting for the next daemon-side list refresh.
     const orphanIds = new Set(orphans.map((s) => s.id))
     setSessions((prev) => prev.filter((s) => !orphanIds.has(s.id)))
     await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
@@ -1147,9 +1085,7 @@ export function ResourceUsageStatusSegment({
     }
     const target = killConfirm
     setKilling(true)
-    // Why: optimistic removal — the kill X was on the row that's about to be
-    // unmounted, so updating local state immediately avoids a flash where the
-    // dialog closes but the killed row waits for the next list refresh.
+    // Why: optimistic removal avoids a flash where the dialog closes but the killed row lingers until the next list refresh.
     setSessions((prev) => prev.filter((s) => s.id !== target.sessionId))
     try {
       await window.api.pty.kill(target.sessionId)
@@ -1159,9 +1095,7 @@ export function ResourceUsageStatusSegment({
       if (mountedRef.current) {
         setKilling(false)
         setKillConfirm(null)
-        // Why: after the killed row unmounts, focus would otherwise drop to
-        // <body>. Park focus on the popover body so keyboard users land back
-        // in the list rather than outside the popover.
+        // Why: killed row unmounts and focus would drop to <body>; park it on the popover body so keyboard users stay in the list.
         cancelPopoverBodyFocusFrame()
         if (popoverBodyRef.current) {
           popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
@@ -1266,11 +1200,7 @@ export function ResourceUsageStatusSegment({
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
-        // Why: clicking a terminal row activates a tab, which causes xterm
-        // to programmatically focus the terminal DOM node. Radix would
-        // interpret that as a focus-outside event and close the popover.
-        // Suppress focus-driven closes; the popover still closes on
-        // outside-click (onPointerDownOutside default) and Escape.
+        // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
       >
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
@@ -1453,10 +1383,7 @@ export function ResourceUsageStatusSegment({
           </div>
         )}
 
-        {/* Why: pin body to a constant 420px so the popover surface doesn't
-            jump as worktrees expand/collapse or as sessions come and go. The
-            inner tree owns its own scroll. The footer renders below this
-            shell when orphan-bulk-kill is available. */}
+        {/* Why: fixed 420px height so the popover doesn't jump as worktrees expand/collapse or sessions change; inner tree owns its scroll. */}
         <div
           ref={setPopoverBodyNode}
           tabIndex={-1}
@@ -1517,9 +1444,7 @@ export function ResourceUsageStatusSegment({
                     )}
                   </button>
                 </div>
-                {/* Why: empty trailing gutter so the CPU/Memory header
-                    cells line up with the row cells; rows reserve the same
-                    width for the kill-X button. */}
+                {/* Why: empty trailing gutter keeps CPU/Memory header cells aligned with rows that reserve this width for the kill-X. */}
                 <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
               </div>
             </div>
@@ -1611,11 +1536,7 @@ export function ResourceUsageStatusSegment({
 
         <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
       </PopoverContent>
-      {/* Why: Radix Dialog must not be a descendant of PopoverContent — when
-          the popover unmounts (e.g. clicking outside, focus moving to the
-          confirm dialog), the Dialog unmounts mid-interaction and the kill
-          confirm flow disappears. Hoist it to a sibling so its lifetime is
-          independent of the popover. */}
+      {/* Why: hoisted to a sibling of PopoverContent — nested, the Dialog unmounts with the popover mid-interaction and the kill-confirm flow disappears. */}
       <Dialog
         open={killConfirm !== null}
         onOpenChange={(next) => {

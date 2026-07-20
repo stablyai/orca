@@ -7,3 +7,13 @@ const CHROMIUM_CERTIFICATE_ERROR_CODES = new Set([
 export function isChromiumCertificateErrorCode(code: number): boolean {
   return CHROMIUM_CERTIFICATE_ERROR_CODES.has(code)
 }
+
+// Why: main (certificate-error handler) and the renderer overlay both compare
+// Chromium error strings; keep one normalizer so their challenge-matching can
+// never silently diverge.
+export function normalizeCertificateError(error: string): string {
+  return error
+    .trim()
+    .replace(/^net::/i, '')
+    .toUpperCase()
+}

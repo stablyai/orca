@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: the editor external-watch hook co-locates
-   target diffing, fs:changed dispatch, tombstone coalescing, and rename
-   correlation so the end-to-end event-to-store mutation contract stays
-   readable in one file. */
+/* eslint-disable max-lines -- co-locates target diffing, fs:changed dispatch, tombstone coalescing, and rename correlation so the event-to-store contract stays in one file. */
 import { useEffect, useRef } from 'react'
 import { useAppStore, type AppState } from '@/store'
 import { basename, joinPath } from '@/lib/path'
@@ -31,14 +28,7 @@ import {
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
 
-// Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
-// VSCode) land as a short burst of `update` events — or `delete + create` on
-// renamers — within a few milliseconds for the same path. Dispatching an
-// `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT` per raw event fan-outs into N full
-// `setContent` + document-repair rebuilds per mounted EditorPanel,
-// which under split-pane + large markdown is enough to wedge the renderer
-// and black out the window (issue #826). Coalescing per (worktreeId + path)
-// on a short debounce collapses that burst into one reload notification.
+// Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per (worktreeId+path).
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
 const pendingExternalReloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -115,9 +105,7 @@ let cachedSshConnectionStates: AppState['sshConnectionStates'] | null = null
 let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], targetsKey: '' }
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
-  // Why: SSH worktrees can exist in the store before their remote filesystem
-  // provider is ready. Include connectionId so a local/unknown placeholder
-  // watch is replaced by the real SSH watch when the repo metadata hydrates.
+  // Why: include connectionId so a local placeholder watch is replaced by the real SSH watch once an SSH worktree's provider metadata hydrates.
   return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}`
 }
 
@@ -145,18 +133,14 @@ export function getEditorExternalWatchTargets(
   }
 
   const targetOwnersByWorktreeId = new Map<string, Set<string | null>>()
-  // Why: watcher ownership is scoped by both worktree and runtime owner.
-  // The same path can be open locally and in a runtime-backed workspace at
-  // once; reads/saves already route per tab owner, so live reloads must too.
+  // Why: watcher ownership is scoped by worktree + runtime owner — the same path can be open locally and in a runtime workspace, and reads/saves already route per owner.
   for (const f of state.openFiles) {
     let owners = targetOwnersByWorktreeId.get(f.worktreeId)
     if (!owners) {
       owners = new Set()
       targetOwnersByWorktreeId.set(f.worktreeId, owners)
     }
-    // Why: persisted/restored local tabs may have runtimeEnvironmentId
-    // undefined. New openFile calls resolve active-runtime inheritance before
-    // storing the tab, so an ownerless stored tab must stay local here.
+    // Why: persisted/restored tabs may have runtimeEnvironmentId undefined; new openFile calls resolve inheritance before storing, so an ownerless tab stays local.
     owners.add(openFileRuntimeOwner(f))
   }
   const activeWorktreeId = state.activeWorktreeId
@@ -179,16 +163,13 @@ export function getEditorExternalWatchTargets(
     ((state.rightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
       (state.rightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
   if (activeWorktreeNeedsSidebarWatch) {
-    // Why: this app-level watcher owns subscriptions for Explorer and Source
-    // Control so downstream consumers do not fight over watch/unwatch IPC.
+    // Why: this app-level watcher owns Explorer/Source-Control subscriptions so downstream consumers don't fight over watch/unwatch IPC.
     let owners = targetOwnersByWorktreeId.get(activeWorktreeId)
     if (!owners) {
       owners = new Set()
       targetOwnersByWorktreeId.set(activeWorktreeId, owners)
     }
-    // Why: sidebar consumers are mounted for the selected worktree. Their
-    // watcher must follow that worktree's host owner, not the host currently
-    // focused in the UI.
+    // Why: sidebar watcher must follow the selected worktree's host owner, not the host currently focused in the UI.
     owners.add(getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId))
   }
 
@@ -236,16 +217,7 @@ export function getEditorExternalWatchTargets(
   return cachedWatchedTargetsSnapshot
 }
 
-// Why: macOS atomic writes (Claude Code Edit, vim :w, VSCode save) deliver a
-// delete event immediately followed by a create event for the same path. When
-// those two land in separate fs:changed payloads a few ms apart, the tab
-// flickers struck-through for one render before the follow-up create clears
-// it. Debouncing just the 'deleted' signal — keyed by absolute path — lets a
-// same-path create in the next payload cancel the tombstone before it ever
-// paints. Key by owner as well as path so local/runtime tabs for the same
-// worktree file cannot cancel each other's tombstones. A naked delete still
-// resolves to 'deleted' after the window. The in-payload rename correlation
-// is unchanged.
+// Why: macOS atomic writes split delete→create across payloads; debounce the 'deleted' signal so a same-path create cancels the tombstone before it paints. Key by owner+path so a local and runtime tab for the same file can't cancel each other's tombstones.
 const EXTERNAL_MUTATION_DEBOUNCE_MS = 75
 
 type PendingDeleteTimer = {
@@ -258,14 +230,7 @@ type PendingDeleteTimer = {
  * has an editor tab open, and notifies the editor to reload clean tabs when
  * their on-disk contents change.
  *
- * Why: the File Explorer panel's watcher hook is unmounted whenever the user
- * switches the right sidebar to Source Control / Checks / Search. Relying on
- * that panel to dispatch editor-reload notifications means terminal edits go
- * unnoticed while any non-Explorer sidebar tab is active. Lifting the
- * editor-reload subscription to an always-mounted hook mirrors VSCode's
- * `TextFileEditorModelManager`, which subscribes to `fileService
- * .onDidFilesChange` once at the workbench level and reloads non-dirty models
- * regardless of which UI panel is visible.
+ * Why: the File Explorer watcher unmounts when the sidebar leaves Explorer, so lifting this to an always-mounted hook keeps terminal edits noticed everywhere.
  */
 export function useEditorExternalWatch(): void {
   const { targets, targetsKey } = useAppStore(getEditorExternalWatchTargets)
@@ -278,10 +243,7 @@ export function useEditorExternalWatch(): void {
     ((payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void) | null
   >(null)
 
-  // Why: diff previous vs next targets so unchanged worktrees keep their
-  // existing subscription. Tearing down every subscription on each targetsKey
-  // change (e.g. opening/closing a tab in an already-watched worktree) causes
-  // a watcher churn that can drop events emitted during the gap.
+  // Why: diff prev vs next targets so unchanged worktrees keep their subscription; tearing down all on every targetsKey change churns watchers and drops events in the gap.
   useEffect(() => {
     const nextTargets = latestTargetsRef.current
     const prev = targetsRef.current
@@ -346,22 +308,15 @@ export function useEditorExternalWatch(): void {
           connectionId: target.connectionId
         })
         .catch((err) => {
-          // Why: remote SSH providers can disappear while tabs still reference
-          // the worktree. Watching should degrade to a diagnostic, not an
-          // uncaught renderer promise that looks like the terminal froze.
+          // Why: remote SSH providers can disappear while tabs still reference the worktree; degrade to a diagnostic, not an uncaught renderer promise.
           warnExternalWatchFailure(target, err)
         })
     }
     targetsRef.current = nextTargets
-    // Why: this effect is intentionally differential — it does not unwatch on
-    // cleanup. Final unmount unwatching lives in the separate [] effect below
-    // so that re-running on targetsKey changes doesn't tear down everything.
+    // Why: intentionally differential — no unwatch on cleanup; final unmount unwatching lives in the [] effect below so targetsKey changes don't tear down everything.
   }, [targetsKey])
 
-  // Why: the fs:changed subscription and the final unmount unwatch are
-  // independent of which worktrees are currently watched. Keeping them in a
-  // single always-mounted effect avoids re-subscribing on every targetsKey
-  // change (which would otherwise miss events fired during re-subscription).
+  // Why: keep the fs:changed subscription in an always-mounted [] effect so it doesn't re-subscribe on every targetsKey change and miss events fired during the gap.
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(
@@ -380,9 +335,7 @@ export function useEditorExternalWatch(): void {
       unsubscribe()
       dispose()
       fsChangedHandlerRef.current = null
-      // Why: final unmount must tear down every outstanding subscription.
-      // The differential watch effect above intentionally never unwatches on
-      // cleanup, so this is the only place that clears them.
+      // Why: the differential watch effect never unwatches on cleanup, so final unmount is the only place that tears down every subscription.
       for (const target of targetsRef.current) {
         const key = getWatchedTargetKey(target)
         const remoteUnsubscribe = remoteWatchUnsubs.get(key)
@@ -397,21 +350,15 @@ export function useEditorExternalWatch(): void {
       }
       remoteWatchUnsubs.clear()
       targetsRef.current = []
-      // Why: deliberately do NOT clear pendingExternalReloadTimers here.
-      // The map is module-scoped, so in React StrictMode (dev) the first
-      // mount's cleanup would otherwise drop timers scheduled by the second
-      // mount. A late `notifyEditorExternalFileChange` dispatch after unmount
-      // is also harmless — it's a window event with no EditorPanel listeners
-      // attached once the editor tree is torn down.
+      // Why: don't clear the module-scoped pendingExternalReloadTimers — StrictMode's first-mount cleanup would drop the second mount's timers; a late dispatch is harmless.
     }
   }, [])
 }
 
 /**
- * Builds the fs:changed handler used by `useEditorExternalWatch`. Exported
- * so tests can drive the full event pipeline — including the debounced
- * tombstone coalescer — without mounting the hook. See
- * `EXTERNAL_MUTATION_DEBOUNCE_MS` for the macOS atomic-write rationale.
+ * Builds the fs:changed handler used by `useEditorExternalWatch`. Exported so
+ * tests can drive the full event pipeline (including the tombstone coalescer)
+ * without mounting the hook.
  */
 export function createExternalWatchEventHandler(
   findTarget: (
@@ -422,10 +369,7 @@ export function createExternalWatchEventHandler(
   handleFsChanged: (payload: FsChangedPayload, runtimeEnvironmentId?: string | null) => void
   dispose: () => void
 } {
-  // Why: coalesce 'deleted' tombstones across back-to-back payloads so a
-  // same-path create arriving in the next payload (macOS atomic write)
-  // cancels the tombstone before the tab flashes. Keyed by normalized
-  // absolute path, scoped per-target. See EXTERNAL_MUTATION_DEBOUNCE_MS.
+  // Why: coalesce 'deleted' tombstones so a same-path create cancels them before the tab flashes (macOS atomic write). See EXTERNAL_MUTATION_DEBOUNCE_MS.
   const pendingDeletes = new Map<string, PendingDeleteTimer>()
   const pendingKey = (
     worktreeId: string,
@@ -441,8 +385,7 @@ export function createExternalWatchEventHandler(
     if (!target) {
       return
     }
-    // Why: this app-level hook owns worktree watcher subscriptions. Other
-    // consumers listen here so they do not fight over watch/unwatch ownership.
+    // Why: this app-level hook owns watcher subscriptions; other consumers listen here so they don't fight over watch/unwatch ownership.
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       window.dispatchEvent(
         new CustomEvent<WorktreeFileChangeEventDetail>(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
@@ -451,9 +394,7 @@ export function createExternalWatchEventHandler(
       )
     }
 
-    // Why: collect create/update paths first so we can cancel any pending
-    // same-path delete before scheduling a new one. This is what absorbs
-    // the macOS atomic-write delete→create split across two payloads.
+    // Why: collect create/update paths first to cancel any pending same-path delete — this absorbs the macOS atomic-write delete→create split across two payloads.
     const createOrUpdatePaths = new Set<string>()
     for (const evt of payload.events) {
       if (evt.isDirectory === true) {
@@ -472,14 +413,8 @@ export function createExternalWatchEventHandler(
       }
     }
 
-    // Why: when an external process removes (or `git mv`s) a file that's
-    // open in the editor, keep the tab alive and mark it as deleted/renamed
-    // so the user can see the mutation and still access their in-memory
-    // content. A paired create-event in the same batch signals a rename;
-    // a lone delete is a hard delete. Resurrection (same path comes back
-    // on disk) clears the mark further down.
-    // Why: snapshot openFiles once so the delete/rename helpers below share a
-    // consistent view and we don't pay N store reads per payload.
+    // Why: mark editor tabs deleted/renamed instead of closing them so the user keeps in-memory content; a paired create means rename, a lone delete is hard.
+    // Why: snapshot openFiles once so the delete/rename helpers share a consistent view without N store reads per payload.
     const openFilesAtStart = useAppStore.getState().openFiles
     const deletedOpenEditorIds = collectDeletedOpenEditorIds(
       payload,
@@ -487,26 +422,19 @@ export function createExternalWatchEventHandler(
       target.runtimeEnvironmentId,
       openFilesAtStart
     )
-    // Why: correlate creates to deletes by basename OR parent directory to
-    // avoid mislabelling unrelated create+delete pairs in a batched payload
-    // as "renamed". When we can't correlate, default to 'deleted' — that's
-    // the least misleading fallback (it preserves in-memory content and
-    // doesn't claim a rename target that doesn't exist).
+    // Why: correlate creates to deletes by basename to avoid mislabelling unrelated create+delete pairs as "renamed"; default to 'deleted' when we can't correlate.
     const hasPairedCreate =
       deletedOpenEditorIds.length > 0 &&
       hasRenameCorrelatedCreate(payload, target.worktreeId, deletedOpenEditorIds, openFilesAtStart)
     if (deletedOpenEditorIds.length > 0) {
       if (hasPairedCreate) {
-        // Why: single-payload delete+create is already correct — the rename
-        // label is visible in one render tick, so no debounce is needed.
+        // Why: single-payload delete+create is already correct in one render tick, so no debounce needed.
         const setExternalMutation = useAppStore.getState().setExternalMutation
         for (const fileId of deletedOpenEditorIds) {
           setExternalMutation(fileId, 'renamed')
         }
       } else {
-        // Why: defer the 'deleted' tombstone so a follow-up same-path create
-        // in the next payload can cancel it. Build a fileId → path map so we
-        // can key the timer by the deleted file's absolute path.
+        // Why: defer the 'deleted' tombstone so a follow-up same-path create in the next payload can cancel it (macOS atomic write).
         const deletePathByFileId = buildDeletePathByFileId(
           payload,
           target.worktreeId,
@@ -527,12 +455,7 @@ export function createExternalWatchEventHandler(
           }
           const timer = setTimeout(() => {
             pendingDeletes.delete(key)
-            // Why: the debounce widens the window between scheduling the
-            // tombstone and applying it; the tab may have been closed or
-            // switched out of edit mode in between. Re-check both before
-            // writing so we don't resurrect state for a dropped fileId or
-            // tombstone a non-edit tab (mirrors the scheduling-time filter
-            // in `collectDeletedOpenEditorIds`).
+            // Why: the debounce window lets the tab close or leave edit mode, so re-check before writing to avoid tombstoning a dropped or non-edit tab.
             const state = useAppStore.getState()
             const stillEditing = state.openFiles.some((f) => f.id === fileId && f.mode === 'edit')
             if (stillEditing) {
@@ -544,13 +467,7 @@ export function createExternalWatchEventHandler(
       }
     }
 
-    // Why: if a previously-deleted file reappears at the same path (e.g.
-    // the user ran `git checkout`), clear the tombstone so the tab returns
-    // to its normal state and any non-dirty content gets reloaded below.
-    // `createOrUpdatePaths` was collected above. Scoped to deleted/renamed:
-    // a 'changed' mark means the file was rewritten while the tab was dirty,
-    // so a further update event must not clear it — it resolves via reload,
-    // save, or the reload path below.
+    // Why: a reappearing file (e.g. `git checkout`) clears its deleted/renamed tombstone — but not a 'changed' mark, which resolves via reload/save instead.
     if (createOrUpdatePaths.size > 0) {
       const state = useAppStore.getState()
       for (const file of state.openFiles) {
@@ -569,17 +486,11 @@ export function createExternalWatchEventHandler(
     const changedFiles = new Set<string>()
     for (const evt of payload.events) {
       if (evt.kind === 'overflow') {
-        // Why: overflow payloads omit per-path create/update info, so any
-        // stale tombstone must be cleared conservatively before we decide
-        // which clean tabs to reload. Otherwise a file that reappeared on
-        // disk during the overrun stays struck through until some later
-        // path-specific event happens to clear it.
+        // Why: overflow omits per-path info, so conservatively clear stale tombstones or a file that reappeared during the overrun stays struck through.
         for (const notification of getOverflowExternalReloadTargets(target)) {
           scheduleDebouncedExternalReload(notification)
         }
-        // Why: `break` (not `return`) — the remaining code early-returns
-        // when changedFiles is empty, so breaking out is semantically
-        // equivalent and more robust to future code added after the loop.
+        // Why: `break` not `return` — changedFiles is empty so the rest early-returns anyway, and this is more robust to code added after the loop.
         break
       }
 
@@ -588,10 +499,7 @@ export function createExternalWatchEventHandler(
       }
 
       if (evt.kind === 'delete') {
-        // Why: delete events are already handled above by marking the tab
-        // as tombstoned. Feeding them into the reload pipeline would fire
-        // `readFile` against the ENOENT path and replace the in-memory
-        // content with "Error loading file..." — losing the user's view.
+        // Why: deletes are tombstoned above; feeding them into reload would read the ENOENT path and replace in-memory content with an error, losing the user's view.
         continue
       }
 
@@ -609,15 +517,9 @@ export function createExternalWatchEventHandler(
       return
     }
 
-    // Why: skip notifying for any tab with unsaved edits so external writes
-    // don't silently destroy the user's work. Mirrors the dirty guard in
-    // `useFileExplorerHandlers`. Read `openFiles` once per payload to avoid
-    // N store reads for large batched events.
+    // Why: read openFiles once per payload to avoid N store reads on large batches; consumers skip dirty tabs so external writes don't destroy unsaved work.
     const openFilesSnapshot = useAppStore.getState().openFiles
-    // Why: a combined "Changes" tab matches no single path but renders every
-    // changed file's working-tree diff. This is per-worktree, not per-path, so
-    // compute it once instead of rescanning openFiles for each changed file in
-    // a large batched payload (e.g. a branch switch touching hundreds of files).
+    // Why: the combined "Changes" tab is per-worktree not per-path, so compute it once instead of rescanning openFiles per changed file in a large batched payload.
     const hasCombinedDiffConsumer = openFilesSnapshot.some(
       (f) =>
         f.worktreeId === target.worktreeId &&
@@ -633,10 +535,7 @@ export function createExternalWatchEventHandler(
       }
       const matching = getOpenFilesForExternalFileChange(openFilesSnapshot, notification)
       if (matching.length === 0) {
-        // Why: notify the combined-diff tab so its section reloads. Its own
-        // dirty/section guards make a blanket reload safe, and there is no
-        // in-memory editor content to clobber, so self-write suppression is
-        // unnecessary here.
+        // Why: combined-diff tab has no in-memory content to clobber and guards its own reload, so notify it directly without self-write suppression.
         if (hasCombinedDiffConsumer) {
           scheduleDebouncedExternalReload(notification)
         }
@@ -644,15 +543,11 @@ export function createExternalWatchEventHandler(
       }
       const dirtyMatches = matching.filter((f) => f.isDirty)
       if (dirtyMatches.length > 0) {
-        // Why: an external write landing on a dirty tab must not vanish
-        // silently (issue #7265) — the user was left with a stale tab and a
-        // save that clobbered the newer disk content. Mark the tab so the
-        // editor shows a changed-on-disk banner with an explicit reload path.
+        // Why: an external write on a dirty tab must not vanish silently (issue #7265) — mark it so the editor shows a changed-on-disk banner with a reload path.
         scheduleChangedOnDiskMark(
           target,
           notification,
-          // Why: canAutoSaveOpenFile is exactly the set of tabs that can hold
-          // unsaved edits (edit + unstaged diff) — the tabs the banner serves.
+          // Why: canAutoSaveOpenFile is exactly the tabs that can hold unsaved edits (edit + unstaged diff) — the tabs the banner serves.
           dirtyMatches.filter((dirtyFile) => canAutoSaveOpenFile(dirtyFile)).map((f) => f.id)
         )
         if (dirtyMatches.length === matching.length) {
@@ -661,8 +556,7 @@ export function createExternalWatchEventHandler(
           }
           continue
         }
-        // Clean sibling tabs (e.g. an unstaged diff of the same path) still
-        // reload below; every notification consumer skips dirty files.
+        // Clean sibling tabs (e.g. an unstaged diff of the same path) still reload below; consumers skip dirty files.
       }
       const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
       const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
@@ -675,8 +569,7 @@ export function createExternalWatchEventHandler(
   }
 
   const dispose = (): void => {
-    // Why: clear in-flight debounced tombstone timers so they don't fire
-    // after disposal and touch a no-longer-relevant store.
+    // Why: clear in-flight tombstone timers so they don't fire after disposal and touch a stale store.
     for (const pending of pendingDeletes.values()) {
       clearTimeout(pending.timer)
     }
@@ -688,10 +581,7 @@ export function createExternalWatchEventHandler(
 
 const inFlightEchoVerificationReads = new Map<string, ReturnType<typeof readRuntimeFileContent>>()
 
-// Why: one save echo can arrive as a burst of watcher payloads (SSH poll +
-// event streams), and each verification is a full-file read — on remote
-// transports a network round-trip. Concurrent payloads for the same file
-// share the in-flight read instead of stacking duplicates.
+// Why: one save echo can arrive as a burst of payloads; share the in-flight full-file read so concurrent payloads for the same file don't stack duplicate reads.
 function readFileForEchoVerification(args: {
   runtimeEnvironmentId: string | null | undefined
   filePath: string
@@ -726,8 +616,7 @@ function markTabsChangedOnDisk(fileIds: string[], connectionId: string | undefin
   const state = useAppStore.getState()
   for (const fileId of fileIds) {
     const file = state.openFiles.find((f) => f.id === fileId)
-    // Why: echo verification resolves async — a save or reload may already
-    // have resolved the conflict; the helper only marks still-dirty tabs.
+    // Why: echo verification resolves async — the tab may have been closed since, so only mark files still open.
     if (file) {
       markFileChangedOnDisk(state, file, { connectionId, origin: 'live' })
     }
@@ -744,9 +633,7 @@ function scheduleChangedOnDiskMark(
   }
   const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
   const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
-  // Why: the fs event may be the echo of Orca's own save racing keystrokes
-  // typed during the write. Marking on the echo would show a false "changed
-  // on disk" banner, so verify disk really differs from our last write.
+  // Why: the fs event may be the echo of Orca's own save — verify disk really differs from our last write before showing a "changed on disk" banner.
   if (!recentSelfWrite || recentSelfWrite.content === null) {
     markTabsChangedOnDisk(fileIds, target.connectionId)
     return
@@ -764,8 +651,7 @@ function scheduleChangedOnDiskMark(
       }
     })
     .catch(() => {
-      // Why: unreadable disk state can't disprove an external change — keep
-      // the conflict visible rather than risk a silent overwrite.
+      // Why: unreadable disk state can't disprove an external change — keep the conflict visible rather than risk a silent overwrite.
       markTabsChangedOnDisk(fileIds, target.connectionId)
     })
 }
@@ -782,9 +668,7 @@ function scheduleSelfWriteAwareExternalReload(
   }
 
   const runtimeEnvironmentId = file.runtimeEnvironmentId ?? target.runtimeEnvironmentId
-  // Why: a recent self-write stamp only proves the path changed recently; an
-  // agent can write a newer version inside the same TTL. Compare disk content
-  // with the saved text so we suppress only the echo of Orca's own write.
+  // Why: a self-write stamp only proves recent change; compare disk content so we suppress only Orca's own echo, not a newer agent write in the same TTL.
   void readFileForEchoVerification({
     runtimeEnvironmentId,
     filePath: file.filePath,
@@ -811,8 +695,7 @@ function scheduleSelfWriteAwareExternalReload(
 
 function hasCleanExternalReloadTarget(notification: ExternalWatchNotification): boolean {
   const matching = getOpenFilesForExternalFileChange(useAppStore.getState().openFiles, notification)
-  // Why: one clean target is enough — every notification consumer skips dirty
-  // files per-file, so a dirty sibling tab no longer vetoes the reload.
+  // Why: one clean target is enough — consumers skip dirty files per-file, so a dirty sibling doesn't veto the reload.
   return matching.some((file) => !file.isDirty)
 }
 
@@ -834,11 +717,7 @@ export function getOverflowExternalReloadTargets(
       continue
     }
     if (file.externalMutation) {
-      // Why: overflow gives no per-path resurrection signal, so fall back to
-      // "assume it may exist again" and clear the tombstone before reloading.
-      // If the file is still gone, EditorPanel will preserve the current in-
-      // memory view by showing the read failure instead of leaving a permanent
-      // stale "deleted" badge with no path to recovery.
+      // Why: overflow gives no per-path resurrection signal, so clear the tombstone and let a still-missing file surface as a read failure.
       state.setExternalMutation(file.id, null)
     }
     notifications.push({
@@ -921,14 +800,7 @@ function collectDeletedOpenEditorIds(
  * Returns true if the batched payload contains at least one file-create event
  * whose basename matches a deleted open editor file.
  *
- * Why: a batched fs payload may include unrelated create+delete events. A
- * blanket `events.some(kind === 'create')` would mislabel those as renames.
- * Basename correlation catches the common `git mv` / `mv` case where the
- * filename survives the move. We intentionally do NOT correlate by parent
- * directory because editor save-as-temp patterns (`rm foo.md && touch
- * foo.md.new`) routinely put unrelated creates in the same dir as a delete,
- * which would produce false rename labels. When correlation fails the caller
- * falls back to 'deleted', which is the least misleading default.
+ * Why: correlate by basename only, not parent dir — save-as-temp patterns (`rm foo.md && touch foo.md.new`) put unrelated creates in the same dir and would mislabel deletes as renames.
  */
 function hasRenameCorrelatedCreate(
   payload: FsChangedPayload,

@@ -83,6 +83,28 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
     expect(onStatusChange).toHaveBeenNthCalledWith(2, installed)
   })
 
+  it('does not run the CLI installer when the Windows PATH read is unknown', async () => {
+    const initial = cliStatus({
+      platform: 'win32',
+      pathConfigured: null,
+      detail: 'Orca could not read the Windows user PATH registry value.'
+    })
+    const install = vi.fn()
+    vi.stubGlobal('window', {
+      api: { cli: { getInstallStatus: vi.fn().mockResolvedValue(initial), install } }
+    })
+
+    await expect(
+      ensureOrcaCliAvailableForAgentSkillTerminal({ registrationPromptDelayMs: 0 })
+    ).resolves.toBe(initial)
+
+    expect(install).not.toHaveBeenCalled()
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.stringMatching(/could not check/i),
+      expect.objectContaining({ description: initial.detail })
+    )
+  })
+
   it('lets the registration toast paint before opening the native installer', async () => {
     vi.useFakeTimers()
     const initial = cliStatus({ state: 'stale' })

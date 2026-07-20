@@ -800,10 +800,10 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(getPanelStyleBounds(element)).toEqual(savedBounds)
   })
 
-  it('layers below root notification cards', async () => {
+  it('layers above root notification cards but below the modal layer', async () => {
     const element = await renderPanel(true)
 
-    expect(getPanelClassName(element)).toContain('z-30')
+    expect(getPanelClassName(element)).toContain('z-[45]')
   })
 
   it('refreshes terminal native input focus when the floating panel opens', async () => {

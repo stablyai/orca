@@ -140,6 +140,41 @@ function installClipboardImageBase64(contentBase64: string): void {
   })
 }
 
+describe('web before-unload persistence', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('persists final UI and host-partitioned sessions synchronously', async () => {
+    const { api, storage } = await installApi('Linux')
+
+    api.app.persistBeforeUnloadSync({
+      sessions: [
+        { state: { activeWorktreeId: 'local-worktree' } as never },
+        {
+          state: { activeWorktreeId: 'remote-worktree' } as never,
+          hostId: 'runtime:web-env-1'
+        }
+      ],
+      ui: { activeView: 'settings' }
+    })
+
+    expect(JSON.parse(storage.getItem('orca.web.workspaceSession.v1') ?? '{}')).toMatchObject({
+      activeWorktreeId: 'local-worktree'
+    })
+    expect(
+      JSON.parse(storage.getItem('orca.web.workspaceSession.v1.runtime:web-env-1') ?? '{}')
+    ).toMatchObject({ activeWorktreeId: 'remote-worktree' })
+    expect(JSON.parse(storage.getItem('orca.web.ui.v1') ?? '{}')).toMatchObject({
+      activeView: 'settings'
+    })
+  })
+})
+
 function installClipboardImageBlob(blob: Blob): {
   getType: ReturnType<typeof vi.fn>
   read: ReturnType<typeof vi.fn>
@@ -1822,6 +1857,35 @@ describe('web UI preload API', () => {
     )
   })
 
+  it('rejects paired web skill discovery failures instead of returning an empty scan', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'skills.discover') {
+            return Promise.reject(new Error('runtime disconnected'))
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.skills.discover({ cwd: '/repo' })).rejects.toThrow(
+      'runtime disconnected'
+    )
+  })
+
   it('rejects paired web computer-use status failures instead of marking the helper unavailable', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -2219,6 +2283,9 @@ describe('web file preload API', () => {
     await expect(
       api.fs.downloadFile({ filePath: '/workspace/repo/file.txt', connectionId: 'ssh-1' })
     ).rejects.toThrow('Remote file download is unavailable in paired web clients.')
+    await expect(
+      api.fs.downloadFolder({ dirPath: '/workspace/repo/src', connectionId: 'ssh-1' })
+    ).rejects.toThrow('Remote folder download is unavailable in paired web clients.')
   })
 
   it('rejects SSH clone requests in paired web clients', async () => {

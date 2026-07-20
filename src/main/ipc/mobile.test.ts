@@ -68,7 +68,8 @@ describe('registerMobileHandlers', () => {
       available: true,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
-      deviceId: 'mobile-1'
+      deviceId: 'mobile-1',
+      connectionMode: 'automatic'
     })
     const rpcServer = { createMobilePairingOffer }
 
@@ -78,7 +79,9 @@ describe('registerMobileHandlers', () => {
       available: true,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
-      deviceId: 'mobile-1'
+      deviceId: 'mobile-1',
+      // The encoded mode passes through so the UI can flag a degraded mint.
+      connectionMode: 'automatic'
     })
 
     expect(createMobilePairingOffer).toHaveBeenCalledWith({
@@ -97,7 +100,8 @@ describe('registerMobileHandlers', () => {
       available: true,
       pairingUrl: 'orca://pair#local',
       endpoint: 'ws://192.168.1.24:6768',
-      deviceId: 'mobile-local'
+      deviceId: 'mobile-local',
+      connectionMode: 'local-only'
     })
 
     registerMobileHandlers({ createMobilePairingOffer } as never)

@@ -208,6 +208,11 @@ export async function getOwnerRepo(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<OwnerRepo | null> {
+  // Why: on a fork checkout PRs live on the upstream parent, not origin (#7331).
+  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
+  if (upstream) {
+    return upstream
+  }
   return getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
 }
 

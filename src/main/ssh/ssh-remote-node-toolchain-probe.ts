@@ -8,26 +8,28 @@ const NPM_VERSION_MARKER = '__ORCA_NPM_VERSION__'
 
 export function buildPosixNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
-  const npmPath = posixPath.join(nodeBinDir, 'npm')
   return [
     `printf '%s\\n' '${NODE_VERSION_MARKER}'`,
     `${shellEscape(nodePath)} --version`,
     `printf '%s\\n' '${NPM_VERSION_MARKER}'`,
-    `PATH=${shellEscape(nodeBinDir)}:$PATH ${shellEscape(npmPath)} --version`
+    // Why: deploy prepends nodeBinDir before running bare npm; requiring a
+    // colocated executable rejects valid split layouts (#9165).
+    `PATH=${shellEscape(nodeBinDir)}:$PATH npm --version`
   ].join(' && ')
 }
 
 export function buildWindowsNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
-  const npmPath = posixPath.join(nodeBinDir, 'npm.cmd')
+  const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
   return [
-    `if (!(Test-Path -LiteralPath ${powerShellLiteral(npmPath)} -PathType Leaf)) { exit 1 }`,
-    `$env:PATH = ${powerShellLiteral(nodeBinDir)} + ';' + $env:PATH`,
+    // Why: mirror deploy's PATH-prepend + bare npm resolution so split
+    // Node/npm layouts are not rejected solely for lacking npm.cmd (#9165).
+    `$env:PATH = ${powerShellLiteral(windowsNodeBinDir)} + ';' + $env:PATH`,
     `Write-Output ${powerShellLiteral(NODE_VERSION_MARKER)}`,
     `& ${powerShellLiteral(nodePath)} --version`,
     'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
     `Write-Output ${powerShellLiteral(NPM_VERSION_MARKER)}`,
-    `& ${powerShellLiteral(npmPath)} --version`,
+    '& npm --version',
     'exit $LASTEXITCODE'
   ].join('; ')
 }

@@ -2877,7 +2877,7 @@ export default function AutomationsPage(): React.JSX.Element {
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="runs" disabled={!selected}>
-                    {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}
+                    {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
                     <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
                   </TabsTrigger>
                 </TabsList>

@@ -4,10 +4,15 @@ import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate
 import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
+import { stampTrayDevBadge } from './tray-dev-badge'
 
 export type SystemTrayOptions = {
   /** App icon id from settings; the tray reuses the app icon image. */
   appIcon: unknown
+  /** True for dev/unpackaged instances; shows a DEV marker on the tray. */
+  isDevInstance: boolean
+  /** Worktree/branch label identifying the dev instance, when known. */
+  devInstanceLabel: string | null
   /** Restore + show + focus the main window (recreating it if needed). */
   onOpen: () => void
   /** Restore the main window and open its Settings surface. */
@@ -31,7 +36,20 @@ let baseTrayImage: NativeImage | null = null
 // freshly created tray reflects it immediately.
 let attentionActive = false
 
+// Why: dev instances share the production template glyph, so remember dev-ness
+// at module scope; tooltip rebuilds (attention on/off) must keep the marker.
+let devIndicator: { label: string | null } | null = null
+
 let nativeThemeUpdatedListener: (() => void) | null = null
+
+// Why: multiple dev instances can run side by side (one per worktree); the
+// tooltip carries the worktree/branch label so hovering tells them apart.
+function baseTooltip(): string {
+  if (!devIndicator) {
+    return 'Orca'
+  }
+  return devIndicator.label ? `Orca DEV (${devIndicator.label})` : 'Orca DEV'
+}
 
 // Why: on Windows the notification area expects a 16px icon; the app icon PNG
 // is larger, so downscale to avoid a cropped/blurry tray glyph.
@@ -66,7 +84,11 @@ function applyTrayImage(): void {
         }
         attentionImage.setTemplateImage(false)
         tray.setImage(attentionImage)
-        tray.setToolTip(translateMain('tray.activityWaiting', 'Orca - activity waiting'))
+        tray.setToolTip(
+          devIndicator
+            ? `${baseTooltip()} - ${translateMain('tray.activityWaitingSuffix', 'activity waiting')}`
+            : translateMain('tray.activityWaiting', 'Orca - activity waiting')
+        )
         return
       } catch (error) {
         // Why: this path runs inside unguarded callbacks (nativeTheme 'updated',
@@ -78,7 +100,7 @@ function applyTrayImage(): void {
 
     baseTrayImage.setTemplateImage(true)
     tray.setImage(baseTrayImage)
-    tray.setToolTip('Orca')
+    tray.setToolTip(baseTooltip())
     return
   }
 
@@ -115,6 +137,33 @@ function createMacMenuBarImage(): NativeImage | null {
   }
   image.setTemplateImage(true)
   return image
+}
+
+// Why: dev builds reuse the production template glyph, so without a marker a
+// dev status item is indistinguishable from the installed app's. Stamping the
+// badge into the template (instead of tray.setTitle) keeps the status item at
+// the exact production width, and the attention tint path inherits it since it
+// reads these same pixels.
+function stampMacDevBadge(base: NativeImage): NativeImage {
+  try {
+    const stamped = stampTrayDevBadge(base)
+    if (base.getScaleFactors().includes(2)) {
+      // Why: createFromBitmap starts from 1x pixels only, so the @2x
+      // representation must be rebuilt or the badge blurs on Retina.
+      const retinaStamped = stampTrayDevBadge(base, 2)
+      stamped.addRepresentation({
+        scaleFactor: 2,
+        dataURL: retinaStamped.toDataURL()
+      })
+    }
+    stamped.setTemplateImage(true)
+    return stamped
+  } catch (error) {
+    // Why: the badge is diagnostics-only chrome; a NativeImage failure must
+    // degrade to the plain icon, not abort tray creation.
+    console.warn('[system-tray] dev badge could not be stamped; showing plain icon', error)
+    return base
+  }
 }
 
 function watchMacAppearance(): void {
@@ -162,10 +211,15 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
     return tray
   }
 
+  devIndicator = opts.isDevInstance ? { label: opts.devInstanceLabel } : null
+
   if (process.platform === 'darwin') {
     baseTrayImage = createMacMenuBarImage()
     if (!baseTrayImage) {
       return null
+    }
+    if (devIndicator) {
+      baseTrayImage = stampMacDevBadge(baseTrayImage)
     }
   } else {
     baseTrayImage = createAppIconImage(opts.appIcon).resize({
@@ -179,6 +233,14 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   applyTrayImage()
 
   const menu = Menu.buildFromTemplate([
+    ...(devIndicator
+      ? ([
+          // Why: several dev instances (one per worktree) can show trays at
+          // once; the disabled header ties this one to its worktree/branch.
+          { label: baseTooltip(), enabled: false },
+          { type: 'separator' }
+        ] as Electron.MenuItemConstructorOptions[])
+      : []),
     {
       label: translateMain('tray.openOrca', 'Open Orca'),
       click: safeMenuAction(() => opts.onOpen())
@@ -202,7 +264,7 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   ])
   tray.setContextMenu(menu)
   if (process.platform === 'win32') {
-    tray.setToolTip('Orca')
+    tray.setToolTip(baseTooltip())
     // Why: a left-click on the tray icon is the conventional Windows gesture to
     // restore a minimized-to-tray app; macOS opens the attached menu instead.
     tray.on(

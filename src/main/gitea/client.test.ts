@@ -12,6 +12,7 @@ vi.mock('../git/runner', () => ({
 import {
   getGiteaAuthStatus,
   getGiteaPullRequestForBranch,
+  getGiteaPullRequestForBranchOrThrow,
   normalizeGiteaApiBaseUrl
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
@@ -170,6 +171,19 @@ describe('Gitea client', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('surfaces a lookup failure via getGiteaPullRequestForBranchOrThrow instead of null (finding 4)', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ message: 'unauthorized' }, { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // The swallowing variant returns null — indistinguishable from "no PR".
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No pull request found".
+    await expect(getGiteaPullRequestForBranchOrThrow('/repo', 'feature/gitea')).rejects.toThrow(
+      /Gitea request failed/
+    )
   })
 
   it('expires successful scans and bounds retained repository listings', async () => {

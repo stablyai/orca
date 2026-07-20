@@ -41,6 +41,7 @@ import {
   addMRComment,
   getMergeRequest,
   getMergeRequestForBranch,
+  getMergeRequestForBranchOrThrow,
   getJobTrace,
   addMRInlineComment,
   closeMR,
@@ -72,6 +73,19 @@ describe('gitlab client — MR operations', () => {
       source: { host: 'gitlab.com', path: 'g/p' },
       fellBack: false
     })
+  })
+
+  it('getMergeRequestForBranchOrThrow surfaces a glab failure instead of null (finding 4)', async () => {
+    getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+    glabExecFileAsyncMock.mockRejectedValue(new Error('glab: connection refused'))
+
+    // The swallowing variant collapses a real failure into a false "no MR".
+    await expect(getMergeRequestForBranch('/repo', 'feature/x')).resolves.toBeNull()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No merge request found".
+    await expect(getMergeRequestForBranchOrThrow('/repo', 'feature/x')).rejects.toThrow(
+      /connection refused/
+    )
   })
 
   it('routes local WSL MR review-management and job actions through project resolution and glab options', async () => {

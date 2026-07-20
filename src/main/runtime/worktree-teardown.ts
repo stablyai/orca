@@ -26,6 +26,18 @@ export type WorktreeTeardownResult = {
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
+// Why: margin so a bounded daemon RPC rejects BEFORE the sweep deadline and its
+// rejection can propagate — otherwise the outer deadline wins with a confusing
+// "Timed out waiting for physical PTY teardown" instead of the accurate stop failure.
+export const WORKTREE_TEARDOWN_RPC_MARGIN_MS = 500
+
+// Absolute deadline (epoch ms) threaded into provider RPCs on the destructive
+// path; each RPC leaf converts it to the remaining time when it actually issues,
+// so sequential RPCs share one budget without any relative-timeout bookkeeping.
+export function teardownRpcDeadline(sweepDeadline: number): number {
+  return sweepDeadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS
+}
+
 /**
  * Kills every PTY we can prove belongs to `worktreeId`, across all three
  * registration surfaces (renderer graph, installed PTY provider session list,
@@ -197,9 +209,10 @@ async function sweepProviderByPrefix(
   failClosed = false
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
+  const rpcDeadline = teardownRpcDeadline(deadline)
   const sessions = failClosed
-    ? await provider.listProcesses()
-    : await provider.listProcesses().catch(() => [])
+    ? await provider.listProcesses({ deadlineMs: rpcDeadline })
+    : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
   const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
@@ -225,7 +238,7 @@ async function sweepProviderByPrefix(
           return false
         }
         try {
-          await provider.shutdown(session.id, { immediate: true })
+          await provider.shutdown(session.id, { immediate: true, deadlineMs: rpcDeadline })
           return Date.now() < deadline
         } catch {
           return false
@@ -251,6 +264,7 @@ async function sweepRegistryForWorktree(
   ) => Promise<{ stopped: boolean; owner: boolean }>,
   onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
+  const rpcDeadline = teardownRpcDeadline(deadline)
   const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
   const stopped = await mapWithConcurrency(
     entries,
@@ -264,7 +278,7 @@ async function sweepRegistryForWorktree(
           return false
         }
         try {
-          await localProvider.shutdown(entry.ptyId, { immediate: true })
+          await localProvider.shutdown(entry.ptyId, { immediate: true, deadlineMs: rpcDeadline })
           return Date.now() < deadline
         } catch {
           return false

@@ -979,18 +979,12 @@ describe('runHook', () => {
   it('runs Windows-path hooks through WSL when the project runtime targets WSL', async () => {
     execMock.mockReset()
     execFileMock.mockReset()
+    // Why: assert on the captured options after runHook resolves — an expect()
+    // thrown inside the mock is swallowed by runHook's own error handling.
+    let capturedOptions: unknown
     execFileMock.mockImplementation((_file, _args, options, callback) => {
+      capturedOptions = options
       callback?.(null, '', '')
-      expect(options).toEqual(
-        expect.objectContaining({
-          env: expect.objectContaining({
-            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            ORCA_WORKTREE_PATH: '/mnt/c/Users/jinwo/git/orca-feature',
-            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
-          })
-        })
-      )
       return {} as never
     })
 
@@ -1003,6 +997,9 @@ describe('runHook', () => {
       configurable: true,
       value: 'win32'
     })
+    // Why: keep the WSLENV assertion hermetic on hosts that export WSLENV.
+    const originalWslenv = process.env.WSLENV
+    delete process.env.WSLENV
 
     try {
       const { runHook } = await import('./hooks')
@@ -1031,12 +1028,36 @@ describe('runHook', () => {
         expect.any(Object),
         expect.any(Function)
       )
+      expect(capturedOptions).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            ORCA_WORKTREE_PATH: '/mnt/c/Users/jinwo/git/orca-feature',
+            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            // Why: wsl.exe only imports Windows env vars named in WSLENV, so
+            // setting the vars on the execFile env alone is not enough (#9206).
+            // /u because runHook pre-translated the values to Linux paths.
+            // stringContaining, not exact: promptGuardShellEnv (#7652) appends
+            // its own guard keys (GIT_TERMINAL_PROMPT, …) after these — the
+            // setup vars must remain registered alongside them.
+            WSLENV: expect.stringContaining(
+              'ORCA_ROOT_PATH/u:ORCA_WORKTREE_PATH/u:CONDUCTOR_ROOT_PATH/u:GHOSTX_ROOT_PATH/u:ORCA_WORKSPACE_NAME/u'
+            )
+          })
+        })
+      )
       expect(execMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
       })
+      if (originalWslenv === undefined) {
+        delete process.env.WSLENV
+      } else {
+        process.env.WSLENV = originalWslenv
+      }
     }
   })
 

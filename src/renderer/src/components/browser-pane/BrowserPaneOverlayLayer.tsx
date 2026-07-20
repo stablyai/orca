@@ -8,12 +8,7 @@ import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import { useBrowserAutomationVisibilityForAny } from './browser-automation-visibility'
 import { useBrowserMobileDriverForAny } from '@/lib/pane-manager/browser-mobile-driver-state'
 
-// Why: Electron `<webview>` destroys its guest contents whenever its DOM
-// parent changes. Rendering paintable BrowserPanes at the worktree level
-// (keyed only by browserTab.id) means moving an active tab between groups
-// never reparents the webview — it only updates the overlay's CSS
-// `position-anchor` so the pane tracks the new owning group's body via
-// native CSS anchor positioning.
+// Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.
 
 type BrowserOverlayAssignment = {
   groupId: string
@@ -26,27 +21,15 @@ const EMPTY_GROUPS: readonly TabGroup[] = []
 
 type BrowserOverlaySlotProps = {
   browserTab: BrowserTabState
-  // Why: `undefined` means this browser tab has no owning group (an "orphan" —
-  // present in `browserTabs` but not referenced by any group's unified-tab
-  // list). See the fallback branch below for why these slots remain hidden.
+  // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined
   isActive: boolean
-  // Why: the legacy architecture rendered BrowserPane inside TabGroupPanel, so
-  // React events from the pane bubbled through TabGroupPanel's
-  // `onPointerDown={focusGroup}` / `onFocusCapture={focusGroup}`. Now that
-  // BrowserPane lives in a worktree-level overlay that is a SIBLING of
-  // TabGroupSplitLayout, those events no longer reach TabGroupPanel — so in
-  // split view, clicking the browser chrome would leave
-  // `activeGroupIdByWorktree` stale. The overlay slot re-implements that
-  // focus sync directly, targeting the owning group.
+  // Why: overlay is a sibling of the group layout, so pane focus doesn't bubble to TabGroupPanel; re-sync it here or split-view clicks leave activeGroupIdByWorktree stale.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   isWorktreeActive: boolean
 }
 
-// Why: each overlay slot is memoized so its BrowserPane subtree only re-renders
-// when its own assignment, active state, or worktree visibility changes.
-// Without this, unrelated worktree mutations (terminal keystrokes, editor
-// updates, etc.) would cascade into every BrowserPane.
+// Why: memoize each slot so unrelated worktree mutations don't cascade a re-render into every BrowserPane subtree.
 const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   groupId,
@@ -54,8 +37,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   onFocusOwningGroup,
   isWorktreeActive
 }: BrowserOverlaySlotProps): React.JSX.Element {
-  // Why: persistent page viewports (webview guests) live under this root so they
-  // survive BrowserPane chrome unmounts on worktree switch without reparenting.
+  // Why: persistent page viewports (webview guests) live under this root so they survive BrowserPane chrome unmounts without reparenting.
   const setSlotViewportRef = useCallback(
     (node: HTMLDivElement | null): void => {
       registerBrowserOverlaySlotViewport(browserTab.id, node)
@@ -70,19 +52,10 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   const automationVisible = useBrowserAutomationVisibilityForAny(browserPageIds)
   const mobileDriven = useBrowserMobileDriverForAny(browserPageIds)
   const isPaintable = isActive || automationVisible || mobileDriven
-  // Why: hidden worktrees keep lightweight overlay slots mounted, but their
-  // Electron webviews must park unless a remote controller needs the guest.
+  // Why: hidden worktrees keep lightweight overlay slots, but park their webviews unless a remote controller needs the guest.
   const shouldMountPane = isWorktreeActive || automationVisible || mobileDriven
-  // Why: each overlay pins itself to the owning TabGroupPanel's body via CSS
-  // anchor positioning. `anchor()` resolves top/left relative to the viewport,
-  // and the overlay's own `position: absolute` inside a positioned ancestor
-  // (the worktree surface div) converts those to the surface's coordinate
-  // space. `anchor-size()` fills the slot exactly. When the tab moves between
-  // groups, only `positionAnchor` changes and the browser relayouts on its
-  // own — no measurement or state updates.
-  //
-  // The orphan branch (no anchorName) stays display:none until the tab is
-  // reassigned (e.g. mid-move) or explicitly destroyed via `closeBrowserTab`.
+  // Why: CSS anchor positioning pins the overlay to its owning group's body — a tab move only swaps positionAnchor, no measurement/state.
+  // Orphan branch (no anchorName) stays display:none until the tab is reassigned or destroyed.
   const style: React.CSSProperties = useMemo(
     () =>
       anchorName
@@ -123,19 +96,13 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       onFocusCapture={handleFocus}
     >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
-      {/* Why: moving an Electron webview between DOM parents destroys the guest
-          document in some Electron builds. Visible worktree browsers stay in
-          stable overlay slots; hidden worktrees park the heavy pane subtree. */}
+      {/* Why: hidden worktrees park the heavy pane subtree; visible ones keep stable slots so reparenting can't destroy the webview guest. */}
       {shouldMountPane ? <BrowserPane browserTab={browserTab} isActive={isActive} /> : null}
     </div>
   )
 })
 
-// Why: memoize so parent re-renders (e.g. `WorktreeSplitSurface` re-rendering
-// because `focusedGroupId` changed — a prop this component doesn't consume)
-// don't rerun the overlay's zustand selector or the assignments mapping.
-// The child `BrowserOverlaySlot` is already memoized, but skipping this layer
-// entirely when its own props are unchanged keeps the fast path fastest.
+// Why: memoize so parent re-renders on props this layer doesn't consume (e.g. focusedGroupId) don't rerun its selector or assignments mapping.
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive
@@ -152,20 +119,13 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
 
-  // Why: stable callback identity so BrowserOverlaySlot's memo isn't broken by
-  // a fresh function reference every render. The group id is passed in at call
-  // time so the same callback serves every slot regardless of which group owns
-  // that tab.
+  // Why: stable identity so BrowserOverlaySlot's memo holds; groupId is passed at call time so one callback serves every slot.
   const focusOwningGroup = useCallback(
     (groupId: string) => focusGroup(worktreeId, groupId),
     [focusGroup, worktreeId]
   )
 
-  // Why: derive the lookup OUTSIDE the zustand selector so shallow equality
-  // holds across unrelated store mutations. If we built the object inside the
-  // selector, every store change would create a new reference and useShallow
-  // would never find equality — the overlay would re-render on every
-  // keystroke in an unrelated terminal.
+  // Why: build this lookup outside the zustand selector — a fresh object inside it would break useShallow equality and re-render on every unrelated mutation.
   const groupActiveTabById = useMemo(() => {
     const lookup: Record<string, string | null | undefined> = {}
     for (const group of groups) {
@@ -174,14 +134,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     return lookup
   }, [groups])
 
-  // Map each browser tab to the group that owns it (if any) and whether it's
-  // the currently active tab in that group. Tabs that exist in `browserTabs`
-  // but are not referenced by any group's unified-tab list are "orphans". In
-  // normal flows this is a transient mid-move state, not a steady state:
-  // closing a tab calls `closeBrowserTab` which removes it from `browserTabs`
-  // (and `destroyPersistentWebview` tears down the guest), and "Close Group"
-  // closes each browser tab before collapsing the group shell — no
-  // follow-to-sibling migration happens.
+  // Map each browser tab to its owning group; tabs not in any group's unified-tab list are transient mid-move "orphans", not a steady state.
   const assignments = useMemo(() => {
     const entries = new Map<string, BrowserOverlayAssignment>()
     for (const tab of unifiedTabs) {

@@ -105,6 +105,23 @@ class FakeMultiplexServer {
     this.send(TerminalStreamOpcode.Output, encodeTerminalStreamText(text), this.cursorUnits)
   }
 
+  outputSpan(data: string, rawLength: number): void {
+    this.cursorUnits += rawLength
+    this.send(
+      TerminalStreamOpcode.OutputSpan,
+      encodeTerminalStreamJson({ data, rawLength, transformed: true }),
+      this.cursorUnits
+    )
+  }
+
+  malformedOutputSpan(): void {
+    this.send(
+      TerminalStreamOpcode.OutputSpan,
+      encodeTerminalStreamJson({ data: 'framing must not render' }),
+      this.cursorUnits
+    )
+  }
+
   flushHeldManualSnapshot(): void {
     if (this.heldManualRequestId === null) {
       throw new Error('No manual snapshot is held')
@@ -144,24 +161,29 @@ describe('remote terminal frame-drop resync', () => {
 
   async function subscribeClient(): Promise<{
     data: string[]
+    metas: { seq?: number; rawLength?: number; transformed?: boolean }[]
     snapshots: string[]
     stream: RemoteRuntimeMultiplexedTerminal
   }> {
     const data: string[] = []
+    const metas: { seq?: number; rawLength?: number; transformed?: boolean }[] = []
     const snapshots: string[] = []
     const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
     const stream = await multiplexer.subscribeTerminal({
       terminal: 'terminal-1',
       client: { id: 'desktop-1', type: 'desktop' },
       callbacks: {
-        onData: (chunk) => data.push(chunk),
+        onData: (chunk, meta) => {
+          data.push(chunk)
+          metas.push(meta ?? {})
+        },
         onSnapshot: (chunk) => snapshots.push(chunk)
       }
     })
     // Let the initial snapshot round-trip settle.
     await Promise.resolve()
     await Promise.resolve()
-    return { data, snapshots, stream }
+    return { data, metas, snapshots, stream }
   }
 
   it('detects a dropped Output frame via the seq gap and resyncs', async () => {
@@ -195,6 +217,27 @@ describe('remote terminal frame-drop resync', () => {
 
     expect(data).toEqual(['one', 'two', 'three'])
     expect(snapshots).toEqual(['INITIAL'])
+  })
+
+  it('delivers an empty transformed span with its raw sequence metadata', async () => {
+    const { data, metas, snapshots } = await subscribeClient()
+
+    server.outputSpan('', 9)
+
+    expect(data).toEqual([''])
+    expect(metas).toEqual([{ seq: 9, rawLength: 9, transformed: true }])
+    expect(snapshots).toEqual(['INITIAL'])
+  })
+
+  it('requests an authoritative resync instead of rendering malformed span JSON', async () => {
+    const { data, snapshots } = await subscribeClient()
+
+    server.malformedOutputSpan()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(data).toEqual([])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
   })
 
   it('uses UTF-16 sequence units when detecting gaps in multibyte output', async () => {

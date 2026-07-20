@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
-import type { TuiAgent } from '../../../../shared/types'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import { useNativeChatLiveSession } from './use-native-chat-live-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
@@ -52,24 +51,9 @@ import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import type { NativeChatViewProps } from './native-chat-view-types'
 
-export type NativeChatViewProps = {
-  /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
-  terminalTabId: string
-  /** Specific split leaf this chat surface replaces. */
-  paneKey?: string
-  /** PTY bound to `paneKey`, used for composer and interactive-card sends. */
-  targetPtyId?: string | null
-  /** Launch-time agent hint from the TerminalTab, when Orca started one. */
-  launchAgent?: TuiAgent | null
-  /** Trusted title/foreground fallback for manually-started agents. */
-  resolvedAgent?: TuiAgent | null
-  /** Return this pane to the hosted terminal surface. */
-  onSwitchToTerminal?: () => void
-  /** Current xterm screen reader used to recover agent-reported session state. */
-  readTerminalScreen?: () => string | null
-  contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
-}
+export type { NativeChatViewProps } from './native-chat-view-types'
 
 /** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView({
@@ -447,6 +431,7 @@ function NativeChatResolvedView({
         <NativeChatComposer
           ref={composerRef}
           terminalTabId={terminalTabId}
+          paneKey={paneKey}
           targetPtyId={targetPtyId}
           agent={agent}
           canSend={canSend}

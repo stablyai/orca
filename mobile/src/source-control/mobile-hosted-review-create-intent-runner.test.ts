@@ -35,6 +35,8 @@ function eligibility(overrides: Record<string, unknown>) {
     defaultBaseRef: 'main',
     title: 'Ship mobile PR create',
     body: 'Generated body',
+    // Accepted no-review lookup so Create / Push & Create is allowed unless overridden.
+    reviewLookupOutcome: 'not_found',
     ...overrides
   }
 }

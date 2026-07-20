@@ -12,9 +12,10 @@ type MobilePageContentProps = {
   closeMobilePage: () => void
   copyInstallUrl: () => void
   copyPairingCode: () => void
-  devices: PairedDevice[]
+  devices: readonly PairedDevice[]
   enterFlow: () => void
   generatePairing: (rotate: boolean) => void
+  canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
   handleBack: () => void
   handleContinue: () => void
@@ -30,10 +31,11 @@ type MobilePageContentProps = {
   handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
+  relayDegraded: boolean
   platform: Platform
   refreshingNetworkInterfaces: boolean
   revokeDevice: (id: string) => void
-  revokingDeviceIds: string[]
+  revokingDeviceIds: readonly string[]
   selectedAddress: string | undefined
   setPlatform: (platform: Platform) => void
   showMobileButton: boolean
@@ -50,6 +52,7 @@ export function MobilePageContent({
   devices,
   enterFlow,
   generatePairing,
+  canGeneratePairing,
   handleAddressChange,
   handleBack,
   handleContinue,
@@ -65,6 +68,7 @@ export function MobilePageContent({
   handleConnectionModeChange,
   pairQrDataUrl,
   pairingUrl,
+  relayDegraded,
   platform,
   refreshingNetworkInterfaces,
   revokeDevice,
@@ -108,10 +112,12 @@ export function MobilePageContent({
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
               pairingUrl={pairingUrl}
+              relayDegraded={relayDegraded}
               pairLoading={pairLoading}
               connectionMode={connectionMode}
               onConnectionModeChange={handleConnectionModeChange}
               onRegeneratePairing={() => generatePairing(true)}
+              canGeneratePairing={canGeneratePairing}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}
               selectedAddress={selectedAddress}

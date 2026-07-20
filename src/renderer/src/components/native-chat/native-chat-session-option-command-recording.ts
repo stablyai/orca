@@ -10,6 +10,7 @@ import {
   isSessionOptionAgentPickerCommand,
   parseBuiltSessionOptionCommand
 } from './native-chat-session-option-command-matching'
+import { clearTrackedOption, isFlipOnlyMidSession } from './native-chat-session-option-flip'
 
 function clearModel(record: NativeChatSessionOptionRecord): void {
   const modelId = typeof record.model?.value === 'string' ? record.model.value : null
@@ -30,11 +31,9 @@ function recordCommandApply(args: {
   if (!midSession || midSession.kind === 'unsupported') {
     return false
   }
-  if (midSession.kind === 'toggle-command' && command === midSession.command) {
+  if (isFlipOnlyMidSession(midSession) && command === midSession.command) {
     const modelId = typeof record.model?.value === 'string' ? record.model.value : null
-    if (modelId) {
-      delete record.valuesByModel[modelId]?.[optionId]
-    }
+    clearTrackedOption(record, modelId, optionId)
     return true
   }
   if (isSessionOptionAgentPickerCommand(midSession, command)) {

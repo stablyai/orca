@@ -174,9 +174,8 @@ async function tryResolveViaLoginShell(
   return null
 }
 
-// Returns true if `nodePath` runs, reports Node >= 18, and has a runnable npm
-// beside it. Deployment prepends this same directory before invoking npm, so
-// accepting a looser pairing would recreate #8450.
+// Validates the same PATH-prepend + bare npm contract used during deployment.
+// This rejects missing npm (#8450) without requiring colocation (#9165).
 // Caches nothing — this runs at most a few times per resolution (one per
 // candidate), and the exec round-trip dominates.
 async function nodeToolchainMeetsRequirements(

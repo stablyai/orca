@@ -8,6 +8,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'gemini',
   'antigravity',
   'opencode',
+  'pi',
   'mimo-code',
   'droid',
   'grok',
@@ -25,7 +26,8 @@ export type AgentProviderSessionMetadata = {
    *  (Claude/Codex `transcript_path`), when available. Native chat reads this
    *  directly because recent Claude Code versions name the transcript file with a
    *  UUID that differs from the hook `session_id`, so reconstructing the path from
-   *  `id` alone fails. `id` is still used for CLI resume (`--resume <id>`). */
+   *  `id` alone fails. Claude/Codex still resume by id; Pi uses its reported
+   *  `session_file` as the authoritative `--session` resume locator. */
   transcriptPath?: string
 }
 
@@ -100,23 +102,29 @@ function readSessionId(record: Record<string, unknown>, keys: readonly string[])
 /** The agent hook's authoritative transcript/rollout path, when present. Used by
  *  native chat to read the exact file rather than reconstructing it from the
  *  session id (which recent Claude Code no longer matches to the file name). */
-function readTranscriptPath(record: Record<string, unknown>): string | undefined {
-  const raw = record.transcript_path ?? record.transcriptPath
-  if (typeof raw !== 'string') {
-    return undefined
+function readTranscriptPathFromKeys(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): string | undefined {
+  for (const key of keys) {
+    const raw = record[key]
+    if (typeof raw !== 'string') {
+      continue
+    }
+    const trimmed = raw.trim()
+    if (trimmed && !hasUnsafeProviderSessionIdChars(trimmed)) {
+      return trimmed
+    }
   }
-  const trimmed = raw.trim()
-  if (!trimmed || hasUnsafeProviderSessionIdChars(trimmed)) {
-    return undefined
-  }
-  return trimmed
+  return undefined
 }
 
 function withTranscriptPath(
   metadata: AgentProviderSessionMetadata,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  keys: readonly string[] = ['transcript_path', 'transcriptPath']
 ): AgentProviderSessionMetadata {
-  const transcriptPath = readTranscriptPath(payload)
+  const transcriptPath = readTranscriptPathFromKeys(payload, keys)
   return transcriptPath ? { ...metadata, transcriptPath } : metadata
 }
 
@@ -137,11 +145,27 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   if (!id) {
     return null
   }
-  const transcriptPath =
-    typeof record.transcriptPath === 'string' && record.transcriptPath.trim().length > 0
-      ? record.transcriptPath
-      : undefined
+  // Why: persisted/relay metadata crosses a trust boundary too; apply the same
+  // control-character rejection used for hook-reported transcript paths.
+  const transcriptPath = readTranscriptPathFromKeys(record, ['transcriptPath'])
   return transcriptPath ? { key, id, transcriptPath } : { key, id }
+}
+
+/** Compare the provider-owned values that identify the CLI resume target.
+ *  Pi's file path is identity; other agents resume by their provider id. */
+export function agentProviderSessionsEqual(
+  agent: string | undefined,
+  left: AgentProviderSessionMetadata | undefined,
+  right: AgentProviderSessionMetadata | undefined
+): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right
+  }
+  return (
+    left.key === right.key &&
+    left.id === right.id &&
+    (agent !== 'pi' || left.transcriptPath === right.transcriptPath)
+  )
 }
 
 export function extractAgentProviderSession(
@@ -173,6 +197,13 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'pi': {
+      const id = readSessionId(payload, ['session_id'])
+      const providerSession = id
+        ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
+        : null
+      return providerSession?.transcriptPath ? providerSession : null
+    }
     case 'grok': {
       const id = readSessionId(payload, ['sessionId', 'session_id'])
       return id ? { key: 'session_id', id } : null
@@ -183,7 +214,6 @@ export function extractAgentProviderSession(
     }
     case 'amp':
     case 'cursor':
-    case 'pi':
     case 'omp':
     case 'command-code':
     case 'copilot':
@@ -208,6 +238,10 @@ export function getAgentResumeArgv(
       return providerSession.key === 'conversation_id' ? ['agy', '--conversation', id] : null
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
+    case 'pi':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['pi', '--session', providerSession.transcriptPath]
+        : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
     case 'droid':

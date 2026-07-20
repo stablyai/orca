@@ -1,7 +1,6 @@
-/* eslint-disable max-lines -- Why: this component intentionally keeps the full
-composer card markup together so the inline and modal variants share one UI
-surface without splitting the controlled form into hard-to-follow fragments. */
+/* eslint-disable max-lines -- Why: keep the full composer card markup together so the inline and modal variants share one UI surface. */
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -154,6 +153,8 @@ type NewWorkspaceComposerCardProps = {
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
   sparseControlsEnabled?: boolean
+  /** When set, "Add project" opens a host-provided flow instead of swapping the store's active modal. */
+  onAddProjectOverride?: () => void
 }
 
 const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
@@ -228,6 +229,86 @@ type WorkspaceRunTargetComboboxProps = {
   recipes: EphemeralVmRecipeOption[]
   recipeValue: string | null
   onRecipeChange?: (recipeId: string | null) => void
+}
+
+type HostPathTooltipPosition = {
+  left: number
+  top: number
+  maxWidth: number
+}
+
+const HOST_PATH_TOOLTIP_DELAY_MS = 400
+const HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX = 8
+const HOST_PATH_TOOLTIP_TRIGGER_GAP_PX = 4
+
+function HostPathTooltip({ path }: { path: string }): React.JSX.Element {
+  const tooltipId = React.useId()
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pointerInsideRef = React.useRef(false)
+  const [position, setPosition] = React.useState<HostPathTooltipPosition | null>(null)
+
+  const hideTooltip = React.useCallback((): void => {
+    pointerInsideRef.current = false
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    setPosition(null)
+  }, [])
+
+  React.useEffect(() => hideTooltip, [hideTooltip])
+
+  const handlePointerEnter = React.useCallback((event: React.PointerEvent<HTMLElement>): void => {
+    pointerInsideRef.current = true
+    const trigger = event.currentTarget
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+    }
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      if (!pointerInsideRef.current || !trigger.isConnected) {
+        return
+      }
+      const rect = trigger.getBoundingClientRect()
+      // Why: anchor under the hovered path, capping width to the viewport edge so a long path wraps instead of flying off-screen.
+      const left = Math.max(HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX, rect.left)
+      setPosition({
+        left,
+        top: rect.bottom + HOST_PATH_TOOLTIP_TRIGGER_GAP_PX,
+        maxWidth: window.innerWidth - left - HOST_PATH_TOOLTIP_VIEWPORT_GAP_PX
+      })
+    }, HOST_PATH_TOOLTIP_DELAY_MS)
+  }, [])
+
+  return (
+    <>
+      {/* Trigger is the truncated path line itself, so the tooltip only appears when hovering it. */}
+      <div
+        className="mt-0.5 truncate text-[11px] text-muted-foreground"
+        aria-describedby={position ? tooltipId : undefined}
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={hideTooltip}
+        onPointerDown={hideTooltip}
+      >
+        {path}
+      </div>
+      {/* Why: a fixed, pointer-transparent portal cannot reflow cmdk or become the hover target. */}
+      {position
+        ? createPortal(
+            <div
+              id={tooltipId}
+              role="tooltip"
+              data-slot="host-path-tooltip"
+              className="pointer-events-none fixed z-[100] w-max break-all rounded-sm border border-border bg-popover px-1.5 py-1 font-mono text-[11px] leading-tight text-popover-foreground shadow-xs"
+              style={{ left: position.left, top: position.top, maxWidth: position.maxWidth }}
+            >
+              {path}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  )
 }
 
 function WorkspaceRunTargetCombobox({
@@ -338,17 +419,14 @@ function WorkspaceRunTargetCombobox({
                 <Server className="size-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm">{option.label}</div>
-                  <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {option.path}
-                  </div>
+                  <HostPathTooltip path={option.path} />
                 </div>
               </CommandItem>
             ))}
             {recipes.length > 0 ? (
               <Popover open={vmRecipesOpen} onOpenChange={setVmRecipesOpen}>
                 <PopoverTrigger asChild>
-                  {/* Why: a real CommandItem (not a raw button) so cmdk registers it — fixes the row
-                      only rendering under the first host, the uneven height, and the double-highlight. */}
+                  {/* Why: a real CommandItem (not a raw button) so cmdk registers it — fixes missing rows, uneven height, and double-highlight. */}
                   <CommandItem
                     value="per-workspace-env"
                     onSelect={() => setVmRecipesOpen(true)}
@@ -363,8 +441,7 @@ function WorkspaceRunTargetCombobox({
                     <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm">{ephemeralVmLabel}</div>
-                      {/* Why: a second line so this row matches the two-line height of the host
-                          options above, and to hint what choosing it opens. */}
+                      {/* Why: a second line so this row matches the two-line host options above and hints what it opens. */}
                       <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                         {translate(
                           'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
@@ -480,9 +557,7 @@ function useComposerFileDragOver(): {
   }, [])
 
   const onDragEnter = React.useCallback((event: React.DragEvent<HTMLDivElement>): void => {
-    // Why: "Files" is the DataTransfer type the OS adds for native file drags;
-    // internal in-app drags must not trigger the
-    // attachment-drop highlight so they still route to their own handlers.
+    // Why: "Files" is the DataTransfer type the OS adds for native drags; skip internal drags so they route to their own handlers.
     if (!event.dataTransfer.types.includes('Files')) {
       return
     }
@@ -498,10 +573,7 @@ function useComposerFileDragOver(): {
       if (!event.dataTransfer.types.includes('Files')) {
         return
       }
-      // Why: mirror the onDragEnter guard so internal in-app drags (which may
-      // carry both "Files" and the workspace path MIME type) don't decrement
-      // the counter when enter skipped incrementing it — otherwise the counter
-      // goes negative and the native-drag highlight state desyncs.
+      // Why: mirror the onDragEnter guard so internal drags don't decrement a counter enter skipped incrementing (else it goes negative).
       if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
@@ -513,10 +585,7 @@ function useComposerFileDragOver(): {
     [reset]
   )
 
-  // Why: the preload bridge calls stopPropagation on native `drop` events so
-  // React's onDrop never fires on the composer card. Listen at the document
-  // level (also capture-phase) to reset the drag highlight whenever any drop
-  // or dragend occurs anywhere in the window.
+  // Why: preload stops native drop events before React's onDrop, so reset the drag highlight via a document capture listener.
   React.useEffect(() => {
     const handler = (): void => {
       reset()
@@ -615,10 +684,10 @@ export default function NewWorkspaceComposerCard({
   sparsePresets,
   sparseSelectedPresetId,
   onSparseSelectPreset,
-  sparseControlsEnabled = true
+  sparseControlsEnabled = true,
+  onAddProjectOverride
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
-  // Why: this form uses the lightweight translate() helper directly; subscribe
-  // so an already-open create dialog repaints when the UI language changes.
+  // Why: subscribe (form uses translate() directly) so an open create dialog repaints when the UI language changes.
   useTranslation()
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
@@ -669,8 +738,7 @@ export default function NewWorkspaceComposerCard({
         ? 'Run commands now'
         : 'Run setup now'
   const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
-  // Why: defaultTabs launch commands can be long-running too, but they are not
-  // the setup command this setting gates agent startup on.
+  // Why: defaultTabs launch commands can run long too, but aren't the setup command this setting gates agent startup on.
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
 
@@ -704,9 +772,7 @@ export default function NewWorkspaceComposerCard({
   )
 
   const focusNameInput = React.useCallback(() => {
-    // Why: after the repo picker commits a choice, moving focus to the name
-    // field keeps the keyboard flow progressing through the form instead of
-    // trapping the user in the repo popover interaction.
+    // Why: move focus to the name field after the repo pick so keyboard flow continues instead of trapping in the repo popover.
     cancelNameInputFocusFrame()
     nameInputFocusFrameRef.current = requestAnimationFrame(() => {
       nameInputFocusFrameRef.current = null
@@ -728,8 +794,13 @@ export default function NewWorkspaceComposerCard({
   }, [detectedAgentIds, disabledTuiAgents])
 
   const handleAddRepo = React.useCallback((): void => {
+    // Why: swapping activeModal would unmount the composer, so the override layers Add Project on top instead.
+    if (onAddProjectOverride) {
+      onAddProjectOverride()
+      return
+    }
     openModal('add-repo')
-  }, [openModal])
+  }, [onAddProjectOverride, openModal])
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
@@ -745,8 +816,7 @@ export default function NewWorkspaceComposerCard({
     event.preventDefault()
     event.stopPropagation()
     const textarea = event.currentTarget
-    // Why: large note pastes need one controlled owner so React receives a
-    // single final input event after chunked DOM insertion.
+    // Why: large note pastes need one controlled owner so React gets a single final input event after chunked DOM insertion.
     void pasteTextIntoTextControl(textarea, text, {
       source: 'clipboard',
       canContinue: (target) => target.ownerDocument.activeElement === target
@@ -787,11 +857,7 @@ export default function NewWorkspaceComposerCard({
     <div
       ref={setComposerNode}
       data-workspace-composer-root="true"
-      // Why: preload classifies native OS file drops by the nearest
-      // `data-native-file-drop-target` marker in the composedPath. Tagging
-      // the composer root makes drops anywhere on the card route to the
-      // composer attachment handler instead of falling back to the default
-      // editor-open behavior.
+      // Why: preload routes native file drops by the nearest data-native-file-drop-target marker, so tag the root to catch card-wide drops.
       data-native-file-drop-target="composer"
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
@@ -836,14 +902,12 @@ export default function NewWorkspaceComposerCard({
             value={selectedProjectId}
             onValueChange={onProjectChange}
             onValueSelected={focusNameInput}
+            onAddProject={handleAddRepo}
             placeholder={
               projectPlaceholder ??
               translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
             }
-            // Why: programmatic .focus() does not reliably trigger
-            // :focus-visible in Chromium. Mirror the Input component's
-            // standard ring (border-ring + ring-ring/50, 3px) onto :focus so
-            // keyboard navigation paints the familiar field ring.
+            // Why: programmatic .focus() doesn't reliably trigger :focus-visible in Chromium, so mirror the Input ring onto :focus.
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             invalid={Boolean(projectError)}
             describedBy={projectDescriptionId}
@@ -961,9 +1025,7 @@ export default function NewWorkspaceComposerCard({
             crossRepoSwitchTarget={smartNameRepoSwitchTarget}
             onActiveSourceModeChange={onSmartNameModeChange}
             onPlainEnter={() => {
-              // Why: Enter on the workspace name advances focus to the next
-              // field (Agent combobox) rather than submitting, letting the user
-              // progress through the form with just the keyboard.
+              // Why: Enter advances focus to the Agent combobox rather than submitting, keeping keyboard flow through the form.
               const root = composerRef?.current
               const agentTrigger = root?.querySelector<HTMLElement>(
                 '[data-agent-combobox-root="true"][role="combobox"]'
@@ -977,13 +1039,7 @@ export default function NewWorkspaceComposerCard({
               <span>{forkPushWarning}</span>
             </p>
           ) : null}
-          {/* Why (#5181): sits right under the branch selection (not the Name
-              field, which can differ from the branch) so reusing the picked
-              branch is an explicit, discoverable choice. Stays mounted and
-              collapses via a grid-rows transition (matching the Advanced
-              drawer) so the dialog grows/shrinks smoothly as the option
-              appears. Only offered when reuse is possible — an existing local
-              branch not already checked out in another worktree. */}
+          {/* Why (#5181): sits under the branch selection (not Name, which can differ) so reusing the picked branch is an explicit choice. */}
           <div
             className={cn(
               'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
@@ -1013,9 +1069,7 @@ export default function NewWorkspaceComposerCard({
                     type="checkbox"
                     checked={reuseSelectedBranch}
                     onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
-                    // Why: while collapsed the row is aria-hidden, so disable the
-                    // input too — keeps a hidden control out of the tab order and
-                    // fully inert (no focusable control inside an aria-hidden tree).
+                    // Why: row is aria-hidden while collapsed, so disable the input too (no focusable control inside an aria-hidden tree).
                     disabled={!canReuseSelectedBranch}
                     className="sr-only"
                   />
@@ -1049,9 +1103,7 @@ export default function NewWorkspaceComposerCard({
                   variant="ghost"
                   size="icon-xs"
                   onClick={onOpenAgentSettings}
-                  // Why: keep Tab flow Name → Agent combobox. This settings
-                  // shortcut is a detour; making it tabbable forces a keystroke
-                  // on every workspace creation.
+                  // Why: keep Tab flow Name → Agent; tabIndex=-1 so this settings detour doesn't add a keystroke to every creation.
                   tabIndex={-1}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                   aria-label={translate(
@@ -1082,9 +1134,7 @@ export default function NewWorkspaceComposerCard({
           />
         </div>
 
-        {/* Why: Advanced is a disclosure header, so keep it visually grouped
-            with the content or footer below it while preserving normal spacing
-            from the Agent field above. */}
+        {/* Why: keep the Advanced disclosure header grouped with the content below while preserving spacing from the Agent field above. */}
         <div className="!mb-2">
           <Button
             type="button"
@@ -1109,10 +1159,7 @@ export default function NewWorkspaceComposerCard({
           aria-hidden={!advancedOpen}
         >
           <div className="min-h-0">
-            {/* Why: px-1 insets the content 4px on each side so the Note
-                textarea's 3px outset focus ring has horizontal breathing room
-                inside the overflow-hidden drawer above. Without it the ring
-                gets clipped on the right edge when the field is focused. */}
+            {/* Why: px-1 gives the Note textarea's 3px outset focus ring breathing room so the overflow-hidden drawer doesn't clip it. */}
             <div
               className={cn(
                 'space-y-4 px-1 pt-1 pb-3 transition-[opacity,transform] duration-150 ease-out',
@@ -1122,12 +1169,7 @@ export default function NewWorkspaceComposerCard({
               )}
             >
               {smartNameSelection ? (
-                // Why: when a source (PR/issue/Linear/Jira/branch) is picked the
-                // smart field shows a pill instead of an editable name, so
-                // surface the auto-derived workspace name here under Advanced
-                // where it can be reviewed/overridden. When the user typed an
-                // explicit name there's no source pill — the smart input is
-                // already the name field, so we don't duplicate it here.
+                // Why: with a source pill the smart field isn't editable, so surface the derived name here; a typed name already is the name field.
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">
                     {translate('auto.components.NewWorkspaceComposerCard.2688050e4b', 'Name')}
@@ -1145,11 +1187,7 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              {/* Why: only offer a manual branch name when creating from a
-                  typed name or a base branch. When a tracked work item (PR/
-                  issue/MR/Linear) is the source, the branch is derived from
-                  that item — a linked GitHub PR even re-resolves it at submit —
-                  so an override typed here would be silently ignored. */}
+              {/* Why: for a tracked work item (PR/issue/MR/Linear) the branch is derived from the item, so a manual override here would be silently ignored. */}
               {selectedRepoIsGit &&
               branchesEnabled &&
               (!smartNameSelection || smartNameSelection.kind === 'branch') ? (
@@ -1186,9 +1224,7 @@ export default function NewWorkspaceComposerCard({
                   onChange={(event) => onNoteChange(event.target.value)}
                   onPaste={handleNotePaste}
                   onInput={(event) => {
-                    // Why: start at one-line height, grow to fit content so a short
-                    // note keeps the dialog compact while longer notes get room to
-                    // breathe without a scroll bar until the max-h clamps growth.
+                    // Why: reset then size to content so short notes stay compact and long ones grow without a scrollbar until max-h clamps.
                     const ta = event.currentTarget
                     ta.style.height = 'auto'
                     ta.style.height = `${ta.scrollHeight}px`
@@ -1226,9 +1262,7 @@ export default function NewWorkspaceComposerCard({
                     </span>
                   </div>
 
-                  {/* Why: `orca.yaml` is the committed source of truth for shared setup,
-                      so the preview reconstructs the real YAML shape instead of showing a raw
-                      shell blob that hides where the command came from. */}
+                  {/* Why: `orca.yaml` is the committed source of truth, so the preview reconstructs the real YAML shape rather than a raw shell blob. */}
                   <SetupCommandPreview
                     setupConfig={setupConfig}
                     headerAction={

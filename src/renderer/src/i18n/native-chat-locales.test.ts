@@ -29,21 +29,26 @@ describe('native chat locale copy', () => {
       const composer = catalog.components['native-chat'].composer
       for (const key of [
         'model',
-        'modelWithValue',
         'effort',
-        'effortWithValue',
         'fastMode',
         'thinking',
         'options',
         'sessionOptions',
         'chooseInAgentPicker',
+        'toggleOption',
+        'valueUnknown',
         'sentNotConfirmed'
       ] as const) {
         expect(composer[key].trim()).not.toBe('')
         expect(composer[key]).not.toBe(englishComposer[key])
       }
       for (const key of ['fast', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const) {
+        expect(composer.optionValue[key].trim()).not.toBe('')
         expect(composer.optionValue[key]).not.toBe(englishComposer.optionValue[key])
+      }
+      // Why: On/Off loanwords are valid translations; only require non-empty.
+      for (const key of ['on', 'off'] as const) {
+        expect(composer.optionValue[key].trim()).not.toBe('')
       }
     }
   )

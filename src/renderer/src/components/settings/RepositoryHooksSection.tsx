@@ -441,7 +441,7 @@ function ExampleTemplateCard({
   return (
     <div className="space-y-2">
       <p className="text-[10px] tracking-[0.18em] text-muted-foreground">
-        {translate('auto.components.settings.RepositoryHooksSection.175daba180', 'Example')}
+        {translate('auto.components.settings.RepositoryHooksSection.175daba180', 'Example')}{' '}
         <code className="rounded bg-muted px-1 py-0.5">
           {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
         </code>{' '}
@@ -665,7 +665,7 @@ function ScriptEditor({
               </span>
             </span>
             <span className="text-[11px] text-muted-foreground">
-              {translate('auto.components.settings.RepositoryHooksSection.b113344b6a', 'Edit')}
+              {translate('auto.components.settings.RepositoryHooksSection.b113344b6a', 'Edit')}{' '}
               <code className="rounded bg-muted px-1 py-0.5">
                 {translate(
                   'auto.components.settings.RepositoryHooksSection.39da2ae12f',
@@ -1308,7 +1308,7 @@ export function RepositoryHooksSection({
                   {translate(
                     'auto.components.settings.RepositoryHooksSection.ac9038d2cc',
                     'When both'
-                  )}
+                  )}{' '}
                   <code className="rounded bg-muted px-1 py-0.5">
                     {translate(
                       'auto.components.settings.RepositoryHooksSection.39da2ae12f',

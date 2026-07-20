@@ -10,6 +10,7 @@ import {
   resolveSetupAgentSequenceLaunchCommand,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
+import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -966,6 +967,72 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'hello world' })
+  })
+
+  it('consumes capable startup queries before relay replay and fanout', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    const term = {
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    }
+    mockPtySpawn.mockReturnValue(term)
+    await dispatcher.callRequest('pty.spawn', {
+      startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+      startupIngress: {
+        colors: { foreground: '#2e3434', background: '#ffffff' },
+        deadlineMs: 5_000
+      }
+    })
+
+    const query = '\x1b]10;?\x07'
+    dataCallback!(query)
+    dataCallback!('prompt')
+    vi.advanceTimersByTime(8)
+
+    expect(term.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+      id: 'pty-1',
+      data: '',
+      rawLength: query.length,
+      seq: query.length,
+      transformed: true
+    })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'prompt' })
+    await expect(
+      dispatcher.callRequest('pty.attach', {
+        id: 'pty-1',
+        suppressReplayNotification: true
+      })
+    ).resolves.toEqual({ replay: 'prompt' })
+  })
+
+  it('leaves startup queries untouched for an unsupported relay capability version', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    const term = {
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    }
+    mockPtySpawn.mockReturnValue(term)
+    await dispatcher.callRequest('pty.spawn', {
+      startupIngressVersion: PTY_STARTUP_INGRESS_VERSION - 1,
+      startupIngress: {
+        colors: { foreground: '#2e3434', background: '#ffffff' },
+        deadlineMs: 5_000
+      }
+    })
+
+    const query = '\x1b]10;?\x07'
+    dataCallback!(query)
+    vi.advanceTimersByTime(8)
+
+    expect(term.write).not.toHaveBeenCalled()
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
   })
 
   it('coalesces background PTY output before notifying the client', async () => {

@@ -432,9 +432,7 @@ describe('registerWorktreeHandlers', () => {
     getHostedReviewForBranchMock.mockResolvedValue(null)
     getWorkItemMock.mockResolvedValue(null)
     getPullRequestPushTargetMock.mockResolvedValue(null)
-    // Why: createLocalWorktree can still hit legacy git fetch fallback in
-    // narrow unit harnesses. Return a resolved promise so catch/then chains
-    // don't trip on undefined.
+    // Why: createLocalWorktree can still hit the legacy git fetch fallback here; resolve so catch/then chains don't trip on undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getEffectiveHooksMock.mockReturnValue(null)
     getEffectiveHooksFromConfigMock.mockImplementation(() => getEffectiveHooksMock())
@@ -489,10 +487,7 @@ describe('registerWorktreeHandlers', () => {
     listWorktreesMock.mockResolvedValue([])
     forceDeleteLocalBranchMock.mockResolvedValue(undefined)
 
-    // Why: createLocalWorktree routes `git fetch` through
-    // `runtime.fetchRemoteWithCache` (§3.3 Lifecycle). A minimal stub
-    // keeps these tests focused on create-flow semantics; the full
-    // cache behavior is covered by fetch-remote-cache.test.ts.
+    // Why: minimal stub keeps these tests on create-flow semantics; full fetchRemoteWithCache behavior is covered by fetch-remote-cache.test.ts.
     runtimeStub = {
       resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
       hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
@@ -795,8 +790,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-1::/workspace/feature-wt',
       updates: { isUnread: false }
     })
-    // Why: per-click isUnread writes must stay event-free (PR #209), while a
-    // rename must reach paired remote clients that no longer poll for titles.
+    // Why: per-click isUnread writes must stay event-free (PR #209), while a rename must reach paired remote clients that no longer poll for titles.
     expect(runtimeStub.notifyWorktreesChangedForRemoteClients).not.toHaveBeenCalled()
 
     handlers['worktrees:updateMeta'](null, {
@@ -842,8 +836,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
-    // Why: new-workspace flow should silently try improve-dashboard-2, -3, ...
-    // rather than failing and forcing the user back to the name picker.
+    // Why: new-workspace flow should silently try improve-dashboard-2, -3, … rather than failing back to the name picker.
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null
     )
@@ -1236,9 +1229,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('reuses an existing local branch when the worktree folder is renamed (#5181)', async () => {
-    // Why: the reuse checkbox keeps branchNameOverride pinned to the selected
-    // branch while the worktree folder is named independently. The backend must
-    // still check out that exact branch (no -b) into the renamed folder.
+    // Why: reuse keeps branchNameOverride on the selected branch though the folder is renamed; backend must check out that branch (no -b).
     listWorktreesMock
       .mockResolvedValueOnce([
         {
@@ -4026,8 +4017,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('creates an SSH worktree from the detected default base when the persisted base is stale', async () => {
-    // Regression: a stale persisted repo base must fall back to the detected
-    // primary default instead of blocking creation.
+    // Regression: a stale persisted repo base must fall back to the detected primary default instead of blocking creation.
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -4901,8 +4891,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('creates from the detected default base when the persisted base is stale', async () => {
-    // Regression: a stale persisted repo base must fall back to the detected
-    // primary default instead of blocking creation.
+    // Regression: a stale persisted repo base must fall back to the detected primary default instead of blocking creation.
     const remoteBase = {
       remote: 'origin',
       branch: 'main',
@@ -5206,11 +5195,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('throws a clear error when no default base ref can be resolved', async () => {
-    // Why: guard against regressing to a silent 'origin/main' fallback. When
-    // default-base resolution returns null (e.g. a fresh repo with no origin/HEAD,
-    // no origin/main, no origin/master, and no local main/master), we must
-    // fail loudly with a message that prompts the user to pick a base
-    // branch, not hand a non-existent ref to `git worktree add`.
+    // Why: guard against regressing to a silent 'origin/main' fallback; an unresolved default base must fail loudly, not hand a non-existent ref to `git worktree add`.
     resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue(null)
     store.getRepo.mockReturnValue({
       id: 'repo-1',
@@ -5588,10 +5573,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery so newly-added worktrees sort to the top of Recent', async () => {
-    // Why: a worktree that exists on disk but has no persisted WorktreeMeta
-    // (e.g. a folder repo just added, or a pre-existing worktree in a
-    // newly-added git repo) would otherwise fall back to `lastActivityAt: 0`
-    // and rank dead last in the Recent sort.
+    // Why: a worktree on disk with no persisted WorktreeMeta would otherwise fall back to lastActivityAt: 0 and rank dead last in Recent.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/discovered-wt',
@@ -5631,9 +5613,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('backfills project-host ownership without re-stamping lastActivityAt for existing meta', async () => {
-    // Why: only the *first* discovery should stamp. Re-stamping on every list
-    // would overwrite real activity and reshuffle the sidebar on refresh. Host
-    // ownership can still be filled because it is derived from the repo setup.
+    // Why: only first discovery stamps (re-stamping would reshuffle the sidebar); host ownership is still backfilled since it derives from repo setup.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -5685,9 +5665,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('repairs legacy project ids when discovery now resolves the same host setup to a logical project', async () => {
-    // Why: provider identity can become available after metadata was written.
-    // Existing workspaces should move from repo-scoped IDs to the logical
-    // project ID without losing activity ordering.
+    // Why: provider identity can arrive after metadata was written; existing workspaces must move to the logical project ID without losing activity ordering.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/existing-wt',
@@ -5948,9 +5926,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery for folder-mode repos', async () => {
-    // Why: folder repos produce a synthetic worktree that flows through the
-    // same list path. Without the stamp, adding a folder puts its card at the
-    // bottom of Recent even though the user just added it.
+    // Why: folder repos produce a synthetic worktree; without the stamp a just-added folder sorts to the bottom of Recent.
     store.getRepos.mockReturnValue([
       {
         id: 'repo-1',
@@ -5991,9 +5967,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('stamps lastActivityAt on first discovery via worktrees:listAll', async () => {
-    // Why: the stamping logic lives in both worktrees:list and worktrees:listAll.
-    // Without a dedicated test, a regression in the listAll loop would silently
-    // bury newly-discovered worktrees from the multi-repo sidebar view.
+    // Why: stamping logic is duplicated in worktrees:list and worktrees:listAll; a listAll regression would silently bury newly-discovered worktrees.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/discovered-wt',
@@ -6022,9 +5996,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('omits prunable worktrees from worktrees:listAll', async () => {
-    // Why: a prunable registration has no working directory (issue #8389), so
-    // surfacing it as a workspace yields repeated pty:spawn/fs:readDir
-    // failures and a blank pane.
+    // Why: a prunable registration has no working directory (issue #8389), so surfacing it yields repeated pty/fs failures and a blank pane.
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/repo',
@@ -6138,13 +6110,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('skips past a suffix that already belongs to a PR after an initial branch conflict', async () => {
-    // Why: `gh pr list` is network-bound and previously fired on every single
-    // create, adding 1–3s to the happy path. We now only probe PR conflicts
-    // from suffix=2 onward — once a local/remote branch collision has already
-    // forced us past the first candidate and uniqueness matters enough to
-    // justify the GitHub round-trip. This test covers that delayed path:
-    // suffix=1 is a branch conflict, suffix=2 is owned by an old PR, so the
-    // loop lands on suffix=3.
+    // Why: the PR-conflict probe (network-bound, 1–3s) only runs from suffix=2 onward, after a branch collision already forced past the first candidate.
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
       branch === 'improve-dashboard' ? 'remote' : null
     )
@@ -6192,10 +6158,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('does not call `gh pr list` on the happy path (no branch conflict)', async () => {
-    // Why: guards the speed optimization. If a future refactor accidentally
-    // reintroduces the PR probe on the first iteration, the happy path will
-    // silently regain a 1–3s GitHub round-trip per click; this test fails
-    // loudly instead.
+    // Why: guard against a refactor reintroducing the PR probe on the happy path (1–3s GitHub round-trip per click).
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -6317,10 +6280,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('launches setup even when primary and worktree orca.yaml scripts diverge', async () => {
-    // Why: regression for a silent skip introduced by the #1280 content-equality
-    // gate. Benign divergence (whitespace, comments, or any setup edit that
-    // landed on the base branch but not yet in the primary checkout) must not
-    // disable setup — repo-level trust already gates execution.
+    // Why: benign orca.yaml divergence must not disable setup (regression from #1280 content-equality gate); repo trust already gates execution.
     listWorktreesMock.mockResolvedValue(createdWorktreeList)
     getEffectiveHooksMock.mockImplementation((_repo, worktreePath?: string) => ({
       scripts: {
@@ -8748,8 +8708,7 @@ describe('registerWorktreeHandlers', () => {
       const worktreeId = 'repo-1::/workspace/feature-wt'
       store.getRepo.mockReturnValue(repo)
       getLocalPtyProviderMock.mockReturnValue(ptyProvider)
-      // Why: a removed/disconnected SSH target has no live provider; forgetLocal
-      // must not reach for one.
+      // Why: a removed/disconnected SSH target has no live provider; forgetLocal must not reach for one.
       getSshGitProviderMock.mockReturnValue(undefined)
 
       const result = await handlers['worktrees:forgetLocal'](null, { worktreeId })

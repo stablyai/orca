@@ -12,6 +12,7 @@ import {
   isDigitIndexActionId,
   isDoubleTapBinding,
   keybindingFromInput,
+  LEGACY_TAB_SWITCH_BINDINGS,
   keybindingFromInputForAction,
   keybindingMatchesAction,
   keybindingMatchesInput,
@@ -215,12 +216,40 @@ describe('keybindings', () => {
 
   it('defines a default shortcut for adding an editor review note', () => {
     expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'darwin')).toEqual([
-      'Mod+Alt+N'
+      'Mod+Shift+A'
     ])
-    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'linux')).toEqual(['Mod+Alt+N'])
-    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'win32')).toEqual(['Mod+Alt+N'])
-    expect(formatKeybindingList(['Mod+Alt+N'], 'darwin')).toBe('⌘⌥N')
-    expect(formatKeybindingList(['Mod+Alt+N'], 'linux')).toBe('Ctrl+Alt+N')
+    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'linux')).toEqual([
+      'Mod+Shift+A'
+    ])
+    expect(getEffectiveKeybindingsForAction('editor.addReviewNote', 'win32')).toEqual([
+      'Mod+Shift+A'
+    ])
+    expect(formatKeybindingList(['Mod+Shift+A'], 'darwin')).toBe('⌘⇧A')
+    expect(formatKeybindingList(['Mod+Shift+A'], 'linux')).toBe('Ctrl+Shift+A')
+
+    const macChord = {
+      key: 'a',
+      code: 'KeyA',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: true
+    }
+    const ctrlChord = { ...macChord, meta: false, control: true }
+    expect(keybindingMatchesAction('editor.addReviewNote', macChord, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('editor.addReviewNote', ctrlChord, 'linux')).toBe(true)
+    expect(keybindingMatchesAction('editor.addReviewNote', ctrlChord, 'win32')).toBe(true)
+
+    const oldCtrlAltChord = {
+      key: 'n',
+      code: 'KeyN',
+      meta: false,
+      control: true,
+      alt: true,
+      shift: false
+    }
+    expect(keybindingMatchesAction('editor.addReviewNote', oldCtrlAltChord, 'linux')).toBe(false)
+    expect(keybindingMatchesAction('editor.addReviewNote', oldCtrlAltChord, 'win32')).toBe(false)
   })
 
   it('defines platform-native replace-in-editor shortcuts', () => {
@@ -441,6 +470,42 @@ describe('keybindings', () => {
         actionIds: ['workspace.rename', 'tab.rename']
       }
     ])
+  })
+
+  it('defaults tab-switch chords to the swapped convention for fresh installs', () => {
+    // New users get the widespread mapping: Shift+bracket cycles all tabs,
+    // Alt+bracket cycles within the active type.
+    expect(getEffectiveKeybindingsForAction('tab.nextAllTypes', 'darwin')).toEqual([
+      'Mod+Shift+BracketRight'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.previousAllTypes', 'darwin')).toEqual([
+      'Mod+Shift+BracketLeft'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.nextSameType', 'darwin')).toEqual([
+      'Mod+Alt+BracketRight'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.previousSameType', 'darwin')).toEqual([
+      'Mod+Alt+BracketLeft'
+    ])
+  })
+
+  it('pins the pre-swap chords via LEGACY_TAB_SWITCH_BINDINGS for upgrading installs', () => {
+    // These are what the seed migration writes so pre-existing users keep the
+    // shortcuts they learned; overriding an action with its legacy value must
+    // reproduce the old effective binding.
+    expect(LEGACY_TAB_SWITCH_BINDINGS).toEqual({
+      'tab.nextSameType': ['Mod+Shift+BracketRight'],
+      'tab.previousSameType': ['Mod+Shift+BracketLeft'],
+      'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
+      'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+    })
+    for (const [actionId, bindings] of Object.entries(LEGACY_TAB_SWITCH_BINDINGS)) {
+      expect(
+        getEffectiveKeybindingsForAction(actionId as KeybindingActionId, 'darwin', {
+          [actionId]: bindings
+        })
+      ).toEqual(bindings)
+    }
   })
 
   it('defines browser history shortcuts for Logitech side-button remaps', () => {
@@ -1216,29 +1281,30 @@ describe('keybindings', () => {
     expect(keybindingMatchesAction('terminal.focusNextPane', jisLeftBracket, 'darwin')).toBe(false)
     expect(keybindingMatchesAction('terminal.focusNextPane', jisRightBracket, 'darwin')).toBe(true)
 
+    // Alt+bracket is the fresh-install same-type default after the convention swap.
     expect(
-      keybindingMatchesAction('tab.previousAllTypes', { ...jisLeftBracket, alt: true }, 'darwin')
+      keybindingMatchesAction('tab.previousSameType', { ...jisLeftBracket, alt: true }, 'darwin')
     ).toBe(true)
     expect(
-      keybindingMatchesAction('tab.nextAllTypes', { ...jisRightBracket, alt: true }, 'darwin')
+      keybindingMatchesAction('tab.nextSameType', { ...jisRightBracket, alt: true }, 'darwin')
     ).toBe(true)
     expect(
       keybindingMatchesAction(
-        'tab.previousAllTypes',
+        'tab.previousSameType',
         { ...jisLeftBracket, control: true, meta: false, alt: true },
         'linux'
       )
     ).toBe(true)
     expect(
       keybindingMatchesAction(
-        'tab.nextAllTypes',
+        'tab.nextSameType',
         { ...jisLeftBracket, control: true, meta: false, alt: true },
         'linux'
       )
     ).toBe(false)
     expect(
       keybindingMatchesAction(
-        'tab.nextAllTypes',
+        'tab.nextSameType',
         { ...jisRightBracket, control: true, meta: false, alt: true },
         'linux'
       )
@@ -1268,7 +1334,7 @@ describe('keybindings', () => {
 
     expect(
       keybindingMatchesAction(
-        'tab.previousAllTypes',
+        'tab.previousSameType',
         {
           key: '[',
           code: 'Digit8',
@@ -1282,7 +1348,7 @@ describe('keybindings', () => {
     ).toBe(false)
     expect(
       keybindingMatchesAction(
-        'tab.previousAllTypes',
+        'tab.previousSameType',
         {
           key: 'Dead',
           code: 'BracketLeft',
@@ -1385,7 +1451,9 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['DoubleTap+Shift'], 'linux')).toBe('Shift Shift')
   })
 
-  it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
+  it('matches macOS Option-composed bracket shortcuts for same-type tab switching', () => {
+    // Cmd+Alt+bracket is the fresh-install same-type default after the swap, so
+    // Option-composed dead keys (\u2325[ -> "\u201c") must still resolve to that action.
     const macOptionLeftBracket = {
       key: '\u201c',
       code: 'BracketLeft',
@@ -1403,12 +1471,12 @@ describe('keybindings', () => {
       shift: false
     }
 
-    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionLeftBracket, 'darwin')).toBe(
+    expect(keybindingMatchesAction('tab.previousSameType', macOptionLeftBracket, 'darwin')).toBe(
       true
     )
-    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionLeftBracket, 'darwin')).toBe(false)
-    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionRightBracket, 'darwin')).toBe(true)
-    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionRightBracket, 'darwin')).toBe(
+    expect(keybindingMatchesAction('tab.nextSameType', macOptionLeftBracket, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.nextSameType', macOptionRightBracket, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('tab.previousSameType', macOptionRightBracket, 'darwin')).toBe(
       false
     )
   })

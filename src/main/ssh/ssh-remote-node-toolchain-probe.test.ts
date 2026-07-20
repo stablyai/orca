@@ -6,20 +6,22 @@ import {
 } from './ssh-remote-node-toolchain-probe'
 
 describe('remote Node/npm toolchain probe', () => {
-  it('probes npm beside the selected POSIX Node with that directory on PATH', () => {
+  it('probes bare npm with the selected POSIX Node directory prepended to PATH', () => {
+    // Deploy runs bare `npm` under the same prepended PATH, so accept npm from
+    // anywhere on PATH rather than requiring it colocated with node (#9165).
     expect(buildPosixNodeToolchainProbe('/home/u/My Node/bin/node')).toBe(
       "printf '%s\\n' '__ORCA_NODE_VERSION__' && '/home/u/My Node/bin/node' --version && " +
-        "printf '%s\\n' '__ORCA_NPM_VERSION__' && PATH='/home/u/My Node/bin':$PATH " +
-        "'/home/u/My Node/bin/npm' --version"
+        "printf '%s\\n' '__ORCA_NPM_VERSION__' && PATH='/home/u/My Node/bin':$PATH npm --version"
     )
   })
 
-  it('probes npm.cmd beside the selected Windows Node', () => {
+  it('probes bare npm with the selected Windows Node directory prepended to PATH', () => {
     const probe = buildWindowsNodeToolchainProbe('C:/Program Files/nodejs/node.exe')
 
-    expect(probe).toContain("Test-Path -LiteralPath 'C:/Program Files/nodejs/npm.cmd'")
-    expect(probe).toContain("$env:PATH = 'C:/Program Files/nodejs' + ';' + $env:PATH")
-    expect(probe).toContain("& 'C:/Program Files/nodejs/npm.cmd' --version")
+    expect(probe).not.toContain('Test-Path')
+    expect(probe).toContain("$env:PATH = 'C:\\Program Files\\nodejs' + ';' + $env:PATH")
+    expect(probe).toContain("& 'C:/Program Files/nodejs/node.exe' --version")
+    expect(probe).toContain('& npm --version')
   })
 
   it('requires marked, parseable Node and npm versions', () => {

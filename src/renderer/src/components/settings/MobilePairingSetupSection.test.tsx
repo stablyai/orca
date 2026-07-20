@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 
 import React from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MobilePairingSetupSection } from './MobilePairingSetupSection'
@@ -23,7 +23,7 @@ function renderSection(
   const onGenerateQr = vi.fn()
   const props: React.ComponentProps<typeof MobilePairingSetupSection> = {
     connectionMode: 'local-only',
-    relayConnectionControl: null,
+    connectionPathControl: <div data-testid="path-control">path</div>,
     networkInterfaces: [LAN, TAILNET],
     selectedAddress: TAILNET.address,
     onSelectedAddressChange,
@@ -44,18 +44,37 @@ function renderSection(
 }
 
 describe('MobilePairingSetupSection', () => {
-  it('keeps local settings visible for local-only pairing', () => {
-    renderSection()
-    expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
-    expect(screen.getByText(/connects only through the local network address/i)).toBeVisible()
+  beforeEach(() => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        shell: { openUrl: vi.fn().mockResolvedValue(undefined) }
+      }
+    })
   })
 
-  it('keeps local settings visible for automatic direct-first pairing', () => {
+  it('shows connection, address, and generate in a compact flow', () => {
+    renderSection()
+    expect(screen.getByText('Pair a phone')).toBeVisible()
+    expect(screen.getByText('Connection')).toBeVisible()
+    expect(screen.getByText('This computer’s address')).toBeVisible()
+    expect(screen.getByTestId('path-control')).toBeVisible()
+    expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
+    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeVisible()
+    expect(screen.getByText(/must be able to reach this address/i)).toBeVisible()
+  })
+
+  it('describes address role when Anywhere is selected', () => {
     renderSection({ connectionMode: 'automatic' })
-    expect(screen.getByRole('combobox')).toBeVisible()
-    expect(
-      screen.getByText(/includes direct access and encrypted Orca Relay fallback/i)
-    ).toBeVisible()
+    expect(screen.getByText(/faster direct path when nearby/i)).toBeVisible()
+  })
+
+  it('disables generate when sign-in is required', () => {
+    // The sign-in explanation lives in the connection panel above, not here, so
+    // this section only gates the button rather than repeating the copy.
+    renderSection({ canGenerate: false })
+    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeDisabled()
+    expect(screen.queryByText(/Sign in above first/i)).toBeNull()
   })
 
   it('commits an OS interface picked from the list', async () => {
@@ -65,9 +84,9 @@ describe('MobilePairingSetupSection', () => {
     expect(onSelectedAddressChange).toHaveBeenCalledWith('192.168.1.24')
   })
 
-  it('generates a pairing code with the selected mode', async () => {
+  it('generates a pairing code', async () => {
     const { user, onGenerateQr } = renderSection()
-    await user.click(screen.getByRole('button', { name: 'Generate QR Code' }))
+    await user.click(screen.getByRole('button', { name: 'Generate QR code' }))
     expect(onGenerateQr).toHaveBeenCalledOnce()
   })
 })
