@@ -4114,6 +4114,15 @@ const api = {
       ipcRenderer.invoke('minimaxCredentials:clearCookie')
   },
 
+  commandCodeCredentials: {
+    getStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('commandCodeCredentials:getStatus'),
+    saveCookie: (cookie: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('commandCodeCredentials:saveCookie', cookie),
+    clearCookie: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('commandCodeCredentials:clearCookie')
+  },
+
   grokAccounts: {
     getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
   },

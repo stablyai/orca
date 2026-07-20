@@ -3280,6 +3280,7 @@ export type StatusBarItem =
   | 'kimi'
   | 'minimax'
   | 'grok'
+  | 'command-code'
   | 'ssh'
   | 'resource-usage'
   | 'ports'
