@@ -1,5 +1,5 @@
 import React from 'react'
-import { X } from 'lucide-react'
+import { Columns2, PictureInPicture2, Rows2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
+import { detachPanelIntoWindow } from '@/lib/panel-canvas-detach'
 
 const EMPTY_PANELS: readonly PinnedTerminalPanel[] = []
 
@@ -64,6 +65,7 @@ const PinnedTerminalPanelPage = React.memo(
     const activeView = useAppStore((s) => s.activeView)
     const activePanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
     const closePinnedTerminalPanelPage = useAppStore((s) => s.closePinnedTerminalPanelPage)
+    const openPanelInCanvas = useAppStore((s) => s.openPanelInCanvas)
     const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
 
     const pageVisible = activeView === 'terminal-panel' && activePanelId !== null
@@ -168,6 +170,62 @@ const PinnedTerminalPanelPage = React.memo(
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
               {activePanel.host}
             </span>
+          ) : null}
+          {activePanel ? (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                aria-label={translate(
+                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitRight',
+                  'Split right in canvas'
+                )}
+                title={translate(
+                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitRight',
+                  'Split right in canvas'
+                )}
+                onClick={() =>
+                  openPanelInCanvas({ kind: 'terminal', panelId: activePanel.id }, 'row')
+                }
+              >
+                <Columns2 className="size-3.5" strokeWidth={1.75} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                aria-label={translate(
+                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitDown',
+                  'Split down in canvas'
+                )}
+                title={translate(
+                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitDown',
+                  'Split down in canvas'
+                )}
+                onClick={() =>
+                  openPanelInCanvas({ kind: 'terminal', panelId: activePanel.id }, 'column')
+                }
+              >
+                <Rows2 className="size-3.5" strokeWidth={1.75} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                aria-label={translate(
+                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.detach',
+                  'Open in new window'
+                )}
+                title={translate(
+                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.detach',
+                  'Open in new window'
+                )}
+                onClick={() => detachPanelIntoWindow('terminal', activePanel.id, activePanel.title)}
+              >
+                <PictureInPicture2 className="size-3.5" strokeWidth={1.75} />
+              </Button>
+            </>
           ) : null}
           <Button
             variant="ghost"

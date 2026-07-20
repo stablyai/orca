@@ -16,11 +16,11 @@ import {
 import {
   collectCanvasLeaves,
   countCanvasLeaves,
+  duplicateCanvasLeaf,
   layoutNodeFromCanvas,
   removeCanvasLeaf,
   setCanvasSplitSizes,
   splitCanvasLeaf,
-  canvasLeafFor,
   type PanelCanvasLeaf
 } from '@/lib/panel-canvas'
 import { Button } from '@/components/ui/button'
@@ -62,9 +62,9 @@ const PanelCanvasPage = React.memo(function PanelCanvasPage(): React.JSX.Element
   const prevLeavesRef = React.useRef<readonly PanelCanvasLeaf[]>([])
   React.useEffect(() => {
     const liveWorktreeIds = new Set(
-      leaves
-        .filter((leaf) => leaf.kind === 'terminal')
-        .map((leaf) => pinnedTerminalPanelCanvasWorktreeId(leaf.panelId, leaf.id))
+      leaves.flatMap((leaf) =>
+        leaf.kind === 'terminal' ? [pinnedTerminalPanelCanvasWorktreeId(leaf.panelId, leaf.id)] : []
+      )
     )
     const state = useAppStore.getState()
     for (const worktreeId of Object.keys(state.tabsByWorktree)) {
@@ -115,16 +115,14 @@ const PanelCanvasPage = React.memo(function PanelCanvasPage(): React.JSX.Element
       if (!current || countCanvasLeaves(current) >= MAX_PANEL_LAYOUT_LEAVES) {
         return
       }
-      // Why: splitting seeds the new tile with the same panel (a second live
+      // Why: splitting seeds the new tile with the same source (a second live
       // instance, e.g. two shells on one host); picking a different panel is
       // done from the sidebar's open-in-canvas actions instead.
       const target = collectCanvasLeaves(current).find((leaf) => leaf.id === leafId)
       if (!target) {
         return
       }
-      setPanelCanvasRoot(
-        splitCanvasLeaf(current, leafId, canvasLeafFor(target.kind, target.panelId), direction)
-      )
+      setPanelCanvasRoot(splitCanvasLeaf(current, leafId, duplicateCanvasLeaf(target), direction))
     },
     [setPanelCanvasRoot]
   )

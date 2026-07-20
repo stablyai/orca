@@ -3,11 +3,20 @@ import type { PanelLayoutNode } from '../../../shared/types'
 /** Runtime canvas tree: the persisted PanelLayout shape plus a stable `id` on
  *  every node. Leaf ids identify tiles — each tile owns its own PTY/webview —
  *  so they must survive re-renders and tree edits. */
-export type PanelCanvasLeaf = {
+export type PanelCanvasPanelLeaf = {
   id: string
   kind: 'terminal' | 'web'
   panelId: string
 }
+
+export type PanelCanvasShellLeaf = {
+  id: string
+  kind: 'shell'
+  host: string | null
+  label?: string
+}
+
+export type PanelCanvasLeaf = PanelCanvasPanelLeaf | PanelCanvasShellLeaf
 
 export type PanelCanvasSplit = {
   id: string
@@ -30,10 +39,28 @@ export function canvasLeafFor(kind: 'terminal' | 'web', panelId: string): PanelC
   return { id: mintId(), kind, panelId }
 }
 
+export function canvasShellLeafFor(host: string | null, label?: string): PanelCanvasShellLeaf {
+  return { id: mintId(), kind: 'shell', host, ...(label ? { label } : {}) }
+}
+
+/** A fresh tile showing the same thing as `leaf` — what a split produces. */
+export function duplicateCanvasLeaf(leaf: PanelCanvasLeaf): PanelCanvasLeaf {
+  return leaf.kind === 'shell'
+    ? canvasShellLeafFor(leaf.host, leaf.label)
+    : canvasLeafFor(leaf.kind, leaf.panelId)
+}
+
 /** Hydrates a persisted layout tree into a runtime canvas tree (fresh ids). */
 export function canvasNodeFromLayout(node: PanelLayoutNode): PanelCanvasNode {
   if ('kind' in node) {
-    return { id: mintId(), kind: node.kind, panelId: node.panelId }
+    return node.kind === 'shell'
+      ? {
+          id: mintId(),
+          kind: 'shell',
+          host: node.host,
+          ...(node.label ? { label: node.label } : {})
+        }
+      : { id: mintId(), kind: node.kind, panelId: node.panelId }
   }
   return {
     id: mintId(),
@@ -46,7 +73,9 @@ export function canvasNodeFromLayout(node: PanelLayoutNode): PanelCanvasNode {
 /** Strips runtime ids back down to the persisted layout shape for saving. */
 export function layoutNodeFromCanvas(node: PanelCanvasNode): PanelLayoutNode {
   if (isPanelCanvasLeaf(node)) {
-    return { kind: node.kind, panelId: node.panelId }
+    return node.kind === 'shell'
+      ? { kind: 'shell', host: node.host, ...(node.label ? { label: node.label } : {}) }
+      : { kind: node.kind, panelId: node.panelId }
   }
   return {
     direction: node.direction,

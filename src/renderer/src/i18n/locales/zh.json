@@ -3263,7 +3263,9 @@
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
-            "sshHost": "SSH 主机"
+            "sshHost": "SSH 主机",
+            "openShell": "Open shell in canvas",
+            "detachShell": "Open shell in new window"
           },
           "usagePercentageLabel": {
             "used": "已用 {{value0}}%",
@@ -4789,7 +4791,8 @@
           "canvasSplitDown": "Add to canvas (split down)",
           "deleteLayout": "Delete layout",
           "layouts": "Layouts",
-          "renamePanel": "Rename"
+          "renamePanel": "Rename",
+          "detachPanel": "Open in new window"
         },
         "SidebarPanelRows": {
           "renameLabel": "Rename"
@@ -13265,7 +13268,10 @@
       },
       "pinned-terminal-panels": {
         "PinnedTerminalPanelPage": {
-          "close": "Close panel"
+          "close": "Close panel",
+          "splitRight": "Split right in canvas",
+          "splitDown": "Split down in canvas",
+          "detach": "Open in new window"
         }
       },
       "pinned-web-panels": {
@@ -13273,7 +13279,10 @@
           "reload": "Reload panel",
           "close": "Close panel",
           "back": "Go back",
-          "forward": "Go forward"
+          "forward": "Go forward",
+          "splitRight": "Split right in canvas",
+          "splitDown": "Split down in canvas",
+          "detach": "Open in new window"
         }
       },
       "panel-canvas": {
@@ -13302,6 +13311,13 @@
         "PopoutTerminalTile": {
           "hostUnresolved": "SSH host not found — check the panel host in Settings.",
           "exited": "Command exited"
+        },
+        "CanvasTileChrome": {
+          "back": "Go back",
+          "forward": "Go forward"
+        },
+        "PanelCanvasTree": {
+          "localShell": "Local shell"
         }
       }
     },

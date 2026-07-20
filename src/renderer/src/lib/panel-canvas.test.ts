@@ -10,6 +10,8 @@ import {
   removeCanvasLeaf,
   setCanvasSplitSizes,
   splitCanvasLeaf,
+  canvasShellLeafFor,
+  duplicateCanvasLeaf,
   type PanelCanvasNode,
   type PanelCanvasSplit
 } from './panel-canvas'
@@ -60,11 +62,11 @@ describe('splitCanvasLeaf', () => {
     const c = canvasLeafFor('terminal', 'c')
     const root = row([a, b], [3, 1])
     const next = splitCanvasLeaf(root, a.id, c, 'row') as PanelCanvasSplit
-    expect(next.children.map((child) => (isPanelCanvasLeaf(child) ? child.panelId : '?'))).toEqual([
-      'a',
-      'c',
-      'b'
-    ])
+    expect(
+      next.children.map((child) =>
+        isPanelCanvasLeaf(child) && child.kind !== 'shell' ? child.panelId : '?'
+      )
+    ).toEqual(['a', 'c', 'b'])
     // Why: stale sizes would misalign weights with the grown children array.
     expect(next.sizes).toBeUndefined()
   })
@@ -126,5 +128,34 @@ describe('setCanvasSplitSizes', () => {
     const nextInner = next.children[0] as PanelCanvasSplit
     expect(nextInner.sizes).toEqual([2, 5])
     expect(next.sizes).toBeUndefined()
+  })
+})
+
+describe('shell leaves in the canvas tree', () => {
+  it('round trips a shell leaf through layout and back', () => {
+    const layout = {
+      direction: 'column' as const,
+      children: [
+        { kind: 'shell' as const, host: 'node-a', label: 'node-a' },
+        { kind: 'terminal' as const, panelId: 'p1' }
+      ]
+    }
+    const canvas = canvasNodeFromLayout(layout)
+    expect(countCanvasLeaves(canvas)).toBe(2)
+    expect(layoutNodeFromCanvas(canvas)).toEqual(layout)
+  })
+
+  it('duplicates a shell leaf with a fresh id and the same host', () => {
+    const shell = canvasShellLeafFor('node-b', 'node-b')
+    const copy = duplicateCanvasLeaf(shell)
+    expect(copy).toEqual({ id: expect.any(String), kind: 'shell', host: 'node-b', label: 'node-b' })
+    expect(copy.id).not.toBe(shell.id)
+  })
+
+  it('duplicates a panel leaf with a fresh id and the same panel', () => {
+    const panel = canvasLeafFor('web', 'p1')
+    const copy = duplicateCanvasLeaf(panel)
+    expect(copy).toEqual({ id: expect.any(String), kind: 'web', panelId: 'p1' })
+    expect(copy.id).not.toBe(panel.id)
   })
 })

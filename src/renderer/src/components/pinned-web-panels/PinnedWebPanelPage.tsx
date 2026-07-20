@@ -1,11 +1,20 @@
 import React from 'react'
-import { ArrowLeft, ArrowRight, RotateCw, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Columns2,
+  PictureInPicture2,
+  RotateCw,
+  Rows2,
+  X
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { PinnedWebPanel } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { detachPanelIntoWindow } from '@/lib/panel-canvas-detach'
 import {
   destroyPinnedWebPanelWebview,
   ensurePinnedWebPanelWebview,
@@ -54,6 +63,7 @@ const PinnedWebPanelPage = React.memo(function PinnedWebPanelPage(): React.JSX.E
   const activeView = useAppStore((s) => s.activeView)
   const activePanelId = useAppStore((s) => s.activePinnedWebPanelId)
   const closePinnedWebPanelPage = useAppStore((s) => s.closePinnedWebPanelPage)
+  const openPanelInCanvas = useAppStore((s) => s.openPanelInCanvas)
   const [visitedPanelIds, setVisitedPanelIds] = React.useState<readonly string[]>([])
 
   const pageVisible = activeView === 'web-panel' && activePanelId !== null
@@ -153,6 +163,58 @@ const PinnedWebPanelPage = React.memo(function PinnedWebPanelPage(): React.JSX.E
         >
           <RotateCw className="size-3.5" strokeWidth={1.75} />
         </Button>
+        {activePanel ? (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              aria-label={translate(
+                'auto.components.pinned-web-panels.PinnedWebPanelPage.splitRight',
+                'Split right in canvas'
+              )}
+              title={translate(
+                'auto.components.pinned-web-panels.PinnedWebPanelPage.splitRight',
+                'Split right in canvas'
+              )}
+              onClick={() => openPanelInCanvas({ kind: 'web', panelId: activePanel.id }, 'row')}
+            >
+              <Columns2 className="size-3.5" strokeWidth={1.75} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              aria-label={translate(
+                'auto.components.pinned-web-panels.PinnedWebPanelPage.splitDown',
+                'Split down in canvas'
+              )}
+              title={translate(
+                'auto.components.pinned-web-panels.PinnedWebPanelPage.splitDown',
+                'Split down in canvas'
+              )}
+              onClick={() => openPanelInCanvas({ kind: 'web', panelId: activePanel.id }, 'column')}
+            >
+              <Rows2 className="size-3.5" strokeWidth={1.75} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              aria-label={translate(
+                'auto.components.pinned-web-panels.PinnedWebPanelPage.detach',
+                'Open in new window'
+              )}
+              title={translate(
+                'auto.components.pinned-web-panels.PinnedWebPanelPage.detach',
+                'Open in new window'
+              )}
+              onClick={() => detachPanelIntoWindow('web', activePanel.id, activePanel.title)}
+            >
+              <PictureInPicture2 className="size-3.5" strokeWidth={1.75} />
+            </Button>
+          </>
+        ) : null}
         <Button
           variant="ghost"
           size="icon"

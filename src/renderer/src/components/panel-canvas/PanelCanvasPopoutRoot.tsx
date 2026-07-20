@@ -5,21 +5,21 @@ import { useAppStore } from '@/store'
 import type { PanelLayoutNode, PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
 import { MAX_PANEL_LAYOUT_LEAVES, normalizePanelLayouts } from '../../../../shared/panel-layouts'
 import {
-  canvasLeafFor,
   canvasNodeFromLayout,
   collectCanvasLeaves,
   countCanvasLeaves,
+  duplicateCanvasLeaf,
   layoutNodeFromCanvas,
   removeCanvasLeaf,
   setCanvasSplitSizes,
   splitCanvasLeaf,
-  type PanelCanvasLeaf,
-  type PanelCanvasNode
+  type PanelCanvasNode,
+  type PanelCanvasPanelLeaf
 } from '@/lib/panel-canvas'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { CanvasNodeView, type CanvasTreeCallbacks } from './PanelCanvasTree'
-import { PopoutTerminalTile } from './PopoutTerminalTile'
+import { SlimTerminalTile } from './SlimTerminalTile'
 
 const EMPTY_TERMINAL_PANELS: readonly PinnedTerminalPanel[] = []
 const EMPTY_WEB_PANELS: readonly PinnedWebPanel[] = []
@@ -83,7 +83,7 @@ export function PanelCanvasPopoutRoot(): React.JSX.Element {
       if (!target) {
         return current
       }
-      return splitCanvasLeaf(current, leafId, canvasLeafFor(target.kind, target.panelId), direction)
+      return splitCanvasLeaf(current, leafId, duplicateCanvasLeaf(target), direction)
     })
   }, [])
 
@@ -105,8 +105,8 @@ export function PanelCanvasPopoutRoot(): React.JSX.Element {
 
   const splitDisabled = root !== null && countCanvasLeaves(root) >= MAX_PANEL_LAYOUT_LEAVES
   const renderTerminalTile = React.useCallback(
-    (leaf: PanelCanvasLeaf, panel: PinnedTerminalPanel) => (
-      <PopoutTerminalTile leaf={leaf} panel={panel} />
+    (leaf: PanelCanvasPanelLeaf, panel: PinnedTerminalPanel) => (
+      <SlimTerminalTile spawnKey={leaf.id} host={panel.host ?? null} command={panel.command} />
     ),
     []
   )

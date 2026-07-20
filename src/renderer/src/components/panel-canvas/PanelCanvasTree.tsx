@@ -1,5 +1,4 @@
 import React from 'react'
-import { Columns2, RotateCw, Rows2, X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
@@ -9,23 +8,17 @@ import {
 } from '../../../../shared/pinned-terminal-panels'
 import {
   isPanelCanvasLeaf,
-  type PanelCanvasLeaf,
   type PanelCanvasNode,
+  type PanelCanvasPanelLeaf,
   type PanelCanvasSplit
 } from '@/lib/panel-canvas'
-import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
-import {
-  ensurePinnedWebPanelWebview,
-  reloadPinnedWebPanelWebview
-} from '@/components/pinned-web-panels/pinned-web-panel-webview'
+import { ensurePinnedWebPanelWebview } from '@/components/pinned-web-panels/pinned-web-panel-webview'
+import { CanvasTileChrome, canvasWebviewId } from './CanvasTileChrome'
+import { SlimTerminalTile } from './SlimTerminalTile'
 
-/** Registry key for a canvas tile's webview — leaf-scoped so a tile never
- *  steals the guest owned by the full-page web panel view of the same panel. */
-export function canvasWebviewId(leafId: string): string {
-  return `canvas::${leafId}`
-}
+export { canvasWebviewId }
 
 export type CanvasTreeCallbacks = {
   splitDisabled: boolean
@@ -33,93 +26,13 @@ export type CanvasTreeCallbacks = {
   onRemoveLeaf: (leafId: string) => void
   onResizeSplit: (splitId: string, sizes: number[]) => void
   /** Popout windows swap the tab/PTY-backed tile for their slim direct-PTY
-   *  terminal; the main window omits this and gets CanvasTerminalTile. */
+   *  terminal; the main window omits this and gets CanvasTerminalTile.
+   *  Shell tiles always use the slim terminal, in every window. */
   renderTerminalTile?: (
-    leaf: PanelCanvasLeaf,
+    leaf: PanelCanvasPanelLeaf,
     panel: PinnedTerminalPanel,
     visible: boolean
   ) => React.ReactNode
-}
-
-function TileChrome({
-  title,
-  host,
-  onSplit,
-  onReload,
-  onClose,
-  splitDisabled
-}: {
-  title: string
-  host?: string
-  onSplit: (direction: 'row' | 'column') => void
-  onReload?: () => void
-  onClose: () => void
-  splitDisabled: boolean
-}): React.JSX.Element {
-  return (
-    <div className="flex h-7 shrink-0 items-center gap-1 border-b border-border bg-background/60 px-1.5">
-      <span className="min-w-0 flex-1 truncate text-[12px] font-medium tracking-tight">
-        {title}
-      </span>
-      {host ? (
-        <span className="shrink-0 rounded bg-muted px-1 py-px font-mono text-[9px] text-muted-foreground">
-          {host}
-        </span>
-      ) : null}
-      {onReload ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-5"
-          aria-label={translate(
-            'auto.components.panel-canvas.PanelCanvasPage.reloadTile',
-            'Reload tile'
-          )}
-          onClick={onReload}
-        >
-          <RotateCw className="size-3" strokeWidth={1.75} />
-        </Button>
-      ) : null}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-5"
-        disabled={splitDisabled}
-        aria-label={translate(
-          'auto.components.panel-canvas.PanelCanvasPage.splitRight',
-          'Split right'
-        )}
-        onClick={() => onSplit('row')}
-      >
-        <Columns2 className="size-3" strokeWidth={1.75} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-5"
-        disabled={splitDisabled}
-        aria-label={translate(
-          'auto.components.panel-canvas.PanelCanvasPage.splitDown',
-          'Split down'
-        )}
-        onClick={() => onSplit('column')}
-      >
-        <Rows2 className="size-3" strokeWidth={1.75} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-5"
-        aria-label={translate(
-          'auto.components.panel-canvas.PanelCanvasPage.closeTile',
-          'Close tile'
-        )}
-        onClick={onClose}
-      >
-        <X className="size-3" strokeWidth={1.75} />
-      </Button>
-    </div>
-  )
 }
 
 function CanvasTerminalTile({
@@ -127,7 +40,7 @@ function CanvasTerminalTile({
   panel,
   visible
 }: {
-  leaf: PanelCanvasLeaf
+  leaf: PanelCanvasPanelLeaf
   panel: PinnedTerminalPanel
   visible: boolean
 }): React.JSX.Element {
@@ -189,7 +102,7 @@ function CanvasWebTile({
   leaf,
   panel
 }: {
-  leaf: PanelCanvasLeaf
+  leaf: PanelCanvasPanelLeaf
   panel: PinnedWebPanel
 }): React.JSX.Element {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
@@ -219,6 +132,27 @@ export function CanvasNodeView({
   callbacks: CanvasTreeCallbacks
 }): React.JSX.Element {
   if (isPanelCanvasLeaf(node)) {
+    if (node.kind === 'shell') {
+      const label =
+        node.label ??
+        node.host ??
+        translate('auto.components.panel-canvas.PanelCanvasTree.localShell', 'Local shell')
+      return (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+          <CanvasTileChrome
+            title={label}
+            host={node.host ?? undefined}
+            splitDisabled={callbacks.splitDisabled}
+            onSplit={(direction) => callbacks.onSplitLeaf(node.id, direction)}
+            onClose={() => callbacks.onRemoveLeaf(node.id)}
+          />
+          {/* Why: shells always use the slim direct-PTY terminal, in every
+              window — they are ad-hoc sessions with no pinned-panel entry,
+              tab, or scrollback restore to preserve. */}
+          <SlimTerminalTile spawnKey={node.id} host={node.host} command="" />
+        </div>
+      )
+    }
     const terminalPanel =
       node.kind === 'terminal' ? terminalPanels.find((p) => p.id === node.panelId) : undefined
     const webPanel = node.kind === 'web' ? webPanels.find((p) => p.id === node.panelId) : undefined
@@ -228,14 +162,12 @@ export function CanvasNodeView({
       translate('auto.components.panel-canvas.PanelCanvasPage.missingPanel', 'Panel removed')
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
-        <TileChrome
+        <CanvasTileChrome
           title={title}
           host={terminalPanel?.host}
+          webviewLeafId={webPanel ? node.id : undefined}
           splitDisabled={callbacks.splitDisabled}
           onSplit={(direction) => callbacks.onSplitLeaf(node.id, direction)}
-          onReload={
-            webPanel ? () => reloadPinnedWebPanelWebview(canvasWebviewId(node.id)) : undefined
-          }
           onClose={() => callbacks.onRemoveLeaf(node.id)}
         />
         {terminalPanel ? (

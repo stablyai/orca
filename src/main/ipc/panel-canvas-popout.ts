@@ -141,14 +141,11 @@ export function registerPanelCanvasPopoutHandlers(): void {
 
   ipcMain.handle(
     'popoutPty:spawn',
-    (event, args: { host?: string | null; command: string; cols?: number; rows?: number }) => {
-      if (!isPopoutWindow(event.sender.id)) {
-        return { ok: false as const, error: 'popout-only' }
-      }
+    (event, args: { host?: string | null; command?: string; cols?: number; rows?: number }) => {
+      // Why: any window may own slim PTYs — popout tiles use them for every
+      // terminal, and shell tiles use them inside the main window too. The
+      // owning webContents scopes every subsequent input/resize/kill.
       const command = typeof args?.command === 'string' ? args.command : ''
-      if (command.length === 0) {
-        return { ok: false as const, error: 'empty-command' }
-      }
       const cols = Number.isInteger(args?.cols) && args.cols! > 0 ? args.cols! : 80
       const rows = Number.isInteger(args?.rows) && args.rows! > 0 ? args.rows! : 24
       const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' }
@@ -168,10 +165,12 @@ export function registerPanelCanvasPopoutHandlers(): void {
         // a remote tty, so swap it for -tt.
         const sshArgs = buildSshArgs(target).map((arg) => (arg === '-T' ? '-tt' : arg))
         file = findSystemSsh() ?? 'ssh'
-        spawnArgs = [...sshArgs, command]
+        // Why: no command = an interactive login shell on the host (the
+        // ad-hoc "SSH window"); with one, run it and exit like a panel.
+        spawnArgs = command.length > 0 ? [...sshArgs, command] : sshArgs
       } else {
         file = process.env.SHELL || '/bin/bash'
-        spawnArgs = ['-lc', command]
+        spawnArgs = command.length > 0 ? ['-lc', command] : ['-l']
       }
 
       let proc: pty.IPty

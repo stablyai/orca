@@ -3364,10 +3364,21 @@ export type PinnedTerminalPanel = {
 /** One tile of a saved panel layout: a reference to a pinned panel. The
  *  panel's command/url/host always come from the live pinned-panel entry, so
  *  editing a panel updates every layout that shows it. */
-export type PanelLayoutLeaf = {
+export type PanelLayoutPanelLeaf = {
   kind: 'terminal' | 'web'
   panelId: string
 }
+
+/** A tile holding an ad-hoc login shell rather than a configured panel —
+ *  `host` names an SSH target (null = local). Shells are self-contained, so
+ *  they survive in saved layouts without depending on a pinned-panel entry. */
+export type PanelLayoutShellLeaf = {
+  kind: 'shell'
+  host: string | null
+  label?: string
+}
+
+export type PanelLayoutLeaf = PanelLayoutPanelLeaf | PanelLayoutShellLeaf
 
 /** A resizable split holding two or more tiles or nested splits. `sizes` are
  *  relative flex weights matching `children`; absent means equal shares. */

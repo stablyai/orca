@@ -36,6 +36,7 @@ import {
   appendCanvasLeaf,
   canvasLeafFor,
   canvasNodeFromLayout,
+  canvasShellLeafFor,
   countCanvasLeaves,
   type PanelCanvasNode
 } from '@/lib/panel-canvas'
@@ -677,6 +678,8 @@ export type UISlice = {
     direction: 'row' | 'column'
   ) => void
   openPanelLayoutInCanvas: (layout: PanelLayout) => void
+  /** Opens an ad-hoc login shell tile on `host` (null = local) in the canvas. */
+  openShellInCanvas: (host: string | null, label: string | null) => void
   /** A detached popout window handed its canvas back — show it here. */
   adoptDetachedPanelCanvas: (root: PanelCanvasNode, layoutId: string | null) => void
   setPanelCanvasRoot: (root: PanelCanvasNode | null) => void
@@ -1288,6 +1291,22 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
                 state.panelCanvasRoot,
                 canvasLeafFor(leaf.kind, leaf.panelId),
                 direction
+              ),
+      previousViewBeforePanelCanvas:
+        state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
+    })),
+  openShellInCanvas: (host: string | null, label: string | null) =>
+    set((state) => ({
+      activeView: 'panel-canvas',
+      panelCanvasRoot:
+        state.panelCanvasRoot === null
+          ? canvasShellLeafFor(host, label ?? undefined)
+          : countCanvasLeaves(state.panelCanvasRoot) >= MAX_PANEL_LAYOUT_LEAVES
+            ? state.panelCanvasRoot
+            : appendCanvasLeaf(
+                state.panelCanvasRoot,
+                canvasShellLeafFor(host, label ?? undefined),
+                'row'
               ),
       previousViewBeforePanelCanvas:
         state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView

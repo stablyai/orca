@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import type { PanelLayout, PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { detachPanelIntoWindow } from '@/lib/panel-canvas-detach'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -72,11 +73,13 @@ function sortableRowStyle(
 function PanelCanvasContextMenu({
   kind,
   panelId,
+  title,
   onRename,
   children
 }: {
   kind: 'terminal' | 'web'
   panelId: string
+  title: string
   onRename: () => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -99,6 +102,9 @@ function PanelCanvasContextMenu({
             'auto.components.sidebar.SidebarPanelsNav.canvasSplitDown',
             'Add to canvas (split down)'
           )}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => detachPanelIntoWindow(kind, panelId, title)}>
+          {translate('auto.components.sidebar.SidebarPanelsNav.detachPanel', 'Open in new window')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -135,7 +141,12 @@ export function SortableWebPanelButton({
     )
   }
   return (
-    <PanelCanvasContextMenu kind="web" panelId={panel.id} onRename={() => setRenaming(true)}>
+    <PanelCanvasContextMenu
+      kind="web"
+      panelId={panel.id}
+      title={panel.title}
+      onRename={() => setRenaming(true)}
+    >
       <button
         ref={setNodeRef}
         style={sortableRowStyle(transform, transition)}
@@ -194,7 +205,12 @@ export function SortableTerminalPanelButton({
     )
   }
   return (
-    <PanelCanvasContextMenu kind="terminal" panelId={panel.id} onRename={() => setRenaming(true)}>
+    <PanelCanvasContextMenu
+      kind="terminal"
+      panelId={panel.id}
+      title={panel.title}
+      onRename={() => setRenaming(true)}
+    >
       <button
         ref={setNodeRef}
         style={sortableRowStyle(transform, transition)}

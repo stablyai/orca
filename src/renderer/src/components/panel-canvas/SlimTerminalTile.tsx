@@ -1,19 +1,23 @@
 import React from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import type { PinnedTerminalPanel } from '../../../../shared/types'
-import type { PanelCanvasLeaf } from '@/lib/panel-canvas'
 import { translate } from '@/i18n/i18n'
 
-/** Popout-window terminal tile: a bare xterm over the slim popoutPty channel
- *  (direct node-pty in main, owned by this window). Live TUIs only — no
- *  scrollback restore, tabs, or pane-manager machinery. */
-export function PopoutTerminalTile({
-  leaf,
-  panel
+/** Popout-window terminal: a bare xterm over the slim popoutPty channel
+ *  (direct node-pty in main, owned by this window). Live TUIs and ad-hoc
+ *  shells only — no scrollback restore, tabs, or pane-manager machinery.
+ *
+ *  `spawnKey` identifies this terminal instance: changing it tears the PTY
+ *  down and spawns a fresh one (canvas tiles pass their leaf id). An empty
+ *  `command` means a login shell. */
+export function SlimTerminalTile({
+  spawnKey,
+  host,
+  command
 }: {
-  leaf: PanelCanvasLeaf
-  panel: PinnedTerminalPanel
+  spawnKey: string
+  host: string | null
+  command: string
 }): React.JSX.Element {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const [error, setError] = React.useState<string | null>(null)
@@ -44,8 +48,8 @@ export function PopoutTerminalTile({
 
     void window.api.panelCanvasPopout.pty
       .spawn({
-        host: panel.host ?? null,
-        command: panel.command,
+        host,
+        command,
         cols: terminal.cols,
         rows: terminal.rows
       })
@@ -109,9 +113,9 @@ export function PopoutTerminalTile({
       }
       terminal.dispose()
     }
-    // Why: leaf.id keys the tile instance — a re-created leaf (reattach round
-    // trip) must spawn a fresh PTY; panel command/host edits likewise.
-  }, [leaf.id, panel.host, panel.command])
+    // Why: spawnKey identifies the instance — a re-created tile (reattach
+    // round trip) must spawn a fresh PTY; command/host edits likewise.
+  }, [spawnKey, host, command])
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0a0a0a]">

@@ -27,6 +27,22 @@ function normalizeLayoutNode(
     budget.leaves -= 1
     return { kind: node.kind, panelId: node.panelId }
   }
+  if (node.kind === 'shell') {
+    // Why: host is a target id/label resolved at spawn time (null = local);
+    // an empty string would silently mean "local", so reject it outright.
+    if (node.host !== null && (typeof node.host !== 'string' || node.host.length === 0)) {
+      return null
+    }
+    if (budget.leaves <= 0) {
+      return null
+    }
+    budget.leaves -= 1
+    const label =
+      typeof node.label === 'string' && node.label.trim().length > 0
+        ? node.label.trim().slice(0, MAX_LAYOUT_TITLE_LENGTH)
+        : undefined
+    return { kind: 'shell', host: node.host, ...(label ? { label } : {}) }
+  }
   if (node.direction !== 'row' && node.direction !== 'column') {
     return null
   }

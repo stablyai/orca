@@ -124,3 +124,59 @@ describe('normalizePanelLayouts', () => {
     expect(countPanelLayoutLeaves(layouts[0].root)).toBeLessThan(9)
   })
 })
+
+describe('shell leaves', () => {
+  it('keeps a shell leaf with host, local shell, and label', () => {
+    const layouts = normalizePanelLayouts([
+      {
+        id: 'l1',
+        title: 'shells',
+        root: {
+          direction: 'row',
+          children: [
+            { kind: 'shell', host: 'node-a', label: 'node-a' },
+            { kind: 'shell', host: null }
+          ]
+        }
+      }
+    ])
+    expect(layouts[0].root).toEqual({
+      direction: 'row',
+      children: [
+        { kind: 'shell', host: 'node-a', label: 'node-a' },
+        { kind: 'shell', host: null }
+      ]
+    })
+  })
+
+  it('rejects a shell leaf whose host is an empty string', () => {
+    // Why: '' would silently mean "local"; only an explicit null does.
+    expect(
+      normalizePanelLayouts([{ id: 'l', title: 't', root: { kind: 'shell', host: '' } }])
+    ).toEqual([])
+  })
+
+  it('drops a blank label instead of persisting it', () => {
+    const layouts = normalizePanelLayouts([
+      { id: 'l', title: 't', root: { kind: 'shell', host: 'h', label: '   ' } }
+    ])
+    expect(layouts[0].root).toEqual({ kind: 'shell', host: 'h' })
+  })
+
+  it('counts shell leaves against the leaf budget', () => {
+    const wide = normalizePanelLayouts([
+      {
+        id: 'w',
+        title: 'w',
+        root: {
+          direction: 'row',
+          children: Array.from({ length: MAX_PANEL_LAYOUT_LEAVES + 3 }, () => ({
+            kind: 'shell',
+            host: 'h'
+          }))
+        }
+      }
+    ])
+    expect(countPanelLayoutLeaves(wide[0].root)).toBe(MAX_PANEL_LAYOUT_LEAVES)
+  })
+})
