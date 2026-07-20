@@ -15,11 +15,11 @@ import {
 } from './remote-file-browser-helpers'
 
 const entries: DirEntry[] = [
-  { name: 'src', isDirectory: true },
-  { name: 'docs', isDirectory: true },
-  { name: 'README.md', isDirectory: false },
-  { name: '.env', isDirectory: false },
-  { name: 'node_modules', isDirectory: true }
+  { name: 'src', isDirectory: true, isSymlink: false },
+  { name: 'docs', isDirectory: true, isSymlink: false },
+  { name: 'README.md', isDirectory: false, isSymlink: false },
+  { name: '.env', isDirectory: false, isSymlink: false },
+  { name: 'node_modules', isDirectory: true, isSymlink: false }
 ]
 
 describe('filterEntries', () => {
@@ -40,7 +40,8 @@ describe('filterEntries', () => {
         get name(): string {
           throw new Error('oversized remote filters must not scan entry names')
         },
-        isDirectory: true
+        isDirectory: true,
+        isSymlink: false
       }
     ]
 
@@ -248,10 +249,10 @@ describe('parsePathInput', () => {
 
 describe('resolveSegmentStep', () => {
   const listing: DirEntry[] = [
-    { name: 'Documents', isDirectory: true },
-    { name: 'Downloads', isDirectory: true },
-    { name: 'orca-internal', isDirectory: true },
-    { name: 'notes.txt', isDirectory: false }
+    { name: 'Documents', isDirectory: true, isSymlink: false },
+    { name: 'Downloads', isDirectory: true, isSymlink: false },
+    { name: 'orca-internal', isDirectory: true, isSymlink: false },
+    { name: 'notes.txt', isDirectory: false, isSymlink: false }
   ]
 
   it('exact directory match descends', () => {
@@ -315,8 +316,8 @@ describe('resolveSegmentStep', () => {
 
   it('case-sensitive exact match wins over a case-insensitive peer', () => {
     const mixed: DirEntry[] = [
-      { name: 'Documents', isDirectory: true },
-      { name: 'documents', isDirectory: true }
+      { name: 'Documents', isDirectory: true, isSymlink: false },
+      { name: 'documents', isDirectory: true, isSymlink: false }
     ]
     expect(resolveSegmentStep('documents', '/home/neil', mixed)).toEqual({
       type: 'descend',

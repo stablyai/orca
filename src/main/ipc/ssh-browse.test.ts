@@ -25,6 +25,13 @@ function createMockChannel(): EventEmitter & { stderr: EventEmitter } {
   })
 }
 
+// The POSIX listing emits `<l|-><d|->/name` lines: `[ -d ]` (which follows
+// symlinks, unlike `ls -p`) supplies the directory flag and `[ -h ]` the
+// symlink flag. Names cannot contain `/`, so the first `/` ends the prefix.
+function posixBrowseCommand(cdTarget: string): string {
+  return `cd ${cdTarget} && pwd && entries=$(command ls -1A) && printf '%s\\n' "$entries" | while IFS= read -r f; do if [ -h "$f" ]; then t=l; else t=-; fi; if [ -d "$f" ]; then d=d; else d=-; fi; printf '%s%s/%s\\n' "$t" "$d" "$f"; done`
+}
+
 // Recover the PowerShell script from a `powershell.exe ... -EncodedCommand <b64>`
 // command so tests can assert on the actual (UTF-16LE) payload sent to the host.
 function decodeEncodedCommand(command: string): string {
@@ -56,25 +63,56 @@ describe('registerSshBrowseHandler', () => {
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
     await Promise.resolve()
-    channel.emit('data', Buffer.from('/home/user\nsrc/\nREADME.md\nnotes file.txt\n'))
+    channel.emit('data', Buffer.from('/home/user\n-d/src\n--/README.md\n--/notes file.txt\n'))
     channel.emit('exit', 0)
     channel.emit('close')
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: '/home/user',
       entries: [
-        { name: 'src', isDirectory: true },
-        { name: 'notes file.txt', isDirectory: false },
-        { name: 'README.md', isDirectory: false }
+        { name: 'src', isDirectory: true, isSymlink: false },
+        { name: 'notes file.txt', isDirectory: false, isSymlink: false },
+        { name: 'README.md', isDirectory: false, isSymlink: false }
       ]
     })
-    expect(exec).toHaveBeenCalledWith('cd "$HOME" && pwd && command ls -1Ap')
+    expect(exec).toHaveBeenCalledWith(posixBrowseCommand('"$HOME"'))
     expect(channel.listenerCount('data')).toBe(0)
     expect(channel.listenerCount('exit')).toBe(0)
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
+  })
+
+  it('classifies remote symlinked directories as directories', async () => {
+    const channel = createMockChannel()
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/srv' })
+    await Promise.resolve()
+    // `[ -d ]` follows symlinks, so the remote loop flags `linked-dir` as a
+    // directory even though it is a symlink; `[ -h ]` marks the link itself.
+    channel.emit(
+      'data',
+      Buffer.from('/srv\nld/linked-dir\n-d/real-dir\nl-/broken-link\nl-/linked-file\n')
+    )
+    channel.emit('exit', 0)
+    channel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: '/srv',
+      entries: [
+        { name: 'linked-dir', isDirectory: true, isSymlink: true },
+        { name: 'real-dir', isDirectory: true, isSymlink: false },
+        { name: 'broken-link', isDirectory: false, isSymlink: true },
+        { name: 'linked-file', isDirectory: false, isSymlink: true }
+      ]
+    })
+    expect(exec).toHaveBeenCalledWith(posixBrowseCommand("'/srv'"))
   })
 
   it('escapes remote browse paths before invoking command ls', async () => {
@@ -95,7 +133,7 @@ describe('registerSshBrowseHandler', () => {
       resolvedPath: "/tmp/it's here",
       entries: []
     })
-    expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
+    expect(exec).toHaveBeenCalledWith(posixBrowseCommand("'/tmp/it'\\''s here'"))
   })
 
   it('falls back to PowerShell when a Windows SSH shell rejects POSIX exec', async () => {
@@ -122,19 +160,19 @@ describe('registerSshBrowseHandler', () => {
     // aren't misclassified as files with a stray carriage return in the name.
     // The script emits a forward-slash resolvedPath (the -replace '\\','/' line)
     // so the renderer's parentPath/joinPath, which only split on `/`, still work.
-    windowsChannel.emit('data', Buffer.from('C:/Users/alice\r\nDesktop/\r\nnotes.txt\r\n'))
+    windowsChannel.emit('data', Buffer.from('C:/Users/alice\r\n-d/Desktop\r\n--/notes.txt\r\n'))
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: 'C:/Users/alice',
       entries: [
-        { name: 'Desktop', isDirectory: true },
-        { name: 'notes.txt', isDirectory: false }
+        { name: 'Desktop', isDirectory: true, isSymlink: false },
+        { name: 'notes.txt', isDirectory: false, isSymlink: false }
       ]
     })
     expect(exec).toHaveBeenCalledTimes(2)
-    expect(exec).toHaveBeenNthCalledWith(1, "cd 'C:/Users/alice' && pwd && command ls -1Ap")
+    expect(exec).toHaveBeenNthCalledWith(1, posixBrowseCommand("'C:/Users/alice'"))
     expect(exec.mock.calls[1]?.[0]).toMatch(/^powershell\.exe /)
     expect(exec.mock.calls[1]?.[1]).toEqual({ wrapCommand: false })
 
@@ -148,6 +186,11 @@ describe('registerSshBrowseHandler', () => {
     // resolvedPath must be emitted with forward slashes so the renderer's
     // parentPath/joinPath (which only split on `/`) keep working on Windows.
     expect(script).toContain("Write-Output ($resolved -replace '\\\\', '/')")
+    // Use LinkType (populated only for symlinks/junctions) rather than the
+    // generic ReparsePoint attribute, which is also set on OneDrive/cloud
+    // placeholders and would mislabel ordinary files as links.
+    expect(script).toContain('$_.LinkType')
+    expect(script).not.toContain('ReparsePoint')
   })
 
   it('falls back for a non-English cmd.exe reject (exit 1, localized stderr)', async () => {
@@ -176,13 +219,13 @@ describe('registerSshBrowseHandler', () => {
     await vi.waitFor(() => {
       expect(windowsChannel.listenerCount('close')).toBe(1)
     })
-    windowsChannel.emit('data', Buffer.from('C:/Users\r\nAdmin/\r\n'))
+    windowsChannel.emit('data', Buffer.from('C:/Users\r\n-d/Admin\r\n'))
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: 'C:/Users',
-      entries: [{ name: 'Admin', isDirectory: true }]
+      entries: [{ name: 'Admin', isDirectory: true, isSymlink: false }]
     })
     expect(exec).toHaveBeenCalledTimes(2)
   })

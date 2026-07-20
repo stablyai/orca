@@ -6,7 +6,13 @@ import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershe
 export type RemoteDirEntry = {
   name: string
   isDirectory: boolean
+  isSymlink: boolean
 }
+
+// Listing lines are `<l|-><d|->/name`: symlink flag, directory flag, then the
+// entry name. Names cannot contain `/`, so the first `/` always ends the
+// prefix; anything else on stdout (motd noise, blank lines) is skipped.
+const BROWSE_ENTRY_LINE = /^([l-])([d-])\/(.*)$/
 
 const SSH_BROWSE_TIMEOUT_MS = 15_000
 
@@ -95,12 +101,19 @@ function browseWithPosixShell(
 ): Promise<{ entries: RemoteDirEntry[]; resolvedPath: string }> {
   // Why: using one line per entry preserves filenames containing spaces.
   // `command ls` bypasses user aliases/functions like `ls='eza ...'`.
-  // The -1 flag outputs one entry per line. The -p flag appends / to directories.
   // We resolve ~ and get the absolute path via `cd <path> && pwd`.
-  // `cd` and `ls` are chained with `&&` so a failing `ls` (e.g. permission
-  // denied after a readable `cd ... && pwd`) propagates as a non-zero exit
-  // code rather than being indistinguishable from an empty directory.
-  return runBrowseCommand(conn, `cd ${shellEscape(dirPath)} && pwd && command ls -1Ap`)
+  // Each entry is emitted as `<l|-><d|->/name`: the directory flag comes from
+  // `[ -d ]`, which follows symlinks (unlike `ls -p`, which would list a
+  // symlinked directory as a file), and `[ -h ]` flags the link itself so the
+  // renderer can show a symlink indicator. Capturing `ls` output into a
+  // variable keeps a failing `ls` (e.g. permission denied after a readable
+  // `cd ... && pwd`) propagating through the `&&` chain as a non-zero exit
+  // code rather than being masked by the while-loop pipeline and misread as
+  // an empty directory.
+  return runBrowseCommand(
+    conn,
+    `cd ${shellEscape(dirPath)} && pwd && entries=$(command ls -1A) && printf '%s\\n' "$entries" | while IFS= read -r f; do if [ -h "$f" ]; then t=l; else t=-; fi; if [ -d "$f" ]; then d=d; else d=-; fi; printf '%s%s/%s\\n' "$t" "$d" "$f"; done`
+  )
 }
 
 function browseWithWindowsPowerShell(
@@ -122,7 +135,12 @@ function browseWithWindowsPowerShell(
     // native $resolved for Get-ChildItem -LiteralPath.
     "Write-Output ($resolved -replace '\\\\', '/')",
     'Get-ChildItem -LiteralPath $resolved -Force | ForEach-Object {',
-    "  if ($_.PSIsContainer) { Write-Output ($_.Name + '/') } else { Write-Output $_.Name }",
+    // Why: LinkType is populated only for symlinks/junctions, matching Node's
+    // isSymbolicLink() on the local/server path. The generic ReparsePoint
+    // attribute would also flag OneDrive/cloud placeholders as links.
+    "  $t = if ($_.LinkType) { 'l' } else { '-' }",
+    "  $d = if ($_.PSIsContainer) { 'd' } else { '-' }",
+    "  Write-Output ($t + $d + '/' + $_.Name)",
     '}'
   ].join('; ')
 
@@ -240,15 +258,15 @@ async function runBrowseCommand(
       const entries: RemoteDirEntry[] = []
 
       for (let i = 1; i < lines.length; i++) {
-        const line = lines[i]
-        if (!line || line === './' || line === '../') {
+        const match = BROWSE_ENTRY_LINE.exec(lines[i])
+        if (!match) {
           continue
         }
-        if (line.endsWith('/')) {
-          entries.push({ name: line.slice(0, -1), isDirectory: true })
-        } else {
-          entries.push({ name: line, isDirectory: false })
+        const name = match[3]
+        if (!name || name === '.' || name === '..') {
+          continue
         }
+        entries.push({ name, isDirectory: match[2] === 'd', isSymlink: match[1] === 'l' })
       }
 
       // Sort: directories first, then alphabetical

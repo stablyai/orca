@@ -12,8 +12,8 @@ type BrowseDirArgs = {
 
 const browseDir = vi.fn(async ({ dirPath }: BrowseDirArgs) => ({
   entries: [
-    { name: 'src', isDirectory: true },
-    { name: 'README.md', isDirectory: false }
+    { name: 'src', isDirectory: true, isSymlink: false },
+    { name: 'README.md', isDirectory: false, isSymlink: false }
   ],
   resolvedPath: dirPath === '~' ? '/home/alice' : dirPath
 }))

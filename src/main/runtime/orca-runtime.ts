@@ -1940,6 +1940,25 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
+async function isServerBrowseEntryDirectory(
+  dirPath: string,
+  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }
+): Promise<boolean> {
+  if (entry.isDirectory()) {
+    return true
+  }
+  if (!entry.isSymbolicLink()) {
+    return false
+  }
+  try {
+    // Why: the Add Project browser must let users descend into symlinked
+    // directories, so classify links by their target type like relay fs.readDir.
+    return (await stat(join(dirPath, entry.name))).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 function resolveServerBrowsePath(pathValue: string): string {
   const trimmed = pathValue.trim() || '~'
   if (trimmed.includes('\0')) {
@@ -13020,13 +13039,15 @@ export class OrcaRuntimeService {
       throw new Error(`${dirPath} is not a directory`)
     }
     const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = entries
-      .filter((entry) => entry.name !== '.' && entry.name !== '..')
-      .map((entry) => ({
-        name: entry.name,
-        isDirectory: entry.isDirectory(),
-        isSymlink: entry.isSymbolicLink()
-      }))
+    const mapped = await Promise.all(
+      entries
+        .filter((entry) => entry.name !== '.' && entry.name !== '..')
+        .map(async (entry) => ({
+          name: entry.name,
+          isDirectory: await isServerBrowseEntryDirectory(dirPath, entry),
+          isSymlink: entry.isSymbolicLink()
+        }))
+    )
     mapped.sort((a, b) => {
       if (a.isDirectory !== b.isDirectory) {
         return a.isDirectory ? -1 : 1

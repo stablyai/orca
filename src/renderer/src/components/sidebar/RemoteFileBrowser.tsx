@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: the remote file browser centralizes filter state, path-mode preview state, cache, debounce, request gen, and click/keyboard handling in one component so picker navigation stays coherent. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Folder, ArrowUp, LoaderCircle, Home, Search } from 'lucide-react'
+import { ChevronRight, Folder, ArrowUp, Link, LoaderCircle, Home, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
@@ -759,6 +759,16 @@ export function RemoteFileBrowser({
                     <FileIcon className="size-3.5 text-muted-foreground/60 shrink-0" />
                   )}
                   <span className="truncate flex-1 min-w-0">{entry.name}</span>
+                  {entry.isSymlink && (
+                    <Link
+                      role="img"
+                      aria-label={translate(
+                        'auto.components.sidebar.RemoteFileBrowser.3fcce89fa7',
+                        'Symbolic link'
+                      )}
+                      className="size-3 text-muted-foreground/60 shrink-0"
+                    />
+                  )}
                   {entry.isDirectory && (
                     <ChevronRight className="size-3.5 text-muted-foreground/60 shrink-0" />
                   )}
