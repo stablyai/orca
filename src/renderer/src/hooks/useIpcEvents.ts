@@ -3020,7 +3020,10 @@ export function useIpcEvents(): void {
         }
       }
       if (!exists) {
-        // Why: startup snapshot replay can beat tab/layout hydration too; bounded retries let runtime-backed rows adopt later.
+        // Why: startup snapshot replay can beat tab/layout hydration too.
+        // Reuse the same bounded retry queue when the row still carries
+        // runtime-backed worktree provenance so the cached status can adopt
+        // once the pane becomes visible.
         if (options?.replay === true) {
           if (data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
             if (options?.retry !== true) {
@@ -3031,7 +3034,9 @@ export function useIpcEvents(): void {
           return 'dropped'
         }
         if (options?.retry !== true) {
-          // Why: a non-empty paneKey with no matching tab is a routing failure; live IPC can beat renderer hydration.
+          // Why: empty paneKeys are dropped in main before IPC fanout. Reaching
+          // this branch means a non-empty paneKey escaped without a matching
+          // renderer tab, so track the adoption/routing failure separately.
           track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
           enqueuePendingAgentStatus(data)
         }

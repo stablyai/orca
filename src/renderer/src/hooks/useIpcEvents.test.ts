@@ -6825,7 +6825,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
-    subscribeListenerRef.current?.(storeState)
+    subscribeListenerRef.current?.(storeState, storeState)
 
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
@@ -6881,7 +6881,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     vi.doMock('./agent-hook-completion-notifications', () => ({
       observeAgentHookCompletionForNotification,
       resetAgentHookCompletionNotificationCoordinators: vi.fn(),
-      syncAgentHookCompletionNotificationSettings: vi.fn()
+      syncAgentHookCompletionNotificationSettings: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
     }))
     stubAuxiliaryModules()
     vi.stubGlobal(
@@ -6929,7 +6930,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
-    subscribeListenerRef.current?.(storeState)
+    subscribeListenerRef.current?.(storeState, storeState)
 
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,
@@ -7024,11 +7025,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
-    subscribeListenerRef.current?.(storeState)
+    subscribeListenerRef.current?.(storeState, storeState)
 
     expect(setAgentStatus).not.toHaveBeenCalled()
   })
-
 
   it('accepts WSL-relayed status events for a local repo (wsl:* is transport provenance, not ownership)', async () => {
     const setAgentStatus = vi.fn()
