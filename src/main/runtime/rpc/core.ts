@@ -1,7 +1,4 @@
-// Why: this is the single boundary between raw RPC frames and the OrcaRuntimeService.
-// Keeping the schema, handler, and result type attached to one object makes the
-// CLI-facing contract greppable and lets the dispatcher verify every payload
-// against the same shape the handler consumed during development.
+// Why: single boundary between raw RPC frames and OrcaRuntimeService; keeps schema, handler, and result type on one object.
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -51,38 +48,20 @@ export type RpcRequest = {
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
-  // Why: long-poll handlers (e.g. orchestration.check with wait=true) need to
-  // observe the underlying socket's lifetime so they can release their slot
-  // and resolve their inner waiters immediately when a client disconnects
-  // instead of running down the configured timeoutMs. Undefined outside the
-  // runtime-rpc transport (direct in-process callers don't need it).
-  // See design doc §3.1 counter-lifecycle.
+  // Why: lets long-poll handlers release immediately on client disconnect instead of running down timeoutMs. See design doc §3.1.
   signal?: AbortSignal
-  // Why: streaming handlers (notifications/accounts/terminal subscribe)
-  // register cleanup callbacks against the runtime so reconnects don't leak
-  // listeners. Keying those cleanups by per-WebSocket connectionId lets the
-  // server reap all subscriptions for a closing socket, even when other
-  // sockets for the same deviceToken stay alive (multi-screen mobile).
+  // Why: per-WebSocket key so the server reaps a closing socket's subscriptions without touching sibling sockets sharing the deviceToken.
   connectionId?: string
-  // Why: shared-control multiplexes many logical streams over one socket. Some
-  // handlers need the frame id to register cleanup at logical-stream granularity.
+  // Why: shared-control multiplexes many logical streams over one socket; the frame id lets handlers register cleanup per logical stream.
   requestId?: string
-  // Why: WebSocket RPCs authenticate by mobile device token. State-owning
-  // handlers use this to clean up when that paired device disconnects.
+  // Why: paired mobile device token; state-owning handlers use it to clean up when that device disconnects.
   clientId?: string
-  // Why: payload windowing/truncation tuned for the constrained mobile payload
-  // (e.g. native-chat block char cap) must not clip full-screen web/desktop
-  // clients. Carries the paired device's scope so handlers can gate the diet to
-  // phones only. Undefined for in-process callers → treat as full-class (no clip).
+  // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
   pairing?: PairingRpcContext
-  // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
-  // responses after the binary terminal cutover. Undefined on Unix/socket
-  // transports and non-E2EE WebSocket paths.
+  // Why: mobile terminal traffic bypasses JSON streaming; undefined on Unix/socket and non-E2EE WebSocket paths.
   sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-  // Why: binary terminal input/resize frames arrive outside JSON-RPC after a
-  // stream is established. The WebSocket transport owns the connection-scoped
-  // stream table; handlers register only the stream IDs they created.
+  // Why: binary terminal frames arrive outside JSON-RPC once a stream is established; handlers register only the stream IDs they created.
   registerBinaryStreamHandler?: (
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
@@ -91,11 +70,7 @@ export type RpcContext = {
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown
 
-// Why: defineMethod preserves the inferred param type locally so each handler
-// is fully typed, but the erased `RpcMethod` form is what the dispatcher
-// actually stores. The erasure lives in one cast inside defineMethod rather
-// than in every method file, which is the tradeoff for the variance problem
-// of `RpcHandler` being contravariant in its param type.
+// Why: RpcMethod erases the param type; centralizing the cast in defineMethod sidesteps RpcHandler's contravariance.
 export type RpcMethod = {
   readonly name: string
   readonly params: ZodType | null
@@ -124,9 +99,7 @@ export type RpcStreamingHandler<TParams> = (
   emit: (result: unknown) => void
 ) => Promise<void>
 
-// Why: streaming methods emit multiple responses over a long-lived connection.
-// The `stream` flag lets the dispatcher distinguish them from one-shot methods
-// and route them to the emit-based call path instead of the Promise-based one.
+// Why: the `stream` flag lets the dispatcher route these to the emit-based path instead of the one-shot Promise path.
 export type RpcStreamingMethod = {
   readonly name: string
   readonly params: ZodType | null
@@ -181,10 +154,7 @@ export class InvalidArgumentError extends Error {
   }
 }
 
-// Why: zod aggregates all failing fields into `issues`, but the CLI surfaces
-// a single string to users. Pick the first issue's message so callers see a
-// message that matches the original handler's `Missing terminal handle`-style
-// phrasing (each schema supplies that literal message on its own constraint).
+// Why: CLI surfaces one string; take the first issue's message, which each schema authors as the user-facing phrasing.
 export function formatZodError(error: ZodError): string {
   const first = error.issues[0]
   return first?.message ?? 'invalid_argument'

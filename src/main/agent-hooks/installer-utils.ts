@@ -38,16 +38,11 @@ export type HooksConfig = {
   [key: string]: unknown
 }
 
-// Why: host-level backstop (seconds) for Orca-managed status hooks. The shell
-// wrapper's curl `--max-time 1.5` is the normal dead-endpoint bound; this caps a
-// hook the agent host itself runs in case that transport budget is bypassed.
-// Intentionally independent of Copilot's `timeoutSec: 5` — both managed budgets
-// coexist by design (#4633).
+// Why: host-level backstop timeout for status hooks, independent of the curl --max-time and Copilot's timeoutSec (#4633).
 export const MANAGED_HOOK_TIMEOUT_SECONDS = 10
 export const MANAGED_HOOK_TIMEOUT_MILLISECONDS = MANAGED_HOOK_TIMEOUT_SECONDS * 1000
 
-// Nested command hook used by the Claude-shaped `hooks: [...]` schema (Claude,
-// Codex, Gemini, Droid, Grok, Command Code, Devin).
+// Nested command hook for the Claude-shaped `hooks: [...]` schema (Claude, Codex, Gemini, Droid, Grok, Command Code, Devin).
 export function buildManagedCommandHook(
   command: string,
   timeout = MANAGED_HOOK_TIMEOUT_SECONDS
@@ -55,8 +50,7 @@ export function buildManagedCommandHook(
   return { type: 'command', command, timeout }
 }
 
-// Direct command definition used by schemas that put `command` on the
-// definition itself (Cursor's documented top-level shape).
+// Direct command definition for schemas that put `command` on the definition itself (Cursor's top-level shape).
 export function buildManagedCommandDefinition(command: string): HookDefinition {
   return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
@@ -78,18 +72,12 @@ export function readHooksJson(configPath: string): HooksConfig | null {
   }
 }
 
-// Why: callers in install/remove need to match not just the exact current
-// managed command, but also stale entries pointing at old script paths — e.g.
-// from a previous dev build with a different Electron userData dir, or a
-// parallel dev/prod install. Matching by the managed script's file name
-// (under any `agent-hooks/` directory) lets a fresh install sweep those
-// without touching unrelated user-authored hooks.
+// Why: match by script file name, not exact command, so a fresh install sweeps stale entries from old/parallel installs.
 export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
   const scriptStem = scriptFileName.replace(/\.(?:cmd|ps1|sh)$/, '')
-  // Why: local Windows installs use .cmd or Copilot's .ps1, while SSH/POSIX
-  // installs use .sh. A platform switch must still sweep stale Orca hooks.
+  // Why: installs use .cmd/.ps1 (Windows) or .sh (SSH/POSIX); match all so a platform switch still sweeps stale hooks.
   const needles = [
     `agent-hooks/${scriptFileName}`,
     `agent-hooks/${scriptStem}.cmd`,
@@ -119,8 +107,7 @@ function decodePowerShellEncodedCommand(command: string): string | null {
   }
 }
 
-// Why: prod, dev, and parallel Orca instances must write the same managed
-// settings entry instead of racing between per-userData script paths.
+// Why: prod/dev/parallel Orca instances must write the same managed entry, not race between per-userData script paths.
 export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
@@ -129,16 +116,9 @@ function quotePosixShellString(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
-// Why: a stale managed hook entry (left over after the user wiped userData,
-// switched dev↔prod installs, or had a partial install fail) used to fire
-// `/bin/sh "<missing path>"` on every tool call, which exits 127 and surfaces
-// as `PreToolUse hook (failed) error: hook exited with code 127` in the agent
-// transcript. Guarding for a regular readable executable file makes a broken
-// install a silent no-op without hiding failures from a script that starts.
+// Why: guard for a readable executable so a stale entry at a missing script becomes a silent no-op, not an exit-127 failure on every tool call.
 export function wrapPosixHookCommand(scriptPath: string, env: Record<string, string> = {}): string {
-  // Why: POSIX single-quote escape so $, `, ", and \ in scriptPath are taken
-  // literally — avoids a shell-injection footgun if a future caller passes an
-  // arbitrary path.
+  // Why: single-quote escape so $, `, ", \ in scriptPath stay literal — avoids shell injection from an arbitrary path.
   const quoted = quotePosixShellString(scriptPath)
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
@@ -162,8 +142,7 @@ export function wrapWindowsHookCommand(
   scriptPath: string,
   env: Record<string, string> = {}
 ): string {
-  // Why: the encoded launcher protects paths across Windows hook shells and
-  // owns stdin when a stale config points at a missing managed script.
+  // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
   const quoted = quotePowerShellString(scriptPath)
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
@@ -176,14 +155,7 @@ export function wrapWindowsHookCommand(
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
 
 export function wrapWindowsCmdHookCommand(scriptPath: string): string {
-  // Why: Codex/Antigravity/Devin launch the hook command as a program (argv[0]),
-  // NOT through cmd.exe, so the launcher must be a single directly-spawnable
-  // token. The bare .cmd path is exactly that. A cmd-builtin `if exist …`
-  // launcher is unspawnable — its argv[0] is `if` — so it fails every hook with
-  // exit 1 (#8430 regression). A stale/missing script therefore surfaces a normal
-  // launch failure here; the missing-script stdin drain lives on the encoded
-  // fallback below, which needs a real interpreter for spaces/metacharacters
-  // anyway and cannot be reached by a cmd-builtin drain without breaking spawn.
+  // Why: Codex/Antigravity/Devin spawn the hook as argv[0], not via cmd.exe, so it must be one spawnable token; a cmd `if exist` launcher isn't (#8430).
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
@@ -191,17 +163,15 @@ export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
 
 export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
   const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly;
-  // unsafe paths stay encoded and the fast path gains a missing-file drain.
+  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly; unsafe paths stay encoded.
   return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
     ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     : wrapWindowsHookCommand(scriptPath)
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
-  // Why: Codex runs these hooks inline on every turn. PowerShell startup alone
-  // makes trusted Windows hooks visibly slow, so mirror the POSIX curl path.
-  // Qualify curl so a repo-local curl.exe cannot hijack hook payloads.
+  // Why: PowerShell startup makes inline per-turn Codex hooks visibly slow, so mirror the POSIX curl path.
+  // Why: fully-qualify curl so a repo-local curl.exe can't hijack hook payloads.
   return [
     `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
     '  --connect-timeout 0.5 --max-time 1.5 ^',
@@ -217,12 +187,7 @@ export function buildWindowsAgentHookPostCommand(source: AgentHookSource): strin
   ].join('\r\n')
 }
 
-// Why: status hooks fire up to 6× per turn; spawning PowerShell per post adds
-// ~300ms of interpreter startup each, which Codex 0.140's synchronous "Running
-// <event> hook" rows make visible. curl.exe (Windows 10 1803+) posts the same
-// form fields as the POSIX hook and reads the raw payload from stdin via
-// `--data-urlencode payload@-`, so UTF-8 (e.g. CJK prompts) survives byte-for-
-// byte without the code-page translation that previously forced PowerShell.
+// Why: PowerShell per-post costs ~300ms startup and mangles UTF-8 via code-page translation; curl.exe (Win10 1803+) avoids both.
 export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): string {
   return [
     '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
@@ -294,8 +259,7 @@ export function hookDefinitionHasManagedCommand(
   )
 }
 
-// Why: temp+rename so concurrent Orca instances writing this shared path can't
-// produce a torn script that an in-flight `/bin/sh <scriptPath>` would source.
+// Why: temp+rename so concurrent writers can't leave a torn script for an in-flight /bin/sh to source.
 export function writeManagedScript(scriptPath: string, content: string): void {
   const dir = dirname(scriptPath)
   mkdirSync(dir, { recursive: true })
@@ -316,9 +280,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
     writeScriptWithAclRetry(tmpPath, content)
-    // Why: chmod before rename so the canonical path is never visible in a
-    // unreadable/non-executable state; wrapPosixHookCommand's guards would
-    // silently skip the hook in that window.
+    // Why: chmod before rename so the canonical path is never visible non-executable, else the POSIX guard skips the hook.
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)
     }
@@ -334,8 +296,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   }
 }
 
-// Why: on Windows, write may fail with EPERM if the target directory has a
-// restrictive DACL. Grant an explicit ACL on EPERM and retry once.
+// Why: a restrictive directory DACL makes writes fail with EPERM on Windows; grant an ACL and retry once.
 function writeScriptWithAclRetry(scriptPath: string, content: string): void {
   try {
     writeFileSync(scriptPath, content, 'utf-8')
@@ -357,39 +318,25 @@ export function writeHooksJson(configPath: string, config: HooksConfig): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
 
-  // Why: write to a temp file then rename so a crash or disk-full mid-write
-  // leaves the original untouched. This is the only safe way to update a
-  // config file the user may have hand-edited.
-  //
-  // Why randomUUID: Date.now() alone collides when two install() calls fire in
-  // the same millisecond targeting the same dir (e.g. a future caller that
-  // installs multiple agents sharing a config dir, or rapid reinstalls from
-  // the settings UI). A collision would corrupt one of the two writes. The
-  // UUID suffix makes the tmp path unique per call.
+  // Why: temp+rename leaves the original untouched on a crash/disk-full mid-write.
+  // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = `${JSON.stringify(config, null, 2)}\n`
 
-  // Why: skip the write (and therefore the .bak rotation) when the on-disk
-  // content is already identical. Without this, every install() rewrites the
-  // file and rolls the backup forward, which can silently destroy the last
-  // recoverable copy if install() is called repeatedly (e.g. on app start).
+  // Why: skip identical writes so repeated install() calls don't roll the .bak forward and destroy the last recoverable copy.
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === serialized) {
         return
       }
     } catch {
-      // Fall through to the normal write path — a read error here is not
-      // worth failing the install for; the atomic write below will either
-      // succeed or throw loudly.
+      // Fall through to the normal write path; a read error isn't worth failing the install for.
     }
   }
 
   try {
     writeFileSync(tmpPath, serialized, 'utf-8')
-    // Why: single rolling backup — one file, no accumulation in ~/.claude.
-    // Protects against a merge-logic bug producing bad JSON; the original is
-    // always recoverable from <configPath>.bak until the next write.
+    // Why: single rolling backup so a merge-logic bug producing bad JSON stays recoverable from <configPath>.bak until the next write.
     if (existsSync(configPath)) {
       copyFileSync(configPath, `${configPath}.bak`)
     }

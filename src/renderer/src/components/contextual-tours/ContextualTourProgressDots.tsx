@@ -46,7 +46,7 @@ export function ContextualTourProgressDots({
       </span>
       <span className="whitespace-nowrap text-[11px] font-medium leading-none text-muted-foreground">
         {current}{' '}
-        {translate('auto.components.contextual.tours.ContextualTourProgressDots.7734cb8ad3', 'of')}
+        {translate('auto.components.contextual.tours.ContextualTourProgressDots.7734cb8ad3', 'of')}{' '}
         {total}
       </span>
     </div>

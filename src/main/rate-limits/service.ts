@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: this service centralizes polling, stale-data
-handling, account-switch fetch semantics, and renderer push coordination so the
-fetch ordering rules stay in one place. */
+/* eslint-disable max-lines -- Why: centralizes polling, stale-data handling, account-switch fetch semantics, and renderer push coordination in one place */
 import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type {
@@ -69,23 +67,16 @@ type ActiveWindowRefreshPlan =
   | { kind: 'full' }
   | { kind: 'providers'; providers: ActiveRateLimitProvider[] }
 
-// Why: Claude's subscription usage endpoint has a tight request budget. Quota
-// state is informational, so prefer keeping a recent snapshot over polling it
-// into 429s during long focused Orca sessions.
+// Why: Claude's usage endpoint has a tight budget and quota is only informational; prefer a recent snapshot over polling into 429s.
 const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
 const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never create a tight loop.
 const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
 const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
 const ACTIVE_FAILURE_REFETCH_MS = MIN_POLL_MS
-// Why: a persistent failure (bad auth, unsupported plan) retried at the 30s
-// floor hammers provider endpoints — Claude's tight-budget usage endpoint
-// starts returning 429s — without ever recovering. Back off per consecutive
-// failure, capped at the background poll cadence.
+// Why: retrying a persistent failure at the 30s floor hammers endpoints into 429s; back off per failure, capped at the poll cadence.
 const MAX_ACTIVE_FAILURE_REFETCH_MS = DEFAULT_POLL_MS
 const MAX_ACTIVE_FAILURE_STREAK = 8
-// Why: these providers have a dedicated fetch cycle, so an activation retry can
-// refresh just the failing one. Providers without one force a full fetchAll, so
-// their error retries stay on the 5-minute cadence to protect Claude's budget.
+// Why: these providers have a dedicated fetch cycle, so an activation retry refreshes just the failing one; others force a full fetchAll.
 const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
   'claude',
   'codex',
@@ -95,8 +86,7 @@ const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale da
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 
-// Why: inactive account arrays are derived from provider-specific caches on
-// demand in getState() and pushToRenderer().
+// Why: inactive account arrays are derived from provider caches on demand in getState()/pushToRenderer().
 type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
@@ -118,8 +108,7 @@ function normalizePollingInterval(ms: number): number {
 function isSystemDefaultClaudeAuth(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined
 ): boolean {
-  // Why: fetch cycles classify missing Claude auth as system-default; keep the
-  // PTY fallback gate aligned so background refresh cannot trigger auth flows.
+  // Why: fetch cycles treat missing Claude auth as system-default; align the PTY gate so refresh can't trigger auth flows.
   if (!authPreparation) {
     return true
   }
@@ -146,8 +135,7 @@ export class RateLimitService {
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
-  // Why: after the first recovery attempt, repeated focus/show/restore events
-  // during the same outage should not create a tight provider retry loop.
+  // Why: throttle repeated focus/show/restore events so one outage doesn't create a tight provider retry loop.
   private lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
@@ -158,8 +146,7 @@ export class RateLimitService {
     grok: 0,
     antigravity: 0
   }
-  // Why: consecutive applied failures per provider drive exponential backoff of
-  // the fast activation-retry lane; reset on any successful/unavailable result.
+  // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   private activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
@@ -269,8 +256,7 @@ export class RateLimitService {
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
-    // Why: attach() can replace windows; the previous closed listener also
-    // captures this service and must be removed with the focus listeners.
+    // Why: attach() can replace windows; remove the previous closed listener too, not only the focus listeners.
     const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
@@ -320,9 +306,7 @@ export class RateLimitService {
     this.pruneInactiveCodexState()
     return {
       ...this.state,
-      // Why: the cookie lives in the file system, not GlobalSettings. Surface
-      // its presence on the pushed state so the renderer keeps the MiniMax
-      // bar visible across reloads and between snapshot refreshes.
+      // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
@@ -339,17 +323,13 @@ export class RateLimitService {
   }
 
   async refresh(): Promise<RateLimitState> {
-    // Why: the explicit refresh button is a user-directed recovery action.
-    // Debouncing it behind the background poll throttle makes the UI feel
-    // broken after wake/focus transitions because the click can no-op even
-    // though the user is asking for a fresh read right now.
+    // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
     await this.fetchAll({ force: true })
     return this.getState()
   }
 
   async refreshIfStale(): Promise<RateLimitState> {
-    // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data,
-    // but replaying a subscription must not queue another forced provider fetch.
+    // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data, but replaying a subscription must not queue another forced fetch.
     const plan = this.getActiveWindowRefreshPlan(Date.now())
     await this.runActiveWindowRefreshPlan(plan)
     return this.getState()
@@ -362,8 +342,7 @@ export class RateLimitService {
 
   invalidateMiniMaxCredentialState(): void {
     this.minimaxFetchGeneration += 1
-    // Why: saving or forgetting the browser cookie can race an in-flight usage
-    // fetch; clear the visible snapshot before any old-cookie result returns.
+    // Why: saving/forgetting the cookie can race an in-flight fetch; clear the visible snapshot before any old-cookie result returns.
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
@@ -389,9 +368,7 @@ export class RateLimitService {
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
     this.lastInactiveCodexFetchAt = 0
-    // Why: switching the selected Codex account must immediately clear the old
-    // Codex quota view. Keeping stale values visible would show the previous
-    // account's limits under the newly selected identity until the next poll.
+    // Why: clear the old Codex view immediately, else the previous account's limits show under the newly selected identity until the next poll.
     this.updateState({
       ...this.state,
       codex: this.withFetchingStatus(null, 'codex')
@@ -442,8 +419,7 @@ export class RateLimitService {
     target?: ClaudeAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeClaudeAccountSelectionTarget(target)
-    // Why: snapshot the outgoing account's usage before clearing it so the
-    // inline usage bars in the switcher can show last-known data immediately.
+    // Why: snapshot the outgoing account's usage before clearing so the switcher's inline bars can show last-known data immediately.
     if (
       outgoingAccountId &&
       this.state.claude?.session &&
@@ -536,8 +512,7 @@ export class RateLimitService {
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
           this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
         } catch {
-          // Why: per-account try/catch prevents one Keychain rejection or
-          // network error from aborting the remaining accounts in the batch.
+          // Why: per-account try/catch keeps one Keychain/network error from aborting the remaining accounts in the batch.
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
@@ -570,8 +545,7 @@ export class RateLimitService {
     if (accounts.length === 0) {
       return
     }
-    // Why: account switching can make a previewed account active while its
-    // RPC-only usage fetch is still in flight; stale results must be ignored.
+    // Why: account switching can activate a previewed account while its RPC-only fetch is still in flight; ignore stale results.
     const fetchGeneration = this.inactiveCodexAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
@@ -596,12 +570,8 @@ export class RateLimitService {
           continue
         }
         try {
-          // Why: fetchCodexRateLimits already accepts codexHomePath, so we can
-          // point it at the managed account's home directory directly without
-          // materializing credentials into the shared runtime location.
-          // Why: opening the account switcher should never start hidden PTYs for
-          // every inactive account. On Windows that fallback can crash inside
-          // ConPTY; RPC-only is enough for this non-critical preview surface.
+          // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
+          // Why: no PTY fallback — the switcher preview shouldn't spawn hidden PTYs per account (can crash ConPTY on Windows); RPC-only is enough.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: account.managedHomePath,
             allowPtyFallback: false,
@@ -695,11 +665,7 @@ export class RateLimitService {
   }
 
   evictInactiveCodexCache(accountId: string): void {
-    // Why: only the evicted account's state should be cleared. The per-account
-    // isCurrentInactiveCodexAccount guard in fetchInactiveCodexAccountsOnOpen
-    // already catches a removed account when its resolver entry disappears,
-    // so bumping the generation here would also invalidate sibling fetches
-    // still in flight and discard their fresh results.
+    // Why: clear only this account, not the generation — bumping it would discard sibling fetches still in flight and their fresh results.
     this.inactiveCodexCache.delete(accountId)
     this.inactiveCodexFetching.delete(accountId)
     this.pushToRenderer()
@@ -753,9 +719,7 @@ export class RateLimitService {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return false
     }
-    // Why: these quota fetches only power in-app UI. When Orca is hidden,
-    // minimized, or unfocused, polling only burns CLI/API budget without any
-    // visible benefit. We refresh again as soon as the window becomes active.
+    // Why: these fetches only power in-app UI; skip polling when hidden/minimized/unfocused to save CLI/API budget (refresh on activate).
     if (!this.mainWindow.isVisible() || this.mainWindow.isMinimized()) {
       return false
     }
@@ -763,9 +727,7 @@ export class RateLimitService {
   }
 
   private getActiveProviderState(): ActiveProviderState[] {
-    // Why: key by provider so a newly added provider is compile-forced to have
-    // an active-refresh entry — a missing one silently never recovers from a
-    // startup error (antigravity was omitted once and needed a fix-up).
+    // Why: key by provider so a new provider is compile-forced an entry — a missing one silently never recovers from a startup error.
     const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
       claude: this.state.claude,
       codex: this.state.codex,
@@ -794,8 +756,7 @@ export class RateLimitService {
         }
         continue
       }
-      // Why: a failed startup read is not fresh data. Keep it eligible for
-      // activation recovery while throttling repeated events per provider.
+      // Why: a failed startup read is not fresh data; keep it eligible for activation recovery, throttled per provider.
       if (limits.status === 'error') {
         const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
         const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
@@ -822,10 +783,8 @@ export class RateLimitService {
       return
     }
     if (plan.kind === 'full') {
-      // Why: a full fetch retries failing providers too. Restart their retry
-      // clocks so the individual failure lane doesn't fire again right after,
-      // ahead of its backoff window. Skip when a fetch is already in flight —
-      // fetchAll would no-op and the throttle must not be consumed for free.
+      // Why: a full fetch retries failing providers too; restart their retry clocks so the individual failure lane doesn't fire ahead of backoff.
+      // Why: gated on !isFetching — the fetchAll below no-ops mid-flight, so don't consume the retry throttle for free.
       if (!this.isFetching) {
         const now = Date.now()
         for (const { provider, limits } of this.getActiveProviderState()) {
@@ -838,8 +797,7 @@ export class RateLimitService {
       return
     }
 
-    // Why: a fetch already in flight will refresh these providers; skip without
-    // consuming the per-provider retry throttle so the next activation retries.
+    // Why: an in-flight fetch will refresh these; skip without consuming the per-provider retry throttle so the next activation retries.
     if (this.isFetching) {
       return
     }
@@ -857,8 +815,7 @@ export class RateLimitService {
       return
     }
 
-    // Why: partial failures of providers with a dedicated fetch cycle should
-    // recover without re-reading healthy providers still inside their debounce.
+    // Why: recover partial failures of dedicated-fetch providers without re-reading healthy providers still inside their debounce.
     if (plan.providers.includes('claude')) {
       await this.fetchClaudeOnly()
     }
@@ -1124,9 +1081,7 @@ export class RateLimitService {
     ) {
       return Promise.resolve()
     }
-    // Why: explicit refresh callers need to await the queued follow-up cycle
-    // when a poll is already in flight, otherwise the UI stops spinning before
-    // the user-requested refresh actually runs.
+    // Why: explicit-refresh callers must await the queued follow-up cycle when a poll is in flight, else the UI stops spinning early.
     return new Promise((resolve) => {
       this.fetchIdleResolvers.push(resolve)
     })
@@ -1232,28 +1187,23 @@ export class RateLimitService {
   }
 
   private shouldAllowCodexPtyFallback(): boolean {
-    // Why: quota UI refreshes run in the background. On Windows, hidden PTY
-    // fallback can crash inside ConPTY, so prefer RPC-only degradation there.
+    // Why: hidden PTY fallback can crash inside ConPTY on Windows; prefer RPC-only degradation there for background quota refresh.
     return process.platform !== 'win32'
   }
 
   private shouldAllowClaudePtyFallback(
     authPreparation: ClaudeRuntimeAuthPreparation | undefined
   ): boolean {
-    // Why: automatic recovery uses Claude CLI as the next source, but Windows
-    // hidden PTY support remains less reliable than host/WSL shells.
+    // Why: Windows hidden PTY support is less reliable than host/WSL shells.
     if (process.platform === 'win32') {
       return false
     }
-    // Why: system-default Claude is not an Orca-managed account. Background
-    // quota refresh may read existing OAuth, but must not launch Claude and
-    // trigger auth/browser flows for users who never configured Claude in Orca.
+    // Why: system-default Claude isn't Orca-managed; refresh may read existing OAuth but must not launch Claude and trigger auth/browser flows.
     return !isSystemDefaultClaudeAuth(authPreparation)
   }
 
   private shouldAllowClaudeUsagePanelSupplement(): boolean {
-    // Why: this supplement runs only after OAuth has already returned usage
-    // data. Keep it off on Windows where hidden PTYs are still less reliable.
+    // Why: keep this supplement off on Windows where hidden PTYs are still less reliable.
     return process.platform !== 'win32'
   }
 
@@ -1268,8 +1218,7 @@ export class RateLimitService {
         error: null
       }
     } catch (error) {
-      // Why: one unreadable browser cookie must not abort every provider's
-      // quota refresh; surface it as MiniMax-only state instead.
+      // Why: one unreadable cookie must not abort every provider's refresh; surface it as MiniMax-only state instead.
       return {
         config: {
           sessionCookie: '',
@@ -1331,10 +1280,7 @@ export class RateLimitService {
         status: 'fetching'
       }
     }
-    // Why: repainting a settled chip as "fetching" on every background refetch
-    // makes the status bar flash "…" → error each retry cycle when a provider
-    // is persistently failing. Keep the settled state visible until the new
-    // result lands; only providers with no settled state show a loading chip.
+    // Why: keep a settled chip visible during background refetch so a persistently failing provider doesn't flash "…" → error each cycle.
     if (current.status === 'ok' || current.status === 'error' || current.status === 'unavailable') {
       return current
     }
@@ -1365,13 +1311,11 @@ export class RateLimitService {
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
-    // Why: getState() is used by renderer pushes and mobile snapshots; keep
-    // Grok's sync auth-file probe on fetch cycles instead of every state read.
+    // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
 
-    // Detect if configuration changed — if it did, we must discard any stale
-    // data because it belongs to a different session/workspace.
+    // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
     const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
     if (opencodeConfigChanged) {
@@ -1388,9 +1332,7 @@ export class RateLimitService {
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
-    // Mark all providers as fetching while keeping previous data visible.
-    // Codex account changes clear Codex separately before this method is
-    // called, so ordinary refreshes still preserve the current values.
+    // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
@@ -1488,9 +1430,7 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity shares Google/Gemini usage credentials today; mirror the
-    // Gemini snapshot under provider 'antigravity' so status-bar UI that checks
-    // antigravity state receives a real fetch lifecycle instead of staying null.
+    // Why: Antigravity shares Gemini credentials today; mirror the Gemini snapshot so its status-bar UI gets a real lifecycle instead of null.
     const antigravity: ProviderRateLimits = {
       ...gemini,
       provider: 'antigravity'
@@ -1571,10 +1511,7 @@ export class RateLimitService {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
 
-    // Why: account switches can race in-flight Codex fetches. Only apply a
-    // Codex result if both the selected-account provenance and the request
-    // generation still match, otherwise an old account could overwrite the
-    // newly selected account's quota state.
+    // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
@@ -1789,8 +1726,7 @@ export class RateLimitService {
       }
     }
 
-    // Explicitly unavailable — user likely cleared a setting. Discard any stale
-    // data so the UI reflects that the provider is now disabled/unconfigured.
+    // Explicitly unavailable (e.g. setting cleared): discard stale data so the UI shows the provider as disabled/unconfigured.
     if (fresh.status === 'unavailable') {
       return fresh
     }
@@ -1813,11 +1749,7 @@ export class RateLimitService {
       return fresh
     }
 
-    // Why: once we have a recent successful snapshot, repeated transient
-    // failures should keep showing that same snapshot until it ages out of the
-    // stale window. Otherwise the bar flaps from "stale but useful" to empty
-    // after the second failure even though the last known quota is still fresh
-    // enough to be actionable.
+    // Why: keep showing a recent snapshot through repeated transient failures until it ages out, so the bar doesn't flap to empty.
     return {
       ...previous,
       error: fresh.error,
@@ -1844,8 +1776,7 @@ export class RateLimitService {
         isFetching: fetching.has(accountId)
       })
     }
-    // Why: include accounts that are fetching but have no cache yet so the
-    // renderer can show a loading indicator for newly added accounts.
+    // Why: include fetching-but-uncached accounts so the renderer shows a loading indicator for newly added accounts.
     for (const accountId of fetching) {
       if (!cache.has(accountId)) {
         result.push({

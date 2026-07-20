@@ -10,6 +10,7 @@ vi.mock('../memory/pty-registry', () => ({
 
 import { killAllProcessesForWorktree, WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from './worktree-teardown'
 import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
+import { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 
 function createProviderStub(listProcesses: () => Promise<PtyProcessInfo[]>): IPtyProvider {
   return {
@@ -59,10 +60,22 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.providerStopped).toBe(1)
     expect(result.registryStopped).toBe(1)
 
-    expect(localProvider.shutdown).toHaveBeenCalledWith('w1@@abcd1234', { immediate: true })
-    expect(localProvider.shutdown).toHaveBeenCalledWith('w1-registry-1', { immediate: true })
-    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2@@efef5678', { immediate: true })
-    expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2-registry-2', { immediate: true })
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      'w1@@abcd1234',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      'w1-registry-1',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith(
+      'w2@@efef5678',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith(
+      'w2-registry-2',
+      expect.objectContaining({ immediate: true })
+    )
     expect(onPtyStopped).toHaveBeenCalledWith('w1@@abcd1234')
     expect(onPtyStopped).toHaveBeenCalledWith('w1-registry-1')
     expect(onPtyStopped).not.toHaveBeenCalledWith('w2@@efef5678')
@@ -85,7 +98,10 @@ describe('killAllProcessesForWorktree', () => {
     // Prefix sweep must kill nothing; registry sweep must still fire.
     expect(result.providerStopped).toBe(0)
     expect(result.registryStopped).toBe(1)
-    expect(localProvider.shutdown).toHaveBeenCalledWith('1', { immediate: true })
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      '1',
+      expect.objectContaining({ immediate: true })
+    )
     expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
     expect(onPtyStopped).toHaveBeenCalledWith('1')
   })
@@ -103,11 +119,18 @@ describe('killAllProcessesForWorktree', () => {
       requirePhysicalStop: true
     })
 
-    expect(localProvider.shutdown).toHaveBeenCalledWith('floating-1', { immediate: true })
-    expect(localProvider.shutdown).toHaveBeenCalledWith('repo-1::/repo/app@@legacy-3', {
-      immediate: true
-    })
-    expect(localProvider.shutdown).not.toHaveBeenCalledWith('outside-2', { immediate: true })
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      'floating-1',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      'repo-1::/repo/app@@legacy-3',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith(
+      'outside-2',
+      expect.objectContaining({ immediate: true })
+    )
     expect(result.providerStopped).toBe(2)
   })
 
@@ -146,9 +169,18 @@ describe('killAllProcessesForWorktree', () => {
       requirePhysicalStop: true
     })
 
-    expect(remoteProvider.shutdown).toHaveBeenCalledWith('pty-remote', { immediate: true })
-    expect(remoteProvider.shutdown).not.toHaveBeenCalledWith('pty-sibling', { immediate: true })
-    expect(remoteProvider.shutdown).not.toHaveBeenCalledWith('local-1', { immediate: true })
+    expect(remoteProvider.shutdown).toHaveBeenCalledWith(
+      'pty-remote',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(remoteProvider.shutdown).not.toHaveBeenCalledWith(
+      'pty-sibling',
+      expect.objectContaining({ immediate: true })
+    )
+    expect(remoteProvider.shutdown).not.toHaveBeenCalledWith(
+      'local-1',
+      expect.objectContaining({ immediate: true })
+    )
     expect(listRegisteredPtysMock).not.toHaveBeenCalled()
     expect(result).toEqual({ runtimeStopped: 0, providerStopped: 1, registryStopped: 0 })
   })
@@ -197,12 +229,18 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([])
 
     const r1 = await killAllProcessesForWorktree('w1', { localProvider: providerA })
-    expect(providerA.shutdown).toHaveBeenCalledWith('w1@@aaaa', { immediate: true })
+    expect(providerA.shutdown).toHaveBeenCalledWith(
+      'w1@@aaaa',
+      expect.objectContaining({ immediate: true })
+    )
     expect(providerB.shutdown).not.toHaveBeenCalled()
     expect(r1.providerStopped).toBe(1)
 
     const r2 = await killAllProcessesForWorktree('w1', { localProvider: providerB })
-    expect(providerB.shutdown).toHaveBeenCalledWith('w1@@bbbb', { immediate: true })
+    expect(providerB.shutdown).toHaveBeenCalledWith(
+      'w1@@bbbb',
+      expect.objectContaining({ immediate: true })
+    )
     expect(providerB.shutdown).toHaveBeenCalledTimes(1)
     expect(r2.providerStopped).toBe(1)
   })
@@ -301,7 +339,10 @@ describe('killAllProcessesForWorktree', () => {
     const result = await killAllProcessesForWorktree('w1', { localProvider })
 
     expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
-    expect(localProvider.shutdown).toHaveBeenCalledWith('w1@@same', { immediate: true })
+    expect(localProvider.shutdown).toHaveBeenCalledWith(
+      'w1@@same',
+      expect.objectContaining({ immediate: true })
+    )
     expect(result.providerStopped + result.registryStopped).toBe(1)
   })
 
@@ -422,6 +463,93 @@ describe('killAllProcessesForWorktree', () => {
     }
   })
 
+  // Why: on win32 the DaemonPtyAdapter is the local provider, so an unbounded
+  // kill RPC (30s default > the 10s sweep deadline) let the outer deadline win
+  // with the confusing "Timed out waiting for physical PTY teardown" instead of
+  // the accurate stop failure. The bound must fire first (native-Windows regression).
+  it('destructive teardown surfaces a bounded stop failure when the daemon kill RPC never replies (#9500 regression)', async () => {
+    vi.useFakeTimers()
+    try {
+      const worktreeId = 'w1'
+      const sessionId = 'w1@@dead0001'
+      let killRequests = 0
+
+      // A fake daemon RPC client standing in for a wedged daemon: it answers
+      // listSessions (so the session is discovered as owned) but never sends a
+      // reply to 'kill'. It faithfully models the real DaemonClient.request
+      // contract — a request is only bounded by its own timeoutMs, which
+      // defaults to REQUEST_TIMEOUT_MS (30_000). The adapter's shutdown passes
+      // no override, so the kill can only settle after 30s: long past the 10s
+      // sweep deadline.
+      const DAEMON_DEFAULT_REQUEST_TIMEOUT_MS = 30_000
+      const fakeClient = {
+        onDisconnected: () => () => {},
+        onEvent: () => () => {},
+        ensureConnected: async () => {},
+        // Why: bounded teardown connects via ensureConnectedWithin; model the real
+        // DaemonClient method so the shared connect+RPC budget path is exercised.
+        ensureConnectedWithin: async () => {},
+        isConnected: () => true,
+        disconnect: () => {},
+        notify: () => {},
+        request: (
+          type: string,
+          _payload?: unknown,
+          timeoutMs = DAEMON_DEFAULT_REQUEST_TIMEOUT_MS
+        ): Promise<unknown> => {
+          if (type === 'listSessions') {
+            return Promise.resolve({
+              sessions: [{ sessionId, isAlive: true, cwd: '/tmp/w1' }]
+            })
+          }
+          if (type === 'kill') {
+            killRequests += 1
+            // The daemon never replies; the request only rejects when its own
+            // timeout elapses, exactly like the real client.
+            return new Promise((_resolve, reject) => {
+              setTimeout(() => reject(new Error(`Request kill timed out after ${timeoutMs}ms`)), timeoutMs)
+            })
+          }
+          return Promise.resolve({})
+        }
+      }
+
+      const adapter = new DaemonPtyAdapter({ socketPath: '/tmp/sock', tokenPath: '/tmp/tok' })
+      ;(adapter as unknown as { client: typeof fakeClient }).client = fakeClient
+
+      listRegisteredPtysMock.mockReturnValue([])
+
+      // Capture the rejection as a value so a wrong error is a clean assertion
+      // failure below rather than a floating unhandled rejection while fake
+      // timers fire.
+      const outcome = killAllProcessesForWorktree(worktreeId, {
+        localProvider: adapter as unknown as IPtyProvider,
+        includeLocalRegistry: false,
+        requirePhysicalStop: true,
+        timeoutMs: WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
+      }).then(
+        () => {
+          throw new Error('teardown unexpectedly resolved')
+        },
+        (error: Error) => error
+      )
+
+      // Advance past the daemon's 8s physical-exit budget AND the 10s sweep
+      // deadline. A bounded adapter shutdown would have rejected inside this
+      // window, letting the sweep report a clean stop failure. Today nothing
+      // settles before the deadline, so the sweep throws its deadline error.
+      await vi.advanceTimersByTimeAsync(WORKTREE_PROCESS_SWEEP_TIMEOUT_MS)
+
+      const error = await outcome
+      expect(killRequests).toBeGreaterThan(0)
+      // Why: the adapter bounds its kill RPC below the sweep deadline, so a wedged
+      // daemon yields the accurate stop failure — not the confusing deadline error.
+      expect(error.message).toContain('Failed to physically stop every PTY')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('tolerates runtime.stopTerminalsForWorktree throwing (headless assertGraphReady reject)', async () => {
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime_unavailable'))
     const runtime = {
@@ -478,7 +606,10 @@ describe('killAllProcessesForWorktree', () => {
         providerStopped: 0,
         registryStopped: 1
       })
-      expect(localProvider.shutdown).toHaveBeenCalledWith('registry-1', { immediate: true })
+      expect(localProvider.shutdown).toHaveBeenCalledWith(
+        'registry-1',
+        expect.objectContaining({ immediate: true })
+      )
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()

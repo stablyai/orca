@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.146-rc.0",
+  "version": "1.4.147-rc.4",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -230,7 +230,8 @@
     "sherpa-onnx-darwin-x64": "1.12.37",
     "sherpa-onnx-linux-arm64": "1.12.37",
     "sherpa-onnx-linux-x64": "1.12.37",
-    "sherpa-onnx-win-x64": "1.12.37"
+    "sherpa-onnx-win-x64": "1.12.37",
+    "windows-native-registry": "3.2.2"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,mts,cts}": [

@@ -254,4 +254,71 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain('statusBarVisible ? (')
     expect(source).toContain('h-6 min-h-[24px] shrink-0 border-t border-border')
   })
+
+  it('keeps activeView off the 150ms debounced UI writer hot path (#9002)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const writerStart = source.indexOf('const timer = window.setTimeout(() => {')
+    const writerEnd = source.indexOf('}, 150)', writerStart)
+    const writerBlock = source.slice(writerStart, writerEnd)
+
+    expect(writerStart).toBeGreaterThanOrEqual(0)
+    expect(writerEnd).toBeGreaterThan(writerStart)
+    // Why: this field riding the writer's payload (#8265) is exactly the
+    // #9002 regression — every switch scheduled a full durable-state save. It
+    // must persist through its narrow preference or unload path instead. Matched as
+    // a standalone object-literal property (not the surrounding prose, which
+    // legitimately references the field name) so the assertion is precise.
+    expect(writerBlock).not.toMatch(/^\s*activeView,\s*$/m)
+
+    const depsStart = source.indexOf('}, [', writerEnd)
+    const depsEnd = source.indexOf('])', depsStart)
+    const depsBlock = source.slice(depsStart, depsEnd)
+    expect(depsBlock).not.toMatch(/^\s*activeView,?\s*$/m)
+  })
+
+  it('persists activeView through its narrow preference on every switch (#9002)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+
+    const preferenceEffect = [
+      '// Why (#9002): activeView has its own tiny profile preference',
+      'void window.api.ui.set({ activeView })',
+      '}, [activeView, persistedUIReady])'
+    ]
+    for (const marker of preferenceEffect) {
+      expect(source).toContain(marker)
+    }
+    expect(source).not.toContain('createActiveViewIdleFlush')
+    expect(source).not.toContain("window.addEventListener('blur', handleBlur)")
+  })
+
+  it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
+    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const checkpointStart = source.indexOf(
+      'const shutdownCheckpoint = createShutdownCheckpointGuard(() => {'
+    )
+    const checkpointEnd = source.indexOf(
+      'const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)',
+      checkpointStart
+    )
+    expect(checkpointStart).toBeGreaterThanOrEqual(0)
+    expect(checkpointEnd).toBeGreaterThan(checkpointStart)
+    const checkpointBlock = source.slice(checkpointStart, checkpointEnd)
+
+    expect(checkpointBlock).toContain('const sessionSnapshots = shouldCaptureSession')
+    expect(checkpointBlock).toContain(
+      'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
+    )
+    expect(checkpointBlock).toContain('window.api.app.persistBeforeUnloadSync({')
+    expect(checkpointBlock).toContain('sessions: sessionSnapshots')
+    expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
+    expect(source).toContain(
+      'window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)'
+    )
+    expect(source).toContain(
+      'window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)'
+    )
+    expect(source).toContain("window.addEventListener('beforeunload', persistBeforeUnload)")
+    expect(source.match(/window\.addEventListener\('beforeunload'/g) ?? []).toHaveLength(1)
+    expect(source).not.toContain('window.api.ui.setSync')
+  })
 })

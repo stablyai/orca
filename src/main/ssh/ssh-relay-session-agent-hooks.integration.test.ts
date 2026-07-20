@@ -210,6 +210,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     session = null
     relay = null
     agentHookServer.setListener(null)
+    agentHookServer.setPaneStatusClearListener(null)
     agentHookInternals.resetCachesForTests()
     warnSpy.mockRestore()
     if (previousRemoteHooksFlag === undefined) {
@@ -270,6 +271,34 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         toolName: undefined
       }
     })
+  })
+
+  it('clears stamped status on reconnect loss but not final shutdown', async () => {
+    const initialRelay = createFakeRelay()
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay)
+      .mockResolvedValueOnce({ transport: initialRelay.transport, platform: 'linux-x64' })
+      .mockResolvedValueOnce({ transport: relay.transport, platform: 'linux-x64' })
+    const clearListener = vi.fn()
+    agentHookServer.setPaneStatusClearListener(clearListener)
+    session = createSession('conn-clear')
+    await session.establish({} as SshConnection)
+    initialRelay.notifyAgentHook(makeEnvelope())
+    await vi.waitFor(() => expect(agentHookServer.getStatusSnapshot()).toHaveLength(1))
+
+    await session.reconnect({} as SshConnection)
+    initialRelay.dispose()
+
+    expect(agentHookServer.getStatusSnapshot()).toEqual([])
+    expect(clearListener).toHaveBeenCalledOnce()
+    expect(clearListener).toHaveBeenCalledWith({
+      transient: true,
+      connectionId: 'conn-clear',
+      clearedAt: expect.any(Number)
+    })
+    session.dispose()
+    session = null
+    expect(clearListener).toHaveBeenCalledOnce()
   })
 
   it('asks the fake relay for cached hook replay after the session wires its listener', async () => {

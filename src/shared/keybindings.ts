@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: the central shortcut registry, parser,
- * formatter, and conflict detector must stay in one shared module so main,
- * renderer, browser guests, and Settings cannot drift apart. */
+/* eslint-disable max-lines -- Why: keep the shortcut registry, parser, formatter, and conflict detector in one shared module so main/renderer/browser/Settings can't drift. */
 import type { TuiAgent } from './types'
 import { ALL_TUI_AGENTS, TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
@@ -266,9 +264,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     conflictGroup: 'workspace-shell',
     searchKeywords: ['shortcut', 'global', 'worktree', 'rename', 'workspace', 'title'],
-    // Why: macOS only. On Windows/Linux Ctrl+Alt+R has no safe default, and the
-    // chord families there (Ctrl+R reverse-search, Ctrl+Shift+R reload) are
-    // taken, so users bind it explicitly in Settings.
+    // Why: macOS only — Windows/Linux Ctrl+Alt+R has no safe default (Ctrl+R reverse-search, Ctrl+Shift+R reload are taken).
     defaultBindings: {
       darwin: ['Mod+Alt+R'],
       linux: [],
@@ -290,8 +286,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'remove',
       'trash'
     ],
-    // Why: ship the command now without claiming a default chord; user
-    // overrides still win automatically when a future default is assigned.
+    // Why: ship now without a default chord; user overrides still win when a future default is assigned.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -301,8 +296,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'workspace', 'board', 'kanban', 'worktree'],
-    // Why: make the command configurable without taking a global chord from
-    // terminal/browser/editor users by default.
+    // Why: configurable but unbound by default, to not take a global chord from terminal/browser/editor users.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -323,9 +317,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       '1-9',
       'index'
     ],
-    // Why: one remappable row for the whole 1-9 range. The stored chord is a
-    // representative — its digit normalizes to 1, but the modifier set is what
-    // matters and any of 1-9 fires it. mac Cmd+1-9, Windows/Linux Ctrl+1-9 → Mod+1.
+    // Why: one remappable row covers the whole 1-9 range (stored chord is a representative; any of 1-9 fires it).
     defaultBindings: platformBindings(['Mod+1'])
   },
   {
@@ -420,8 +412,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'show',
       'hide'
     ],
-    // Why: ship unbound — issue #5209 asks to "assign a shortcut", so we avoid
-    // claiming a cross-platform chord and let users bind it in Settings.
+    // Why: ship unbound (issue #5209 asks users to assign it), avoiding a claimed cross-platform chord.
     defaultBindings: platformBindings([])
   },
   {
@@ -430,8 +421,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'sidebar', 'worktree', 'focus'],
-    // Why: keep zoom.reset on the browser-standard Mod+0; this chord was
-    // unreachable while it shared that default (#8584).
+    // Why: keep zoom.reset on the browser-standard Mod+0; this chord was unreachable while it shared that default (#8584).
     defaultBindings: platformBindings(['Mod+Shift+0'])
   },
   {
@@ -458,10 +448,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'maximize',
       'expand'
     ],
-    // Why: pairs with the floatingTerminal.toggle chord (Cmd+Opt+A) so
-    // maximize/restore lives on the same key anchor and stays one-handed,
-    // instead of the two-hand reach to Cmd+Opt+ArrowUp. macOS-only default;
-    // Linux/Windows stay unbound for users to assign.
+    // Why: pairs with floatingTerminal.toggle (Cmd+Opt+A) so maximize stays one-handed; macOS-only, Linux/Windows unbound.
     defaultBindings: {
       darwin: ['Mod+Alt+Shift+A'],
       linux: [],
@@ -484,9 +471,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'minimize',
       'hide'
     ],
-    // Why: intentionally unbound on every platform. floatingTerminal.toggle
-    // already owns the default show/hide chord; this action exists only so
-    // users can bind an explicit "hide the focused panel" shortcut in Settings.
+    // Why: unbound everywhere since floatingTerminal.toggle owns show/hide; this exists only for an explicit user-bound "hide panel" shortcut.
     defaultBindings: {
       darwin: [],
       linux: [],
@@ -550,9 +535,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Tabs',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'agent', 'new', 'default', 'launch'],
-    // Why: macOS only. On Windows Ctrl+Alt is AltGr on many layouts, and on
-    // Linux Ctrl+Alt+T is the desktop-level "open terminal" shortcut, so
-    // there is no safe default chord there; users bind it in Settings.
+    // Why: macOS only — Windows Ctrl+Alt is AltGr and Linux Ctrl+Alt+T is the desktop "open terminal", so no safe default there.
     defaultBindings: {
       darwin: ['Mod+Alt+T'],
       linux: [],
@@ -573,8 +556,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Tabs',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'simulator', 'emulator', 'mobile', 'ios', 'new'],
-    // Why: keep explorer on Mod+Shift+E (VS Code muscle memory). Emulator is
-    // macOS-only and less common, so it yields to a free chord (#8533).
+    // Why: keep explorer on Mod+Shift+E (VS Code muscle memory); emulator is macOS-only and less common, so it yields to a free chord (#8533).
     defaultBindings: {
       darwin: ['Mod+Alt+Shift+E'],
       linux: [],
@@ -620,9 +602,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     conflictGroup: 'workspace-shell',
     searchKeywords: ['shortcut', 'tab', 'rename', 'title', 'label'],
-    // Why: macOS only. Cmd+R is free in the app/terminal focus zone (the
-    // browser pane owns its own Cmd+R reload). On Windows/Linux Ctrl+R is the
-    // shell reverse-search, so it is left unbound for explicit user binding.
+    // Why: macOS only — Cmd+R is free in app/terminal focus; on Windows/Linux Ctrl+R is shell reverse-search, so left unbound.
     defaultBindings: {
       darwin: ['Mod+R'],
       linux: [],
@@ -643,9 +623,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Tab Navigation',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle'],
-    // Why: Mod+Shift+Bracket is the widespread "switch tab" chord, so it now
-    // drives the broad all-types cycle for new users; same-type moves to
-    // Mod+Alt. Pre-release installs keep the old mapping via the seed migration.
+    // Why: the widespread "switch tab" chord (Mod+Shift+Bracket) now drives all-types cycling; same-type moved to Mod+Alt for new installs.
     defaultBindings: platformBindings(['Mod+Alt+BracketRight'])
   },
   {
@@ -704,14 +682,9 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Select Tab 1–9',
     group: 'Tab Navigation',
     scope: 'tabs',
-    // Why: deliberately no shared conflictGroup with workspace.selectByIndex.
-    // They live in different scopes, so swapping their modifiers (the headline
-    // use case) is never blocked as a false conflict; runtime stays deterministic
-    // because resolveWindowShortcutAction checks the workspace range first.
+    // Why: no shared conflictGroup with workspace.selectByIndex so swapping their modifiers isn't a false conflict; safe because resolveWindowShortcutAction checks the workspace range first.
     searchKeywords: ['shortcut', 'tab', 'select', 'switch', 'number', 'digit', '1-9', 'index'],
-    // Why: representative chord for the 1-9 range (see workspace.selectByIndex).
-    // mac Ctrl+1-9 (Cmd+1-9 is the workspace jump); Windows/Linux Alt+1-9
-    // (Ctrl+1-9 is the workspace jump), so each platform gets a free chord.
+    // Why: representative chord for the 1-9 range (see workspace.selectByIndex); each platform avoids the workspace-jump chord (Mod+1-9).
     defaultBindings: {
       darwin: ['Ctrl+1'],
       linux: ['Alt+1'],
@@ -723,8 +696,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Toggle Quick Commands menu',
     group: 'Quick Commands',
     scope: 'tabs',
-    // Why: this tab-scoped action is also routed through the main window
-    // shortcut allowlist, so Settings must warn when it shadows global chords.
+    // Why: this tab-scoped action is also routed through the main-window allowlist, so Settings must warn when it shadows global chords.
     conflictGroup: 'global',
     searchKeywords: ['shortcut', 'quick', 'command', 'menu', 'tab', 'group', 'toggle'],
     defaultBindings: platformBindings([])
@@ -807,8 +779,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Editors',
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'replace', 'find', 'search'],
-    // Why: match the source editor's native replace shortcut — Cmd+Alt+F on
-    // macOS, Ctrl+H on Linux/Windows.
+    // Why: match the source editor's native replace shortcut per platform.
     defaultBindings: {
       darwin: ['Mod+Alt+F'],
       linux: ['Mod+H'],
@@ -839,8 +810,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'editor', 'copy', 'context'],
     defaultBindings: platformBindings(['Mod+Alt+C'])
   },
-  // Why: F7 / Shift+F7 gives VS Code / JetBrains diff-change navigation. Function
-  // keys are safe as bare / Shift bindings, so both opt into allowBareKeybindings.
+  // Why: F7 / Shift+F7 mirror VS Code / JetBrains diff-change nav; function keys are safe bare/Shift, so both opt into allowBareKeybindings.
   {
     id: 'editor.previousChange',
     title: 'Go to Previous Change',
@@ -865,8 +835,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Editors',
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'markdown', 'note', 'comment', 'annotation', 'review'],
-    // Why: Ctrl+Alt+letter is AltGr text input on Windows/Linux; an editor-scope
-    // default must not reserve characters such as Polish `ń`.
+    // Why: Ctrl+Alt+letter is AltGr text input on Windows/Linux, so an editor default must not reserve chars like Polish `ń`.
     defaultBindings: platformBindings(['Mod+Shift+A'])
   },
   {
@@ -1068,18 +1037,13 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       linux: [],
       win32: []
     },
-    // Why: macOS permits Shift+Space as an input-source shortcut, while normal
-    // Orca actions reject Shift-only bindings to avoid stealing typed text.
+    // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
   },
   ...buildAgentTabKeybindingDefinitions()
 ]
 
-/**
- * The tab-switch bindings as they shipped before the convention swap. A one-time
- * migration pins these for pre-release installs so upgrading users keep the
- * shortcuts they learned; fresh installs get the new registry defaults above.
- */
+/** Pre-swap tab-switch bindings; a one-time migration pins these for pre-release installs so upgrading users keep the shortcuts they learned. */
 export const LEGACY_TAB_SWITCH_BINDINGS: Readonly<Partial<Record<KeybindingActionId, string[]>>> = {
   'tab.nextSameType': ['Mod+Shift+BracketRight'],
   'tab.previousSameType': ['Mod+Shift+BracketLeft'],
@@ -1091,9 +1055,7 @@ export function agentTabActionId(agent: TuiAgent): AgentTabActionId {
   return `tab.newAgent.${agent}`
 }
 
-// Why: one bindable action per agent so users can put each enabled agent on
-// its own chord. All ship unassigned — `tab.newAgent` covers the default
-// agent — and Settings → Shortcuts hides rows for disabled agents.
+// Why: one bindable action per agent; all ship unassigned since tab.newAgent covers the default, and Settings hides disabled agents.
 function buildAgentTabKeybindingDefinitions(): KeybindingDefinition[] {
   return ALL_TUI_AGENTS.map((agent) => ({
     id: agentTabActionId(agent),
@@ -1121,9 +1083,7 @@ const DEFINITION_IDS = new Set<KeybindingActionId>(
   KEYBINDING_DEFINITIONS.map((definition) => definition.id)
 )
 
-// Why: "Select Tab 1-9" / "Select Workspace 1-9" are single remappable rows
-// whose chord is a representative — the digit is canonicalized to 1, but the
-// binding fires for any of 1-9. These ids opt into that range behavior.
+// Why: these ids are single remappable rows whose chord is a representative — the digit canonicalizes to 1 but the binding fires for any 1-9.
 export const DIGIT_INDEX_ACTION_IDS: readonly KeybindingActionId[] = [
   'tab.selectByIndex',
   'workspace.selectByIndex'
@@ -1294,9 +1254,7 @@ function emptyParsedKeybinding(): ParsedKeybinding {
   return { mod: false, meta: false, control: false, alt: false, shift: false, key: '' }
 }
 
-// Why: a double-tap is a bare modifier with no key, so it cannot reuse the
-// normal "one key required" parse path; validation of conflicting/extra
-// modifiers is deferred to normalizeKeybindingWithOptions for shared errors.
+// Why: a double-tap is a bare modifier with no key, so it can't use the normal parse path; modifier validation is deferred to normalize.
 function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding | null {
   const modifiers: ModifierToken[] = []
   let sawDoubleTap = false
@@ -1321,8 +1279,7 @@ function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding | null {
   for (const modifier of modifiers) {
     applyModifierToken(parsed, modifier)
   }
-  // Mod combined with a platform-specific modifier: keep both flags so normalize
-  // emits the shared "Mod or platform-specific, not both" error.
+  // Keep both flags when Mod is combined with a platform modifier, so normalize emits the shared "Mod or platform-specific, not both" error.
   if (parsed.mod && (parsed.meta || parsed.control)) {
     parsed.doubleTapModifier = 'Mod'
     return parsed
@@ -1395,9 +1352,7 @@ function isSafeBareKey(parsed: ParsedKeybinding): boolean {
   if (parsed.mod || parsed.meta || parsed.control || parsed.alt) {
     return false
   }
-  // Function keys produce no text, so they're safe standalone or with Shift
-  // (e.g. F7 / Shift+F7 for diff-change navigation). Shift is only permitted
-  // alongside a function key — Shift+letter stays unsafe.
+  // Function keys produce no text, so they're safe bare or with Shift (Shift+letter stays unsafe).
   if (parsed.shift) {
     return isFunctionKeyToken(parsed.key)
   }
@@ -1516,11 +1471,7 @@ function normalizeOptionsForAction(actionId: KeybindingActionId): NormalizeKeybi
   }
 }
 
-// Why: a digit-index row stores one representative chord. Rewrite the key to 1
-// so display and conflict detection stay stable across the 1-9 range, and
-// reject anything that is not a number key 1-9. Extra modifiers (e.g. Shift) are
-// intentionally allowed — only the key must be a digit; parseKeybinding has
-// already enforced that at least one modifier is present.
+// Why: rewrite a digit-index chord's key to 1 so display and conflict detection stay stable across the 1-9 range; reject any non 1-9 key.
 function canonicalizeDigitIndexBinding(binding: string): KeybindingValidationResult {
   const parsed = parseKeybinding(binding)
   if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
@@ -1631,15 +1582,12 @@ function logicalKeyTokenFromInput(input: KeybindingInput): string | null {
 }
 
 function canUsePhysicalCodeFallback(input: KeybindingInput): boolean {
-  // Why: layout-aware shortcuts must trust real logical keys; physical code is
-  // only a fallback when the platform cannot report the produced key.
+  // Why: layout-aware shortcuts trust real logical keys; physical code is only a fallback when the platform can't report the produced key.
   return PHYSICAL_CODE_FALLBACK_KEYS.has(input.key ?? '')
 }
 
 function isLatinShortcutKey(key: string): boolean {
-  // Why: A-Z / 0-9 are the only single chars a Latin shortcut token names; any
-  // other produced character (Cyrillic с, Greek π, ...) cannot be a deliberate
-  // remap of a Latin chord, so it is safe to fall back to the physical code.
+  // Why: A-Z / 0-9 are the only chars a Latin shortcut names; a non-Latin char (Cyrillic с, Greek π) is never a Latin remap, so physical-code fallback is safe.
   if (key.length !== 1) {
     return false
   }
@@ -1651,12 +1599,7 @@ function shouldUseNonLatinShortcutPhysicalFallback(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
-  // Why: non-Latin layouts (Cyrillic, Greek, ...) report a non-Latin logical key
-  // for physical letter keys (issue #6274), so Ctrl/Meta shortcuts never match.
-  // Fall back to the physical code, but only when no logical shortcut token
-  // exists, a real primary modifier (Ctrl or Meta) is held, and this is not an
-  // AltGr (Ctrl+Alt) text-composition event. macOS is excluded — it already has
-  // dedicated Option-composed fallbacks and Cmd shortcuts are layout-stable.
+  // Why: non-Latin layouts report non-Latin logical keys for physical letters (#6274), breaking Ctrl/Meta shortcuts; fall back to the physical code.
   if (getKeybindingPlatform(platform) === 'darwin') {
     return false
   }
@@ -1702,8 +1645,7 @@ function shouldUseMacOptionComposedCaptureFallback(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
-  // Why: macOS Option+key reports composed characters (Option+C -> ç), so
-  // capturing Alt shortcuts needs the same physical-code fallback as matching.
+  // Why: macOS Option+key reports composed characters (Option+C -> ç), so capturing Alt shortcuts needs the physical-code fallback.
   if (
     getKeybindingPlatform(platform) !== 'darwin' ||
     !hasModifier(input, 'alt') ||
@@ -1740,8 +1682,7 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
   return physicalCodeKeyTokenFromInput(input)
 }
 
-// Why: the platform primary modifier canonicalizes to Mod, mirroring normal
-// capture where Cmd on macOS / Ctrl elsewhere both become Mod.
+// Why: the platform primary modifier canonicalizes to Mod (Cmd on macOS / Ctrl elsewhere), mirroring normal capture.
 function canonicalDoubleTapToken(
   modifier: PhysicalModifierToken,
   platform: NodeJS.Platform
@@ -1839,9 +1780,7 @@ export function getEffectiveKeybindingsForAction(
   }
   const override = overrides?.[actionId]
   if (Array.isArray(override)) {
-    // Why: digit-index overrides resolve to their canonical <mods>+1 representative
-    // (deduped) so effective bindings stay consistent for display and conflict
-    // detection even if a hand-edited file stored a different digit.
+    // Why: canonicalize digit-index overrides to <mods>+1 so display/conflict stay consistent even if a hand-edited file stored a different digit.
     if (isDigitIndexActionId(actionId)) {
       const canonical: string[] = []
       for (const binding of override) {
@@ -1888,8 +1827,7 @@ export function keybindingIsActiveInContext(
   if (options.context !== 'terminal') {
     return true
   }
-  // Why: Orca-first preserves existing app shortcut behavior inside terminals.
-  // Terminal-first is the explicit escape hatch for shells and TUIs.
+  // Why: Orca-first keeps app shortcuts inside terminals; terminal-first is the escape hatch for shells and TUIs.
   if (normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first') {
     return true
   }
@@ -1928,8 +1866,7 @@ function shouldUseMacOptionLetterPhysicalFallback(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
-  // Why: macOS Option+letter can report composed characters (Option+A -> å),
-  // leaving no logical Latin key for app shortcuts that intentionally use Alt.
+  // Why: macOS Option+letter reports composed characters (Option+A -> å), leaving no logical Latin key for Alt shortcuts.
   return (
     getKeybindingPlatform(platform) === 'darwin' &&
     parsed.alt &&
@@ -1943,8 +1880,7 @@ function shouldUseMacOptionPunctuationPhysicalFallback(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
-  // Why: macOS Option+punctuation can report composed quote/dead-key values,
-  // leaving no logical bracket token for app shortcuts that intentionally use Alt.
+  // Why: macOS Option+punctuation reports composed dead-key values, leaving no logical bracket token for Alt shortcuts.
   return (
     getKeybindingPlatform(platform) === 'darwin' &&
     parsed.alt &&
@@ -2001,8 +1937,7 @@ function shouldUseSemanticPunctuation(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
-  // Why: Windows/Linux often expose AltGr as Ctrl+Alt. Do not turn ordinary
-  // international text input into Mod+Alt app shortcuts.
+  // Why: Windows/Linux expose AltGr as Ctrl+Alt; don't turn international text input into Mod+Alt app shortcuts.
   if (
     getKeybindingPlatform(platform) !== 'darwin' &&
     parsed.mod &&
@@ -2038,8 +1973,7 @@ function keyMatches(
   }
 
   if (isPunctuationKeyToken(parsedKey)) {
-    // Why: shortcut labels name logical punctuation, but international
-    // layouts can report the same character from different physical codes.
+    // Why: shortcut labels name logical punctuation, but international layouts can report it from different physical codes.
     const semanticKey = semanticPunctuationKey(input)
     if (semanticKey !== null) {
       if (!shouldUseSemanticPunctuation(parsed, input, platform)) {
@@ -2090,8 +2024,7 @@ export function keybindingMatchesInput(
   if (!parsed) {
     return false
   }
-  // A double-tap binding matches only a synthetic double-tap input, resolved per
-  // platform; a normal binding never matches a synthetic input, and vice-versa.
+  // A double-tap binding matches only a synthetic double-tap input (and vice-versa), resolved per platform.
   if (parsed.doubleTapModifier) {
     return (
       input.doubleTapModifier !== undefined &&
@@ -2176,11 +2109,7 @@ function digitFromInput(input: KeybindingInput, platform: NodeJS.Platform): stri
   return null
 }
 
-// Why: digit-index rows bind a representative chord but fire for 1-9. Reuse the
-// representative's modifier set with the pressed digit, then match it through the
-// normal input matcher so Mod/Cmd resolution and layout fallbacks stay shared.
-// Honors keybindingIsActiveInContext, so terminal-first focus disables the range
-// just like the scope-based gating for every other shortcut.
+// Why: a digit-index row's representative chord fires for any 1-9 — reuse its modifiers with the pressed digit via the normal matcher.
 export function matchKeybindingDigitIndex(
   actionId: KeybindingActionId,
   input: KeybindingInput,
@@ -2323,8 +2252,7 @@ export function findKeybindingConflicts(
     for (const binding of getEffectiveKeybindingsForAction(definition.id, platform, overrides)) {
       const groups = new Set([definition.conflictGroup ?? definition.scope])
       if (definition.conflictGroup) {
-        // Why: native menu accelerators can still consume global chords, so custom
-        // renderer bindings must be checked against both the menu bucket and scope.
+        // Why: native menu accelerators can consume global chords, so check custom bindings against both the menu bucket and scope.
         groups.add(definition.scope)
       }
       for (const group of groups) {

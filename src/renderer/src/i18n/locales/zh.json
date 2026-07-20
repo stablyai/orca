@@ -341,7 +341,8 @@
               "2db0bd7515": "Orca CLI 注册不可用",
               "8d6eedf97e": "无法在 PATH 中注册 Orca CLI。",
               "0f116999f1": "在安装之前重新启动 shell 或将 Orca CLI 目录添加到 PATH。",
-              "15cbedc3e3": "在运行智能体技能设置之前安装 Orca CLI。"
+              "15cbedc3e3": "在运行智能体技能设置之前安装 Orca CLI。",
+              "windowsPathUnknown": "Orca could not check your Windows user PATH"
             }
           }
         }
@@ -1858,7 +1859,7 @@
         "ac037cfac2": "手机",
         "75499e01d9": "关闭",
         "66b5a67bee": "Esc键",
-        "45def60329": "开放",
+        "45def60329": "打开",
         "f65d992a11": "进入",
         "c5081f2814": "当前工作树",
         "52404f8096": "当前选项卡",
@@ -5374,7 +5375,8 @@
           "0c9f3cf9da": "选择 Orca 检查和安装全局智能体技能的位置。",
           "f00d6aa9b5": "WSL 在此计算机上不可用。",
           "7c776ff9d8": "wsl",
-          "fc0fcf72fd": "在技​​能设置之前注册 WSL shell 命令。"
+          "fc0fcf72fd": "在技​​能设置之前注册 WSL shell 命令。",
+          "windowsPathUnknown": "WSL shell command PATH could not be checked"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "由未自定义源代码控制 AI 的存储库使用。",
@@ -5422,7 +5424,7 @@
         "ComputerUsePane": {
           "1735461723": "使智能体能够检查和操作本地桌面应用程序。",
           "93255aaf18": "计算机控制技能",
-          "45f8e22c2e": "开放",
+          "45f8e22c2e": "打开",
           "d95d1cfab8": "刷新",
           "0c29da5805": "就绪",
           "3383ea1aab": "无法重置计算机使用权限",
@@ -9408,7 +9410,7 @@
             "37c875d827": "新文件",
             "b3e288bf41": "无法下载“{{value0}}”。",
             "f729bcd97d": "无法下载文件夹“{{value0}}”。",
-            "1a3df04ae1": "开放",
+            "1a3df04ae1": "打开",
             "bce4d4e44f": "下载“{{value0}}”",
             "a4029c996b": "已下载文件夹“{{value0}}”",
             "e26010014a": "被 .gitignore 忽略",
@@ -12365,7 +12367,7 @@
             "109a791e7b": "保存",
             "bb0a55f856": "保存…",
             "0203bed775": "取消",
-            "6978871a3d": "开放",
+            "6978871a3d": "打开",
             "cce596969e": "删除注释",
             "cad3384faa": "编辑备注",
             "508ee678a5": "在浏览器中打开"

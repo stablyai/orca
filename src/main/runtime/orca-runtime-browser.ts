@@ -144,15 +144,9 @@ export type RuntimeBrowserCommandHost = {
   resolveWorktreeSelector(selector: string): Promise<{ id: string }>
   getAuthoritativeWindow(): BrowserWindow
   getAvailableAuthoritativeWindow(): BrowserWindow | null
-  // Why: headless serve has no renderer window; browser pages are backed by a
-  // main-process offscreen backend instead. Null when offscreen browsing is
-  // unavailable (e.g. environment can't support it), which keeps capability
-  // reporting honest.
+  // Why: headless serve backs pages with a main-process offscreen backend; null when the environment can't support offscreen browsing.
   getOffscreenBrowserBackend(): BrowserBackend | null
-  // Why: the session-tab snapshot is the source of truth for which tab is
-  // focused. A headless browser create must mark itself active there so paired
-  // clients keep focus on the new tab instead of the reconcile snapping back to
-  // a terminal (whose activeTabType the snapshot still reports).
+  // Why: the session-tab snapshot owns focus, so a headless create must mark itself active or paired clients snap back to a terminal.
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
     browserPageId: string,
@@ -201,15 +195,10 @@ export class RuntimeBrowserCommands {
     return Boolean(guest && !guest.isDestroyed())
   }
 
-  // Why: the CLI sends worktree selectors (e.g. "path:/Users/...") but the
-  // bridge stores worktreeIds in "repoId::path" format (from the renderer's
-  // Zustand store). This helper resolves the selector to the store-compatible
-  // ID so the bridge can filter tabs correctly.
+  // Why: the CLI sends selectors (e.g. "path:/...") but the bridge keys tabs by "repoId::path"; resolve to that store-compatible id.
   private async resolveBrowserWorktreeId(selector?: string): Promise<string | undefined> {
     if (!selector) {
-      // Why: after app restart, webviews only mount when the browser pane is visible.
-      // Without --worktree, we still need to activate the view so persisted tabs
-      // become operable via registerGuest.
+      // Why: after restart, webviews mount only when the pane is visible; activate the view so persisted tabs become operable via registerGuest.
       const bridge = this.host.getAgentBrowserBridge()
       if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, undefined)) {
         try {
@@ -222,17 +211,13 @@ export class RuntimeBrowserCommands {
     }
 
     const worktreeId = (await this.host.resolveWorktreeSelector(selector)).id
-    // Why: explicit worktree selectors are user intent, so resolution errors
-    // must surface instead of silently widening browser routing scope. Only the
-    // activation step remains best-effort because missing windows during tests
-    // or startup should not erase the validated worktree target itself.
+    // Why: explicit selectors are user intent, so resolution errors surface (not silently widen scope); only activation stays best-effort.
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
       try {
         await this.ensureBrowserWorktreeActive(worktreeId)
       } catch {
-        // Fall through with the validated worktree id so downstream routing
-        // still stays scoped to the caller's explicit selector.
+        // Fall through with the validated worktree id so routing stays scoped to the caller's explicit selector.
       }
     }
     return worktreeId
@@ -257,14 +242,11 @@ export class RuntimeBrowserCommands {
       try {
         await this.ensureBrowserPageActive(worktreeId, browserPageId)
       } catch {
-        // Fall through with the explicit page target so downstream routing
-        // returns the existing clear "tab not found" error if wake fails.
+        // Fall through with the explicit page target; downstream routing surfaces a clear "tab not found" error if wake fails.
       }
     }
     return {
-      // Why: explicit browserPageId is already a stable tab identity, so we do
-      // not auto-resolve cwd worktree scoping on top of it. Only honor an
-      // explicit --worktree when the caller asked for that extra validation.
+      // Why: an explicit browserPageId is already a stable tab identity, so don't auto-resolve cwd worktree scoping on top of it.
       worktreeId,
       browserPageId
     }
@@ -297,16 +279,11 @@ export class RuntimeBrowserCommands {
     return { browserPageId: resolvedPageId, webContents: guest }
   }
 
-  // Why: browser tabs must become paintable before their webview guest starts
-  // and registerGuest fires, but automation must not steal the user's visible
-  // worktree/browser pane. Ask the renderer to background-mount the worktree and
-  // acquire a hidden automation visibility lease instead of activating the UI.
+  // Why: background-mount the worktree via a hidden visibility lease so the webview guest can register without stealing the user's visible pane.
   private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
     const win = this.host.getAuthoritativeWindow()
     win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
-    // Why: hidden/restored browser panes become operable only after the
-    // renderer's webview mounts and calls registerGuest. Waiting on that IPC is
-    // both faster and less flaky than sleeping for an arbitrary fixed delay.
+    // Why: the pane is operable only after the webview mounts and calls registerGuest; wait on that IPC rather than a flaky fixed sleep.
     await waitForWorktreeTabRegistration(worktreeId)
   }
 
@@ -322,11 +299,7 @@ export class RuntimeBrowserCommands {
     await waitForTabRegistration(browserPageId)
   }
 
-  // Why: agent-browser drives navigation via CDP, which bypasses Electron's
-  // webview event system. The renderer's did-navigate / page-title-updated
-  // listeners never fire, leaving the Zustand store (and thus the Orca UI's
-  // address bar and tab title) stale. Push updates from main → renderer after
-  // any navigation-causing command so the UI stays in sync.
+  // Why: CDP navigation bypasses Electron's webview events, so the renderer's did-navigate listeners never fire; push updates to keep the UI in sync.
   private notifyRendererNavigation(browserPageId: string, url: string, title: string): void {
     try {
       const win = this.host.getAuthoritativeWindow()
@@ -336,18 +309,7 @@ export class RuntimeBrowserCommands {
     }
   }
 
-  // Why: `tabSwitch` only flips the bridge's `activeWebContentsId` — it
-  // does not surface the browser pane in the renderer. Without --focus, the
-  // switch is invisible to the user. With --focus, we send a dedicated IPC
-  // so the renderer can update its per-worktree active-tab state.
-  //
-  // Why this IPC carries `worktreeId` instead of letting the renderer
-  // dispatch `setActiveWorktree`: multiple agents drive browsers in parallel
-  // worktrees. A global focus call from agent X would steal the user's
-  // screen from agent Y's worktree. The renderer-side handler
-  // (focusBrowserTabInWorktree) updates per-worktree state unconditionally
-  // and only flips globals when the user is already on the targeted
-  // worktree. Cross-worktree --focus calls pre-stage silently.
+  // Why: carry worktreeId (not a global setActiveWorktree) so one agent's --focus can't steal the screen from another agent's parallel worktree.
   private notifyRendererBrowserPaneFocus(
     worktreeId: string | undefined,
     browserPageId: string
@@ -374,9 +336,7 @@ export class RuntimeBrowserCommands {
     const target = await this.resolveBrowserCommandTarget(params)
     const bridge = this.requireAgentBrowserBridge()
     const result = await bridge.click(params.element, target.worktreeId, target.browserPageId)
-    // Why: clicks can trigger navigation (e.g. submitting a form, clicking a link).
-    // Read the target tab's live URL/title after the click and push to the
-    // renderer so the UI updates even when automation targeted a non-active page.
+    // Why: clicks can trigger navigation, so push the tab's live URL/title to the renderer even when automation targeted a non-active page.
     const page = bridge.getPageInfo(target.worktreeId, target.browserPageId)
     if (page) {
       this.notifyRendererNavigation(page.browserPageId, page.url, page.title)
@@ -503,9 +463,7 @@ export class RuntimeBrowserCommands {
     }
     let active = this.activeScreencastsByPageId.get(browserPageId)
     while (active) {
-      // Why: CDP only allows one Page.startScreencast per page. Treat a new
-      // subscriber as taking over from a stale/hidden paired client instead of
-      // surfacing an already-active error in the browser pane.
+      // Why: CDP allows one Page.startScreencast per page, so a new subscriber takes over a stale/hidden client instead of erroring.
       active.stop()
       await active.done
       stopping = this.stoppingScreencastPageIds.get(browserPageId)
@@ -581,8 +539,7 @@ export class RuntimeBrowserCommands {
       if (stoppingPromise || !session) {
         return
       }
-      // Why: mobile can unsubscribe and immediately resubscribe on rotation.
-      // New streams wait for CDP teardown instead of failing with already-active.
+      // Why: mobile can unsubscribe and instantly resubscribe on rotation; new streams wait for CDP teardown instead of failing already-active.
       stoppingPromise = session.done.finally(clearPageGate)
       this.stoppingScreencastPageIds.set(browserPageId, stoppingPromise)
     }
@@ -668,11 +625,7 @@ export class RuntimeBrowserCommands {
     const bridge = this.requireAgentBrowserBridge()
     const result = await bridge.tabSwitch(params.index, target.worktreeId, target.browserPageId)
     if (params.focus) {
-      // Why: prefer the explicit --worktree the caller passed; fall back to
-      // the bridge's owning-worktree map for the just-switched tab. The
-      // owning worktree is what the renderer needs to scope the focus to.
-      // The renderer NEVER yanks the user across worktrees on this signal
-      // (see focusBrowserTabInWorktree).
+      // Why: scope focus to the tab's owning worktree; the renderer never yanks the user across worktrees on this signal (see focusBrowserTabInWorktree).
       const worktreeId =
         target.worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
       this.notifyRendererBrowserPaneFocus(worktreeId, result.browserPageId)
@@ -1353,9 +1306,7 @@ export class RuntimeBrowserCommands {
         `Browser profile ${params.profileId} was not found`
       )
     }
-    // Why: a desktop renderer mounts a <webview>; a headless serve has none and
-    // backs the page with a main-process offscreen WebContents instead. Both
-    // register into BrowserManager so all downstream commands resolve uniformly.
+    // Why: headless serve has no renderer <webview>, so back the page with a main-process offscreen WebContents instead.
     if (!this.host.getAvailableAuthoritativeWindow()) {
       const offscreen = this.host.getOffscreenBrowserBackend()
       if (!offscreen) {
@@ -1378,35 +1329,23 @@ export class RuntimeBrowserCommands {
       params.activate
     )
 
-    // Why: the renderer creates the Zustand tab immediately, but the webview must
-    // mount and fire dom-ready before registerGuest runs. Waiting here ensures the
-    // tab is operable by subsequent CLI commands (snapshot, click, etc.).
-    // If registration doesn't complete within timeout, return the ID anyway — the
-    // tab exists in the UI but may not be ready for automation commands yet.
+    // Why: the webview must mount and register before the tab is operable, so wait here (returning the ID anyway on timeout).
     if (params.waitForRegistration !== false) {
       try {
         await waitForTabRegistration(browserPageId)
       } catch {
-        // Tab was created in the renderer but the webview hasn't finished mounting.
-        // Return success since the tab exists; subsequent commands will fail with a
-        // clear "tab not available" error if the webview never loads.
+        // Tab exists in the renderer even if the webview hasn't mounted; subsequent commands surface a clear error if it never loads.
       }
     }
 
-    // Why: newly created tabs should be auto-activated so subsequent commands
-    // (snapshot, click, goto) target the new tab without requiring an explicit
-    // tab switch. Without this, the bridge's active tab still points at the
-    // previously active tab and the new tab shows active: false in tab list.
+    // Why: auto-activate the new tab so subsequent commands target it without an explicit switch.
     const bridge = this.requireAgentBrowserBridge()
     const wcId = bridge.getRegisteredTabs(worktreeId).get(browserPageId)
     if (wcId != null) {
       bridge.setActiveTab(wcId, worktreeId)
     }
 
-    // Why: the renderer sets webview.src=url on mount, but agent-browser connects
-    // via CDP after the webview loads about:blank. Without an explicit goto, the
-    // page stays blank from agent-browser's perspective. Navigate via the bridge
-    // so agent-browser's CDP session tracks the correct page state.
+    // Why: the webview loads about:blank first, so navigate via the bridge to make agent-browser's CDP session track the real URL.
     if (url && url !== 'about:blank') {
       try {
         const result = await bridge.goto(url, worktreeId, browserPageId)
@@ -1441,8 +1380,7 @@ export class RuntimeBrowserCommands {
       )
     }
 
-    // Why: short-circuit no-op switches so the renderer doesn't tear down and
-    // remount the webview when the tab is already on the requested profile.
+    // Why: short-circuit no-op switches so the renderer doesn't needlessly tear down and remount the webview.
     const currentProfileId = browserManager.getSessionProfileIdForTab(browserPageId) ?? 'default'
     if (currentProfileId === profile.id) {
       return {
@@ -1484,17 +1422,11 @@ export class RuntimeBrowserCommands {
       })
     })
 
-    // Why: the renderer destroys the old webview and remounts on the new
-    // partition. Wait for the re-register so a follow-up tab list
-    // --show-profile reads the updated sessionProfileId from BrowserManager
-    // instead of stale data, and so subsequent CLI ops (snapshot, click, etc.)
-    // hit a guest that's already attached.
+    // Why: profile change remounts the webview; wait for re-register so follow-up commands see the new profile and an attached guest.
     try {
       await waitForTabRegistration(browserPageId)
     } catch {
-      // Best-effort: re-register won't fire if the worktree is hidden. The
-      // store already reflects the new profile; downstream commands retry
-      // once the pane re-mounts.
+      // Best-effort: re-register won't fire while the worktree is hidden; downstream commands retry once the pane re-mounts.
     }
 
     return {
@@ -1543,8 +1475,7 @@ export class RuntimeBrowserCommands {
       profile.id,
       profile.partition
     )
-    // Why: parity with browserTabCreate. Wait for the cloned tab's webview to
-    // register so the returned browserPageId is operable by the next CLI call.
+    // Why: wait for the cloned tab's webview to register so the returned browserPageId is operable by the next CLI call.
     try {
       await waitForTabRegistration(created.browserPageId)
     } catch {
@@ -1580,8 +1511,7 @@ export class RuntimeBrowserCommands {
 
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {
     return {
-      // Why: clients only need display metadata for the picker; filesystem
-      // paths and keychain identifiers stay on the runtime server.
+      // Why: expose only display metadata; filesystem paths and keychain identifiers stay on the runtime server.
       browsers: detectInstalledBrowsers().map((browser) => ({
         family: browser.family,
         label: browser.label,
@@ -1675,9 +1605,7 @@ export class RuntimeBrowserCommands {
       }
       tabId = entries[params.index][0]
     } else {
-      // Why: try the bridge first (registered tabs with webviews), then fall back
-      // to asking the renderer to close its active browser tab (handles cases where
-      // the webview hasn't mounted yet, e.g. tab was just created).
+      // Why: try the bridge first; fall back to the renderer for tabs whose webview hasn't mounted yet (e.g. just created).
       const tabs = bridge.getRegisteredTabs(worktreeId)
       const entries = [...tabs.entries()]
       const activeEntry = entries.find(([, wcId]) => wcId === bridge.getActiveWebContentsId())
@@ -1686,15 +1614,12 @@ export class RuntimeBrowserCommands {
       }
     }
 
-    // Why: headless serve owns its pages via the offscreen backend, with no
-    // renderer to ask. Destroy the offscreen page directly when that backend is
-    // the one serving this host (no renderer window).
+    // Why: headless serve has no renderer to ask, so destroy the offscreen page directly.
     const offscreen = this.host.getAvailableAuthoritativeWindow()
       ? null
       : this.host.getOffscreenBrowserBackend()
     if (offscreen) {
-      // Why: for implicit close (no --page/--index) resolve the active page like
-      // the renderer path does, so we don't report success while closing nothing.
+      // Why: resolve the active page for implicit close so we don't report success while closing nothing.
       const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
       if (!resolvedTabId) {
         return { closed: false }
@@ -1727,11 +1652,7 @@ export class RuntimeBrowserCommands {
         }
       }
       ipcMain.on('browser:tabCloseReply', handler)
-      // Why: when main cannot resolve a concrete tab id itself (for example if a
-      // browser workspace exists in the renderer before its guest mounts), the
-      // renderer still needs the intended worktree scope. Otherwise it falls
-      // back to the globally active browser tab and can close a tab in the
-      // wrong worktree.
+      // Why: pass worktreeId so the renderer scopes the close correctly instead of falling back to the globally active tab in the wrong worktree.
       win.webContents.send('browser:requestTabClose', { requestId, tabId, worktreeId })
     })
 
@@ -1771,10 +1692,7 @@ export class RuntimeBrowserCommands {
     return this.enrichBrowserTabInfo(tab)
   }
 
-  // Why: headless serve path. The offscreen backend registers the page
-  // synchronously, so there is no webview-mount wait. The page already loaded the
-  // URL during createTab, so we only sync the bridge's active tab and notify the
-  // (absent) renderer is skipped — nav state is read from the live WebContents.
+  // Why: headless serve path — the offscreen backend registers synchronously, so there is no webview-mount wait.
   private async createBrowserTabOffscreen(
     offscreen: BrowserBackend,
     url: string,
@@ -1789,11 +1707,7 @@ export class RuntimeBrowserCommands {
     if (bridge && wcId != null) {
       bridge.setActiveTab(wcId, worktreeId)
     }
-    // Why: only a user-initiated create (activate:true, e.g. the UI or a mobile
-    // HTML-link tap) should steal focus by marking the tab active in the session
-    // snapshot. Background/agent creates (CLI `tab create`, automation) must NOT,
-    // or they'd yank a connected client/mobile to the new tab. Mirrors the
-    // renderer path, which forwards `activate` and never force-focuses otherwise.
+    // Why: only user-initiated creates (activate:true) mark the tab active; agent/background creates must not yank a connected client to it.
     if (activate === true) {
       this.host.markHeadlessBrowserSessionTabActive?.(worktreeId, browserPageId, targetGroupId)
     }
@@ -1836,11 +1750,7 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
-        // Why: leave sessionProfileId/sessionPartition undefined when no explicit
-        // profile was chosen so the renderer still applies the user's configured
-        // default-profile inheritance. Only thread the resolved partition when a
-        // profile is named — sending null here would suppress inheritance and
-        // force the shared default partition.
+        // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
         sessionProfileId: profileId,
         sessionPartition,
         activate

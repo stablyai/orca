@@ -16,20 +16,11 @@ import { SettingsSwitch } from './SettingsFormControls'
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
-// Why: pin cols/rows so PREVIEW_BUFFER never wraps. Sized so the longest
-// line (the def total signature, 32 chars) plus a few cols of margin fits
-// the xterm canvas in the xl right-column at the default 14px font with
-// the divider + stub pane carved off the right side. Larger fonts will
-// extend past the xterm box's right edge — the box clips, which is
-// preferable to wrapping mid-content.
+// Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
 const PREVIEW_COLS = 36
 const PREVIEW_ROWS = 15
 
-// Why: the old TerminalThemePreview rendered two side-by-side panes so the
-// user could see the divider + inactive opacity in context. Keep that
-// affordance with a real xterm on the left and a small color-only stub on
-// the right. 40px is wide enough to read the inactive opacity dim against
-// the active xterm, narrow enough not to crowd content.
+// Why: color-only stub pane; 40px is wide enough to read inactive-pane opacity dim, narrow enough not to crowd content.
 const STUB_PANE_PX = 40
 
 type PreviewMode = 'dark' | 'light'
@@ -39,18 +30,11 @@ type TerminalSettingsPreviewProps = {
   description?: string
   settings: GlobalSettings
   systemPrefersDark: boolean
-  /** Optional override for `settings.terminalFontFamily`. Set by the font
-   *  picker while the user hovers a dropdown option so they can preview a
-   *  font without committing the selection. */
+  /** Override for `settings.terminalFontFamily`; set by the font picker on hover to preview a font before committing. */
   previewFontFamily?: string | null
-  /** Force the preview into this mode regardless of app settings. Used by
-   *  the Dark/Light theme sections so each pins its own theme. When set,
-   *  the in-header theme toggle is hidden. */
+  /** Force the preview into this mode regardless of app settings; hides the in-header theme toggle when set. */
   modeOverride?: PreviewMode
-  /** When true, render a Moon/Sun toggle in the card header so the user
-   *  can flip the preview between dark and light themes without changing
-   *  the app theme. Initial mode follows the active app theme. Ignored
-   *  when `modeOverride` is set. */
+  /** Render a Moon/Sun header toggle to flip the preview theme without changing the app theme. Ignored when `modeOverride` is set. */
   showThemeToggle?: boolean
 }
 
@@ -82,29 +66,19 @@ export function TerminalSettingsPreview({
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
-  // Why: lazy-init from the active app theme so the toggle starts in the
-  // user's current mode. After init the toggle is independent — flipping
-  // it doesn't change app settings, and changing the app theme later
-  // doesn't reset the toggle.
+  // Why: lazy-init from the active app theme; after mount the toggle is independent of later app-theme changes.
   const [togglePreviewMode, setTogglePreviewMode] = useState<PreviewMode>(() =>
     resolveAppMode(settings, systemPrefersDark)
   )
   const [previewPaneDividerVisible, setPreviewPaneDividerVisible] = useState(false)
 
-  // Why: precedence — modeOverride pins the mode; otherwise the in-header
-  // toggle drives it; otherwise follow whatever the app is set to right
-  // now (recomputed each render so plain previews track app theme changes).
+  // Why: recomputed each render so plain previews (no override/toggle) track live app-theme changes.
   const effectiveMode: PreviewMode =
     modeOverride ??
     (showThemeToggle ? togglePreviewMode : resolveAppMode(settings, systemPrefersDark))
 
-  // Why: reuse the live-pane resolver so divider color, theme palette, and
-  // the dark/light variant rules (e.g. `useSeparateLightTheme`) stay in
-  // lockstep with what real terminal panes render.
-  // Why: list each property resolveEffectiveTerminalAppearance reads instead
-  // of the whole settings object so unrelated changes (font, cursor) don't
-  // re-derive the appearance. The lint can't see that settings flows through
-  // the helper to those specific properties.
+  // Why: reuse the live-pane resolver so divider color, theme palette, and dark/light variant rules stay in lockstep.
+  // Why: list resolveEffectiveTerminalAppearance's inputs explicitly so unrelated changes (font, cursor) don't re-derive.
   const appearance = useMemo(
     () =>
       resolveEffectiveTerminalAppearance({ ...settings, theme: effectiveMode }, systemPrefersDark),
@@ -121,8 +95,7 @@ export function TerminalSettingsPreview({
     ]
   )
 
-  // Why: same — list the composeActiveTerminalTheme inputs explicitly so font
-  // and cursor option changes don't trigger a buffer rewrite.
+  // Why: list composeActiveTerminalTheme inputs explicitly so font/cursor changes don't trigger a buffer rewrite.
   const composedTheme = useMemo(
     () => composeActiveTerminalTheme(appearance.theme, settings),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -146,17 +119,12 @@ export function TerminalSettingsPreview({
     const weights = resolveTerminalFontWeights(settings.terminalFontWeight)
     skipInitialOptionMutationRef.current = true
     skipInitialThemeRewriteRef.current = true
-    // Why: DOM renderer only — multiple previews can mount at once and
-    // WebGL contexts are scarce.
-    // Why disableStdin: read-only preview. tabIndex/aria-hidden on the
-    // wrapper don't reach xterm's internal textarea; disableStdin does.
+    // Why: DOM renderer only — WebGL contexts are scarce and multiple previews can mount at once.
+    // Why disableStdin: read-only; tabIndex/aria-hidden on the wrapper don't reach xterm's internal textarea, but this does.
     const terminal = new Terminal({
       ...buildDefaultTerminalOptions(),
       disableStdin: true,
-      // Why mirror cursorInactiveStyle: xterm renders the cursor as a hollow
-      // outline when the terminal is not focused. The preview is read-only and
-      // never gets focused, so without mirroring the user wouldn't see their
-      // selected cursor shape on the trailing prompt.
+      // Why mirror cursorInactiveStyle: preview is never focused, and xterm defaults the unfocused cursor to a hollow outline.
       cursorInactiveStyle: settings.terminalCursorStyle,
       cursorStyle: settings.terminalCursorStyle,
       cursorBlink: settings.terminalCursorBlink,
@@ -188,14 +156,11 @@ export function TerminalSettingsPreview({
       terminal.dispose()
       terminalRef.current = null
     }
-    // Why empty deps: mount effect intentionally runs once. Subsequent
-    // setting changes (including cursor style) flow through the dedicated
-    // option-mutation effects below.
+    // Why empty deps: mount effect runs once; later setting changes flow through the option-mutation effects below.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Why: font/cursor options are mutated directly so the preview repaints in
-  // xterm's normal cycle. No fit/refit needed since cols/rows are pinned.
+  // Why: mutate options directly so xterm repaints in its normal cycle; no refit needed since cols/rows are pinned.
   useEffect(() => {
     const terminal = terminalRef.current
     if (!terminal) {
@@ -212,8 +177,7 @@ export function TerminalSettingsPreview({
     terminal.options.fontWeightBold = weights.fontWeightBold
     terminal.options.lineHeight = terminalLineHeight
     terminal.options.cursorStyle = settings.terminalCursorStyle
-    // Why: see constructor — mirror so the unfocused cursor reflects the
-    // user's chosen shape (xterm defaults inactive to 'outline').
+    // Why: mirror so the unfocused cursor reflects the chosen shape (xterm defaults inactive to 'outline'; see constructor).
     terminal.options.cursorInactiveStyle = settings.terminalCursorStyle
     terminal.options.cursorBlink = settings.terminalCursorBlink
   }, [
@@ -231,21 +195,14 @@ export function TerminalSettingsPreview({
       return
     }
     terminal.options.theme = composedTheme
-    // Why: matches the live pane policy in applyTerminalAppearance — without
-    // this, an opacity < 1 background renders opaque inside xterm even though
-    // the theme color carries an alpha channel.
+    // Why: xterm renders an alpha-channel background opaque unless allowTransparency is set (matches applyTerminalAppearance).
     terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
     if (skipInitialThemeRewriteRef.current) {
       skipInitialThemeRewriteRef.current = false
       return
     }
-    // Why reset() not clear(): clear() keeps the row the cursor sits on, and
-    // our buffer ends mid-line on the prompt — so a follow-up clear+write
-    // would leave the trailing prompt fragment and append the new buffer
-    // beneath it, producing the duplicated content seen during font swaps.
-    // reset() restores cursor home + wipes the buffer so the rewrite starts
-    // from a clean slate.
+    // Why reset() not clear(): buffer ends mid-line on the prompt, so clear()+write would duplicate the trailing fragment.
     terminal.reset()
     terminal.write(PREVIEW_BUFFER)
   }, [composedTheme, settings.terminalBackgroundOpacity])
@@ -262,8 +219,7 @@ export function TerminalSettingsPreview({
       try {
         terminal.loadAddon(addon)
         ligaturesAddonRef.current = addon
-        // Why: the preview writes its sample before this effect runs; repaint
-        // so already-rendered operators switch to ligature glyphs immediately.
+        // Why: sample is written before this effect runs; repaint so already-rendered operators switch to ligature glyphs.
         terminal.refresh(0, terminal.rows - 1)
       } catch (err) {
         addon.dispose()
@@ -343,9 +299,7 @@ export function TerminalSettingsPreview({
         </div>
       </CardHeader>
       <CardContent className="px-4 pb-4">
-        {/* Why: flex layout with xterm on the left and a stub pane on the
-            right keeps inactive-pane opacity visible. The divider stays
-            preview-only and opt-in so the default preview remains clean. */}
+        {/* Why: stub pane on the right keeps inactive-pane opacity visible; divider is opt-in to keep the default preview clean. */}
         <div className="flex h-[300px] flex-col overflow-hidden rounded-md border border-border/50">
           <div className="flex min-h-0 flex-1 overflow-hidden" aria-hidden="true">
             <div

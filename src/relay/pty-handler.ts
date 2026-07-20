@@ -39,6 +39,12 @@ import {
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
+import {
+  PTY_STARTUP_INGRESS_VERSION,
+  PtyStartupIngress,
+  parsePtyStartupIngressIntent,
+  type PtyIngressEmission
+} from '../shared/pty-startup-ingress'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
@@ -54,20 +60,14 @@ type ManagedPty = {
   buffered: string
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
-  /** True once disposeManagedPty has run. Prevents double-dispose (onExit + an
-   *  explicit shutdown can both fire for the same PTY) and converts post-dispose
-   *  entry-point calls into a clean "not found" error instead of a silent no-op
-   *  (POSIX proc.kill is neutralized inside disposeManagedPty). */
+  /** True once disposeManagedPty has run; blocks double-dispose and makes post-dispose calls fail "not found" not silently. */
   disposed?: boolean
   /** True once external cleanup observers have been notified. */
   exitListenerNotified?: boolean
-  /** Renderer-supplied paneKey from spawn env (ORCA_PANE_KEY). Captured so
-   *  external observers (the relay-hook-server cache) can evict per-pane
-   *  state when this PTY exits. Symmetric with Orca's local pty.ts. */
+  /** Renderer-supplied paneKey (ORCA_PANE_KEY); captured so exit observers can evict per-pane cache state. */
   paneKey?: string
   tabId?: string
-  /** Attach-only identity metadata supplied over RPC. Kept separate from
-   *  paneKey/tabId because those fields also control shell env/revive hooks. */
+  /** Attach-only identity metadata (RPC). Separate from paneKey/tabId, which also drive shell env/revive hooks. */
   attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
@@ -78,10 +78,15 @@ type ManagedPty = {
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
   gracefulKillSent?: boolean
+  startupIngress?: PtyStartupIngress
+  startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
 }
 
 type PendingPtyOutput = {
   data: string
+  rawLength?: number
+  transformed?: boolean
+  seq?: number
 }
 
 type ManagedStartupCommand = {
@@ -92,10 +97,7 @@ type ManagedStartupCommand = {
   timer: ReturnType<typeof setTimeout> | null
 }
 
-// Why: node-pty's Windows agent throws "Signals not supported on windows." for
-// any signal argument. ConPTY/winpty has no signal semantics — a bare kill()
-// force-terminates the child — so drop the signal on Windows and forward it
-// (SIGTERM graceful vs SIGKILL force) on POSIX.
+// Why: node-pty's Windows agent throws on any signal arg (ConPTY has no signal semantics); drop it there, forward on POSIX.
 function killPtyProcess(pty: IPty, signal: string): void {
   if (process.platform === 'win32') {
     pty.kill()
@@ -120,26 +122,17 @@ function disposeManagedPty(managed: ManagedPty): void {
     return
   }
   managed.disposed = true
-  // Why: clear any pending 5s SIGKILL fallback timer. If graceful-shutdown
-  // armed a killTimer and the child then exited cleanly (firing onExit →
-  // disposeManagedPty), the timer would otherwise fire later and attempt
-  // pty.kill('SIGKILL') on an already-disposed instance. The ptys.has(id)
-  // guard inside the timer short-circuits today, but symmetry is clearer.
+  // Why: clear the SIGKILL fallback timer so it can't fire pty.kill on an already-disposed instance.
   if (managed.killTimer) {
     clearTimeout(managed.killTimer)
     managed.killTimer = undefined
   }
-  // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`.
-  // The close event fires asynchronously; by then the child may have exited and
-  // its pid been recycled. On the Linux remote hosts the relay typically runs on,
-  // pid recycling is fast — SIGHUP to a stranger is a real hazard. Neutralize
-  // managed.pty.kill before destroy() runs. Windows exempt: WindowsTerminal.destroy
-  // IS a kill() call via _deferNoArgs — neutralizing it leaks the ConPTY agent.
+  // Why: neutralize pty.kill before destroy() so UnixTerminal's async 'close' SIGHUP can't hit a recycled pid.
+  // Windows exempt: its destroy() IS a kill() (via _deferNoArgs), so neutralizing leaks the ConPTY agent.
   if (process.platform !== 'win32') {
     ;(managed.pty as unknown as { kill: (sig?: string) => void }).kill = () => {}
   } else if (managed.gracefulKillSent || managed.forceKillSent) {
-    // Why: WindowsTerminal.destroy() calls kill() internally; any prior bare
-    // kill already closed ConPTY, so destroy would double-close the handle.
+    // Why: WindowsTerminal.destroy() calls kill(); a prior bare kill already closed ConPTY, so skip to avoid double-close.
     return
   }
   try {
@@ -240,11 +233,9 @@ export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
 /**
- * True when a reattach's expected pane identity contradicts the target PTY's
- * own. Used to reject cross-relay-generation id collisions: a reset relay mints
- * `pty-N` from 1 again, so an old lease's `pty-N` can name a different pane's
- * fresh PTY. Only compares fields present on *both* sides — absent identity on
- * either side is permissive so legacy PTYs and identity-less callers still attach.
+ * True when a reattach's expected pane identity contradicts the target PTY's own.
+ * Rejects cross-relay-generation id collisions (a reset relay reuses `pty-N`).
+ * Only compares fields present on both sides; absent identity stays permissive.
  */
 export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
   return Boolean(
@@ -252,14 +243,8 @@ export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIden
     (expected.tabId && managed.tabId && expected.tabId !== managed.tabId)
   )
 }
-/** Returns env to merge into the PTY's spawn env. Receives spawn context so
- *  augmenters that need a per-PTY identity (e.g. OPENCODE_CONFIG_DIR overlay
- *  paths derived from the renderer's paneKey) can compute it without pulling
- *  the renderer's env in twice. `command` is the renderer-chosen agent launch
- *  command (`pi`, `omp`, …) — supplied by ssh-pty-provider.ts so the Pi
- *  overlay can resolve the per-agent source dir without disk-presence
- *  guessing. NEVER undefined for client-driven spawns that target a
- *  Pi-compatible agent; may be undefined for CLI-launched bare shells. */
+/** Returns env to merge into the PTY's spawn env. Receives spawn context so augmenters can derive per-PTY identity from paneKey.
+ *  `command` is the renderer-chosen agent launch command (`pi`, `omp`, …); undefined for CLI-launched bare shells. */
 export type PtyEnvAugmenter = (ctx: {
   id: string
   paneKey?: string
@@ -291,18 +276,9 @@ export class PtyHandler {
   private ptyModule: typeof NodePty | null = null
   private ptyModuleLoadPromise: Promise<typeof NodePty | null> | null = null
   private reloadPtyModuleFromDisk = false
-  // Why: external observers need to drop per-pane state when a PTY exits.
-  // Today the relay composes multiple consumers (hook-server cache eviction
-  // and plugin-overlay dir cleanup) into a single callback at the call site
-  // (see relay.ts setExitListener). A single optional slot is intentional —
-  // callers compose externally rather than us maintaining a listener list.
-  // A throw inside the listener is swallowed so it can never block
-  // disposeManagedPty / map cleanup.
+  // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
-  // Why: env augmenters injected at relay boot (currently the relay-hook
-  // server's ORCA_AGENT_HOOK_* coords). Run on every spawn so every PTY
-  // sees the live hook coordinates without the dispatcher needing to know
-  // about agent hooks.
+  // Why: env augmenters run on every spawn so each PTY sees live hook coords without the dispatcher knowing about agent hooks.
   private envAugmenters: PtyEnvAugmenter[] = []
 
   constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
@@ -335,8 +311,7 @@ export class PtyHandler {
         this.reloadPtyModuleFromDisk = true
       }
     }
-    // Why: the relay is launched from its install dir today, but module
-    // resolution must remain tied to the deployed bundle rather than cwd.
+    // Why: tie module resolution to the deployed bundle dir, not cwd.
     const moduleEntry = join(__dirname, 'node_modules', 'node-pty', 'lib', 'index.js')
     if (!existsSync(moduleEntry)) {
       return null
@@ -387,17 +362,13 @@ export class PtyHandler {
     return this.graceTimeMs
   }
 
-  /** Subscribe to PTY-exit events. Used by the relay-hook server to evict
-   *  per-paneKey cached payloads when the backing PTY ends. */
+  /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
   }
 
-  /** Register an env augmenter whose return value is merged into every spawn
-   *  env *after* `process.env` and the renderer-supplied env. Used by the
-   *  relay-hook server to inject ORCA_AGENT_HOOK_PORT/TOKEN/ENV/VERSION/
-   *  ENDPOINT — values the agent CLI inside the PTY needs to find the local
-   *  hook receiver. See docs/design/agent-status-over-ssh.md §3. */
+  /** Register an env augmenter merged into every spawn env *after* process.env and renderer env.
+   *  Used by the relay-hook server to inject ORCA_AGENT_HOOK_* coords. See docs/design/agent-status-over-ssh.md §3. */
   addEnvAugmenter(augmenter: PtyEnvAugmenter): () => void {
     this.envAugmenters.push(augmenter)
     return () => {
@@ -408,13 +379,7 @@ export class PtyHandler {
     }
   }
 
-  /** Build the augmented spawn env. Augmenter values override `process.env`
-   *  and any renderer-supplied env (the augmenter contract — see
-   *  addEnvAugmenter doc-comment). Used by both spawn() and revive() so the
-   *  relationship between process.env, renderer env, and augmenters cannot
-   *  drift between the two paths — revived shells after a relay restart must
-   *  see the fresh ORCA_AGENT_HOOK_* coords just like freshly-spawned ones,
-   *  otherwise agent-status over SSH silently breaks on every revive. */
+  /** Build augmented spawn env; augmenter values win over process.env/renderer env. Shared by spawn()/revive() so precedence can't drift. */
   private buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
     ctx: { id: string; paneKey?: string; shell: string; command?: string },
@@ -443,8 +408,7 @@ export class PtyHandler {
       }
     }
     const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
-    // Why: match local/daemon precedence so relay defaults and augmenters
-    // cannot resurrect attribution or identity values explicitly removed.
+    // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
     }
@@ -455,8 +419,7 @@ export class PtyHandler {
     ) {
       result.TERM = rendererEnv.TERM
     }
-    // Why: node-pty treats missing/empty TERM as its own platform-specific
-    // default. Normalize here so POSIX and Windows relay children agree.
+    // Why: node-pty defaults missing/empty TERM per-platform; normalize so POSIX and Windows children agree.
     if (!result.TERM) {
       result.TERM = 'xterm-256color'
     }
@@ -471,6 +434,9 @@ export class PtyHandler {
   }
 
   private appendReplayBuffer(managed: ManagedPty, data: string): void {
+    if (data.length === 0) {
+      return
+    }
     managed.buffered += data
     if (managed.buffered.length > REPLAY_BUFFER_MAX) {
       managed.buffered = managed.buffered.slice(-REPLAY_BUFFER_MAX)
@@ -504,15 +470,11 @@ export class PtyHandler {
     if (startup.scanState) {
       const heldBytes = drainShellReadyHeldBytes(startup.scanState)
       if (heldBytes) {
-        this.appendReplayBuffer(managed, heldBytes)
-        this.enqueuePtyOutput(managed.id, heldBytes)
+        managed.startupIngress?.accept(heldBytes)
       }
     }
     const submit = process.platform === 'win32' ? '\r' : '\n'
-    // Why: a multiline startup prompt is pasted literally via bracketed paste
-    // only when the Orca shell-ready wrapper is active (waitForShellReady) —
-    // that is the bash/zsh overlay that arms bracketed-paste mode. Other remote
-    // shells keep the raw submit path so the ESC[200~ markers are not echoed.
+    // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
     const payload = buildStartupCommandSubmission(startup.command, {
       submit,
       bracketedPasteSafe: startup.waitForShellReady
@@ -525,6 +487,22 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
+    const emitIngressData = (emission: PtyIngressEmission): void => {
+      const rawLength = emission.rawEndSeq - emission.rawStartSeq
+      this.appendReplayBuffer(managed, emission.data)
+      this.enqueuePtyOutput(
+        managed.id,
+        emission.data,
+        emission.transformed || rawLength !== emission.data.length
+          ? { rawLength, seq: emission.rawEndSeq, transformed: true }
+          : {}
+      )
+    }
+    managed.startupIngress ??= new PtyStartupIngress({
+      ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
+      write: (data) => managed.pty.write(data),
+      onEmission: emitIngressData
+    })
     managed.pty.onData((data: string) => {
       const startup = managed.startupCommand
       if (startup?.waitForShellReady && startup.scanState && !startup.delivered) {
@@ -534,42 +512,43 @@ export class PtyHandler {
           this.scheduleStartupCommandDelivery(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
         }
       }
-      this.appendReplayBuffer(managed, data)
-      this.enqueuePtyOutput(managed.id, data)
+      managed.startupIngress?.accept(data)
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       managed.physicalExit?.markExited()
       if (managed.disposed) {
         return
       }
-      // Why: neutralize managed.pty.kill synchronously BEFORE anything else
-      // in this callback. node-pty's UnixTerminal has
-      // `_socket.once('close', () => this.kill('SIGHUP'))` wired at destroy
-      // time, and the master socket can emit 'close' concurrently with this
-      // onExit on natural exit. If 'close' wins, SIGHUP targets the reaped
-      // pid — recycled to an unrelated process on Linux (the typical relay
-      // host). Synchronous neutralization closes that window. Windows is
-      // exempt (WindowsTerminal.destroy uses kill() to close ConPTY).
+      // Why: neutralize pty.kill synchronously so node-pty's 'close' SIGHUP can't hit a recycled pid on POSIX.
       if (process.platform !== 'win32') {
         ;(managed.pty as unknown as { kill: (sig?: string) => void }).kill = () => {}
       }
-      // Why: If the PTY exits normally (or via SIGTERM), we must clear the
-      // SIGKILL fallback timer to avoid firing SIGKILL later.
+      // Why: clear the SIGKILL fallback timer on clean exit so it doesn't fire later.
       if (managed.killTimer) {
         clearTimeout(managed.killTimer)
         managed.killTimer = undefined
       }
       this.clearStartupCommandTimer(managed)
+      this.releaseRelayIngress(managed)
       this.flushPtyOutput(managed.id)
       this.dispatcher.notify('pty.exit', { id: managed.id, code: exitCode })
       this.notifyExitListener(managed)
       this.ptys.delete(managed.id)
       this.clearPtyFlowState(managed.id)
-      // Why: release the ptmx fd on the natural-exit path. Without this the
-      // node-pty wrapper's _socket stays alive until GC and the master fd
-      // leaks (see docs/fix-pty-fd-leak.md).
+      // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
       disposeManagedPty(managed)
     })
+  }
+
+  private releaseRelayIngress(managed: ManagedPty): void {
+    const startupCommand = managed.startupCommand
+    const scanState = startupCommand?.scanState
+    if (scanState) {
+      const held = drainShellReadyHeldBytes(scanState)
+      startupCommand.scanState = null
+      managed.startupIngress?.accept(held)
+    }
+    managed.startupIngress?.drainAndClose()
   }
 
   private notifyExitListener(managed: ManagedPty): void {
@@ -577,8 +556,7 @@ export class PtyHandler {
       return
     }
     managed.exitListenerNotified = true
-    // Why: external observers own relay-hook cache eviction and plugin-overlay
-    // cleanup. Physical exits and whole-relay disposal both need it exactly once.
+    // Why: notify exactly once — both physical exit and whole-relay disposal reach here.
     if (this.exitListener) {
       try {
         this.exitListener({ id: managed.id, paneKey: managed.paneKey })
@@ -605,6 +583,9 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
     this.dispatcher.onRequest('pty.getProfiles', async () => listShellProfiles())
+    this.dispatcher.onRequest('pty.closeStartupQueryAuthority', (p) =>
+      this.closeStartupQueryAuthority(p)
+    )
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
@@ -618,6 +599,17 @@ export class PtyHandler {
       return true
     }
     return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
+  }
+
+  private async closeStartupQueryAuthority(
+    params: Record<string, unknown>
+  ): Promise<{ appliedSeq: number }> {
+    const id = params.id as string
+    const managed = this.ptys.get(id)
+    if (!managed || managed.disposed) {
+      throw new Error(`PTY "${id}" not found`)
+    }
+    return { appliedSeq: managed.startupIngress?.closeQueryAuthority() ?? 0 }
   }
 
   private shouldSendInteractiveOutputNow(id: string, data: string): boolean {
@@ -640,15 +632,33 @@ export class PtyHandler {
     return true
   }
 
-  private enqueuePtyOutput(id: string, data: string): void {
+  private enqueuePtyOutput(
+    id: string,
+    data: string,
+    meta: { rawLength?: number; transformed?: boolean; seq?: number } = {}
+  ): void {
     const existing = this.pendingOutputByPty.get(id)
-    const pending = { data: (existing?.data ?? '') + data }
+    if (meta.transformed === true) {
+      // Why: transformed spans lack a raw-to-clean slice mapping, so they can't be folded into the output batch.
+      if (existing) {
+        this.flushPtyOutput(id)
+      }
+      this.dispatcher.notify('pty.data', { id, data, ...meta })
+      return
+    }
+    const pending: PendingPtyOutput = { data: (existing?.data ?? '') + data }
+    if (existing?.rawLength !== undefined || meta.rawLength !== undefined) {
+      pending.rawLength =
+        (existing?.rawLength ?? existing?.data.length ?? 0) + (meta.rawLength ?? data.length)
+    }
+    if (meta.seq !== undefined) {
+      pending.seq = meta.seq
+    }
     if (this.shouldSendInteractiveOutputNow(id, pending.data)) {
       this.pendingOutputByPty.delete(id)
       this.clearOutputFlushTimerIfIdle()
-      // Why: remote agent TUIs redraw around each keystroke. Background relay
-      // batching should reduce SSH chatter, not add visible input echo delay.
-      this.dispatcher.notify('pty.data', { id, data: pending.data })
+      // Why: send interactive echo immediately — batching must not add visible input delay for TUIs.
+      this.dispatcher.notify('pty.data', { id, ...pending })
       return
     }
     this.pendingOutputByPty.set(id, pending)
@@ -670,17 +680,35 @@ export class PtyHandler {
         break
       }
       this.pendingOutputByPty.delete(id)
-      const chunk = pending.data.slice(0, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
-      const remaining = pending.data.slice(PTY_OUTPUT_FLUSH_CHUNK_CHARS)
+      const chunk = pending.transformed
+        ? pending.data
+        : pending.data.slice(0, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
+      const remaining = pending.transformed ? '' : pending.data.slice(PTY_OUTPUT_FLUSH_CHUNK_CHARS)
       if (remaining) {
-        this.pendingOutputByPty.set(id, { data: remaining })
+        this.pendingOutputByPty.set(id, {
+          data: remaining,
+          ...(pending.rawLength === undefined ? {} : { rawLength: remaining.length }),
+          seq: pending.seq
+        })
       }
-      this.dispatcher.notify('pty.data', { id, data: chunk })
+      const chunkRawLength = pending.transformed
+        ? pending.rawLength
+        : pending.rawLength === undefined
+          ? undefined
+          : chunk.length
+      const chunkSeq =
+        pending.seq === undefined ? undefined : pending.seq - (pending.data.length - chunk.length)
+      this.dispatcher.notify('pty.data', {
+        id,
+        data: chunk,
+        ...(chunkSeq === undefined ? {} : { seq: chunkSeq }),
+        ...(chunkRawLength === undefined ? {} : { rawLength: chunkRawLength }),
+        ...(pending.transformed ? { transformed: true } : {})
+      })
       writes++
     }
     if (this.pendingOutputByPty.size > 0 && writes > 0) {
-      // Why: relay-side output can arrive as a large single PTY chunk. Yield
-      // between slices so client input and control frames can interleave.
+      // Why: yield between slices of a large chunk so client input and control frames can interleave.
       this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
     }
   }
@@ -691,7 +719,7 @@ export class PtyHandler {
       return
     }
     this.pendingOutputByPty.delete(id)
-    this.dispatcher.notify('pty.data', { id, data: pending.data })
+    this.dispatcher.notify('pty.data', { id, ...pending })
     this.clearOutputFlushTimerIfIdle()
   }
 
@@ -733,8 +761,7 @@ export class PtyHandler {
         throw new Error('Maximum number of PTY sessions reached (50)')
       }
     } catch (error) {
-      // Why: worktree identity and cwd can belong to different roots. A later
-      // rejection must release every earlier admission before propagating.
+      // Why: a later rejection must release every earlier admission before propagating.
       finishPtyCreationOperations(finishRemovalOperations)
       throw error
     }
@@ -812,16 +839,9 @@ export class PtyHandler {
       id = `pty-${this.nextId++}`
     } while (this.ptys.has(id) || this.pendingReviveIds.has(id))
 
-    // Why: server-side augmenter values (ORCA_AGENT_HOOK_* and plugin overlay
-    // dirs) override renderer-supplied env so live remote paths and hook coords
-    // win over local userData paths. The context lets overlay augmenters derive
-    // per-PTY OpenCode/Pi directories from the stable paneKey when present.
-    // `command` is usually forwarded by ssh-pty-provider.ts only as a hint
-    // for overlay resolution; runtime-owned PTYs opt into relay delivery
-    // because no renderer TerminalPane exists to type the command.
+    // Why: augmenter values override renderer env so remote paths and hook coords win over local userData.
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
-    // Why: kept so a restarted runtime can re-adopt this live PTY under its
-    // originally-exported handle (reported via listProcesses, survives revive).
+    // Why: kept so a restarted runtime can re-adopt this PTY under its original handle (survives revive).
     const terminalHandle =
       typeof env?.ORCA_TERMINAL_HANDLE === 'string' ? env.ORCA_TERMINAL_HANDLE : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
@@ -831,9 +851,7 @@ export class PtyHandler {
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command }, envToDelete)
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
-    // Why: SSH PTYs bypass main's host-env builder. Apply the policy only
-    // after the relay merges its authoritative process environment so indexed
-    // Git config and remote Windows/WSL behavior remain intact.
+    // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
       launchCommand: launchCommandHint,
       isUnattended: isTuiAgent(params.launchAgent),
@@ -846,34 +864,26 @@ export class PtyHandler {
         startupCommandDelivery:
           params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
       })
-    // Why: renderer- and provider-delivered startup commands both use this
-    // marker; the side responsible for delivery also strips it from output.
+    // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro,
       emitReadyMarker: shouldEmitShellReadyMarker
     })
 
-    // Why: SSH exec channels give the relay a minimal environment without
-    // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
-    // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
-    // When overlays are injected, the launch wrapper keeps those paths after
-    // user startup files re-export their defaults.
+    // Why: SSH exec channels give a minimal env; a login shell sources startup files so PATH includes Homebrew/nvm/user CLIs.
     let term: IPty
     try {
       term = pty.spawn(shell, shellLaunch.args, {
-        // Why: node-pty overwrites env.TERM with `name`; keep caller-selected
-        // terminal identities instead of losing them at the final spawn boundary.
+        // Why: node-pty overwrites env.TERM with `name`; pass caller-selected TERM so it isn't lost.
         name: spawnEnv.TERM ?? 'xterm-256color',
         cols,
         rows,
         cwd,
-        // Why: relay shells inherit process.env; never let an ambient Orca marker
-        // enable shell-ready behavior unless this spawn explicitly requested it.
+        // Why: relay shells inherit process.env; don't let an ambient Orca marker enable shell-ready unless requested.
         env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
       })
     } catch (error) {
-      // Why: Windows node-pty loads conpty.node only on first spawn, after the
-      // wrapper import succeeded. Keep that late failure on the degraded path.
+      // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
       if (isMissingNodePtyNativeBinding(error)) {
         this.invalidatePtyModuleAfterBindingFailure()
         throw new Error('node-pty is not available on this remote host')
@@ -881,16 +891,19 @@ export class PtyHandler {
       throw error
     }
 
-    // Why: capture the renderer-supplied paneKey on the managed entry so the
-    // exit listener can evict per-pane caches without the relay needing a
-    // separate ptyId→paneKey map. ORCA_PANE_KEY is shaped `${tabId}:${paneId}`
-    // and is bounded by the renderer; the relay treats it as opaque.
+    // Why: capture paneKey so the exit listener can evict per-pane caches without a separate ptyId→paneKey map.
     const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
     const attachIdentity = {
       paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
       tabId: typeof params.tabId === 'string' ? params.tabId : tabId
     }
     const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
+    const startupIngressIntent =
+      params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
+        ? parsePtyStartupIngressIntent(params.startupIngress, {
+            allowWindowsEchoProjection: false
+          })
+        : undefined
     const managed: ManagedPty = {
       id,
       pty: term,
@@ -903,6 +916,7 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(shouldProviderDeliverCommand
         ? {
@@ -921,9 +935,7 @@ export class PtyHandler {
     }
     this.wireAndStore(managed)
     if (context?.isStale()) {
-      // Why: if the client reconnected while pty.spawn was in flight, the
-      // response is discarded and no renderer can own this PTY. Shut it down
-      // immediately so it does not linger as an unreachable remote shell.
+      // Why: a client reconnect mid-spawn discards the response, so no renderer can own this PTY — shut it down.
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'terminate stale')
     } else if (managed.startupCommand) {
@@ -940,24 +952,16 @@ export class PtyHandler {
   private async attach(params: Record<string, unknown>): Promise<{ replay?: string }> {
     const id = params.id as string
     const managed = this.ptys.get(id)
-    // Why: treat a disposed managed entry the same as "not found" — after
-    // disposeManagedPty has run, managed.pty is torn down and any write/kill
-    // would hit a neutralized no-op on POSIX. The explicit check converts a
-    // silent failure into the existing error callers already handle.
+    // Why: after dispose, pty.kill is a POSIX no-op; treat disposed as not-found so failures aren't silent.
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: a reattach can arrive for a relay PTY whose backing shell already
-    // died without node-pty delivering onExit (e.g. the child was reaped out of
-    // band while the SSH channel was down). The map entry lingers, so attach
-    // would otherwise "succeed" with an empty replay and strand the reattached
-    // pane on a black, unresponsive shell. Prove liveness here; if the pid is
-    // provably gone, reap the stale entry and report not-found so the caller
-    // drops the dead lease and spawns fresh — the same recovery path an expired
-    // grace window already takes.
+    // Why: a shell can die without node-pty firing onExit (reaped out-of-band); prove liveness so attach doesn't strand a dead, lingering lease.
     if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
       managed.physicalExit?.markExited()
+      this.releaseRelayIngress(managed)
+      this.flushPtyOutput(id)
       this.notifyExitListener(managed)
       disposeManagedPty(managed)
       this.ptys.delete(id)
@@ -965,14 +969,7 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Why: PTY ids are a per-relay-process counter (pty-1, pty-2, …). When the
-    // relay changes generation — an app update deploys a new content-hashed
-    // relay dir, or a grace-expired relay restarts — the counter resets, so an
-    // old lease's `pty-N` can name a freshly spawned `pty-N` that belongs to a
-    // *different* pane. Attaching by id alone then wires a tab to the wrong
-    // shell. Reject when the caller's expected identity disagrees with this
-    // PTY's own so the client falls back to a fresh spawn. Absent identity on
-    // either side stays permissive for backward compatibility.
+    // Why: a relay generation reset can reuse pty-N for a different pane; reject on identity disagreement (absent identity permissive).
     const mismatch = attachIdentityMismatches(
       {
         paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
@@ -984,19 +981,12 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
-    // Replay buffered output. During pty.spawn({ sessionId }) the renderer has
-    // not registered replay handlers yet, so return the bytes to the caller
-    // instead of notifying them too early.
-    // Why: the buffer is NOT cleared after replay. It always holds the last
-    // 100 KB of raw output (capped in onData). The client clears xterm before
-    // writing the replay, so returning the full buffer on every attach does
-    // not cause duplication. Keeping the buffer intact means a second app
-    // restart still replays the full terminal history instead of only output
-    // generated since the previous attach.
+    managed.startupIngress?.snapshotBarrier()
+
+    // Why: renderer hasn't registered replay handlers yet during spawn, so return to the caller instead of notifying too early.
+    // Why: buffer intentionally NOT cleared after replay (client clears xterm first) so later restarts still replay full history.
     if (managed.buffered) {
-      // Why: relay batching may still hold bytes that are already included in
-      // the full replay buffer. Drop that pending notification before attach
-      // so reconnect/suppressed replay cannot render the same bytes twice.
+      // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
       this.pendingOutputByPty.delete(id)
       this.clearOutputFlushTimerIfIdle()
       if (params.suppressReplayNotification) {
@@ -1043,9 +1033,7 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
       this.requestForceKill(managed)
-      // Why: remote Git deletion must not race native handles still owned by
-      // an uninterruptible child. Timeout rejects but deliberately keeps the
-      // map entry so a later onExit or retry retains the physical owner.
+      // Why: remote Git deletion must not race the child's native handles; on timeout keep the map entry so onExit/retry still owns it.
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
     } else {
       this.releaseStartupCommand(managed)
@@ -1060,9 +1048,7 @@ export class PtyHandler {
       throw new Error(`Signal not allowed: ${signal}`)
     }
     const managed = this.ptys.get(id)
-    // Why: POSIX disposeManagedPty neutralizes managed.pty.kill. Without the
-    // disposed check, a post-dispose sendSignal would silently succeed (no
-    // error, no action). Convert to the existing "not found" error.
+    // Why: dispose neutralizes pty.kill on POSIX; treat disposed as not-found so signals don't silently no-op.
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
@@ -1089,8 +1075,7 @@ export class PtyHandler {
     }
     managed.gracefulKillSent = true
     if (process.platform === 'win32') {
-      // Why: bare node-pty kill is already force-final on ConPTY, so no later
-      // fallback, immediate cleanup, or destroy may close the handle again.
+      // Why: ConPTY's bare kill is already force-final; block any later close of the handle.
       managed.forceKillSent = true
     }
     try {
@@ -1103,8 +1088,7 @@ export class PtyHandler {
     if (process.platform === 'win32') {
       return
     }
-    // Why: POSIX children may ignore SIGTERM; only onExit releases ownership
-    // after the bounded SIGKILL fallback.
+    // Why: POSIX children may ignore SIGTERM; arm a bounded SIGKILL fallback.
     this.armForceKillFallback(managed, fallbackAction, 5000, PTY_FORCE_KILL_MAX_ATTEMPTS)
   }
 
@@ -1126,8 +1110,7 @@ export class PtyHandler {
         process.stderr.write(
           `[pty-handler] failed to ${fallbackAction} PTY ${managed.id}: ${error instanceof Error ? error.message : String(error)}\n`
         )
-        // Why: a transient native SIGKILL failure must not strand an
-        // unreachable remote shell after the only cleanup owner returned.
+        // Why: a transient SIGKILL failure must not strand an unreachable remote shell.
         if (attemptsRemaining > 1 && this.ptys.get(still.id) === still && !still.disposed) {
           this.armForceKillFallback(
             still,
@@ -1175,6 +1158,7 @@ export class PtyHandler {
     const id = params.id as string
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
+      managed.startupIngress?.snapshotBarrier()
       managed.pty.clear()
     }
   }
@@ -1274,10 +1258,7 @@ export class PtyHandler {
     if (!ptyMod) {
       return
     }
-    // Why: revive must apply the same hook env as spawn(). The hook-server
-    // coords come from augmenters, while pane identity comes from the
-    // serialized PTY entry because managed hook scripts exit without
-    // ORCA_PANE_KEY.
+    // Why: pane identity comes from the serialized entry (not env) since hook scripts exit without ORCA_PANE_KEY.
     const revivedEnv: Record<string, string> = {}
     if (entry.paneKey) {
       revivedEnv.ORCA_PANE_KEY = entry.paneKey
@@ -1298,8 +1279,7 @@ export class PtyHandler {
     if (explicitTerm !== undefined) {
       revivedEnv.TERM = explicitTerm
     }
-    // Why: serialized state can come from an older or untrusted client, so
-    // revive reapplies the same bounds as a fresh spawn before retaining it.
+    // Why: serialized state may come from an older/untrusted client; reapply fresh-spawn bounds.
     const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
     const shell = resolveDefaultShell()
     const spawnEnv = this.buildSpawnEnv(
@@ -1307,8 +1287,7 @@ export class PtyHandler {
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
-    // Why: revive lacks the original launch command, so preserve the guard
-    // decision made at fresh spawn. Legacy state remains an ordinary shell.
+    // Why: revive lacks the original launch command, so reuse the fresh-spawn guard decision (legacy defaults to unguarded).
     const gitCredentialPromptGuarded = entry.gitCredentialPromptGuarded === true
     if (gitCredentialPromptGuarded) {
       Object.assign(spawnEnv, gitCredentialPromptGuardEnv(spawnEnv, process.platform))
@@ -1348,9 +1327,7 @@ export class PtyHandler {
     if (timeoutMs === 0) {
       return
     }
-    // Why: callers may shorten the first empty-detached startup window, but
-    // connected relays still use the configured grace so live PTYs can survive
-    // app restarts and reconnects.
+    // Why: connected relays keep the configured grace so live PTYs survive restarts/reconnects.
     this.graceTimer = setTimeout(() => {
       onExpire()
     }, timeoutMs)
@@ -1364,8 +1341,7 @@ export class PtyHandler {
   }
 
   dispose(options: { waitForPhysicalExit?: boolean } = {}): Promise<void> {
-    // Why: fence creation synchronously before the first await so a spawn or
-    // revive cannot appear after the disposal snapshot and escape process exit.
+    // Why: fence synchronously before the first await so a spawn/revive can't slip past disposal and escape exit.
     this.creationFenced = true
     if (this.disposePromise) {
       return this.disposePromise
@@ -1373,8 +1349,7 @@ export class PtyHandler {
     const disposePromise = this.disposePtys(options.waitForPhysicalExit !== false)
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
-      // Why: a rejected native kill retains ownership so a later shutdown
-      // signal can retry instead of joining a permanently rejected promise.
+      // Why: clear on rejected kill so a later shutdown can retry instead of joining a rejected promise.
       if (this.disposePromise === disposePromise) {
         this.disposePromise = null
       }
@@ -1385,6 +1360,10 @@ export class PtyHandler {
   private async disposePtys(waitForPhysicalExit: boolean): Promise<void> {
     this.cancelGraceTimer()
     await this.waitForPendingPtyCreations()
+    for (const managed of this.ptys.values()) {
+      this.releaseRelayIngress(managed)
+      this.flushPtyOutput(managed.id)
+    }
     if (this.outputFlushTimer !== null) {
       clearTimeout(this.outputFlushTimer)
       this.outputFlushTimer = null
@@ -1414,15 +1393,14 @@ export class PtyHandler {
       managed.killTimer = undefined
     }
     this.clearStartupCommandTimer(managed)
-    // Why: relay exit must retain the native owner until SIGKILL is accepted
-    // (with one bounded retry) or onExit proves the process is already gone.
+    this.releaseRelayIngress(managed)
+    // Why: retain the native owner until SIGKILL is accepted (one bounded retry) or onExit proves it gone.
     await this.requestForceKillForRelayShutdown(managed)
     if (waitForPhysicalExit && this.ptys.get(managed.id) === managed && !managed.disposed) {
       try {
         await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
       } catch {
-        // An accepted SIGKILL is the bounded final boundary when a child is
-        // uninterruptible and cannot report exit before relay shutdown.
+        // An accepted SIGKILL is the final boundary when an uninterruptible child can't report exit.
       }
     }
     if (this.ptys.get(managed.id) === managed && !managed.disposed) {

@@ -70,11 +70,7 @@ type TabsProjectionCache = {
 }
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
-// Why: track when each tab was registered so we can suppress the "no live
-// transport" warning during the initial PTY connection window. The warning
-// is noise when it fires on mount (PTY spawn/attach is async and hasn't
-// finished yet), but valuable if the transport is still missing after the
-// grace period — that indicates a real stuck state.
+// Why: registration time suppresses the "no live transport" warning during the async PTY-connect window; after the grace period it's a real stuck state.
 const tabRegisteredAt = new Map<string, number>()
 const NO_TRANSPORT_GRACE_MS = 10_000
 const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
@@ -112,8 +108,7 @@ export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => vo
   tabRegisteredAt.set(tab.tabId, Date.now())
   scheduleRuntimeGraphSync()
   return () => {
-    // Why: React can mount a replacement surface before the prior effect
-    // cleans up. Stale cleanup must not erase the successor's live registry.
+    // Why: React can mount a replacement surface before the prior effect cleans up; stale cleanup must not erase the successor's registry.
     if (registeredTabs.get(tab.tabId) !== tab) {
       return
     }
@@ -169,9 +164,7 @@ export function scheduleRuntimeGraphSync(): void {
     return
   }
   syncScheduled = true
-  // Why: terminal title/status updates often arrive as separate IPC tasks.
-  // A frame-sized timer collapses that churn into one graph publish without
-  // tying runtime state publication to paint frames or visible-window status.
+  // Why: a frame-sized timer collapses separate title/status IPC tasks into one graph publish without tying publication to paint frames.
   syncTimer = setTimeout(() => {
     syncTimer = null
     syncScheduled = false
@@ -191,22 +184,14 @@ async function runRuntimeGraphSync(): Promise<void> {
     syncInFlight = false
     if (syncPendingAfterFlight) {
       syncPendingAfterFlight = false
-      // Why: syncWindowGraph crosses IPC and can be slower than title/layout
-      // churn. Collapse all updates that arrived during one in-flight sync
-      // into a single trailing graph instead of stacking concurrent IPC calls.
+      // Why: coalesce updates that arrived during one in-flight sync into a single trailing graph instead of stacking concurrent IPC calls.
       scheduleRuntimeGraphSync()
     }
   }
 }
 
 export type RuntimeMobileSessionSyncKey = {
-  // Why: large maps the renderer never reshapes are compared by reference.
-  // Reallocating `terminalLayoutsByTabId` / `runtimePaneTitlesByTabId` is the
-  // signal that some pane layout or pane title actually changed; nothing else
-  // in the store rewrites those references. Comparing references avoids
-  // stringifying potentially thousands of accumulated tab entries on every
-  // `setActivePane` / `updateTabTitle` mutation. See
-  // docs/agent-working-pane-typing-lag.md.
+  // Why: compared by reference; reallocation signals a real layout/title change, avoiding stringifying thousands of tabs. See docs/agent-working-pane-typing-lag.md.
   terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   groupsByWorktree: AppState['groupsByWorktree']
@@ -225,10 +210,7 @@ export type RuntimeMobileSessionSyncKey = {
   generatedTabTitlesEnabled: boolean
   systemPrefersDark: boolean | null
   terminalThemeProjection: string
-  // Why: these projections still need value-level inspection because the
-  // underlying references churn even when the mobile-relevant shape is
-  // unchanged (`tabsByWorktree` reallocates on every OSC title frame).
-  // Pre-serialize them once.
+  // Why: underlying refs churn even when the mobile shape is unchanged (tabsByWorktree reallocates per OSC title frame); pre-serialize.
   tabsProjection: string
   openFilesProjection: string
   browserProjection: string
@@ -315,9 +297,7 @@ export function getRuntimeMobileSessionSyncKey(
     activeTabId: state.activeTabId,
     activeBrowserTabIdByWorktree:
       state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
-    // Why: paired web/mobile snapshots include full agentStatus details. The
-    // epoch covers sort/retention/freshness transitions; the projection covers
-    // prompt/tool details without publishing every timestamp-only heartbeat.
+    // Why: epoch covers sort/retention/freshness changes; projection covers prompt/tool details, skipping timestamp-only heartbeats.
     agentStatusEpoch: state.agentStatusEpoch ?? 0,
     agentStatusProjection:
       canReusePrevious && agentStatusByPaneKey === previousAgentStatusByPaneKey
@@ -331,9 +311,7 @@ export function getRuntimeMobileSessionSyncKey(
       previousKey.systemPrefersDark === terminalThemeSystemPrefersDark
         ? previousKey.terminalThemeProjection
         : JSON.stringify(resolveMobileTerminalTheme(state, systemPrefersDark) ?? null),
-    // Why: background agent title ticks can change runtimePaneTitlesByTabId
-    // many times per second while the user types elsewhere. Reuse unchanged
-    // projections so those ticks do not rescan all tabs, files, and drafts.
+    // Why: background title ticks churn many times/sec; reuse unchanged projections so they don't rescan all tabs, files, and drafts.
     tabsProjection:
       canReusePrevious && state.tabsByWorktree === previousState.tabsByWorktree
         ? previousKey.tabsProjection
@@ -356,8 +334,7 @@ export function getRuntimeMobileSessionSyncKey(
 }
 
 function getBrowserTabsByWorktree(state: AppState): AppState['browserTabsByWorktree'] {
-  // Why: some runtime-sync callers and tests construct partial pre-browser
-  // renderer states; treat missing browser slices as no browser tabs.
+  // Why: some callers/tests build partial pre-browser states; treat missing browser slices as no tabs.
   return state.browserTabsByWorktree ?? EMPTY_BROWSER_TABS_BY_WORKTREE
 }
 
@@ -496,8 +473,7 @@ function buildRuntimeMobileAgentStatusProjection(
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
-        // Why: include so a newly-captured AskUserQuestion prompt re-fires the
-        // mobile session republish even when no other field changed.
+        // Why: include so a newly-captured AskUserQuestion prompt re-fires the mobile republish even when no other field changed.
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         interrupted: entry.interrupted ?? null
@@ -539,15 +515,10 @@ async function syncRuntimeGraph(): Promise<void> {
   if (!syncEnabled || !getStoreState) {
     return
   }
-  // Why: the runtime graph helper cannot import the Zustand store directly
-  // because the terminal slice also imports this module to schedule syncs.
-  // Injecting the getter from App keeps the runtime graph path out of the
-  // store construction cycle and avoids test-time partial initialization.
+  // Why: can't import the store directly (terminal slice imports this module); inject the getter to break the construction cycle.
   const state = getStoreState()
   const systemPrefersDark = getSystemPrefersDark()
-  // Why: sync can run after high-churn terminal/title mutations. Build lookup
-  // maps once per sync instead of flattening every worktree's tabs for each
-  // registered terminal.
+  // Why: build lookup maps once per sync instead of re-flattening every worktree's tabs for each registered terminal.
   const terminalTabById = new Map(
     Object.values(state.tabsByWorktree)
       .flat()
@@ -615,13 +586,7 @@ async function syncRuntimeGraph(): Promise<void> {
     }
   }
 
-  // Why: background automation tabs spawn their agent PTY eagerly and are created
-  // inactive, so they never mount a TerminalPane and never enter `registeredTabs`.
-  // Without this pass their leaf+ptyId is never published, so the runtime treats
-  // the live agent PTY as orphaned (surfaced as a synthetic `pty:<id>` terminal)
-  // and `orca terminal list` / session-reuse can't see the real tab. Publish them
-  // from the persisted layout, gated on a live eager buffer so we only adopt a
-  // still-running unmounted PTY (never a stale saved ptyId).
+  // Why: inactive automation tabs never mount a TerminalPane; publish their leaf+ptyId from persisted layout (gated on a live buffer) or the live PTY looks orphaned.
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       if (registeredTabs.has(tab.id) || isWebOnlyMirroredTerminalTab(state, tab)) {
@@ -685,9 +650,7 @@ export function buildMobileSessionTabSnapshots(
   state: AppState,
   systemPrefersDark = getSystemPrefersDark()
 ): RuntimeMobileSessionTabsSnapshot[] {
-  // Why: mobile publication can run on high-frequency background agent title
-  // ticks. Cache open-file indexes and draft hashes by immutable store-slice
-  // reference so title-only syncs do not rescan or rehash editor state.
+  // Why: high-frequency title ticks fire mobile sync; cache indexes/hashes by store-slice ref to skip rescanning editor state.
   const openFileIndexes = getOpenFileIndexes(state.openFiles)
   const editorDraftVersionByFileId = getEditorDraftVersionByFileId(state.editorDrafts)
   const worktreeIds = new Set<string>([
@@ -788,8 +751,7 @@ export function buildMobileSessionTabSnapshots(
       }
     }
 
-    // Why: split-group projection can miss plain editor files during hydration.
-    // Publish the missing file so paired mobile/web clients still mirror it.
+    // Why: split-group projection can miss plain editor files during hydration; publish them so mobile/web still mirror.
     const fallbackEditorTabs: FallbackEditorTabTarget[] = []
     if (openFilesForWorktree) {
       const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
@@ -876,8 +838,7 @@ export function buildMobileSessionTabSnapshots(
 }
 
 function isEditorSurfaceTab(tab: Pick<Tab, 'contentType'>): boolean {
-  // Why: mobile file snapshots can faithfully mirror ordinary edit/diff files;
-  // conflict review and check-details tabs require metadata this contract lacks.
+  // Why: mobile can mirror ordinary edit/diff files; conflict-review and check-details tabs need metadata this contract lacks.
   return tab.contentType === 'editor' || tab.contentType === 'diff'
 }
 
@@ -1009,10 +970,7 @@ function isWebOnlyMirroredTerminalTab(
   const ptyIds = [tab.ptyId, ...layoutPtyIds].filter(
     (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
   )
-  // Why: web mirror ids are a web-renderer implementation detail. If such an
-  // id has only remote/no PTYs, it is a mirror and must not be published back
-  // as host state. Legacy leaked host tabs with local PTYs still publish so
-  // existing sessions keep desktop/web parity.
+  // Why: only-remote/no-PTY tabs are web mirrors, not host state; legacy local-PTY tabs still publish for desktop/web parity.
   return ptyIds.every(isRemoteRuntimePtyId)
 }
 
@@ -1151,8 +1109,7 @@ function buildMobileSessionGroupProjection(
     }
     const tabOrder = visibleOrder.map((item) => item.tabId ?? item.id)
     const tabOrderSet = new Set(tabOrder)
-    // Why: persisted split groups can contain very large tab orders; append
-    // iteratively so mobile sync does not hit V8's argument-list limit.
+    // Why: persisted split groups can have very large tab orders; append iteratively to avoid V8's argument-list limit.
     for (const item of visibleOrder) {
       order.push(item)
     }
@@ -1259,9 +1216,7 @@ function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] 
     return persistedLeafIds
   }
 
-  // Why: a newly-created terminal tab can be in the store before TerminalPane
-  // mounts. Without a live or persisted UUID leaf, there is no stable mobile
-  // surface to publish yet; fabricating pane:1 would become stale after mount.
+  // Why: a new tab can predate TerminalPane mount; fabricating pane:1 with no live/persisted leaf would go stale after mount.
   return []
 }
 
@@ -1301,9 +1256,7 @@ function buildMobileTerminalSurfaceTabs(
     typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
   )
   const parentLayout = normalizeTerminalLayoutSnapshot({
-    // Why: the live DOM tree (when mounted) is authoritative; otherwise the
-    // saved tree. Both carry the real direction — only synthesize as a last
-    // resort, never re-guess. Shared with the client-ingest path.
+    // Why: live DOM tree is authoritative when mounted, else the saved tree; synthesize only as a last resort, never re-guess.
     root: resolveTerminalLayoutRoot({
       authoritativeRoot: liveLayoutRoot,
       existingRoot: sanitizedSavedLayout?.root,
@@ -1466,8 +1419,7 @@ function isMobileUnsupportedCombinedDiffSource(
 }
 
 function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
-  // Why: combined diff tabs use display labels as relative paths and require
-  // the desktop combined renderer; mobile would otherwise try files.read.
+  // Why: combined diff tabs use display labels as paths and need the desktop renderer; mobile would mis-call files.read.
   return !isMobileUnsupportedCombinedDiffSource(file.diffSource)
 }
 
@@ -1492,8 +1444,7 @@ function buildMobileBrowserTab(
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
-    // Why: null means the active page successfully cleared its failure. Falling
-    // back through ?? would resurrect a stale workspace-level error.
+    // Why: null means the active page cleared its failure; ?? would resurrect a stale workspace-level error.
     loadError: activePage ? activePage.loadError : workspace.loadError,
     certificateFailure: activePage
       ? (state.browserCertificateFailuresByPageId?.[activePage.id] ?? null)

@@ -126,18 +126,11 @@ import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 
-// Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
-// ordinary JSON/log files inaccessible before the editor can degrade features.
+// Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const BINARY_PROBE_BYTES = 8192
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
-// Why: previewable binaries (PDFs, images) are rendered by the viewer as
-// base64 blobs, not parsed as text — 5MB is tight for real-world PDFs, and
-// raising this cap only affects binary preview, not text/search paths.
-// The relay (SSH) uses a smaller 10MB cap because its JSON-RPC frames are
-// bounded by MAX_MESSAGE_SIZE = 16MB; the local IPC path has no such limit,
-// so 50MB covers real-world PDFs (specs, datasheets, image-heavy contracts).
-// See src/relay/fs-handler-utils.ts for the remote-side reasoning.
+// Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
 const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
 const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -210,8 +203,7 @@ type DownloadSession = {
 const DOWNLOAD_SESSION_TTL_MS = 30 * 60 * 1000
 
 function createSiblingTransferPath(destinationPath: string, suffix: string): string {
-  // Why: promotion uses rename/no-clobber operations that must stay on the
-  // destination volume, so transfer paths intentionally remain siblings.
+  // Why: promotion renames must stay on the destination volume, so transfer paths remain siblings.
   return join(dirname(destinationPath), `.${randomUUID()}.${suffix}`)
 }
 
@@ -388,8 +380,7 @@ async function getRepoForSourceControlAi(
     if (repo.connectionId !== args.connectionId) {
       return null
     }
-    // Why: a single SSH connection can host several repos; repo-scoped AI
-    // overrides only apply when the requested worktree belongs to that repo.
+    // Why: one SSH connection can host several repos; repo-scoped AI overrides apply only when the worktree belongs to that repo.
     return (await remoteRepoOwnsWorktree(store, repo, args.worktreePath, args.connectionId))
       ? repo
       : null
@@ -397,8 +388,7 @@ async function getRepoForSourceControlAi(
   if (repo.connectionId) {
     return null
   }
-  // Why: renderer-supplied repoId is advisory; only apply repo overrides when
-  // the requested local worktree is known to belong to that repo.
+  // Why: renderer-supplied repoId is advisory; apply repo overrides only when the local worktree belongs to that repo.
   return (await localRepoOwnsWorktree(store, repo, args.worktreePath)) ? repo : null
 }
 
@@ -459,9 +449,7 @@ async function isDirectoryEntry(
   entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
   _resolveEntryPath: (entryPath: string) => Promise<string>
 ): Promise<boolean> {
-  // Why: following a symlink just to decorate readDir can touch macOS
-  // TCC-protected app containers. Treat links as file-like until the user
-  // explicitly opens them.
+  // Why: following a symlink in readDir can touch macOS TCC-protected containers; treat links as file-like until explicitly opened.
   void _resolveEntryPath
   if (entry.isSymbolicLink()) {
     void dirPath
@@ -509,10 +497,7 @@ export function registerFilesystemHandlers(
   ipcMain.handle(
     'fs:readDir',
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
-      // Why: a thrown fs:readDir reaches the renderer as the opaque "Error
-      // invoking remote method 'fs:readDir'" (Windows WSL/UNC realpath/readdir
-      // failures, dropped SSH providers). Record which throw site fired plus a
-      // redacted path shape so these are diagnosable without the raw path.
+      // Why: fs:readDir throws surface as opaque IPC errors; record the throw site + redacted path shape to keep them diagnosable.
       let throwSite: ReadDirThrowSite = 'authorize'
       try {
         if (args.connectionId) {
@@ -588,17 +573,13 @@ export function registerFilesystemHandlers(
         return {
           content: buffer.toString('base64'),
           isBinary: true,
-          // Why: the renderer/store contract already keys previewable binary
-          // rendering off `isImage`. Keep that legacy flag for PDFs too so the
-          // new preview path stays compatible with existing callers.
+          // Why: the renderer keys previewable-binary rendering off `isImage`, so set it for PDFs too to stay compatible.
           isImage: true,
           mimeType
         }
       }
 
-      // Why: the text cap is intentionally larger than the old binary cap.
-      // Probe unknown large files first so archives do not get fully buffered
-      // just to discover they are not editable text.
+      // Why: probe large unknown files first so archives aren't fully buffered only to discover they aren't editable text.
       if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
         return { content: '', isBinary: true }
       }
@@ -859,25 +840,17 @@ export function registerFilesystemHandlers(
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.deletePath(args.targetPath, args.recursive)
       }
-      // Why: deleting must operate on the symlink itself, not its target.
-      // Following the link with realpath() would trash the real file — which
-      // could be another file inside the worktree, or a path outside all
-      // allowed roots that we would never be able to delete again.
+      // Why: preserve the symlink so we delete the link, not its target (realpath would trash the real file, possibly outside all roots).
       const targetPath = await resolveAuthorizedPath(args.targetPath, store, {
         preserveSymlink: true
       })
 
-      // Why: WSL UNC targets (\\wsl.localhost\<distro>\...) have no Recycle Bin,
-      // so shell.trashItem throws. Hard-delete via `rm` inside the distro instead
-      // (true delete, honors Linux perms). Returns false for normal local paths,
-      // which still go to the Recycle Bin (issue #6415).
+      // Why: WSL UNC targets have no Recycle Bin (shell.trashItem throws), so hard-delete via `rm` inside the distro (issue #6415).
       if (await tryDeleteWslUncPath(targetPath, { recursive: args.recursive })) {
         return
       }
 
-      // Why: once auto-refresh exists, an external delete can race with a
-      // UI-initiated delete. Swallowing ENOENT keeps the action idempotent
-      // from the user's perspective (design §7.1).
+      // Why: swallow ENOENT so an external delete racing this UI delete stays idempotent (design §7.1).
       try {
         await shell.trashItem(targetPath)
       } catch (error) {
@@ -957,10 +930,7 @@ export function registerFilesystemHandlers(
       )
       const searchKey = `${event.sender.id}:${rootPath}`
 
-      // Why: checking rg availability upfront avoids a race condition where
-      // spawn('rg') emits 'close' before 'error' on some platforms, causing
-      // the handler to resolve with empty results before the git-grep
-      // fallback can run. The result is cached after the first check.
+      // Why: probe rg upfront; on some platforms spawn emits 'close' before 'error', resolving empty before the git-grep fallback runs.
       const rgAvailable = await checkRgAvailable(rootPath, localGitOptions.wslDistro)
       if (!rgAvailable) {
         return searchWithGitGrep(rootPath, args, maxResults, localGitOptions)
@@ -969,11 +939,7 @@ export function registerFilesystemHandlers(
       return new Promise((resolvePromise) => {
         const rgArgs = buildRgArgs(args.query, rootPath, args)
 
-        // Why: search requests are fired on each query/options change. If the
-        // previous ripgrep process keeps running, it can continue streaming and
-        // parsing thousands of matches on the Electron main thread after the UI
-        // no longer cares about that result, which is exactly the freeze users
-        // experience in large repos.
+        // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
         activeTextSearches.get(searchKey)?.kill()
 
         const acc = createAccumulator()
@@ -982,8 +948,7 @@ export function registerFilesystemHandlers(
         let child: ChildProcess | null = null
         let killTimeout: ReturnType<typeof setTimeout>
 
-        // Why: WSL-routed rg emits Linux-native paths. UNC repos carry their
-        // distro in the path; Windows-path repos carry it in project runtime.
+        // Why: WSL-routed rg emits Linux paths; UNC repos carry the distro in the path, Windows-path repos in project runtime.
         const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
         const transformAbsPath = wslDistroForOutput
           ? (p: string): string => (p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p)
@@ -998,8 +963,7 @@ export function registerFilesystemHandlers(
             activeTextSearches.delete(searchKey)
           }
           clearTimeout(killTimeout)
-          // Why: child.kill() is advisory. If rg ignores it, detach our
-          // closures so repeated local searches do not retain old scans.
+          // Why: child.kill() is advisory; detach our closures so repeated searches don't retain old scans if rg ignores it.
           child?.stdout?.off('data', handleStdoutData)
           child?.stderr?.off('data', handleStderrData)
           child?.off('error', handleError)
@@ -1049,8 +1013,7 @@ export function registerFilesystemHandlers(
         nextChild.once('error', handleError)
         nextChild.once('close', handleClose)
 
-        // Why: if the timeout fires, the child is killed and results are partial.
-        // We must mark them as truncated so the UI can indicate incomplete results.
+        // Why: timeout kills the child mid-scan; mark truncated so the UI shows incomplete results.
         killTimeout = setTimeout(() => {
           acc.truncated = true
           child?.kill()
@@ -1061,9 +1024,7 @@ export function registerFilesystemHandlers(
   )
 
   // ─── List all files (for quick-open) ─────────────────────
-  // Why #7721: keyed by renderer-generated token so a workspace switch can
-  // abort the previous workspace's full-tree scan (SSH relays otherwise stack
-  // scans that starve interactive fs.readDir/fs.stat past their 30s timeout).
+  // Why #7721: token-keyed so a workspace switch aborts the prior full-tree scan (SSH otherwise stacks scans past the 30s timeout).
   const listFilesCancellations = createSenderScopedRequestCancellations()
   ipcMain.handle(
     'fs:listFiles',
@@ -1080,16 +1041,11 @@ export function registerFilesystemHandlers(
       try {
         if (args.connectionId) {
           const provider = getSshFilesystemProvider(args.connectionId)
-          // Why: when the SSH connection is not yet established (cold start) or
-          // temporarily disconnected, return [] so quick-open shows "No matching
-          // files" instead of an error banner. The file list will repopulate when
-          // the user re-opens quick-open after the connection is restored.
+          // Why: no provider (cold start / disconnected) → return [] so quick-open shows "No matching files" instead of an error.
           if (!provider) {
             return []
           }
-          // Why: forward excludePaths through to the remote provider.
-          // Dropping it here would silently double-scan nested linked worktrees
-          // over SSH and contribute to timeout-induced partial results.
+          // Why: forward excludePaths or nested linked worktrees get double-scanned over SSH, causing timeout-induced partial results.
           return await provider.listFiles(args.rootPath, {
             excludePaths: args.excludePaths,
             signal: controller?.signal
@@ -1136,8 +1092,7 @@ export function registerFilesystemHandlers(
           if (!provider) {
             throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
           }
-          // Why: awaiting here keeps the cancellation token registered until
-          // the remote request settles instead of running finally immediately.
+          // Why: await keeps the cancellation token registered until the remote request settles (an early finally would free it).
           return await provider.getStatus(args.worktreePath, options)
         }
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -1157,9 +1112,7 @@ export function registerFilesystemHandlers(
     gitStatusCancellations.cancel(event, args.requestToken)
   })
 
-  // Why: the parent status only reports one gitlink row per submodule. When the
-  // user expands a dirty submodule, this fetches the inner per-file changes by
-  // running a plain status inside the submodule's own worktree (read-only).
+  // Why: parent status reports only one gitlink row per submodule; fetch inner per-file changes from the submodule's own worktree.
   ipcMain.handle(
     'git:submoduleStatus',
     async (
@@ -1216,10 +1169,7 @@ export function registerFilesystemHandlers(
     }
   )
 
-  // Why: when status hits the entry limit, the SCM view offers to .gitignore the
-  // folder that's flooding it. These two handlers back that flow. Local-only:
-  // the huge-untracked-folder case is a local-dev pathology, and routing a
-  // .gitignore write through the SSH provider isn't worth the surface here.
+  // Why: backs the SCM "ignore the flooding folder" flow; local-only since huge untracked folders are a local-dev pathology.
   ipcMain.handle(
     'git:findHugeFoldersToIgnore',
     async (_event, args: { worktreePath: string }): Promise<string[]> => {
@@ -1265,9 +1215,7 @@ export function registerFilesystemHandlers(
     }
   )
 
-  // Why: lightweight fs-only check for conflict operation state. Used to poll
-  // non-active worktrees so their "Rebasing"/"Merging" badges clear when the
-  // operation finishes, without running a full `git status`.
+  // Why: fs-only conflict-state check so non-active worktrees can clear their Rebasing/Merging badges without a full git status.
   ipcMain.handle(
     'git:conflictOperation',
     async (
@@ -1854,9 +1802,7 @@ export function registerFilesystemHandlers(
         pushTarget?: GitPushTarget
       }
     ): Promise<void> => {
-      // Why: coerce to strict boolean at the IPC boundary so a malformed
-      // renderer payload (e.g. string 'false') can't silently enable
-      // --set-upstream mode. Mirrors the relay handler in src/relay/git-handler.ts.
+      // Why: coerce to strict boolean so a malformed payload (e.g. string 'false') can't enable --set-upstream; mirror in src/relay/git-handler.ts.
       const publish = args.publish === true
       if (args.connectionId) {
         if (args.pushTarget) {
@@ -2227,8 +2173,7 @@ export function registerFilesystemHandlers(
       _event,
       args: { worktreePath: string; relativePath: string; line: number; connectionId?: string }
     ): Promise<string | null> => {
-      // Why: remote repos can't read relay-side .git/config locally. Delegate
-      // URL construction to the SSH provider, which can fetch remote metadata.
+      // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
@@ -2248,8 +2193,7 @@ export function registerFilesystemHandlers(
       args: { worktreePath: string; sha: string; connectionId?: string }
     ): Promise<string | null> => {
       const sha = validateFullGitObjectId(args.sha, 'sha')
-      // Why: remote repos can't read relay-side .git/config locally. Delegate
-      // URL construction to the SSH provider, which can fetch remote metadata.
+      // Why: remote repos can't read relay-side .git/config locally; delegate URL construction to the SSH provider.
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {

@@ -141,6 +141,14 @@ export function buildRemovedSshTargetCleanupPatch(
   }
 
   const nextDeferredTargets = state.deferredSshReconnectTargets.filter((id) => id !== targetId)
+  const nextTransientClearedConnections = {
+    ...state.transientClearedAgentStatusConnectionIds
+  }
+  const removedTransientClearBlock = Object.prototype.hasOwnProperty.call(
+    nextTransientClearedConnections,
+    targetId
+  )
+  delete nextTransientClearedConnections[targetId]
   const nextConnectionStates = new Map(state.sshConnectionStates)
   const removedConnectionState = nextConnectionStates.delete(targetId)
   const nextLabels = new Map(state.sshTargetLabels)
@@ -170,6 +178,7 @@ export function buildRemovedSshTargetCleanupPatch(
   const removedDeferredTarget =
     nextDeferredTargets.length !== state.deferredSshReconnectTargets.length
   const changed =
+    removedTransientClearBlock ||
     removedConnectionState ||
     removedLabel ||
     removedHydrated ||
@@ -185,6 +194,9 @@ export function buildRemovedSshTargetCleanupPatch(
   }
 
   return {
+    ...(removedTransientClearBlock
+      ? { transientClearedAgentStatusConnectionIds: nextTransientClearedConnections }
+      : {}),
     ...(removedConnectionState ? { sshConnectionStates: nextConnectionStates } : {}),
     ...(removedLabel ? { sshTargetLabels: nextLabels } : {}),
     ...(removedHydrated ? { remoteWorkspaceHydratedTargetIds: nextHydrated } : {}),
