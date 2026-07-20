@@ -320,6 +320,7 @@ const PinnedTerminalPanelPage = lazy(
   () => import('./components/pinned-terminal-panels/PinnedTerminalPanelPage')
 )
 const PanelCanvasPage = lazy(() => import('./components/panel-canvas/PanelCanvasPage'))
+import { PanelCanvasAdoptBridge } from './components/panel-canvas/PanelCanvasAdoptBridge'
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
@@ -2469,6 +2470,7 @@ function App(): React.JSX.Element {
                               {hasPinnedWebPanels ? <PinnedWebPanelPage /> : null}
                               {hasPinnedTerminalPanels ? <PinnedTerminalPanelPage /> : null}
                               {hasPanelCanvas ? <PanelCanvasPage /> : null}
+                              <PanelCanvasAdoptBridge />
                               {activeView === 'terminal' &&
                               creationLayoutActive &&
                               activePendingCreationId ? (

@@ -35,6 +35,7 @@ import { registerComputerUsePermissionHandlers } from './computer-use-permission
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
+import { registerPanelCanvasPopoutHandlers } from './panel-canvas-popout'
 import { registerDiagnosticsHandlers } from './diagnostics'
 import { registerSkillsHandlers } from './skills'
 import { registerWorkspaceSpaceHandlers } from './workspace-space'
@@ -156,6 +157,7 @@ export function registerCoreHandlers(
   registerTerminalRenderDesyncEvidenceHandler()
   registerComputerUsePermissionHandlers()
   registerSettingsHandlers(store, agentAwakeService)
+  registerPanelCanvasPopoutHandlers()
   registerSkillsHandlers(store)
   if (automations) {
     registerAutomationHandlers(store, automations)

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Save, X } from 'lucide-react'
+import { PictureInPicture2, Save, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -189,6 +189,32 @@ const PanelCanvasPage = React.memo(function PanelCanvasPage(): React.JSX.Element
     setSaveTitle('')
   }, [saveTitle, panelLayouts, saveLayouts, setActivePanelLayoutId])
 
+  const onDetach = React.useCallback(() => {
+    const current = useAppStore.getState().panelCanvasRoot
+    if (!current) {
+      return
+    }
+    const title =
+      useAppStore
+        .getState()
+        .settings?.panelLayouts?.find(
+          (layout) => layout.id === useAppStore.getState().activePanelLayoutId
+        )?.title ?? null
+    void window.api.panelCanvasPopout
+      .open({
+        layout: layoutNodeFromCanvas(current),
+        layoutId: useAppStore.getState().activePanelLayoutId,
+        title
+      })
+      .then((opened) => {
+        // Why: the canvas moves, it doesn't fork — close here only once the
+        // popout exists so a failed open never loses the tree.
+        if (opened) {
+          useAppStore.getState().closePanelCanvas()
+        }
+      })
+  }, [])
+
   if (root === null) {
     return null
   }
@@ -251,6 +277,22 @@ const PanelCanvasPage = React.memo(function PanelCanvasPage(): React.JSX.Element
             </Button>
           </>
         )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          aria-label={translate(
+            'auto.components.panel-canvas.PanelCanvasPage.detach',
+            'Detach into its own window'
+          )}
+          title={translate(
+            'auto.components.panel-canvas.PanelCanvasPage.detach',
+            'Detach into its own window'
+          )}
+          onClick={onDetach}
+        >
+          <PictureInPicture2 className="size-3.5" strokeWidth={1.75} />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

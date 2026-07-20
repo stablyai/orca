@@ -1,6 +1,6 @@
 import './assets/main.css'
 
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import App from './App'
@@ -36,8 +36,26 @@ if (!rootElement) {
   throw new Error('Renderer root element not found.')
 }
 
+// Why: detached panel-canvas windows load the same renderer bundle with a
+// query flag and render a slim root — booting the full app shell (sidebar,
+// workspaces, terminals) in a popout would duplicate every startup service.
+const isPanelCanvasPopoutWindow =
+  new URLSearchParams(window.location.search).get('window') === 'panel-canvas-popout'
+const PanelCanvasPopoutRoot = lazy(() =>
+  import('./components/panel-canvas/PanelCanvasPopoutRoot').then((module) => ({
+    default: module.PanelCanvasPopoutRoot
+  }))
+)
+
 function RendererRoot(): React.JSX.Element {
   useTranslation()
+  if (isPanelCanvasPopoutWindow) {
+    return (
+      <Suspense fallback={null}>
+        <PanelCanvasPopoutRoot />
+      </Suspense>
+    )
+  }
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="app.root"

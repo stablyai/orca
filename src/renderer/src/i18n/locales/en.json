@@ -13312,7 +13312,19 @@
           "splitDown": "Split down",
           "closeTile": "Close tile",
           "missingPanel": "Panel removed",
-          "missingPanelBody": "This pinned panel was deleted in Settings."
+          "missingPanelBody": "This pinned panel was deleted in Settings.",
+          "detach": "Detach into its own window"
+        },
+        "PanelCanvasPopoutRoot": {
+          "title": "Panel canvas",
+          "reattach": "Reattach",
+          "close": "Close window",
+          "bootFailed": "This window has no canvas payload — close it and detach again.",
+          "loading": "Loading…"
+        },
+        "PopoutTerminalTile": {
+          "hostUnresolved": "SSH host not found — check the panel host in Settings.",
+          "exited": "Command exited"
         }
       }
     },

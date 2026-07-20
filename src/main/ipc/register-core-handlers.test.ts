@@ -208,6 +208,10 @@ vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
 }))
 
+vi.mock('./panel-canvas-popout', () => ({
+  registerPanelCanvasPopoutHandlers: vi.fn()
+}))
+
 vi.mock('./skills', () => ({
   registerSkillsHandlers: registerSkillsHandlersMock
 }))

@@ -2176,6 +2176,47 @@ export type PreloadApi = {
   localhostWorktreeLabels: {
     register: (args: LocalhostWorktreeLabelRoute) => Promise<LocalhostWorktreeLabelResult>
   }
+  panelCanvasPopout: {
+    /** Detach the current canvas into its own OS window. */
+    open: (args: {
+      layout: unknown
+      layoutId?: string | null
+      title?: string | null
+    }) => Promise<boolean>
+    /** Popout boot: the layout this window was opened with (null in the main window). */
+    getBootPayload: () => Promise<{
+      layout: unknown
+      layoutId: string | null
+      title: string | null
+    } | null>
+    /** Hand the canvas back to the main window and close this popout. */
+    reattach: (args: {
+      layout: unknown
+      layoutId?: string | null
+      title?: string | null
+    }) => Promise<boolean>
+    /** Main window: a popout reattached its canvas here. */
+    onAdopt: (
+      callback: (payload: {
+        layout: unknown
+        layoutId: string | null
+        title: string | null
+      }) => void
+    ) => () => void
+    pty: {
+      spawn: (args: {
+        host?: string | null
+        command: string
+        cols?: number
+        rows?: number
+      }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+      input: (args: { id: string; data: string }) => Promise<void>
+      resize: (args: { id: string; cols: number; rows: number }) => Promise<void>
+      kill: (args: { id: string }) => Promise<void>
+      onData: (callback: (payload: { id: string; data: string }) => void) => () => void
+      onExit: (callback: (payload: { id: string; exitCode: number }) => void) => () => void
+    }
+  }
   keybindings: {
     get: () => Promise<KeybindingFileSnapshot>
     ensureFile: () => Promise<KeybindingFileSnapshot>

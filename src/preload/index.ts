@@ -1928,6 +1928,68 @@ const api = {
     }
   },
 
+  panelCanvasPopout: {
+    open: (args: {
+      layout: unknown
+      layoutId?: string | null
+      title?: string | null
+    }): Promise<boolean> => ipcRenderer.invoke('panelCanvasPopout:open', args),
+    getBootPayload: (): Promise<{
+      layout: unknown
+      layoutId: string | null
+      title: string | null
+    } | null> => ipcRenderer.invoke('panelCanvasPopout:getBootPayload'),
+    reattach: (args: {
+      layout: unknown
+      layoutId?: string | null
+      title?: string | null
+    }): Promise<boolean> => ipcRenderer.invoke('panelCanvasPopout:reattach', args),
+    onAdopt: (
+      callback: (payload: {
+        layout: unknown
+        layoutId: string | null
+        title: string | null
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { layout: unknown; layoutId: string | null; title: string | null }
+      ): void => callback(payload)
+      ipcRenderer.on('panelCanvasPopout:adopt', listener)
+      return () => ipcRenderer.removeListener('panelCanvasPopout:adopt', listener)
+    },
+    pty: {
+      spawn: (args: {
+        host?: string | null
+        command: string
+        cols?: number
+        rows?: number
+      }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+        ipcRenderer.invoke('popoutPty:spawn', args),
+      input: (args: { id: string; data: string }): Promise<void> =>
+        ipcRenderer.invoke('popoutPty:input', args),
+      resize: (args: { id: string; cols: number; rows: number }): Promise<void> =>
+        ipcRenderer.invoke('popoutPty:resize', args),
+      kill: (args: { id: string }): Promise<void> => ipcRenderer.invoke('popoutPty:kill', args),
+      onData: (callback: (payload: { id: string; data: string }) => void): (() => void) => {
+        const listener = (
+          _event: Electron.IpcRendererEvent,
+          payload: { id: string; data: string }
+        ): void => callback(payload)
+        ipcRenderer.on('popoutPty:data', listener)
+        return () => ipcRenderer.removeListener('popoutPty:data', listener)
+      },
+      onExit: (callback: (payload: { id: string; exitCode: number }) => void): (() => void) => {
+        const listener = (
+          _event: Electron.IpcRendererEvent,
+          payload: { id: string; exitCode: number }
+        ): void => callback(payload)
+        ipcRenderer.on('popoutPty:exit', listener)
+        return () => ipcRenderer.removeListener('popoutPty:exit', listener)
+      }
+    }
+  },
+
   localhostWorktreeLabels: {
     register: (args: LocalhostWorktreeLabelRoute): Promise<LocalhostWorktreeLabelResult> =>
       ipcRenderer.invoke('localhostWorktreeLabels:register', args)

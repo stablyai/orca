@@ -677,6 +677,8 @@ export type UISlice = {
     direction: 'row' | 'column'
   ) => void
   openPanelLayoutInCanvas: (layout: PanelLayout) => void
+  /** A detached popout window handed its canvas back — show it here. */
+  adoptDetachedPanelCanvas: (root: PanelCanvasNode, layoutId: string | null) => void
   setPanelCanvasRoot: (root: PanelCanvasNode | null) => void
   setActivePanelLayoutId: (layoutId: string | null) => void
   closePanelCanvas: () => void
@@ -1287,6 +1289,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
                 canvasLeafFor(leaf.kind, leaf.panelId),
                 direction
               ),
+      previousViewBeforePanelCanvas:
+        state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
+    })),
+  adoptDetachedPanelCanvas: (root: PanelCanvasNode, layoutId: string | null) =>
+    set((state) => ({
+      activeView: 'panel-canvas',
+      panelCanvasRoot: root,
+      activePanelLayoutId: layoutId,
       previousViewBeforePanelCanvas:
         state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
     })),

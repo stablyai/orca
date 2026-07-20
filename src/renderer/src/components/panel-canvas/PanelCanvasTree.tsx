@@ -32,6 +32,13 @@ export type CanvasTreeCallbacks = {
   onSplitLeaf: (leafId: string, direction: 'row' | 'column') => void
   onRemoveLeaf: (leafId: string) => void
   onResizeSplit: (splitId: string, sizes: number[]) => void
+  /** Popout windows swap the tab/PTY-backed tile for their slim direct-PTY
+   *  terminal; the main window omits this and gets CanvasTerminalTile. */
+  renderTerminalTile?: (
+    leaf: PanelCanvasLeaf,
+    panel: PinnedTerminalPanel,
+    visible: boolean
+  ) => React.ReactNode
 }
 
 function TileChrome({
@@ -232,7 +239,11 @@ export function CanvasNodeView({
           onClose={() => callbacks.onRemoveLeaf(node.id)}
         />
         {terminalPanel ? (
-          <CanvasTerminalTile leaf={node} panel={terminalPanel} visible={visible} />
+          callbacks.renderTerminalTile ? (
+            callbacks.renderTerminalTile(node, terminalPanel, visible)
+          ) : (
+            <CanvasTerminalTile leaf={node} panel={terminalPanel} visible={visible} />
+          )
         ) : webPanel ? (
           <CanvasWebTile leaf={node} panel={webPanel} />
         ) : (
