@@ -7,8 +7,6 @@ import type { GlobalSettings, Repo } from '../../shared/types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
-  isRuntimePathAbsolute,
-  isWindowsAbsolutePathLike,
   getRuntimePathBasename,
   normalizeRuntimePathForComparison,
   resolveRuntimePath
@@ -19,7 +17,8 @@ import {
   computeRemoteHomeWorkspaceRoot,
   computeWorkspaceRoot,
   getWorktreePathSettings,
-  hasRepoWorktreeBasePath
+  hasRepoWorktreeBasePath,
+  remoteWorktreePathUsesRemoteHome
 } from './worktree-logic'
 import { resolveSshRemoteHome } from '../ssh/ssh-remote-home'
 import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
@@ -93,14 +92,6 @@ function getRemoteProvider(connectionId: string | undefined): IFilesystemProvide
   return connectionId ? getSshFilesystemProvider(connectionId) : undefined
 }
 
-function isRuntimePathAbsoluteForRepo(repoPath: string, pathValue: string): boolean {
-  const pathFlavor =
-    isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(pathValue)
-      ? 'windows'
-      : 'posix'
-  return isRuntimePathAbsolute(pathValue, pathFlavor)
-}
-
 async function getBaseWatchLayouts(
   repo: Repo,
   pathSettings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>,
@@ -108,8 +99,9 @@ async function getBaseWatchLayouts(
 ): Promise<{ workspaceRoot: string; nestWorkspaces: boolean }[]> {
   if (
     connectionId &&
-    !hasRepoWorktreeBasePath(repo) &&
-    isRuntimePathAbsoluteForRepo(repo.path, pathSettings.workspaceDir)
+    remoteWorktreePathUsesRemoteHome(repo.path, pathSettings, {
+      useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
+    })
   ) {
     // Why: SSH default placement mirrors the workspace layout under the remote
     // home when the relay can resolve it, while worktrees created before that
@@ -143,10 +135,11 @@ async function maybeAddBaseTarget(
     return
   }
   const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
+  const repoOnWslFilesystem = isWslUncPath(repo.path)
   let config: { repoId: string; repoName: string; nestWorkspaces: boolean } | undefined
   for (const { workspaceRoot, nestWorkspaces } of layouts) {
     // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
-    if (isWslUncPath(workspaceRoot) || isWslUncPath(repo.path)) {
+    if (isWslUncPath(workspaceRoot) || repoOnWslFilesystem) {
       const key = `${repo.id}:${workspaceRoot}`
       if (shouldEmitBoundedWarning(skippedWslWarnings, key)) {
         console.warn(

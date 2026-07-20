@@ -196,9 +196,10 @@ export function useCreateProjectDefaults({
       setCreateRuntimeParentStatus('idle')
       return
     }
-    const targetKey = runtimeEnvironmentId
-      ? `runtime:${runtimeEnvironmentId}`
-      : `ssh:${sshTargetId}`
+    // Why: exactly one remote target is active past the guard, so the
+    // hook-level key already carries the right `runtime:`/`ssh:` value —
+    // keep the key construction in one place.
+    const targetKey = activeCreateParentTargetKey
     if (!canReplaceCreateParentDefault(createParent)) {
       setCreateRuntimeParentStatus('idle')
       return
@@ -256,6 +257,7 @@ export function useCreateProjectDefaults({
     activeRuntimeEnvironmentId,
     activeCreateParentRuntimeEnvironmentId,
     activeCreateParentSshTargetId,
+    activeCreateParentTargetKey,
     canReplaceCreateParentDefault,
     createParent,
     setCreateParent,

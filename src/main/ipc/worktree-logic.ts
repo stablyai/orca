@@ -106,11 +106,15 @@ export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir:
       // Mirror absolute local desktop workspace roots inside the distro so
       // terminals stay on the WSL filesystem; repo-relative roots can resolve
       // directly against the WSL repo path.
-      return win32.join(wslHome, 'orca', 'workspaces')
+      return win32.join(wslHome, ...HOME_WORKSPACE_SEGMENTS)
     }
   }
   return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
 }
+
+// Why: the "<hostHome>/orca/workspaces" mirror layout is shared by the WSL and
+// SSH placements (and matches the desktop default in shared/constants.ts).
+const HOME_WORKSPACE_SEGMENTS = ['orca', 'workspaces'] as const
 
 export function computeRemoteWorktreePath(
   sanitizedName: string,
@@ -118,10 +122,7 @@ export function computeRemoteWorktreePath(
   settings: WorktreePathSettings,
   options: { useConfiguredAbsolutePath?: boolean; remoteHome?: string | null } = {}
 ): string {
-  if (
-    options.useConfiguredAbsolutePath ||
-    isWorkspaceDirRelativeToRepo(repoPath, settings.workspaceDir)
-  ) {
+  if (!remoteWorktreePathUsesRemoteHome(repoPath, settings, options)) {
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
   // Why: absolute global workspaceDir values belong to the desktop machine.
@@ -162,7 +163,7 @@ export function computeRemoteHomeWorkspaceRoot(
   if (!pathOps.isAbsolute(trimmed)) {
     return null
   }
-  return pathOps.join(trimmed, 'orca', 'workspaces')
+  return pathOps.join(trimmed, ...HOME_WORKSPACE_SEGMENTS)
 }
 
 export function getWorktreePathSettings(
