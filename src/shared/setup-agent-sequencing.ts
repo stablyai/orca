@@ -4,7 +4,7 @@ import {
   type SetupRunnerCommandShell
 } from './setup-runner-command'
 
-const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+export const DEFAULT_SETUP_AGENT_SEQUENCE_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 
 export type SequencedSetupAgentCommands = {
@@ -41,7 +41,8 @@ export function createSequencedSetupAgentCommands(args: {
   // Why: overlapping gated launches of the same setup runner must not race on
   // a shared completion marker.
   const markerPath = `${resolution.runnerScriptPathForShell}.${nonce}.done`
-  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
+  const waitTimeoutSeconds =
+    args.waitTimeoutSeconds ?? DEFAULT_SETUP_AGENT_SEQUENCE_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows') {
     return {

@@ -16795,6 +16795,11 @@ export class OrcaRuntimeService {
 
     this.notifyWorktreesChanged(repo.id)
     const shouldActivate = args.activate === true || args.runHooks === true
+    // Why: the automation renderer must launch the setup marker and matching
+    // agent wait command together; spawning bare setup here would reintroduce the race.
+    const deferSetupForAutomationAgent =
+      !effectiveStartup && Boolean(args.automationProvenance) && setup?.waitForAgentStartup === true
+    const setupForRuntimeProvisioning = deferSetupForAutomationAgent ? undefined : setup
     let didSpawnStartup = false
     // Why: tracks whether runtime itself launched the setup script (via
     // provisionManagedWorktreeTerminals). When true, renderer activation and the
@@ -16928,19 +16933,22 @@ export class OrcaRuntimeService {
           activationDefaultTabs
         )
       }
-    } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
+    } else if (
+      this.ptyController?.spawn &&
+      (setupForRuntimeProvisioning || defaultTabs || didSpawnStartup)
+    ) {
       // Why: inactive terminal materialization matches normal worktree creation,
       // but setup/default tab failures must not gate automation dispatch.
       void this.provisionManagedWorktreeTerminals({
         worktreeSelector: `id:${worktree.id}`,
         worktreeId: worktree.id,
         worktreePath,
-        ...(setup ? { setup } : {}),
+        ...(setupForRuntimeProvisioning ? { setup: setupForRuntimeProvisioning } : {}),
         ...(defaultTabs ? { defaultTabs } : {}),
         primaryTerminalHandle: startupTerminalHandle,
         hasStartupTerminal: didSpawnStartup,
-        setupCommandPlatform: setup
-          ? isWindowsAbsolutePathLike(setup.runnerScriptPath)
+        setupCommandPlatform: setupForRuntimeProvisioning
+          ? isWindowsAbsolutePathLike(setupForRuntimeProvisioning.runnerScriptPath)
             ? 'windows'
             : 'posix'
           : 'posix',
@@ -16948,7 +16956,7 @@ export class OrcaRuntimeService {
       })
       // Why: runtime owns setup spawning here, so the RPC result must omit setup
       // to keep the headless/mobile caller from launching it a second time.
-      if (setup) {
+      if (setupForRuntimeProvisioning) {
         didSpawnSetup = true
       }
     } else if (this.ptyController?.spawn) {
@@ -17103,6 +17111,13 @@ export class OrcaRuntimeService {
     this.notifyWorktreesChanged(repo.id)
 
     let warning = result.warning
+    // Why: the automation renderer owns the cross-host setup/agent marker pair;
+    // runtime still materializes ordinary setup and default tabs itself.
+    const deferSetupForAutomationAgent =
+      !args.startup &&
+      Boolean(args.automationProvenance) &&
+      result.setup?.waitForAgentStartup === true
+    const setupForRuntimeProvisioning = deferSetupForAutomationAgent ? undefined : result.setup
     let didSpawnStartup = false
     // Why: same no-double-spawn contract as the local path — once runtime
     // provisions setup, omit it from activation and the RPC result.
@@ -17231,7 +17246,7 @@ export class OrcaRuntimeService {
     if (
       !shouldActivate &&
       this.ptyController?.spawn &&
-      (result.setup || result.defaultTabs || didSpawnStartup)
+      (setupForRuntimeProvisioning || result.defaultTabs || didSpawnStartup)
     ) {
       // Why: inactive terminal materialization matches normal worktree creation,
       // but setup/default tab failures must not gate automation dispatch.
@@ -17239,12 +17254,12 @@ export class OrcaRuntimeService {
         worktreeSelector: `path:${result.worktree.path}`,
         worktreeId: result.worktree.id,
         worktreePath: result.worktree.path,
-        ...(result.setup ? { setup: result.setup } : {}),
+        ...(setupForRuntimeProvisioning ? { setup: setupForRuntimeProvisioning } : {}),
         ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
         primaryTerminalHandle: startupTerminalHandle,
         hasStartupTerminal: didSpawnStartup,
-        setupCommandPlatform: result.setup
-          ? isWindowsAbsolutePathLike(result.setup.runnerScriptPath)
+        setupCommandPlatform: setupForRuntimeProvisioning
+          ? isWindowsAbsolutePathLike(setupForRuntimeProvisioning.runnerScriptPath)
             ? 'windows'
             : 'posix'
           : 'posix',
@@ -17252,7 +17267,7 @@ export class OrcaRuntimeService {
       })
       // Why: runtime owns setup spawning here, so omit setup from the RPC result
       // to keep the headless/mobile caller from launching it a second time.
-      if (result.setup) {
+      if (setupForRuntimeProvisioning) {
         didSpawnSetup = true
       }
     } else if (!shouldActivate && this.ptyController?.spawn) {

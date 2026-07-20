@@ -12,8 +12,9 @@ import { translate } from '@/i18n/i18n'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { buildSetupRunnerCommand } from '../../../shared/setup-runner-command'
+import { launchRuntimeWorktreeSetupTerminal } from '@/lib/runtime-worktree-setup-terminal'
+import { buildBackgroundTerminalSplitLayout } from '@/lib/background-terminal-split-layout'
 import type {
-  TerminalLayoutSnapshot,
   Worktree,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -60,31 +61,6 @@ function buildPaneEnv(
   }
 }
 
-function buildSplitLayout(
-  first: BackgroundPane,
-  second: BackgroundPane,
-  direction: 'horizontal' | 'vertical',
-  secondTitle: string
-): TerminalLayoutSnapshot {
-  return {
-    root: {
-      type: 'split',
-      direction,
-      first: { type: 'leaf', leafId: first.leafId },
-      second: { type: 'leaf', leafId: second.leafId }
-    },
-    activeLeafId: first.leafId,
-    expandedLeafId: null,
-    ptyIdsByLeafId: {
-      [first.leafId]: first.ptyId,
-      [second.leafId]: second.ptyId
-    },
-    titlesByLeafId: {
-      [second.leafId]: secondTitle
-    }
-  }
-}
-
 function persistExitedPaneOutput(tabId: string, leafId: string, output: string): void {
   const store = useAppStore.getState()
   const layout = store.terminalLayoutsByTabId[tabId]
@@ -120,6 +96,9 @@ function registerBackgroundPaneBuffer(tabId: string, leafId: string, ptyId: stri
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
+  if (setup.command?.trim()) {
+    return setup.command
+  }
   return buildSetupRunnerCommand(
     setup.runnerScriptPath,
     isWindowsAbsolutePathLike(setup.runnerScriptPath) ? 'windows' : 'posix'
@@ -225,7 +204,7 @@ async function addSetupSplit(args: {
   store.updateTabPtyId(args.tab.tabId, setupPtyId)
   store.setTabLayout(
     args.tab.tabId,
-    buildSplitLayout(
+    buildBackgroundTerminalSplitLayout(
       args.tab.primary,
       { leafId: setupLeafId, ptyId: setupPtyId },
       args.direction,
@@ -259,7 +238,17 @@ export async function launchWorktreeBackgroundTerminals(
     getSettingsForWorktreeRuntimeOwner(store, args.worktreeId)
   )
   if (runtimeTarget.kind === 'environment') {
-    // Runtime-owned worktrees materialize setup/defaultTabs inside createManagedWorktree.
+    // Runtime create owns ordinary setup/default tabs. A gated automation setup
+    // is explicitly deferred so the renderer can pair it with the agent marker.
+    if (args.setup?.waitForAgentStartup === true) {
+      await launchRuntimeWorktreeSetupTerminal({
+        runtimeTarget,
+        worktreeId: args.worktreeId,
+        setup: args.setup,
+        command: buildSetupCommand(args.setup),
+        title: getSetupTabTitle()
+      })
+    }
     return
   }
 

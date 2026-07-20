@@ -235,7 +235,8 @@ export function useAutomationDispatchEvents(): void {
           }
           dispatchWorkspaceId = worktree.id
           dispatchWorkspaceDisplayName = worktree.displayName
-          if (createResult?.setup || createResult?.defaultTabs) {
+          const shouldGateAgentOnSetup = createResult?.setup?.waitForAgentStartup === true
+          if (!shouldGateAgentOnSetup && (createResult?.setup || createResult?.defaultTabs)) {
             void launchWorktreeBackgroundTerminals({
               worktreeId: worktree.id,
               setup: createResult.setup,
@@ -430,6 +431,14 @@ export function useAutomationDispatchEvents(): void {
             prompt: automation.prompt,
             launchSource: 'unknown',
             title: run.title,
+            ...(shouldGateAgentOnSetup && createResult?.setup
+              ? {
+                  preAgentWorktreeSetup: {
+                    setup: createResult.setup,
+                    defaultTabs: createResult.defaultTabs
+                  }
+                }
+              : {}),
             onData: (chunk) => {
               outputSnapshotBuffer.append(chunk)
             },

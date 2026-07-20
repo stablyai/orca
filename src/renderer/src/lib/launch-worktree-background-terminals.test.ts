@@ -11,6 +11,7 @@ const mockClearTabPtyId = vi.fn()
 const mockCloseTab = vi.fn()
 const mockRegisterEagerPtyBuffer = vi.fn()
 const mockGetActiveRuntimeTarget = vi.fn()
+const mockCallRuntimeRpc = vi.fn()
 
 let uuidIndex = 0
 
@@ -62,7 +63,8 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: mockGetActiveRuntimeTarget
+  getActiveRuntimeTarget: mockGetActiveRuntimeTarget,
+  callRuntimeRpc: mockCallRuntimeRpc
 }))
 
 describe('launchWorktreeBackgroundTerminals', () => {
@@ -93,6 +95,9 @@ describe('launchWorktreeBackgroundTerminals', () => {
     let ptyIndex = 0
     mockSpawn.mockImplementation(async () => ({ id: `pty-${++ptyIndex}` }))
     mockGetActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
+    mockCallRuntimeRpc.mockResolvedValue({
+      terminal: { handle: 'runtime-setup', worktreeId: 'wt-1', title: 'Setup' }
+    })
     vi.stubGlobal('window', {
       api: {
         pty: {
@@ -301,6 +306,38 @@ describe('launchWorktreeBackgroundTerminals', () => {
 
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockSpawn).not.toHaveBeenCalled()
+    expect(mockCallRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('launches a deferred setup gate on the worktree owner runtime', async () => {
+    mockGetActiveRuntimeTarget.mockReturnValue({ kind: 'environment', environmentId: 'env-1' })
+    const { launchWorktreeBackgroundTerminals } =
+      await import('./launch-worktree-background-terminals')
+
+    await launchWorktreeBackgroundTerminals({
+      worktreeId: 'wt-1',
+      setup: {
+        ...setupLaunch,
+        waitForAgentStartup: true,
+        command: "bash -lc 'sequenced setup marker'"
+      },
+      defaultTabs: { runCommands: true, tabs: [{ title: 'Dev', command: 'pnpm dev' }] }
+    })
+
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockSpawn).not.toHaveBeenCalled()
+    expect(mockCallRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'terminal.create',
+      {
+        worktree: 'id:wt-1',
+        command: "bash -lc 'sequenced setup marker'",
+        env: setupLaunch.envVars,
+        title: 'Setup',
+        presentation: 'background'
+      },
+      { timeoutMs: 15_000 }
+    )
   })
 
   it('kills a PTY whose tab is closed before the spawn resolves', async () => {

@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store'
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import type {
   LaunchAgentBackgroundSessionArgs,
   LaunchAgentBackgroundSessionResult
@@ -10,11 +9,6 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { scheduleAgentBackgroundDraft } from '@/lib/agent-background-draft-delivery'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -40,6 +34,12 @@ import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-p
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
+import {
+  sequenceBackgroundAgentStartupAfterSetup,
+  SETUP_GATED_AGENT_READY_TIMEOUT_MS
+} from '@/lib/background-agent-setup-sequence'
+import { markBackgroundAgentWorkspaceTrusted } from '@/lib/background-agent-trust'
+import { buildBackgroundAgentStartupPlan } from '@/lib/background-agent-startup-plan'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -51,20 +51,9 @@ export async function launchAgentBackgroundSession(
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
-    try {
-      await window.api.agentTrust.markTrusted({
-        preset: preflight,
-        workspacePath: worktree.path
-      })
-    } catch {
-      // Best-effort: continue with launch. The user can still accept the trust menu.
-    }
+  if (worktree.path) {
+    await markBackgroundAgentWorkspaceTrusted(agent, worktree.path)
   }
-  const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
         repo,
@@ -79,24 +68,27 @@ export async function launchAgentBackgroundSession(
     isRemote,
     terminalWindowsShell: store.settings?.terminalWindowsShell
   })
-  const trimmedPrompt = prompt?.trim() ?? ''
-  const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-
-  const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
-  const startupPlan = buildAgentStartupPlan({
-    agent,
-    prompt: hasPrompt && !isFollowupPath ? trimmedPrompt : '',
-    cmdOverrides,
-    agentArgs,
-    agentEnv,
-    platform: launchPlatform,
-    shell: startupShell,
-    isRemote,
-    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
-  })
-  if (!startupPlan) {
+  const { startupPlan: initialStartupPlan, pasteDraftAfterLaunch } =
+    buildBackgroundAgentStartupPlan({
+      agent,
+      prompt,
+      settings: store.settings,
+      launchPlatform,
+      startupShell,
+      isRemote
+    })
+  if (!initialStartupPlan) {
     return null
+  }
+  let startupPlan = initialStartupPlan
+
+  if (args.preAgentWorktreeSetup) {
+    startupPlan = await sequenceBackgroundAgentStartupAfterSetup(
+      worktreeId,
+      startupPlan,
+      launchPlatform,
+      args.preAgentWorktreeSetup
+    )
   }
 
   // Why: automation runs should start without revealing the workspace.
@@ -260,14 +252,14 @@ export async function launchAgentBackgroundSession(
     }
     store.updateTabPtyId(tab.id, ptyId)
     store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
-    if (agent === 'command-code' && hasPrompt && !isFollowupPath) {
+    if (agent === 'command-code' && pasteDraftAfterLaunch === null && Boolean(prompt?.trim())) {
       // Why: Command Code does not expose a prompt-start hook; seed working for
       // hidden prompt launches so sidebar/activity surfaces do not stay idle.
       const routing = agentStatusConsumer.resolveRouting()
       if (routing) {
         store.setAgentStatus(
           paneKey,
-          { state: 'working', prompt: trimmedPrompt, agentType: agent },
+          { state: 'working', prompt: prompt!.trim(), agentType: agent },
           undefined,
           undefined,
           routing,
@@ -309,7 +301,12 @@ export async function launchAgentBackgroundSession(
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
 
     if (pasteDraftAfterLaunch !== null) {
-      scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
+      scheduleAgentBackgroundDraft(
+        tab.id,
+        pasteDraftAfterLaunch,
+        agent,
+        args.preAgentWorktreeSetup ? { timeoutMs: SETUP_GATED_AGENT_READY_TIMEOUT_MS } : undefined
+      )
     }
 
     return { tabId: tab.id, paneKey, ptyId, startupPlan }

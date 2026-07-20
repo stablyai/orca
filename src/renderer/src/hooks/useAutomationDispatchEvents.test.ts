@@ -252,6 +252,30 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
+  it('passes wait-for-setup work into the agent launcher instead of racing it', async () => {
+    const gatedSetup = { ...setupLaunch, waitForAgentStartup: true }
+    const defaultTabs = {
+      tabs: [{ title: 'Dev', command: 'pnpm dev' }],
+      runCommands: true
+    }
+    mockCreateWorktree.mockResolvedValue({
+      worktree: createdWorktree,
+      setup: gatedSetup,
+      defaultTabs
+    })
+
+    await registerAndDispatch()
+
+    expect(mockLaunchWorktreeBackgroundTerminals).not.toHaveBeenCalled()
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'wt-created',
+        prompt: 'run this',
+        preAgentWorktreeSetup: { setup: gatedSetup, defaultTabs }
+      })
+    )
+  })
+
   it('defaults legacy automations without a setup choice to skipping setup', async () => {
     await registerAndDispatch(makeAutomation({ setupDecision: undefined }))
 

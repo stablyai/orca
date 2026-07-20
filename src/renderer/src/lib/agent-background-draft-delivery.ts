@@ -5,13 +5,15 @@ import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session
 export function scheduleAgentBackgroundDraft(
   tabId: string,
   content: string,
-  agent: TuiAgent
+  agent: TuiAgent,
+  options?: { timeoutMs?: number }
 ): void {
   void pasteDraftWhenAgentReady({
     tabId,
     content,
     agent,
     submit: true,
+    ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
     onTimeout: () => showAutomationPromptNotSentToast(agent)
   })
 }

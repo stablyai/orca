@@ -28070,6 +28070,88 @@ describe('OrcaRuntimeService', () => {
     expect(result.setup).toBeUndefined()
   })
 
+  it('defers wait-for-setup automation hooks for the renderer-owned agent gate', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-primary' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-primary' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-automation-gated-setup')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-automation-gated-setup')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: { setup: 'pnpm worktree:setup' }
+    })
+    vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
+    vi.mocked(createSetupRunnerScript).mockReturnValue({
+      runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
+      envVars: {
+        ORCA_ROOT_PATH: '/tmp/repo',
+        ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-automation-gated-setup'
+      },
+      waitForAgentStartup: true
+    })
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-automation-gated-setup',
+        head: 'def',
+        branch: 'runtime-automation-gated-setup',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-automation-gated-setup',
+      setupDecision: 'run',
+      automationProvenance: {
+        kind: 'created-by-automation',
+        automationId: 'auto-1',
+        automationNameSnapshot: 'Nightly',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Nightly run',
+        createdAt: Date.now(),
+        executionTargetType: 'local',
+        executionTargetId: 'local',
+        projectId: 'repo-1',
+        repoId: 'repo-1'
+      }
+    })
+
+    expect(result.setup).toEqual(
+      expect.objectContaining({
+        runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
+        waitForAgentStartup: true
+      })
+    )
+    expect(spawn).toHaveBeenCalledOnce()
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: undefined,
+        worktreeId: result.worktree.id
+      })
+    )
+  })
+
   it('starts setup and startup side by side by default for local headless worktree creates', async () => {
     const runtime = new OrcaRuntimeService(store)
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-headless-parallel' })

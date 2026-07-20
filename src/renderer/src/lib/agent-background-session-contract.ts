@@ -2,6 +2,7 @@ import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-type
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { PreAgentWorktreeSetup } from '@/lib/background-agent-setup-sequence'
 
 export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
@@ -9,6 +10,7 @@ export type LaunchAgentBackgroundSessionArgs = {
   prompt?: string
   launchSource?: LaunchSource
   title?: string
+  preAgentWorktreeSetup?: PreAgentWorktreeSetup
   onData?: (chunk: string) => void
   onExit?: (ptyId: string, code: number) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
