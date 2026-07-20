@@ -13,6 +13,7 @@ import { readdir, rm } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { spawn } from 'node:child_process'
+import { Worker } from 'node:worker_threads'
 import type {
   SpeechModelManifest,
   SpeechModelState,
@@ -57,6 +58,54 @@ const MAX_RETRY_AFTER_MS = 120_000
 const RETRYABLE_NET_ERROR =
   /net::ERR_(CONTENT_LENGTH_MISMATCH|INCOMPLETE_CHUNKED_ENCODING|CONNECTION_(RESET|CLOSED|ABORTED|REFUSED|TIMED_OUT)|EMPTY_RESPONSE|NETWORK_CHANGED|TIMED_OUT|INTERNET_DISCONNECTED|ADDRESS_UNREACHABLE|NAME_NOT_RESOLVED|SOCKET_NOT_CONNECTED|HTTP2_PROTOCOL_ERROR|QUIC_PROTOCOL_ERROR)\b/
 const RETRYABLE_HTTP_STATUSES = new Set([408, 416, 425, 429, 500, 502, 503, 504])
+
+function extractWindowsArchive(
+  archivePath: string,
+  destinationDir: string,
+  signal: AbortSignal
+): Promise<void> {
+  if (signal.aborted) {
+    return Promise.reject(new Error('Aborted'))
+  }
+  return new Promise((resolve, reject) => {
+    const workerPath = app.isPackaged
+      ? join(process.resourcesPath, 'app.asar', 'out', 'main', 'speech-model-archive-worker.js')
+      : join(__dirname, 'speech-model-archive-worker.js')
+    const worker = new Worker(workerPath, { workerData: { archivePath, destinationDir } })
+    let settled = false
+
+    const finish = (error?: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      worker.removeAllListeners()
+      void worker.terminate().then(
+        () => (error ? reject(error) : resolve()),
+        (cause: unknown) => reject(error ?? new Error(String(cause)))
+      )
+    }
+    const onAbort = (): void => finish(new Error('Aborted'))
+    signal.addEventListener('abort', onAbort, { once: true })
+    worker.once('message', (message: unknown) => {
+      const result = message as { ok?: unknown; error?: unknown }
+      if (result.ok === true) {
+        finish()
+      } else {
+        finish(new Error(typeof result.error === 'string' ? result.error : 'Extraction failed'))
+      }
+    })
+    worker.once('error', (error) =>
+      finish(error instanceof Error ? error : new Error(String(error)))
+    )
+    worker.once('exit', (code) => {
+      if (!settled) {
+        finish(new Error(`Extraction worker exited before completion: ${code}`))
+      }
+    })
+  })
+}
 
 function isRetryableDownloadError(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -329,7 +378,13 @@ export class ModelManager {
       }
 
       this.updateState(modelId, 'extracting')
-      await this.extractArchive(archivePath, this.modelsDir, modelId, () => aborted)
+      await this.extractArchive(
+        archivePath,
+        this.modelsDir,
+        modelId,
+        () => aborted,
+        abortController.signal
+      )
 
       if (aborted) {
         this.cleanup(modelId, archivePath)
@@ -818,10 +873,15 @@ export class ModelManager {
     archivePath: string,
     destDir: string,
     modelId: string,
-    isAborted: () => boolean
+    isAborted: () => boolean,
+    signal: AbortSignal
   ): Promise<void> {
     const modelDir = join(destDir, modelId)
     mkdirSync(modelDir, { recursive: true })
+
+    if (process.platform === 'win32') {
+      return extractWindowsArchive(archivePath, modelDir, signal)
+    }
 
     return new Promise((resolve, reject) => {
       // Why: spawn (not exec) so slow bzip2 stderr can't overflow exec's 1MB maxBuffer and silently kill the process.

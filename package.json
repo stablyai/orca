@@ -125,7 +125,9 @@
     "serve-sim": "^0.1.40",
     "sherpa-onnx": "1.12.37",
     "ssh2": "^1.17.0",
+    "tar": "7.5.20",
     "tweetnacl": "^1.0.3",
+    "unbzip2-stream": "1.4.3",
     "ws": "^8.21.0",
     "yaml": "^2.8.4",
     "zod": "~4.4.3"
@@ -165,6 +167,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/ssh2": "^1.15.5",
+    "@types/unbzip2-stream": "1.4.3",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.2.0",
     "@xterm/addon-fit": "0.12.0-beta.287",

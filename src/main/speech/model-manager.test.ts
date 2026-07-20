@@ -44,7 +44,8 @@ type ModelManagerInternals = {
     archivePath: string,
     destDir: string,
     modelId: string,
-    isAborted: () => boolean
+    isAborted: () => boolean,
+    signal: AbortSignal
   ) => Promise<void>
 }
 
@@ -399,6 +400,7 @@ describe('ModelManager', () => {
   })
 
   it('clears extraction abort polling when the child does not close', async () => {
+    const platformMock = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
@@ -434,7 +436,13 @@ describe('ModelManager', () => {
       spawnMock.mockReturnValue(child)
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
-      const extraction = manager.extractArchive(join(dir, 'model.tar.bz2'), dir, 'm', () => true)
+      const extraction = manager.extractArchive(
+        join(dir, 'model.tar.bz2'),
+        dir,
+        'm',
+        () => true,
+        new AbortController().signal
+      )
       const rejection = expect(extraction).rejects.toThrow('Aborted')
       await vi.advanceTimersByTimeAsync(250)
       await rejection
@@ -448,6 +456,7 @@ describe('ModelManager', () => {
       vi.advanceTimersByTime(1000)
       expect(child.kill).toHaveBeenCalledTimes(1)
     } finally {
+      platformMock.mockRestore()
       vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })
     }

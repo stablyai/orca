@@ -173,7 +173,9 @@ export default defineConfig({
       // directory cannot reach into app.asar, so pure-JS dependencies used
       // by the daemon must be bundled rather than externalized.
       externalizeDeps: {
-        exclude: ['@xterm/headless', '@xterm/addon-serialize']
+        // Why: the extraction worker runs from app.asar and cannot resolve
+        // dependencies copied beside the archive. Bundle its pure-JS pipeline.
+        exclude: ['@xterm/headless', '@xterm/addon-serialize', 'tar', 'unbzip2-stream']
       },
       rollupOptions: {
         input: {
@@ -181,6 +183,7 @@ export default defineConfig({
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
+          'speech-model-archive-worker': resolve('src/main/speech/speech-model-archive-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
           'session-scanner-opencode-sqlite-worker-entry': resolve(
             'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts'
