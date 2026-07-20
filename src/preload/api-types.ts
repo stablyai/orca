@@ -21,6 +21,7 @@ import type {
 } from '../shared/local-log-tail-types'
 import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type { AppIdentity } from '../shared/app-identity'
+import type { MediaPlaybackStatus } from '../shared/media-playback-status'
 import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
@@ -1000,6 +1001,9 @@ export type PreloadApi = {
       osRelease: string
       displayServer: 'wayland' | 'x11' | null
     }
+  }
+  mediaPlayback: {
+    getStatus: () => Promise<MediaPlaybackStatus | null>
   }
   e2e: {
     getConfig: () => E2EConfig

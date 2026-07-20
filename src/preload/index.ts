@@ -6,6 +6,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type { MediaPlaybackStatus } from '../shared/media-playback-status'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
@@ -539,6 +540,11 @@ const api = {
       displayServer: getLinuxDisplayServer()
     })
   } satisfies PreloadApi['platform'],
+
+  mediaPlayback: {
+    getStatus: (): Promise<MediaPlaybackStatus | null> =>
+      ipcRenderer.invoke('mediaPlayback:getStatus')
+  } satisfies PreloadApi['mediaPlayback'],
 
   wsl: {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),

@@ -30,7 +30,10 @@
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。单击可查看工作区范围的端口和外部监听器。",
         "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用量。",
-        "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用量。"
+        "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用量。",
+        "mediaPlayback": "正在播放",
+        "mediaPlaybackDescription": "在状态栏中显示当前的 Apple Music 或 Spotify 曲目。",
+        "mediaPlaybackToggleDescription": "在 macOS 上显示当前播放的本地 Apple Music 或 Spotify 曲目。"
       },
       "menuBarIcon": {
         "title": "显示菜单栏图标",
@@ -13557,6 +13560,15 @@
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
+  "statusBar": {
+    "mediaPlayback": {
+      "playing": "正在播放",
+      "paused": "已暂停",
+      "stopped": "已停止",
+      "noTrack": "无曲目信息",
+      "nowPlaying": "正在播放"
     }
   }
 }

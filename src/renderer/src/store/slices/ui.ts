@@ -278,6 +278,7 @@ const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
+const DEFAULT_ON_MEDIA_PLAYBACK_STATUS_BAR_ITEM: StatusBarItem = 'media-playback'
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
   const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
@@ -2423,22 +2424,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
           ? statusBarItemsWithAntigravity
           : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+      const statusBarItemsWithMediaPlayback =
+        ui._mediaPlaybackStatusBarDefaultAdded || statusBarItemsWithGrok.includes('media-playback')
+          ? statusBarItemsWithGrok
+          : [...statusBarItemsWithGrok, DEFAULT_ON_MEDIA_PLAYBACK_STATUS_BAR_ITEM]
       if (
         (!ui._portsStatusBarDefaultAdded ||
           !ui._kimiStatusBarDefaultAdded ||
           !ui._minimaxStatusBarDefaultAdded ||
           !ui._antigravityStatusBarDefaultAdded ||
-          !ui._grokStatusBarDefaultAdded) &&
+          !ui._grokStatusBarDefaultAdded ||
+          !ui._mediaPlaybackStatusBarDefaultAdded) &&
         typeof window !== 'undefined'
       ) {
         window.api.ui
           .set({
-            statusBarItems: statusBarItemsWithGrok,
+            statusBarItems: statusBarItemsWithMediaPlayback,
             _portsStatusBarDefaultAdded: true,
             _kimiStatusBarDefaultAdded: true,
             _minimaxStatusBarDefaultAdded: true,
             _antigravityStatusBarDefaultAdded: true,
-            _grokStatusBarDefaultAdded: true
+            _grokStatusBarDefaultAdded: true,
+            _mediaPlaybackStatusBarDefaultAdded: true
           })
           .catch(console.error)
       }
@@ -2507,7 +2514,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
-        statusBarItems: statusBarItemsWithGrok,
+        statusBarItems: statusBarItemsWithMediaPlayback,
         statusBarVisible: ui.statusBarVisible ?? true,
         usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
         // Why: absent → true so existing users see the pet the first time

@@ -46,6 +46,7 @@ import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
+import { registerMediaPlaybackHandlers } from './media-playback'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
@@ -172,6 +173,7 @@ export function registerCoreHandlers(
   registerBrowserHandlers()
   registerShellHandlers()
   registerPetHandlers()
+  registerMediaPlaybackHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
   registerEmulatorFrameStreamHandlers()

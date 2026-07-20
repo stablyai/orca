@@ -51,7 +51,8 @@ const StatusBarItem = z.enum([
   'grok',
   'ssh',
   'resource-usage',
-  'ports'
+  'ports',
+  'media-playback'
 ])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -217,6 +218,7 @@ export const UiUpdate = z
     _minimaxStatusBarDefaultAdded: z.boolean().optional(),
     _antigravityStatusBarDefaultAdded: z.boolean().optional(),
     _grokStatusBarDefaultAdded: z.boolean().optional(),
+    _mediaPlaybackStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     dismissedUpdateVersion: NullableString.optional(),

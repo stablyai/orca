@@ -30,7 +30,10 @@
         "resourceUsageToggleDescription": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다.",
         "portsToggleDescription": "라이브 워크스페이스 포트를 표시합니다. 워크스페이스 범위 포트 및 외부 수신기를 보려면 클릭하세요.",
         "antigravityToggleDescription": "활성 워크스페이스에 대한 Antigravity 구독 사용량을 표시합니다.",
-        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다."
+        "grokToggleDescription": "Grok CLI로 로그인한 경우 Grok 구독 크레딧 사용량을 표시합니다.",
+        "mediaPlayback": "현재 재생 중",
+        "mediaPlaybackDescription": "현재 Apple Music 또는 Spotify 곡을 상태바에 표시합니다.",
+        "mediaPlaybackToggleDescription": "macOS에서 재생 중인 로컬 Apple Music 또는 Spotify 곡을 표시합니다."
       },
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
@@ -13557,6 +13560,15 @@
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
+  "statusBar": {
+    "mediaPlayback": {
+      "playing": "재생 중",
+      "paused": "일시 정지",
+      "stopped": "정지",
+      "noTrack": "곡 정보 없음",
+      "nowPlaying": "현재 재생 중"
     }
   }
 }
