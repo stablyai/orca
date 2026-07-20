@@ -7,11 +7,13 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { createClickUpSlice } from './clickup'
+import { CLICKUP_DEFAULT_CACHE_SCOPE } from './clickup-task-cache-patch'
 
 const clickUpStatus = vi.fn()
 const clickUpGetTask = vi.fn()
 const clickUpListTasks = vi.fn()
 const clickUpSearchTasks = vi.fn()
+const clickUpSelectWorkspace = vi.fn()
 
 vi.mock('@/runtime/runtime-clickup-client', () => ({
   clickUpConnect: vi.fn(),
@@ -19,7 +21,7 @@ vi.mock('@/runtime/runtime-clickup-client', () => ({
   clickUpGetTask: (...args: unknown[]) => clickUpGetTask(...args),
   clickUpListTasks: (...args: unknown[]) => clickUpListTasks(...args),
   clickUpSearchTasks: (...args: unknown[]) => clickUpSearchTasks(...args),
-  clickUpSelectWorkspace: vi.fn(),
+  clickUpSelectWorkspace: (...args: unknown[]) => clickUpSelectWorkspace(...args),
   clickUpStatus: (...args: unknown[]) => clickUpStatus(...args),
   clickUpTestConnection: vi.fn()
 }))
@@ -106,6 +108,23 @@ describe('createClickUpSlice', () => {
     expect(store.getState().clickUpTaskCache[remoteKey]?.data?.name).toBe('Remote task')
   })
 
+  it('keeps unscoped optimistic patches out of explicit task-source caches', async () => {
+    const store = createTestStore()
+    const remote = sourceContext('remote')
+    clickUpGetTask
+      .mockResolvedValueOnce(task('abc', 'Local task'))
+      .mockResolvedValueOnce(task('abc', 'Remote task'))
+
+    await store.getState().fetchClickUpTask('abc', 'team-1')
+    await store.getState().fetchClickUpTask('abc', 'team-1', { sourceContext: remote })
+    store.getState().patchClickUpTask('abc', { name: 'Patched local' })
+
+    const localKey = `${CLICKUP_DEFAULT_CACHE_SCOPE}::team-1::task::abc`
+    const remoteKey = `${getTaskSourceCacheScope(remote)}::team-1::task::abc`
+    expect(store.getState().clickUpTaskCache[localKey]?.data?.name).toBe('Patched local')
+    expect(store.getState().clickUpTaskCache[remoteKey]?.data?.name).toBe('Remote task')
+  })
+
   it('serves fresh list caches without issuing another ClickUp request', async () => {
     const store = createTestStore()
     store.setState({
@@ -121,5 +140,50 @@ describe('createClickUpSlice', () => {
     await store.getState().listClickUpTasks('assigned', 20)
 
     expect(clickUpListTasks).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['search', clickUpSearchTasks],
+    ['list', clickUpListTasks]
+  ])('does not cache a stale %s response after a Workspace switch', async (kind, requestMock) => {
+    let resolveRequest!: (tasks: ClickUpTask[]) => void
+    requestMock.mockReturnValueOnce(
+      new Promise<ClickUpTask[]>((resolve) => {
+        resolveRequest = resolve
+      })
+    )
+    clickUpSelectWorkspace.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'team-2'
+    })
+    const store = createTestStore()
+    store.setState({
+      clickUpStatus: { connected: true, viewer: null, selectedWorkspaceId: 'team-1' }
+    })
+
+    const pending =
+      kind === 'search'
+        ? store.getState().searchClickUpTasks('abc', 20)
+        : store.getState().listClickUpTasks('assigned', 20)
+    await store.getState().selectClickUpWorkspace('team-2')
+    resolveRequest([task('abc')])
+    await pending
+
+    expect(store.getState().clickUpSearchCache).toEqual({})
+    expect(store.getState().clickUpListCache).toEqual({})
+  })
+
+  it('updates the status context key after selecting a Workspace', async () => {
+    clickUpSelectWorkspace.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'team-2'
+    })
+    const store = createTestStore()
+
+    await store.getState().selectClickUpWorkspace('team-2')
+
+    expect(store.getState().clickUpStatusContextKey).not.toBeNull()
   })
 })

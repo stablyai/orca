@@ -25,9 +25,11 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { patchClickUpCaches } from './clickup-task-cache-patch'
-
-const CACHE_TTL = 60_000
-const MAX_CACHE_ENTRIES = 500
+import {
+  clickUpCacheKey,
+  evictStaleClickUpCacheEntries,
+  isFreshClickUpCacheEntry
+} from './clickup-task-cache-policy'
 
 type ClickUpReadOptions = {
   force?: boolean
@@ -63,22 +65,7 @@ function getReadScope(
 }
 
 function scopedKey(scope: ClickUpReadScope, key: string): string {
-  return scope.cachePrefix ? `${scope.cachePrefix}::${key}` : key
-}
-
-function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
-  return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL
-}
-
-function evictStale<T>(cache: Record<string, CacheEntry<T>>): Record<string, CacheEntry<T>> {
-  const keys = Object.keys(cache)
-  if (keys.length <= MAX_CACHE_ENTRIES) {
-    return cache
-  }
-  const keep = keys
-    .sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
-    .slice(-MAX_CACHE_ENTRIES)
-  return Object.fromEntries(keep.map((key) => [key, cache[key]!]))
+  return clickUpCacheKey(scope.cachePrefix, key)
 }
 
 function selectedWorkspaceId(status: ClickUpConnectionStatus): ClickUpWorkspaceSelection | null {
@@ -224,6 +211,7 @@ export const createClickUpSlice: StateCreator<AppState, [], [], ClickUpSlice> = 
     set({
       clickUpStatus: status,
       clickUpStatusChecked: true,
+      clickUpStatusContextKey: getProviderRuntimeContextKey(get().settings),
       clickUpTaskCache: {},
       clickUpSearchCache: {},
       clickUpListCache: {}
@@ -234,7 +222,7 @@ export const createClickUpSlice: StateCreator<AppState, [], [], ClickUpSlice> = 
     const scope = getReadScope(get().settings, options?.sourceContext)
     const key = scopedKey(scope, `${workspaceId ?? 'default'}::task::${taskId}`)
     const cached = get().clickUpTaskCache[key]
-    if (!options?.force && isFresh(cached)) {
+    if (!options?.force && isFreshClickUpCacheEntry(cached)) {
       return cached.data
     }
     const existing = inflight.get(key) as Promise<ClickUpTask | null> | undefined
@@ -250,7 +238,7 @@ export const createClickUpSlice: StateCreator<AppState, [], [], ClickUpSlice> = 
             scope.contextKey === getProviderRuntimeContextKey(get().settings))
         ) {
           set((state) => ({
-            clickUpTaskCache: evictStale({
+            clickUpTaskCache: evictStaleClickUpCacheEntries({
               ...state.clickUpTaskCache,
               [key]: { data: task, fetchedAt: Date.now() }
             })
@@ -272,12 +260,16 @@ export const createClickUpSlice: StateCreator<AppState, [], [], ClickUpSlice> = 
     const workspaceId = selectedWorkspaceId(get().clickUpStatus)
     const key = scopedKey(scope, `${workspaceId ?? 'default'}::search::${query}::${limit}`)
     const cached = get().clickUpSearchCache[key]
-    if (!options?.force && isFresh(cached)) {
+    if (!options?.force && isFreshClickUpCacheEntry(cached)) {
       return cached.data ?? []
     }
+    const generation = mutationGeneration
     const tasks = await clickUpSearchTasks(scope.settings, query, limit, workspaceId)
+    if (generation !== mutationGeneration) {
+      return tasks
+    }
     set((state) => ({
-      clickUpSearchCache: evictStale({
+      clickUpSearchCache: evictStaleClickUpCacheEntries({
         ...state.clickUpSearchCache,
         [key]: { data: tasks, fetchedAt: Date.now() }
       }),
@@ -300,12 +292,16 @@ export const createClickUpSlice: StateCreator<AppState, [], [], ClickUpSlice> = 
     const workspaceId = selectedWorkspaceId(get().clickUpStatus)
     const key = scopedKey(scope, `${workspaceId ?? 'default'}::list::${filter}::${limit}`)
     const cached = get().clickUpListCache[key]
-    if (!options?.force && isFresh(cached)) {
+    if (!options?.force && isFreshClickUpCacheEntry(cached)) {
       return cached.data ?? []
     }
+    const generation = mutationGeneration
     const tasks = await clickUpListTasks(scope.settings, filter, limit, workspaceId)
+    if (generation !== mutationGeneration) {
+      return tasks
+    }
     set((state) => ({
-      clickUpListCache: evictStale({
+      clickUpListCache: evictStaleClickUpCacheEntries({
         ...state.clickUpListCache,
         [key]: { data: tasks, fetchedAt: Date.now() }
       })
