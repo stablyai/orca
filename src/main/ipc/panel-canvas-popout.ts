@@ -10,6 +10,9 @@
  * with no scrollback restore or daemon adoption to preserve, so a direct
  * node-pty per tile, owned by the popout's webContents and reaped with it, is
  * the contained solution that cannot regress main-window terminals.
+ *
+ * Lifespan: ephemeral (see shared/panel-lifespan.ts PANEL_POPOUT_TILE_LIFESPAN).
+ * Closing the window reaps all popout PTYs — L0/L1 layout may reattach, not L2.
  */
 import { BrowserWindow, ipcMain } from 'electron'
 import { join } from 'node:path'

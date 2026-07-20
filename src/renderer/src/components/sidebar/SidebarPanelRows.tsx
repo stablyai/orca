@@ -10,9 +10,13 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { Input } from '@/components/ui/input'
+import { buildSplitCandidates } from '@/lib/panel-split-candidates'
 
 /** Inline title editor shown in place of a row while renaming. Commits on
  *  Enter/blur, cancels on Escape; empty titles cancel instead of committing. */
@@ -68,41 +72,100 @@ function sortableRowStyle(
   }
 }
 
-/** Right-click affordance shared by both panel row kinds: sends the panel
- *  into the split canvas (seeding it when closed, splitting when open). */
+/** Right-click affordance shared by both panel row kinds: opens a split
+ *  picker (other panels / blank / duplicate), never silent-clones alone. */
 function PanelCanvasContextMenu({
   kind,
   panelId,
   title,
+  host,
   onRename,
   children
 }: {
   kind: 'terminal' | 'web'
   panelId: string
   title: string
+  host?: string | null
   onRename: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const openCanvasSplitFromSource = useAppStore((s) => s.openCanvasSplitFromSource)
   const openPanelInCanvas = useAppStore((s) => s.openPanelInCanvas)
+  const terminalPanels = useAppStore((s) => s.settings?.pinnedTerminalPanels ?? [])
+  const webPanels = useAppStore((s) => s.settings?.pinnedWebPanels ?? [])
+  const items = React.useMemo(
+    () =>
+      buildSplitCandidates({
+        source:
+          kind === 'terminal'
+            ? { kind: 'terminal', panelId, host: host ?? null }
+            : { kind: 'web', panelId },
+        terminalPanels,
+        webPanels,
+        includeDuplicate: true
+      }),
+    [kind, panelId, host, terminalPanels, webPanels]
+  )
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent>
+      <ContextMenuContent className="min-w-[14rem]">
         <ContextMenuItem onSelect={onRename}>
           {translate('auto.components.sidebar.SidebarPanelsNav.renamePanel', 'Rename')}
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => openPanelInCanvas({ kind, panelId }, 'row')}>
-          {translate(
-            'auto.components.sidebar.SidebarPanelsNav.canvasSplitRight',
-            'Add to canvas (split right)'
-          )}
+          {translate('auto.components.sidebar.SidebarPanelsNav.openInCanvas', 'Open in canvas')}
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => openPanelInCanvas({ kind, panelId }, 'column')}>
-          {translate(
-            'auto.components.sidebar.SidebarPanelsNav.canvasSplitDown',
-            'Add to canvas (split down)'
-          )}
-        </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            {translate(
+              'auto.components.sidebar.SidebarPanelsNav.canvasSplitRight',
+              'Add to canvas (split right)'
+            )}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="min-w-[14rem]">
+            {items.map((item) => (
+              <ContextMenuItem
+                key={`row:${item.id}`}
+                onSelect={() => openCanvasSplitFromSource({ kind, panelId }, 'row', item.choice)}
+              >
+                <span className="flex flex-col items-start gap-0.5">
+                  <span>{item.label}</span>
+                  {item.subtitle ? (
+                    <span className="max-w-[14rem] truncate font-mono text-[10px] text-muted-foreground">
+                      {item.subtitle}
+                    </span>
+                  ) : null}
+                </span>
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            {translate(
+              'auto.components.sidebar.SidebarPanelsNav.canvasSplitDown',
+              'Add to canvas (split down)'
+            )}
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="min-w-[14rem]">
+            {items.map((item) => (
+              <ContextMenuItem
+                key={`col:${item.id}`}
+                onSelect={() => openCanvasSplitFromSource({ kind, panelId }, 'column', item.choice)}
+              >
+                <span className="flex flex-col items-start gap-0.5">
+                  <span>{item.label}</span>
+                  {item.subtitle ? (
+                    <span className="max-w-[14rem] truncate font-mono text-[10px] text-muted-foreground">
+                      {item.subtitle}
+                    </span>
+                  ) : null}
+                </span>
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuItem onSelect={() => detachPanelIntoWindow(kind, panelId, title)}>
           {translate('auto.components.sidebar.SidebarPanelsNav.detachPanel', 'Open in new window')}
         </ContextMenuItem>
@@ -209,6 +272,7 @@ export function SortableTerminalPanelButton({
       kind="terminal"
       panelId={panel.id}
       title={panel.title}
+      host={panel.host ?? null}
       onRename={() => setRenaming(true)}
     >
       <button

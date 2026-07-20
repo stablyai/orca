@@ -4815,7 +4815,8 @@
           "deleteLayout": "Delete layout",
           "layouts": "Layouts",
           "renamePanel": "Rename",
-          "detachPanel": "Open in new window"
+          "detachPanel": "Open in new window",
+          "openInCanvas": "Open in canvas"
         },
         "SidebarPanelRows": {
           "renameLabel": "Rename"
@@ -13340,7 +13341,11 @@
           "forward": "Go forward"
         },
         "PanelCanvasTree": {
-          "localShell": "Local shell"
+          "localShell": "Local shell",
+          "blankBrowser": "Blank browser"
+        },
+        "PanelSplitMenu": {
+          "chooseTile": "Choose tile to open"
         }
       }
     },

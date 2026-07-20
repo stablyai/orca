@@ -1,4 +1,6 @@
 import type { PanelLayoutNode } from '../../../shared/types'
+// Lifespan: canvas tiles use policy A (new process per leaf) — see panel-lifespan.ts
+import type { PanelSplitChoice } from './panel-split-candidates'
 
 /** Runtime canvas tree: the persisted PanelLayout shape plus a stable `id` on
  *  every node. Leaf ids identify tiles — each tile owns its own PTY/webview —
@@ -16,7 +18,15 @@ export type PanelCanvasShellLeaf = {
   label?: string
 }
 
-export type PanelCanvasLeaf = PanelCanvasPanelLeaf | PanelCanvasShellLeaf
+/** Ephemeral browser guest (not a pinned User Panel). */
+export type PanelCanvasBrowserLeaf = {
+  id: string
+  kind: 'browser'
+  url?: string
+  label?: string
+}
+
+export type PanelCanvasLeaf = PanelCanvasPanelLeaf | PanelCanvasShellLeaf | PanelCanvasBrowserLeaf
 
 export type PanelCanvasSplit = {
   id: string
@@ -43,24 +53,63 @@ export function canvasShellLeafFor(host: string | null, label?: string): PanelCa
   return { id: mintId(), kind: 'shell', host, ...(label ? { label } : {}) }
 }
 
-/** A fresh tile showing the same thing as `leaf` — what a split produces. */
+export function canvasBrowserLeafFor(url?: string, label?: string): PanelCanvasBrowserLeaf {
+  return {
+    id: mintId(),
+    kind: 'browser',
+    ...(url ? { url } : {}),
+    ...(label ? { label } : {})
+  }
+}
+
+/** A fresh tile showing the same thing as `leaf` — policy A second session. */
 export function duplicateCanvasLeaf(leaf: PanelCanvasLeaf): PanelCanvasLeaf {
-  return leaf.kind === 'shell'
-    ? canvasShellLeafFor(leaf.host, leaf.label)
-    : canvasLeafFor(leaf.kind, leaf.panelId)
+  if (leaf.kind === 'shell') {
+    return canvasShellLeafFor(leaf.host, leaf.label)
+  }
+  if (leaf.kind === 'browser') {
+    return canvasBrowserLeafFor(leaf.url, leaf.label)
+  }
+  return canvasLeafFor(leaf.kind, leaf.panelId)
+}
+
+/** Mint a runtime leaf from a split-picker choice (or duplicate the source). */
+export function canvasLeafFromSplitChoice(
+  choice: PanelSplitChoice,
+  source: PanelCanvasLeaf
+): PanelCanvasLeaf {
+  switch (choice.type) {
+    case 'duplicate':
+      return duplicateCanvasLeaf(source)
+    case 'panel':
+      return canvasLeafFor(choice.kind, choice.panelId)
+    case 'blank-shell':
+      return canvasShellLeafFor(choice.host, choice.label)
+    case 'blank-browser':
+      return canvasBrowserLeafFor(choice.url, choice.label)
+  }
 }
 
 /** Hydrates a persisted layout tree into a runtime canvas tree (fresh ids). */
 export function canvasNodeFromLayout(node: PanelLayoutNode): PanelCanvasNode {
   if ('kind' in node) {
-    return node.kind === 'shell'
-      ? {
-          id: mintId(),
-          kind: 'shell',
-          host: node.host,
-          ...(node.label ? { label: node.label } : {})
-        }
-      : { id: mintId(), kind: node.kind, panelId: node.panelId }
+    if (node.kind === 'shell') {
+      return {
+        id: mintId(),
+        kind: 'shell',
+        host: node.host,
+        ...(node.label ? { label: node.label } : {})
+      }
+    }
+    if (node.kind === 'browser') {
+      return {
+        id: mintId(),
+        kind: 'browser',
+        ...(node.url ? { url: node.url } : {}),
+        ...(node.label ? { label: node.label } : {})
+      }
+    }
+    return { id: mintId(), kind: node.kind, panelId: node.panelId }
   }
   return {
     id: mintId(),
@@ -73,9 +122,17 @@ export function canvasNodeFromLayout(node: PanelLayoutNode): PanelCanvasNode {
 /** Strips runtime ids back down to the persisted layout shape for saving. */
 export function layoutNodeFromCanvas(node: PanelCanvasNode): PanelLayoutNode {
   if (isPanelCanvasLeaf(node)) {
-    return node.kind === 'shell'
-      ? { kind: 'shell', host: node.host, ...(node.label ? { label: node.label } : {}) }
-      : { kind: node.kind, panelId: node.panelId }
+    if (node.kind === 'shell') {
+      return { kind: 'shell', host: node.host, ...(node.label ? { label: node.label } : {}) }
+    }
+    if (node.kind === 'browser') {
+      return {
+        kind: 'browser',
+        ...(node.url ? { url: node.url } : {}),
+        ...(node.label ? { label: node.label } : {})
+      }
+    }
+    return { kind: node.kind, panelId: node.panelId }
   }
   return {
     direction: node.direction,

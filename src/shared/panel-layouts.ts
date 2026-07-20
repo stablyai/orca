@@ -1,4 +1,7 @@
 import type { PanelLayout, PanelLayoutNode } from './types'
+// Lifespan: saved layouts are L0 config + L1 view only — see panel-lifespan.ts
+// (terminals/browsers respawn; processes are not restored).
+import { PANEL_LAYOUT_RESTORE_HINT } from './panel-lifespan'
 
 // Why: a layout references already-capped pinned panels; these bounds only
 // guard against a corrupted profile smuggling unbounded trees into every
@@ -7,6 +10,9 @@ export const MAX_PANEL_LAYOUTS = 16
 export const MAX_PANEL_LAYOUT_LEAVES = 12
 const MAX_PANEL_LAYOUT_DEPTH = 5
 const MAX_LAYOUT_TITLE_LENGTH = 60
+
+/** Re-export for UI copy next to Save / Open layout. */
+export { PANEL_LAYOUT_RESTORE_HINT }
 
 function normalizeLayoutNode(
   value: unknown,
@@ -42,6 +48,48 @@ function normalizeLayoutNode(
         ? node.label.trim().slice(0, MAX_LAYOUT_TITLE_LENGTH)
         : undefined
     return { kind: 'shell', host: node.host, ...(label ? { label } : {}) }
+  }
+  if (node.kind === 'browser') {
+    if (budget.leaves <= 0) {
+      return null
+    }
+    let url: string | undefined
+    if (node.url !== undefined) {
+      if (typeof node.url !== 'string') {
+        return null
+      }
+      const trimmed = node.url.trim()
+      if (trimmed.length === 0) {
+        url = undefined
+      } else {
+        try {
+          const parsed = new URL(trimmed)
+          // Why: only web pages — match pinned web panel allowlist.
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            // about:blank is the blank-browser default and is safe in a guest.
+            if (parsed.protocol === 'about:' && parsed.pathname === 'blank') {
+              url = 'about:blank'
+            } else {
+              return null
+            }
+          } else {
+            url = parsed.toString()
+          }
+        } catch {
+          return null
+        }
+      }
+    }
+    budget.leaves -= 1
+    const label =
+      typeof node.label === 'string' && node.label.trim().length > 0
+        ? node.label.trim().slice(0, MAX_LAYOUT_TITLE_LENGTH)
+        : undefined
+    return {
+      kind: 'browser',
+      ...(url !== undefined ? { url } : {}),
+      ...(label ? { label } : {})
+    }
   }
   if (node.direction !== 'row' && node.direction !== 'column') {
     return null

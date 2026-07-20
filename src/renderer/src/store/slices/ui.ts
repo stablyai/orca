@@ -35,11 +35,13 @@ import type {
 import {
   appendCanvasLeaf,
   canvasLeafFor,
+  canvasLeafFromSplitChoice,
   canvasNodeFromLayout,
   canvasShellLeafFor,
   countCanvasLeaves,
   type PanelCanvasNode
 } from '@/lib/panel-canvas'
+import type { PanelSplitChoice } from '@/lib/panel-split-candidates'
 import { MAX_PANEL_LAYOUT_LEAVES } from '../../../../shared/panel-layouts'
 import {
   applyManualRepoOrder,
@@ -677,6 +679,13 @@ export type UISlice = {
     leaf: { kind: 'terminal' | 'web'; panelId: string },
     direction: 'row' | 'column'
   ) => void
+  /** Full-page / sidebar split: seed source panel if canvas empty, then add
+   *  the picker choice (blank or other panel). Never silent-clones alone. */
+  openCanvasSplitFromSource: (
+    source: { kind: 'terminal' | 'web'; panelId: string },
+    direction: 'row' | 'column',
+    choice: PanelSplitChoice
+  ) => void
   openPanelLayoutInCanvas: (layout: PanelLayout) => void
   /** Opens an ad-hoc login shell tile on `host` (null = local) in the canvas. */
   openShellInCanvas: (host: string | null, label: string | null) => void
@@ -1295,6 +1304,32 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       previousViewBeforePanelCanvas:
         state.activeView === 'panel-canvas' ? state.previousViewBeforePanelCanvas : state.activeView
     })),
+  openCanvasSplitFromSource: (source, direction, choice) =>
+    set((state) => {
+      const sourceLeaf = canvasLeafFor(source.kind, source.panelId)
+      const newLeaf = canvasLeafFromSplitChoice(choice, sourceLeaf)
+      let root = state.panelCanvasRoot
+      if (root === null) {
+        // Why: first split from a full-page panel should keep the source
+        // visible and place the chosen tile beside it.
+        root = {
+          id: crypto.randomUUID(),
+          direction,
+          children: [sourceLeaf, newLeaf]
+        }
+      } else if (countCanvasLeaves(root) < MAX_PANEL_LAYOUT_LEAVES) {
+        root = appendCanvasLeaf(root, newLeaf, direction)
+      }
+      // Cap hit: keep root unchanged (still reveal canvas).
+      return {
+        activeView: 'panel-canvas' as const,
+        panelCanvasRoot: root,
+        previousViewBeforePanelCanvas:
+          state.activeView === 'panel-canvas'
+            ? state.previousViewBeforePanelCanvas
+            : state.activeView
+      }
+    }),
   openShellInCanvas: (host: string | null, label: string | null) =>
     set((state) => ({
       activeView: 'panel-canvas',

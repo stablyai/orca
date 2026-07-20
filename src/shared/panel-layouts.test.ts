@@ -44,6 +44,41 @@ describe('normalizePanelLayouts', () => {
     ])
   })
 
+  it('accepts browser leaves (about:blank and https)', () => {
+    const layouts = normalizePanelLayouts([
+      {
+        id: 'br',
+        title: 'blank',
+        root: {
+          direction: 'row',
+          children: [
+            { kind: 'browser' },
+            { kind: 'browser', url: 'about:blank', label: 'scratch' },
+            { kind: 'browser', url: 'https://example.com/x' }
+          ]
+        }
+      }
+    ])
+    expect(layouts).toHaveLength(1)
+    expect(countPanelLayoutLeaves(layouts[0].root)).toBe(3)
+  })
+
+  it('drops browser leaves with non-http schemes (except about:blank)', () => {
+    const layouts = normalizePanelLayouts([
+      {
+        id: 'bad',
+        title: 'bad',
+        root: { kind: 'browser', url: 'file:///etc/passwd' }
+      },
+      {
+        id: 'ok',
+        title: 'ok',
+        root: { kind: 'browser', url: 'https://ok.example/' }
+      }
+    ])
+    expect(layouts.map((l) => l.id)).toEqual(['ok'])
+  })
+
   it('drops malformed entries without failing the rest', () => {
     const layouts = normalizePanelLayouts([
       { id: 'bad-root', title: 'x', root: { direction: 'diagonal', children: [] } },

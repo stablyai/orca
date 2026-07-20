@@ -1,4 +1,9 @@
-import { PINNED_WEB_PANEL_PARTITION } from '../../../../shared/pinned-web-panels'
+import {
+  CANVAS_BROWSER_PARTITION,
+  PINNED_WEB_PANEL_PARTITION
+} from '../../../../shared/pinned-web-panels'
+
+export { CANVAS_BROWSER_PARTITION }
 
 const webviewsByPanelId = new Map<string, Electron.WebviewTag>()
 
@@ -53,11 +58,14 @@ export function navigatePinnedWebPanelWebview(
 export function ensurePinnedWebPanelWebview({
   panelId,
   url,
-  container
+  container,
+  partition = PINNED_WEB_PANEL_PARTITION
 }: {
   panelId: string
   url: string
   container: HTMLDivElement
+  /** Override guest partition (canvas blank browsers use CANVAS_BROWSER_PARTITION). */
+  partition?: string
 }): Electron.WebviewTag {
   const existing = webviewsByPanelId.get(panelId)
   if (existing && existing.parentElement === container) {
@@ -73,7 +81,7 @@ export function ensurePinnedWebPanelWebview({
     destroyPinnedWebPanelWebview(panelId)
   }
   const webview = document.createElement('webview') as Electron.WebviewTag
-  webview.setAttribute('partition', PINNED_WEB_PANEL_PARTITION)
+  webview.setAttribute('partition', partition)
   webview.setAttribute('data-panel-url', url)
   webview.setAttribute('src', url)
   webview.style.display = 'flex'

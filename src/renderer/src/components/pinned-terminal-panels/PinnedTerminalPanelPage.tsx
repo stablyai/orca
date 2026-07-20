@@ -1,9 +1,9 @@
 import React from 'react'
-import { Columns2, PictureInPicture2, Rows2, X } from 'lucide-react'
+import { PictureInPicture2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { PinnedTerminalPanel } from '../../../../shared/types'
+import type { PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
 import {
   getPinnedTerminalPanelIdFromWorktreeId,
   isPinnedTerminalPanelCanvasWorktreeId,
@@ -14,8 +14,11 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { detachPanelIntoWindow } from '@/lib/panel-canvas-detach'
+import { buildSplitCandidates } from '@/lib/panel-split-candidates'
+import { PanelSplitMenuButtons } from '@/components/panel-canvas/PanelSplitMenu'
 
 const EMPTY_PANELS: readonly PinnedTerminalPanel[] = []
+const EMPTY_WEB: readonly PinnedWebPanel[] = []
 
 function PinnedTerminalPanelViewport({
   panel,
@@ -65,11 +68,28 @@ const PinnedTerminalPanelPage = React.memo(
     const activeView = useAppStore((s) => s.activeView)
     const activePanelId = useAppStore((s) => s.activePinnedTerminalPanelId)
     const closePinnedTerminalPanelPage = useAppStore((s) => s.closePinnedTerminalPanelPage)
-    const openPanelInCanvas = useAppStore((s) => s.openPanelInCanvas)
+    const openCanvasSplitFromSource = useAppStore((s) => s.openCanvasSplitFromSource)
+    const webPanels = useAppStore((s) => s.settings?.pinnedWebPanels ?? EMPTY_WEB)
     const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
 
     const pageVisible = activeView === 'terminal-panel' && activePanelId !== null
     const activePanel = panels.find((panel) => panel.id === activePanelId)
+    const splitItems = React.useMemo(
+      () =>
+        activePanel
+          ? buildSplitCandidates({
+              source: {
+                kind: 'terminal',
+                panelId: activePanel.id,
+                host: activePanel.host ?? null
+              },
+              terminalPanels: panels,
+              webPanels,
+              includeDuplicate: true
+            })
+          : [],
+      [activePanel, panels, webPanels]
+    )
 
     // Why: the tab (and its PTY) is created on first visit, not at startup —
     // eight configured panels must not spawn eight shells on app boot. A tab
@@ -173,42 +193,19 @@ const PinnedTerminalPanelPage = React.memo(
           ) : null}
           {activePanel ? (
             <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6"
-                aria-label={translate(
-                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitRight',
-                  'Split right in canvas'
-                )}
-                title={translate(
-                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitRight',
-                  'Split right in canvas'
-                )}
-                onClick={() =>
-                  openPanelInCanvas({ kind: 'terminal', panelId: activePanel.id }, 'row')
+              <PanelSplitMenuButtons
+                items={splitItems}
+                disabled={splitItems.length === 0}
+                buttonClassName="size-6"
+                iconClassName="size-3.5"
+                onPick={(direction, choice) =>
+                  openCanvasSplitFromSource(
+                    { kind: 'terminal', panelId: activePanel.id },
+                    direction,
+                    choice
+                  )
                 }
-              >
-                <Columns2 className="size-3.5" strokeWidth={1.75} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6"
-                aria-label={translate(
-                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitDown',
-                  'Split down in canvas'
-                )}
-                title={translate(
-                  'auto.components.pinned-terminal-panels.PinnedTerminalPanelPage.splitDown',
-                  'Split down in canvas'
-                )}
-                onClick={() =>
-                  openPanelInCanvas({ kind: 'terminal', panelId: activePanel.id }, 'column')
-                }
-              >
-                <Rows2 className="size-3.5" strokeWidth={1.75} />
-              </Button>
+              />
               <Button
                 variant="ghost"
                 size="icon"

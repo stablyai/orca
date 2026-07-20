@@ -11,6 +11,9 @@ export const MAX_PINNED_WEB_PANELS = 12
 // renderer's webview host must agree on the exact string.
 export const PINNED_WEB_PANEL_PARTITION = 'persist:pinned-web-panels'
 
+/** Ad-hoc canvas blank browsers — separate cookies from pinned dashboards. */
+export const CANVAS_BROWSER_PARTITION = 'persist:canvas-browser'
+
 const MAX_PANEL_TITLE_LENGTH = 60
 
 function normalizePinnedWebPanelUrl(value: unknown): string | null {

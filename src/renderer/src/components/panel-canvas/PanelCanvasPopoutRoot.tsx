@@ -8,7 +8,7 @@ import {
   canvasNodeFromLayout,
   collectCanvasLeaves,
   countCanvasLeaves,
-  duplicateCanvasLeaf,
+  canvasLeafFromSplitChoice,
   layoutNodeFromCanvas,
   removeCanvasLeaf,
   setCanvasSplitSizes,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/panel-canvas'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import type { PanelSplitChoice } from '@/lib/panel-split-candidates'
 import { CanvasNodeView, type CanvasTreeCallbacks } from './PanelCanvasTree'
 import { SlimTerminalTile } from './SlimTerminalTile'
 
@@ -74,18 +75,26 @@ export function PanelCanvasPopoutRoot(): React.JSX.Element {
     })
   }, [])
 
-  const onSplitLeaf = React.useCallback((leafId: string, direction: 'row' | 'column') => {
-    setRoot((current) => {
-      if (!current || countCanvasLeaves(current) >= MAX_PANEL_LAYOUT_LEAVES) {
-        return current
-      }
-      const target = collectCanvasLeaves(current).find((leaf) => leaf.id === leafId)
-      if (!target) {
-        return current
-      }
-      return splitCanvasLeaf(current, leafId, duplicateCanvasLeaf(target), direction)
-    })
-  }, [])
+  const onSplitLeaf = React.useCallback(
+    (leafId: string, direction: 'row' | 'column', choice: PanelSplitChoice) => {
+      setRoot((current) => {
+        if (!current || countCanvasLeaves(current) >= MAX_PANEL_LAYOUT_LEAVES) {
+          return current
+        }
+        const target = collectCanvasLeaves(current).find((leaf) => leaf.id === leafId)
+        if (!target) {
+          return current
+        }
+        return splitCanvasLeaf(
+          current,
+          leafId,
+          canvasLeafFromSplitChoice(choice, target),
+          direction
+        )
+      })
+    },
+    []
+  )
 
   const onRemoveLeaf = React.useCallback((leafId: string) => {
     setRoot((current) => {

@@ -14,15 +14,16 @@ import {
   normalizePanelLayouts
 } from '../../../../shared/panel-layouts'
 import {
+  canvasLeafFromSplitChoice,
   collectCanvasLeaves,
   countCanvasLeaves,
-  duplicateCanvasLeaf,
   layoutNodeFromCanvas,
   removeCanvasLeaf,
   setCanvasSplitSizes,
   splitCanvasLeaf,
   type PanelCanvasLeaf
 } from '@/lib/panel-canvas'
+import type { PanelSplitChoice } from '@/lib/panel-split-candidates'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
@@ -77,7 +78,7 @@ const PanelCanvasPage = React.memo(function PanelCanvasPage(): React.JSX.Element
     }
     const liveLeafIds = new Set(leaves.map((leaf) => leaf.id))
     for (const prev of prevLeavesRef.current) {
-      if (prev.kind === 'web' && !liveLeafIds.has(prev.id)) {
+      if ((prev.kind === 'web' || prev.kind === 'browser') && !liveLeafIds.has(prev.id)) {
         destroyPinnedWebPanelWebview(canvasWebviewId(prev.id))
       }
     }
@@ -99,7 +100,7 @@ const PanelCanvasPage = React.memo(function PanelCanvasPage(): React.JSX.Element
         }
       }
       for (const leaf of prevLeavesRef.current) {
-        if (leaf.kind === 'web') {
+        if (leaf.kind === 'web' || leaf.kind === 'browser') {
           destroyPinnedWebPanelWebview(canvasWebviewId(leaf.id))
         }
       }
@@ -110,19 +111,20 @@ const PanelCanvasPage = React.memo(function PanelCanvasPage(): React.JSX.Element
   const activeLayout = (panelLayouts ?? []).find((layout) => layout.id === activeLayoutId)
 
   const onSplitLeaf = React.useCallback(
-    (leafId: string, direction: 'row' | 'column') => {
+    (leafId: string, direction: 'row' | 'column', choice: PanelSplitChoice) => {
       const current = useAppStore.getState().panelCanvasRoot
       if (!current || countCanvasLeaves(current) >= MAX_PANEL_LAYOUT_LEAVES) {
         return
       }
-      // Why: splitting seeds the new tile with the same source (a second live
-      // instance, e.g. two shells on one host); picking a different panel is
-      // done from the sidebar's open-in-canvas actions instead.
+      // Why: picker chooses definition or blank; never silent-clone. Policy A
+      // still mints a new process for "duplicate" or same panelId tiles.
       const target = collectCanvasLeaves(current).find((leaf) => leaf.id === leafId)
       if (!target) {
         return
       }
-      setPanelCanvasRoot(splitCanvasLeaf(current, leafId, duplicateCanvasLeaf(target), direction))
+      setPanelCanvasRoot(
+        splitCanvasLeaf(current, leafId, canvasLeafFromSplitChoice(choice, target), direction)
+      )
     },
     [setPanelCanvasRoot]
   )

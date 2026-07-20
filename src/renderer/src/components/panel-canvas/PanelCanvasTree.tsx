@@ -8,13 +8,16 @@ import {
 } from '../../../../shared/pinned-terminal-panels'
 import {
   isPanelCanvasLeaf,
+  type PanelCanvasLeaf,
   type PanelCanvasNode,
   type PanelCanvasPanelLeaf,
   type PanelCanvasSplit
 } from '@/lib/panel-canvas'
+import { buildSplitCandidates, type PanelSplitChoice } from '@/lib/panel-split-candidates'
 import { translate } from '@/i18n/i18n'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { ensurePinnedWebPanelWebview } from '@/components/pinned-web-panels/pinned-web-panel-webview'
+import { CANVAS_BROWSER_PARTITION } from '../../../../shared/pinned-web-panels'
 import { CanvasTileChrome, canvasWebviewId } from './CanvasTileChrome'
 import { SlimTerminalTile } from './SlimTerminalTile'
 
@@ -22,7 +25,7 @@ export { canvasWebviewId }
 
 export type CanvasTreeCallbacks = {
   splitDisabled: boolean
-  onSplitLeaf: (leafId: string, direction: 'row' | 'column') => void
+  onSplitLeaf: (leafId: string, direction: 'row' | 'column', choice: PanelSplitChoice) => void
   onRemoveLeaf: (leafId: string) => void
   onResizeSplit: (splitId: string, sizes: number[]) => void
   /** Popout windows swap the tab/PTY-backed tile for their slim direct-PTY
@@ -33,6 +36,19 @@ export type CanvasTreeCallbacks = {
     panel: PinnedTerminalPanel,
     visible: boolean
   ) => React.ReactNode
+}
+
+function splitItemsForLeaf(
+  leaf: PanelCanvasLeaf,
+  terminalPanels: readonly PinnedTerminalPanel[],
+  webPanels: readonly PinnedWebPanel[]
+) {
+  return buildSplitCandidates({
+    source: leaf,
+    terminalPanels,
+    webPanels,
+    includeDuplicate: true
+  })
 }
 
 function CanvasTerminalTile({
@@ -118,6 +134,21 @@ function CanvasWebTile({
   return <div ref={containerRef} className="flex min-h-0 flex-1 flex-col" />
 }
 
+function CanvasBrowserTile({ leafId, url }: { leafId: string; url: string }): React.JSX.Element {
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  React.useEffect(() => {
+    if (containerRef.current) {
+      ensurePinnedWebPanelWebview({
+        panelId: canvasWebviewId(leafId),
+        url,
+        container: containerRef.current,
+        partition: CANVAS_BROWSER_PARTITION
+      })
+    }
+  }, [leafId, url])
+  return <div ref={containerRef} className="flex min-h-0 flex-1 flex-col" />
+}
+
 export function CanvasNodeView({
   node,
   visible,
@@ -132,6 +163,10 @@ export function CanvasNodeView({
   callbacks: CanvasTreeCallbacks
 }): React.JSX.Element {
   if (isPanelCanvasLeaf(node)) {
+    const splitItems = splitItemsForLeaf(node, terminalPanels, webPanels)
+    const onPickSplit = (direction: 'row' | 'column', choice: PanelSplitChoice): void => {
+      callbacks.onSplitLeaf(node.id, direction, choice)
+    }
     if (node.kind === 'shell') {
       const label =
         node.label ??
@@ -142,14 +177,34 @@ export function CanvasNodeView({
           <CanvasTileChrome
             title={label}
             host={node.host ?? undefined}
+            splitItems={splitItems}
             splitDisabled={callbacks.splitDisabled}
-            onSplit={(direction) => callbacks.onSplitLeaf(node.id, direction)}
+            onPickSplit={onPickSplit}
             onClose={() => callbacks.onRemoveLeaf(node.id)}
           />
           {/* Why: shells always use the slim direct-PTY terminal, in every
               window — they are ad-hoc sessions with no pinned-panel entry,
-              tab, or scrollback restore to preserve. */}
+              tab, or scrollback restore to preserve. Lifespan: ephemeral. */}
           <SlimTerminalTile spawnKey={node.id} host={node.host} command="" />
+        </div>
+      )
+    }
+    if (node.kind === 'browser') {
+      const url = node.url && node.url.length > 0 ? node.url : 'about:blank'
+      const title =
+        node.label ??
+        translate('auto.components.panel-canvas.PanelCanvasTree.blankBrowser', 'Blank browser')
+      return (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-border">
+          <CanvasTileChrome
+            title={title}
+            webviewLeafId={node.id}
+            splitItems={splitItems}
+            splitDisabled={callbacks.splitDisabled}
+            onPickSplit={onPickSplit}
+            onClose={() => callbacks.onRemoveLeaf(node.id)}
+          />
+          <CanvasBrowserTile leafId={node.id} url={url} />
         </div>
       )
     }
@@ -166,8 +221,9 @@ export function CanvasNodeView({
           title={title}
           host={terminalPanel?.host}
           webviewLeafId={webPanel ? node.id : undefined}
+          splitItems={splitItems}
           splitDisabled={callbacks.splitDisabled}
-          onSplit={(direction) => callbacks.onSplitLeaf(node.id, direction)}
+          onPickSplit={onPickSplit}
           onClose={() => callbacks.onRemoveLeaf(node.id)}
         />
         {terminalPanel ? (

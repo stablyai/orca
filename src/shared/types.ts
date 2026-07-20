@@ -3371,14 +3371,23 @@ export type PanelLayoutPanelLeaf = {
 
 /** A tile holding an ad-hoc login shell rather than a configured panel —
  *  `host` names an SSH target (null = local). Shells are self-contained, so
- *  they survive in saved layouts without depending on a pinned-panel entry. */
+ *  they survive in saved layouts without depending on a pinned-panel entry.
+ *  Process lifespan: ephemeral (panel-lifespan); L0 only when saved in a layout. */
 export type PanelLayoutShellLeaf = {
   kind: 'shell'
   host: string | null
   label?: string
 }
 
-export type PanelLayoutLeaf = PanelLayoutPanelLeaf | PanelLayoutShellLeaf
+/** Ad-hoc browser tile (not a pinned User Panel). Optional url defaults to
+ *  about:blank at spawn. Layout save is L0+L1 only — guest process is ephemeral. */
+export type PanelLayoutBrowserLeaf = {
+  kind: 'browser'
+  url?: string
+  label?: string
+}
+
+export type PanelLayoutLeaf = PanelLayoutPanelLeaf | PanelLayoutShellLeaf | PanelLayoutBrowserLeaf
 
 /** A resizable split holding two or more tiles or nested splits. `sizes` are
  *  relative flex weights matching `children`; absent means equal shares. */

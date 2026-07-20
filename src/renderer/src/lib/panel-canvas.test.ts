@@ -11,6 +11,8 @@ import {
   setCanvasSplitSizes,
   splitCanvasLeaf,
   canvasShellLeafFor,
+  canvasBrowserLeafFor,
+  canvasLeafFromSplitChoice,
   duplicateCanvasLeaf,
   type PanelCanvasNode,
   type PanelCanvasSplit
@@ -64,7 +66,9 @@ describe('splitCanvasLeaf', () => {
     const next = splitCanvasLeaf(root, a.id, c, 'row') as PanelCanvasSplit
     expect(
       next.children.map((child) =>
-        isPanelCanvasLeaf(child) && child.kind !== 'shell' ? child.panelId : '?'
+        isPanelCanvasLeaf(child) && (child.kind === 'terminal' || child.kind === 'web')
+          ? child.panelId
+          : '?'
       )
     ).toEqual(['a', 'c', 'b'])
     // Why: stale sizes would misalign weights with the grown children array.
@@ -157,5 +161,27 @@ describe('shell leaves in the canvas tree', () => {
     const copy = duplicateCanvasLeaf(panel)
     expect(copy).toEqual({ id: expect.any(String), kind: 'web', panelId: 'p1' })
     expect(copy.id).not.toBe(panel.id)
+  })
+
+  it('round-trips browser leaves and mints from split choices', () => {
+    const layout = {
+      direction: 'row' as const,
+      children: [
+        { kind: 'browser' as const },
+        { kind: 'browser' as const, url: 'https://example.com/', label: 'ex' }
+      ]
+    }
+    const canvas = canvasNodeFromLayout(layout)
+    expect(countCanvasLeaves(canvas)).toBe(2)
+    expect(layoutNodeFromCanvas(canvas)).toEqual(layout)
+
+    const source = canvasBrowserLeafFor()
+    const blank = canvasLeafFromSplitChoice({ type: 'blank-browser' }, source)
+    expect(blank.kind).toBe('browser')
+    const panelChoice = canvasLeafFromSplitChoice(
+      { type: 'panel', kind: 'web', panelId: 'w1' },
+      source
+    )
+    expect(panelChoice).toEqual({ id: expect.any(String), kind: 'web', panelId: 'w1' })
   })
 })
