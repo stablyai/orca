@@ -75,6 +75,15 @@ export function QuickAddWebForm({ onDone }: { onDone: () => void }): React.JSX.E
     <div
       className="mx-1 mb-1 space-y-2 rounded-md border border-worktree-sidebar-border/40 bg-worktree-sidebar-background p-2"
       onClick={(event) => event.stopPropagation()}
+      // Why: the autofocused Title field used to ignore Enter/Escape because the
+      // handler sat on the URL input only — handle at the form so every field works.
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          submit()
+        } else if (e.key === 'Escape') {
+          onDone()
+        }
+      }}
     >
       <div className="text-[12px] font-medium">
         {translate('auto.components.sidebar.QuickAddPanelPopovers.webTitle', 'New user panel')}
@@ -92,13 +101,6 @@ export function QuickAddWebForm({ onDone }: { onDone: () => void }): React.JSX.E
       <Input
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            submit()
-          } else if (e.key === 'Escape') {
-            onDone()
-          }
-        }}
         placeholder="https://…"
         className="h-7 text-[12px]"
       />
@@ -166,6 +168,15 @@ export function QuickAddTerminalForm({ onDone }: { onDone: () => void }): React.
     <div
       className="mx-1 mb-1 space-y-2 rounded-md border border-worktree-sidebar-border/40 bg-worktree-sidebar-background p-2"
       onClick={(event) => event.stopPropagation()}
+      // Why: the autofocused Title and the Host field used to ignore Enter/Escape
+      // because the handler sat on the Command input only.
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          submit()
+        } else if (e.key === 'Escape') {
+          onDone()
+        }
+      }}
     >
       <div className="text-[12px] font-medium">
         {translate('auto.components.sidebar.QuickAddPanelPopovers.terminalTitle', 'New node panel')}
@@ -183,13 +194,6 @@ export function QuickAddTerminalForm({ onDone }: { onDone: () => void }): React.
       <Input
         value={draft.command}
         onChange={(e) => setDraft({ ...draft, command: e.target.value })}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            submit()
-          } else if (e.key === 'Escape') {
-            onDone()
-          }
-        }}
         placeholder={translate(
           'auto.components.sidebar.QuickAddPanelPopovers.commandPlaceholder',
           'Command (e.g. btop)'
