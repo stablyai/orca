@@ -16,6 +16,8 @@ export type GitRepoAddOutcome = {
   importedProjectGroupId?: string | undefined
 }
 
+/** Completion handoff shared by the add-repo flows: the added repo, its
+ *  telemetry source, and any extra outcome hosts may act on. */
 export type CompleteGitRepoAdd = (
   repoId: string,
   source: AddRepoExistingWorkspaceSource,
