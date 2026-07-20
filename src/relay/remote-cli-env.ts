@@ -1,5 +1,6 @@
 import { BOOLEAN_FLAGS, matches, parseArgs } from '../shared/cli-args-parser'
 import {
+  isLifecycleMessageType,
   ORCHESTRATION_SEND_ALLOWED_FLAGS,
   ORCHESTRATION_SEND_COMMAND_PATH
 } from '../shared/orchestration-cli-contract'
@@ -22,7 +23,7 @@ function isLifecycleSend(argv: string[]): boolean {
     }
   }
   const type = parsed.flags.get('type')
-  return type === 'worker_done' || type === 'heartbeat'
+  return typeof type === 'string' && isLifecycleMessageType(type)
 }
 
 export function pickRemoteCliEnv(

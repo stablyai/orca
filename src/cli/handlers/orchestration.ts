@@ -8,6 +8,10 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getTerminalHandle } from '../selectors'
+import {
+  isLifecycleMessageType,
+  type OrchestrationLifecycleMessageType
+} from '../../shared/orchestration-cli-contract'
 import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
 import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
@@ -16,7 +20,7 @@ import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-
 // parent process the subprocess is alive without flooding logs. See design
 // doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
-function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+function getLifecycleGroupRecipientError(type: OrchestrationLifecycleMessageType): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
 }
 
@@ -355,7 +359,7 @@ function getOptionalPositiveIntegerValueFlag(
 }
 
 function rejectLifecycleGroupRecipient(type: string | undefined, to: string): void {
-  if ((type === 'worker_done' || type === 'heartbeat') && to.startsWith('@')) {
+  if (isLifecycleMessageType(type) && to.startsWith('@')) {
     throw new RuntimeClientError('invalid_argument', getLifecycleGroupRecipientError(type))
   }
 }
@@ -365,7 +369,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const to = getRequiredStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
     const explicitFrom = getOptionalStringFlag(flags, 'from')
-    const isLifecycle = type === 'worker_done' || type === 'heartbeat'
+    const isLifecycle = isLifecycleMessageType(type)
     rejectLifecycleGroupRecipient(type, to)
 
     if (

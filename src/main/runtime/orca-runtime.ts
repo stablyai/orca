@@ -22155,6 +22155,8 @@ export class OrcaRuntimeService {
     // Why: pruning can remove a PTY without the normal exit callback.
     this.advancePtyLifecycleGeneration(ptyId)
     this.revokeOrchestrationSenderCapabilityForPty(ptyId)
+    // Why: retained PTYs need the counter; final prune can drop it only after revocation.
+    this.orchestrationSenderGenerationByPtyId.delete(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)

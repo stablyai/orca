@@ -15128,6 +15128,49 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('drops sender generation state only when the disconnected PTY record is finally pruned', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = 'pty-pruned-sender-generation'
+    const tabId = 'tab-pruned-sender-generation'
+    const leafId = '77777777-7777-4777-8777-777777777777'
+    const paneKey = makePaneKey(tabId, leafId)
+    const handle = runtime.preAllocateHandleForPty(ptyId)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, { tabId, leafId })
+    const staleCapability = runtime.issueOrchestrationSenderCapability(paneKey, handle)
+    const internals = runtime as unknown as {
+      orchestrationSenderGenerationByPtyId: Map<string, number>
+      ptysById: Map<string, unknown>
+      dropDisconnectedPtyRecord: (id: string) => void
+    }
+
+    runtime.onPtyExit(ptyId, 0)
+    expect(internals.orchestrationSenderGenerationByPtyId.has(ptyId)).toBe(true)
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(staleCapability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+
+    internals.dropDisconnectedPtyRecord(ptyId)
+    expect(internals.ptysById.has(ptyId)).toBe(false)
+    expect(internals.orchestrationSenderGenerationByPtyId.has(ptyId)).toBe(false)
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(staleCapability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+
+    const replacementHandle = runtime.preAllocateHandleForPty(ptyId)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, { tabId, leafId })
+    const replacementCapability = runtime.issueOrchestrationSenderCapability(
+      paneKey,
+      replacementHandle
+    )
+    expect(runtime.resolveAuthenticatedOrchestrationSender(replacementCapability)).toEqual({
+      canonicalHandle: replacementHandle,
+      canonicalPaneKey: paneKey
+    })
+    expect(() => runtime.resolveAuthenticatedOrchestrationSender(staleCapability)).toThrow(
+      'orchestration_sender_unauthenticated'
+    )
+  })
+
   it('migrates a live capability across a same-leaf tab re-key and revokes it on exit', () => {
     const runtime = new OrcaRuntimeService(store)
     const ptyId = 'pty-rekeyed-sender'

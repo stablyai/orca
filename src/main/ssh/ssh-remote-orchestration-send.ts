@@ -1,4 +1,5 @@
 import { RemoteCliArgumentError } from './ssh-remote-cli-argument-error'
+import { isLifecycleMessageType } from '../../shared/orchestration-cli-contract'
 import { ORCHESTRATION_SENDER_CAPABILITY_ENV } from '../../shared/orchestration-sender-capability'
 
 type RemoteFlags = Map<string, string | boolean>
@@ -22,7 +23,7 @@ export function resolveRemoteOrchestrationSender(
 ): string {
   const explicit = optionalString(flags, 'from')
   const envHandle = env.ORCA_TERMINAL_HANDLE || undefined
-  const isLifecycle = type === 'worker_done' || type === 'heartbeat'
+  const isLifecycle = isLifecycleMessageType(type)
   if (isLifecycle && (!envHandle || !env[ORCHESTRATION_SENDER_CAPABILITY_ENV])) {
     throw new RemoteCliArgumentError(
       'no_active_sender_terminal',
@@ -42,7 +43,7 @@ export function resolveRemoteOrchestrationSenderCapability(
   env: Record<string, string>,
   type: string | undefined
 ): string | undefined {
-  if (type !== 'worker_done' && type !== 'heartbeat') {
+  if (!isLifecycleMessageType(type)) {
     return undefined
   }
   const capability = env[ORCHESTRATION_SENDER_CAPABILITY_ENV] || undefined
