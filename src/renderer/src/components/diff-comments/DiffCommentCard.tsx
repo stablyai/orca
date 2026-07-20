@@ -127,6 +127,10 @@ export function DiffCommentCard({
     .filter(Boolean)
     .join(' ')
 
+  const ariaLabel = collapsed
+    ? translate('auto.components.diff.comments.DiffCommentCard.expand', 'Expand comment')
+    : translate('auto.components.diff.comments.DiffCommentCard.collapse', 'Collapse comment')
+
   const handleSubmit = async (): Promise<void> => {
     if (!canSubmit || !onSubmitEdit) {
       return
@@ -161,17 +165,7 @@ export function DiffCommentCard({
             type="button"
             className="orca-diff-comment-collapse-btn"
             aria-expanded={!collapsed}
-            aria-label={
-              collapsed
-                ? translate(
-                    'auto.components.diff.comments.DiffCommentCard.expand',
-                    'Expand comment'
-                  )
-                : translate(
-                    'auto.components.diff.comments.DiffCommentCard.collapse',
-                    'Collapse comment'
-                  )
-            }
+            aria-label={ariaLabel}
             onClick={(ev) => {
               ev.preventDefault()
               ev.stopPropagation()
