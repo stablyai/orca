@@ -36,8 +36,10 @@ import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confi
 import type { RecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
 import type { OrcaProfilesSlice } from './slices/orca-profiles'
 import type { NewIssueDraftSlice } from './slices/new-issue-draft'
+import type { MissionsSlice } from './slices/missions'
 
 export type AppState = RepoSlice &
+  MissionsSlice &
   SparsePresetsSlice &
   WorktreeSlice &
   TerminalSlice &

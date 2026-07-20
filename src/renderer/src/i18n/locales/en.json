@@ -2500,7 +2500,11 @@
               "4471d4a1c0": "No projects match your search.",
               "bfd8ce21c6": "All projects",
               "a58a0cd100": "Search projects...",
-              "65a3dae41d": "No projects"
+              "65a3dae41d": "No projects",
+              "f6c169f19a": "Groups",
+              "55821ddef9": "Projects",
+              "2f01be5a6c": "{{value0}} projects",
+              "fec864f87b": "{{value0}}/{{value1}} projects"
             }
           }
         },
@@ -4067,7 +4071,12 @@
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
           "ca6f729da2": "New workspace ({{value0}})",
-          "a30e34eb5c": "Close workspace board"
+          "a30e34eb5c": "Close workspace board",
+          "d2a0089e45": "Projects",
+          "b6cd1198f2": "Workspaces",
+          "ea1ec23452": "Missions",
+          "60c23631f0": "New Mission",
+          "52cff41bb2": "Add a project to create a mission"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -4350,6 +4359,7 @@
           "3baa7d6507": "Pin",
           "697d0f6e1b": "Unpin",
           "250de158fd": "Remove Workspace",
+          "80a3c0efc8": "Mission session — delete the mission instead.",
           "changeParentWorkspace": "Change Parent Worktree...",
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
@@ -4398,7 +4408,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "3a2edfac81": "Add to mission"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -4694,8 +4705,9 @@
         "FolderWorkspaceComposerDialog": {
           "connectFailed": "Failed to connect to project.",
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
-          "title": "Create Folder Workspace",
-          "create": "Create workspace",
+          "title": "Open Shared Folder Workspace",
+          "create": "Open shared workspace",
+          "sharedCheckoutNotice": "Uses the existing checkouts in this folder. Branches and file changes are shared with other workspaces; Orca does not create isolated worktrees for each repository.",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source",
           "createFailed": "Failed to create folder workspace."
@@ -4804,6 +4816,63 @@
           "cancel": "Cancel",
           "forget": "Remove from Orca",
           "reconnectAndDelete": "Reconnect & Delete"
+        },
+        "MissionAddProjectsDialog": {
+          "6ec97cd26f": "Add Projects",
+          "02449d01cc": "Each added project gets a workspace on {{value0}}. Missions currently support only Git projects on this computer's native filesystem; folder, SSH, runtime, and WSL projects are unavailable.",
+          "d5aae76bca": "Cancel",
+          "e81ed87ddd": "Adding...",
+          "36cc45b3fb": "Add",
+          "99e993fe93": "No eligible projects available to add.",
+          "5b02d8f5da": "Could not add projects. Try again."
+        },
+        "MissionCreateDialog": {
+          "0655a02f86": "New Mission",
+          "4608f14ade": "Each selected project gets a workspace on a shared mission branch. Missions currently support only Git projects on this computer's native filesystem; folder, SSH, runtime, and WSL projects are unavailable.",
+          "48ec5c5b11": "Mission Name",
+          "0c9fe9ce6d": "Branch",
+          "bcea32d392": "Projects",
+          "741e98ec23": "Cancel",
+          "131ac9a3ca": "Creating...",
+          "470b9ba02f": "Create Mission",
+          "507155ae18": "Some workspaces could not be created. You can retry from the mission list.",
+          "e85049f72a": "Could not create the mission. Try again.",
+          "009decc6e5": "Done",
+          "ba57f70473": "Agent"
+        },
+        "MissionDeleteDialog": {
+          "7c84ee0d7d": "Delete Mission",
+          "3a89f8d9b8": "Delete \"{{value0}}\"?",
+          "cef9382dc6": "Also delete member workspaces",
+          "b74a531d8d": "Some workspaces could not be deleted. Resolve the errors and try again.",
+          "e0a412c615": "Cancel",
+          "fd82d0130a": "Deleting...",
+          "9ce0f98166": "Delete"
+        },
+        "MissionList": {
+          "280576fc92": "Workspace missing",
+          "d241d824cb": "Recreate",
+          "edb3b75817": "Remove from mission",
+          "745def31cd": "{{value0}} projects",
+          "28833b5212": "Add projects",
+          "d12c29d655": "Rename",
+          "b32972019a": "Delete mission",
+          "c9de5b6d5a": "No missions yet",
+          "d5d9aa29fa": "Group projects per task. Each project gets a workspace on a shared mission branch.",
+          "e4cb2a2294": "New Mission",
+          "d56fdff6c8": "Rename Mission",
+          "8d3abfb48a": "Mission Name",
+          "7f94e6c670": "Save",
+          "955a21f262": "Mission options",
+          "83e2a3cc38": "1 project"
+        },
+        "MissionMemberErrorCopy": {
+          "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."
+        },
+        "MissionMemberRows": {
+          "2f310bd75a": "Remove project and delete workspace?",
+          "539f206f0e": "This deletes the Mission workspace for {{value0}}. Git work that cannot be deleted safely is preserved on its branch.",
+          "1d08535a23": "Delete workspace"
         }
       },
       "shared": {

@@ -425,6 +425,7 @@ function App(): React.JSX.Element {
       fetchProjectGroupsForAllHosts: s.fetchProjectGroupsForAllHosts,
       fetchFolderWorkspaces: s.fetchFolderWorkspaces,
       fetchFolderWorkspacesForAllHosts: s.fetchFolderWorkspacesForAllHosts,
+      fetchMissions: s.fetchMissions,
       fetchAllWorktrees: s.fetchAllWorktrees,
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchOrcaProfiles: s.fetchOrcaProfiles,
@@ -867,6 +868,9 @@ function App(): React.JSX.Element {
         await timeRendererStartupStep('fetch-folder-workspaces-local', () =>
           actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
         )
+        // Why: missions are local-host persisted state; load them with the
+        // local catalog so the Missions tab is populated on first paint.
+        await timeRendererStartupStep('fetch-missions-local', () => actions.fetchMissions())
         await timeRendererStartupStep('fetch-worktrees', () =>
           actions.fetchAllWorktrees({ hydrationPurge: 'defer' })
         )

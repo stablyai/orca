@@ -82,6 +82,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     worktreeIdsWithLiveAgent: new Set(),
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
+    missionMemberWorktreeIds: new Set<string>(),
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -683,5 +684,39 @@ describe('computeClearFilterActions', () => {
       resetHideAutomationGeneratedWorkspaces: true,
       resetVisibleWorkspaceHostIds: true
     })
+  })
+})
+
+describe('mission member visibility', () => {
+  it('hides mission member worktrees from the projects pipeline', () => {
+    const missionWt = makeWorktree('repo1::/wt/mission')
+    const plainWt = makeWorktree('repo1::/wt/plain')
+    const result = computeVisibleWorktreeIds(
+      { repo1: [missionWt, plainWt] },
+      [missionWt.id, plainWt.id],
+      visibleOptions({
+        missionMemberWorktreeIds: new Set([missionWt.id])
+      })
+    )
+    expect(result).toEqual([plainWt.id])
+  })
+})
+
+describe('mission member lineage exclusion', () => {
+  it('keeps mission member parents hidden even when a visible child restores lineage', () => {
+    const missionParent = makeWorktree('mission-parent')
+    const child = makeWorktree('child')
+    const lineage = makeWorktreeLineage(child, missionParent)
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [missionParent, child] },
+      [child.id, missionParent.id],
+      visibleOptions({
+        missionMemberWorktreeIds: new Set([missionParent.id]),
+        worktreeLineageById: { [child.id]: lineage }
+      })
+    )
+
+    expect(result).toEqual([child.id])
   })
 })

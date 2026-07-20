@@ -766,6 +766,7 @@ export type UISlice = {
     | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
+    | 'mission-create'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -836,6 +837,8 @@ export type UISlice = {
   setSortBy: (s: UISlice['sortBy']) => void
   projectOrderBy: ProjectOrderBy
   setProjectOrderBy: (p: ProjectOrderBy) => void
+  sidebarListMode: 'projects' | 'missions'
+  setSidebarListMode: (mode: UISlice['sidebarListMode']) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
@@ -1925,6 +1928,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   projectOrderBy: 'manual',
   setProjectOrderBy: (p) => set({ projectOrderBy: p }),
 
+  sidebarListMode: 'projects',
+  setSidebarListMode: (mode) => {
+    window.api.ui.set({ sidebarListMode: mode }).catch(console.error)
+    set({ sidebarListMode: mode })
+  },
+
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
 
@@ -2346,6 +2355,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         sortBy,
         // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
         projectOrderBy: ui.projectOrderBy,
+        sidebarListMode: (ui.sidebarListMode === 'missions'
+          ? 'missions'
+          : 'projects') as UISlice['sidebarListMode'],
         // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
         showActiveOnly: false,
         // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).

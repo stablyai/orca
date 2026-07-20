@@ -94,6 +94,13 @@ export function canShowWorkspaceDeleteQuickAction(args: {
   deleteModifierPressed: boolean
   isDeleting: boolean
   isMainWorktree: boolean
+  isMissionSessionWorkspace: boolean
 }): boolean {
-  return args.deleteModifierPressed && !args.isDeleting && !args.isMainWorktree
+  return (
+    args.deleteModifierPressed &&
+    !args.isDeleting &&
+    !args.isMainWorktree &&
+    // Why: mission sessions are deleted with their mission, never row-by-row.
+    !args.isMissionSessionWorkspace
+  )
 }

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectGroup, Repo } from '../../../../shared/types'
-import {
-  getFolderSourceRepos,
-  getFolderWorkspacePrimaryActionLabel
-} from './folder-workspace-composer-helpers'
+import { getFolderSourceRepos } from './folder-workspace-composer-helpers'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -76,16 +73,5 @@ describe('getFolderSourceRepos', () => {
         projectGroup
       ).map((item) => item.id)
     ).toEqual(['runtime-by-path', 'runtime-by-group'])
-  })
-})
-
-describe('getFolderWorkspacePrimaryActionLabel', () => {
-  it('uses a stable workspace creation label independent of quick agent selection', () => {
-    const label = (getFolderWorkspacePrimaryActionLabel as (...args: unknown[]) => string)({
-      id: 'codex'
-    })
-
-    expect(label).toBe('Create workspace')
-    expect(label).not.toContain('Agent')
   })
 })

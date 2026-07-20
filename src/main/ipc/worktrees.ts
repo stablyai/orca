@@ -195,6 +195,7 @@ import {
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
+import { assertWorktreeIsNotMissionManaged } from '../missions/mission-removal-boundary'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
@@ -1380,6 +1381,13 @@ export function registerWorktreeHandlers(
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
+      assertWorktreeIsNotMissionManaged(
+        store,
+        args.worktreeId,
+        !repo.connectionId && !isFolderRepo(repo)
+          ? { repoPath: repo.path, worktreePath }
+          : undefined
+      )
       const inFlightKey = getWorktreeRemovalInFlightKey(
         args.worktreeId,
         getRepoExecutionHostId(repo)
@@ -1897,11 +1905,18 @@ export function registerWorktreeHandlers(
       _event,
       args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId'>
     ): Promise<RemoveWorktreeResult> => {
-      const { repoId } = parseWorktreeId(args.worktreeId)
+      const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
       const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
+      assertWorktreeIsNotMissionManaged(
+        store,
+        args.worktreeId,
+        !repo.connectionId && !isFolderRepo(repo)
+          ? { repoPath: repo.path, worktreePath }
+          : undefined
+      )
       // Why: share the removal in-flight map so concurrent remove and forgetLocal on the same id can't both mutate metadata.
       const inFlightKey = getWorktreeRemovalInFlightKey(
         args.worktreeId,

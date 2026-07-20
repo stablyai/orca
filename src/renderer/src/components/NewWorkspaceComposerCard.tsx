@@ -62,6 +62,7 @@ import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-f
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { getFolderWorkspaceCheckoutNotice } from '@/components/sidebar/folder-workspace-composer-copy'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
@@ -93,6 +94,7 @@ type NewWorkspaceComposerCardProps = {
   ephemeralVmRecipeError?: string | null
   repoBackedSearchRepos?: RepoOption[]
   repoBackedSourcesDisabled?: boolean
+  showSharedFolderCheckoutNotice?: boolean
   allowSmartNameAddProject?: boolean
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   primaryActionLabel: string
@@ -628,6 +630,7 @@ export default function NewWorkspaceComposerCard({
   ephemeralVmRecipeError = null,
   repoBackedSearchRepos,
   repoBackedSourcesDisabled = false,
+  showSharedFolderCheckoutNotice = false,
   allowSmartNameAddProject = true,
   smartNameRepoSwitchTarget = 'project',
   primaryActionLabel,
@@ -923,6 +926,11 @@ export default function NewWorkspaceComposerCard({
                   'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
                   'Add a project before creating a workspace.'
                 )}
+            </p>
+          ) : null}
+          {showSharedFolderCheckoutNotice ? (
+            <p className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-[11px] text-muted-foreground">
+              {getFolderWorkspaceCheckoutNotice()}
             </p>
           ) : null}
           {readyProjectHostSetupOptions.length > 1 || ephemeralVmRecipes.length > 0 ? (

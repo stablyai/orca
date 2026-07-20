@@ -248,6 +248,7 @@ export type ComposerCardProps = {
   ephemeralVmRecipeError: string | null
   repoBackedSearchRepos?: ReturnType<typeof useAppStore.getState>['repos']
   repoBackedSourcesDisabled?: boolean
+  showSharedFolderCheckoutNotice?: boolean
   allowSmartNameAddProject?: boolean
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   name: string
@@ -4128,6 +4129,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       isProjectGroupTarget || !ephemeralVmsEnabled ? null : ephemeralVmRecipeError,
     repoBackedSearchRepos: isProjectGroupTarget ? folderSourceRepos : undefined,
     repoBackedSourcesDisabled: isProjectGroupTarget ? folderSourceRepos.length === 0 : false,
+    showSharedFolderCheckoutNotice: isProjectGroupTarget,
     allowSmartNameAddProject: !isProjectGroupTarget,
     smartNameRepoSwitchTarget: isProjectGroupTarget ? 'task-source' : 'project',
     name,

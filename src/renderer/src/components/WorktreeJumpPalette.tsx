@@ -470,6 +470,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const worktreeIdsWithLiveAgent = liveAgentActivity.worktreeIds
 
   // Why: empty-query mirrors sidebar filters so Search opens on the same quiet list; typed search widens to global non-archived scope.
+  // Mission members stay listed deliberately: the Projects sidebar hides them, so the palette is their direct-access surface.
   const emptyQueryVisibleWorktrees = useMemo(
     () =>
       allWorktrees.filter((worktree) => {

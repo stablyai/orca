@@ -1073,11 +1073,15 @@ export function useIpcEvents(): void {
             await state.fetchReposForAllHosts()
             await state.fetchProjectGroupsForAllHosts()
             await state.fetchFolderWorkspacesForAllHosts()
+            // Why: missions are local-owned; their mutations broadcast on this
+            // channel and must refresh even while a runtime host is focused.
+            await state.fetchMissions()
           })()
           return
         }
         void state.fetchProjectGroups()
         void state.fetchFolderWorkspaces()
+        void state.fetchMissions()
         void state.fetchRepos()
       })
     )

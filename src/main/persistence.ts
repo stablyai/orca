@@ -47,6 +47,7 @@ import type {
   Repo,
   ProjectGroup,
   FolderWorkspace,
+  Mission,
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
@@ -190,6 +191,15 @@ import {
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import {
+  clearMissingMissionMembers,
+  createMission,
+  getNextMissionTabOrder,
+  missionSentinelGroupId,
+  normalizeMissionName,
+  normalizeMissions
+} from '../shared/missions'
+import { assertRepoIsNotMissionManaged } from './missions/mission-removal-boundary'
 import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
@@ -2970,6 +2980,7 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const normalizedMissions = normalizeMissions(parsed.missions)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
@@ -2992,8 +3003,10 @@ export class Store {
           projectGroups: normalizedProjectGroups,
           folderWorkspaces: normalizeFolderWorkspaces(
             parsed.folderWorkspaces,
-            normalizedProjectGroups
+            normalizedProjectGroups,
+            normalizedMissions
           ),
+          missions: normalizedMissions,
           worktreeLineageById: parsed.worktreeLineageById ?? {},
           workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
             parsed.workspaceLineageByChildKey
@@ -3329,6 +3342,11 @@ export class Store {
     }
 
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
+    const missionSanitize = clearMissingMissionMembers(result.missions ?? [], repos)
+    result.missions = missionSanitize.missions
+    if (missionSanitize.changed) {
+      this.loadNeedsSave = true
+    }
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.loadNeedsSave = true
@@ -3935,6 +3953,9 @@ export class Store {
     if (!workspace) {
       return null
     }
+    if (workspace.missionId && (updates.name !== undefined || updates.folderPath !== undefined)) {
+      throw new Error('mission_workspace_managed_by_mission')
+    }
     if (updates.name !== undefined) {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
     }
@@ -3987,6 +4008,9 @@ export class Store {
   }
 
   removeFolderWorkspace(id: string): boolean {
+    if (this.getFolderWorkspace(id)?.missionId) {
+      throw new Error('mission_workspace_managed_by_mission')
+    }
     const before = this.state.folderWorkspaces?.length ?? 0
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => workspace.id !== id
@@ -4026,6 +4050,255 @@ export class Store {
     this.state.repos.push(repo)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
+  }
+
+  getMissions(): Mission[] {
+    return [...(this.state.missions ?? [])].sort(
+      (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
+    )
+  }
+
+  getMission(missionId: string): Mission | null {
+    return (this.state.missions ?? []).find((mission) => mission.id === missionId) ?? null
+  }
+
+  createMission(input: {
+    name: string
+    branchName?: string | null
+    repoIds: string[]
+    sessionAgent?: Mission['sessionAgent']
+  }): Mission {
+    const mission = createMission({
+      ...input,
+      tabOrder: getNextMissionTabOrder(this.state.missions ?? [])
+    })
+    this.state.missions = [...(this.state.missions ?? []), mission]
+    this.scheduleSave()
+    return mission
+  }
+
+  updateMission(
+    missionId: string,
+    updates: Partial<Pick<Mission, 'name' | 'tabOrder'>>
+  ): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    if (updates.name !== undefined) {
+      mission.name = normalizeMissionName(updates.name, mission.name)
+      const sessionWorkspace = this.getMissionSessionWorkspace(missionId)
+      if (sessionWorkspace) {
+        // Why: the session card carries the mission's identity in the sidebar.
+        sessionWorkspace.name = mission.name
+        sessionWorkspace.updatedAt = Date.now()
+      }
+    }
+    if (updates.tabOrder !== undefined && Number.isFinite(updates.tabOrder)) {
+      mission.tabOrder = updates.tabOrder
+    }
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  deleteMission(missionId: string): boolean {
+    const before = this.state.missions?.length ?? 0
+    this.state.missions = (this.state.missions ?? []).filter((m) => m.id !== missionId)
+    if ((this.state.missions?.length ?? 0) === before) {
+      return false
+    }
+    const sessionWorkspace = this.getMissionSessionWorkspace(missionId)
+    if (sessionWorkspace) {
+      this.state.workspaceSession = removeWorkspaceSessionOwner(
+        this.state.workspaceSession,
+        folderWorkspaceKey(sessionWorkspace.id)
+      )!
+      this.removeWorkspaceLineageForFolderParent(sessionWorkspace.id)
+      this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+        (workspace) => workspace.id !== sessionWorkspace.id
+      )
+    }
+    this.scheduleSave()
+    return true
+  }
+
+  deleteMissionAndFlush(missionId: string): boolean {
+    const snapshot = {
+      missions: this.state.missions,
+      folderWorkspaces: this.state.folderWorkspaces,
+      workspaceSession: this.state.workspaceSession,
+      workspaceLineageByChildKey: { ...this.state.workspaceLineageByChildKey }
+    }
+    const deleted = this.deleteMission(missionId)
+    if (!deleted) {
+      return false
+    }
+    try {
+      this.flushOrThrow()
+      return true
+    } catch (error) {
+      // Why: ownership guards must stay live until Mission deletion is durable.
+      this.state.missions = snapshot.missions
+      this.state.folderWorkspaces = snapshot.folderWorkspaces
+      this.state.workspaceSession = snapshot.workspaceSession
+      this.state.workspaceLineageByChildKey = snapshot.workspaceLineageByChildKey
+      this.scheduleSave()
+      throw error
+    }
+  }
+
+  setMissionRootPath(
+    missionId: string,
+    rootPath: string,
+    rootBasePath?: string | null
+  ): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    mission.rootPath = rootPath
+    if (rootBasePath !== undefined) {
+      mission.rootBasePath = rootBasePath
+    }
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  getMissionSessionWorkspace(missionId: string): FolderWorkspace | null {
+    return (
+      (this.state.folderWorkspaces ?? []).find((workspace) => workspace.missionId === missionId) ??
+      null
+    )
+  }
+
+  ensureMissionSessionWorkspace(missionId: string): FolderWorkspace {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      throw new Error('mission_not_found')
+    }
+    if (!mission.rootPath) {
+      throw new Error('mission_root_not_ready')
+    }
+    const existing = this.getMissionSessionWorkspace(missionId)
+    if (existing) {
+      const projectGroupId = missionSentinelGroupId(mission.id)
+      if (
+        existing.name !== mission.name ||
+        existing.folderPath !== mission.rootPath ||
+        existing.projectGroupId !== projectGroupId ||
+        existing.connectionId !== null
+      ) {
+        // Why: Mission identity and root are authoritative; generic persisted
+        // folder-workspace fields must not permanently diverge across restarts.
+        existing.name = mission.name
+        existing.folderPath = mission.rootPath
+        existing.projectGroupId = projectGroupId
+        existing.connectionId = null
+        existing.updatedAt = Date.now()
+        this.scheduleSave()
+      }
+      return existing
+    }
+    const now = Date.now()
+    const workspace: FolderWorkspace = {
+      id: randomUUID(),
+      projectGroupId: missionSentinelGroupId(mission.id),
+      missionId: mission.id,
+      name: mission.name,
+      folderPath: mission.rootPath,
+      connectionId: null,
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: now,
+      // Why: the session's first activation auto-launches this agent at the
+      // mission root. Read from the mission record so a failed eager ensure
+      // still honors the pick when the sidebar retries lazily.
+      ...(mission.sessionAgent ? { createdWithAgent: mission.sessionAgent } : {}),
+      lastActivityAt: now,
+      createdAt: now,
+      updatedAt: now
+    }
+    this.state.folderWorkspaces = [...(this.state.folderWorkspaces ?? []), workspace]
+    this.scheduleSave()
+    return workspace
+  }
+
+  addMissionMembers(missionId: string, repoIds: string[]): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    const now = Date.now()
+    const existing = new Set(mission.members.map((member) => member.repoId))
+    for (const repoId of repoIds) {
+      if (!repoId || existing.has(repoId)) {
+        continue
+      }
+      existing.add(repoId)
+      mission.members.push({
+        repoId,
+        worktreeId: null,
+        worktreeInstanceId: null,
+        lastError: null,
+        addedAt: now
+      })
+    }
+    mission.updatedAt = now
+    this.scheduleSave()
+    return mission
+  }
+
+  removeMissionMember(missionId: string, repoId: string): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    mission.members = mission.members.filter((member) => member.repoId !== repoId)
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  setMissionMemberWorktree(
+    missionId: string,
+    repoId: string,
+    worktreeId: string | null,
+    worktreeInstanceId: string | null = null
+  ): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    const member = mission.members.find((entry) => entry.repoId === repoId)
+    if (!member) {
+      return null
+    }
+    member.worktreeId = worktreeId
+    member.worktreeInstanceId = worktreeInstanceId
+    member.lastError = null
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  setMissionMemberError(missionId: string, repoId: string, error: string | null): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    const member = mission.members.find((entry) => entry.repoId === repoId)
+    if (!member) {
+      return null
+    }
+    member.lastError = error
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
   }
 
   // Why: return false on a stale permutation (concurrent add/remove) so the caller resyncs instead of persisting an order that drops/duplicates ids.
@@ -4090,6 +4363,7 @@ export class Store {
   }
 
   removeProject(id: string): void {
+    assertRepoIsNotMissionManaged(this.getMissions(), id)
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
     this.syncProjectHostSetupCompatibilityState()
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
@@ -4100,6 +4374,9 @@ export class Store {
 
   // Why: the same repo id can exist on multiple execution hosts; remove only this host's row and metadata, never another host's.
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
+    if (hostId === LOCAL_EXECUTION_HOST_ID) {
+      assertRepoIsNotMissionManaged(this.getMissions(), id)
+    }
     this.state.repos = this.state.repos.filter(
       (r) => !(r.id === id && getRepoExecutionHostId(r) === hostId)
     )

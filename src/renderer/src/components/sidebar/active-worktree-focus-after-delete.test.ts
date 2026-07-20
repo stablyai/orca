@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => {
     repos: [] as SeedRepo[],
     lastVisitedAtByWorktreeId: {} as Record<string, number>,
     deleteStateByWorktreeId: {} as Record<string, { isDeleting?: boolean }>,
-    worktreeMap: new Map<string, SeedWorktree>()
+    worktreeMap: new Map<string, SeedWorktree>(),
+    missions: [] as { members: { worktreeId: string | null }[] }[]
   }
   return { state }
 })
@@ -85,6 +86,7 @@ describe('prepareActiveWorktreeFocusAfterDelete', () => {
     mocks.state.lastVisitedAtByWorktreeId = {}
     mocks.state.deleteStateByWorktreeId = {}
     mocks.state.worktreeMap = new Map()
+    mocks.state.missions = []
     vi.mocked(activateAndRevealWorktree).mockClear()
   })
 
@@ -98,6 +100,19 @@ describe('prepareActiveWorktreeFocusAfterDelete', () => {
     commit()
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-b')
+  })
+
+  it('skips mission member worktrees hidden from the Projects sidebar', () => {
+    seed([{ id: 'main', isMainWorktree: true }, { id: 'wt-member' }, { id: 'wt-del' }])
+    mocks.state.activeWorktreeId = 'wt-del'
+    mocks.state.lastVisitedAtByWorktreeId = { 'wt-member': 500 }
+    mocks.state.missions = [{ members: [{ worktreeId: 'wt-member' }] }]
+
+    const commit = prepareActiveWorktreeFocusAfterDelete('wt-del')
+    simulateDelete('wt-del', true)
+    commit()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('main')
   })
 
   it('falls back to the base/primary worktree when no other workspace remains', () => {

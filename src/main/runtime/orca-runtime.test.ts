@@ -98,18 +98,56 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
+import { ensureMissionRoot } from '../missions/mission-root'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const findExistingWorktreeSymlinkPathsMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
+const missionOwnershipMarkerMocks = vi.hoisted(() => ({
+  assertMissionWorktreeOwnershipMarker: vi.fn(),
+  readMissionWorktreeOwnershipMarker: vi.fn<
+    (args: { repoPath: string; worktreePath: string }) => {
+      missionId: string
+      repoId: string
+      worktreeId: string
+      worktreeInstanceId: string
+    } | null
+  >(() => null),
+  writeMissionWorktreeOwnershipMarker: vi.fn()
+}))
+const missionCreateIntentMocks = vi.hoisted(() => ({
+  clearMissionWorktreeCreateIntent: vi.fn(),
+  recoverMissionWorktreeCreateIntent: vi.fn<
+    () => {
+      missionId: string
+      repoId: string
+      worktreeId: string
+      worktreeInstanceId: string
+      preserveBranchOnDelete?: true
+    } | null
+  >(() => null),
+  writeMissionWorktreeCreateIntent: vi.fn(
+    (args: {
+      root: { missionId: string }
+      repoId: string
+      branchName: string
+      worktreePath: string
+      worktreeInstanceId: string
+      preserveBranchOnDelete: boolean
+    }) => ({ version: 1 as const, missionId: args.root.missionId, ...args })
+  )
+}))
 
 vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeLinkedPaths: vi.fn(),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
 }))
+
+vi.mock('../missions/mission-worktree-ownership-marker', () => missionOwnershipMarkerMocks)
+vi.mock('../missions/mission-worktree-create-intent', () => missionCreateIntentMocks)
 
 async function waitForMobileSessionTabsEvents(
   events: RuntimeMobileSessionTabsResult[],
@@ -610,6 +648,12 @@ function resetRuntimeTestMocks(): void {
   findExistingWorktreeSymlinkPathsMock.mockReset().mockResolvedValue([])
   removeWorktreeLinkedPathsMock.mockReset()
   resolveLocalGitUsernameMock.mockReset().mockResolvedValue('')
+  missionOwnershipMarkerMocks.assertMissionWorktreeOwnershipMarker.mockReset()
+  missionOwnershipMarkerMocks.readMissionWorktreeOwnershipMarker.mockReset().mockReturnValue(null)
+  missionOwnershipMarkerMocks.writeMissionWorktreeOwnershipMarker.mockReset()
+  missionCreateIntentMocks.clearMissionWorktreeCreateIntent.mockReset()
+  missionCreateIntentMocks.recoverMissionWorktreeCreateIntent.mockReset().mockReturnValue(null)
+  missionCreateIntentMocks.writeMissionWorktreeCreateIntent.mockClear()
   vi.mocked(forceDeleteLocalBranchMock).mockReset()
   vi.mocked(forceDeleteLocalBranchMock).mockResolvedValue(undefined)
   sshGitProviders.clear()
@@ -3102,6 +3146,27 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('uses a strict Git scan for an authoritative ownership lookup', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.inspectManagedWorktreeForOwnership(TEST_WORKTREE_ID)).resolves.toEqual({
+      status: 'found',
+      worktree: expect.objectContaining({ id: TEST_WORKTREE_ID })
+    })
+    expect(listWorktreesStrict).toHaveBeenCalledWith(TEST_REPO_PATH, {})
+  })
+
+  it('reports ownership liveness unavailable when the strict Git scan fails', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktreesStrict).mockRejectedValueOnce(new Error('git list failed'))
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.inspectManagedWorktreeForOwnership(TEST_WORKTREE_ID)).resolves.toEqual({
+      status: 'unavailable'
+    })
+    expect(listWorktrees).not.toHaveBeenCalled()
+  })
+
   it('still throws selector_not_found for an unknown id selector', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -3190,6 +3255,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getRepos: () => [folderRepo],
       getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
+      getMissions: () => [],
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
@@ -3214,7 +3280,8 @@ describe('OrcaRuntimeService', () => {
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:folder-repo',
       name: 'folder-session',
-      createdWithAgent: 'codex'
+      createdWithAgent: 'codex',
+      missionId: 'mission-folder'
     })
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
@@ -3232,7 +3299,8 @@ describe('OrcaRuntimeService', () => {
       instanceId: result.worktree.instanceId,
       displayName: 'folder-session',
       orcaCreationSource: 'runtime',
-      createdWithAgent: 'codex'
+      createdWithAgent: 'codex',
+      missionId: 'mission-folder'
     })
     await expect(runtime.showManagedWorktree(`id:${result.worktree.id}`)).resolves.toMatchObject({
       id: result.worktree.id,
@@ -3272,6 +3340,64 @@ describe('OrcaRuntimeService', () => {
     expect(metaById[result.worktree.id]).toBeUndefined()
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(result.worktree.id)
     expect(notifier.worktreesChanged).toHaveBeenCalledWith('folder-repo')
+  })
+
+  it('tears down synthetic workspace processes through the public runtime seam', async () => {
+    const folderWorkspaceId = 'mission-folder-1'
+    const workspaceId = `folder:${folderWorkspaceId}`
+    const runtimeStore = {
+      ...store,
+      getProjectGroups: () => [],
+      getFolderWorkspaces: () => [
+        makeFolderWorkspace({
+          id: folderWorkspaceId,
+          projectGroupId: 'mission:mission-1',
+          missionId: 'mission-1',
+          folderPath: join(tmpdir(), 'missing-mission-root', randomUUID())
+        })
+      ]
+    }
+    const localProvider = {
+      listProcesses: vi.fn(async () => []),
+      shutdown: vi.fn(async () => undefined)
+    }
+    const stopAndWait = vi.fn(async () => true)
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getLocalProvider: () => localProvider as never
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      stopAndWait,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'mission-tab',
+          worktreeId: workspaceId,
+          title: 'Mission',
+          activeLeafId: 'mission-pane',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'mission-tab',
+          worktreeId: workspaceId,
+          leafId: 'mission-pane',
+          paneRuntimeId: 1,
+          ptyId: 'mission-pty',
+          paneTitle: null
+        }
+      ]
+    })
+
+    await runtime.teardownWorkspaceProcesses(workspaceId)
+
+    expect(stopAndWait).toHaveBeenCalledWith('mission-pty')
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
   })
 
   it('refreshes runtime remote-tracking bases before creating local worktrees', async () => {
@@ -3649,7 +3775,6 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ])
-
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
       name: 'feature/something',
@@ -4254,6 +4379,295 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('keeps a required exact branch while suffixing only an occupied worktree path', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const spawn = vi.fn().mockResolvedValue({ id: 'unexpected-pty' })
+    const activateWorktree = vi.fn()
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({ worktreesChanged: vi.fn(), activateWorktree } as never)
+    const availablePath = `/tmp/workspaces/mission-task-${randomUUID()}`
+    const createdWorktree = {
+      path: availablePath,
+      head: 'abc123',
+      branch: 'refs/heads/mission/task',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockImplementation((sanitizedName: string) =>
+      sanitizedName === 'mission-task' ? process.cwd() : availablePath
+    )
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
+    vi.mocked(getBranchConflictKind).mockClear().mockResolvedValue(null)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    const setMetaSpy = vi.spyOn(store, 'setWorktreeMeta')
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/mission/task^{commit}')) {
+        throw new Error('missing local branch')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'mission-task',
+        baseBranch: 'abc123',
+        branchNameOverride: 'mission/task',
+        requireExactBranchName: true,
+        missionId: 'mission-1',
+        activate: true,
+        skipInitialTerminal: true
+      })
+
+      expect(vi.mocked(getBranchConflictKind).mock.calls.map((call) => call[1])).toEqual([
+        'mission/task',
+        'mission/task'
+      ])
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        availablePath,
+        'mission/task',
+        'abc123',
+        false
+      )
+      expect(setMetaSpy).toHaveBeenCalledWith(
+        `${TEST_REPO_ID}::${availablePath}`,
+        expect.objectContaining({ missionId: 'mission-1', instanceId: expect.any(String) })
+      )
+      expect(missionOwnershipMarkerMocks.writeMissionWorktreeOwnershipMarker).toHaveBeenCalledWith({
+        repoPath: TEST_REPO_PATH,
+        worktreePath: availablePath,
+        proof: {
+          missionId: 'mission-1',
+          repoId: TEST_REPO_ID,
+          worktreeId: `${TEST_REPO_ID}::${availablePath}`,
+          worktreeInstanceId: expect.any(String)
+        }
+      })
+      expect(result.worktree).toMatchObject({
+        path: availablePath,
+        branch: 'refs/heads/mission/task'
+      })
+      expect(spawn).not.toHaveBeenCalled()
+      expect(activateWorktree).not.toHaveBeenCalled()
+    } finally {
+      setMetaSpy.mockRestore()
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('durably records a physical Mission create before Git adds the worktree', async () => {
+    const temporaryRoot = await mkdtemp(join(tmpdir(), 'runtime-mission-intent-'))
+    const baseDir = join(temporaryRoot, 'missions')
+    const rootPath = join(baseDir, 'mission-1')
+    const worktreePath = join(rootPath, 'repo-1')
+    const mission = {
+      id: 'mission-1',
+      name: 'Cross repo task',
+      branchName: 'mission/intent',
+      members: [{ repoId: TEST_REPO_ID, worktreeId: null, addedAt: 1 }],
+      tabOrder: 0,
+      rootPath,
+      rootBasePath: baseDir,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    ensureMissionRoot({ baseDir, rootPath, missionId: mission.id, links: [] })
+    const runtime = new OrcaRuntimeService({ ...store, getMission: () => mission } as never)
+    const createdWorktree = {
+      path: worktreePath,
+      head: 'abc123',
+      branch: 'refs/heads/mission/intent',
+      isBare: false,
+      isMainWorktree: false
+    }
+    vi.mocked(getBranchConflictKind).mockResolvedValue(null)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/mission/intent^{commit}')) {
+        throw new Error('missing local branch')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await runtime.createManagedWorktree({
+        repoSelector: `id:${TEST_REPO_ID}`,
+        name: 'mission-intent',
+        baseBranch: 'abc123',
+        branchNameOverride: 'mission/intent',
+        requireExactBranchName: true,
+        missionId: mission.id,
+        worktreePathOverride: worktreePath,
+        skipInitialTerminal: true
+      })
+
+      expect(missionCreateIntentMocks.writeMissionWorktreeCreateIntent).toHaveBeenCalledWith({
+        root: { baseDir, rootPath, missionId: mission.id },
+        repoId: TEST_REPO_ID,
+        branchName: 'mission/intent',
+        worktreePath,
+        worktreeInstanceId: expect.any(String),
+        preserveBranchOnDelete: false
+      })
+      expect(
+        missionCreateIntentMocks.writeMissionWorktreeCreateIntent.mock.invocationCallOrder[0]
+      ).toBeLessThan(vi.mocked(addWorktree).mock.invocationCallOrder[0])
+      expect(missionCreateIntentMocks.clearMissionWorktreeCreateIntent).toHaveBeenCalledWith({
+        root: { baseDir, rootPath, missionId: mission.id },
+        intent: expect.objectContaining({
+          missionId: mission.id,
+          repoId: TEST_REPO_ID,
+          worktreePath
+        })
+      })
+    } finally {
+      gitSpy.mockRestore()
+      await rm(temporaryRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('rolls back the checkout and branch when Mission ownership stamping fails', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const availablePath = `/tmp/workspaces/mission-rollback-${randomUUID()}`
+    const createdWorktree = {
+      path: availablePath,
+      head: 'abc123',
+      branch: 'refs/heads/mission/rollback',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(availablePath)
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
+    vi.mocked(getBranchConflictKind).mockResolvedValue(null)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    vi.mocked(removeWorktree).mockResolvedValue({})
+    missionOwnershipMarkerMocks.writeMissionWorktreeOwnershipMarker.mockImplementationOnce(() => {
+      throw new Error('mission_member_worktree_marker_write_failed')
+    })
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/mission/rollback^{commit}')) {
+        throw new Error('missing local branch')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'mission-rollback',
+          baseBranch: 'abc123',
+          branchNameOverride: 'mission/rollback',
+          requireExactBranchName: true,
+          missionId: 'mission-1',
+          skipInitialTerminal: true
+        })
+      ).rejects.toThrow('mission_member_worktree_marker_write_failed')
+
+      expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, availablePath, true, {
+        knownRemovedWorktree: createdWorktree,
+        deleteBranch: true,
+        forceBranchDelete: true
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('preserves a reused local branch when Mission ownership stamping fails', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const availablePath = `/tmp/workspaces/mission-existing-${randomUUID()}`
+    const createdWorktree = {
+      path: availablePath,
+      head: 'abc123',
+      branch: 'refs/heads/mission/existing',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(availablePath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(availablePath)
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: TEST_REPO_PATH,
+          head: 'main',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+      .mockResolvedValueOnce([createdWorktree])
+    vi.mocked(removeWorktree).mockResolvedValue({})
+    missionOwnershipMarkerMocks.writeMissionWorktreeOwnershipMarker.mockImplementationOnce(() => {
+      throw new Error('mission_member_worktree_marker_write_failed')
+    })
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/mission/existing^{commit}')) {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('abc123^{commit}')) {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'mission-existing',
+          baseBranch: 'abc123',
+          branchNameOverride: 'mission/existing',
+          requireExactBranchName: true,
+          missionId: 'mission-1',
+          skipInitialTerminal: true
+        })
+      ).rejects.toThrow('mission_member_worktree_marker_write_failed')
+
+      expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, availablePath, true, {
+        knownRemovedWorktree: createdWorktree,
+        deleteBranch: false,
+        forceBranchDelete: false
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('fails a required exact branch on the first real branch conflict', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(getBranchConflictKind).mockClear().mockResolvedValueOnce('local')
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/mission/task^{commit}')) {
+        throw new Error('branch is not reusable')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'mission-task',
+          baseBranch: 'abc123',
+          branchNameOverride: 'mission/task',
+          requireExactBranchName: true
+        })
+      ).rejects.toThrow('Branch "mission/task" already exists locally.')
+
+      expect(getBranchConflictKind).toHaveBeenCalledTimes(1)
+      expect(addWorktree).not.toHaveBeenCalled()
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
   it('rejects when every exact PR branch checkout path suffix is occupied', async () => {
     const runtime = new OrcaRuntimeService(store)
     computeWorktreePathMock.mockReturnValue(process.cwd())
@@ -4345,6 +4759,7 @@ describe('OrcaRuntimeService', () => {
       name: 'mobile-feature',
       linkedGitLabIssue: 321,
       linkedGitLabMR: 654,
+      missionId: 'mission-remote',
       startup: { command: 'claude' }
     })
 
@@ -4362,10 +4777,32 @@ describe('OrcaRuntimeService', () => {
     })
     expect(metaById[result.worktree.id]).toMatchObject({
       linkedGitLabIssue: 321,
-      linkedGitLabMR: 654
+      linkedGitLabMR: 654,
+      missionId: 'mission-remote'
     })
     expect(addWorktree).not.toHaveBeenCalled()
-    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(listWorktreesStrict).toHaveBeenCalledWith(TEST_REPO_PATH, {})
+  })
+
+  it('rejects required exact branches on SSH before remote creation can suffix them', async () => {
+    const remoteRepo = { ...store.getRepos()[0], connectionId: 'ssh-1' }
+    const remoteStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
+    }
+    const runtime = new OrcaRuntimeService(remoteStore)
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'mission-task',
+        branchNameOverride: 'mission/task',
+        requireExactBranchName: true
+      })
+    ).rejects.toThrow('Exact branch creation is not supported for SSH-backed repositories.')
+
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
   })
 
   it('records lineage for SSH-backed CLI-created worktrees', async () => {
@@ -10592,6 +11029,33 @@ describe('OrcaRuntimeService', () => {
     expect(spawnedEnv.ORCA_PROJECT_GROUP_ID).toBe(TEST_FOLDER_PROJECT_GROUP_ID)
     expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_FOLDER_WORKSPACE_KEY)
+  })
+
+  it('exposes ORCA_MISSION_ID instead of the sentinel group id for mission sessions', async () => {
+    const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-mission-session-'))
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-mission' })
+    const folderWorkspace = makeFolderWorkspace({
+      folderPath,
+      projectGroupId: 'mission:m1',
+      missionId: 'm1'
+    })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace) as never
+    )
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(TEST_FOLDER_WORKSPACE_KEY, { command: 'codex' })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
+    const spawnedEnv = spawnCall?.env ?? {}
+    expect(spawnedEnv.ORCA_MISSION_ID).toBe('m1')
+    expect(spawnedEnv.ORCA_PROJECT_GROUP_ID).toBeUndefined()
+    expect(spawnedEnv.ORCA_WORKSPACE_ROOT).toBe(folderPath)
   })
 
   it.each([
@@ -28229,12 +28693,19 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ])
+    const recreatedWorktreeId = `${TEST_REPO_ID}::/tmp/workspaces/runtime-initial-terminal`
+    store.setWorktreeMeta(recreatedWorktreeId, {
+      instanceId: 'stale-instance',
+      missionId: 'stale-mission'
+    })
 
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
       name: 'runtime-initial-terminal'
     })
 
+    expect(store.getWorktreeMeta(result.worktree.id)?.missionId).toBeUndefined()
+    expect(store.getWorktreeMeta(result.worktree.id)?.instanceId).not.toBe('stale-instance')
     expect(activateWorktree).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -30876,6 +31347,8 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.createManagedWorktree({
         repoSelector: 'id:repo-1',
         name: 'runtime-wsl',
+        branchNameOverride: 'runtime-wsl',
+        requireExactBranchName: true,
         pushTarget: {
           remoteName: 'pr-contributor-orca',
           branchName: 'contributor/runtime-wsl',
@@ -30962,6 +31435,137 @@ describe('OrcaRuntimeService', () => {
     })
   }
 
+  it('discovers marker-only Mission ownership from an authoritative Git scan', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const proof = {
+      missionId: 'mission-1',
+      repoId: TEST_REPO_ID,
+      worktreeId: TEST_WORKTREE_ID,
+      worktreeInstanceId: 'instance-1'
+    }
+    vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+    missionOwnershipMarkerMocks.readMissionWorktreeOwnershipMarker.mockImplementation(
+      ({ worktreePath }) => (worktreePath === TEST_WORKTREE_PATH ? proof : null)
+    )
+
+    await expect(
+      runtime.findManagedWorktreesForMissionOwnership('mission-1', TEST_REPO_ID, 'feature/foo')
+    ).resolves.toEqual({ status: 'found', candidates: [proof] })
+  })
+
+  it('promotes an add-complete create intent and restores reused-branch metadata', async () => {
+    const proof = {
+      missionId: 'mission-1',
+      repoId: TEST_REPO_ID,
+      worktreeId: TEST_WORKTREE_ID,
+      worktreeInstanceId: 'instance-1',
+      preserveBranchOnDelete: true as const
+    }
+    const setWorktreeMeta = vi.fn(store.setWorktreeMeta)
+    const runtimeStore = {
+      ...store,
+      getMission: () => ({
+        id: 'mission-1',
+        rootBasePath: '/tmp/missions',
+        rootPath: '/tmp/missions/mission-1'
+      }),
+      setWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+    missionCreateIntentMocks.recoverMissionWorktreeCreateIntent.mockReturnValue(proof)
+
+    await expect(
+      runtime.findManagedWorktreesForMissionOwnership('mission-1', TEST_REPO_ID, 'feature/foo')
+    ).resolves.toEqual({ status: 'found', candidates: [proof] })
+    expect(missionCreateIntentMocks.recoverMissionWorktreeCreateIntent).toHaveBeenCalledWith({
+      root: {
+        baseDir: '/tmp/missions',
+        rootPath: '/tmp/missions/mission-1',
+        missionId: 'mission-1'
+      },
+      repoId: TEST_REPO_ID,
+      repoPath: TEST_REPO_PATH,
+      branchName: 'feature/foo',
+      worktrees: MOCK_GIT_WORKTREES
+    })
+    expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
+      missionId: 'mission-1',
+      instanceId: 'instance-1',
+      preserveBranchOnDelete: true
+    })
+  })
+
+  it('rejects a marker whose strict Git row is on the wrong Mission branch', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+    missionOwnershipMarkerMocks.readMissionWorktreeOwnershipMarker.mockReturnValue({
+      missionId: 'mission-1',
+      repoId: TEST_REPO_ID,
+      worktreeId: TEST_WORKTREE_ID,
+      worktreeInstanceId: 'instance-1'
+    })
+
+    await expect(
+      runtime.findManagedWorktreesForMissionOwnership(
+        'mission-1',
+        TEST_REPO_ID,
+        'mission/another-branch'
+      )
+    ).rejects.toThrow('mission_member_worktree_ownership_unverified')
+  })
+
+  it('rejects a same-Mission marker that names the wrong repository', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
+    missionOwnershipMarkerMocks.readMissionWorktreeOwnershipMarker.mockReturnValue({
+      missionId: 'mission-1',
+      repoId: 'another-repo',
+      worktreeId: `another-repo::${TEST_WORKTREE_PATH}`,
+      worktreeInstanceId: 'instance-1'
+    })
+
+    await expect(
+      runtime.findManagedWorktreesForMissionOwnership('mission-1', TEST_REPO_ID, 'feature/foo')
+    ).rejects.toThrow('mission_member_worktree_ownership_unverified')
+  })
+
+  it('reports marker recovery unavailable when the strict Git scan fails', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(listWorktreesStrict).mockRejectedValue(new Error('git unavailable'))
+
+    await expect(
+      runtime.findManagedWorktreesForMissionOwnership('mission-1', TEST_REPO_ID, 'feature/foo')
+    ).resolves.toEqual({ status: 'unavailable' })
+    expect(missionOwnershipMarkerMocks.readMissionWorktreeOwnershipMarker).not.toHaveBeenCalled()
+  })
+
+  it('accepts Windows path spelling variants in marker recovery', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    const gitPath = 'C:\\Workspaces\\Mission-Member'
+    const proof = {
+      missionId: 'mission-1',
+      repoId: TEST_REPO_ID,
+      worktreeId: `${TEST_REPO_ID}::c:/workspaces/mission-member`,
+      worktreeInstanceId: 'instance-1'
+    }
+    vi.mocked(listWorktreesStrict).mockResolvedValue([
+      {
+        path: gitPath,
+        head: 'abc',
+        branch: 'refs/heads/mission/task',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    missionOwnershipMarkerMocks.readMissionWorktreeOwnershipMarker.mockReturnValue(proof)
+
+    await expect(
+      runtime.findManagedWorktreesForMissionOwnership('mission-1', TEST_REPO_ID, 'mission/task')
+    ).resolves.toEqual({ status: 'found', candidates: [proof] })
+  })
+
   it('skips archive hooks for CLI worktree removal by default', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -30986,6 +31590,112 @@ describe('OrcaRuntimeService', () => {
     expect(result.warning).toBe(
       `orca.yaml archive hook skipped for ${TEST_WORKTREE_PATH}; pass --run-hooks to run it.`
     )
+  })
+
+  it('rejects generic removal of a Mission-managed worktree before teardown', async () => {
+    const missionMeta = {
+      ...store.getWorktreeMeta(TEST_WORKTREE_ID),
+      missionId: 'mission-1',
+      instanceId: 'instance-1'
+    }
+    const runtimeStore = {
+      ...store,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === TEST_WORKTREE_ID ? missionMeta : undefined,
+      getMissionSessionWorkspace: (missionId: string) =>
+        missionId === 'mission-1' ? { id: 'mission-folder-1' } : null
+    }
+    const sessionWorkspaceId = 'folder:mission-folder-1'
+    const localProvider = {
+      listProcesses: vi.fn(async () => [{ id: `${sessionWorkspaceId}@@pty-1` }]),
+      shutdown: vi.fn(async () => undefined)
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getLocalProvider: () => localProvider as never
+    })
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree).mockResolvedValue({})
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      'mission_member_managed_by_mission'
+    )
+
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('rejects a scoped Mission removal before teardown when its marker is unverified', async () => {
+    const missionMeta = {
+      ...store.getWorktreeMeta(TEST_WORKTREE_ID),
+      missionId: 'mission-1',
+      instanceId: 'instance-1'
+    }
+    const runtimeStore = {
+      ...store,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === TEST_WORKTREE_ID ? missionMeta : undefined,
+      getMissionSessionWorkspace: () => ({ id: 'mission-folder-1' })
+    }
+    const localProvider = {
+      listProcesses: vi.fn(async () => []),
+      shutdown: vi.fn(async () => undefined)
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getLocalProvider: () => localProvider as never
+    })
+    missionOwnershipMarkerMocks.assertMissionWorktreeOwnershipMarker.mockImplementationOnce(() => {
+      throw new Error('mission_member_worktree_ownership_unverified')
+    })
+
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, {
+        missionId: 'mission-1',
+        repoId: TEST_REPO_ID,
+        worktreeId: TEST_WORKTREE_ID,
+        worktreeInstanceId: 'instance-1'
+      })
+    ).rejects.toThrow('mission_member_worktree_ownership_unverified')
+
+    expect(removeWorktree).not.toHaveBeenCalled()
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+  })
+
+  it('rechecks Mission ownership after linked-path cleanup before Git removal', async () => {
+    const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
+    const missionMeta = {
+      ...store.getWorktreeMeta(TEST_WORKTREE_ID),
+      missionId: 'mission-1',
+      instanceId: 'instance-1'
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [repo],
+      getRepo: () => repo,
+      getWorktreeMeta: (worktreeId: string) =>
+        worktreeId === TEST_WORKTREE_ID ? missionMeta : undefined
+    }
+    const runtime = createWorktreeRemovalRuntime(runtimeStore)
+    let markerInvalidated = false
+    missionOwnershipMarkerMocks.assertMissionWorktreeOwnershipMarker.mockImplementation(() => {
+      if (markerInvalidated) {
+        throw new Error('mission_member_worktree_ownership_unverified')
+      }
+    })
+    removeWorktreeLinkedPathsMock.mockImplementationOnce(async () => {
+      markerInvalidated = true
+    })
+
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, {
+        missionId: 'mission-1',
+        repoId: TEST_REPO_ID,
+        worktreeId: TEST_WORKTREE_ID,
+        worktreeInstanceId: 'instance-1'
+      })
+    ).rejects.toThrow('mission_member_worktree_ownership_unverified')
+
+    expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH, ['node_modules'])
+    expect(removeWorktree).not.toHaveBeenCalled()
   })
 
   it('does not remove a runtime worktree when watcher teardown cannot release it', async () => {

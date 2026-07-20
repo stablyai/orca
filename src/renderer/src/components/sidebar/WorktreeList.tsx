@@ -12,6 +12,7 @@ import {
   CircleX,
   Ellipsis,
   Eye,
+  Flag,
   FolderInput,
   FolderPlus,
   FolderX,
@@ -68,6 +69,11 @@ import type {
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import {
+  getMissionMemberWorktreeIds,
+  isMissionEligibleRepo,
+  isMissionOwnedFolderWorkspace
+} from '../../../../shared/missions'
 import { buildWorktreeComparator, compareWorktreeSortLabel } from './smart-sort'
 import {
   buildAttentionByWorktree,
@@ -1445,6 +1451,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
+  const missions = useAppStore((s) => s.missions)
+  const addMissionMembers = useAppStore((s) => s.addMissionMembers)
   const lastVisibleRefreshKeyRef = useRef('')
   const reportVisibleGitHubPRRefreshCandidates = useAppStore(
     (s) => s.reportVisibleGitHubPRRefreshCandidates
@@ -1875,6 +1883,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
     }
     for (const workspace of folderWorkspaces) {
+      // Why: mission session workspaces render in the Missions tab, so no row
+      // here ever reads their path status — skip the wasted IPC round-trips.
+      if (isMissionOwnedFolderWorkspace(workspace)) {
+        continue
+      }
       const request = { scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id }
       const options = getFolderPathStatusRouteOptions(request)
       requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })
@@ -4618,6 +4631,34 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 )}
                               </DropdownMenuItem>
                             ) : null}
+                            {missions.length > 0 && isMissionEligibleRepo(row.repo) ? (
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                  <Flag className="size-3.5" />
+                                  {translate(
+                                    'auto.components.sidebar.WorktreeList.3a2edfac81',
+                                    'Add to mission'
+                                  )}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  {missions.map((mission) => (
+                                    <DropdownMenuItem
+                                      key={mission.id}
+                                      disabled={mission.members.some(
+                                        (member) => member.repoId === row.repo?.id
+                                      )}
+                                      onSelect={() => {
+                                        if (row.repo) {
+                                          void addMissionMembers(mission.id, [row.repo.id])
+                                        }
+                                      }}
+                                    >
+                                      <span className="max-w-48 truncate">{mission.name}</span>
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            ) : null}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               variant="destructive"
@@ -5195,6 +5236,11 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const missionsForVisibility = useAppStore((s) => s.missions)
+  const missionMemberWorktreeIds = useMemo(
+    () => getMissionMemberWorktreeIds(missionsForVisibility),
+    [missionsForVisibility]
+  )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -5480,6 +5526,7 @@ const WorktreeList = React.memo(function WorktreeList({
           ),
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
+      missionMemberWorktreeIds,
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
@@ -5502,6 +5549,7 @@ const WorktreeList = React.memo(function WorktreeList({
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
+    missionMemberWorktreeIds,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,
