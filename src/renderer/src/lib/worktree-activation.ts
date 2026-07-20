@@ -48,6 +48,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -242,6 +243,14 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
+/**
+ * Build a startup payload that reopens the agent a worktree was originally
+ * created with (`createdWithAgent`). Returns `undefined` when the worktree
+ * has no creation agent, so the caller can fall through to the default-agent
+ * or plain-terminal path.
+ * @param worktree - The worktree being activated.
+ * @returns A startup payload to resume the creation agent, or `undefined`.
+ */
 function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
   const agent = worktree.createdWithAgent
   if (!isTuiAgent(agent)) {
@@ -288,6 +297,76 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'sidebar',
       request_kind: 'resume'
+    }
+  }
+}
+
+/**
+ * Build a startup payload that launches the user's global `defaultTuiAgent`
+ * when activating a worktree with no existing tabs. Only fires when the
+ * `openWorktreeWithAgent` setting is enabled and the default agent is a
+ * valid, enabled TUI agent (not 'blank' or null). Lower priority than
+ * `buildCreatedAgentReopenStartup` so worktrees created with a specific
+ * agent always reopen that agent.
+ * @param state - Current app store state (for settings + repo lookup).
+ * @param worktree - The worktree being activated.
+ * @returns A startup payload to launch the default agent, or `undefined` to
+ *   fall through to a plain terminal.
+ */
+function buildDefaultAgentReopenStartup(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktree: Worktree
+): WorktreeStartupPayload | undefined {
+  // Why: opt-in setting. When disabled (default), worktrees open a plain
+  // terminal exactly as before.
+  if (!state.settings?.openWorktreeWithAgent) {
+    return undefined
+  }
+  const agent = state.settings?.defaultTuiAgent
+  // Why: 'blank' and null mean the user explicitly chose no agent — respect
+  // that and fall through to a plain terminal.
+  if (!isTuiAgent(agent)) {
+    return undefined
+  }
+  if (!isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents)) {
+    return undefined
+  }
+
+  const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+  const launchPlatform = repo
+    ? getAgentLaunchPlatformForRepo(
+        repo,
+        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
+      )
+    : CLIENT_PLATFORM
+
+  const startupPlan = buildAgentStartupPlan({
+    agent,
+    prompt: '',
+    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+    platform: launchPlatform,
+    allowEmptyPromptLaunch: true
+  })
+  if (!startupPlan) {
+    return undefined
+  }
+
+  return {
+    command: startupPlan.launchCommand,
+    ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    launchConfig: startupPlan.launchConfig,
+    launchAgent: agent,
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
+    telemetry: {
+      agent_kind: tuiAgentToAgentKind(agent),
+      launch_source: 'sidebar',
+      // Why: 'default' distinguishes "user's global default agent" from
+      // 'resume' (worktree was created with this specific agent).
+      request_kind: 'default'
     }
   }
 }
@@ -375,7 +454,9 @@ export function activateAndRevealWorktree(
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     useAppStore.getState(),
     worktreeId,
-    opts?.startup ?? buildCreatedAgentReopenStartup(wt),
+    opts?.startup ??
+      buildCreatedAgentReopenStartup(wt) ??
+      buildDefaultAgentReopenStartup(useAppStore.getState(), wt),
     opts?.setup,
     opts?.issueCommand,
     opts?.defaultTabs

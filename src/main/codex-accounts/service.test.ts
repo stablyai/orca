@@ -157,7 +157,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,
-    tabAutoGenerateTitle
+    tabAutoGenerateTitle,
+    openWorktreeWithAgent: overrides.openWorktreeWithAgent ?? false
   }
 }
 

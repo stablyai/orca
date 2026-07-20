@@ -326,6 +326,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,
     defaultTuiAgent: null,
+    openWorktreeWithAgent: false,
     disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],
     claudeAgentTeamsDefaultDisabledMigrated: true,
     skipDeleteWorktreeConfirm: false,

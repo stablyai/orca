@@ -219,7 +219,7 @@ export const launchSourceSchema = z.enum([
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
 
-export const requestKindSchema = z.enum(['new', 'resume', 'followup'])
+export const requestKindSchema = z.enum(['new', 'resume', 'followup', 'default'])
 export type RequestKind = z.infer<typeof requestKindSchema>
 
 export const featureWallTileIdSchema = z.enum([
