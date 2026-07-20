@@ -1189,13 +1189,16 @@ export default function SmartWorkspaceNameField({
   // specific source rather than naming a workspace. Once a matching row
   // appears in the results, snap the highlight onto it so Enter picks it
   // instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | null>(() => {
+  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'clickup' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
     const trimmed = value.trim()
     if (!trimmed) {
       return null
+    }
+    if (mode === 'clickup' && clickUpAvailable) {
+      return 'clickup'
     }
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
@@ -1207,7 +1210,7 @@ export default function SmartWorkspaceNameField({
       return 'linear'
     }
     return null
-  }, [linearAvailable, value])
+  }, [clickUpAvailable, linearAvailable, mode, value])
 
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,

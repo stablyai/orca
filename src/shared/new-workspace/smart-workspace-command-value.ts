@@ -12,7 +12,7 @@ export type SmartWorkspaceCommandRow = {
   value: string
 }
 
-export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | null
+export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'clickup' | null
 
 export function resolveSmartWorkspaceCommandValue({
   currentValue,
@@ -48,6 +48,11 @@ export function resolveSmartWorkspaceCommandValue({
     const linearRow = rows.find((row) => row.kind === 'linear')
     if (linearRow) {
       return linearRow.value
+    }
+  } else if (sourceIntent === 'clickup') {
+    const clickUpRow = rows.find((row) => row.kind === 'clickup')
+    if (clickUpRow) {
+      return clickUpRow.value
     }
   }
 
