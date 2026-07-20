@@ -1477,7 +1477,7 @@ export type PreloadApi = {
      *  the model snapshot. Never delivered in-band on pty:data. */
     onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void) => () => void
     /** Batched derived side-effect facts for PTYs whose bytes transit local
-     *  main; see docs/reference/terminal-side-effect-authority.md. */
+     *  main. */
     onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void) => () => void
     /** Title-only replay snapshot for (re)attach; attention facts never replay. */
     getSideEffectSnapshot: (id: string) => Promise<TerminalSideEffectBatch | null>
@@ -2507,6 +2507,10 @@ export type PreloadApi = {
       filePath: string
       connectionId: string
     }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
+    downloadFolder: (args: {
+      dirPath: string
+      connectionId: string
+    }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     saveDownloadedFile: (args: {
       suggestedName: string
       content: string
@@ -3280,6 +3284,9 @@ export type PreloadApi = {
           pairingUrl: string
           endpoint: string
           deviceId: string
+          /** Mode the QR actually encodes; 'local-only' when an automatic
+           *  request degraded because Relay could not be attached. */
+          connectionMode: MobilePairingConnectionMode
         }
     >
     getWindowsFirewallStatus: (args?: { address?: string }) => Promise<

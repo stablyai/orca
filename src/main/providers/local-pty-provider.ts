@@ -61,6 +61,7 @@ import {
   terminateDescendantSnapshot
 } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
@@ -102,6 +103,9 @@ const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 const ptyLastRecognizedForeground = new Map<string, string>()
 const ptyTerminalHandle = new Map<string, string>()
 const ptyInitialCwd = new Map<string, string>()
+// Why: reattach requests carry current settings, not the live process's launch
+// context. Keep the first creator's WSL/native identity for the PTY incarnation.
+const ptyWslDistroById = new Map<string, string | null>()
 // Why: node-pty callbacks must be disposed before environment teardown, but
 // onExit separately owns physical process-exit proof during termination.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
@@ -238,6 +242,7 @@ function clearPtyState(id: string): void {
   ptyLastRecognizedForeground.delete(id)
   ptyTerminalHandle.delete(id)
   ptyInitialCwd.delete(id)
+  ptyWslDistroById.delete(id)
   ptyLoadGeneration.delete(id)
   ptyTerminationMode.delete(id)
   ptyPhysicalExits.delete(id)
@@ -517,12 +522,18 @@ export class LocalPtyProvider implements IPtyProvider {
       }
       const existing = ptyProcesses.get(reattachId)
       if (existing) {
+        const existingWslDistro = ptyWslDistroById.get(reattachId)
         try {
           existing.resize(args.cols, args.rows)
         } catch {
           /* Existing PTY may reject resize during teardown; still return the live handle. */
         }
-        return { id: reattachId, pid: existing.pid, isReattach: true }
+        return {
+          id: reattachId,
+          pid: existing.pid,
+          ...(ptyWslDistroById.has(reattachId) ? { wslDistro: existingWslDistro ?? null } : {}),
+          isReattach: true
+        }
       }
     }
     const id = allocatePtyId(reattachId ?? undefined)
@@ -870,9 +881,15 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const proc = spawnResult.process
+    const spawnedShellIsWsl =
+      process.platform === 'win32' && pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const spawnedWslDistro = spawnedShellIsWsl ? (launchWslDistro ?? undefined) : null
     createPtyPhysicalExit(id)
     ptyProcesses.set(id, proc)
     ptyInitialCwd.set(id, cwd)
+    if (spawnedWslDistro !== undefined) {
+      ptyWslDistroById.set(id, spawnedWslDistro)
+    }
     // Why both signals: launchAgent is the caller's explicit intent and
     // survives command rewriting (e.g. auth env prefixes); recognition covers
     // callers that pass a bare agent command line without the flag.
@@ -1030,7 +1047,11 @@ export class LocalPtyProvider implements IPtyProvider {
     // briefly 0/undefined if node-pty hasn't observed the forked child yet.
     const rawPid = proc.pid
     const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
-    return { id, pid }
+    return {
+      id,
+      pid,
+      ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
+    }
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
@@ -1234,10 +1255,35 @@ export class LocalPtyProvider implements IPtyProvider {
       ptyLastRecognizedForeground.delete(id)
       return null
     }
+    const fallbackProcess = resolveForegroundFallbackProcess(
+      proc.process || null,
+      ptyShellName.get(id)
+    )
+    const cachedAgent = ptyLastRecognizedForeground.get(id) ?? null
+    let consoleMembershipUnavailable = false
+    // Why: exact console membership can preserve a live cached agent without
+    // trusting the whole-table scan that becomes incomplete under Windows load.
+    if (
+      process.platform === 'win32' &&
+      canConfirmAgentFromConsolePresence(cachedAgent, fallbackProcess)
+    ) {
+      try {
+        const consoleProcessIds = await readWindowsConptyProcessIds(proc.pid)
+        if (ptyProcesses.get(id) !== proc) {
+          return null
+        }
+        if (consoleProcessIds !== null && consoleProcessIds.size > 1 && cachedAgent !== null) {
+          return cachedAgent
+        }
+        consoleMembershipUnavailable = consoleProcessIds === null
+      } catch {
+        consoleMembershipUnavailable = true
+      }
+    }
     try {
       const resolution = await resolveAgentForegroundProcessWithAvailability(
         proc.pid,
-        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        fallbackProcess,
         {
           contextPaths: ptyAgentForegroundContextPaths.get(id)
         }
@@ -1251,9 +1297,17 @@ export class LocalPtyProvider implements IPtyProvider {
       // foreground — the completion coordinator reads that as an exit and fires
       // a false "agent done" while the agent is still working. Prefer the last
       // recognized agent across a transient failure (e.g. a Windows CIM timeout).
+      const lastRecognizedAgent = ptyLastRecognizedForeground.get(id) ?? null
+      const resolvedAgent = resolution.processName
+        ? recognizeAgentProcessFromCommandLine(resolution.processName)
+        : null
+      // Why: an incomplete global snapshot plus an unavailable console probe is
+      // not exit proof; only verified shell-only membership may clear the cache.
       const stable = resolveStableForegroundProcess(
-        resolution,
-        ptyLastRecognizedForeground.get(id) ?? null
+        consoleMembershipUnavailable && resolvedAgent === null
+          ? { ...resolution, available: false }
+          : resolution,
+        lastRecognizedAgent
       )
       if (stable.lastRecognizedAgent) {
         ptyLastRecognizedForeground.set(id, stable.lastRecognizedAgent)

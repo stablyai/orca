@@ -3,8 +3,8 @@
  * both the renderer transport (`createPtyOutputProcessor`) and main's
  * per-PTY tracker in `OrcaRuntimeService.onPtyData`.
  *
- * Why shared: docs/reference/terminal-side-effect-authority.md makes main the
- * side-effect parser for every PTY whose bytes transit local main. Title
+ * Why shared: main is the side-effect parser for every PTY whose bytes transit
+ * local main. Title
  * semantics (all-titles ordering, cursor-agent literal drop, normalization,
  * stale-working-title clearing) must not drift between the two paths.
  */

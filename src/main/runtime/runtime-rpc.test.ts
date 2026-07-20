@@ -548,6 +548,7 @@ describe('OrcaRuntimeRpcServer', () => {
         expect.objectContaining({ endpoint: offer.endpoint, scope: 'mobile', relay })
       )
       expect(parsed).not.toHaveProperty('endpoints')
+      expect(offer.connectionMode).toBe('automatic')
       expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.relayBinding).toEqual({
         relayHostId: relay.relayHostId,
         relayDeviceId: offer.deviceId,
@@ -585,6 +586,9 @@ describe('OrcaRuntimeRpcServer', () => {
         scope: 'mobile'
       })
       expect(parsePairingCode(offer.pairingUrl)).not.toHaveProperty('relay')
+      // Why: the result reports what the offer actually encodes so the UI can
+      // flag the degraded mint instead of labeling it as Relay.
+      expect(offer.connectionMode).toBe('local-only')
     } finally {
       await server.stop()
     }
@@ -618,6 +622,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }
       expect(parsePairingCode(offer.pairingUrl)).not.toHaveProperty('relay')
       expect(createPairingRelay).not.toHaveBeenCalled()
+      expect(offer.connectionMode).toBe('local-only')
       expect(server.getDeviceRegistry()?.getMobilePairingConnectionMode(offer.deviceId)).toBe(
         'local-only'
       )
@@ -710,6 +715,116 @@ describe('OrcaRuntimeRpcServer', () => {
       expect(server.getDeviceRegistry()?.getDevice(anywhere.deviceId)).toBeNull()
       expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
       expect(parsePairingCode(local.pairingUrl)).not.toHaveProperty('relay')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('rotates a pending local-only code when switching it back to Anywhere', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const local = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(local.available).toBe(true)
+      if (!local.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const anywhere = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(anywhere.available).toBe(true)
+      if (!anywhere.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      // Why: a QR displayed under the local-only pledge must not become an
+      // anywhere-capable credential; the policy switch mints a fresh token.
+      expect(anywhere.deviceId).not.toBe(local.deviceId)
+      expect(server.getDeviceRegistry()?.getDevice(local.deviceId)).toBeNull()
+      expect(anywhere.connectionMode).toBe('automatic')
+      expect(parsePairingCode(anywhere.pairingUrl)).toHaveProperty('relay')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('reuses the pending token when the requested mode is unchanged', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(first.available).toBe(true)
+      if (!first.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      // Why: a same-mode remint (e.g. two windows converging after a
+      // preference sync) must not race rotations off each other's token.
+      const second = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(second.available).toBe(true)
+      if (!second.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(second.deviceId).toBe(first.deviceId)
+      expect(onDeviceRevokeQueued).not.toHaveBeenCalled()
     } finally {
       await server.stop()
     }

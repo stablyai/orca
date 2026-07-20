@@ -17731,64 +17731,84 @@ describe('connectPanePty', () => {
     // land in the first advance window, confirming exit before the replacement
     // hook owner is set and racing the very veto this test asserts.
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-    getForegroundProcess.mockResolvedValue('codex')
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps()
+    try {
+      const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
+      // Why: call-count alone is flaky — one advanceTimersToNextTimerAsync can start
+      // multiple getForegroundProcess reads (completion cadence + pane tracker /
+      // confirmForegroundProcess alias). Gate the 2nd+ null sample until the
+      // replacement hook owner is installed so the confirming sample always sees it.
+      let idleMode = false
+      let nullSamplesStarted = 0
+      let releaseConfirmingNullSample: (() => void) | undefined
+      const confirmingNullSampleGate = new Promise<void>((resolve) => {
+        releaseConfirmingNullSample = resolve
+      })
+      getForegroundProcess.mockImplementation(async () => {
+        if (!idleMode) {
+          return 'codex'
+        }
+        nullSamplesStarted += 1
+        if (nullSamplesStarted >= 2) {
+          await confirmingNullSampleGate
+        }
+        return null
+      })
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps()
 
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks()
-    const titleHandler = createdTransportOptions[0]?.onTitleChange as
-      | ((title: string, rawTitle: string) => void)
-      | undefined
-    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
-      | ((title: string) => void)
-      | undefined
-    if (!titleHandler || !idleHandler) {
-      throw new Error('Expected title and idle handlers to be registered')
-    }
-
-    titleHandler('Codex working', 'Codex working')
-    await vi.advanceTimersByTimeAsync(2_500)
-    const inspectionsBeforeIdle = getForegroundProcess.mock.calls.length
-    getForegroundProcess.mockResolvedValue(null)
-    // Why: active process polling is jittered, so a fixed window can consume
-    // both null samples before the replacement hook row is installed.
-    for (
-      let attempts = 0;
-      getForegroundProcess.mock.calls.length === inspectionsBeforeIdle;
-      attempts += 1
-    ) {
-      if (attempts >= 10) {
-        throw new Error('Expected the first idle process inspection')
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks()
+      const titleHandler = createdTransportOptions[0]?.onTitleChange as
+        | ((title: string, rawTitle: string) => void)
+        | undefined
+      const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+        | ((title: string) => void)
+        | undefined
+      if (!titleHandler || !idleHandler) {
+        throw new Error('Expected title and idle handlers to be registered')
       }
-      await vi.advanceTimersToNextTimerAsync()
-    }
-    expect(getForegroundProcess).toHaveBeenCalledTimes(inspectionsBeforeIdle + 1)
 
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: 'replacement agent turn',
-      updatedAt: Date.now(),
-      stateStartedAt: Date.now(),
-      agentType: 'claude',
-      paneKey,
-      stateHistory: []
-    }
-    idleHandler('Claude done')
-    await vi.advanceTimersByTimeAsync(800)
-    await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+      titleHandler('Codex working', 'Codex working')
+      await vi.advanceTimersByTimeAsync(2_500)
+      idleMode = true
+      for (let attempts = 0; nullSamplesStarted < 1; attempts += 1) {
+        if (attempts >= 10) {
+          throw new Error('Expected the first idle process inspection')
+        }
+        await vi.advanceTimersToNextTimerAsync()
+      }
+      // Why: let the first null sample apply pendingProcessExitAgent before the
+      // replacement owner is installed; later samples stay gated until then.
+      await flushAsyncTicks()
 
-    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'agent-task-complete' })
-    )
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      RESET_TERMINAL_CURSOR_STYLE,
-      expect.any(Function)
-    )
-    randomSpy.mockRestore()
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'working',
+        prompt: 'replacement agent turn',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'claude',
+        paneKey,
+        stateHistory: []
+      }
+      releaseConfirmingNullSample?.()
+      idleHandler('Claude done')
+      await vi.advanceTimersByTimeAsync(800)
+      await vi.advanceTimersByTimeAsync(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+      expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'agent-task-complete' })
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        RESET_TERMINAL_CURSOR_STYLE,
+        expect.any(Function)
+      )
+    } finally {
+      // Why: any assertion failure above must not pin Math.random for later tests
+      // in this large suite.
+      randomSpy.mockRestore()
+    }
   })
 
   it('preserves replacement-agent title side effects through the process replacement veto', async () => {

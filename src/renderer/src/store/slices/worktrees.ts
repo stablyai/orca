@@ -31,6 +31,10 @@ import {
   type ClosedTerminalTabSnapshot
 } from './recently-closed-tabs'
 import { findRepoForHost } from './repo-host-identity'
+import {
+  dropWorktreeRowsForRemovedRuntimeEnvironments,
+  isRemovedRuntimeHostId
+} from './stale-runtime-host-rows'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -4971,6 +4975,200 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     set((s) => buildWorktreePurgeState(s, purgeableWorktreeIds))
+  },
+
+  purgeStaleRuntimeHostState: (removedEnvironmentIds) => {
+    const removed = new Set(removedEnvironmentIds)
+    if (removed.size === 0) {
+      return
+    }
+    set((s) => {
+      const repoIdsWithRemovedOwners = new Set<string>()
+      const survivingRepoIds = new Set<string>()
+      const repoIdsWithSurvivingOwners = new Set<string>()
+      const survivingRepos: AppState['repos'] = []
+      for (const repo of s.repos) {
+        if (isRemovedRuntimeHostId(getRepoExecutionHostId(repo), removed)) {
+          repoIdsWithRemovedOwners.add(repo.id)
+        } else {
+          survivingRepos.push(repo)
+          survivingRepoIds.add(repo.id)
+          repoIdsWithSurvivingOwners.add(repo.id)
+        }
+      }
+      const reposChanged = survivingRepos.length !== s.repos.length
+
+      // Why: broader than filterSetupsForPrunedRepoRows — a repoId-less setup on
+      // the removed host can still flip projectIdsRequiringSetupGroups and split a
+      // surviving project group, so drop every setup owned by the removed host.
+      const survivingSetups: AppState['projectHostSetups'] = []
+      for (const setup of s.projectHostSetups) {
+        if (isRemovedRuntimeHostId(setup.hostId, removed)) {
+          if (setup.repoId) {
+            repoIdsWithRemovedOwners.add(setup.repoId)
+          }
+        } else {
+          survivingSetups.push(setup)
+          if (setup.repoId) {
+            repoIdsWithSurvivingOwners.add(setup.repoId)
+          }
+        }
+      }
+      const setupsChanged = survivingSetups.length !== s.projectHostSetups.length
+      const detectedRows: Record<string, DetectedWorktreeListResult['worktrees']> =
+        Object.fromEntries(
+          Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
+            repoId,
+            result.worktrees
+          ])
+        )
+      // Why: repo/setup catalogs can lag session hydration; hosted worktree rows
+      // are ownership evidence during that loading gap too.
+      const recordWorktreeOwners = (
+        rowsByRepo: Record<string, readonly { hostId?: ExecutionHostId }[]>
+      ): void => {
+        for (const [repoId, rows] of Object.entries(rowsByRepo)) {
+          for (const row of rows) {
+            if (!row.hostId) {
+              continue
+            }
+            const ownerSet = isRemovedRuntimeHostId(row.hostId, removed)
+              ? repoIdsWithRemovedOwners
+              : repoIdsWithSurvivingOwners
+            ownerSet.add(repoId)
+          }
+        }
+      }
+      recordWorktreeOwners(s.worktreesByRepo)
+      recordWorktreeOwners(detectedRows)
+
+      const sessionWorktreeIdsOwnedByRemovedHosts = new Set<string>()
+      let survivingRestoredSessionOwners = s.restoredRuntimeHostIdByWorkspaceSessionKey
+      for (const [workspaceKey, hostId] of Object.entries(
+        s.restoredRuntimeHostIdByWorkspaceSessionKey
+      )) {
+        const scope = parseWorkspaceKey(workspaceKey)
+        if (scope?.type === 'folder') {
+          continue
+        }
+        const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceKey
+        const repoId = getRepoIdFromWorktreeId(worktreeId)
+        if (!isRemovedRuntimeHostId(hostId, removed)) {
+          // Why: restored sessions can be the only surviving-owner evidence before catalogs load.
+          repoIdsWithSurvivingOwners.add(repoId)
+          continue
+        }
+        sessionWorktreeIdsOwnedByRemovedHosts.add(worktreeId)
+        repoIdsWithRemovedOwners.add(repoId)
+        if (survivingRestoredSessionOwners === s.restoredRuntimeHostIdByWorkspaceSessionKey) {
+          survivingRestoredSessionOwners = { ...survivingRestoredSessionOwners }
+        }
+        delete survivingRestoredSessionOwners[workspaceKey]
+      }
+
+      // Why: legacy rows predate host stamps; every available owner record must
+      // agree that no other host survives before an unhosted row can be retired.
+      const repoIdsWithoutSurvivingOwners = new Set(repoIdsWithRemovedOwners)
+      for (const repoId of repoIdsWithSurvivingOwners) {
+        repoIdsWithoutSurvivingOwners.delete(repoId)
+      }
+
+      const worktreeDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(
+        s.worktreesByRepo,
+        removed,
+        repoIdsWithoutSurvivingOwners
+      )
+      const detectedDrop = dropWorktreeRowsForRemovedRuntimeEnvironments(
+        detectedRows,
+        removed,
+        repoIdsWithoutSurvivingOwners
+      )
+
+      const worktreesChanged = worktreeDrop.rowsByRepo !== s.worktreesByRepo
+      const detectedChanged = detectedDrop.rowsByRepo !== detectedRows
+
+      const removedWorktreeIds = new Set([
+        ...worktreeDrop.removedWorktreeIds,
+        ...detectedDrop.removedWorktreeIds,
+        ...sessionWorktreeIdsOwnedByRemovedHosts
+      ])
+      // Why: terminal tabs hydrate before worktree metadata; session-only ids for
+      // repos whose owners are all gone still need the full worktree-state purge.
+      if (repoIdsWithoutSurvivingOwners.size > 0) {
+        for (const worktreeId of Object.keys(s.tabsByWorktree)) {
+          const scope = parseWorkspaceKey(worktreeId)
+          const rawWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+          if (
+            scope?.type !== 'folder' &&
+            repoIdsWithoutSurvivingOwners.has(getRepoIdFromWorktreeId(rawWorktreeId))
+          ) {
+            removedWorktreeIds.add(rawWorktreeId)
+          }
+        }
+      }
+      // Why: bare-id state follows an exact survivor unless the restored session
+      // partition proves that state belonged to the removed host.
+      for (const rows of Object.values(worktreeDrop.rowsByRepo)) {
+        for (const row of rows) {
+          if (!sessionWorktreeIdsOwnedByRemovedHosts.has(row.id)) {
+            removedWorktreeIds.delete(row.id)
+          }
+        }
+      }
+      for (const rows of Object.values(detectedDrop.rowsByRepo)) {
+        for (const row of rows) {
+          if (!sessionWorktreeIdsOwnedByRemovedHosts.has(row.id)) {
+            removedWorktreeIds.delete(row.id)
+          }
+        }
+      }
+      const purgeState =
+        removedWorktreeIds.size > 0 ? buildWorktreePurgeState(s, [...removedWorktreeIds]) : {}
+
+      const restoredSessionOwnersChanged =
+        survivingRestoredSessionOwners !== s.restoredRuntimeHostIdByWorkspaceSessionKey
+      if (
+        !reposChanged &&
+        !setupsChanged &&
+        !worktreesChanged &&
+        !detectedChanged &&
+        !restoredSessionOwnersChanged &&
+        removedWorktreeIds.size === 0
+      ) {
+        return s
+      }
+
+      const detectedWorktreesByRepo = detectedChanged
+        ? Object.fromEntries(
+            Object.entries(s.detectedWorktreesByRepo).map(([repoId, result]) => [
+              repoId,
+              { ...result, worktrees: detectedDrop.rowsByRepo[repoId] }
+            ])
+          )
+        : s.detectedWorktreesByRepo
+
+      const rowsChanged = worktreesChanged || detectedChanged
+      return {
+        ...purgeState,
+        ...(reposChanged ? { repos: survivingRepos } : {}),
+        ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
+        ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
+        ...(detectedChanged ? { detectedWorktreesByRepo } : {}),
+        ...(restoredSessionOwnersChanged
+          ? { restoredRuntimeHostIdByWorkspaceSessionKey: survivingRestoredSessionOwners }
+          : {}),
+        ...(rowsChanged ? { sortEpoch: s.sortEpoch + 1 } : {}),
+        // Why: mirror validateRepoScopedUi's repo-scoped UI subset so a filtered or
+        // active sidebar can't be left referencing a purged repo id.
+        ...(reposChanged
+          ? {
+              activeRepoId:
+                s.activeRepoId && survivingRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+              filterRepoIds: s.filterRepoIds.filter((repoId) => survivingRepoIds.has(repoId))
+            }
+          : {})
+      }
+    })
   },
 
   migrateWorktreeIdentity: (oldWorktreeId: string, newWorktreeId: string) => {

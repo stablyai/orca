@@ -26,6 +26,10 @@ export function resolveProvisionalHostedReviewProvider(input: {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  // Provider inferred from the repo's remote URL host; used before the GitHub
+  // default so a GitLab (etc.) repo with no linked review still gets its own
+  // review copy while a probe is loading or after it fails.
+  remoteInferredProvider?: HostedReviewProvider | null
 }): HostedReviewProvider {
   if (input.hostedReview?.provider && supportsHostedReviewCreation(input.hostedReview.provider)) {
     return input.hostedReview.provider
@@ -49,19 +53,10 @@ export function resolveProvisionalHostedReviewProvider(input: {
   if (input.linkedGitHubPR != null || input.fallbackGitHubPR != null) {
     return 'github'
   }
-  return 'github'
-}
-
-export function buildLoadingHostedReviewCreationEligibility(
-  provider: HostedReviewProvider
-): HostedReviewCreationEligibility {
-  return {
-    provider,
-    review: null,
-    canCreate: false,
-    blockedReason: null,
-    nextAction: null
+  if (input.remoteInferredProvider && supportsHostedReviewCreation(input.remoteInferredProvider)) {
+    return input.remoteInferredProvider
   }
+  return 'github'
 }
 
 function shouldOfferCreatePrHeaderChrome(

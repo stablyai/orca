@@ -16,6 +16,12 @@ import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 // session-scanner-opencode-sqlite-discovery.ts.
 
 const OPENCODE_SQLITE_PREVIEW_LIMIT = 5
+// Why (#8864): a heavy session can hold ~10K parts (25-150 KB tool-output
+// blobs). Join preview parts against only the newest N messages instead of
+// scanning every part of the session, using the real (session_id, time_created,
+// id) index. Bounds the read to those messages' parts; the 15 s parse timeout
+// caps the residual for a single pathological giant part.
+const OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW = 100
 
 type SessionRow = {
   id: string
@@ -164,10 +170,12 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
                  json_extract(m.data, '$.summary.body') AS summary_body
-          FROM message m
+          FROM (SELECT id, data FROM message
+                WHERE session_id = ?
+                ORDER BY time_created DESC, id DESC
+                LIMIT ${OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW}) m
           JOIN part p ON p.message_id = m.id
-          WHERE m.session_id = ?
-            AND json_extract(m.data, '$.role') IN ('user','assistant')
+          WHERE json_extract(m.data, '$.role') IN ('user','assistant')
             AND json_extract(p.data, '$.type') = 'text'
           ORDER BY p.time_created DESC
           LIMIT ?`

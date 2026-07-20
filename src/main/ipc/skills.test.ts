@@ -3,15 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   handleMock,
   discoverSkillsMock,
+  discoverSkillsInWslMock,
   inventorySkillFreshnessMock,
   getDefaultWslDistroMock,
-  getWslHomeMock
+  getWslHomeMock,
+  parseWslPathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   discoverSkillsMock: vi.fn(),
+  discoverSkillsInWslMock: vi.fn(),
   inventorySkillFreshnessMock: vi.fn(),
   getDefaultWslDistroMock: vi.fn(),
-  getWslHomeMock: vi.fn()
+  getWslHomeMock: vi.fn(),
+  parseWslPathMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -27,13 +31,27 @@ vi.mock('../skills/discovery', () => ({
   discoverSkills: discoverSkillsMock
 }))
 
+vi.mock('../skills/skill-discovery-wsl', () => ({
+  discoverSkillsInWsl: discoverSkillsInWslMock
+}))
+
 vi.mock('../skills/skill-freshness-inventory', () => ({
   inventorySkillFreshness: inventorySkillFreshnessMock
 }))
 
 vi.mock('../wsl', () => ({
   getDefaultWslDistro: getDefaultWslDistroMock,
-  getWslHome: getWslHomeMock
+  getWslHome: getWslHomeMock,
+  parseWslPath: parseWslPathMock,
+  toLinuxPath: (pathValue: string) => {
+    if (pathValue === '\\\\wsl.localhost\\Ubuntu\\home\\alice') {
+      return '/home/alice'
+    }
+    if (pathValue === 'C:\\repo\\worktree') {
+      return '/mnt/c/repo/worktree'
+    }
+    return pathValue
+  }
 }))
 
 import { registerSkillsHandlers } from './skills'
@@ -48,9 +66,13 @@ describe('registerSkillsHandlers', () => {
   beforeEach(() => {
     handleMock.mockReset()
     discoverSkillsMock.mockReset()
+    discoverSkillsInWslMock.mockReset()
     getDefaultWslDistroMock.mockReset()
     getWslHomeMock.mockReset()
+    parseWslPathMock.mockReset()
+    parseWslPathMock.mockReturnValue(null)
     discoverSkillsMock.mockResolvedValue({ skills: [], sources: [], scannedAt: 1 })
+    discoverSkillsInWslMock.mockResolvedValue({ skills: [], sources: [], scannedAt: 1 })
     inventorySkillFreshnessMock.mockResolvedValue({
       schemaVersion: 1,
       installations: [],
@@ -139,10 +161,35 @@ describe('registerSkillsHandlers', () => {
 
     expect(getDefaultWslDistroMock).not.toHaveBeenCalled()
     expect(getWslHomeMock).toHaveBeenCalledWith('Ubuntu')
-    expect(discoverSkillsMock).toHaveBeenCalledWith({
-      repos: [],
-      homeDir: '\\\\wsl.localhost\\Ubuntu\\home\\alice',
-      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\alice'
+    expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
+      distro: 'Ubuntu',
+      homeDir: '/home/alice',
+      cwd: '/home/alice'
+    })
+  })
+
+  it('scans the requested project directory in the selected WSL runtime', async () => {
+    const handler = getDiscoverHandler()
+
+    await handler(null, {
+      cwd: 'C:\\repo\\worktree',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo-1',
+          distro: 'Ubuntu',
+          reason: 'project-override',
+          cacheKey: 'repo-1:wsl:Ubuntu'
+        }
+      }
+    })
+
+    expect(discoverSkillsInWslMock).toHaveBeenCalledWith({
+      distro: 'Ubuntu',
+      homeDir: '/home/alice',
+      cwd: '/mnt/c/repo/worktree'
     })
   })
 

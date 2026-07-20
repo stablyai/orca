@@ -85,6 +85,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { isRemovedRuntimeHostId } from './stale-runtime-host-rows'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
@@ -1562,6 +1563,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       let finalizedHostRepos: Repo[] = []
       set((s) => {
+        // Why: an in-flight fetch for a just-removed runtime env would otherwise
+        // re-add purged repos/rows and stick — nothing re-triggers the purge. Skip
+        // only when the catalog's env was actually removed (tombstoned), not merely
+        // absent from the not-yet-hydrated saved list (#8881).
+        if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
+          return s
+        }
         // Why: after re-adoption re-points a repo onto a re-added SSH target, the
         // per-host merge leaves the stale row on the old (removed) target id — a
         // ghost a terminal pane can bind to and fail with "SSH target not found".
@@ -1616,6 +1624,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const catalog = await fetchRepoCatalogForTarget(target)
       let finalizedHostRepos: Repo[] = []
       set((s) => {
+        // Why: skip a merge for a runtime env removed while this Connect-flow fetch
+        // was in flight, so purged repos/rows are not re-added (#8881).
+        if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
+          return s
+        }
         const result = mergeFetchedRepoCatalog(catalog, s.repos)
         const reconciliation = reconcileSupersededSshRepos(result.repos, s)
         const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
@@ -1682,6 +1695,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       let hostRepos: Repo[] = []
       set((s) => {
+        // Why: an all-host refresh can still be merging a host removed mid-load;
+        // skip a catalog whose env was tombstoned by a removal, not one merely
+        // absent from the not-yet-hydrated saved list (#8881).
+        if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
+          return s
+        }
         const result = mergeFetchedRepoCatalog(catalog, s.repos)
         const reconciliation = reconcileSupersededSshRepos(result.repos, s)
         const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)

@@ -546,6 +546,7 @@ describe('SSH IPC handlers', () => {
         status: 'connected',
         error: null,
         reconnectAttempt: 0,
+        supportsFolderDownload: true,
         remotePlatform: 'win32'
       }
     })
@@ -603,7 +604,8 @@ describe('SSH IPC handlers', () => {
           targetId: 'ssh-1',
           status: 'connected',
           error: null,
-          reconnectAttempt: 0
+          reconnectAttempt: 0,
+          supportsFolderDownload: true
         }
       })
       expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({

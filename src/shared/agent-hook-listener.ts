@@ -1898,7 +1898,8 @@ function extractCopilotToolFields(
 
 function extractPiToolFields(
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  agentKind: 'pi' | 'omp'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -1906,9 +1907,16 @@ function extractPiToolFields(
     eventName === 'tool_execution_end'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
-    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
+    const rawToolInput = hookPayload.tool_input
+    const toolInput = deriveToolInputPreview(toolName, rawToolInput)
+    // Why: OMP shares this extractor. interactivePrompt derivation should
+    // only apply to Pi so OMP ask_user_question metadata stays unchanged.
+    const interactivePrompt =
+      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
+        ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
+        : undefined
     return toolUpdate(
-      { toolName, toolInput },
+      { toolName, toolInput, interactivePrompt },
       { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
     )
   }
@@ -2386,7 +2394,7 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
     case 'omp':
-      return extractPiToolFields(eventName, hookPayload)
+      return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
     case 'command-code':
@@ -3422,13 +3430,22 @@ function normalizePiCompatibleEvent(
     return null
   }
 
-  const stateName =
-    eventName === 'before_agent_start' ||
-    eventName === 'agent_start' ||
-    eventName === 'tool_call' ||
-    eventName === 'tool_execution_start' ||
-    eventName === 'tool_execution_end' ||
-    eventName === 'message_end'
+  // Why: gate on the event's own tool_name (matching the Claude/Grok normalizers),
+  // not a merged snapshot, so a partial follow-up event can't inherit a stale
+  // ask_user_question name from the tool cache and spuriously re-enter blocked.
+  const isPiAskUserQuestion =
+    agentType === 'pi' &&
+    isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
+    (eventName === 'tool_call' || eventName === 'tool_execution_start')
+
+  const stateName = isPiAskUserQuestion
+    ? 'blocked'
+    : eventName === 'before_agent_start' ||
+        eventName === 'agent_start' ||
+        eventName === 'tool_call' ||
+        eventName === 'tool_execution_start' ||
+        eventName === 'tool_execution_end' ||
+        eventName === 'message_end'
       ? 'working'
       : eventName === 'agent_end'
         ? 'done'

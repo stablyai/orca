@@ -19,8 +19,8 @@ import {
   writeChunksToTerminal
 } from '../../shared/terminal-restore-parity-fixture'
 
-// Differential garble gate for the hidden-terminal model/view contract
-// (docs/reference/terminal-model-view-contract.md): with the hidden-delivery
+// Differential garble gate for the hidden-terminal model/view contract:
+// with the hidden-delivery
 // gate on, a hidden pane receives NOTHING — main's HeadlessEmulator is the
 // source of truth and reveal repaints the renderer xterm from
 // preamble + rehydrateSequences + snapshotAnsi (applyMainBufferSnapshot).

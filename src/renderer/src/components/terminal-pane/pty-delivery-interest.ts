@@ -1,6 +1,6 @@
 /**
  * Renderer-side delivery-interest registry for the Phase-4 hidden-delivery
- * gate (docs/reference/terminal-side-effect-authority.md, Open Items).
+ * gate.
  *
  * Why: main only drops hidden PTY byte delivery while NO renderer party needs
  * raw bytes. Dispatcher sidecars and eager pre-mount buffers register

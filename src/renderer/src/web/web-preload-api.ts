@@ -1621,6 +1621,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     downloadFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
+    downloadFolder: async () => {
+      throw new Error('Remote folder download is unavailable in paired web clients.')
+    },
     saveDownloadedFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
@@ -2763,11 +2766,7 @@ function createComputerUsePermissionsApi(): NonNullable<
 function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
   return {
     discover: (target) =>
-      callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000).catch(() => ({
-        skills: [],
-        sources: [],
-        scannedAt: Date.now()
-      })),
+      callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000),
     // Why: browser clients have no local skill homes, and remote-host
     // freshness stays disabled until its update rail has equivalent coverage.
     freshnessInventory: (): Promise<SkillFreshnessInventory> =>

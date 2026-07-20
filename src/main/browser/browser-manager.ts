@@ -891,11 +891,11 @@ export class BrowserManager {
         return
       }
       this.clearedLoadErrorsByGuestId.delete(guest.id)
-      const loadError = {
-        code: errorCode,
-        description: errorDescription || 'This site could not be reached.',
-        validatedUrl: redactKagiSessionToken(validatedURL || guest.getURL() || 'about:blank')
-      }
+      const loadError = this.buildLoadError(
+        errorCode,
+        errorDescription || 'This site could not be reached.',
+        validatedURL || guest.getURL() || 'about:blank'
+      )
       this.loadErrorsByGuestId.set(guest.id, loadError)
       this.forwardOrQueueGuestLoadFailure(guest.id, loadError)
       this.notifyBrowserGuestStateChanged(guest.id)
@@ -1299,17 +1299,24 @@ export class BrowserManager {
     }
   }
 
+  // Why: both the did-fail-load path and the synthesized certificate failure
+  // build a load error from an untrusted URL; centralize the redaction so a
+  // future third site cannot forget to strip Kagi session tokens.
+  private buildLoadError(code: number, description: string, rawUrl: string): BrowserLoadError {
+    return {
+      code,
+      description,
+      validatedUrl: redactKagiSessionToken(rawUrl)
+    }
+  }
+
   notifyCertificateFailureChanged(
     webContentsId: number,
     failure: BrowserCertificateFailure | null,
     navigationUrl?: string
   ): void {
     if (failure && navigationUrl) {
-      const loadError = {
-        code: failure.errorCode ?? -1,
-        description: failure.error,
-        validatedUrl: redactKagiSessionToken(navigationUrl)
-      }
+      const loadError = this.buildLoadError(failure.errorCode ?? -1, failure.error, navigationUrl)
       this.loadErrorsByGuestId.set(webContentsId, loadError)
       this.forwardOrQueueGuestLoadFailure(webContentsId, loadError)
     }

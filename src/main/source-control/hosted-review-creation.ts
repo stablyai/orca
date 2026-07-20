@@ -6,6 +6,7 @@ import type {
   HostedReviewCreationBlockedReason,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
+  HostedReviewLookupOutcome,
   HostedReviewProvider
 } from '../../shared/hosted-review'
 import {
@@ -435,6 +436,18 @@ async function validateCurrentBranchCanCreateReview(
       enforceBaseOnRemote: true,
       ...options
     })
+    // Why: never call the provider create API when the existing-review lookup
+    // could not prove the branch has no review. An `unavailable` outcome means a
+    // real MR/PR might exist that a failed lookup could not see; refuse
+    // inconclusively (design invariant 8 / submission boundary) so we never
+    // create a duplicate. The composed title/body are preserved by the caller.
+    if (eligibility.reviewLookupOutcome === 'unavailable') {
+      return {
+        ok: false,
+        code: 'validation',
+        error: `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
+      }
+    }
     // Why: renderer eligibility can be stale by submit time; the main process
     // is the last chance to avoid creating a PR from an out-of-date remote head.
     return blockedEligibilityToCreateResult(eligibility, submittedBase)
@@ -475,6 +488,10 @@ export async function getHostedReviewCreationEligibility(
   }
   const baseBranch = defaultBaseRef ? normalizeHostedReviewBaseRef(defaultBaseRef) : null
   let review: Awaited<ReturnType<typeof getHostedReviewForBranch>> = null
+  // Why: a swallowed lookup failure must not masquerade as authoritative
+  // no-review evidence. Track it so the renderer can distinguish an accepted
+  // no-PR result (`not_found`) from a local-blocker fallback (`unavailable`).
+  let lookupFailed = false
   try {
     review = await getHostedReviewForBranch({
       repoPath: args.repoPath,
@@ -489,23 +506,25 @@ export async function getHostedReviewCreationEligibility(
       ...hostedReviewExecutionContext(args)
     })
   } catch (error) {
-    const canReturnLocalBlocker =
-      branch &&
-      branch !== 'HEAD' &&
-      supportsHostedReviewCreation(provider) &&
-      (!baseBranch || branch.toLowerCase() !== baseBranch.toLowerCase()) &&
-      (args.hasUncommittedChanges || args.hasUpstream !== true || (args.behind ?? 0) > 0)
-    if (!canReturnLocalBlocker) {
-      throw error
-    }
-    // Why: local blockers still let the UI offer Create PR preparation; a
-    // flaky existing-review lookup should not hide the affordance entirely.
-    console.warn('Hosted review lookup failed while resolving local review blocker:', error)
+    // Why: a failed existing-review lookup can never authorize Create — it might
+    // be hiding a real PR. Record `unavailable` and fall through so any local
+    // blocker (dirty/no-upstream/behind) still supplies primary guidance, but the
+    // clean-branch happy path below is forced to `canCreate: false`. Never rethrow
+    // here: a thrown lookup must not collapse into a false `not_found` and must
+    // stay a structured, honest empty state for the renderer.
+    lookupFailed = true
+    console.warn('Hosted review lookup failed; treating existing-review as unavailable:', error)
   }
 
+  const reviewLookupOutcome: HostedReviewLookupOutcome = review
+    ? 'found'
+    : lookupFailed
+      ? 'unavailable'
+      : 'not_found'
   const baseResult = {
     provider,
     review: review ? { number: review.number, url: review.url } : null,
+    reviewLookupOutcome,
     defaultBaseRef,
     head: branch || null
   }
@@ -575,7 +594,15 @@ export async function getHostedReviewCreationEligibility(
       nextAction: null
     }
   }
-  return { ...baseResult, canCreate: Boolean(baseBranch), blockedReason: null, nextAction: null }
+  // Why: a lookup that failed leaves review existence unproven, so the clean,
+  // in-sync happy path must not claim `canCreate` — that would open Create
+  // against a branch that may already have a review. Stays `unavailable`.
+  return {
+    ...baseResult,
+    canCreate: lookupFailed ? false : Boolean(baseBranch),
+    blockedReason: null,
+    nextAction: null
+  }
 }
 
 export async function createHostedReview(

@@ -14,6 +14,10 @@ import {
 import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
 import {
+  ensureSessionParseCacheLoaded,
+  scheduleSessionParseCachePersist
+} from './session-parse-cache-persistence'
+import {
   createSessionParseStats,
   parseAgentSessionFileCached,
   type SessionParseStats
@@ -61,6 +65,9 @@ export async function scanAiVaultSessions(
     const issues: AiVaultScanIssue[] = []
     const parseStats = createSessionParseStats()
     const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(readOptionalTextFile)
+    // Why: persisted entries must be seeded before any candidate is parsed, or
+    // the cold scan gains nothing from the cache file (#9210).
+    await ensureSessionParseCacheLoaded()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
 
     const candidates = discoveries
@@ -112,6 +119,8 @@ export async function scanAiVaultSessions(
     span.setAttribute('fullParses', parseStats.fullParses)
     span.setAttribute('bytesRead', parseStats.bytesRead)
     span.setAttribute('issues', issues.length)
+
+    scheduleSessionParseCachePersist(parseStats)
 
     return {
       sessions: mergeSessions(cappedSessions, scopeSessions),

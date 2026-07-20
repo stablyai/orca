@@ -368,6 +368,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // explicit return-to-desktop-size action, no wall-clock guess.
     // See docs/mobile-fit-hold.md.
     mobileAutoRestoreFitMs: null,
+    // Why: Anywhere (Relay + local) is the default remote path. Explicit
+    // `local-only` is only written after the user picks same-network only.
+    mobilePairingConnectionMode: 'automatic',
     // Why: off by default — opt-in cosmetic joke feature. Leaving the default
     // false keeps the overlay unmounted for users who never enable it.
     experimentalPet: false,

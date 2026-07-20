@@ -278,6 +278,12 @@ function clearRelayStateOverride(targetId: string): void {
   relayStateOverrides.delete(targetId)
 }
 
+function connectionSupportsFolderDownload(targetId: string): boolean {
+  // Why: ready legacy/test connections without an explicit transport are ssh2-shaped;
+  // only a confirmed system-SSH transport must remove the SFTP-only capability.
+  return connectionManager?.getConnection(targetId)?.usesSystemSshTransport?.() !== true
+}
+
 function getPublicSshState(targetId: string): SshConnectionState | undefined {
   const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
   return state ? withSshRemotePlatform(targetId, state) : undefined
@@ -674,7 +680,8 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
         targetId: tid,
         status: 'connected',
         error: null,
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        supportsFolderDownload: connectionSupportsFolderDownload(tid)
       })
     }
     void restorePortForwards(tid, getCurrentMainWindow)
@@ -925,7 +932,8 @@ export function registerSshHandlers(
         targetId,
         status: 'connected',
         error: null,
-        reconnectAttempt: 0
+        reconnectAttempt: 0,
+        supportsFolderDownload: conn.usesSystemSshTransport?.() !== true
       })
     } catch (err) {
       // Relay deployment failed — disconnect SSH
