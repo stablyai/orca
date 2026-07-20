@@ -1,7 +1,7 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { PinnedWebPanel } from '../../../../shared/types'
+import type { PinnedTerminalPanel, PinnedWebPanel } from '../../../../shared/types'
 import {
   MAX_PINNED_WEB_PANELS,
   normalizePinnedWebPanels
@@ -17,11 +17,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { emptyDraft, panelFromDraft } from '@/components/settings/pinned-terminal-panel-drafts'
 
+// Why: zustand selectors must return stable references. `?? []` allocates a new
+// array every read when settings are still loading → React #185 max update depth
+// on mount (QuickAdd mounts in always-visible panel rails).
+const EMPTY_WEB_PANELS: PinnedWebPanel[] = []
+const EMPTY_TERMINAL_PANELS: PinnedTerminalPanel[] = []
+
 /** Compact + on User Panels: create a web panel without opening Settings. */
 export function QuickAddWebPanelButton(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
-  const panels = useAppStore((s) => s.settings?.pinnedWebPanels ?? [])
+  const panels = useAppStore((s) => s.settings?.pinnedWebPanels ?? EMPTY_WEB_PANELS)
   const [open, setOpen] = React.useState(false)
   const [title, setTitle] = React.useState('')
   const [url, setUrl] = React.useState('')
@@ -136,7 +142,7 @@ export function QuickAddWebPanelButton(): React.JSX.Element {
 export function QuickAddTerminalPanelButton(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
-  const panels = useAppStore((s) => s.settings?.pinnedTerminalPanels ?? [])
+  const panels = useAppStore((s) => s.settings?.pinnedTerminalPanels ?? EMPTY_TERMINAL_PANELS)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const [open, setOpen] = React.useState(false)
   const [draft, setDraft] = React.useState(emptyDraft)

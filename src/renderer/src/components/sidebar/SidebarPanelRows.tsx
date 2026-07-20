@@ -18,6 +18,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { buildSplitCandidates } from '@/lib/panel-split-candidates'
 
+// Why: zustand useSyncExternalStore + `?? []` → new [] every snapshot when
+// settings are unset → React #185 (same class as QuickAddPanelPopovers).
+const EMPTY_TERMINAL_PANELS: PinnedTerminalPanel[] = []
+const EMPTY_WEB_PANELS: PinnedWebPanel[] = []
+
 /** Inline title editor shown in place of a row while renaming. Commits on
  *  Enter/blur, cancels on Escape; empty titles cancel instead of committing. */
 export function RowRenameInput({
@@ -91,8 +96,10 @@ function PanelCanvasContextMenu({
 }): React.JSX.Element {
   const openCanvasSplitFromSource = useAppStore((s) => s.openCanvasSplitFromSource)
   const openPanelInCanvas = useAppStore((s) => s.openPanelInCanvas)
-  const terminalPanels = useAppStore((s) => s.settings?.pinnedTerminalPanels ?? [])
-  const webPanels = useAppStore((s) => s.settings?.pinnedWebPanels ?? [])
+  const terminalPanels = useAppStore(
+    (s) => s.settings?.pinnedTerminalPanels ?? EMPTY_TERMINAL_PANELS
+  )
+  const webPanels = useAppStore((s) => s.settings?.pinnedWebPanels ?? EMPTY_WEB_PANELS)
   const items = React.useMemo(
     () =>
       buildSplitCandidates({
