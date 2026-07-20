@@ -11,18 +11,20 @@ describe('renderer startup runtime routing', () => {
     const startupBlockEnd = source.indexOf("timeRendererStartupStep('session-get'")
     const startupBlock = source.slice(startupBlockStart, startupBlockEnd)
 
-    const settingsIndex = startupBlock.indexOf('actions.fetchSettings()')
-    const uiGetIndex = startupBlock.indexOf("timeRendererStartupStep('ui-get'")
-    const hydrateUiIndex = startupBlock.indexOf(
-      "timeRendererStartupSyncStep('hydrate-persisted-ui'"
-    )
-    const localReposIndex = startupBlock.indexOf(
+    const indexInStartupBlock = (needle: string): number => {
+      const relativeIndex = startupBlock.indexOf(needle)
+      return relativeIndex === -1 ? -1 : startupBlockStart + relativeIndex
+    }
+    const settingsIndex = indexInStartupBlock('actions.fetchSettings()')
+    const uiGetIndex = indexInStartupBlock("timeRendererStartupStep('ui-get'")
+    const hydrateUiIndex = indexInStartupBlock("timeRendererStartupSyncStep('hydrate-persisted-ui'")
+    const localReposIndex = indexInStartupBlock(
       "actions.fetchReposForAllHosts({ remoteHosts: 'skip' })"
     )
-    const localGroupsIndex = startupBlock.indexOf(
+    const localGroupsIndex = indexInStartupBlock(
       "actions.fetchProjectGroupsForAllHosts({ remoteHosts: 'skip' })"
     )
-    const localFoldersIndex = startupBlock.indexOf(
+    const localFoldersIndex = indexInStartupBlock(
       "actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })"
     )
     const sessionIndex = source.indexOf("timeRendererStartupStep('session-get'")
