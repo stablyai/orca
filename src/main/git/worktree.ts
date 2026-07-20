@@ -84,10 +84,7 @@ const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 
-// Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
-// stall its checkout writes for minutes (STA-1292) — a stuck create then fails
-// fast instead of spinning forever. Generous enough not to kill a legit large
-// checkout (mirrors the SYNC runner's cloud-placeholder floor, #7225).
+// Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); generous enough for a legit large checkout (#7225).
 export const WORKTREE_ADD_TIMEOUT_MS = 180_000
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 
@@ -155,9 +152,7 @@ function parseRemoteTrackingLocalBaseRef(
     return undefined
   }
 
-  // Why: Only refs proven to be remote-tracking refs get refresh status.
-  // Local branches can contain slashes (e.g. release/2026) and must not
-  // produce a fake "Local 2026 was not refreshed" warning.
+  // Why: only proven remote-tracking refs get refresh status; slash-containing local branches (release/2026) must not fake a "not refreshed" warning.
   const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
   const slashIndex = shortRemoteRef.indexOf('/')
   if (slashIndex <= 0) {
@@ -196,9 +191,7 @@ async function evaluateLocalBaseRefRefreshability(
   let localOid = ''
   let remoteOid = ''
   try {
-    // Why: advisory and mutating paths must agree on "safe to fast-forward".
-    // `rev-list A...B` proves the local branch exists, has no local-only
-    // commits, and tells the toast whether it is actually behind.
+    // Why: advisory and mutating paths must agree on "safe to fast-forward"; `rev-list A...B` proves no local-only commits and how far behind.
     const { stdout } = await gitExecFileAsync(
       ['rev-list', '--left-right', '--count', `${parsed.fullRef}...${remoteTrackingRef}`],
       gitExecOptions(repoPath, options)
@@ -208,8 +201,7 @@ async function evaluateLocalBaseRefRefreshability(
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
     if (!shouldInspectOwner(parsedDrift.behind)) {
-      // Why: a current local ref cannot produce an update suggestion, so the
-      // advisory path need not resolve OIDs or inspect its owner worktree.
+      // Why: a current local ref yields no update suggestion, so the advisory path skips OID resolution and owner inspection.
       return undefined
     }
     const { stdout: localOidOutput } = await gitExecFileAsync(
@@ -238,8 +230,7 @@ async function evaluateLocalBaseRefRefreshability(
   }
 
   try {
-    // Why: if the local base branch is checked out anywhere, turning on the
-    // setting would only update it when that owner worktree is clean.
+    // Why: if the local base branch is checked out, only update it when that owner worktree is clean.
     const { stdout: worktreeListOutput } = await gitExecFileAsync(
       ['worktree', 'list', '--porcelain'],
       gitExecOptions(repoPath, options)
@@ -276,9 +267,7 @@ async function evaluateLocalBaseRefRefreshability(
       }
     }
 
-    // Why: localBranch isn't checked out anywhere, so there is no working tree
-    // to desync — a bare ref fast-forward (update-ref) is safe. Omitting
-    // ownerWorktreePath signals the mutating path to take that branch.
+    // Why: localBranch isn't checked out anywhere, so a bare-ref fast-forward is safe; omitting ownerWorktreePath signals the mutating path to take it.
     return {
       refreshable: true,
       ...resultBase,
@@ -332,8 +321,7 @@ async function persistWorktreeCreationBase(
   } catch (error) {
     console.warn(`addWorktree: failed to set ${configKey} for ${worktreePath}`, error)
     try {
-      // Why: reused branch names may carry stale base metadata; if replacement
-      // fails, remove the old value so consumers do not trust outdated lineage.
+      // Why: reused branch names may carry stale base metadata; if replacement fails, unset it so consumers don't trust stale lineage.
       await gitExecFileAsync(['config', '--local', '--unset-all', configKey], {
         ...gitExecOptions(worktreePath, options)
       })
@@ -356,8 +344,7 @@ async function unsetWorktreeCreationBase(
       ...gitExecOptions(worktreePath, options)
     })
   } catch {
-    // Best-effort cleanup; missing keys and locked config both leave the
-    // original sparse setup error as the actionable failure.
+    // Best-effort cleanup; leave the original sparse-setup error as the actionable failure.
   }
 }
 
@@ -383,8 +370,7 @@ function resolveRevParsePath(repoPath: string, value: string): string {
   if (posix.isAbsolute(value) || win32.isAbsolute(value)) {
     return value
   }
-  // Old git ignores `--path-format=absolute`, so a relative toplevel/git-dir
-  // must be resolved against the scanned repo path.
+  // Old git ignores `--path-format=absolute`, so resolve a relative toplevel/git-dir against the scanned repo path.
   return looksLikeWindowsPath(repoPath)
     ? win32.resolve(repoPath, value)
     : posix.resolve(repoPath, value)
@@ -393,11 +379,8 @@ function resolveRevParsePath(repoPath: string, value: string): string {
 type RepoLocation = { topLevel: string; commonDir: string }
 
 function parseRepoLocation(repoPath: string, output: string): RepoLocation | undefined {
-  // Old git (pre `--path-format`) echoes the unrecognized flag to stdout and
-  // exits 0 rather than erroring, so drop any echoed `-`-prefixed lines and
-  // read the two trailing path lines (toplevel, then git-common-dir). Strip only
-  // the trailing CR, not surrounding spaces — git paths may legitimately start
-  // or end with a space.
+  // Old git echoes the unrecognized `--path-format` flag and exits 0, so drop `-`-prefixed lines and
+  // read the last two path lines (toplevel, git-common-dir); strip only trailing CR — paths may have edge spaces.
   const lines = output
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
@@ -430,8 +413,7 @@ async function readRepoLocation(
           gitExecOptions(repoPath, options)
         )
         if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
-          // Why: some old Git versions echo the unknown option and exit zero;
-          // remember that compatibility signal even though parsing can recover.
+          // Why: some old Git echoes the unknown option and exits zero; remember that compat signal even though parsing recovers.
           capabilities.rememberUnsupported('rev-parse-path-format')
         }
         return parseRepoLocation(resolveBasePath, stdout)
@@ -457,11 +439,8 @@ async function normalizeMainWorktreePath(
 ): Promise<GitWorktreeInfo[]> {
   const mainIndex = worktrees.findIndex((worktree) => worktree.isMainWorktree)
   const mainWorktree = worktrees[mainIndex]
-  // Compare in the Git-output space: under WSL the porcelain/rev-parse paths are
-  // Linux while repoPath is a UNC path, so without translating, a UNC repoPath
-  // never matches the early-return and fires a needless rev-parse on every poll.
-  // Use the platform-independent UNC parser so the comparison holds regardless
-  // of host OS; the runner still receives the original repoPath for WSL routing.
+  // Why: under WSL, porcelain/rev-parse paths are Linux but repoPath is UNC; compare in Git-output
+  // space so the early-return matches and we skip a needless rev-parse per poll (runner still gets repoPath).
   const wslRepo = parseWslUncPath(repoPath)
   const comparablePath = wslRepo ? wslRepo.linuxPath : repoPath
   if (!mainWorktree || areWorktreePathsEqual(mainWorktree.path, comparablePath)) {
@@ -473,10 +452,8 @@ async function normalizeMainWorktreePath(
     return worktrees
   }
 
-  // Why: only a separate-git-dir/submodule main worktree reports the Git
-  // directory as the main entry — i.e. the main entry equals git-common-dir.
-  // A linked worktree's main entry is a real working root, so gating on this
-  // equality avoids overwriting it with the linked worktree's own toplevel.
+  // Why: only a separate-git-dir/submodule main worktree reports git-common-dir as its path; gate on
+  // that equality so we don't overwrite a linked worktree's real working root with its own toplevel.
   if (!areWorktreePathsEqual(mainWorktree.path, location.commonDir)) {
     return worktrees
   }
@@ -527,8 +504,7 @@ export function parseWorktreeList(
         const rawReason = line.slice('locked'.length).trim()
         lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
       } else if (line === 'prunable' || line.startsWith('prunable ')) {
-        // Why: Git ≥ 2.36 flags registrations whose directory is gone; ignoring
-        // it surfaces the stale worktree as a live workspace (issue #8389).
+        // Why: Git ≥2.36 flags registrations whose directory is gone; ignoring it shows the stale worktree as live (#8389).
         prunable = true
         const rawReason = line.slice('prunable'.length).trim()
         prunableReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
@@ -610,8 +586,7 @@ async function readWorktreeList(
       )
     },
     async () => {
-      // Why: `-z` is required to preserve worktree paths containing newlines,
-      // but Git <2.36 rejects it. Keep the line parser as the fallback.
+      // Why: `-z` preserves worktree paths with newlines but Git <2.36 rejects it; fall back to the line parser.
       const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
         cwd: repoPath,
         ...options
@@ -621,11 +596,8 @@ async function readWorktreeList(
         parseWorktreeList(stdout),
         options
       )
-      // Why: this `-z`-unsupported fallback (Git <2.36) also serves Git <2.31,
-      // which emits no `prunable` annotation; probe each linked worktree path
-      // for existence instead of treating stale registrations as live. On Git
-      // 2.31–2.35 `parseWorktreeList` already set `prunable`, so the probe is a
-      // harmless backstop that skips those entries (issue #8389).
+      // Why: Git <2.31 emits no `prunable`, so probe each linked path for existence instead of trusting
+      // stale registrations; a harmless backstop on 2.31–2.35 where parseWorktreeList already set it (#8389).
       return annotatePrunableByExistence(normalized, repoPath, options)
     },
     isUnsupportedWorktreeListZError
@@ -645,11 +617,8 @@ async function annotatePrunableByExistence(
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
-      // Git only marks linked worktrees prunable, and never locked ones (a
-      // lock shields the registration even when the directory is missing). The
-      // `locked` annotation is only parsed on Git >=2.31, so on older Git a
-      // locked+missing worktree cannot be shielded here. A missing main
-      // worktree is handled by the repo-level ENOENT paths.
+      // Git only prunes linked worktrees, never locked ones (a lock shields a missing dir; `locked`
+      // parses only on Git >=2.31). A missing main worktree is handled by the repo-level ENOENT paths.
       if (
         !worktree ||
         worktree.isMainWorktree ||
@@ -709,17 +678,10 @@ export async function listWorktreeGraph(
   }
 }
 
-// Why: a cold start lists every repo's worktrees from several independent
-// paths (renderer worktrees fetch, lineage resolution, boot pty-registry
-// hydration), and each `git worktree list` is a full process spawn —
-// expensive on Windows (issue #7225). Sharing the in-flight promise collapses
-// concurrent duplicate scans; nothing is served after a scan settles.
+// Why: cold start triggers many concurrent `git worktree list` spawns per repo (expensive on Windows, #7225); share the in-flight promise to collapse duplicates.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-// Why: a caller listing AFTER a mutation completed must observe it, so it may
-// not join a scan that started before the mutation. Bumping the generation on
-// mutation completion retires older in-flight scans from sharing (they still
-// settle for their original callers).
+// Why: a listing after a mutation must not join a scan that predates it; bumping the generation on mutation retires older in-flight scans from sharing.
 const worktreeScanGenerations = new Map<string, number>()
 
 function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
@@ -733,8 +695,7 @@ function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
 }
 
 function bumpWorktreeScanGeneration(repoPath: string): void {
-  // Why: generations only prevent joining a pre-mutation scan. Without an
-  // active scan, retaining the repo path just leaks completed mutation keys.
+  // Why: generations only prevent joining a pre-mutation scan; with no active scan, keeping the repo path just leaks completed mutation keys.
   if (!hasInFlightWorktreeScanForRepo(repoPath)) {
     return
   }
@@ -742,8 +703,7 @@ function bumpWorktreeScanGeneration(repoPath: string): void {
 }
 
 function pruneWorktreeScanGeneration(repoPath: string): void {
-  // Why: ordinary scan settlement should stay O(1); only repos invalidated
-  // during an active scan need the cross-generation in-flight check.
+  // Why: keep ordinary scan settlement O(1); only repos invalidated during an active scan need the cross-generation check.
   if (!worktreeScanGenerations.has(repoPath)) {
     return
   }
@@ -813,9 +773,7 @@ async function listWorktreesUnshared(
     if (isNotGitRepositoryError(err)) {
       return []
     }
-    // Why: a silent catch turns git compatibility or repo-state failures into
-    // opaque downstream errors like "Worktree created but not found in listing".
-    // Surface the cause so future regressions show up immediately.
+    // Why: don't swallow git-compat/repo-state failures — else they resurface as opaque "created but not found in listing" errors.
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
@@ -853,8 +811,7 @@ async function annotateSparseCheckoutStatus(
     }
   }
 
-  // Why: worktree refreshes run on git-status polling paths. Many worktrees can
-  // otherwise fan out `.git`/sparse-checkout filesystem probes all at once.
+  // Why: cap concurrency so status-poll refreshes don't fan out many sparse-checkout filesystem probes at once.
   const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
   await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
   return annotated
@@ -913,17 +870,14 @@ async function refreshLocalBaseRefForWorktreeCreate(
       return { ...resultBase, status: 'updated', ownerWorktreePath: currentOwner.path }
     }
 
-    // Why: no owner worktree — fast-forward the bare ref. The expected-old-OID
-    // form makes this a no-op-safe compare-and-swap if the ref moved since the
-    // evaluation snapshot.
+    // Why: no owner worktree — fast-forward the bare ref; the expected-old-OID form is a no-op-safe CAS if the ref moved since evaluation.
     await gitExecFileAsync(
       ['update-ref', evaluation.fullRef, evaluation.remoteOid, evaluation.localOid],
       gitExecOptions(repoPath, options)
     )
     return { ...resultBase, status: 'updated' }
   } catch {
-    // update-ref/reset can fail on locked refs, filesystem errors, or unusual
-    // worktree states. Worktree creation should still proceed.
+    // update-ref/reset can fail on locked refs or odd worktree states; worktree creation should still proceed.
     return { ...resultBase, status: 'skipped_error' }
   }
 }
@@ -934,10 +888,9 @@ async function refreshLocalBaseRefForWorktreeCreate(
  * @param worktreePath - Absolute path where the worktree will be created
  * @param branch - Branch name for the new worktree
  * @param baseBranch - Optional base branch to create from (defaults to HEAD)
- * @remarks Side effect: passes `--no-track`, writes `branch.<branch>.base`
- * for new-branch worktrees with a base ref, and may write
- * `push.autoSetupRemote=true` to the repo's shared config. Config writes are
- * best-effort and warn-only. See body comments below for the full rationale.
+ * @remarks Side effects (best-effort, warn-only): passes `--no-track`, writes
+ * `branch.<branch>.base` for new-branch worktrees with a base ref, and may
+ * write `push.autoSetupRemote=true` to the repo's shared config.
  */
 export async function addWorktree(
   repoPath: string,
@@ -985,20 +938,13 @@ async function performAddWorktree(
     // Why: -b would create a new branch instead of checking out the selected one.
     args.push(worktreePath, branch)
   } else {
-    // Why: --no-track keeps the new branch from inheriting the base ref's
-    // upstream, so `git status` doesn't report "behind by N" against the base
-    // pre-publish and tools/agents don't misread an unpublished branch as
-    // out-of-sync. First push sets the upstream — see push.autoSetupRemote
-    // below for the terminal ergonomics.
+    // Why: --no-track avoids inheriting the base's upstream so `git status` won't misreport "behind by N" pre-publish; first push sets it (see push.autoSetupRemote below).
     args.push('--no-track', '-b', branch, worktreePath)
     if (baseBranch) {
       effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
         hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
       )
-      // Why: resolving the creation base first distinguishes real
-      // remote-tracking refs from slash-containing local branch names.
-      // The mutation stays behind the explicit setting so the default
-      // remains conservative.
+      // Why: resolve the creation base first to distinguish remote-tracking refs from slash-containing local branches (mutation gated behind the explicit setting).
       if (refreshLocalBaseRef) {
         localBaseRefRefresh = await refreshLocalBaseRefForWorktreeCreate(
           repoPath,
@@ -1021,8 +967,7 @@ async function performAddWorktree(
   }
   await gitExecFileAsync(args, {
     ...gitExecOptions(repoPath, options),
-    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292)
-    // fails fast rather than hanging worktree creation indefinitely.
+    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292) fails fast instead of hanging.
     timeout: WORKTREE_ADD_TIMEOUT_MS
   })
 
@@ -1034,38 +979,13 @@ async function performAddWorktree(
     await persistWorktreeCreationBase(worktreePath, branch, effectiveBase, options)
   }
 
-  // SSH parity: src/relay/git-handler-worktree-ops.ts addWorktreeOp mirrors this exact
-  // probe-and-write state machine. If you change the logic here, update
-  // the relay handler in lockstep so local and SSH paths stay aligned.
-  //
-  // Why: with --no-track there is no upstream until first push. Setting
-  // push.autoSetupRemote=true makes a plain `git push` from the terminal
-  // create origin/<branch> and set it as upstream automatically — matching
-  // user expectations from modern git without requiring `-u`. Note that
-  // `--local` on a linked worktree writes to the shared common-dir config,
-  // so this affects the whole repo, not just this worktree. That is
-  // intentional and acceptable: the value is benign and idempotent, and
-  // every Orca-created worktree wants the same default. True per-worktree
-  // scope would require enabling extensions.worktreeConfig=true repo-wide,
-  // which is a larger change we deliberately avoid.
-  //
-  // Notes on the design:
-  // - push.autoSetupRemote is honored by git >= 2.37; older clients ignore
-  //   the value, so `git push` falls back to the pre-2.37 "no upstream"
-  //   error and the user runs `git push -u` once.
-  // - Failures here are warn-only: config writes are best-effort and a
-  //   missing write degrades to the same fallback as old git.
-  // - The write is skipped when any value is already set (local, global,
-  //   or system) so a deliberate user `false` is preserved.
-  // - Not rolled back on creation failure: addSparseWorktree's catch path
-  //   removes the worktree but does not unset this config. That is consistent
-  //   with the "benign and idempotent" rationale above — every Orca-created
-  //   worktree wants this default, and a future creation will silently re-set
-  //   it via the existing-value check anyway.
+  // SSH parity: relay's addWorktreeOp (src/relay/git-handler-worktree-ops.ts) mirrors this — change both in lockstep.
+  // Why: --no-track leaves no upstream until first push; push.autoSetupRemote=true lets a plain
+  // `git push` create+set origin/<branch> (git >=2.37; older clients ignore it). `--local` on a
+  // linked worktree writes the shared common-dir config (whole repo) — intentional and idempotent,
+  // so it's warn-only and not rolled back on failure.
   try {
-    // Why: `--get` (not `--local --get`) so a value set at any scope
-    // (local/global/system) counts as "user already chose" and we don't
-    // overwrite it.
+    // Why: `--get` (not `--local --get`) so a value at any scope counts as "user already chose" and isn't overwritten.
     let alreadySet = false
     try {
       await gitExecFileAsync(['config', '--get', 'push.autoSetupRemote'], {
@@ -1073,10 +993,7 @@ async function performAddWorktree(
       })
       alreadySet = true
     } catch (readError) {
-      // Why: `git config --get` exits 1 only when the key is unset at every
-      // scope. Any other exit code means a real read failure (corrupt config,
-      // locked file, parse error) — surface that via the outer catch instead
-      // of silently overwriting whatever value the user actually has.
+      // Why: `git config --get` exits 1 only when unset at every scope; any other code is a real read failure — rethrow rather than overwrite the user's value.
       const code = (readError as { code?: unknown })?.code
       if (code !== 1) {
         throw readError
@@ -1138,15 +1055,13 @@ export async function addSparseWorktree(
       try {
         await removeWorktree(repoPath, worktreePath, true, {
           deleteBranch: !options.checkoutExistingBranch,
-          // Why: rolling back a failed creation — the just-created branch has no
-          // user commits, so force-delete it rather than preserving an orphan.
+          // Why: failed-creation rollback — the fresh branch has no user commits, so force-delete rather than orphan it.
           forceBranchDelete: !options.checkoutExistingBranch,
           ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
         })
       } catch {
         wrapped.cleanupFailed = true
-        // Why: the user needs to know that manual cleanup may be required —
-        // otherwise a half-created worktree silently lingers on disk.
+        // Why: surface that manual cleanup may be needed, else a half-created worktree lingers silently on disk.
         wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
       }
     }
@@ -1155,13 +1070,10 @@ export async function addSparseWorktree(
 }
 
 /**
- * Move a worktree's directory to a new path with `git worktree move`, which
- * relocates the working tree and rewrites git's gitdir pointers so the linkage
- * stays intact — a raw `fs.rename` would corrupt the `.git` file and the
- * `.git/worktrees/<name>/gitdir` back-pointer. Local worktrees only: the
- * first-work folder rename skips SSH/remote, so there is no relay parity handler
- * for this op. The caller owns migrating Orca's path-derived worktree identity
- * after a successful move, and pre-checks that the destination is free.
+ * Move a worktree with `git worktree move` (not `fs.rename`, which corrupts the
+ * `.git` file and the `.git/worktrees/<name>/gitdir` back-pointer). Local-only,
+ * so there is no relay parity handler. Caller owns migrating Orca's
+ * path-derived worktree identity and pre-checks that the destination is free.
  */
 export async function moveWorktree(
   repoPath: string,
@@ -1184,10 +1096,7 @@ export async function removeWorktree(
   repoPath: string,
   worktreePath: string,
   force = false,
-  // Why: forceBranchDelete is for cleaning up a worktree this code just created
-  // (e.g. rollback of a failed creation) where the fresh branch has no user work
-  // and must be removed outright. User-initiated deletes leave it false so unmerged
-  // commits are preserved.
+  // forceBranchDelete: for failed-creation rollback (fresh branch, no user work); user deletes leave it false so unmerged commits survive.
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   try {
@@ -1213,8 +1122,7 @@ async function performRemoveWorktree(
   const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
   const branchHead = removedWorktree?.head ?? ''
 
-  // Why: callers outside the IPC/runtime preflight must not bypass Git's lock
-  // contract or depend on localized stderr to discover it after side effects.
+  // Why: callers outside the IPC/runtime preflight must not bypass Git's lock contract or rely on localized stderr after side effects.
   assertWorktreeUnlockedForRemoval(removedWorktree)
 
   const args = ['worktree', 'remove']
@@ -1228,9 +1136,7 @@ async function performRemoveWorktree(
     if (force || !isSubmoduleWorktreeRemovalRefusal(error)) {
       throw error
     }
-    // Why: Git refuses non-force removal of any worktree with an initialised
-    // submodule even when everything is clean. Re-prove cleanliness (parent
-    // status reports dirty submodule content as ` M <sub>`), then --force.
+    // Why: Git refuses non-force removal of a worktree with an initialised submodule even when clean; re-prove cleanliness, then --force.
     await assertWorktreeCleanForRemoval(worktreePath, false, options)
     await gitExecFileAsync(
       ['worktree', 'remove', '--force', worktreePath],
@@ -1246,13 +1152,8 @@ async function performRemoveWorktree(
   }
 
   try {
-    // Why: `git worktree remove` only detaches the filesystem entry. Orca also
-    // drops the now-unused local branch here so delete-worktree does not leave
-    // behind orphaned feature branches unless another worktree still points at it.
-    // Use `-d` (not `-D`): Git refuses to delete a branch with commits not merged
-    // into its upstream or HEAD, so unpublished work is preserved instead of
-    // force-deleted. forceBranchDelete opts into `-D` for failed-creation rollback,
-    // where the fresh branch has no user work to protect.
+    // Why: also drop the now-orphaned branch so delete-worktree leaves none; `-d` (not `-D`) preserves
+    // unmerged work, and forceBranchDelete opts into `-D` for failed-creation rollback.
     const branchDeleteResult = await deleteLocalBranchAfterWorktreeRemoval(
       repoPath,
       branchName,
@@ -1277,16 +1178,14 @@ async function performRemoveWorktree(
           return {}
         }
       } catch (alreadyMergedDeleteError) {
-        // Why: the worktree is already gone; a raced branch cleanup should
-        // degrade to the preserved-branch recovery path instead of failing delete.
+        // Why: worktree is already gone; a raced branch cleanup should degrade to preserved-branch recovery, not fail delete.
         console.warn(
           `[git] Failed to delete already-merged local branch "${branchName}" after removing worktree`,
           alreadyMergedDeleteError
         )
       }
     }
-    // Expected when the branch still has unmerged/unpublished commits: keep it.
-    // Deleting a worktree must never silently discard commits.
+    // Keep an unmerged/unpublished branch: deleting a worktree must never silently discard commits.
     console.warn(
       `[git] Preserved local branch "${branchName}" after removing worktree (not fully merged)`,
       error
@@ -1315,8 +1214,7 @@ async function deleteLocalBranchAfterWorktreeRemoval(
   }
 
   try {
-    // Why: `branch -d` is the cheap live-checkout guard. Only pay for
-    // `worktree prune` when a stale admin record may be the thing blocking it.
+    // Why: only pay for `worktree prune` when a stale admin record may be blocking `branch -d`.
     await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
   } catch (error) {
     console.warn(`[git] Failed to prune worktrees before deleting branch "${branchName}"`, error)
@@ -1350,9 +1248,7 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
     })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   await refreshBranchCleanupTargetRefs(runGit, targetRefs)
-  // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch
-  // whose changes are already on the base ref. Delete only when Git can prove
-  // the branch contributes no tree changes to that base.
+  // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
   if (
     !(await branchHasNoUnmergedChangesOnAnyTarget(
       runGit,
@@ -1389,8 +1285,7 @@ export async function forceDeleteLocalBranch(
   if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
-  // Why: stale toast actions must not delete a branch that moved after Git
-  // preserved it. `update-ref` deletes only if the ref still has expectedHead.
+  // Why: stale toast actions must not delete a branch that moved; `update-ref -d` deletes only if the ref still == expectedHead.
   try {
     await runGit(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
   } catch {
@@ -1412,8 +1307,7 @@ export async function forceDeleteLocalBranch(
   try {
     await runGit(['config', '--remove-section', `branch.${branchName}`], repoPath)
   } catch {
-    // Best-effort parity with `git branch -D`; stale config is harmless and
-    // should not make the already-deleted ref look like a failed delete.
+    // Best-effort parity with `git branch -D`; stale config is harmless.
   }
 }
 
@@ -1493,22 +1387,8 @@ function translateWorktreePath(
 }
 
 async function detectSparseCheckout(worktreePath: string): Promise<boolean> {
-  // Why: `listWorktrees` runs on every 3-second git-status poll and on every
-  // worktree refresh, so this probe fires N times per poll for N worktrees.
-  // The previous `git sparse-checkout list` subprocess made that N*poll extra
-  // git processes, which regressed app responsiveness on machines with many
-  // worktrees (see PR #1131 revert in #1290). A single fs.stat on the
-  // per-worktree sparse-checkout config file is ~two orders of magnitude
-  // cheaper and has the same truthiness semantics: Git writes this file when
-  // sparse checkout is enabled for the worktree and does not write it
-  // otherwise.
-  //
-  // Why per-worktree gitdir and not `<worktreePath>/.git/info/sparse-checkout`:
-  // linked worktrees have a `.git` file that points at
-  // `<repo>/.git/worktrees/<name>`, and that is where Git stores the
-  // worktree-local sparse-checkout config. `core.sparseCheckout` itself is
-  // shared across all worktrees, so the presence of the config file is the
-  // correct per-worktree signal.
+  // Why: fs.stat the per-worktree gitdir's sparse-checkout config instead of a per-poll `git sparse-checkout list` subprocess that regressed responsiveness (PR #1290);
+  // the file's presence is the per-worktree signal because core.sparseCheckout is shared across all worktrees.
   try {
     const gitDir = await resolveGitDir(worktreePath)
     const stats = await stat(join(gitDir, 'info', 'sparse-checkout'))

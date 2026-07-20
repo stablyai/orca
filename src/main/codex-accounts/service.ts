@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: this service intentionally keeps Codex
-account lifecycle, path safety, login, and identity parsing in one audited
-main-process module so the managed-account boundary stays explicit. */
+/* eslint-disable max-lines -- Why: keeps Codex account lifecycle, path safety, login, and identity parsing in one audited main-process module. */
 import { randomUUID } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -55,8 +53,7 @@ type ResolvedCodexIdentity = {
 
 type CanonicalCodexConfig = {
   contents: string
-  /** Home the config was read from, in the path style Codex sees at runtime
-   *  (Linux-side for WSL); relative path-valued settings resolve against it. */
+  /** Home the config was read from, in the path style Codex sees (Linux-side for WSL); relative settings resolve against it. */
   sourceHomePath: string
 }
 
@@ -77,9 +74,7 @@ function shellQuote(value: string): string {
 }
 
 export class CodexAccountService {
-  // Why: account mutations read settings, do async work (login, rate-limit
-  // refresh), then write settings. Without serialization, overlapping calls
-  // (e.g. double-click "Add Account") can cause lost updates.
+  // Why: serialize the read-modify-write of settings; overlapping calls (e.g. double-click Add) would lose updates.
   private mutationQueue: Promise<unknown> = Promise.resolve()
 
   constructor(
@@ -170,8 +165,7 @@ export class CodexAccountService {
       this.runtimeHome.clearLastWrittenAuthJson(account.id)
       this.runtimeHome.syncForCurrentSelection()
 
-      // Why: the new account becomes active, so the previous active account is
-      // now inactive and its last-known usage should be cached for the switcher.
+      // Why: switching activates the new account, so cache the outgoing account's usage for the switcher.
       const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
       await this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, targetSelection)
       return this.getSnapshot()
@@ -215,9 +209,7 @@ export class CodexAccountService {
     this.runtimeHome.clearLastWrittenAuthJson(accountId)
     this.runtimeHome.syncForCurrentSelection(getCodexSelectionTargetForAccount(account))
 
-    // Why: re-auth can change which actual Codex identity the managed home
-    // points at. Force a fresh read immediately so the status bar cannot keep
-    // showing the previous account's quota under the updated label.
+    // Why: re-auth can change the underlying Codex identity, so force a fresh read to avoid showing stale quota.
     await this.rateLimits.refreshForCodexAccountChange(
       undefined,
       getCodexSelectionTargetForAccount(account)
@@ -244,8 +236,7 @@ export class CodexAccountService {
     this.runtimeHome.syncForCurrentSelection()
 
     this.safeRemoveManagedHome(account.managedHomePath)
-    // Why: a removed account can no longer appear in the switcher dropdown,
-    // so purge its cached usage to avoid stale entries.
+    // Why: removed accounts can't appear in the switcher, so purge cached usage to avoid stale entries.
     this.rateLimits.evictInactiveCodexCache(accountId)
     await this.rateLimits.refreshForCodexAccountChange(
       getSelectedCodexAccountIdForTarget(settings, getCodexSelectionTargetForAccount(account)) ===
@@ -358,9 +349,7 @@ export class CodexAccountService {
 
     const managedHomePath = join(this.getManagedAccountsRoot(), accountId, 'home')
     mkdirSync(managedHomePath, { recursive: true })
-    // Why: Codex expects CODEX_HOME to be a concrete directory it can own. We
-    // pre-create the directory and leave a marker so future cleanup code can
-    // prove the path belongs to Orca before deleting anything.
+    // Why: marker lets future cleanup prove the path belongs to Orca before deleting anything.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
     return {
       managedHomePath: this.assertManagedHomePath(managedHomePath),
@@ -462,12 +451,7 @@ export class CodexAccountService {
     }
 
     const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath)
-    // Why: Orca account switching is meant to swap Codex credentials and quota
-    // identity, not silently fork the user's sandbox/config defaults. Syncing
-    // one canonical config into every managed home keeps auth isolated per
-    // account while preserving consistent Codex behavior. Managed homes are
-    // real CODEX_HOMEs for `codex login`, so relative path-valued settings
-    // must keep resolving against the home the config was read from.
+    // Why: sync one canonical config per home so switching swaps only auth/quota; rewrite relative paths to resolve against the source home.
     this.writeManagedConfig(
       trustedManagedHomePath,
       rewriteRelativePathConfigValues(canonicalConfig.contents, canonicalConfig.sourceHomePath)
@@ -507,8 +491,7 @@ export class CodexAccountService {
     }
 
     try {
-      // Why: the config is read over UNC but consumed by Codex inside WSL, so
-      // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
+      // Why: read over UNC but consumed inside WSL, so path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
       return { contents: readFileSync(configPath, 'utf-8'), sourceHomePath: `${wslHome}/.codex` }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
@@ -523,8 +506,7 @@ export class CodexAccountService {
         return
       }
     } catch {
-      // Why: read errors should not make a stale config look current; the
-      // atomic write path owns Windows ACL repair and persistent error surfacing.
+      // Why: a read error must not make a stale config look current; atomic write owns ACL repair and error surfacing.
     }
     writeFileAtomically(configPath, contents)
   }
@@ -561,8 +543,7 @@ export class CodexAccountService {
       throw originalError
     }
 
-    // Why: explicit re-auth is allowed to recover from a lost empty container,
-    // but only at the exact Orca-owned account path persisted for this account.
+    // Why: re-auth may recreate a lost empty home, but only at the exact Orca-owned path persisted for this account.
     mkdirSync(expectedManagedHomePath, { recursive: true })
     writeFileSync(join(expectedManagedHomePath, '.orca-managed-home'), `${account.id}\n`, 'utf-8')
     return this.assertManagedHomePath(expectedManagedHomePath)
@@ -687,18 +668,11 @@ export class CodexAccountService {
       throw new Error('Managed Codex home directory does not exist on disk.')
     }
 
-    // realpath() requires the leaf to exist. For pre-login add flow we create
-    // the home directory first so the containment check still verifies the
-    // canonical on-disk target rather than trusting persisted text blindly.
+    // realpath() requires the leaf to exist; verify the canonical on-disk target rather than trusting persisted text.
     const canonicalCandidate = realpathSync(resolvedCandidate)
     const canonicalRoot = realpathSync(resolvedRoot)
 
-    // Why: the prefix check must compare canonical paths on both sides. On
-    // macOS, userData sits under /var/folders/... which realpath resolves to
-    // /private/var/folders/...; comparing a canonical candidate against a
-    // non-canonical root would spuriously reject every managed home. In dev
-    // mode (orca-dev/ vs orca/) this check also filters out production-rooted
-    // paths before downstream sync runs.
+    // Why: both sides must be canonical — macOS /var/folders realpaths to /private/var, else every managed home is rejected.
     if (
       canonicalCandidate !== canonicalRoot &&
       !canonicalCandidate.startsWith(canonicalRoot + sep)
@@ -727,8 +701,7 @@ export class CodexAccountService {
     linuxHomePath: string,
     expectedAccountId: string
   ): void {
-    // Why: WSL home creation can fail after mkdir/marker write but before the
-    // path is trusted. Cleanup must prove the marker/account ID inside WSL.
+    // Why: creation can fail after mkdir/marker but before trust, so cleanup must verify the marker/account ID inside WSL.
     try {
       execFileSync(
         'wsl.exe',
@@ -784,13 +757,10 @@ export class CodexAccountService {
       return
     }
 
-    // Why: managed homes live at <accounts-root>/<uuid>/home. Removing
-    // just the home/ leaf leaves an empty <uuid>/ directory behind.
+    // Why: homes live at <accounts-root>/<uuid>/home; removing the home/ leaf leaves an empty <uuid>/ behind.
     try {
       const parentDir = resolve(managedHomePath, '..')
-      // Why: managedHomePath is already canonicalized by assertManagedHomePath,
-      // so the root must be canonicalized too for the prefix check to work on
-      // macOS where userData resolves through /private/var.
+      // Why: canonicalize the root too so the prefix check works on macOS where userData resolves through /private/var.
       const root = realpathSync(this.getManagedAccountsRoot())
       if (parentDir.startsWith(root + sep) && parentDir !== root) {
         rmSync(parentDir, { recursive: true, force: true })
@@ -816,11 +786,7 @@ export class CodexAccountService {
           }
         : (() => {
             const codexCommand = resolveCodexCommand()
-            // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file
-            // (e.g. codex.cmd from npm). Node's child_process.spawn cannot execute
-            // batch scripts directly without shell:true, but shell:true with an args
-            // array causes DEP0190 because args are concatenated, not escaped.
-            // Fix: detect batch scripts and invoke cmd.exe /c explicitly.
+            // Why: Windows codex may be a .cmd/.bat; spawn+shell:true would trigger DEP0190, so invoke cmd.exe /c explicitly.
             const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
             return {
               command: spawnCmd,
@@ -834,8 +800,7 @@ export class CodexAccountService {
           })()
       const child = spawn(spawnConfig.command, spawnConfig.args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        // Why: route through cmd.exe for .cmd/.bat entrypoints would otherwise
-        // flash a console window in the packaged GUI app on Windows.
+        // Why: prevents a console window flash for .cmd/.bat entrypoints routed through cmd.exe on Windows.
         windowsHide: true,
         env: spawnConfig.env
       })
@@ -881,9 +846,7 @@ export class CodexAccountService {
       const onError = (error: Error): void => {
         settle(() => {
           const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
-          // Why: ENOENT can mean either the codex binary doesn't exist OR the
-          // script's shebang interpreter (node) isn't in PATH. When we resolved
-          // codex to a full path, ENOENT almost certainly means node is missing.
+          // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
           const isBareCommand = spawnConfig.codexCommand === 'codex'
           const message = isEnoent
             ? isBareCommand
@@ -963,10 +926,7 @@ export class CodexAccountService {
     const authFilePath = join(this.assertManagedHomePath(managedHomePath), 'auth.json')
     const raw = JSON.parse(readFileSync(authFilePath, 'utf-8')) as Record<string, unknown>
 
-    // Why: API-key-based auth files have no OAuth tokens or JWT identity
-    // claims. Returning nulls causes the caller to fail with a clear
-    // "could not resolve the account email" error rather than crashing
-    // on missing nested token fields.
+    // Why: API-key auth files have no OAuth/JWT claims; return nulls so the caller fails cleanly instead of crashing.
     if (typeof raw.OPENAI_API_KEY === 'string' && raw.OPENAI_API_KEY.trim() !== '') {
       return {
         idToken: null,

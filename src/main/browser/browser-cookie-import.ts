@@ -1,5 +1,4 @@
-/* eslint-disable max-lines -- Why: cookie import is a single pipeline (detect → decrypt → stage → swap)
-   that must stay together so the encryption, schema, and staging steps remain in sync. */
+/* eslint-disable max-lines -- Why: cookie import is one pipeline (detect → decrypt → stage → swap) that must stay together to keep encryption/schema/staging in sync. */
 import { app, type BrowserWindow, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
 import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
@@ -19,8 +18,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Why: writing to userData instead of tmpdir() so the diag log is only
-// readable by the current user, not world-readable in /tmp.
+// Why: write the diag log to userData, not world-readable /tmp, so only the current user can read it.
 let _diagLog: string | null = null
 function getDiagLogPath(): string {
   if (!_diagLog) {
@@ -38,8 +36,7 @@ function reasonWithDiagLog(reason: string): string {
 const COOKIE_IMPORT_ERROR_SUMMARY_MAX_CHARS = 180
 const COOKIE_IMPORT_ERROR_SCAN_MAX_CHARS = 512
 
-// Why: imported cookie errors can include pasted or file-derived payloads;
-// diagnostics only need a short preview, not a full-string whitespace pass.
+// Why: error messages can embed large pasted/file payloads; cap the scan since diagnostics only need a short preview.
 export function summarizeCookieImportError(err: unknown): string {
   const raw = err instanceof Error && err.message ? err.message : String(err)
   let summary = ''
@@ -108,8 +105,7 @@ type ChromiumBrowserDef = {
   label: string
   keychainService: string
   keychainAccount: string
-  // Why: each platform stores browser data in a different location. The per-platform
-  // root paths are resolved at detection time via browserRootPath().
+  // Per-platform data-dir roots, resolved at detection time via browserRootPath().
   macRoot?: string
   winRoot?: string
   linuxRoot?: string
@@ -161,8 +157,7 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
   },
   {
     family: 'helium',
-    // Why: Helium deviates from the '<Browser> Safe Storage'/'<Browser>' convention —
-    // its Keychain entry is literally service 'Helium Storage Key', account 'Helium'.
+    // Why: Helium breaks the '<Browser> Safe Storage' convention — its Keychain service is literally 'Helium Storage Key'.
     label: 'Helium',
     keychainService: 'Helium Storage Key',
     keychainAccount: 'Helium',
@@ -208,9 +203,7 @@ function isSafeBrowserProfileDirectory(directory: string): boolean {
   )
 }
 
-// Why: Chrome's Local State JSON contains profile.info_cache which maps profile
-// directory names (e.g. "Default", "Profile 1") to metadata including the
-// user-visible display name. This lets us show human-readable names in the picker.
+// Why: Chrome's Local State profile.info_cache maps profile dirs to display names for the picker.
 function discoverProfiles(browserRoot: string): BrowserProfile[] {
   try {
     const localStatePath = join(browserRoot, 'Local State')
@@ -267,8 +260,7 @@ function discoverFirefoxProfiles(): BrowserProfile[] {
     const entries = readdirSync(profilesRoot, { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
-    // Why: Firefox profile dirs are named <random>.<name> (e.g. "abc123.default-release").
-    // Prefer 'default-release' as it's the primary user profile on most installs.
+    // Why: Firefox dirs are named <random>.<name>; prefer 'default-release' as the primary profile on most installs.
     const sorted = entries.sort((a, b) => {
       if (a.includes('default-release')) {
         return -1
@@ -360,8 +352,7 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
       continue
     }
     const profiles = discoverProfiles(root)
-    // Why: a browser is "detected" if at least one profile has a cookies DB.
-    // Use the first profile with a valid cookies path as the default selection.
+    // Why: a browser counts as detected once a profile has a cookies DB; use the first such profile as default.
     for (const profile of profiles) {
       const profileDir = join(root, profile.directory)
       const cookiesPath = resolveChromiumCookiesPath(profileDir)
@@ -393,10 +384,6 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
   return detected
 }
 
-// Why: when the user selects a different profile from the picker, we need to
-// resolve the cookies path for that profile. Returns a new DetectedBrowser
-// with the updated cookiesPath and selectedProfile, or null if the profile
-// has no cookies DB.
 export function selectBrowserProfile(
   browser: DetectedBrowser,
   profileDirectory: string
@@ -463,9 +450,7 @@ type ValidatedCookie = {
   expirationDate: number | undefined
 }
 
-// Why: Chromium's SQLite schema uses CookieSameSiteForStorage enum:
-// 0=UNSPECIFIED, 1=NO_RESTRICTION(None), 2=LAX, 3=STRICT.
-// This differs from Firefox (0=None, 1=Lax, 2=Strict).
+// Why: Chromium's CookieSameSiteForStorage enum (0=Unspecified,1=None,2=Lax,3=Strict) differs from Firefox's numbering.
 function chromiumSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
   switch (raw) {
     case 1:
@@ -512,9 +497,7 @@ function normalizeSameSite(raw: unknown): 'unspecified' | 'no_restriction' | 'la
   return 'unspecified'
 }
 
-// Why: Electron's cookies.set() requires a url field to determine the cookie's
-// scope. Derive it from the domain + secure flag so the caller doesn't need
-// to supply it.
+// Why: cookies.set() needs a url to scope the cookie; derive it from domain + secure flag.
 function deriveUrl(domain: string, secure: boolean): string | null {
   const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain
   if (!cleanDomain || cleanDomain.includes(' ')) {
@@ -578,8 +561,7 @@ async function importValidatedCookies(
   let skipped = totalInput - cookies.length
   const domainSet = new Set<string>()
 
-  // Why: Electron's cookies.set() rejects any non-printable-ASCII byte.
-  // Strip from all string fields as a safety net.
+  // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
   const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
 
   for (const cookie of cookies) {
@@ -596,8 +578,7 @@ async function importValidatedCookies(
         expirationDate: cookie.expirationDate
       })
       importedCount++
-      // Why: surface only the domain — never name, value, or path — so the
-      // renderer can show a useful summary without leaking secret cookie data.
+      // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
       const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
       domainSet.add(cleanDomain)
     } catch (err) {
@@ -638,8 +619,7 @@ async function importValidatedCookies(
 // Import from JSON file
 // ---------------------------------------------------------------------------
 
-// Why: source selection must be main-owned via a native open dialog so a
-// compromised renderer cannot turn cookie import into arbitrary file reads.
+// Why: use a main-owned native dialog so a compromised renderer can't turn import into arbitrary file reads.
 export async function pickCookieFile(parentWindow: BrowserWindow | null): Promise<string | null> {
   const opts = {
     title: 'Import Cookies',
@@ -714,14 +694,11 @@ export async function importCookiesFromFile(
 // Direct import from installed Chromium browser
 // ---------------------------------------------------------------------------
 
-// Why: Google and other services bind auth cookies to the User-Agent that
-// created them. We read the source browser's real version from its plist
-// and construct a matching UA string so imported sessions aren't invalidated.
+// Why: services bind auth cookies to the creating User-Agent, so build a UA matching the source browser's real version.
 export function getUserAgentForBrowser(
   family: BrowserSessionProfileSource['browserFamily']
 ): string | null {
-  // Why: UA spoofing uses macOS-specific plist reading. On other platforms,
-  // skip UA override — the default Electron UA is acceptable.
+  // Why: UA version comes from macOS-only plist reading; elsewhere the default Electron UA is acceptable.
   if (process.platform !== 'darwin') {
     return null
   }
@@ -763,14 +740,12 @@ export function getUserAgentForBrowser(
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
     case 'comet': {
-      // Why: Comet is Chromium-based and ships a Chrome-shaped version in its plist.
-      // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
+      // Why: Comet is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
       const v = readBrowserVersion('/Applications/Comet.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
     case 'helium': {
-      // Why: Helium is Chromium-based and ships a Chrome-shaped version in its plist.
-      // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
+      // Why: Helium is Chromium-based; use Chrome's UA shape so Google-bound auth cookies survive import.
       const v = readBrowserVersion('/Applications/Helium.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
@@ -805,16 +780,12 @@ function chromiumTimestampToUnix(chromiumTs: bigint | number | string): number {
   }
 }
 
-// Why: each platform uses a different mechanism to protect the Chromium cookie encryption key.
-// macOS: PBKDF2(keychain password, "saltysalt", 1003 iterations) → AES-128-CBC
-// Linux: PBKDF2(keyring password or "peanuts", "saltysalt", 1 iteration) → AES-128-CBC
-// Windows: DPAPI-encrypted master key from Local State → AES-256-GCM
+// Why: each platform protects the Chromium key differently: macOS/Linux PBKDF2→AES-128-CBC, Windows DPAPI→AES-256-GCM.
 
 type EncryptionKeyResult = {
   key: Buffer
   mode: 'aes-128-cbc' | 'aes-256-gcm'
-  // Why: Linux v10 cookies use a hardcoded "peanuts" password while v11 uses the
-  // keyring password. We need both keys to decrypt the full cookie set.
+  // Why: Linux v10 cookies use "peanuts" and v11 the keyring password; both keys are needed to decrypt the full set.
   fallbackKey?: Buffer
 }
 
@@ -926,8 +897,7 @@ export function buildChromiumCookieInsertParams(
       return null
     }
 
-    // Why: Chromium cookie DB columns drift across Chrome/Electron versions.
-    // Missing NOT NULL target columns must get safe Chromium defaults, not NULL.
+    // Why: cookie columns drift across Chrome/Electron versions; missing NOT NULL columns need Chromium defaults, not NULL.
     return fallbackChromiumCookieColumnValue(column, sourceRow)
   })
 }
@@ -972,9 +942,7 @@ function getLinuxEncryptionKey(
   keychainService: string,
   keychainAccount: string
 ): EncryptionKeyResult | null {
-  // Why: Linux v10 cookies use the hardcoded password "peanuts" with 1 PBKDF2
-  // iteration. v11 cookies use the actual keyring password. We derive both keys
-  // so the decrypt function can try each based on the version prefix.
+  // Why: v10 cookies use hardcoded "peanuts", v11 the keyring password; derive both so decrypt can pick by version prefix.
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
 
   let keyringPassword = ''
@@ -1031,8 +999,7 @@ function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult 
       return null
     }
 
-    // Why: PowerShell DPAPI decrypt is the only way to access the master key
-    // without native addons. The key is passed via stdin to prevent injection.
+    // Why: PowerShell DPAPI decrypt is the only native-addon-free path to the master key; pass via stdin to avoid injection.
     const dpapiData = encryptedKey.subarray(dpapiPrefix.length).toString('base64')
     const script = [
       'try { Add-Type -AssemblyName System.Security.Cryptography.ProtectedData -ErrorAction Stop }',
@@ -1056,12 +1023,7 @@ function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult 
   }
 }
 
-// Why: Chromium 127+ prepends a 32-byte per-host HMAC to the cookie value
-// before encrypting. After AES-CBC decryption, the raw output is:
-//   [32-byte HMAC] [actual cookie value]
-// Detection: the HMAC is a hash, so roughly half its bytes are non-printable
-// ASCII. Real cookie values are overwhelmingly printable. If ≥8 of the first
-// 32 bytes are non-printable, it's an HMAC prefix.
+// Why: Chromium 127+ prepends a 32-byte HMAC before the value; a hash is ~half non-printable, so ≥8 non-printable of the first 32 bytes flags the prefix.
 const CHROMIUM_COOKIE_HMAC_LEN = 32
 
 function hasHmacPrefix(buf: Buffer): boolean {
@@ -1103,8 +1065,7 @@ function decryptCookieValueRaw(
     return Buffer.alloc(0)
   }
 
-  // Why: Linux v10 uses "peanuts" key, v11 uses keyring key. Try the primary
-  // key first, then fallback. macOS uses the same key for both versions.
+  // Why: Linux v10 uses the "peanuts" key, v11 the keyring key; try primary then fallback (macOS uses one key).
   const keysToTry =
     version === 'v10' && keyResult.fallbackKey
       ? [keyResult.fallbackKey, keyResult.key]
@@ -1175,8 +1136,7 @@ function decodeSafariBinaryCookies(buffer: Buffer): ValidatedCookie[] {
 }
 
 function appendSafariCookies(target: ValidatedCookie[], cookies: readonly ValidatedCookie[]): void {
-  // Why: Safari binary cookie pages can contain generated-size cookie lists;
-  // spreading a decoded page into push can exceed JavaScript's argument limit.
+  // Why: pages can hold large cookie lists; push per-item to avoid exceeding the spread argument limit.
   for (const cookie of cookies) {
     target.push(cookie)
   }
@@ -1215,8 +1175,7 @@ function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
   if (buf.length < 48) {
     return null
   }
-  // Why: size is read from the binary file and could be attacker-controlled.
-  // Clamp to buf.length so readCString cannot escape the cookie's subarray.
+  // Why: size comes from the file and could be attacker-controlled; clamp so readCString can't escape the subarray.
   const size = Math.min(buf.readUInt32LE(0), buf.length)
   if (size < 48) {
     return null
@@ -1402,8 +1361,7 @@ async function importCookiesFromSafari(
     data = readFileSync(browser.cookiesPath)
   } catch (err) {
     diag(`  Safari read failed: ${err}`)
-    // Why: Safari's Cookies.binarycookies lives inside a macOS sandbox container.
-    // Reading it requires Full Disk Access in System Settings → Privacy & Security.
+    // Why: Safari's Cookies.binarycookies is in a sandbox container; reading it needs Full Disk Access.
     const isPermError =
       err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EPERM'
     if (isPermError) {
@@ -1459,19 +1417,9 @@ export async function importCookiesFromBrowser(
     return importCookiesFromSafari(browser, targetPartition)
   }
 
-  // Why: Electron's cookies.set() API rejects many valid cookie values (binary
-  // bytes > 0x7F etc). Instead, decrypt from the source browser and write
-  // plaintext directly to the SQLite `value` column. CookieMonster reads
-  // `value` as a raw byte string when `encrypted_value` is empty, bypassing
-  // all API-level validation. This works because Electron's CookieMonster in
-  // dev mode does not use os_crypt encryption — it stores cookies as plaintext.
-  // In packaged builds where os_crypt IS active, CookieMonster will re-encrypt
-  // plaintext cookies on its next flush, so this approach is safe in both modes.
+  // Why: cookies.set() rejects many valid values (bytes > 0x7F); instead write plaintext to the `value` column, which CookieMonster reads raw when `encrypted_value` is empty and re-encrypts on flush in packaged builds.
 
-  // Why: CookieMonster holds the live DB's data in memory and overwrites it
-  // on flush/shutdown. Writing directly to the live DB is futile. Instead,
-  // copy the live DB to a staging location, populate it there, and let the
-  // next cold start swap it in before CookieMonster initializes.
+  // Why: CookieMonster overwrites the live DB on flush, so stage a populated copy and swap it in at next cold start.
   const targetSession = session.fromPartition(targetPartition)
   await targetSession.cookies.flushStore()
 
@@ -1479,10 +1427,7 @@ export async function importCookiesFromBrowser(
   const partitionDir = join(app.getPath('userData'), 'Partitions', partitionName)
   let liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
 
-  // Why: Electron only creates the partition's Cookies SQLite file after the
-  // session has actually stored a cookie. For newly created profiles that have
-  // never been used by a webview, the file won't exist yet. Setting and
-  // removing a throwaway cookie forces Electron to initialize the database.
+  // Why: Electron creates the Cookies file only after a cookie is stored; a throwaway set/remove forces DB init for unused profiles.
   if (!liveCookiesPath) {
     try {
       await targetSession.cookies.set({ url: 'https://localhost', name: '__init', value: '1' })
@@ -1508,8 +1453,7 @@ export async function importCookiesFromBrowser(
     mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
-    // Why: copyFile is not atomic and can leave a partial database after an
-    // I/O failure, so failed imports must not retain sensitive cookie data.
+    // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
     try {
       unlinkSync(stagingCookiesPath)
     } catch {
@@ -1520,8 +1464,7 @@ export async function importCookiesFromBrowser(
 
   let sourceSnapshot: ChromiumCookieSnapshot
   try {
-    // Why: the browser can commit cookies only to WAL while it remains open;
-    // snapshot retries prevent pairing the main DB with a racing WAL generation.
+    // Why: an open browser may hold cookies in WAL only; snapshot retries avoid pairing the main DB with a racing WAL.
     sourceSnapshot = createChromiumCookieSnapshot(browser.cookiesPath)
   } catch (err) {
     try {
@@ -1540,8 +1483,7 @@ export async function importCookiesFromBrowser(
   let stagingDb: InstanceType<typeof DatabaseSync> | null = null
 
   try {
-    // Why: Chromium stores timestamps as microseconds since 1601, which can exceed
-    // Number.MAX_SAFE_INTEGER (~9e15). readBigInts ensures no precision loss.
+    // Why: Chromium timestamps (µs since 1601) can exceed Number.MAX_SAFE_INTEGER; readBigInts avoids precision loss.
     sourceDb = new DatabaseSync(sourceSnapshot.databasePath, {
       readOnly: true,
       readBigInts: true
@@ -1586,8 +1528,7 @@ export async function importCookiesFromBrowser(
     if (needsSourceKey && !sourceKey) {
       stagingDb.close()
       stagingDb = null
-      // Why: key denial happens after staging, so failed retries must not leave
-      // one full target database copy behind each time.
+      // Why: key denial happens after staging, so clean up the target DB copy or retries pile up.
       try {
         unlinkSync(stagingCookiesPath)
       } catch {
@@ -1599,11 +1540,7 @@ export async function importCookiesFromBrowser(
       }
     }
 
-    // Why: Google's integrity cookies (SIDCC, __Secure-*PSIDCC, __Secure-STRP)
-    // are cryptographically bound to the source browser's TLS fingerprint and
-    // environment. Importing them into a different browser causes
-    // accounts.google.com to reject the session with CookieMismatch. Skipping
-    // them lets Google regenerate fresh integrity cookies on the first request.
+    // Why: Google integrity cookies are bound to the source browser's TLS/env; importing them triggers CookieMismatch, so skip and let Google reissue.
     const INTEGRITY_COOKIE_NAMES = new Set([
       'SIDCC',
       '__Secure-1PSIDCC',
@@ -1649,9 +1586,7 @@ export async function importCookiesFromBrowser(
 
     for (const sourceRow of sourceRows) {
       const encRaw = sourceRow.encrypted_value
-      // Why: node:sqlite returns BLOB columns as Uint8Array. Any other truthy type
-      // means the schema is unexpected — treat it as missing rather than creating
-      // an empty buffer that would silently produce a blank cookie value.
+      // Why: node:sqlite returns BLOBs as Uint8Array; treat any other type as missing, not an empty buffer that would silently blank the cookie value.
       const encBuf = encRaw instanceof Uint8Array ? Buffer.from(encRaw) : null
       const plainRaw = sourceRow.value
 
@@ -1687,9 +1622,7 @@ export async function importCookiesFromBrowser(
       const httpOnly = sourceRow.is_httponly === 1n
       const sameSite = chromiumSameSite(Number(sourceRow.samesite ?? 0))
       const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
-      // Why: cookie values are raw byte strings, not UTF-8 text. Using latin1
-      // (ISO-8859-1) preserves all byte values 0x00–0xFF without replacement
-      // characters that UTF-8 decoding would insert for invalid sequences.
+      // Why: cookie values are raw bytes, not UTF-8; latin1 preserves 0x00–0xFF without lossy replacement.
       const value = decryptedValue.toString('latin1')
 
       decryptedCookies.push({
@@ -1716,18 +1649,13 @@ export async function importCookiesFromBrowser(
 
     diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
 
-    // Why: clearing the session's in-memory cookie store before loading imported
-    // cookies prevents stale cookies from a previous Orca browsing session from
-    // mixing with the imported set. Mixed state (some old, some imported) causes
-    // sites like Google to detect inconsistent session cookies and reject them.
+    // Why: clear stale cookies first; mixing them with the imported set makes sites like Google reject the session.
     await targetSession.clearStorageData({ storages: ['cookies'] })
     diag(
       `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
     )
 
-    // Why: loading cookies into memory via cookies.set() makes them available
-    // immediately without requiring a restart. The staging DB is kept as a
-    // fallback for any cookies that fail the cookies.set() validation.
+    // Why: load into memory via cookies.set() so imported cookies work without a restart.
     for (const cookie of decryptedCookies) {
       const url = deriveUrl(cookie.domain, cookie.secure)
       if (!url) {
@@ -1735,8 +1663,7 @@ export async function importCookiesFromBrowser(
         continue
       }
       try {
-        // Why: __Host- prefixed cookies must not have a domain attribute and
-        // must have path=/. Chromium rejects them otherwise.
+        // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
         const isHostPrefixed = cookie.name.startsWith('__Host-')
         await targetSession.cookies.set({
           url,
@@ -1758,9 +1685,7 @@ export async function importCookiesFromBrowser(
     diag(`  memory load: ${memoryLoaded} OK, ${memoryFailed} failed`)
 
     if (memoryFailed > 0) {
-      // Why: some cookies couldn't be loaded via cookies.set() (non-ASCII values
-      // or other validation failures). Keep the staging DB so the next cold start
-      // picks them up from SQLite where CookieMonster reads them without validation.
+      // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
       browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
       diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
     } else {
@@ -1799,8 +1724,7 @@ export async function importCookiesFromBrowser(
     } catch {
       /* may already be closed */
     }
-    // Why: if the import fails after the staging DB was created, clean it up
-    // to avoid a stale staged import being applied on the next cold start.
+    // Why: drop the staging DB so a stale staged import isn't applied on the next cold start.
     try {
       unlinkSync(stagingCookiesPath)
     } catch {
