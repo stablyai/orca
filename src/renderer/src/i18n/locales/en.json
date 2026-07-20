@@ -4819,15 +4819,16 @@
         },
         "MissionAddProjectsDialog": {
           "6ec97cd26f": "Add Projects",
-          "02449d01cc": "Each added project gets a workspace on {{value0}}.",
+          "02449d01cc": "Each added project gets a workspace on {{value0}}. Missions currently support only Git projects on this computer's native filesystem; folder, SSH, runtime, and WSL projects are unavailable.",
           "d5aae76bca": "Cancel",
           "e81ed87ddd": "Adding...",
           "36cc45b3fb": "Add",
-          "99e993fe93": "No eligible projects available to add."
+          "99e993fe93": "No eligible projects available to add.",
+          "5b02d8f5da": "Could not add projects. Try again."
         },
         "MissionCreateDialog": {
           "0655a02f86": "New Mission",
-          "4608f14ade": "Each selected project gets a workspace on a shared mission branch.",
+          "4608f14ade": "Each selected project gets a workspace on a shared mission branch. Missions currently support only Git projects on this computer's native filesystem; folder, SSH, runtime, and WSL projects are unavailable.",
           "48ec5c5b11": "Mission Name",
           "0c9fe9ce6d": "Branch",
           "bcea32d392": "Projects",
@@ -4867,6 +4868,11 @@
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."
+        },
+        "MissionMemberRows": {
+          "2f310bd75a": "Remove project and delete workspace?",
+          "539f206f0e": "This deletes the Mission workspace for {{value0}}. Git work that cannot be deleted safely is preserved on its branch.",
+          "1d08535a23": "Delete workspace"
         }
       },
       "shared": {

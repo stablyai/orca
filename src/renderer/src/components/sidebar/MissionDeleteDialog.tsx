@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { Mission } from '../../../../shared/types'
+import { toast } from 'sonner'
 
 export function MissionDeleteDialog({
   mission,
@@ -26,6 +27,8 @@ export function MissionDeleteDialog({
   const [deleteWorktrees, setDeleteWorktrees] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [failureMessages, setFailureMessages] = useState<string[]>([])
+  const [warningMessage, setWarningMessage] = useState<string | null>(null)
   const missionId = mission?.id ?? null
   // Why: an in-flight delete may resolve after the dialog has switched to a
   // different mission (cancel A → open B). The ref lets the completion detect
@@ -42,6 +45,8 @@ export function MissionDeleteDialog({
     if (missionId !== null) {
       setDeleteWorktrees(true)
       setFailed(false)
+      setFailureMessages([])
+      setWarningMessage(null)
       setSubmitting(false)
     }
   }, [missionId])
@@ -53,15 +58,30 @@ export function MissionDeleteDialog({
     const targetMissionId = mission.id
     setSubmitting(true)
     setFailed(false)
+    setFailureMessages([])
+    setWarningMessage(null)
     try {
       const result = await deleteMission(targetMissionId, deleteWorktrees)
       if (currentMissionIdRef.current !== targetMissionId) {
         return
       }
       if (result?.deleted) {
+        if (result.warning) {
+          toast.info(result.warning)
+        }
         onOpenChange(false)
         return
       }
+      setWarningMessage(result?.warning ?? null)
+      const repoNameById = new Map(repos.map((repo) => [repo.id, repo.displayName]))
+      setFailureMessages(
+        [
+          result?.error,
+          ...(result?.memberResults.map((entry) =>
+            entry.error ? `${repoNameById.get(entry.repoId) ?? entry.repoId}: ${entry.error}` : null
+          ) ?? [])
+        ].filter((message): message is string => Boolean(message))
+      )
       setFailed(true)
     } finally {
       if (currentMissionIdRef.current === targetMissionId) {
@@ -107,13 +127,32 @@ export function MissionDeleteDialog({
             )}
           </Label>
         </div>
-        {failed ? (
-          <p className="text-xs text-destructive">
-            {translate(
-              'auto.components.sidebar.MissionDeleteDialog.b74a531d8d',
-              'Some workspaces could not be deleted. Resolve the errors and try again.'
-            )}
+        {warningMessage ? (
+          <p
+            role="status"
+            className="rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground"
+          >
+            {warningMessage}
           </p>
+        ) : null}
+        {failed ? (
+          <div className="space-y-1 text-xs text-destructive">
+            <p>
+              {translate(
+                'auto.components.sidebar.MissionDeleteDialog.b74a531d8d',
+                'Some workspaces could not be deleted. Resolve the errors and try again.'
+              )}
+            </p>
+            {failureMessages.length > 0 ? (
+              <ul className="max-h-24 list-disc space-y-0.5 overflow-y-auto pl-4 scrollbar-sleek">
+                {failureMessages.map((message) => (
+                  <li key={message} className="break-words">
+                    {message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         ) : null}
         <DialogFooter>
           <Button

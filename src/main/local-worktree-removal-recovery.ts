@@ -123,6 +123,13 @@ export async function recoverLocalWindowsWorktreeRemoval(
   // Why: Windows recovery recursively deletes the remaining directory, so it
   // must fail closed while a watcher process may still own a native handle.
   await args.closeWatcher(args.canonicalWorktreePath)
+  if (!(await isRecoverableWindowsFilesystemRemovalFailure(args))) {
+    throw staleRegistrationRecoveryError(
+      new Error('Git registered a worktree at the removal path during watcher teardown.'),
+      args.canonicalWorktreePath,
+      args.force
+    )
+  }
   try {
     await removeLocalWorktreePath(args.canonicalWorktreePath, args.localWorktreeGitOptions)
   } catch (error) {

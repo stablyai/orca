@@ -11,6 +11,7 @@ Keep this folder for versioned reference docs that are meant to survive past a s
 - Headless Linux server setup for remote `orca serve` hosts. See [Headless Linux Server](./headless-linux-server.md).
 - Feature education state, interaction tracking, and retention analytics notes that define how contextual tours are persisted and measured. See [Feature Education State](./feature-education-state.md), [Feature Discovery Interaction Tracking](./feature-discovery-interaction-tracking.md), and [Feature Education Retention Analytics](./feature-education-retention-analytics.md).
 - New-user parallel work telemetry notes that define how the parallel-work tour and setup guide should be measured against retention. See [New User Parallel Work Telemetry](./new-user-parallel-work-telemetry.md).
+- 여러 Git repository를 하나의 안전한 작업 세션으로 구성하는 동작과 현재 host 제한은 [Missions](./missions.md)를 참고한다.
 
 ## What Stays Out
 

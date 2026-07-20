@@ -16,14 +16,15 @@ import type {
   MissionDeleteResult,
   MissionMemberResult
 } from '../../shared/types'
-import { getMissionWorktreeName } from '../../shared/missions'
 import {
   ensureMissionRootStrict,
   removeMissionRootIfPresent,
   syncMissionRootIfPresent
 } from '../missions/mission-root-sync'
+import { MissionMemberLifecycle } from '../missions/mission-member-lifecycle'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { requireNativeLocalMissionRepos } from '../missions/mission-repo-eligibility'
 
 function notifyReposChanged(mainWindow: BrowserWindow): void {
   if (!mainWindow.isDestroyed()) {
@@ -55,57 +56,7 @@ export function registerMissionHandlers(
     ipcMain.removeHandler(channel)
   }
 
-  async function createMemberWorktree(
-    mission: Mission,
-    repoId: string
-  ): Promise<MissionMemberResult> {
-    try {
-      const created = await runtime.createManagedWorktree({
-        repoSelector: `id:${repoId}`,
-        name: getMissionWorktreeName(mission.branchName),
-        // Why: inside a mission the repo is the member's identity; the mission
-        // name already labels the session card and the shared branch.
-        displayName: store.getRepo(repoId)?.displayName ?? mission.name,
-        branchNameOverride: mission.branchName
-      })
-      store.setMissionMemberWorktree(mission.id, repoId, created.worktree.id)
-      return { repoId, worktreeId: created.worktree.id }
-    } catch (error) {
-      store.setMissionMemberWorktree(mission.id, repoId, null)
-      return { repoId, worktreeId: null, error: toErrorMessage(error) }
-    }
-  }
-
-  // Why: fan-out is intentionally sequential — parallel worktree creation can
-  // contend on git locks, and per-member results must stay deterministic for
-  // the create dialog.
-  async function createMemberWorktrees(
-    mission: Mission,
-    repoIds: string[]
-  ): Promise<MissionMemberResult[]> {
-    const results: MissionMemberResult[] = []
-    for (const repoId of repoIds) {
-      results.push(await createMemberWorktree(mission, repoId))
-    }
-    return results
-  }
-
-  async function removeMemberWorktree(
-    mission: Mission,
-    member: { repoId: string; worktreeId: string | null }
-  ): Promise<MissionMemberResult> {
-    if (!member.worktreeId) {
-      store.removeMissionMember(mission.id, member.repoId)
-      return { repoId: member.repoId, worktreeId: null }
-    }
-    try {
-      await runtime.removeManagedWorktree(`id:${member.worktreeId}`, false, true)
-      store.removeMissionMember(mission.id, member.repoId)
-      return { repoId: member.repoId, worktreeId: null }
-    } catch (error) {
-      return { repoId: member.repoId, worktreeId: member.worktreeId, error: toErrorMessage(error) }
-    }
-  }
+  const memberLifecycle = new MissionMemberLifecycle(store, runtime)
 
   ipcMain.handle('missions:list', (): Mission[] => store.getMissions())
 
@@ -113,32 +64,43 @@ export function registerMissionHandlers(
     'missions:create',
     async (_event, rawArgs: unknown): Promise<MissionCreateResult> => {
       const args = parseMissionIpcArgs(MissionCreateArgs, rawArgs, 'invalid_mission_create_args')
-      const repoIds = [...new Set(args.repoIds)].filter((repoId) => store.getRepo(repoId))
-      if (repoIds.length === 0) {
-        throw new Error('mission_create_no_valid_repos')
-      }
+      const repoIds = [...new Set(args.repoIds)]
+      requireNativeLocalMissionRepos(store, repoIds)
       const mission = store.createMission({
         name: args.name,
         branchName: args.branchName ?? null,
         repoIds,
         sessionAgent: args.sessionAgent
       })
-      notifyReposChanged(mainWindow)
-      const memberResults = await createMemberWorktrees(mission, repoIds)
-      // Why: the mission row IS the session card, so root and session are
-      // created eagerly. Best-effort — a root failure must not fail creation;
-      // the sidebar retries via missions:ensureSession.
-      try {
-        const ensured = ensureMissionRootStrict(store, store.getMission(mission.id) ?? mission)
-        store.ensureMissionSessionWorkspace(ensured.id)
-      } catch (error) {
-        console.warn('[missions] eager session ensure failed:', error)
-      }
-      notifyReposChanged(mainWindow)
-      return { mission: store.getMission(mission.id) ?? mission, memberResults }
+      return memberLifecycle.run(mission.id, async () => {
+        let rootedMission: Mission | null = null
+        try {
+          // Why: member worktrees live inside the Mission root so sandboxed
+          // agents can discover and edit every repo without following external symlinks.
+          rootedMission = ensureMissionRootStrict(store, mission)
+          // Why: the worktree marker can recover metadata/member-pointer crash
+          // windows only if the owning Mission and root already reached disk.
+          store.flushOrThrow()
+        } catch (error) {
+          if (rootedMission) {
+            try {
+              removeMissionRootIfPresent(store, rootedMission)
+            } catch {
+              // Preserve the original durability failure; ownership checks keep
+              // an unremoved root from being claimed by another Mission.
+            }
+          }
+          store.deleteMission(mission.id)
+          throw error
+        }
+        notifyReposChanged(mainWindow)
+        const memberResults = await memberLifecycle.createWorktrees(rootedMission, repoIds)
+        store.ensureMissionSessionWorkspace(rootedMission.id)
+        notifyReposChanged(mainWindow)
+        return { mission: store.getMission(mission.id) ?? rootedMission, memberResults }
+      })
     }
   )
-
   ipcMain.handle('missions:update', (_event, rawArgs: unknown): Mission | null => {
     const args = parseMissionIpcArgs(MissionUpdateArgs, rawArgs, 'invalid_mission_update_args')
     const updated = store.updateMission(args.missionId, args.updates)
@@ -147,47 +109,89 @@ export function registerMissionHandlers(
     }
     return updated
   })
-
   ipcMain.handle(
     'missions:delete',
     async (_event, rawArgs: unknown): Promise<MissionDeleteResult> => {
       const args = parseMissionIpcArgs(MissionDeleteArgs, rawArgs, 'invalid_mission_delete_args')
-      const mission = store.getMission(args.missionId)
-      if (!mission) {
-        return { deleted: false, memberResults: [] }
-      }
-      if (!args.deleteWorktrees) {
-        const deleted = store.deleteMission(mission.id)
-        if (deleted) {
-          removeMissionRootIfPresent(mission)
+      return memberLifecycle.run(args.missionId, async () => {
+        const mission = store.getMission(args.missionId)
+        if (!mission) {
+          return { deleted: false, memberResults: [] }
+        }
+        try {
+          // Why: the Mission PTY may have a cwd inside a link; stop it before unlinking.
+          await memberLifecycle.teardownSession(mission)
+        } catch (error) {
+          return { deleted: false, memberResults: [], error: toErrorMessage(error) }
+        }
+
+        if (!args.deleteWorktrees) {
+          let rootWarning: string | undefined, recoveredMission: Mission, deleted: boolean
+          try {
+            // Why: a create intent may be the only proof after Git add. Promote
+            // it through a strict scan before root cleanup can remove that proof.
+            recoveredMission = await memberLifecycle.recoverMembersBeforeMissionDetach(mission)
+            const rootResult = removeMissionRootIfPresent(store, recoveredMission)
+            if (rootResult && !rootResult.removed && mission.rootPath) {
+              rootWarning = `Preserved files in the former Mission root: ${mission.rootPath}`
+            }
+            // Why: marker removal is safe only after Mission/session deletion is durable.
+            deleted = store.deleteMissionAndFlush(mission.id)
+          } catch (error) {
+            return { deleted: false, memberResults: [], error: toErrorMessage(error) }
+          }
+          if (deleted) {
+            memberLifecycle.detachDeletedMissionOwnership(recoveredMission)
+          }
+          notifyReposChanged(mainWindow)
+          return {
+            deleted,
+            memberResults: [],
+            ...(rootWarning ? { warning: rootWarning } : {})
+          }
+        }
+
+        const memberResults: MissionMemberResult[] = []
+        // Why: removeWorktree reassigns members; iterate a snapshot so removals don't skip entries.
+        const members = [...mission.members]
+        for (const member of members) {
+          memberResults.push(await memberLifecycle.removeWorktree(mission, member))
+        }
+        const remaining = store.getMission(mission.id)
+        // Why: keep a Mission with an undeletable worktree visible for a safe retry.
+        let deleted = false
+        let rootWarning: string | undefined
+        if (remaining !== null && remaining.members.length === 0) {
+          try {
+            const rootResult = removeMissionRootIfPresent(store, mission)
+            if (rootResult && !rootResult.removed && mission.rootPath) {
+              rootWarning = `Preserved files in the former Mission root: ${mission.rootPath}`
+            }
+            deleted = store.deleteMission(mission.id)
+          } catch (error) {
+            return {
+              deleted: false,
+              memberResults,
+              error: toErrorMessage(error)
+            }
+          }
+        }
+        if (!deleted) {
+          syncMissionRootIfPresent(store, mission.id)
         }
         notifyReposChanged(mainWindow)
-        return { deleted, memberResults: [] }
-      }
-      const memberResults: MissionMemberResult[] = []
-      // Why: removeMissionMember reassigns mission.members; iterate the array
-      // captured before the loop so removals don't skip entries.
-      const members = mission.members
-      for (const member of members) {
-        memberResults.push(await removeMemberWorktree(mission, member))
-      }
-      const remaining = store.getMission(mission.id)
-      // Why: a mission with an undeletable worktree (dirty/unpushed) must stay
-      // visible so the user can resolve and retry — never silently orphan it.
-      const deleted =
-        remaining !== null && remaining.members.length === 0
-          ? store.deleteMission(mission.id)
-          : false
-      if (deleted) {
-        removeMissionRootIfPresent(mission)
-      } else {
-        syncMissionRootIfPresent(store, mission.id)
-      }
-      notifyReposChanged(mainWindow)
-      return { deleted, memberResults }
+        const warnings = memberResults.flatMap((result) => result.warning ?? [])
+        if (rootWarning) {
+          warnings.push(rootWarning)
+        }
+        return {
+          deleted,
+          memberResults,
+          ...(warnings.length > 0 ? { warning: warnings.join(' ') } : {})
+        }
+      })
     }
   )
-
   ipcMain.handle(
     'missions:addMembers',
     async (_event, rawArgs: unknown): Promise<MissionCreateResult> => {
@@ -196,26 +200,39 @@ export function registerMissionHandlers(
         rawArgs,
         'invalid_mission_add_members_args'
       )
-      const mission = store.getMission(args.missionId)
-      if (!mission) {
-        throw new Error('mission_not_found')
-      }
-      const existing = new Set(mission.members.map((member) => member.repoId))
-      const repoIds = [...new Set(args.repoIds)].filter(
-        (repoId) => store.getRepo(repoId) && !existing.has(repoId)
-      )
-      store.addMissionMembers(mission.id, repoIds)
-      notifyReposChanged(mainWindow)
-      const memberResults = await createMemberWorktrees(
-        store.getMission(mission.id) ?? mission,
-        repoIds
-      )
-      syncMissionRootIfPresent(store, mission.id)
-      notifyReposChanged(mainWindow)
-      return { mission: store.getMission(mission.id) ?? mission, memberResults }
+      return memberLifecycle.run(args.missionId, async () => {
+        const mission = store.getMission(args.missionId)
+        if (!mission) {
+          throw new Error('mission_not_found')
+        }
+        const existing = new Set(mission.members.map((member) => member.repoId))
+        const repoIds = [...new Set(args.repoIds)].filter((repoId) => !existing.has(repoId))
+        if (repoIds.length > 0) {
+          requireNativeLocalMissionRepos(store, repoIds)
+        }
+        const rootedMission = ensureMissionRootStrict(store, mission)
+        store.addMissionMembers(mission.id, repoIds)
+        try {
+          // Why: marker-only recovery needs the intended membership durable
+          // before any newly added repo receives a linked checkout.
+          store.flushOrThrow()
+        } catch (error) {
+          for (const repoId of repoIds) {
+            store.removeMissionMember(mission.id, repoId)
+          }
+          throw error
+        }
+        notifyReposChanged(mainWindow)
+        const memberResults = await memberLifecycle.createWorktrees(
+          store.getMission(mission.id) ?? rootedMission,
+          repoIds
+        )
+        syncMissionRootIfPresent(store, mission.id)
+        notifyReposChanged(mainWindow)
+        return { mission: store.getMission(mission.id) ?? mission, memberResults }
+      })
     }
   )
-
   ipcMain.handle(
     'missions:removeMember',
     async (_event, rawArgs: unknown): Promise<MissionDeleteResult> => {
@@ -224,27 +241,38 @@ export function registerMissionHandlers(
         rawArgs,
         'invalid_mission_remove_member_args'
       )
-      const mission = store.getMission(args.missionId)
-      if (!mission) {
-        return { deleted: false, memberResults: [] }
-      }
-      const member = mission.members.find((entry) => entry.repoId === args.repoId)
-      if (!member) {
-        return { deleted: false, memberResults: [] }
-      }
-      let result: MissionMemberResult
-      if (args.deleteWorktree) {
-        result = await removeMemberWorktree(mission, member)
-      } else {
-        store.removeMissionMember(mission.id, member.repoId)
-        result = { repoId: member.repoId, worktreeId: null }
-      }
-      syncMissionRootIfPresent(store, mission.id)
-      notifyReposChanged(mainWindow)
-      return { deleted: false, memberResults: [result] }
+      return memberLifecycle.run(args.missionId, async () => {
+        const mission = store.getMission(args.missionId)
+        if (!mission) {
+          return { deleted: false, memberResults: [] }
+        }
+        const member = mission.members.find((entry) => entry.repoId === args.repoId)
+        if (!member) {
+          return { deleted: false, memberResults: [] }
+        }
+        try {
+          await memberLifecycle.teardownSession(mission)
+        } catch (error) {
+          return {
+            deleted: false,
+            memberResults: [
+              {
+                repoId: member.repoId,
+                worktreeId: member.worktreeId,
+                error: toErrorMessage(error)
+              }
+            ]
+          }
+        }
+        const result = args.deleteWorktree
+          ? await memberLifecycle.removeWorktree(mission, member)
+          : await memberLifecycle.detachMember(mission, member)
+        syncMissionRootIfPresent(store, mission.id)
+        notifyReposChanged(mainWindow)
+        return { deleted: false, memberResults: [result] }
+      })
     }
   )
-
   ipcMain.handle(
     'missions:recreateMemberWorktree',
     async (_event, rawArgs: unknown): Promise<MissionMemberResult> => {
@@ -253,32 +281,42 @@ export function registerMissionHandlers(
         rawArgs,
         'invalid_mission_recreate_args'
       )
-      const mission = store.getMission(args.missionId)
-      if (!mission || !mission.members.some((member) => member.repoId === args.repoId)) {
-        throw new Error('mission_member_not_found')
-      }
-      const result = await createMemberWorktree(mission, args.repoId)
-      syncMissionRootIfPresent(store, mission.id)
-      notifyReposChanged(mainWindow)
-      return result
+      return memberLifecycle.run(args.missionId, async () => {
+        const mission = store.getMission(args.missionId)
+        if (!mission || !mission.members.some((member) => member.repoId === args.repoId)) {
+          throw new Error('mission_member_not_found')
+        }
+        const rootedMission = ensureMissionRootStrict(store, mission)
+        const result = await memberLifecycle.createWorktree(rootedMission, args.repoId)
+        syncMissionRootIfPresent(store, mission.id)
+        notifyReposChanged(mainWindow)
+        return result
+      })
     }
   )
-
-  ipcMain.handle('missions:ensureSession', (_event, rawArgs: unknown): FolderWorkspace => {
-    const args = parseMissionIpcArgs(
-      MissionSelectorArgs,
-      rawArgs,
-      'invalid_mission_ensure_session_args'
-    )
-    const mission = store.getMission(args.missionId)
-    if (!mission) {
-      throw new Error('mission_not_found')
+  ipcMain.handle(
+    'missions:ensureSession',
+    async (_event, rawArgs: unknown): Promise<FolderWorkspace> => {
+      const args = parseMissionIpcArgs(
+        MissionSelectorArgs,
+        rawArgs,
+        'invalid_mission_ensure_session_args'
+      )
+      return memberLifecycle.run(args.missionId, async () => {
+        const mission = store.getMission(args.missionId)
+        if (!mission) {
+          throw new Error('mission_not_found')
+        }
+        requireNativeLocalMissionRepos(
+          store,
+          mission.members.map((member) => member.repoId)
+        )
+        // Why: session open must surface root creation failures; member-change syncs are best-effort.
+        const ensured = ensureMissionRootStrict(store, mission)
+        const workspace = store.ensureMissionSessionWorkspace(ensured.id)
+        notifyReposChanged(mainWindow)
+        return workspace
+      })
     }
-    // Why: strict (throwing) ensure — opening the session must surface a
-    // root that cannot be created, unlike best-effort member-change syncs.
-    const ensured = ensureMissionRootStrict(store, mission)
-    const workspace = store.ensureMissionSessionWorkspace(ensured.id)
-    notifyReposChanged(mainWindow)
-    return workspace
-  })
+  )
 }

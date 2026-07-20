@@ -276,6 +276,7 @@ describe('registerWorktreeHandlers', () => {
     getProjects: vi.fn(),
     getSparsePresets: vi.fn(),
     getSettings: vi.fn(),
+    getMissions: vi.fn(),
     getWorktreeMeta: vi.fn(),
     getAllWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
@@ -351,6 +352,7 @@ describe('registerWorktreeHandlers', () => {
       store.getProjects,
       store.getSparsePresets,
       store.getSettings,
+      store.getMissions,
       store.getWorktreeMeta,
       store.getAllWorktreeMeta,
       store.setWorktreeMeta,
@@ -404,6 +406,7 @@ describe('registerWorktreeHandlers', () => {
       refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: '/workspace'
     })
+    store.getMissions.mockReturnValue([])
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.getAllWorktreeMeta.mockReturnValue({})
     store.setWorktreeMeta.mockReturnValue({})
@@ -6551,6 +6554,22 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('rejects generic deletion of a Mission-managed worktree before Git or metadata changes', async () => {
+    const worktreeId = 'repo-1::/workspace/feature-wt'
+    store.getWorktreeMeta.mockReturnValue(
+      makeWorktreeMeta({ missionId: 'mission-1', instanceId: 'instance-1' })
+    )
+    store.getMissions.mockReturnValue([{ id: 'mission-1', members: [] }])
+
+    await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
+      'mission_member_managed_by_mission'
+    )
+
+    expect(listWorktreesMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
   it('prunes git worktree tracking when removing an orphaned worktree', async () => {
     mockKnownFeatureWorktree()
     const orphanError = Object.assign(new Error('git worktree remove failed'), {
@@ -8734,6 +8753,24 @@ describe('registerWorktreeHandlers', () => {
   })
 
   describe('worktrees:forgetLocal', () => {
+    it('rejects forgetting a worktree still referenced by a Mission member', async () => {
+      const worktreeId = 'repo-1::/workspace/feature-wt'
+      store.getMissions.mockReturnValue([
+        {
+          id: 'mission-1',
+          members: [{ repoId: 'repo-1', worktreeId }]
+        }
+      ])
+
+      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).rejects.toThrow(
+        'mission_member_managed_by_mission'
+      )
+
+      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+    })
+
     it('forgets a workspace pinned to a removed SSH target without touching the provider', async () => {
       const repo = {
         id: 'repo-1',

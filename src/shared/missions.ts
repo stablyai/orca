@@ -1,5 +1,8 @@
-import type { Mission, MissionMember } from './types'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from './execution-host'
+import { isFolderRepo } from './repo-kind'
 import { isTuiAgent } from './tui-agent-config'
+import type { Mission, MissionMember, Repo } from './types'
+import { isWslUncPath } from './wsl-paths'
 
 function createMissionInstanceId(): string {
   const randomUUID = globalThis.crypto?.randomUUID
@@ -28,9 +31,34 @@ function slugifyMissionText(name: string): string {
     .replace(/[-._]+$/g, '')
 }
 
-/** Branch shared by every member worktree. */
-export function slugifyMissionBranch(name: string): string {
-  return `mission/${slugifyMissionText(name) || 'task'}`
+function hashMissionText(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function hasNonAsciiMissionText(value: string): boolean {
+  for (const character of value) {
+    if ((character.codePointAt(0) ?? 0) > 0x7f) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Branch shared by every member worktree. The optional mission identity keeps
+ *  names with no ASCII slug (for example Korean) from all collapsing to task. */
+export function slugifyMissionBranch(name: string, missionId?: string): string {
+  const slug = slugifyMissionText(name)
+  const identity = hasNonAsciiMissionText(name)
+    ? hashMissionText(name.trim())
+    : slugifyMissionText(missionId ?? '')
+        .replace(/^mission-/, '')
+        .slice(0, 8)
+  return `mission/${slug || (identity ? `task-${identity}` : 'task')}`
 }
 
 export function getMissionWorktreeName(branchName: string): string {
@@ -65,9 +93,13 @@ export function getFolderWorkspaceOwnerEnv(workspace: {
   return { ORCA_PROJECT_GROUP_ID: workspace.projectGroupId }
 }
 
-function normalizeMissionBranchName(branchName: string | null | undefined, name: string): string {
+function normalizeMissionBranchName(
+  branchName: string | null | undefined,
+  name: string,
+  missionId: string
+): string {
   const trimmed = branchName?.trim()
-  return trimmed && trimmed.length > 0 ? trimmed : slugifyMissionBranch(name)
+  return trimmed && trimmed.length > 0 ? trimmed : slugifyMissionBranch(name, missionId)
 }
 
 export function createMission(input: {
@@ -80,6 +112,7 @@ export function createMission(input: {
 }): Mission {
   const now = input.now ?? Date.now()
   const name = normalizeMissionName(input.name)
+  const id = createMissionInstanceId()
   const members: MissionMember[] = []
   const seen = new Set<string>()
   for (const repoId of input.repoIds) {
@@ -87,12 +120,18 @@ export function createMission(input: {
       continue
     }
     seen.add(repoId)
-    members.push({ repoId, worktreeId: null, addedAt: now })
+    members.push({
+      repoId,
+      worktreeId: null,
+      worktreeInstanceId: null,
+      lastError: null,
+      addedAt: now
+    })
   }
   return {
-    id: createMissionInstanceId(),
+    id,
     name,
-    branchName: normalizeMissionBranchName(input.branchName, name),
+    branchName: normalizeMissionBranchName(input.branchName, name, id),
     members,
     tabOrder: input.tabOrder,
     ...(input.sessionAgent ? { sessionAgent: input.sessionAgent } : {}),
@@ -116,9 +155,23 @@ function normalizeMissionMembers(value: unknown, now: number): MissionMember[] {
       continue
     }
     seen.add(raw.repoId)
+    const worktreeId =
+      typeof raw.worktreeId === 'string' && raw.worktreeId.length > 0 ? raw.worktreeId : null
     members.push({
       repoId: raw.repoId,
-      worktreeId: typeof raw.worktreeId === 'string' ? raw.worktreeId : null,
+      worktreeId,
+      // Why: an instance stamp without its path-derived worktree id cannot
+      // safely identify ownership and must not be adopted during hydration.
+      worktreeInstanceId:
+        worktreeId &&
+        typeof raw.worktreeInstanceId === 'string' &&
+        raw.worktreeInstanceId.length > 0
+          ? raw.worktreeInstanceId
+          : null,
+      lastError:
+        typeof raw.lastError === 'string' && raw.lastError.trim().length > 0
+          ? raw.lastError.trim()
+          : null,
       addedAt: typeof raw.addedAt === 'number' && Number.isFinite(raw.addedAt) ? raw.addedAt : now
     })
   }
@@ -148,11 +201,18 @@ export function normalizeMissions(value: unknown): Mission[] {
       branchName:
         typeof raw.branchName === 'string' && raw.branchName.trim().length > 0
           ? raw.branchName
-          : slugifyMissionBranch(name),
+          : slugifyMissionBranch(name, raw.id),
       members: normalizeMissionMembers(raw.members, now),
       tabOrder:
         typeof raw.tabOrder === 'number' && Number.isFinite(raw.tabOrder) ? raw.tabOrder : 0,
       rootPath: typeof raw.rootPath === 'string' && raw.rootPath.length > 0 ? raw.rootPath : null,
+      rootBasePath:
+        typeof raw.rootPath === 'string' &&
+        raw.rootPath.length > 0 &&
+        typeof raw.rootBasePath === 'string' &&
+        raw.rootBasePath.length > 0
+          ? raw.rootBasePath
+          : null,
       ...(isTuiAgent(raw.sessionAgent) ? { sessionAgent: raw.sessionAgent } : {}),
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
@@ -186,10 +246,19 @@ export function clearMissingMissionMembers(
   return { missions: changed ? next : (missions as Mission[]), changed }
 }
 
-/** Missions are local-host persisted state (V1): local and SSH-connection
- *  repos qualify; runtime-environment-owned repos are not offered. */
-export function isMissionEligibleRepo(repo: { executionHostId?: string | null }): boolean {
-  return !repo.executionHostId?.startsWith('runtime:')
+/** Mission V1 roots and sessions run on Orca's native local host. Remote,
+ *  runtime-owned, and WSL-backed repos cannot share that filesystem root. */
+export function isMissionEligibleRepo(
+  repo: Pick<Repo, 'path' | 'kind' | 'connectionId' | 'executionHostId'>
+): boolean {
+  // Why: legacy SSH repos may only carry connectionId, while newer records
+  // carry executionHostId; either signal must keep them out of local Missions.
+  return (
+    !isFolderRepo(repo) &&
+    !repo.connectionId &&
+    getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+    !isWslUncPath(repo.path)
+  )
 }
 
 /** Worktree ids owned by mission members. The Projects view hides these —

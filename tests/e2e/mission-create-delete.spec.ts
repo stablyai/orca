@@ -1,4 +1,5 @@
 import { existsSync, lstatSync, readdirSync } from 'node:fs'
+import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 
 test.describe('Missions', () => {
@@ -32,7 +33,7 @@ test.describe('Missions', () => {
     })
     expect(memberWorktreeId).toBeTruthy()
 
-    // The mission session is created eagerly with the mission: the symlinked
+    // The mission session is created eagerly with the mission: the physical
     // root and the mission-owned folder workspace exist without extra clicks.
     await expect
       .poll(
@@ -51,10 +52,15 @@ test.describe('Missions', () => {
     const missionRoot = await orcaPage.evaluate(
       () => window.__store!.getState().folderWorkspaces.find((fw) => fw.missionId)!.folderPath
     )
-    // The root physically contains a symlink to the member worktree.
+    // The member is a real direct child so sandboxed agents can discover and
+    // write it without traversing an out-of-root directory symlink.
     const rootEntries = readdirSync(missionRoot)
-    expect(rootEntries.length).toBeGreaterThan(0)
-    expect(lstatSync(`${missionRoot}/${rootEntries[0]}`).isSymbolicLink()).toBe(true)
+    const memberPath = memberWorktreeId!.slice(memberWorktreeId!.indexOf('::') + 2)
+    expect(path.dirname(memberPath)).toBe(missionRoot)
+    expect(rootEntries).toContain(path.basename(memberPath))
+    expect(lstatSync(memberPath).isDirectory()).toBe(true)
+    expect(lstatSync(memberPath).isSymbolicLink()).toBe(false)
+    expect(lstatSync(path.join(missionRoot, '.orca-mission-root.json')).isFile()).toBe(true)
 
     // Mission member worktrees are hidden from the Projects tab.
     await orcaPage.getByRole('button', { name: 'Projects', exact: true }).first().click()
@@ -68,7 +74,7 @@ test.describe('Missions', () => {
     await orcaPage.getByRole('button', { name: 'Delete', exact: true }).click()
 
     await expect(orcaPage.getByText('No missions yet')).toBeVisible({ timeout: 60_000 })
-    // Mission delete removes the symlinked root as well.
+    // Mission delete removes the physical member worktree and owned root.
     expect(existsSync(missionRoot)).toBe(false)
     const missionCount = await orcaPage.evaluate(() => {
       const store = window.__store

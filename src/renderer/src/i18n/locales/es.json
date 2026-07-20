@@ -4796,15 +4796,16 @@
         },
         "MissionAddProjectsDialog": {
           "6ec97cd26f": "Añadir proyectos",
-          "02449d01cc": "Cada proyecto añadido recibe un espacio de trabajo en {{value0}}.",
+          "02449d01cc": "Cada proyecto añadido recibe un espacio de trabajo en {{value0}}. Actualmente, las misiones solo admiten proyectos Git ubicados en el sistema de archivos nativo de este equipo; los proyectos de carpeta, SSH, de entorno de ejecución y WSL no están disponibles.",
           "d5aae76bca": "Cancelar",
           "e81ed87ddd": "Añadiendo...",
           "36cc45b3fb": "Añadir",
-          "99e993fe93": "No hay proyectos aptos disponibles para añadir."
+          "99e993fe93": "No hay proyectos aptos disponibles para añadir.",
+          "5b02d8f5da": "No se pudieron añadir los proyectos. Inténtalo de nuevo."
         },
         "MissionCreateDialog": {
           "0655a02f86": "Nueva misión",
-          "4608f14ade": "Cada proyecto seleccionado recibe un espacio de trabajo en una rama de misión compartida.",
+          "4608f14ade": "Cada proyecto seleccionado recibe un espacio de trabajo en una rama de misión compartida. Actualmente, las misiones solo admiten proyectos Git ubicados en el sistema de archivos nativo de este equipo; los proyectos de carpeta, SSH, de entorno de ejecución y WSL no están disponibles.",
           "48ec5c5b11": "Nombre de la misión",
           "0c9fe9ce6d": "Rama",
           "bcea32d392": "Proyectos",
@@ -4844,6 +4845,11 @@
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo."
+        },
+        "MissionMemberRows": {
+          "2f310bd75a": "¿Quitar el proyecto y eliminar el espacio de trabajo?",
+          "539f206f0e": "Esto elimina el espacio de trabajo de la misión para {{value0}}. El trabajo de Git que no se pueda eliminar de forma segura se conserva en su rama.",
+          "1d08535a23": "Eliminar espacio de trabajo"
         }
       },
       "shared": {

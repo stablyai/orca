@@ -68,7 +68,7 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
@@ -722,6 +722,13 @@ import {
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../worktree-removal-safety'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
+import { assertOwnedMissionRoot } from '../missions/mission-root'
+import {
+  clearMissionWorktreeCreateIntent,
+  recoverMissionWorktreeCreateIntent,
+  writeMissionWorktreeCreateIntent,
+  type MissionWorktreeCreateIntent
+} from '../missions/mission-worktree-create-intent'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import {
@@ -766,6 +773,13 @@ import {
   getFolderWorkspacePathStatusForPath,
   inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
+import {
+  assertMissionWorktreeOwnershipMarker,
+  readMissionWorktreeOwnershipMarker,
+  type MissionWorktreeOwnershipProof,
+  writeMissionWorktreeOwnershipMarker
+} from '../missions/mission-worktree-ownership-marker'
+import { assertWorktreeIsNotMissionManaged } from '../missions/mission-removal-boundary'
 import {
   getSshGitProvider,
   getSshGitProviderGeneration,
@@ -838,6 +852,9 @@ type RuntimeStore = {
   deleteProjectGroup?: Store['deleteProjectGroup']
   moveProjectToGroup?: Store['moveProjectToGroup']
   getFolderWorkspaces?: Store['getFolderWorkspaces']
+  getMissionSessionWorkspace?: Store['getMissionSessionWorkspace']
+  getMission?: Store['getMission']
+  getMissions?: Store['getMissions']
   createFolderWorkspace?: Store['createFolderWorkspace']
   updateFolderWorkspace?: Store['updateFolderWorkspace']
   removeFolderWorkspace?: Store['removeFolderWorkspace']
@@ -1561,8 +1578,20 @@ type PreservedBranchCleanupTarget = {
   pushTarget?: GitPushTarget
 }
 
-function getRuntimeWorktreeRemovalOptionsKey(force: boolean, runHooks: boolean): string {
-  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}`
+function getRuntimeWorktreeRemovalOptionsKey(
+  force: boolean,
+  runHooks: boolean,
+  expectedOwnership?: MissionWorktreeOwnershipProof
+): string {
+  const ownershipKey = expectedOwnership
+    ? [
+        expectedOwnership.missionId,
+        expectedOwnership.repoId,
+        expectedOwnership.worktreeId,
+        expectedOwnership.worktreeInstanceId
+      ].join('\0')
+    : 'unscoped'
+  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ownershipKey}`
 }
 
 function getRuntimeFolderWorkspaceRootId(repo: Repo): string {
@@ -2056,6 +2085,15 @@ type WorktreeLineageResolution =
 type RuntimeWorktreeScanResult =
   | { ok: true; worktrees: GitWorktreeInfo[] }
   | { ok: false; worktrees: GitWorktreeInfo[] }
+
+export type ManagedWorktreeOwnershipInspection =
+  | { status: 'found'; worktree: Worktree }
+  | { status: 'missing' }
+  | { status: 'unavailable' }
+
+export type ManagedMissionOwnershipScan =
+  | { status: 'found'; candidates: MissionWorktreeOwnershipProof[] }
+  | { status: 'unavailable' }
 
 type RuntimeWorktreeScanCache = {
   generation: number
@@ -2709,6 +2747,23 @@ export class OrcaRuntimeService {
 
   getLocalProvider(): IPtyProvider | null {
     return this.getLocalProviderFn ? this.getLocalProviderFn() : null
+  }
+
+  async teardownWorkspaceProcesses(workspaceId: string, connectionId?: string): Promise<void> {
+    await this.stopPtysForDestructiveWorktreeRemoval(workspaceId, connectionId)
+  }
+
+  private async teardownOwningMissionSession(worktreeId: string): Promise<void> {
+    const missionId = this.store?.getWorktreeMeta(worktreeId)?.missionId
+    if (!missionId) {
+      return
+    }
+    const workspace = this.store?.getMissionSessionWorkspace?.(missionId)
+    if (workspace) {
+      // Why: a Mission terminal can hold a cwd beneath a member link even
+      // when deletion entered through a generic worktree surface or RPC.
+      await this.stopPtysForDestructiveWorktreeRemoval(folderWorkspaceKey(workspace.id))
+    }
   }
 
   private async stopPtysForDestructiveWorktreeRemoval(
@@ -12810,10 +12865,13 @@ export class OrcaRuntimeService {
     if (!this.store?.updateFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+    const workspace = this.store
+      .getFolderWorkspaces?.()
+      .find((entry) => entry.id === folderWorkspaceId)
+    if (workspace?.missionId && (updates.name !== undefined || updates.folderPath !== undefined)) {
+      throw new Error('mission_workspace_managed_by_mission')
+    }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
-      const workspace = this.store
-        .getFolderWorkspaces?.()
-        .find((entry) => entry.id === folderWorkspaceId)
       if (!workspace) {
         return null
       }
@@ -12843,6 +12901,13 @@ export class OrcaRuntimeService {
   async deleteFolderWorkspace(folderWorkspaceId: string): Promise<{ deleted: boolean }> {
     if (!this.store?.removeFolderWorkspace) {
       throw new Error('runtime_unavailable')
+    }
+    if (
+      this.store
+        .getFolderWorkspaces?.()
+        .some((workspace) => workspace.id === folderWorkspaceId && workspace.missionId)
+    ) {
+      throw new Error('mission_workspace_managed_by_mission')
     }
     const deleted = this.store.removeFolderWorkspace(folderWorkspaceId)
     if (deleted) {
@@ -15201,6 +15266,127 @@ export class OrcaRuntimeService {
     return await this.resolveWorktreeSelector(worktreeSelector)
   }
 
+  async inspectManagedWorktreeForOwnership(
+    worktreeId: string
+  ): Promise<ManagedWorktreeOwnershipInspection> {
+    const parsed = splitWorktreeIdForFilesystem(worktreeId)
+    const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
+    if (!parsed?.worktreePath || !repo || repo.connectionId || isFolderRepo(repo)) {
+      return { status: 'unavailable' }
+    }
+
+    const projectRuntime = resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+    // Why: ownership cleanup may erase durable Mission state; only the strict
+    // Git scan can distinguish an absent checkout from a failed repository probe.
+    const scan = await withTimeoutResult(
+      listWorktreesStrict(
+        repo.path,
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+      ),
+      RESOLVED_WORKTREE_REPO_TIMEOUT_MS
+    )
+    if (!scan.ok) {
+      return { status: 'unavailable' }
+    }
+    const gitWorktree = scan.value.find((candidate) =>
+      areWorktreePathsEqual(candidate.path, parsed.worktreePath)
+    )
+    if (!gitWorktree) {
+      return { status: 'missing' }
+    }
+    return {
+      status: 'found',
+      worktree: mergeWorktree(
+        repo.id,
+        gitWorktree,
+        this.store?.getWorktreeMeta(worktreeId),
+        repo.displayName
+      )
+    }
+  }
+
+  async findManagedWorktreesForMissionOwnership(
+    missionId: string,
+    repoId: string,
+    branchName: string
+  ): Promise<ManagedMissionOwnershipScan> {
+    const repo = this.store?.getRepo(repoId)
+    if (!repo || repo.connectionId || isFolderRepo(repo)) {
+      return { status: 'unavailable' }
+    }
+    const projectRuntime = resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+    const scan = await withTimeoutResult(
+      listWorktreesStrict(
+        repo.path,
+        getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+      ),
+      RESOLVED_WORKTREE_REPO_TIMEOUT_MS
+    )
+    if (!scan.ok) {
+      return { status: 'unavailable' }
+    }
+
+    const mission = this.store?.getMission?.(missionId)
+    const recovered =
+      mission?.rootPath && mission.rootBasePath
+        ? recoverMissionWorktreeCreateIntent({
+            root: {
+              baseDir: mission.rootBasePath,
+              rootPath: mission.rootPath,
+              missionId: mission.id
+            },
+            repoId,
+            repoPath: repo.path,
+            branchName,
+            worktrees: scan.value
+          })
+        : null
+    const candidates: MissionWorktreeOwnershipProof[] = recovered ? [recovered] : []
+    for (const worktree of scan.value) {
+      if (worktree.isMainWorktree || worktree.isBare) {
+        continue
+      }
+      const proof = readMissionWorktreeOwnershipMarker({
+        repoPath: repo.path,
+        worktreePath: worktree.path
+      })
+      if (!proof || proof.missionId !== missionId) {
+        continue
+      }
+      if (proof.repoId !== repoId) {
+        throw new Error('mission_member_worktree_ownership_unverified')
+      }
+      const parsedProofId = splitWorktreeIdForFilesystem(proof.worktreeId)
+      if (
+        parsedProofId?.repoId !== repoId ||
+        !parsedProofId.worktreePath ||
+        !areWorktreePathsEqual(parsedProofId.worktreePath, worktree.path) ||
+        worktree.branch.replace(/^refs\/heads\//, '') !== branchName
+      ) {
+        throw new Error('mission_member_worktree_ownership_unverified')
+      }
+      if (
+        !candidates.some(
+          (candidate) =>
+            candidate.worktreeId === proof.worktreeId &&
+            candidate.worktreeInstanceId === proof.worktreeInstanceId
+        )
+      ) {
+        candidates.push(proof)
+      }
+    }
+    for (const proof of candidates) {
+      // Why: the Git-admin marker outlives debounced metadata and also records
+      // whether Mission creation reused a pre-existing local branch.
+      this.store?.setWorktreeMeta(proof.worktreeId, {
+        missionId,
+        instanceId: proof.worktreeInstanceId,
+        preserveBranchOnDelete: proof.preserveBranchOnDelete
+      })
+    }
+    return { status: 'found', candidates }
+  }
+
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {
     return scanWorkspacePortProbes(await this.getWorkspacePortProbes(repoId))
   }
@@ -15818,6 +16004,10 @@ export class OrcaRuntimeService {
     baseBranch?: string
     compareBaseRef?: string
     branchNameOverride?: string
+    requireExactBranchName?: boolean
+    missionId?: string
+    worktreePathOverride?: string
+    skipInitialTerminal?: boolean
     linkedIssue?: number | null
     linkedPR?: number | null
     linkedLinearIssue?: string
@@ -15853,6 +16043,55 @@ export class OrcaRuntimeService {
     }
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
+    if (args.requireExactBranchName && !args.branchNameOverride) {
+      throw new Error('Exact branch creation requires branchNameOverride.')
+    }
+    if (args.requireExactBranchName && repo.connectionId) {
+      // Why: the SSH create helper owns its suffix retry loop and cannot yet
+      // guarantee an exact branch without risking an orphaned remote worktree.
+      throw new Error('Exact branch creation is not supported for SSH-backed repositories.')
+    }
+    if (args.requireExactBranchName && isFolderRepo(repo)) {
+      throw new Error('Exact branch creation requires a Git repository.')
+    }
+    let missionWorktreePath: string | null = null
+    let missionRootOwnership: { baseDir: string; rootPath: string; missionId: string } | undefined
+    if (args.worktreePathOverride !== undefined) {
+      if (
+        !args.missionId ||
+        !args.requireExactBranchName ||
+        !isAbsolute(args.worktreePathOverride)
+      ) {
+        throw new Error('Mission worktree path override requires an absolute exact-branch target.')
+      }
+      const mission = this.store.getMission?.(args.missionId)
+      const resolvedPath = resolve(args.worktreePathOverride)
+      const resolvedRoot = mission?.rootPath ? resolve(mission.rootPath) : null
+      if (
+        !resolvedRoot ||
+        resolvedPath !== args.worktreePathOverride ||
+        normalizeRuntimePathForComparison(dirname(resolvedPath)) !==
+          normalizeRuntimePathForComparison(resolvedRoot)
+      ) {
+        throw new Error('Mission worktree path must be a direct child of its owned root.')
+      }
+      if (!mission?.rootBasePath) {
+        throw new Error('Mission worktree path requires a persisted root base.')
+      }
+      // Why: persisted paths are untrusted and the root may have been replaced
+      // after session ensure; prove marker ownership immediately before Git writes.
+      assertOwnedMissionRoot({
+        baseDir: mission.rootBasePath,
+        rootPath: resolvedRoot,
+        missionId: mission.id
+      })
+      missionRootOwnership = {
+        baseDir: mission.rootBasePath,
+        rootPath: resolvedRoot,
+        missionId: mission.id
+      }
+      missionWorktreePath = resolvedPath
+    }
     const createSettings = this.store.getSettings()
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
     const requestedAgentEnabled =
@@ -15892,6 +16131,9 @@ export class OrcaRuntimeService {
       const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
       const meta = this.store.setWorktreeMeta(worktreeId, {
         instanceId,
+        // Why: path-keyed metadata can outlive a checkout; every creation must
+        // either stamp current Mission ownership or explicitly clear stale ownership.
+        missionId: args.missionId,
         ...getProjectHostSetupWorktreeMeta(this.store.getProjectHostSetups?.() ?? [], repo),
         displayName: args.displayName?.trim() || args.name,
         lastActivityAt: now,
@@ -15933,7 +16175,9 @@ export class OrcaRuntimeService {
       const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
       this.invalidateResolvedWorktreeCache()
       this.notifyWorktreesChanged(repo.id)
-      const shouldActivate = args.activate === true || args.runHooks === true
+      const skipInitialTerminal = args.skipInitialTerminal === true && !effectiveStartup
+      const shouldActivate =
+        !skipInitialTerminal && (args.activate === true || args.runHooks === true)
       let warning: string | undefined
       let didSpawnStartup = false
       let startupTerminal: CreateWorktreeResult['startupTerminal']
@@ -15980,7 +16224,7 @@ export class OrcaRuntimeService {
         } else {
           this.notifyActivateWorktree(repo.id, worktree.id)
         }
-      } else if (this.ptyController?.spawn && !didSpawnStartup) {
+      } else if (!skipInitialTerminal && this.ptyController?.spawn && !didSpawnStartup) {
         try {
           await this.createTerminal(`id:${worktree.id}`)
         } catch (err) {
@@ -16130,7 +16374,11 @@ export class OrcaRuntimeService {
       branchName = await resolveCreateBranchName(
         repo.path,
         selectedExistingLocalBranchName ??
-          getBranchNameOverrideCandidate(args.branchNameOverride, suffix),
+          // Why: Missions require one branch across every member repo; only the
+          // filesystem path may receive a collision suffix in exact mode.
+          (args.requireExactBranchName
+            ? args.branchNameOverride
+            : getBranchNameOverrideCandidate(args.branchNameOverride, suffix)),
         effectiveSanitizedName,
         settings,
         username,
@@ -16191,6 +16439,11 @@ export class OrcaRuntimeService {
           }
         }
         if (branchConflictKind) {
+          if (args.requireExactBranchName) {
+            throw new Error(
+              `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
+            )
+          }
           continue
         }
       }
@@ -16208,13 +16461,21 @@ export class OrcaRuntimeService {
           // workspace; git conflicts still decide whether this candidate works.
         }
         if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args, branchName)) {
+          if (args.requireExactBranchName) {
+            throw new Error(`Branch "${branchName}" is already associated with an existing review.`)
+          }
           continue
         }
       }
-      worktreePath = ensurePathWithinWorkspace(
-        computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
-        workspaceRoot
-      )
+      worktreePath = missionWorktreePath
+        ? join(
+            dirname(missionWorktreePath),
+            getWorktreeCreateCandidate(basename(missionWorktreePath), suffix)
+          )
+        : ensurePathWithinWorkspace(
+            computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
+            workspaceRoot
+          )
       if (!(await pathExists(worktreePath))) {
         worktreePathResolved = true
         break
@@ -16328,6 +16589,25 @@ export class OrcaRuntimeService {
       ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
     }
     const defaultAddWorktreeOption = addProjectGitOptions()
+    if (missionRootOwnership) {
+      // Why: base resolution and fetches await external work; recheck the root
+      // at the last synchronous boundary before Git creates the child checkout.
+      assertOwnedMissionRoot(missionRootOwnership)
+    }
+    const instanceId = randomUUID()
+    let missionCreateIntent: MissionWorktreeCreateIntent | null = null
+    if (missionRootOwnership) {
+      // Why: Git publishes its worktree registration before Orca can access the
+      // new admin dir; this root-owned intent lets a restart safely finish that gap.
+      missionCreateIntent = writeMissionWorktreeCreateIntent({
+        root: missionRootOwnership,
+        repoId: repo.id,
+        branchName,
+        worktreePath,
+        worktreeInstanceId: instanceId,
+        preserveBranchOnDelete: checkoutExistingBranch
+      })
+    }
     const addResult: AddWorktreeResult =
       (await (sparseDirectories.length > 0
         ? checkoutExistingBranch
@@ -16446,6 +16726,59 @@ export class OrcaRuntimeService {
 
     const worktreeId = `${repo.id}::${created.path}`
     const now = Date.now()
+    if (args.missionId) {
+      try {
+        // Why: path and branch can both be reused after an external Git remove;
+        // the admin-dir marker proves this exact linked-worktree incarnation.
+        writeMissionWorktreeOwnershipMarker({
+          repoPath: repo.path,
+          worktreePath: created.path,
+          proof: {
+            missionId: args.missionId,
+            repoId: repo.id,
+            worktreeId,
+            worktreeInstanceId: instanceId,
+            ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {})
+          }
+        })
+      } catch (error) {
+        let rollbackComplete = false
+        try {
+          await removeWorktree(repo.path, created.path, true, {
+            knownRemovedWorktree: created,
+            deleteBranch: !checkoutExistingBranch,
+            forceBranchDelete: !checkoutExistingBranch,
+            ...localWorktreeGitOptions
+          })
+          rollbackComplete = true
+        } catch (cleanupError) {
+          console.warn('[missions] failed to roll back unstamped Mission worktree:', cleanupError)
+        }
+        if (rollbackComplete && missionCreateIntent) {
+          try {
+            clearMissionWorktreeCreateIntent({
+              root: missionRootOwnership!,
+              intent: missionCreateIntent
+            })
+          } catch (cleanupError) {
+            console.warn('[missions] failed to clear rolled-back create intent:', cleanupError)
+          }
+        }
+        throw error
+      }
+      if (missionCreateIntent) {
+        try {
+          clearMissionWorktreeCreateIntent({
+            root: missionRootOwnership!,
+            intent: missionCreateIntent
+          })
+        } catch (cleanupError) {
+          // The marker is already durable; a later strict scan can clear the
+          // matching intent without risking duplicate creation.
+          console.warn('[missions] failed to clear completed create intent:', cleanupError)
+        }
+      }
+    }
     // Why: PR/MR-created worktrees can start from a head ref/SHA while Source
     // Control must compare against the review target branch.
     const metadataBaseRef = args.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch
@@ -16458,7 +16791,10 @@ export class OrcaRuntimeService {
       // Why: worktree IDs are path-derived. If a path is deleted outside Orca
       // and later recreated, creation must mint a fresh instance identity so
       // stale lineage records tied to the old occupant fail validation.
-      instanceId: randomUUID(),
+      instanceId,
+      // Why: path-keyed metadata can outlive a checkout; every creation must
+      // either stamp current Mission ownership or explicitly clear stale ownership.
+      missionId: args.missionId,
       ...getProjectHostSetupWorktreeMeta(this.store.getProjectHostSetups?.() ?? [], repo),
       lastActivityAt: now,
       // See createRemoteWorktree: createdAt grants the new worktree a grace
@@ -16591,7 +16927,9 @@ export class OrcaRuntimeService {
     invalidateAuthorizedRootsCache()
 
     this.notifyWorktreesChanged(repo.id)
-    const shouldActivate = args.activate === true || args.runHooks === true
+    const skipInitialTerminal = args.skipInitialTerminal === true && !effectiveStartup
+    const shouldActivate =
+      !skipInitialTerminal && (args.activate === true || args.runHooks === true)
     let didSpawnStartup = false
     // Why: tracks whether runtime itself launched the setup script (via
     // provisionManagedWorktreeTerminals). When true, renderer activation and the
@@ -16725,7 +17063,11 @@ export class OrcaRuntimeService {
           activationDefaultTabs
         )
       }
-    } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
+    } else if (
+      !skipInitialTerminal &&
+      this.ptyController?.spawn &&
+      (setup || defaultTabs || didSpawnStartup)
+    ) {
       // Why: inactive terminal materialization matches normal worktree creation,
       // but setup/default tab failures must not gate automation dispatch.
       void this.provisionManagedWorktreeTerminals({
@@ -16748,7 +17090,7 @@ export class OrcaRuntimeService {
       if (setup) {
         didSpawnSetup = true
       }
-    } else if (this.ptyController?.spawn) {
+    } else if (!skipInitialTerminal && this.ptyController?.spawn) {
       try {
         await this.createTerminal(`id:${worktree.id}`)
       } catch (err) {
@@ -16810,6 +17152,8 @@ export class OrcaRuntimeService {
       baseBranch?: string
       compareBaseRef?: string
       branchNameOverride?: string
+      missionId?: string
+      skipInitialTerminal?: boolean
       linkedIssue?: number | null
       linkedPR?: number | null
       linkedLinearIssue?: string
@@ -16890,6 +17234,7 @@ export class OrcaRuntimeService {
       headlessWindow
     )
 
+    this.store.setWorktreeMeta(result.worktree.id, { missionId: args.missionId })
     if (args.comment !== undefined) {
       this.store.setWorktreeMeta(result.worktree.id, { comment: args.comment })
       result.worktree.comment = args.comment
@@ -16966,7 +17311,9 @@ export class OrcaRuntimeService {
       }
     }
 
-    const shouldActivate = args.activate === true || args.runHooks === true
+    const skipInitialTerminal = args.skipInitialTerminal === true && !args.startup
+    const shouldActivate =
+      !skipInitialTerminal && (args.activate === true || args.runHooks === true)
     if (shouldActivate) {
       const runtimeWillProvisionTerminals =
         didSpawnStartup && Boolean(result.setup || result.defaultTabs)
@@ -17027,6 +17374,7 @@ export class OrcaRuntimeService {
 
     if (
       !shouldActivate &&
+      !skipInitialTerminal &&
       this.ptyController?.spawn &&
       (result.setup || result.defaultTabs || didSpawnStartup)
     ) {
@@ -17052,7 +17400,7 @@ export class OrcaRuntimeService {
       if (result.setup) {
         didSpawnSetup = true
       }
-    } else if (!shouldActivate && this.ptyController?.spawn) {
+    } else if (!shouldActivate && !skipInitialTerminal && this.ptyController?.spawn) {
       try {
         await this.createTerminal(`path:${result.worktree.path}`)
       } catch (err) {
@@ -18165,14 +18513,35 @@ export class OrcaRuntimeService {
   async removeManagedWorktree(
     worktreeSelector: string,
     force = false,
-    runHooks = false
+    runHooks = false,
+    expectedOwnership?: MissionWorktreeOwnershipProof
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const store = this.store
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks)
+    const removalRepo = store.getRepo(removalTarget.repoId)
+    if (!removalRepo) {
+      throw new Error('repo_not_found')
+    }
+    if (!expectedOwnership) {
+      assertWorktreeIsNotMissionManaged(
+        store,
+        removalTarget.id,
+        !removalRepo.connectionId && !isFolderRepo(removalRepo)
+          ? { repoPath: removalRepo.path, worktreePath: removalTarget.path }
+          : undefined
+      )
+    }
+    if (
+      expectedOwnership &&
+      (expectedOwnership.repoId !== removalTarget.repoId ||
+        expectedOwnership.worktreeId !== removalTarget.id)
+    ) {
+      throw new Error('mission_member_worktree_ownership_unverified')
+    }
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, expectedOwnership)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {
       if (inFlightRemoval.optionsKey === optionsKey) {
@@ -18184,9 +18553,12 @@ export class OrcaRuntimeService {
     // Why: runtime callers can race the same workspace through CLI/mobile
     // retries. Share one destructive Git/filesystem operation per worktree ID.
     const removal = (async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
-      const repo = store.getRepo(removalTarget.repoId)
-      if (!repo) {
-        throw new Error('repo_not_found')
+      const repo = removalRepo
+      if (expectedOwnership && (repo.connectionId || isFolderRepo(repo))) {
+        throw new Error('mission_member_worktree_ownership_unverified')
+      }
+      if (!expectedOwnership) {
+        await this.teardownOwningMissionSession(removalTarget.id)
       }
       if (isFolderRepo(repo)) {
         if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
@@ -18230,6 +18602,21 @@ export class OrcaRuntimeService {
         removalTarget.path,
         registeredWorktrees
       )
+      if (expectedOwnership) {
+        if (
+          !registeredWorktree ||
+          removedMeta?.missionId !== expectedOwnership.missionId ||
+          removedMeta.instanceId !== expectedOwnership.worktreeInstanceId
+        ) {
+          throw new Error('mission_member_worktree_ownership_unverified')
+        }
+        assertMissionWorktreeOwnershipMarker({
+          repoPath: repo.path,
+          worktreePath: registeredWorktree.path,
+          proof: expectedOwnership
+        })
+        await this.teardownOwningMissionSession(removalTarget.id)
+      }
       if (!registeredWorktree) {
         let canCleanOrphanedDirectory = false
         if (
@@ -18397,6 +18784,16 @@ export class OrcaRuntimeService {
         throw new Error(`Refusing to delete unregistered worktree path: ${removalTarget.path}`)
       }
       const canonicalWorktreePath = registeredWorktree.path
+      const assertExpectedOwnership = (): void => {
+        if (!expectedOwnership) {
+          return
+        }
+        assertMissionWorktreeOwnershipMarker({
+          repoPath: repo.path,
+          worktreePath: canonicalWorktreePath,
+          proof: expectedOwnership
+        })
+      }
       const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
 
       // Why: a Git lock must block before archive hooks or linked-path cleanup
@@ -18411,6 +18808,7 @@ export class OrcaRuntimeService {
       // Git's stale registration; recover and verify it before clearing metadata.
       if (
         !repo.connectionId &&
+        !expectedOwnership &&
         force === true &&
         process.platform === 'win32' &&
         (isWindowsAbsolutePathLike(canonicalWorktreePath) || !!localWorktreeGitOptions.wslDistro) &&
@@ -18527,6 +18925,7 @@ export class OrcaRuntimeService {
       } catch (error) {
         throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
+      assertExpectedOwnership()
 
       const linkedPaths = repo.symlinkPaths ?? []
       const ignoredLinkedPaths = force
@@ -18560,10 +18959,12 @@ export class OrcaRuntimeService {
         // Why: linked-path deletion is destructive too; PTYs must release every
         // handle before Windows or WSL filesystem cleanup starts.
         await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
+        assertExpectedOwnership()
 
         if (linkedPaths.length > 0) {
           await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
         }
+        assertExpectedOwnership()
 
         try {
           const removeOptions = {
@@ -18604,6 +19005,7 @@ export class OrcaRuntimeService {
               )
             ) {
               await this.closeFileWatchersForRemoval(canonicalWorktreePath)
+              assertExpectedOwnership()
               await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
                 () => {}
               )
@@ -20238,19 +20640,36 @@ export class OrcaRuntimeService {
     // Why: this mutates live PTYs, so the runtime must reject it while the
     // renderer graph is reloading instead of acting on cached leaf ownership.
     const graphEpoch = this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const rawSelector = worktreeSelector.startsWith('id:')
+      ? worktreeSelector.slice('id:'.length)
+      : worktreeSelector
+    const parsedWorkspace = parseWorkspaceKey(rawSelector)
+    let workspaceId: string
+    if (parsedWorkspace?.type === 'folder') {
+      // Why: teardown must still stop an owned Mission PTY after its projected
+      // root was removed, so resolve the durable workspace identity without statting its path.
+      const exists = this.store
+        ?.getFolderWorkspaces?.()
+        .some((workspace) => workspace.id === parsedWorkspace.folderWorkspaceId)
+      if (!exists) {
+        throw new Error('selector_not_found')
+      }
+      workspaceId = folderWorkspaceKey(parsedWorkspace.folderWorkspaceId)
+    } else {
+      workspaceId = (await this.resolveWorktreeSelector(worktreeSelector)).id
+    }
     this.assertStableReadyGraph(graphEpoch)
     if (options.deadline !== undefined && Date.now() >= options.deadline) {
       return { stopped: 0 }
     }
     const ptyIds = new Set<string>()
     for (const leaf of this.leaves.values()) {
-      if (leaf.worktreeId === worktree.id && leaf.ptyId) {
+      if (leaf.worktreeId === workspaceId && leaf.ptyId) {
         ptyIds.add(leaf.ptyId)
       }
     }
     for (const pty of this.ptysById.values()) {
-      if (pty.worktreeId === worktree.id && pty.connected) {
+      if (pty.worktreeId === workspaceId && pty.connected) {
         ptyIds.add(pty.ptyId)
       }
     }

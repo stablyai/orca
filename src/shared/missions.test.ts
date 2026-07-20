@@ -36,6 +36,8 @@ describe('slugifyMissionBranch', () => {
 
   it('falls back when nothing survives sanitization', () => {
     expect(slugifyMissionBranch('###')).toBe('mission/task')
+    expect(slugifyMissionBranch('결제 오류')).toMatch(/^mission\/task-[a-f0-9]{8}$/)
+    expect(slugifyMissionBranch('결제 오류')).not.toBe(slugifyMissionBranch('회원 오류'))
   })
 
   it('collapses consecutive dots so the branch stays a valid git ref', () => {
@@ -76,7 +78,22 @@ describe('createMission', () => {
     })
     expect(mission.branchName).toBe('mission/referral')
     expect(mission.members.map((m) => m.repoId)).toEqual(['r1', 'r2'])
-    expect(mission.members.every((m) => m.worktreeId === null && m.addedAt === 42)).toBe(true)
+    expect(mission.members).toEqual([
+      {
+        repoId: 'r1',
+        worktreeId: null,
+        worktreeInstanceId: null,
+        lastError: null,
+        addedAt: 42
+      },
+      {
+        repoId: 'r2',
+        worktreeId: null,
+        worktreeInstanceId: null,
+        lastError: null,
+        addedAt: 42
+      }
+    ])
     expect(mission.tabOrder).toBe(3)
   })
 
@@ -88,6 +105,11 @@ describe('createMission', () => {
       tabOrder: 0
     })
     expect(mission.branchName).toBe('mission/custom')
+  })
+
+  it('disambiguates the default branch when a localized name has no ASCII slug', () => {
+    const mission = createMission({ name: '결제 오류', repoIds: ['r1'], tabOrder: 0 })
+    expect(mission.branchName).toMatch(/^mission\/task-[a-z0-9]{8}$/)
   })
 })
 
@@ -108,9 +130,56 @@ describe('normalizeMissions', () => {
     ])
     expect(result.map((m) => m.id)).toEqual(['a', 'c', 'b'])
     expect(result[0].members).toEqual([
-      { repoId: 'r1', worktreeId: null, addedAt: expect.any(Number) }
+      {
+        repoId: 'r1',
+        worktreeId: null,
+        worktreeInstanceId: null,
+        lastError: null,
+        addedAt: expect.any(Number)
+      }
     ])
     expect(result[1].members).toEqual([])
+  })
+
+  it('normalizes member ownership stamps and durable errors', () => {
+    const [mission] = normalizeMissions([
+      makeMission({
+        id: 'owned',
+        members: [
+          {
+            repoId: 'assigned',
+            worktreeId: 'assigned::/wt',
+            worktreeInstanceId: 'instance-1',
+            lastError: '  retry failed  ',
+            addedAt: 3
+          },
+          {
+            repoId: 'missing',
+            worktreeId: null,
+            worktreeInstanceId: 'orphaned-instance',
+            lastError: '',
+            addedAt: 4
+          }
+        ]
+      })
+    ])
+
+    expect(mission.members).toEqual([
+      {
+        repoId: 'assigned',
+        worktreeId: 'assigned::/wt',
+        worktreeInstanceId: 'instance-1',
+        lastError: 'retry failed',
+        addedAt: 3
+      },
+      {
+        repoId: 'missing',
+        worktreeId: null,
+        worktreeInstanceId: null,
+        lastError: null,
+        addedAt: 4
+      }
+    ])
   })
 })
 
@@ -183,12 +252,46 @@ describe('normalizeMissions rootPath', () => {
 })
 
 describe('isMissionEligibleRepo', () => {
-  it('accepts local and ssh repos, rejects runtime-owned repos', () => {
-    expect(isMissionEligibleRepo({})).toBe(true)
-    expect(isMissionEligibleRepo({ executionHostId: null })).toBe(true)
-    expect(isMissionEligibleRepo({ executionHostId: 'local' })).toBe(true)
-    expect(isMissionEligibleRepo({ executionHostId: 'ssh:target-1' })).toBe(true)
-    expect(isMissionEligibleRepo({ executionHostId: 'runtime:env-1' })).toBe(false)
+  it('accepts native local repos, including legacy records without a host stamp', () => {
+    expect(isMissionEligibleRepo({ path: '/repos/app' })).toBe(true)
+    expect(
+      isMissionEligibleRepo({ path: 'C:\\repos\\app', executionHostId: null, connectionId: null })
+    ).toBe(true)
+    expect(isMissionEligibleRepo({ path: '/repos/app', executionHostId: 'local' })).toBe(true)
+  })
+
+  it('rejects both legacy and explicitly host-stamped SSH repos', () => {
+    expect(isMissionEligibleRepo({ path: '/srv/app', connectionId: 'target-1' })).toBe(false)
+    expect(
+      isMissionEligibleRepo({
+        path: '/srv/app',
+        connectionId: 'target-1',
+        executionHostId: 'local'
+      })
+    ).toBe(false)
+    expect(isMissionEligibleRepo({ path: '/srv/app', executionHostId: 'ssh:target-1' })).toBe(false)
+  })
+
+  it('rejects runtime-owned repos', () => {
+    expect(
+      isMissionEligibleRepo({ path: '/workspace/app', executionHostId: 'runtime:env-1' })
+    ).toBe(false)
+  })
+
+  it('rejects plain folder projects because Missions require Git worktrees', () => {
+    expect(isMissionEligibleRepo({ path: '/repos/folder', kind: 'folder' })).toBe(false)
+  })
+
+  it('rejects WSL UNC repos even when their execution host is local', () => {
+    expect(
+      isMissionEligibleRepo({
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\app',
+        executionHostId: 'local'
+      })
+    ).toBe(false)
+    expect(
+      isMissionEligibleRepo({ path: '//wsl$/Ubuntu/home/dev/app', executionHostId: 'local' })
+    ).toBe(false)
   })
 })
 

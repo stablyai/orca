@@ -201,6 +201,7 @@ import {
   normalizeMissionName,
   normalizeMissions
 } from '../shared/missions'
+import { assertRepoIsNotMissionManaged } from './missions/mission-removal-boundary'
 import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
@@ -4199,6 +4200,9 @@ export class Store {
     if (!workspace) {
       return null
     }
+    if (workspace.missionId && (updates.name !== undefined || updates.folderPath !== undefined)) {
+      throw new Error('mission_workspace_managed_by_mission')
+    }
     if (updates.name !== undefined) {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
     }
@@ -4251,6 +4255,9 @@ export class Store {
   }
 
   removeFolderWorkspace(id: string): boolean {
+    if (this.getFolderWorkspace(id)?.missionId) {
+      throw new Error('mission_workspace_managed_by_mission')
+    }
     const before = this.state.folderWorkspaces?.length ?? 0
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => workspace.id !== id
@@ -4363,12 +4370,44 @@ export class Store {
     return true
   }
 
-  setMissionRootPath(missionId: string, rootPath: string): Mission | null {
+  deleteMissionAndFlush(missionId: string): boolean {
+    const snapshot = {
+      missions: this.state.missions,
+      folderWorkspaces: this.state.folderWorkspaces,
+      workspaceSession: this.state.workspaceSession,
+      workspaceLineageByChildKey: { ...this.state.workspaceLineageByChildKey }
+    }
+    const deleted = this.deleteMission(missionId)
+    if (!deleted) {
+      return false
+    }
+    try {
+      this.flushOrThrow()
+      return true
+    } catch (error) {
+      // Why: ownership guards must stay live until Mission deletion is durable.
+      this.state.missions = snapshot.missions
+      this.state.folderWorkspaces = snapshot.folderWorkspaces
+      this.state.workspaceSession = snapshot.workspaceSession
+      this.state.workspaceLineageByChildKey = snapshot.workspaceLineageByChildKey
+      this.scheduleSave()
+      throw error
+    }
+  }
+
+  setMissionRootPath(
+    missionId: string,
+    rootPath: string,
+    rootBasePath?: string | null
+  ): Mission | null {
     const mission = this.getMission(missionId)
     if (!mission) {
       return null
     }
     mission.rootPath = rootPath
+    if (rootBasePath !== undefined) {
+      mission.rootBasePath = rootBasePath
+    }
     mission.updatedAt = Date.now()
     this.scheduleSave()
     return mission
@@ -4382,16 +4421,32 @@ export class Store {
   }
 
   ensureMissionSessionWorkspace(missionId: string): FolderWorkspace {
-    const existing = this.getMissionSessionWorkspace(missionId)
-    if (existing) {
-      return existing
-    }
     const mission = this.getMission(missionId)
     if (!mission) {
       throw new Error('mission_not_found')
     }
     if (!mission.rootPath) {
       throw new Error('mission_root_not_ready')
+    }
+    const existing = this.getMissionSessionWorkspace(missionId)
+    if (existing) {
+      const projectGroupId = missionSentinelGroupId(mission.id)
+      if (
+        existing.name !== mission.name ||
+        existing.folderPath !== mission.rootPath ||
+        existing.projectGroupId !== projectGroupId ||
+        existing.connectionId !== null
+      ) {
+        // Why: Mission identity and root are authoritative; generic persisted
+        // folder-workspace fields must not permanently diverge across restarts.
+        existing.name = mission.name
+        existing.folderPath = mission.rootPath
+        existing.projectGroupId = projectGroupId
+        existing.connectionId = null
+        existing.updatedAt = Date.now()
+        this.scheduleSave()
+      }
+      return existing
     }
     const now = Date.now()
     const workspace: FolderWorkspace = {
@@ -4432,7 +4487,13 @@ export class Store {
         continue
       }
       existing.add(repoId)
-      mission.members.push({ repoId, worktreeId: null, addedAt: now })
+      mission.members.push({
+        repoId,
+        worktreeId: null,
+        worktreeInstanceId: null,
+        lastError: null,
+        addedAt: now
+      })
     }
     mission.updatedAt = now
     this.scheduleSave()
@@ -4453,7 +4514,8 @@ export class Store {
   setMissionMemberWorktree(
     missionId: string,
     repoId: string,
-    worktreeId: string | null
+    worktreeId: string | null,
+    worktreeInstanceId: string | null = null
   ): Mission | null {
     const mission = this.getMission(missionId)
     if (!mission) {
@@ -4464,6 +4526,23 @@ export class Store {
       return null
     }
     member.worktreeId = worktreeId
+    member.worktreeInstanceId = worktreeInstanceId
+    member.lastError = null
+    mission.updatedAt = Date.now()
+    this.scheduleSave()
+    return mission
+  }
+
+  setMissionMemberError(missionId: string, repoId: string, error: string | null): Mission | null {
+    const mission = this.getMission(missionId)
+    if (!mission) {
+      return null
+    }
+    const member = mission.members.find((entry) => entry.repoId === repoId)
+    if (!member) {
+      return null
+    }
+    member.lastError = error
     mission.updatedAt = Date.now()
     this.scheduleSave()
     return mission
@@ -4534,6 +4613,7 @@ export class Store {
   }
 
   removeProject(id: string): void {
+    assertRepoIsNotMissionManaged(this.getMissions(), id)
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
     this.syncProjectHostSetupCompatibilityState()
     // Why: presets are repo-scoped, so removing the repo means the presets
@@ -4548,6 +4628,9 @@ export class Store {
   // only that host's repo row and worktree metadata — never the local or
   // another host's records that happen to share the id.
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
+    if (hostId === LOCAL_EXECUTION_HOST_ID) {
+      assertRepoIsNotMissionManaged(this.getMissions(), id)
+    }
     this.state.repos = this.state.repos.filter(
       (r) => !(r.id === id && getRepoExecutionHostId(r) === hostId)
     )

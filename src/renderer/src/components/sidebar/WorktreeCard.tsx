@@ -120,6 +120,8 @@ type WorktreeCardProps = {
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   isLineageDropTarget?: boolean
   onActivate?: () => void
+  /** Use when activation must first repair or materialize the target workspace. */
+  useCustomActivationOnly?: boolean
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (
@@ -207,6 +209,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   revealHighlightTone = 'default',
   selectedWorktrees,
   onActivate,
+  useCustomActivationOnly = false,
   onImmediateActivate,
   onSelectionGesture,
   onContextMenuSelect,
@@ -881,7 +884,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
         sshDisconnected: isSshDisconnected
       })
       onImmediateActivate?.(worktree.id, activationRowKey)
-      void activateWorktreeFromSidebar(worktree.id)
+      if (!useCustomActivationOnly) {
+        void activateWorktreeFromSidebar(worktree.id)
+      }
       // Why: clicking the card is a deliberate focus of this project, so the
       // blocking reconnect prompt is appropriate here (unlike auto-restore) —
       // but skip it when a terminal is active, since that pane already shows the
@@ -901,6 +906,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       isSshDisconnected,
       activeViewIsTerminal,
       onActivate,
+      useCustomActivationOnly,
       onImmediateActivate,
       onSelectionGesture
     ]

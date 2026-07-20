@@ -3387,6 +3387,22 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('r2::/other')!.displayName).toBe('other')
   })
 
+  it('rejects removing a project while it is a Mission member', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+    const mission = store.createMission({ name: 'Mission', repoIds: ['r1'] })
+    store.setWorktreeMeta('r1::/mission/wt', {
+      displayName: 'mission-wt',
+      missionId: mission.id
+    })
+
+    expect(() => store.removeProject('r1')).toThrow('mission_member_managed_by_mission')
+
+    expect(store.getRepo('r1')).toBeDefined()
+    expect(store.getWorktreeMeta('r1::/mission/wt')).toBeDefined()
+    expect(store.getMissions()[0]?.members[0]?.repoId).toBe('r1')
+  })
+
   it('removeProject removes the derived project host setup compatibility record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
@@ -3460,6 +3476,19 @@ describe('Store', () => {
     // Local worktree meta survives; the SSH host's meta is pruned.
     expect(store.getWorktreeMeta('shared::/local/repo/wt')).toBeDefined()
     expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
+  })
+
+  it('rejects removing a local project host while it is a Mission member', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+    store.createMission({ name: 'Mission', repoIds: ['r1'] })
+
+    expect(() => store.removeProjectForHost('r1', 'local')).toThrow(
+      'mission_member_managed_by_mission'
+    )
+
+    expect(store.getRepo('r1')).toBeDefined()
+    expect(store.getMissions()[0]?.members[0]?.repoId).toBe('r1')
   })
 
   it('reorderReposForHost independently reorders local and SSH rows with shared ids', async () => {
@@ -10308,8 +10337,18 @@ describe('missions persistence', () => {
     expect(store.getMissions()).toHaveLength(1)
     expect(store.getMission(mission.id)?.members.map((m) => m.repoId)).toEqual(['r1', 'r2'])
 
-    store.setMissionMemberWorktree(mission.id, 'r1', 'r1::/tmp/wt')
-    expect(store.getMission(mission.id)?.members[0].worktreeId).toBe('r1::/tmp/wt')
+    store.setMissionMemberWorktree(mission.id, 'r1', 'r1::/tmp/wt', 'instance-1')
+    expect(store.getMission(mission.id)?.members[0]).toMatchObject({
+      worktreeId: 'r1::/tmp/wt',
+      worktreeInstanceId: 'instance-1',
+      lastError: null
+    })
+    store.setMissionMemberError(mission.id, 'r1', 'retry failed')
+    expect(store.getMission(mission.id)?.members[0].lastError).toBe('retry failed')
+    const rootBasePath = join(sep, 'tmp', 'orca', 'missions')
+    const rootPath = join(rootBasePath, 'referral')
+    store.setMissionRootPath(mission.id, rootPath, rootBasePath)
+    expect(store.getMission(mission.id)).toMatchObject({ rootPath, rootBasePath })
 
     expect(store.updateMission(mission.id, { name: 'Referral v2' })?.name).toBe('Referral v2')
     expect(store.removeMissionMember(mission.id, 'r2')?.members).toHaveLength(1)
@@ -10360,7 +10399,15 @@ describe('missions persistence', () => {
     expect(missions).toHaveLength(1)
     expect(missions[0].name).toBe('Keep')
     // The ghost member's repo does not exist: clearMissingMissionMembers ran.
-    expect(missions[0].members).toEqual([{ repoId: 'r1', worktreeId: null, addedAt: 1 }])
+    expect(missions[0].members).toEqual([
+      {
+        repoId: 'r1',
+        worktreeId: null,
+        worktreeInstanceId: null,
+        lastError: null,
+        addedAt: 1
+      }
+    ])
   })
 })
 
@@ -10418,6 +10465,54 @@ describe('mission session workspaces', () => {
     store.deleteMission(mission.id)
     expect(store.getMissionSessionWorkspace(mission.id)).toBeNull()
     expect(store.getFolderWorkspaces()).toHaveLength(0)
+  })
+
+  it('rolls back Mission session and lineage when durable deletion fails', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        {
+          id: 'r1',
+          path: join(sep, 'tmp', 'r1'),
+          displayName: 'R1',
+          badgeColor: '#000',
+          addedAt: 1
+        }
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} }
+    })
+    const store = await createStore()
+    const mission = store.createMission({ name: 'Referral', repoIds: ['r1'] })
+    store.setMissionRootPath(mission.id, join(sep, 'tmp', 'orca', 'missions', 'referral'))
+    const workspace = store.ensureMissionSessionWorkspace(mission.id)
+    const workspaceKey = folderWorkspaceKey(workspace.id)
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: workspaceKey,
+      activeRepoId: 'r1'
+    }
+    store.setWorkspaceSession(session)
+    const lineage = makeWorkspaceLineage({ parentWorkspaceKey: workspaceKey })
+    store.setWorkspaceLineage(lineage)
+    const scheduleSave = vi.spyOn(store as unknown as { scheduleSave: () => void }, 'scheduleSave')
+    scheduleSave.mockClear()
+    vi.spyOn(
+      store as unknown as { writeToDiskSync: () => void },
+      'writeToDiskSync'
+    ).mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    expect(() => store.deleteMissionAndFlush(mission.id)).toThrow('disk full')
+
+    expect(scheduleSave).toHaveBeenCalledTimes(2)
+    expect(store.getMission(mission.id)).toEqual(mission)
+    expect(store.getMissionSessionWorkspace(mission.id)).toEqual(workspace)
+    expect(store.getWorkspaceSession()).toEqual(session)
+    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toEqual(lineage)
   })
 
   it('drops mission session workspaces whose mission disappeared on load', async () => {

@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { isMissionEligibleRepo } from '../../../../shared/missions'
 import { getMissionEligibleGroupRepoIds } from './mission-group-selection'
+import { isRendererMissionEligibleRepo } from './mission-repo-eligibility'
 import type { Mission } from '../../../../shared/types'
 
 export function MissionAddProjectsDialog({
@@ -23,18 +23,25 @@ export function MissionAddProjectsDialog({
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
+  const projects = useAppStore((s) => s.projects)
   const projectGroups = useAppStore((s) => s.projectGroups)
+  const settings = useAppStore((s) => s.settings)
   const addMissionMembers = useAppStore((s) => s.addMissionMembers)
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
+  const [addFailed, setAddFailed] = useState(false)
 
   const memberIds = useMemo(
     () => new Set(mission?.members.map((member) => member.repoId) ?? []),
     [mission]
   )
+  const eligibilityContext = useMemo(() => ({ projects, settings }), [projects, settings])
   const candidates = useMemo(
-    () => repos.filter((repo) => isMissionEligibleRepo(repo) && !memberIds.has(repo.id)),
-    [repos, memberIds]
+    () =>
+      repos.filter(
+        (repo) => isRendererMissionEligibleRepo(repo, eligibilityContext) && !memberIds.has(repo.id)
+      ),
+    [eligibilityContext, repos, memberIds]
   )
   // Why: existing members are excluded inside the combobox — group rows only
   // act on repos the picker itself offers, so no extra exclusion is needed.
@@ -43,14 +50,20 @@ export function MissionAddProjectsDialog({
       projectGroups.map((group) => ({
         id: group.id,
         name: group.name,
-        repoIds: getMissionEligibleGroupRepoIds(projectGroups, repos, group.id)
+        repoIds: getMissionEligibleGroupRepoIds(
+          projectGroups,
+          repos,
+          group.id,
+          eligibilityContext
+        ).filter((repoId) => !memberIds.has(repoId))
       })),
-    [projectGroups, repos]
+    [eligibilityContext, projectGroups, repos, memberIds]
   )
 
   function close(): void {
     setSelected(new Set())
     setSubmitting(false)
+    setAddFailed(false)
     onOpenChange(false)
   }
 
@@ -59,7 +72,13 @@ export function MissionAddProjectsDialog({
       return
     }
     setSubmitting(true)
-    await addMissionMembers(mission.id, [...selected])
+    setAddFailed(false)
+    const result = await addMissionMembers(mission.id, [...selected])
+    if (!result) {
+      setAddFailed(true)
+      setSubmitting(false)
+      return
+    }
     close()
   }
 
@@ -76,7 +95,7 @@ export function MissionAddProjectsDialog({
           <DialogDescription className="text-xs">
             {translate(
               'auto.components.sidebar.MissionAddProjectsDialog.02449d01cc',
-              'Each added project gets a workspace on {{value0}}.',
+              "Each added project gets a workspace on {{value0}}. Missions currently support only Git projects on this computer's native filesystem; folder, SSH, runtime, and WSL projects are unavailable.",
               { value0: mission?.branchName ?? '' }
             )}
           </DialogDescription>
@@ -97,6 +116,14 @@ export function MissionAddProjectsDialog({
             groups={groupOptions}
           />
         )}
+        {addFailed ? (
+          <p className="text-xs text-destructive">
+            {translate(
+              'auto.components.sidebar.MissionAddProjectsDialog.5b02d8f5da',
+              'Could not add projects. Try again.'
+            )}
+          </p>
+        ) : null}
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" className="text-xs" onClick={close}>
             {translate('auto.components.sidebar.MissionAddProjectsDialog.d5aae76bca', 'Cancel')}

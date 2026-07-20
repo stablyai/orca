@@ -7,13 +7,13 @@ import type {
   MissionMemberResult,
   TuiAgent
 } from '../../../../shared/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AppState } from '../types'
 
 export type MissionsSlice = {
   missions: Mission[]
-  /** Transient per-member worktree errors keyed `${missionId}:${repoId}`.
-   *  Renderer-local: survives refetches but not reloads (failures are
-   *  retryable states, not persisted data). */
+  /** Per-member worktree errors keyed `${missionId}:${repoId}` and rebuilt
+   *  from durable Mission member state after every catalog refresh. */
   missionMemberErrors: Record<string, string>
   fetchMissions: () => Promise<void>
   createMission: (args: {
@@ -37,6 +37,18 @@ export const missionMemberErrorKey = (missionId: string, repoId: string): string
   `${missionId}:${repoId}`
 
 export const createMissionsSlice: StateCreator<AppState, [], [], MissionsSlice> = (set, get) => {
+  function getPersistedMemberErrors(missions: readonly Mission[]): Record<string, string> {
+    const errors: Record<string, string> = {}
+    for (const mission of missions) {
+      for (const member of mission.members) {
+        if (member.lastError) {
+          errors[missionMemberErrorKey(mission.id, member.repoId)] = member.lastError
+        }
+      }
+    }
+    return errors
+  }
+
   function applyMemberResults(missionId: string, memberResults: MissionMemberResult[]): void {
     set((state) => {
       const next = { ...state.missionMemberErrors }
@@ -59,7 +71,7 @@ export const createMissionsSlice: StateCreator<AppState, [], [], MissionsSlice> 
     fetchMissions: async () => {
       try {
         const missions = await window.api.missions.list()
-        set({ missions })
+        set({ missions, missionMemberErrors: getPersistedMemberErrors(missions) })
       } catch (err) {
         console.error('Failed to fetch missions:', err)
       }
@@ -88,8 +100,23 @@ export const createMissionsSlice: StateCreator<AppState, [], [], MissionsSlice> 
 
     deleteMission: async (missionId, deleteWorktrees) => {
       try {
+        const sessionWorkspace = get().folderWorkspaces.find(
+          (workspace) => workspace.missionId === missionId
+        )
         const result = await window.api.missions.delete({ missionId, deleteWorktrees })
         applyMemberResults(missionId, result.memberResults)
+        if (result.deleted) {
+          await get().fetchFolderWorkspaces()
+          // Why: main may report a deleted Mission before a folder-workspace
+          // refresh proves its session record is gone. Keep terminal UI state
+          // until that authoritative catalog no longer contains the workspace.
+          if (
+            sessionWorkspace &&
+            !get().folderWorkspaces.some((workspace) => workspace.id === sessionWorkspace.id)
+          ) {
+            get().purgeWorktreeTerminalState([folderWorkspaceKey(sessionWorkspace.id)])
+          }
+        }
         await get().fetchMissions()
         return result
       } catch (err) {
@@ -114,6 +141,8 @@ export const createMissionsSlice: StateCreator<AppState, [], [], MissionsSlice> 
       try {
         const result = await window.api.missions.removeMember({ missionId, repoId, deleteWorktree })
         applyMemberResults(missionId, result.memberResults)
+        // Why: member removal briefly tears down the shared PTY but does not
+        // delete the Mission session workspace; its renderer state remains owned.
         await get().fetchMissions()
       } catch (err) {
         console.error('Failed to remove mission member:', err)

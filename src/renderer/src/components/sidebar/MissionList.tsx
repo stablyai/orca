@@ -1,9 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { MoreHorizontal, Plus, RefreshCw, SquareTerminal, X } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { MoreHorizontal, Plus, SquareTerminal } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
-import { missionMemberErrorKey } from '@/store/slices/missions'
-import { formatMissionMemberError } from './mission-member-error-copy'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,87 +14,12 @@ import WorktreeCard from './WorktreeCard'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { MissionDeleteDialog } from './MissionDeleteDialog'
 import { MissionAddProjectsDialog } from './MissionAddProjectsDialog'
+import { MissionMemberRows } from './MissionMemberRows'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Mission } from '../../../../shared/types'
 
 const missionCollapseKey = (missionId: string): string => `mission:${missionId}`
-
-function MissionMemberRows({ mission }: { mission: Mission }): React.JSX.Element {
-  const repos = useAppStore((s) => s.repos)
-  const allWorktrees = useAllWorktrees()
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const missionMemberErrors = useAppStore((s) => s.missionMemberErrors)
-  const removeMissionMember = useAppStore((s) => s.removeMissionMember)
-  const recreateMissionMemberWorktree = useAppStore((s) => s.recreateMissionMemberWorktree)
-
-  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
-  const worktreeById = useMemo(
-    () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
-    [allWorktrees]
-  )
-
-  return (
-    <div className="flex flex-col gap-0.5">
-      {mission.members.map((member) => {
-        const repo = repoById.get(member.repoId)
-        const worktree = member.worktreeId ? worktreeById.get(member.worktreeId) : undefined
-        if (worktree) {
-          return (
-            <WorktreeCard
-              key={member.repoId}
-              // Why: inside a mission the repo is the member's identity, so the
-              // card title shows the repo name (legacy members were created
-              // with the mission name) and the repo badge would repeat it.
-              worktree={{ ...worktree, displayName: repo?.displayName ?? worktree.displayName }}
-              repo={repo}
-              isActive={activeWorktreeId === worktree.id}
-              onActivate={() => setActiveWorktree(worktree.id)}
-              nativeDragEnabled={false}
-              flushSurface
-              hideRepoBadge
-            />
-          )
-        }
-        const error = missionMemberErrors[missionMemberErrorKey(mission.id, member.repoId)]
-        return (
-          <div
-            key={member.repoId}
-            className="group/mission-member flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-muted-foreground hover:bg-worktree-sidebar-accent"
-          >
-            <span className="truncate">{repo?.displayName ?? member.repoId}</span>
-            <span className="min-w-0 truncate text-[11px] text-muted-foreground/70" title={error}>
-              {error
-                ? formatMissionMemberError(error)
-                : translate('auto.components.sidebar.MissionList.280576fc92', 'Workspace missing')}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="ml-auto shrink-0 text-muted-foreground"
-              aria-label={translate('auto.components.sidebar.MissionList.d241d824cb', 'Recreate')}
-              onClick={() => void recreateMissionMemberWorktree(mission.id, member.repoId)}
-            >
-              <RefreshCw className="size-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="shrink-0 text-muted-foreground can-hover:opacity-0 transition-opacity group-hover/mission-member:opacity-100 group-focus-within/mission-member:opacity-100 focus-visible:opacity-100"
-              aria-label={translate(
-                'auto.components.sidebar.MissionList.edb3b75817',
-                'Remove from mission'
-              )}
-              onClick={() => void removeMissionMember(mission.id, member.repoId, false)}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 function MissionSection({
   mission,
@@ -120,6 +42,12 @@ function MissionSection({
   const ensureMissionSession = useAppStore((s) => s.ensureMissionSession)
   const collapsed = collapsedGroups.has(missionCollapseKey(mission.id))
   const ensureRequestedRef = useRef(false)
+  const activateMissionSession = async (): Promise<void> => {
+    const workspace = await ensureMissionSession(mission.id)
+    if (workspace) {
+      setActiveWorktree(folderWorkspaceKey(workspace.id))
+    }
+  }
 
   // Why: missions created before the sessionized row (or whose eager ensure
   // failed) get their session materialized on first render of the tab.
@@ -170,7 +98,7 @@ function MissionSection({
           <button
             type="button"
             className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[13px] text-muted-foreground"
-            onClick={() => void ensureMissionSession(mission.id)}
+            onClick={() => void activateMissionSession()}
           >
             <SquareTerminal className="size-3.5 shrink-0" />
             <span className="truncate">{mission.name}</span>
@@ -198,7 +126,8 @@ function MissionSection({
         worktree={sessionWorktree}
         repo={undefined}
         isActive={activeWorktreeId === sessionWorktree.id}
-        onActivate={() => setActiveWorktree(sessionWorktree.id)}
+        onActivate={() => void activateMissionSession()}
+        useCustomActivationOnly
         nativeDragEnabled={false}
         flushSurface
         hideFolderPathLabel

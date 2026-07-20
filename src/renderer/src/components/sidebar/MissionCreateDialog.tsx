@@ -21,9 +21,10 @@ import { Label } from '@/components/ui/label'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { isMissionEligibleRepo, slugifyMissionBranch } from '../../../../shared/missions'
+import { slugifyMissionBranch } from '../../../../shared/missions'
 import { formatMissionMemberError } from './mission-member-error-copy'
 import { getMissionEligibleGroupRepoIds } from './mission-group-selection'
+import { isRendererMissionEligibleRepo } from './mission-repo-eligibility'
 import {
   MissionCreateMemberStatusList,
   type MissionCreateMemberStatus
@@ -34,7 +35,9 @@ export default function MissionCreateDialog(): React.JSX.Element {
   const open = useAppStore((s) => s.activeModal === 'mission-create')
   const closeModal = useAppStore((s) => s.closeModal)
   const repos = useAppStore((s) => s.repos)
+  const projects = useAppStore((s) => s.projects)
   const projectGroups = useAppStore((s) => s.projectGroups)
+  const settings = useAppStore((s) => s.settings)
   const createMission = useAppStore((s) => s.createMission)
   const setSidebarListMode = useAppStore((s) => s.setSidebarListMode)
 
@@ -85,16 +88,17 @@ export default function MissionCreateDialog(): React.JSX.Element {
     )
   }, [detectedAgentIds, disabledTuiAgents])
 
-  const eligibleRepos = useMemo(() => repos.filter(isMissionEligibleRepo), [repos])
-  const groupOptions = useMemo(
-    () =>
-      projectGroups.map((group) => ({
+  const { eligibleRepos, groupOptions } = useMemo(() => {
+    const context = { projects, settings }
+    return {
+      eligibleRepos: repos.filter((repo) => isRendererMissionEligibleRepo(repo, context)),
+      groupOptions: projectGroups.map((group) => ({
         id: group.id,
         name: group.name,
-        repoIds: getMissionEligibleGroupRepoIds(projectGroups, repos, group.id)
-      })),
-    [projectGroups, repos]
-  )
+        repoIds: getMissionEligibleGroupRepoIds(projectGroups, repos, group.id, context)
+      }))
+    }
+  }, [projectGroups, projects, repos, settings])
   const repoNameById = useMemo(
     () => new Map(eligibleRepos.map((repo) => [repo.id, repo.displayName])),
     [eligibleRepos]
@@ -188,7 +192,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
           <DialogDescription className="text-xs">
             {translate(
               'auto.components.sidebar.MissionCreateDialog.4608f14ade',
-              'Each selected project gets a workspace on a shared mission branch.'
+              "Each selected project gets a workspace on a shared mission branch. Missions currently support only Git projects on this computer's native filesystem; folder, SSH, runtime, and WSL projects are unavailable."
             )}
           </DialogDescription>
         </DialogHeader>

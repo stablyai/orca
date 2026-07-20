@@ -44,7 +44,7 @@ describe('normalizeFolderWorkspaces (mission-owned)', () => {
     const result = normalizeFolderWorkspaces(
       [makeWorkspace({ id: 'fw1', projectGroupId: 'mission:m1', missionId: 'm1' })],
       [],
-      [{ id: 'm1', rootPath: missionRootPath }]
+      [{ id: 'm1', name: 'Referral', rootPath: missionRootPath }]
     )
     expect(result).toHaveLength(1)
     expect(result[0].missionId).toBe('m1')
@@ -71,9 +71,31 @@ describe('normalizeFolderWorkspaces (mission-owned)', () => {
         })
       ],
       [],
-      [{ id: 'm1', rootPath: missionRootPath }]
+      [{ id: 'm1', name: 'Referral', rootPath: missionRootPath }]
     )
     expect(result[0].folderPath).toBe(missionRootPath)
+  })
+
+  it('repairs stale Mission workspace identity and path from the owning Mission', () => {
+    const result = normalizeFolderWorkspaces(
+      [
+        makeWorkspace({
+          id: 'fw1',
+          projectGroupId: 'mission:wrong',
+          missionId: 'm1',
+          name: 'Stale name',
+          folderPath: path.join(path.sep, 'stale', 'root')
+        })
+      ],
+      [],
+      [{ id: 'm1', name: 'Referral', rootPath: missionRootPath }]
+    )
+
+    expect(result[0]).toMatchObject({
+      projectGroupId: 'mission:m1',
+      name: 'Referral',
+      folderPath: missionRootPath
+    })
   })
 
   it('keeps group-owned behavior unchanged (orphans still drop)', () => {

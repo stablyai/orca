@@ -138,6 +138,36 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
     })
   })
 
+  it('rechecks Git ownership after watcher teardown before recursive deletion', async () => {
+    await withPlatform('win32', async () => {
+      listWorktreesStrictMock.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          path: 'C:/repo/worktree/feature',
+          head: 'replacement-head',
+          branch: 'refs/heads/replacement',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+      await expect(
+        recoverLocalWindowsWorktreeRemoval({
+          error: new Error('git worktree remove failed'),
+          force: true,
+          canonicalWorktreePath: 'C:/repo/worktree/feature',
+          repoPath: 'C:/repo',
+          localWorktreeGitOptions: {},
+          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
+          deleteBranch: true,
+          closeWatcher: vi.fn().mockResolvedValue(undefined)
+        })
+      ).rejects.toThrow('Git still has stale worktree registration')
+
+      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    })
+  })
+
   it('recovers localized Windows failures after Git already removed the registration', async () => {
     await withPlatform('win32', async () => {
       const result = await recoverLocalWindowsWorktreeRemoval({

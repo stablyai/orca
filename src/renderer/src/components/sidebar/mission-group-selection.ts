@@ -1,6 +1,9 @@
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
-import { isMissionEligibleRepo } from '../../../../shared/missions'
 import type { ProjectGroup, Repo } from '../../../../shared/types'
+import {
+  isRendererMissionEligibleRepo,
+  type MissionRepoEligibilityContext
+} from './mission-repo-eligibility'
 
 /** Mission-eligible repos contained in a project group's subtree. Group
  *  selection in mission pickers is a bulk-select convenience: membership is
@@ -8,7 +11,8 @@ import type { ProjectGroup, Repo } from '../../../../shared/types'
 export function getMissionEligibleGroupRepoIds(
   groups: readonly ProjectGroup[],
   repos: readonly Repo[],
-  groupId: string
+  groupId: string,
+  eligibilityContext: MissionRepoEligibilityContext
 ): string[] {
   const subtreeIds = getProjectGroupSubtreeIds(groups, groupId)
   return repos
@@ -16,7 +20,7 @@ export function getMissionEligibleGroupRepoIds(
       (repo) =>
         typeof repo.projectGroupId === 'string' &&
         subtreeIds.has(repo.projectGroupId) &&
-        isMissionEligibleRepo(repo)
+        isRendererMissionEligibleRepo(repo, eligibilityContext)
     )
     .map((repo) => repo.id)
 }

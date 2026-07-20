@@ -1370,6 +1370,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         rawArgs,
         'invalid_folder_workspace_update_args'
       )
+      const ownedWorkspace = store.getFolderWorkspace(args.folderWorkspaceId)
+      if (
+        ownedWorkspace?.missionId &&
+        (args.updates.name !== undefined || args.updates.folderPath !== undefined)
+      ) {
+        throw new Error('mission_workspace_managed_by_mission')
+      }
       if (
         typeof args.updates.folderPath === 'string' &&
         args.updates.folderPath.trim().length > 0
@@ -1408,6 +1415,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
+    if (store.getFolderWorkspace(args.folderWorkspaceId)?.missionId) {
+      throw new Error('mission_workspace_managed_by_mission')
+    }
     const deleted = store.removeFolderWorkspace(args.folderWorkspaceId)
     if (deleted) {
       notifyReposChanged(mainWindow)

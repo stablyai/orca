@@ -100,6 +100,22 @@ describe('MissionDeleteDialog', () => {
     expect(rendered.textContent).toContain(FAILURE_COPY)
   })
 
+  it('shows partial-delete warnings while the failed Mission remains open', async () => {
+    mocks.deleteMission.mockResolvedValue({
+      deleted: false,
+      memberResults: [{ repoId: 'r1', worktreeId: 'wt-1', error: 'uncommitted changes' }],
+      warning: 'Preserved local branch mission/referral.'
+    })
+    const rendered = renderDialog(makeMission('m1', 'Referral'))
+
+    await act(async () => {
+      getDeleteButton(rendered).click()
+    })
+
+    expect(rendered.textContent).toContain('Preserved local branch mission/referral.')
+    expect(rendered.querySelector('[role="status"]')).not.toBeNull()
+  })
+
   it('reseeds the failure banner and worktree checkbox on the next open', async () => {
     mocks.deleteMission.mockResolvedValue({ deleted: false, memberResults: [] })
     let rendered = renderDialog(makeMission('m1', 'Referral'))

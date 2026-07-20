@@ -3,15 +3,27 @@ import { act } from 'react'
 import type { ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MissionCreateResult } from '../../../../shared/types'
+import type { MissionCreateResult, Project } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   createMission: vi.fn<(args: unknown) => Promise<MissionCreateResult | null>>(),
   closeModal: vi.fn(),
   setSidebarListMode: vi.fn(),
-  repos: [] as { id: string; displayName: string; projectGroupId?: string }[],
+  repos: [] as {
+    id: string
+    path: string
+    displayName: string
+    kind?: 'git' | 'folder'
+    projectGroupId?: string | null
+    connectionId?: string | null
+    executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
+  }[],
+  projects: [] as Project[],
   projectGroups: [] as { id: string; name: string; parentGroupId: string | null }[],
-  comboboxProps: [] as { groups?: readonly unknown[] }[]
+  settings: null as {
+    localWindowsRuntimeDefault: { kind: 'windows-host' } | { kind: 'wsl'; distro: string | null }
+  } | null,
+  comboboxProps: [] as { repos: readonly { id: string }[]; groups?: readonly unknown[] }[]
 }))
 
 vi.mock('@/store', () => ({
@@ -20,10 +32,11 @@ vi.mock('@/store', () => ({
       activeModal: 'mission-create',
       closeModal: mocks.closeModal,
       repos: mocks.repos,
+      projects: mocks.projects,
       projectGroups: mocks.projectGroups,
       createMission: mocks.createMission,
       setSidebarListMode: mocks.setSidebarListMode,
-      settings: null,
+      settings: mocks.settings,
       detectedAgentIds: null
     })
 }))
@@ -43,6 +56,7 @@ vi.mock('@/components/ui/dialog', () => ({
 // and records the props the dialog hands to the picker.
 vi.mock('@/components/ui/repo-multi-combobox', () => ({
   default: (props: {
+    repos: readonly { id: string }[]
     onChange: (next: ReadonlySet<string>) => void
     groups?: readonly unknown[]
   }) => {
@@ -61,6 +75,10 @@ vi.mock('@/components/ui/repo-multi-combobox', () => ({
 
 vi.mock('@/components/agent/AgentCombobox', () => ({
   default: () => null
+}))
+
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => 'win32'
 }))
 
 import MissionCreateDialog from './MissionCreateDialog'
@@ -92,8 +110,10 @@ describe('MissionCreateDialog', () => {
     mocks.createMission.mockReset()
     mocks.closeModal.mockReset()
     mocks.setSidebarListMode.mockReset()
-    mocks.repos = [{ id: 'r1', displayName: 'Dashboard' }]
+    mocks.repos = [{ id: 'r1', path: '/repos/dashboard', displayName: 'Dashboard' }]
+    mocks.projects = []
     mocks.projectGroups = []
+    mocks.settings = null
     mocks.comboboxProps = []
   })
 
@@ -146,9 +166,9 @@ describe('MissionCreateDialog', () => {
       { id: 'g2', name: 'Nested', parentGroupId: 'g1' }
     ]
     mocks.repos = [
-      { id: 'r1', displayName: 'Dashboard', projectGroupId: 'g1' },
-      { id: 'r2', displayName: 'Docs', projectGroupId: 'g2' },
-      { id: 'r3', displayName: 'Loose' }
+      { id: 'r1', path: '/repos/dashboard', displayName: 'Dashboard', projectGroupId: 'g1' },
+      { id: 'r2', path: '/repos/docs', displayName: 'Docs', projectGroupId: 'g2' },
+      { id: 'r3', path: '/repos/loose', displayName: 'Loose' }
     ]
     renderDialog()
 
@@ -158,5 +178,76 @@ describe('MissionCreateDialog', () => {
       { id: 'g1', name: 'Platform', repoIds: ['r1', 'r2'] },
       { id: 'g2', name: 'Nested', repoIds: ['r2'] }
     ])
+  })
+
+  it('explains the native-local Git limit and excludes unsupported projects', () => {
+    mocks.repos = [
+      { id: 'local', path: '/repos/local', displayName: 'Local' },
+      { id: 'folder', path: '/repos/folder', displayName: 'Folder', kind: 'folder' },
+      {
+        id: 'legacy-ssh',
+        path: '/srv/legacy',
+        displayName: 'Legacy SSH',
+        connectionId: 'target-1'
+      },
+      {
+        id: 'ssh',
+        path: '/srv/ssh',
+        displayName: 'SSH',
+        executionHostId: 'ssh:target-1'
+      },
+      {
+        id: 'runtime',
+        path: '/workspace/runtime',
+        displayName: 'Runtime',
+        executionHostId: 'runtime:env-1'
+      },
+      {
+        id: 'wsl',
+        path: '\\\\wsl.localhost\\Ubuntu\\repos\\wsl',
+        displayName: 'WSL',
+        executionHostId: 'local'
+      }
+    ]
+
+    const rendered = renderDialog()
+
+    expect(rendered.textContent).toContain(
+      "Missions currently support only Git projects on this computer's native filesystem"
+    )
+    expect(mocks.comboboxProps.at(-1)?.repos.map((repo) => repo.id)).toEqual(['local'])
+  })
+
+  it('excludes projects assigned to WSL through the Windows global default', () => {
+    mocks.repos = [
+      { id: 'host', path: 'C:\\src\\host', displayName: 'Host' },
+      { id: 'wsl', path: 'C:\\src\\wsl', displayName: 'WSL' }
+    ]
+    mocks.projects = [
+      {
+        id: 'host-project',
+        displayName: 'Host',
+        badgeColor: '#000',
+        localWindowsRuntimePreference: { kind: 'windows-host' },
+        sourceRepoIds: ['host'],
+        createdAt: 1,
+        updatedAt: 1
+      },
+      {
+        id: 'wsl-project',
+        displayName: 'WSL',
+        badgeColor: '#000',
+        sourceRepoIds: ['wsl'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    mocks.settings = {
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    }
+
+    renderDialog()
+
+    expect(mocks.comboboxProps.at(-1)?.repos.map((repo) => repo.id)).toEqual(['host'])
   })
 })
