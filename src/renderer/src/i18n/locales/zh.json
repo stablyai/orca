@@ -952,9 +952,15 @@
           "from": "从",
           "to": "到",
           "activity": "活动",
-          "noActivity": "暂无活动。"
+          "noActivity": "暂无活动。",
+          "activityExpand": "展开活动",
+          "activityCollapse": "折叠活动"
         },
-        "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。"
+        "checkActionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。",
+        "comments": {
+          "expand": "展开评论",
+          "collapse": "折叠评论"
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -1428,7 +1434,11 @@
         "dd5d9a4f17": "{{value0}}更新",
         "71a3c0f9d2": "启动工作区",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "comments": {
+          "expand": "展开评论",
+          "collapse": "折叠评论"
+        }
       },
       "QuickOpen": {
         "1dbd3f59ff": "移动",
@@ -12301,7 +12311,9 @@
             "6978871a3d": "打开",
             "cce596969e": "删除注释",
             "cad3384faa": "编辑备注",
-            "508ee678a5": "在浏览器中打开"
+            "508ee678a5": "在浏览器中打开",
+            "expand": "展开评论",
+            "collapse": "折叠评论"
           },
           "DiffCommentPopover": {
             "2b3ce6d394": "取消",

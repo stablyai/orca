@@ -952,9 +952,15 @@
           "from": "de",
           "to": "a",
           "activity": "Actividad",
-          "noActivity": "Sin actividad aún."
+          "noActivity": "Sin actividad aún.",
+          "activityExpand": "Expandir actividad",
+          "activityCollapse": "Contraer actividad"
         },
-        "checkActionRequiredHint": "Esta verificación necesita una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que se desbloquee la fusión."
+        "checkActionRequiredHint": "Esta verificación necesita una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que se desbloquee la fusión.",
+        "comments": {
+          "expand": "Expandir comentarios",
+          "collapse": "Contraer comentarios"
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reabrir",
@@ -1428,7 +1434,11 @@
         "dd5d9a4f17": "actualizado {{value0}}",
         "71a3c0f9d2": "Iniciar espacio de trabajo",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "comments": {
+          "expand": "Expandir comentarios",
+          "collapse": "Contraer comentarios"
+        }
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -12301,7 +12311,9 @@
             "6978871a3d": "Abierto",
             "cce596969e": "Eliminar nota",
             "cad3384faa": "Editar nota",
-            "508ee678a5": "Abrir en el navegador"
+            "508ee678a5": "Abrir en el navegador",
+            "expand": "Expandir comentario",
+            "collapse": "Contraer comentario"
           },
           "DiffCommentPopover": {
             "2b3ce6d394": "Cancelar",

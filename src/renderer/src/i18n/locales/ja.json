@@ -952,9 +952,15 @@
           "from": "from",
           "to": "to",
           "activity": "アクティビティ",
-          "noActivity": "まだアクティビティはありません。"
+          "noActivity": "まだアクティビティはありません。",
+          "activityExpand": "アクティビティを展開する",
+          "activityCollapse": "アクティビティを折りたたむ"
         },
-        "checkActionRequiredHint": "マージを解除するには、このチェックにGitHub上で手動アクション（例：ワークフロー実行の承認）が必要です。"
+        "checkActionRequiredHint": "マージを解除するには、このチェックにGitHub上で手動アクション（例：ワークフロー実行の承認）が必要です。",
+        "comments": {
+          "expand": "コメントを展開する",
+          "collapse": "コメントを折りたたむ"
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -1428,7 +1434,11 @@
         "dd5d9a4f17": "{{value0}}に更新",
         "71a3c0f9d2": "ワークスペースを開始",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "comments": {
+          "expand": "コメントを展開する",
+          "collapse": "コメントを折りたたむ"
+        }
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -12301,7 +12311,9 @@
             "6978871a3d": "オープン",
             "cce596969e": "メモの削除",
             "cad3384faa": "メモを編集する",
-            "508ee678a5": "ブラウザで開く"
+            "508ee678a5": "ブラウザで開く",
+            "expand": "コメントを展開する",
+            "collapse": "コメントを折りたたむ"
           },
           "DiffCommentPopover": {
             "2b3ce6d394": "キャンセル",

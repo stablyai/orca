@@ -975,9 +975,15 @@
           "from": "from",
           "to": "to",
           "activity": "Activity",
-          "noActivity": "No activity yet."
+          "noActivity": "No activity yet.",
+          "activityExpand": "Expand activity",
+          "activityCollapse": "Collapse activity"
         },
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "comments": {
+          "expand": "Expand comments",
+          "collapse": "Collapse comments"
+        }
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1451,7 +1457,11 @@
         "8ff5ae8866": "Assignees",
         "82c87eceb9": "Edit assignees",
         "1ff5d979df": "No one assigned",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "comments": {
+          "expand": "Expand comments",
+          "collapse": "Collapse comments"
+        }
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -12324,7 +12334,9 @@
             "6978871a3d": "Open",
             "cce596969e": "Delete note",
             "cad3384faa": "Edit note",
-            "508ee678a5": "Open in browser"
+            "508ee678a5": "Open in browser",
+            "expand": "Expand comment",
+            "collapse": "Collapse comment"
           },
           "DiffCommentPopover": {
             "2b3ce6d394": "Cancel",
