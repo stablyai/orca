@@ -119,8 +119,6 @@ export async function detectRepoIcon({
   return undefined
 }
 
-export { REPO_ICON_FILE_CANDIDATES } from './repo-icon-file-detection'
-
 // Why: `upstream: null` is a resolved "not a fork" marker and prevents
 // repeated best-effort probes.
 export async function detectRepoIconAndUpstream({
