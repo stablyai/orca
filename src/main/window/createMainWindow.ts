@@ -742,6 +742,9 @@ export function createMainWindow(
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
+    // Why: crash recording captures diagnostics synchronously before its async
+    // write. Arm recovery first so diagnostics cannot postpone the reload timer.
+    scheduleRendererRecovery(details)
     // Why: macOS can report BrowserWindow teardown as renderer `killed`/SIGKILL
     // after a confirmed close; that is window lifecycle noise, not a crash.
     if (!windowClosing) {
@@ -752,7 +755,6 @@ export function createMainWindow(
     if (!windowClosing) {
       console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
     }
-    scheduleRendererRecovery(details)
   })
   mainWindow.webContents.on('destroyed', () => {
     resetMarkdownEditorFocus()
