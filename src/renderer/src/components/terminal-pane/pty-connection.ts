@@ -311,7 +311,6 @@ const TERMINAL_FOCUS_OUT_SEQUENCE = '\x1b[O'
 const FOCUS_REPORTING_DISABLE_SEQUENCE = '\x1b[?1004l'
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const SHIFT_ENTER_RECONFIRM_IDLE_MS = 350
-const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 128 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 // Why: a submit repaint can take longer than one keystroke echo to fully
@@ -324,7 +323,6 @@ const FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS = 400
 // collectively starve timers unless foreground writes have a rolling budget.
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
 const FOREGROUND_BUDGET_WINDOW_MS = 500
-const INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS = 32 * 1024
 const FOREGROUND_GRID_DRIFT_CHECK_MIN_MS = 250
 // Why: this is only shown if hidden renderer output was skipped and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
@@ -619,8 +617,6 @@ let codexRestartNoticePresenceSource: Record<
   { previousAccountLabel: string; nextAccountLabel: string }
 > | null = null
 let codexRestartNoticePresence = false
-let inactiveForegroundImmediateBudgetChars = 0
-let inactiveForegroundImmediateBudgetWindowStart = 0
 
 type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
@@ -724,22 +720,6 @@ function isSshSessionExpiredError(err: unknown): boolean {
 
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
   return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
-}
-
-function consumeInactiveForegroundImmediateBudget(dataLength: number): boolean {
-  const now = performance.now()
-  if (now - inactiveForegroundImmediateBudgetWindowStart > FOREGROUND_BUDGET_WINDOW_MS) {
-    inactiveForegroundImmediateBudgetChars = 0
-    inactiveForegroundImmediateBudgetWindowStart = now
-  }
-  if (
-    inactiveForegroundImmediateBudgetChars + dataLength >
-    INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS
-  ) {
-    return false
-  }
-  inactiveForegroundImmediateBudgetChars += dataLength
-  return true
 }
 
 function hasCodexRestartNotices(
@@ -5311,6 +5291,8 @@ export function connectPanePty(
     }
     let foregroundImmediateBudgetChars = 0
     let foregroundImmediateBudgetWindowStart = 0
+    let foregroundRendererQueryPtyId: string | null = null
+    let foregroundRendererQueryScanTail = ''
     let foregroundRewriteChunkEndedWithCarriageReturn = false
     let foregroundRewriteCsiScanTail = ''
     let hiddenMode2031ScanTail = ''
@@ -5549,29 +5531,34 @@ export function connectPanePty(
       return activePane ? activePane.id === pane.id : true
     }
 
-    function isLatencySensitiveForegroundOutput(data: string): boolean {
-      if (!isActiveSplitPane()) {
-        // Why: many visible split panes can each emit tiny TUI frames. A shared
-        // budget keeps watched panes live while preventing aggregate xterm work
-        // from starving typing in the active pane.
-        if (data.includes('\x1b[')) {
-          return false
-        }
-        return consumeInactiveForegroundImmediateBudget(data.length)
+    function containsForegroundRendererReplyQuery(data: string): boolean {
+      const ptyId = transport.getPtyId()
+      if (foregroundRendererQueryPtyId !== ptyId) {
+        foregroundRendererQueryPtyId = ptyId
+        foregroundRendererQueryScanTail = ''
       }
-      if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
-        return consumeForegroundImmediateBudget(data.length)
+      const extracted = extractHiddenStartupRendererQueryData(data, foregroundRendererQueryScanTail)
+      foregroundRendererQueryScanTail = extracted.pending
+      return Boolean(
+        extracted.statelessQueryData || extracted.statefulQueryData || extracted.oscColorQueryData
+      )
+    }
+
+    function isLatencySensitiveForegroundOutput(
+      data: string,
+      containsRendererReplyQuery: boolean
+    ): boolean {
+      if (containsRendererReplyQuery) {
+        return true
+      }
+      if (!isActiveSplitPane()) {
+        return false
       }
       const recentInput =
         performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-      if (
-        recentInput &&
-        data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
-        data.includes('\x1b[')
-      ) {
-        return consumeForegroundImmediateBudget(data.length)
-      }
-      return false
+      // Why: accepted input is evidence of echo/redraw work; transport chunk
+      // size alone is not, so passive agent streams wait for the next frame.
+      return recentInput && consumeForegroundImmediateBudget(data.length)
     }
 
     function containsNonAsciiOutput(data: string): boolean {
@@ -5762,6 +5749,8 @@ export function connectPanePty(
       const synchronizedFrameLatencySensitive =
         synchronizedForegroundOutput && synchronizedForegroundFrameInteractive
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
+      const foregroundContainsRendererReplyQuery =
+        foreground && containsForegroundRendererReplyQuery(data)
       if (!foreground && hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
@@ -5777,7 +5766,8 @@ export function connectPanePty(
         latencySensitive:
           !foreground || parseHiddenStartupOutput
             ? true
-            : synchronizedFrameLatencySensitive || isLatencySensitiveForegroundOutput(data),
+            : synchronizedFrameLatencySensitive ||
+              isLatencySensitiveForegroundOutput(data, foregroundContainsRendererReplyQuery),
         forceForegroundRefresh:
           foregroundOutput &&
           (synchronizedForegroundOutput ||

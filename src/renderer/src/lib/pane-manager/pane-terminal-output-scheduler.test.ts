@@ -51,6 +51,39 @@ function createForegroundTerminal() {
   }
 }
 
+function installManualAnimationFrames(): {
+  pendingCount: () => number
+  runNext: (timestamp?: number) => void
+} {
+  let nextId = 1
+  const callbacks = new Map<number, FrameRequestCallback>()
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((callback: FrameRequestCallback) => {
+      const id = nextId++
+      callbacks.set(id, callback)
+      return id
+    })
+  )
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((id: number) => {
+      callbacks.delete(id)
+    })
+  )
+  return {
+    pendingCount: () => callbacks.size,
+    runNext: (timestamp = 16) => {
+      const next = callbacks.entries().next().value as [number, FrameRequestCallback] | undefined
+      if (!next) {
+        throw new Error('No animation frame is pending')
+      }
+      callbacks.delete(next[0])
+      next[1](timestamp)
+    }
+  }
+}
+
 async function loadScheduler() {
   vi.resetModules()
   return import('./pane-terminal-output-scheduler')
@@ -80,6 +113,7 @@ describe('pane terminal output scheduler', () => {
 
     it('credits when a queued chunk finishes parsing', async () => {
       vi.useFakeTimers()
+      const frames = installManualAnimationFrames()
       const { writeTerminalOutput } = await loadScheduler()
       const terminal = createTerminal()
       let parsed: (() => void) | undefined
@@ -95,7 +129,7 @@ describe('pane terminal output scheduler', () => {
       })
       expect(credit.count()).toBe(0)
 
-      vi.advanceTimersByTime(0)
+      frames.runNext()
       expect(terminal.write).toHaveBeenCalledWith('queued', expect.any(Function))
       expect(credit.count()).toBe(0)
       parsed?.()
@@ -124,6 +158,7 @@ describe('pane terminal output scheduler', () => {
 
     it('defers split-chunk credit and onParsed until the final slice parses', async () => {
       vi.useFakeTimers()
+      const frames = installManualAnimationFrames()
       const { writeTerminalOutput } = await loadScheduler()
       const terminal = createTerminal()
       const parseCallbacks: (() => void)[] = []
@@ -141,7 +176,7 @@ describe('pane terminal output scheduler', () => {
         ackCredit: credit.fire,
         onParsed
       })
-      vi.advanceTimersByTime(0)
+      frames.runNext()
 
       expect(parseCallbacks).toHaveLength(3)
       parseCallbacks[0]()
@@ -375,6 +410,7 @@ describe('pane terminal output scheduler', () => {
 
   it('runs parsed callbacks after queued foreground output parses', async () => {
     vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
     let parseCallback: (() => void) | undefined
@@ -389,7 +425,7 @@ describe('pane terminal output scheduler', () => {
       onParsed
     })
 
-    vi.advanceTimersByTime(0)
+    frames.runNext()
 
     expect(terminal.write).toHaveBeenCalledWith('queued', expect.any(Function))
     expect(onParsed).not.toHaveBeenCalled()
@@ -684,8 +720,9 @@ describe('pane terminal output scheduler', () => {
     expect(onParsed).toHaveBeenCalledTimes(1)
   })
 
-  it('defers throughput foreground output to the shared high-priority drain', async () => {
+  it('defers throughput foreground output to the shared frame-oriented drain', async () => {
     vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
 
@@ -699,12 +736,158 @@ describe('pane terminal output scheduler', () => {
     })
 
     expect(terminal.write).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(0)
+    expect(frames.pendingCount()).toBe(1)
+    frames.runNext()
 
     expect(terminal.write).toHaveBeenCalledTimes(2)
     expect(terminal.write.mock.calls.map(([data]) => data).join('')).toBe(
       `${'a'.repeat(16 * 1024)}${'b'.repeat(16 * 1024)}`
     )
+  })
+
+  it('keeps the parse-clocked continuation when passive chunks arrive behind a released backlog', async () => {
+    // Why: the frame gate must cover only the initial drain. Re-gating every
+    // passive arrival collapsed sustained visible floods to one 128KB drain
+    // per frame (~4MB/s vs the ~30MB/s parse-clocked ceiling).
+    vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, 'x'.repeat(512 * 1024), {
+      foreground: true,
+      latencySensitive: false
+    })
+    expect(frames.pendingCount()).toBe(1)
+    frames.runNext()
+    const writesAfterFrame = terminal.write.mock.calls.length
+    expect(writesAfterFrame).toBeGreaterThan(0)
+
+    writeTerminalOutput(terminal, 'y'.repeat(64 * 1024), {
+      foreground: true,
+      latencySensitive: false
+    })
+
+    expect(frames.pendingCount()).toBe(0)
+    vi.advanceTimersByTime(8)
+    expect(terminal.write.mock.calls.length).toBeGreaterThan(writesAfterFrame)
+
+    for (let tick = 0; tick < 200; tick++) {
+      vi.advanceTimersByTime(4)
+    }
+    const written = terminal.write.mock.calls.map(([data]) => data as string).join('')
+    expect(written).toBe('x'.repeat(512 * 1024) + 'y'.repeat(64 * 1024))
+    expect(frames.pendingCount()).toBe(0)
+  })
+
+  it('coalesces passive tiny chunks and their ACK credits into one frame write', async () => {
+    vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const parseCallbacks: (() => void)[] = []
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      if (callback) {
+        parseCallbacks.push(callback)
+      }
+    })
+    const credits = [vi.fn(), vi.fn(), vi.fn()]
+
+    for (const [index, data] of ['tiny-', 'passive-', 'stream'].entries()) {
+      writeTerminalOutput(terminal, data, {
+        foreground: true,
+        latencySensitive: false,
+        ackCredit: credits[index]
+      })
+    }
+
+    expect(terminal.write).not.toHaveBeenCalled()
+    expect(frames.pendingCount()).toBe(1)
+    frames.runNext()
+
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+    expect(terminal.write).toHaveBeenCalledWith('tiny-passive-stream', expect.any(Function))
+    expect(credits.every((credit) => credit.mock.calls.length === 0)).toBe(true)
+    parseCallbacks[0]?.()
+    expect(credits.every((credit) => credit.mock.calls.length === 1)).toBe(true)
+  })
+
+  it('shares one animation-frame request across passive foreground terminals', async () => {
+    vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
+    const requestFrame = vi.mocked(globalThis.requestAnimationFrame)
+    const { writeTerminalOutput } = await loadScheduler()
+    const first = createTerminal()
+    const second = createTerminal()
+
+    writeTerminalOutput(first, 'first', { foreground: true, latencySensitive: false })
+    writeTerminalOutput(second, 'second', { foreground: true, latencySensitive: false })
+
+    expect(requestFrame).toHaveBeenCalledTimes(1)
+    frames.runNext()
+    expect(first.write).toHaveBeenCalledWith('first', expect.any(Function))
+    expect(second.write).toHaveBeenCalledWith('second', expect.any(Function))
+  })
+
+  it('flushes an immediate suffix behind its ordered frame-waiting prefix', async () => {
+    vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
+    const cancelFrame = vi.mocked(globalThis.cancelAnimationFrame)
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, 'passive-', {
+      foreground: true,
+      latencySensitive: false
+    })
+    writeTerminalOutput(terminal, 'reply-query', {
+      foreground: true,
+      latencySensitive: true
+    })
+
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+    expect(terminal.write).toHaveBeenCalledWith('passive-reply-query', expect.any(Function))
+    expect(cancelFrame).toHaveBeenCalledTimes(1)
+    expect(frames.pendingCount()).toBe(0)
+  })
+
+  it('uses the one-shot fallback when an animation frame does not run', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 41)
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, 'fallback', {
+      foreground: true,
+      latencySensitive: false
+    })
+
+    vi.advanceTimersByTime(31)
+    expect(terminal.write).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(terminal.write).toHaveBeenCalledWith('fallback', expect.any(Function))
+    vi.advanceTimersByTime(32)
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases frame-waiting output on an explicit visibility flush', async () => {
+    vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
+    const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, 'visible-again', {
+      foreground: true,
+      latencySensitive: false
+    })
+    flushTerminalOutput(terminal)
+
+    expect(terminal.write).toHaveBeenCalledWith('visible-again', expect.any(Function))
+    expect(frames.pendingCount()).toBe(0)
   })
 
   it('coalesces synchronized foreground frame endings with immediate cursor restore bytes', async () => {
@@ -1138,6 +1321,7 @@ describe('pane terminal output scheduler', () => {
 
   it('ignores unforced chunks when resolving a coalesced forced refresh', async () => {
     vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createForegroundTerminal()
 
@@ -1151,7 +1335,7 @@ describe('pane terminal output scheduler', () => {
       foreground: true,
       latencySensitive: false
     })
-    vi.advanceTimersByTime(0)
+    frames.runNext()
 
     expect(terminal.refresh).toHaveBeenCalledWith(0, 23)
     expect(terminal._core.refresh).not.toHaveBeenCalled()
@@ -1210,6 +1394,7 @@ describe('pane terminal output scheduler', () => {
 
   it('drains active foreground backlog before older background terminal backlog', async () => {
     vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
     const { writeTerminalOutput } = await loadScheduler()
     const backgroundA = createTerminal()
     const backgroundB = createTerminal()
@@ -1222,7 +1407,7 @@ describe('pane terminal output scheduler', () => {
       latencySensitive: false
     })
 
-    vi.advanceTimersByTime(0)
+    frames.runNext()
 
     expect(active.write).toHaveBeenCalledWith('active', expect.any(Function))
     expect(active.write.mock.invocationCallOrder[0]).toBeLessThan(
@@ -1422,6 +1607,7 @@ describe('pane terminal output scheduler', () => {
     // TUI on a starved renderer grew queuedChars without bound (field
     // reports of ~1.5 GB renderer RSS before terminals froze).
     vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
     const chunk = 'x'.repeat(512 * 1024)
@@ -1431,7 +1617,7 @@ describe('pane terminal output scheduler', () => {
     }
     writeTerminalOutput(terminal, 'after-cap\r\n', { foreground: true, latencySensitive: false })
 
-    vi.advanceTimersByTime(0)
+    frames.runNext()
 
     const output = terminal.write.mock.calls.map(([data]) => data).join('')
     expect(output).toContain('Orca skipped a burst of terminal output')
@@ -1461,6 +1647,7 @@ describe('pane terminal output scheduler', () => {
 
   it('scales the backlog cap with the scrollback setting', async () => {
     vi.useFakeTimers()
+    const frames = installManualAnimationFrames()
     const { writeTerminalOutput, configureTerminalOutputBacklogCap } = await loadScheduler()
     const terminal = createTerminal()
     const chunk = 'x'.repeat(512 * 1024)
@@ -1471,17 +1658,19 @@ describe('pane terminal output scheduler', () => {
     for (let i = 0; i < 5; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
     }
-    vi.advanceTimersByTime(0)
+    frames.runNext()
 
     let output = terminal.write.mock.calls.map(([data]) => data).join('')
     expect(output).not.toContain('Orca skipped')
     expect(output).toContain('x'.repeat(1024))
 
-    // But the scaled cap still bounds a runaway flood.
+    // But the scaled cap still bounds a runaway flood. The backlog was already
+    // frame-released, so these arrivals ride the parse-clocked continuation.
     terminal.write.mockClear()
     for (let i = 0; i < 13; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
     }
+    expect(frames.pendingCount()).toBe(0)
     vi.advanceTimersByTime(0)
     output = terminal.write.mock.calls.map(([data]) => data).join('')
     expect(output).toContain('Orca skipped a burst of terminal output')

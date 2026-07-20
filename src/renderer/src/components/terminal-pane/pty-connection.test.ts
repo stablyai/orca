@@ -1807,7 +1807,7 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.('x'.repeat(16 * 1024))
 
     expect(pane.terminal.write).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(0)
+    vi.advanceTimersByTime(32)
     expect(pane.terminal.write).toHaveBeenCalledWith('x'.repeat(16 * 1024), expect.any(Function))
   })
 
@@ -1865,6 +1865,117 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
   })
 
+  it('batches passive tiny chunks into one foreground frame write', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    vi.useFakeTimers()
+
+    capturedDataCallback.current?.('passive ')
+    capturedDataCallback.current?.('agent ')
+    capturedDataCallback.current?.('output\r\n')
+
+    expect(pane.terminal.write).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(32)
+    expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'passive agent output\r\n',
+      expect.any(Function)
+    )
+  })
+
+  it('parses a complete terminal reply query immediately without recent input', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    capturedDataCallback.current?.('\x1b[6n')
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[6n', expect.any(Function))
+  })
+
+  it('flushes an ordered split terminal query as soon as it completes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    vi.useFakeTimers()
+
+    capturedDataCallback.current?.('\x1b[')
+    expect(pane.terminal.write).not.toHaveBeenCalled()
+    capturedDataCallback.current?.('6n')
+
+    expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[6n', expect.any(Function))
+    vi.advanceTimersByTime(32)
+    expect(pane.terminal.write).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['ssh', 'remote-runtime'] as const)(
+    'keeps terminal reply queries immediate for inactive %s panes',
+    async (runtimeKind) => {
+      if (runtimeKind === 'ssh') {
+        mockStoreState = {
+          ...mockStoreState,
+          repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+          sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
+        } as StoreState
+      } else {
+        enableActiveRuntimeEnvironment()
+      }
+      const { connectPanePty } = await import('./pty-connection')
+      const pane = createPane(1)
+      const transport = createMockTransport('pty-1')
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-1'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const manager = {
+        ...createManager(2),
+        getActivePane: vi.fn(() => ({ id: 2 }))
+      }
+
+      connectPanePty(
+        pane as never,
+        manager as never,
+        createDeps({ isActiveRef: { current: false } }) as never
+      )
+      await flushAsyncTicks()
+      capturedDataCallback.current?.('\x1b[c')
+
+      expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[c', expect.any(Function))
+    }
+  )
+
   it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(1)
@@ -1899,7 +2010,7 @@ describe('connectPanePty', () => {
     }
 
     expect(pane.terminal.write.mock.calls.length).toBeLessThan(frames.length)
-    vi.advanceTimersByTime(0)
+    vi.advanceTimersByTime(32)
     expect(pane.terminal.write.mock.calls.length).toBeGreaterThan(0)
   })
 
@@ -9525,6 +9636,7 @@ describe('connectPanePty', () => {
           // must not re-arm restores — the post-gap bytes write through.
           dataCallback('', { droppedOutput: true })
           dataCallback('AFTER-FLOOD', { seq: 700 * 1024, rawLength: 11 })
+          vi.advanceTimersByTime(32)
           await flushAsyncTicks(8)
           expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
           expect(writtenFloodData(pane)).toContain('AFTER-FLOOD')
@@ -10093,7 +10205,7 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(redraw)
 
     expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw, expect.any(Function))
-    vi.advanceTimersByTime(0)
+    vi.advanceTimersByTime(32)
     expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
   })
 
@@ -10126,7 +10238,7 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(redraw)
 
     expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw, expect.any(Function))
-    vi.advanceTimersByTime(0)
+    vi.advanceTimersByTime(32)
     expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
   })
 
@@ -12151,7 +12263,7 @@ describe('connectPanePty', () => {
     )
 
     vi.advanceTimersByTime(1)
-    vi.advanceTimersByTime(0)
+    vi.advanceTimersByTime(32)
     await flushAsyncTicks(10)
 
     const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
@@ -12218,6 +12330,7 @@ describe('connectPanePty', () => {
       vi.advanceTimersByTime(0)
       await flushAsyncTicks(10)
     }
+    vi.advanceTimersByTime(32)
 
     const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
     const warningIndex = written.findIndex((data) => data.includes('main recovery was unavailable'))
@@ -12321,7 +12434,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(4)
 
     vi.advanceTimersByTime(750)
-    vi.advanceTimersByTime(0)
+    vi.advanceTimersByTime(32)
     await flushAsyncTicks(10)
 
     const written = pane.terminal.write.mock.calls.map(([data]) => data as string)
@@ -15874,6 +15987,7 @@ describe('connectPanePty', () => {
     bellHandler()
     idleHandler('* Codex done')
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+    vi.advanceTimersByTime(32)
     await flushAsyncTicks()
 
     expect(window.api.notifications.dispatch).toHaveBeenCalledTimes(1)
@@ -17877,6 +17991,7 @@ describe('connectPanePty', () => {
       lastAssistantMessage: 'Done.'
     })
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+    vi.advanceTimersByTime(32)
 
     expect(deps.dispatchNotification).not.toHaveBeenCalled()
     expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith(paneKey, expect.any(Number))
@@ -18190,6 +18305,7 @@ describe('connectPanePty', () => {
       agentType: 'claude',
       lastAssistantMessage: 'Done.'
     })
+    vi.advanceTimersByTime(32)
 
     expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith(paneKey, expect.any(Number))
     expect(pane.terminal.write).toHaveBeenCalledWith(
