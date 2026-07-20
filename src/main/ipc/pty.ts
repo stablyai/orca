@@ -460,9 +460,9 @@ async function isProviderPtyLive(
 ): Promise<boolean> {
   // Why: bound the liveness list RPC by the teardown deadline so a wedged daemon
   // fails fast; undefined keeps the provider default for all other callers.
-  return (await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)).some(
-    (session) => session.id === ptyId
-  )
+  return (
+    await provider.listProcesses(deadlineMs !== undefined ? { deadlineMs } : undefined)
+  ).some((session) => session.id === ptyId)
 }
 
 async function verifyPtyStopped(

@@ -8,6 +8,7 @@ import type { RelayGitStreamExec } from './git-stdout-stream'
 import { getStatusOp } from './git-handler-status-ops'
 import { clearNoEffectiveUpstreamStatusCache } from './git-status-upstream-negative-cache'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
 
 const LARGE_STATUS_ENTRY_COUNT = 150_000
 
@@ -67,15 +68,12 @@ describe('getStatusOp', () => {
       return { stoppedEarly: false }
     })
 
-    const result = await getStatusOp(git, streamGit, {
-      worktreePath: tmpDir,
-      limit: 10_000
-    })
+    const result = await getStatusOp(git, streamGit, { worktreePath: tmpDir })
 
     expect(result.didHitLimit).toBe(true)
-    expect(result.statusLength).toBe(10_001)
-    expect(result.entries).toHaveLength(10_000)
-    expect(emittedEntries).toBe(10_001)
+    expect(result.statusLength).toBe(DEFAULT_GIT_STATUS_LIMIT + 1)
+    expect(result.entries).toHaveLength(DEFAULT_GIT_STATUS_LIMIT)
+    expect(emittedEntries).toBe(DEFAULT_GIT_STATUS_LIMIT + 1)
     expect(streamGit).toHaveBeenCalledWith(
       expect.arrayContaining(['status', '--porcelain=v2']),
       tmpDir,

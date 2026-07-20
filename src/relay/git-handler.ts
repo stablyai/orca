@@ -15,7 +15,8 @@ import {
   computeDiff,
   branchCompare as branchCompareOp,
   branchDiffEntries,
-  validateGitExecArgs
+  validateGitExecArgs,
+  type GitExec
 } from './git-handler-ops'
 import {
   buildSubmoduleInnerCommitRangeDiff,
@@ -190,7 +191,9 @@ export class GitHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
-    this.dispatcher.onRequest('git.submoduleStatus', (p) => this.getSubmoduleStatus(p))
+    this.dispatcher.onRequest('git.submoduleStatus', (p, context) =>
+      this.getSubmoduleStatus(p, context)
+    )
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
@@ -337,30 +340,33 @@ export class GitHandler {
   }
 
   // Why: parent status lists one gitlink row per submodule; fetch inner per-file changes by running status inside the submodule's own worktree.
-  private async getSubmoduleStatus(params: Record<string, unknown>) {
+  private async getSubmoduleStatus(params: Record<string, unknown>, context: RequestContext) {
     const worktreePath = params.worktreePath as string
     const submodulePath = params.submodulePath as string
     const area = resolveSubmoduleStatusArea(params)
     const staged = area === 'staged'
     const resolved = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
-    const workingResult = await getStatusOp(this.git.bind(this), streamRelayGitStdout, {
-      ...params,
-      worktreePath: resolved
-    })
+    const workingResult = await getStatusOp(
+      this.git.bind(this),
+      streamRelayGitStdout,
+      {
+        ...params,
+        worktreePath: resolved
+      },
+      { signal: context.signal }
+    )
+    // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
+    const requestGit: GitExec = (args, cwd, options) =>
+      this.git(args, cwd, { ...options, signal: context.signal })
     // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface files changed between recorded and checked-out commits so it isn't empty.
     const { fromOid, toOid } = await resolveSubmoduleCommitRange(
-      this.git.bind(this),
+      requestGit,
       worktreePath,
       submodulePath,
       staged
     )
     if (fromOid && toOid && fromOid !== toOid) {
-      const rangeEntries = await computeSubmoduleRangeEntries(
-        this.git.bind(this),
-        resolved,
-        fromOid,
-        toOid
-      )
+      const rangeEntries = await computeSubmoduleRangeEntries(requestGit, resolved, fromOid, toOid)
       if (staged) {
         return { ...workingResult, entries: rangeEntries }
       }

@@ -9744,7 +9744,8 @@
               "a9bf7c171a": "Push Failed",
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
-            }
+            },
+            "97e7124eac": "Could not refresh Source Control. Try again."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

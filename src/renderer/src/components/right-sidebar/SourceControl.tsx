@@ -5657,7 +5657,12 @@ function SourceControlInner(): React.JSX.Element {
 
           {repositoryHuge && (
             <div className="px-3 pb-2">
-              <TooManyChangesBanner limit={repositoryHuge.limit} onRetry={refreshActiveGitStatus} />
+              {/* Why: a slow SSH retry must not keep the next worktree's Retry disabled after navigation. */}
+              <TooManyChangesBanner
+                key={activeWorktreeId}
+                limit={repositoryHuge.limit}
+                onRetry={refreshActiveGitStatus}
+              />
             </div>
           )}
 
@@ -7501,6 +7506,12 @@ export function TooManyChangesBanner({
       // Why: a failed local/SSH retry must leave the capped warning usable
       // instead of becoming an unhandled click rejection.
       console.warn('[SourceControl] capped status retry failed', error)
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.SourceControl.97e7124eac',
+          'Could not refresh Source Control. Try again.'
+        )
+      )
     } finally {
       setIsRetrying(false)
     }

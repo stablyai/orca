@@ -9721,7 +9721,8 @@
               "a9bf7c171a": "プッシュ失敗",
               "834cb3f23d": "AIで修正",
               "783a808870": "閉じる"
-            }
+            },
+            "97e7124eac": "Source Control を更新できませんでした。もう一度お試しください。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
