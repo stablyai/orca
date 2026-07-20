@@ -278,26 +278,29 @@ export async function attachRepoAndOpenTerminal(
     )
     .toBe(true)
 
-  const worktreeId = await page.evaluate(async ({ repoId, terminalBackendPreference }) => {
-    const store = window.__store
-    if (!store) {
-      return null
-    }
-    const state = store.getState()
-    // Why: repo identity remains stable when Windows canonicalizes path casing
-    // or separators between the IPC and renderer layers.
-    const repoWorktrees = state.worktreesByRepo[repoId] ?? []
-    const primary = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? repoWorktrees[0]
-    if (!primary) {
-      return null
-    }
-    const project = state.projects.find((candidate) => candidate.sourceRepoIds.includes(repoId))
-    if (project && terminalBackendPreference) {
-      await state.updateProject(project.id, { terminalBackendPreference })
-    }
-    state.setActiveWorktree(primary.id)
-    return primary.id
-  }, { repoId, terminalBackendPreference: options.terminalBackendPreference })
+  const worktreeId = await page.evaluate(
+    async ({ repoId, terminalBackendPreference }) => {
+      const store = window.__store
+      if (!store) {
+        return null
+      }
+      const state = store.getState()
+      // Why: repo identity remains stable when Windows canonicalizes path casing
+      // or separators between the IPC and renderer layers.
+      const repoWorktrees = state.worktreesByRepo[repoId] ?? []
+      const primary = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? repoWorktrees[0]
+      if (!primary) {
+        return null
+      }
+      const project = state.projects.find((candidate) => candidate.sourceRepoIds.includes(repoId))
+      if (project && terminalBackendPreference) {
+        await state.updateProject(project.id, { terminalBackendPreference })
+      }
+      state.setActiveWorktree(primary.id)
+      return primary.id
+    },
+    { repoId, terminalBackendPreference: options.terminalBackendPreference }
+  )
 
   if (!worktreeId) {
     throw new Error('attachRepoAndOpenTerminal: test repo did not surface in the store')

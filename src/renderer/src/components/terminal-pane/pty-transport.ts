@@ -730,9 +730,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           // Why: hidden-at-spawn mark must reach main before the PTY's first byte — ride the spawn IPC, not the visibility sync (terminal-query-authority.md).
           ...(options.initiallyHidden ? { initiallyHidden: true } : {}),
           worktreeId,
-      ...(tabId ? { tabId } : {}),
-      ...(leafId ? { leafId } : {}),
-      ...(terminalLayout ? { terminalLayout } : {}),
+          ...(tabId ? { tabId } : {}),
+          ...(leafId ? { leafId } : {}),
+          ...(terminalLayout ? { terminalLayout } : {}),
           ...(shellOverride ? { shellOverride } : {}),
           ...(projectRuntime ? { projectRuntime } : {}),
           ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),

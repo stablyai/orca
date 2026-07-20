@@ -3403,9 +3403,9 @@ export function connectPanePty(
     // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
     // pty:spawn returns. Daemon-host-only: SSH path leaves these undefined
     // and the main-side guard short-circuits.
-      tabId: deps.tabId,
-      leafId: pane.leafId,
-      terminalLayout: useAppStore.getState().terminalLayoutsByTabId[deps.tabId],
+    tabId: deps.tabId,
+    leafId: pane.leafId,
+    terminalLayout: useAppStore.getState().terminalLayoutsByTabId[deps.tabId],
     activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
