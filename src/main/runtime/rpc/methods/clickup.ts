@@ -20,9 +20,12 @@ const TaskUpdate = z.object({
     name: z.string().optional(),
     description: z.string().optional(),
     status: z.string().optional(),
-    priority: z.union([z.number().int().min(1).max(4), z.null()]).optional(),
-    dueDate: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null()]).optional(),
-    timeEstimate: z.union([z.number().nonnegative(), z.null()]).optional(),
+    priority: z.number().int().min(1).max(4).nullish(),
+    dueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullish(),
+    timeEstimate: z.number().nonnegative().nullish(),
     assigneeIds: z.array(z.number()).optional(),
     tagNames: z.array(z.string()).optional()
   })
@@ -91,7 +94,7 @@ export const CLICKUP_METHODS: RpcMethod[] = [
       name: requiredString('Task name is required'),
       description: z.string().optional(),
       status: OptionalString,
-      priority: z.union([z.number().int().min(1).max(4), z.null()]).optional(),
+      priority: z.number().int().min(1).max(4).nullish(),
       dueDate: z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)

@@ -178,6 +178,25 @@ export function registerClickUpHandlers(): void {
     if (args.tagNames !== undefined && !validStringArray(args.tagNames)) {
       return { ok: false, error: 'Invalid tag names.' }
     }
+    if (
+      args.priority !== undefined &&
+      args.priority !== null &&
+      (!Number.isInteger(args.priority) || args.priority < 1 || args.priority > 4)
+    ) {
+      return { ok: false, error: 'Invalid priority.' }
+    }
+    if (
+      args.dueDate !== undefined &&
+      (typeof args.dueDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(args.dueDate))
+    ) {
+      return { ok: false, error: 'Invalid due date.' }
+    }
+    if (
+      args.timeEstimate !== undefined &&
+      (!Number.isFinite(args.timeEstimate) || args.timeEstimate < 0)
+    ) {
+      return { ok: false, error: 'Invalid time estimate.' }
+    }
     return createTask({
       ...args,
       listId: args.listId.trim(),
