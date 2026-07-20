@@ -2,7 +2,6 @@ import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { SearchFileResult, SearchMatch, SearchResult } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
@@ -32,9 +31,6 @@ export type FileSearchPanelModel = {
 export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearchPanelModel {
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const runtimeEnvironmentId = useAppStore((s) =>
-    getRuntimeEnvironmentIdForWorktree(s, s.activeWorktreeId)
-  )
   const openFile = useAppStore((s) => s.openFile)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
 
@@ -48,6 +44,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   const fileSearchIncludePattern = searchState?.includePattern ?? ''
   const fileSearchExcludePattern = searchState?.excludePattern ?? ''
   const fileSearchResults = searchState?.results ?? null
+  const fileSearchResultOwner = searchState?.resultOwner ?? null
   const fileSearchLoading = searchState?.loading ?? false
   const fileSearchCollapsedFiles = searchState?.collapsedFiles ?? EMPTY_COLLAPSED_FILES
   const fileSearchSeedRequestId = searchState?.seedRequestId
@@ -131,18 +128,22 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
   useEffect(() => {
     if (!worktreePath) {
       cancelPendingSearch()
-      updateActiveSearchState({ results: null })
+      updateActiveSearchState({ results: null, resultOwner: null })
     }
   }, [worktreePath, cancelPendingSearch, updateActiveSearchState])
 
-  const deferredSearchResults = useDeferredValue(fileSearchResults)
+  const committedSearchResults = useMemo(
+    () => ({ results: fileSearchResults, owner: fileSearchResultOwner }),
+    [fileSearchResultOwner, fileSearchResults]
+  )
+  const deferredSearchResults = useDeferredValue(committedSearchResults)
   const searchRows = useMemo(
     () =>
       buildSearchRows(
-        fileSearchQuery.trim() && worktreePath ? deferredSearchResults : null,
+        fileSearchQuery.trim() && worktreePath ? deferredSearchResults.results : null,
         fileSearchCollapsedFiles
       ),
-    [deferredSearchResults, fileSearchCollapsedFiles, fileSearchQuery, worktreePath]
+    [deferredSearchResults.results, fileSearchCollapsedFiles, fileSearchQuery, worktreePath]
   )
 
   useEffect(() => {
@@ -222,12 +223,8 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
 
   const handleMatchClick = useCallback(
     (fileResult: SearchFileResult, match: SearchMatch) => {
-      if (!activeWorktreeId) {
-        return
-      }
       openMatchResult({
-        activeWorktreeId,
-        runtimeEnvironmentId,
+        resultOwner: deferredSearchResults.owner,
         fileResult,
         match,
         openFile,
@@ -236,7 +233,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
         revealInnerRafRef
       })
     },
-    [activeWorktreeId, runtimeEnvironmentId, openFile, setPendingEditorReveal]
+    [deferredSearchResults.owner, openFile, setPendingEditorReveal]
   )
 
   return {
@@ -279,7 +276,7 @@ export function useFileSearchPanel(explorerView: 'files' | 'search'): FileSearch
       }
     },
     resultsProps: {
-      results: deferredSearchResults,
+      results: deferredSearchResults.results,
       hasCommittedResults: fileSearchResults !== null,
       query: fileSearchQuery,
       loading: fileSearchLoading,

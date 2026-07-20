@@ -1,4 +1,5 @@
 import { detectLanguage } from '@/lib/language-detect'
+import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 
 export function cancelRevealFrame(frameRef: React.RefObject<number | null>): void {
@@ -9,8 +10,7 @@ export function cancelRevealFrame(frameRef: React.RefObject<number | null>): voi
 }
 
 export function openMatchResult(params: {
-  activeWorktreeId: string
-  runtimeEnvironmentId: string | null
+  resultOwner: FileSearchResultOwner | null
   fileResult: SearchFileResult
   match: SearchMatch
   openFile: (
@@ -18,11 +18,11 @@ export function openMatchResult(params: {
       filePath: string
       relativePath: string
       worktreeId: string
-      runtimeEnvironmentId?: string
       language: string
       mode: 'edit'
+      runtimeEnvironmentId: string | null
     },
-    options?: { suppressActiveRuntimeFallback?: boolean }
+    options: { suppressActiveRuntimeFallback: boolean }
   ) => void
   setPendingEditorReveal: (
     reveal: {
@@ -36,8 +36,7 @@ export function openMatchResult(params: {
   revealInnerRafRef: React.RefObject<number | null>
 }): void {
   const {
-    activeWorktreeId,
-    runtimeEnvironmentId,
+    resultOwner,
     fileResult,
     match,
     openFile,
@@ -46,20 +45,21 @@ export function openMatchResult(params: {
     revealInnerRafRef
   } = params
 
+  if (!resultOwner) {
+    return
+  }
+
   openFile(
     {
       filePath: fileResult.filePath,
       relativePath: fileResult.relativePath,
-      worktreeId: activeWorktreeId,
-      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined,
+      worktreeId: resultOwner.worktreeId,
+      runtimeEnvironmentId: resultOwner.runtimeEnvironmentId,
       language: detectLanguage(fileResult.relativePath),
       mode: 'edit'
     },
     {
-      // Why: search results come from the worktree's owning runtime; opening
-      // them must keep that owner (or pin local) instead of letting the ambient
-      // active-runtime fallback pick a host that cannot read the path (#9185).
-      suppressActiveRuntimeFallback: runtimeEnvironmentId === null
+      suppressActiveRuntimeFallback: resultOwner.runtimeEnvironmentId === null
     }
   )
 

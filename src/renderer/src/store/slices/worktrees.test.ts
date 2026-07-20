@@ -6882,6 +6882,9 @@ describe('migrateWorktreeIdentity', () => {
       renamingWorktreeId: { worktreeId: OLD, rowKey: 'all:old' },
       tabsByWorktree: { [OLD]: [{ id: 'tab1', worktreeId: OLD }] },
       rightSidebarExplorerViewByWorktree: { [OLD]: 'search' },
+      fileSearchStateByWorktree: {
+        [OLD]: { resultOwner: { worktreeId: OLD, runtimeEnvironmentId: 'runtime-a' } }
+      },
       activeTabIdByWorktree: { [OLD]: 'tab1' },
       browserTabsByWorktree: { [OLD]: [{ id: 'browser1', worktreeId: OLD }] },
       browserPagesByWorkspace: { browser1: [{ id: 'page1', worktreeId: OLD }] },
@@ -6945,6 +6948,11 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.gitBranchCompareRequestStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.rightSidebarExplorerViewByWorktree[OLD]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[NEW]).toBe('search')
+    expect(s.fileSearchStateByWorktree[OLD]).toBeUndefined()
+    expect(s.fileSearchStateByWorktree[NEW]?.resultOwner).toEqual({
+      worktreeId: NEW,
+      runtimeEnvironmentId: 'runtime-a'
+    })
     expect(s.lastVisitedAtByWorktreeId[NEW]).toBe(123)
     expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
     // The two maps absent from the purge list are still re-keyed.
