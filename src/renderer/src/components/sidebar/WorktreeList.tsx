@@ -2844,7 +2844,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       y: drag.currentY,
       shouldShowDropIndicator: (target) =>
         Boolean(
-          target.status && shouldShowWorkspaceBoardDropIndicator(drag.draggedIds, target.status)
+          target.status &&
+          shouldShowWorkspaceBoardDropIndicator(drag.reorderDraggedIds, target.status)
         )
     })
     drag.latestBoardDropTarget = {
@@ -2919,7 +2920,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         ? computeWorktreeStatusDrop({
             pointerY: drag.currentY,
             status: preferredStatusTarget.status,
-            draggedIds: drag.draggedIds
+            draggedIds: drag.reorderDraggedIds
           })
         : null
       if (statusDrop) {
@@ -2967,7 +2968,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         ? computeWorktreeStatusDrop({
             pointerY: drag.currentY,
             status: target.status,
-            draggedIds: drag.draggedIds
+            draggedIds: drag.reorderDraggedIds
           })
         : null
       if (statusDrop) {
@@ -3258,7 +3259,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         onPinWorktrees(drag.draggedIds)
       } else if (boardDropTarget.status) {
         onDropWorktreesOnWorkspaceBoard({
-          worktreeIds: drag.draggedIds,
+          worktreeIds: drag.reorderDraggedIds,
           status: boardDropTarget.status,
           dropIndex: boardDropTarget.dropIndex,
           groups: getWorkspaceKanbanSidebarDropGroups()
@@ -3290,7 +3291,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             ? computeWorktreeStatusDrop({
                 pointerY: event.clientY,
                 status: preferredStatusTarget.status,
-                draggedIds: drag.draggedIds
+                draggedIds: drag.reorderDraggedIds
               })
             : null
           if (preferredStatusTarget.isPinDrop) {
@@ -3298,13 +3299,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           } else if (preferredStatusTarget.status) {
             if (statusDrop) {
               onMoveWorktreesToStatusAtIndex({
-                worktreeIds: drag.draggedIds,
+                worktreeIds: drag.reorderDraggedIds,
                 status: preferredStatusTarget.status,
                 dropIndex: statusDrop.dropIndex,
                 groups: worktreeDragGroups
               })
             } else {
-              onMoveWorktreesToStatus(drag.draggedIds, preferredStatusTarget.status)
+              onMoveWorktreesToStatus(drag.reorderDraggedIds, preferredStatusTarget.status)
             }
           }
           clearWorktreeDrag()
@@ -3332,7 +3333,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             ? computeWorktreeStatusDrop({
                 pointerY: event.clientY,
                 status: currentTarget.status,
-                draggedIds: drag.draggedIds
+                draggedIds: drag.reorderDraggedIds
               })
             : null
           const { target, preview: statusDrop } = resolveWorktreeSidebarStatusDropCommitTarget({
@@ -3349,13 +3350,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           } else if (target.status) {
             if (statusDrop) {
               onMoveWorktreesToStatusAtIndex({
-                worktreeIds: drag.draggedIds,
+                worktreeIds: drag.reorderDraggedIds,
                 status: target.status,
                 dropIndex: statusDrop.dropIndex,
                 groups: worktreeDragGroups
               })
             } else {
-              onMoveWorktreesToStatus(drag.draggedIds, target.status)
+              onMoveWorktreesToStatus(drag.reorderDraggedIds, target.status)
             }
           }
         }
@@ -3454,7 +3455,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             ? computeWorktreeStatusDrop({
                 pointerY: point.clientY,
                 status: target.status,
-                draggedIds: session.draggedIds
+                draggedIds: session.reorderDraggedIds
               })
             : null
           if (statusDrop) {
@@ -3603,7 +3604,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           ? computeWorktreeStatusDrop({
               pointerY: event.clientY,
               status: target.status,
-              draggedIds: session.draggedIds
+              draggedIds: session.reorderDraggedIds
             })
           : null
         if (statusDrop) {
@@ -3701,14 +3702,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           ? computeWorktreeStatusDrop({
               pointerY: event.clientY,
               status: target.status,
-              draggedIds: session.draggedIds
+              draggedIds: session.reorderDraggedIds
             })
           : null
         if (target.status && statusDrop) {
           event.preventDefault()
           event.stopPropagation()
           onMoveWorktreesToStatusAtIndex({
-            worktreeIds: session.draggedIds,
+            worktreeIds: session.reorderDraggedIds,
             status: target.status,
             dropIndex: statusDrop.dropIndex,
             groups: worktreeDragGroups
@@ -3896,14 +3897,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         ? computeWorktreeStatusDrop({
             pointerY: event.clientY,
             status,
-            draggedIds: session.draggedIds
+            draggedIds: session.reorderDraggedIds
           })
         : null
       setDragOverStatus(null)
       if (session && statusDrop) {
         event.stopPropagation()
         onMoveWorktreesToStatusAtIndex({
-          worktreeIds: session.draggedIds,
+          worktreeIds: session.reorderDraggedIds,
           status,
           dropIndex: statusDrop.dropIndex,
           groups: worktreeDragGroups
@@ -3911,11 +3912,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         clearWorktreeDrag()
         return
       }
-      onMoveWorktreesToStatus(worktreeIds, status)
+      // Match the status-drop scope to the drag-preview scope (#9083): with a live session use its
+      // precomputed expanded set; the session-less foreign-origin case expands the dataTransfer ids live.
+      onMoveWorktreesToStatus(
+        session ? session.reorderDraggedIds : getReorderDraggedIds(worktreeIds),
+        status
+      )
     },
     [
       clearWorktreeDrag,
       computeWorktreeStatusDrop,
+      getReorderDraggedIds,
       onMoveWorktreesToStatus,
       onMoveWorktreesToStatusAtIndex,
       worktreeDragGroups
@@ -3956,14 +3963,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           ? computeWorktreeStatusDrop({
               pointerY: event.clientY,
               status: target.status,
-              draggedIds: session.draggedIds
+              draggedIds: session.reorderDraggedIds
             })
           : null
         if (target.status && statusDrop) {
           event.preventDefault()
           event.stopPropagation()
           onMoveWorktreesToStatusAtIndex({
-            worktreeIds: session.draggedIds,
+            worktreeIds: session.reorderDraggedIds,
             status: target.status,
             dropIndex: statusDrop.dropIndex,
             groups: worktreeDragGroups
@@ -4034,6 +4041,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [clearWorktreeDrag])
 
+  // Why: this session-less capture-phase committer is the primary native-drop path in packaged
+  // Electron. Expand at this call site (not in the shared hook, which WorkspaceKanbanDrawer uses for
+  // its flat board) so a dropped parent carries its visible lineage children (#9083).
+  const moveWorktreesToStatusForDocumentDrop = useCallback(
+    (ids: readonly string[], status: WorkspaceStatus) =>
+      onMoveWorktreesToStatus(getReorderDraggedIds(ids), status),
+    [getReorderDraggedIds, onMoveWorktreesToStatus]
+  )
+
   useWorkspaceStatusDocumentDrop(
     scrollRef,
     onMoveWorktreeToStatus,
@@ -4041,7 +4057,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     handleWorkspaceStatusDragFinish,
     hasWorkspaceDropTargets,
     {
-      onMoveWorktreesToStatus,
+      onMoveWorktreesToStatus: moveWorktreesToStatusForDocumentDrop,
       onPinWorktrees
     }
   )

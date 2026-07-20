@@ -359,14 +359,7 @@ export type RpcResponseError = {
 
 export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError
 
-export type CreateOrAttachResult = {
-  isNew: boolean
-  snapshot: TerminalSnapshot | null
-  pid: number | null
-  shellState: ShellReadyState
-  historySeeded?: boolean
-  launchAgent?: TuiAgent
-}
+export type { DaemonCreateOrAttachResult as CreateOrAttachResult } from './daemon-create-or-attach-result'
 export type GetSnapshotResult = {
   snapshot: TerminalSnapshot | null
 }

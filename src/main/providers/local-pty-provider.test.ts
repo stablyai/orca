@@ -228,8 +228,60 @@ describe('LocalPtyProvider', () => {
 
       const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
 
-      expect(second).toEqual({ id: 'serve-session-1', pid: 12345, isReattach: true })
+      expect(second).toEqual({
+        id: 'serve-session-1',
+        pid: 12345,
+        wslDistro: null,
+        isReattach: true
+      })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps a native UNC session native on a conflicting WSL reattach', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const first = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'native-session',
+        cwd: '\\\\server\\share\\repo',
+        shellOverride: 'powershell.exe'
+      })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+
+      expect(first.wslDistro).toBeNull()
+      expect(second.wslDistro).toBeNull()
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps the first WSL distro on a conflicting distro reattach', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const first = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'wsl-session',
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+      })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({
+        cols: 120,
+        rows: 40,
+        sessionId: first.id,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian'
+      })
+
+      expect(first.wslDistro).toBe('Ubuntu')
+      expect(second.wslDistro).toBe('Ubuntu')
       expect(spawnMock).not.toHaveBeenCalled()
     })
 

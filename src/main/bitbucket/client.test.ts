@@ -9,7 +9,11 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { getBitbucketAuthStatus, getBitbucketPullRequestForBranch } from './client'
+import {
+  getBitbucketAuthStatus,
+  getBitbucketPullRequestForBranch,
+  getBitbucketPullRequestForBranchOrThrow
+} from './client'
 import { _resetBitbucketRepoRefCache } from './repository-ref'
 
 const OLD_ENV = process.env
@@ -91,6 +95,19 @@ describe('Bitbucket client', () => {
     expect((listInit.headers as Record<string, string>).Authorization).toBe(
       `Basic ${Buffer.from('user@example.com:token').toString('base64')}`
     )
+  })
+
+  it('getBitbucketPullRequestForBranchOrThrow surfaces a failure instead of null (finding 4)', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ error: 'forbidden' }, { status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // The swallowing variant collapses a real failure into a false "no PR".
+    await expect(getBitbucketPullRequestForBranch('/repo', 'feature/bitbucket')).resolves.toBeNull()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No pull request found".
+    await expect(
+      getBitbucketPullRequestForBranchOrThrow('/repo', 'feature/bitbucket')
+    ).rejects.toThrow(/Bitbucket request failed/)
   })
 
   it('falls back to a linked PR number when branch lookup misses', async () => {

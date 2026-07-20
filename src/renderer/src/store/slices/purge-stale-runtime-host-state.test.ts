@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { ProjectHostSetup, DetectedWorktreeListResult } from '../../../../shared/types'
 
 vi.mock('sonner', () => ({
@@ -53,7 +54,7 @@ function detectedResult(
 function detected(
   id: string,
   repoId: string,
-  hostId: ReturnType<typeof toRuntimeExecutionHostId> | 'local'
+  hostId: ReturnType<typeof toRuntimeExecutionHostId> | 'local' | undefined
 ): DetectedWorktreeListResult['worktrees'][number] {
   return {
     ...makeWorktree({ id, repoId, hostId }),
@@ -171,6 +172,7 @@ describe('purgeStaleRuntimeHostState', () => {
     const store = createTestStore()
     seedStore(store, {
       repos: [TEST_REPO],
+      projectHostSetups: [setup({ id: 's-local', repoId: 'repo1', hostId: 'local' })],
       worktreesByRepo: {
         repo1: [makeWorktree({ id: 'repo1::/wt', repoId: 'repo1', hostId: 'local' })]
       }
@@ -179,6 +181,7 @@ describe('purgeStaleRuntimeHostState', () => {
     const epochBefore = before.sortEpoch
     const worktreesRef = before.worktreesByRepo
     const reposRef = before.repos
+    const setupsRef = before.projectHostSetups
 
     store.getState().purgeStaleRuntimeHostState([])
     store.getState().purgeStaleRuntimeHostState(['env-does-not-exist'])
@@ -188,16 +191,17 @@ describe('purgeStaleRuntimeHostState', () => {
     // Nothing stale => the reducer returns state untouched (same references).
     expect(s.worktreesByRepo).toBe(worktreesRef)
     expect(s.repos).toBe(reposRef)
+    expect(s.projectHostSetups).toBe(setupsRef)
   })
 
-  it('same-repoId-on-two-hosts: keeps the local row and the repo key after purge', () => {
+  it('same-repoId-on-two-hosts: keeps an ambiguous unhosted row and the repo key', () => {
     const store = createTestStore()
     // repoId 'shared' exists under both local and runtime:env-a in worktreesByRepo.
     seedStore(store, {
       repos: [
         { id: 'shared', path: '/shared', displayName: 'shared', badgeColor: '#000', addedAt: 0 },
         {
-          id: 'sharedRuntime',
+          id: 'shared',
           path: '/shared',
           displayName: 'shared',
           badgeColor: '#000',
@@ -207,7 +211,7 @@ describe('purgeStaleRuntimeHostState', () => {
       ],
       worktreesByRepo: {
         shared: [
-          makeWorktree({ id: 'shared::/wt-local', repoId: 'shared', hostId: 'local' }),
+          makeWorktree({ id: 'shared::/wt-local', repoId: 'shared', hostId: undefined }),
           makeWorktree({ id: 'shared::/wt-a', repoId: 'shared', hostId: RUNTIME_A })
         ]
       }
@@ -218,6 +222,241 @@ describe('purgeStaleRuntimeHostState', () => {
     const s = store.getState()
     expect(s.worktreesByRepo).toHaveProperty('shared')
     expect(s.worktreesByRepo.shared.map((w) => w.id)).toEqual(['shared::/wt-local'])
+    expect(s.worktreesByRepo.shared[0]?.hostId).toBeUndefined()
+  })
+
+  it('preserves worktree-scoped state when the exact same id survives on another host', () => {
+    const store = createTestStore()
+    const RUNTIME_B = toRuntimeExecutionHostId('env-b')
+    const worktreeId = 'shared::/same/path'
+    const tabs = [makeTab({ id: 'tab-surviving', worktreeId })]
+    seedStore(store, {
+      repos: [
+        {
+          id: 'shared',
+          path: '/shared',
+          displayName: 'shared',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_A
+        },
+        {
+          id: 'shared',
+          path: '/shared',
+          displayName: 'shared',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_B
+        }
+      ],
+      worktreesByRepo: {
+        shared: [
+          makeWorktree({ id: worktreeId, repoId: 'shared', hostId: RUNTIME_A }),
+          makeWorktree({ id: worktreeId, repoId: 'shared', hostId: RUNTIME_B })
+        ]
+      },
+      tabsByWorktree: { [worktreeId]: tabs },
+      restoredRuntimeHostIdByWorkspaceSessionKey: { [worktreeId]: RUNTIME_B },
+      activeWorktreeId: worktreeId,
+      activeWorkspaceKey: worktreeWorkspaceKey(worktreeId)
+    })
+    const restoredOwners = store.getState().restoredRuntimeHostIdByWorkspaceSessionKey
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    const s = store.getState()
+    expect(s.worktreesByRepo.shared).toHaveLength(1)
+    expect(s.worktreesByRepo.shared[0]?.hostId).toBe(RUNTIME_B)
+    expect(s.tabsByWorktree[worktreeId]).toBe(tabs)
+    expect(s.restoredRuntimeHostIdByWorkspaceSessionKey).toBe(restoredOwners)
+    expect(s.restoredRuntimeHostIdByWorkspaceSessionKey[worktreeId]).toBe(RUNTIME_B)
+    expect(s.activeWorktreeId).toBe(worktreeId)
+    expect(s.activeWorkspaceKey).toBe(worktreeWorkspaceKey(worktreeId))
+  })
+
+  it('purges a legacy unhosted row when its sole repo owner was removed', () => {
+    const store = createTestStore()
+    const worktreeId = 'repoA::/legacy'
+    seedStore(store, {
+      repos: [
+        {
+          id: 'repoA',
+          path: '/repoA',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_A
+        }
+      ],
+      worktreesByRepo: {
+        repoA: [makeWorktree({ id: worktreeId, repoId: 'repoA', hostId: undefined })]
+      },
+      tabsByWorktree: { [worktreeId]: [makeTab({ id: 'legacy-tab', worktreeId })] }
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    const s = store.getState()
+    expect(s.worktreesByRepo.repoA).toEqual([])
+    expect(s.tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  it('uses a removed host setup to purge an unhosted row before its repo loads', () => {
+    const store = createTestStore()
+    const worktreeId = 'repoA::/legacy'
+    seedStore(store, {
+      repos: [],
+      projectHostSetups: [setup({ id: 's-a', repoId: 'repoA', hostId: RUNTIME_A })],
+      worktreesByRepo: {
+        repoA: [makeWorktree({ id: worktreeId, repoId: 'repoA', hostId: undefined })]
+      },
+      tabsByWorktree: { [worktreeId]: [makeTab({ id: 'legacy-tab', worktreeId })] }
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    const s = store.getState()
+    expect(s.projectHostSetups).toEqual([])
+    expect(s.worktreesByRepo.repoA).toEqual([])
+    expect(s.tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  it('purges hydrated worktree state before its worktree row loads', () => {
+    const store = createTestStore()
+    const worktreeId = 'repoA::/session-only'
+    seedStore(store, {
+      repos: [
+        {
+          id: 'repoA',
+          path: '/repoA',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_A
+        }
+      ],
+      worktreesByRepo: {},
+      tabsByWorktree: { [worktreeId]: [makeTab({ id: 'hydrated-tab', worktreeId })] },
+      activeWorktreeId: worktreeId,
+      activeWorkspaceKey: worktreeWorkspaceKey(worktreeId)
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeWorkspaceKey).toBeNull()
+  })
+
+  it('uses an explicit surviving worktree row as owner evidence during catalog loading', () => {
+    const store = createTestStore()
+    const RUNTIME_B = toRuntimeExecutionHostId('env-b')
+    const legacyWorktreeId = 'shared::/legacy'
+    const survivingWorktreeId = 'shared::/host-b'
+    const tabs = [makeTab({ id: 'surviving-tab', worktreeId: legacyWorktreeId })]
+    seedStore(store, {
+      repos: [
+        {
+          id: 'shared',
+          path: '/shared-a',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_A
+        }
+      ],
+      worktreesByRepo: {
+        shared: [makeWorktree({ id: legacyWorktreeId, repoId: 'shared', hostId: undefined })]
+      },
+      detectedWorktreesByRepo: {
+        shared: detectedResult('shared', [detected(survivingWorktreeId, 'shared', RUNTIME_B)])
+      },
+      tabsByWorktree: { [legacyWorktreeId]: tabs }
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    const s = store.getState()
+    expect(s.repos).toEqual([])
+    expect(s.worktreesByRepo.shared.map((worktree) => worktree.id)).toEqual([legacyWorktreeId])
+    expect(s.detectedWorktreesByRepo.shared.worktrees.map((worktree) => worktree.id)).toEqual([
+      survivingWorktreeId
+    ])
+    expect(s.tabsByWorktree[legacyWorktreeId]).toBe(tabs)
+  })
+
+  it('preserves an unhosted row when a setup proves another host still owns it', () => {
+    const store = createTestStore()
+    const RUNTIME_B = toRuntimeExecutionHostId('env-b')
+    const worktreeId = 'shared::/legacy'
+    const tabs = [makeTab({ id: 'surviving-tab', worktreeId })]
+    seedStore(store, {
+      repos: [
+        {
+          id: 'shared',
+          path: '/shared-a',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_A
+        }
+      ],
+      projectHostSetups: [setup({ id: 's-b', repoId: 'shared', hostId: RUNTIME_B })],
+      worktreesByRepo: {
+        shared: [makeWorktree({ id: worktreeId, repoId: 'shared', hostId: undefined })]
+      },
+      tabsByWorktree: { [worktreeId]: tabs }
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    const s = store.getState()
+    expect(s.repos).toEqual([])
+    expect(s.projectHostSetups).toHaveLength(1)
+    expect(s.worktreesByRepo.shared).toHaveLength(1)
+    expect(s.tabsByWorktree[worktreeId]).toBe(tabs)
+  })
+
+  it('purges a legacy unhosted row when every repo owner is removed together', () => {
+    const store = createTestStore()
+    const RUNTIME_B = toRuntimeExecutionHostId('env-b')
+    const worktreeId = 'shared::/legacy'
+    seedStore(store, {
+      repos: [
+        {
+          id: 'shared',
+          path: '/shared-a',
+          displayName: 'A',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_A
+        },
+        {
+          id: 'shared',
+          path: '/shared-b',
+          displayName: 'B',
+          badgeColor: '#000',
+          addedAt: 0,
+          executionHostId: RUNTIME_B
+        }
+      ],
+      worktreesByRepo: {
+        shared: [makeWorktree({ id: worktreeId, repoId: 'shared', hostId: undefined })]
+      },
+      detectedWorktreesByRepo: {
+        shared: detectedResult('shared', [detected(worktreeId, 'shared', undefined)])
+      },
+      tabsByWorktree: { [worktreeId]: [makeTab({ id: 'legacy-tab', worktreeId })] }
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a', 'env-b'])
+
+    const s = store.getState()
+    expect(s.repos).toEqual([])
+    expect(s.worktreesByRepo.shared).toEqual([])
+    expect(s.detectedWorktreesByRepo.shared.worktrees).toEqual([])
+    expect(s.tabsByWorktree[worktreeId]).toBeUndefined()
   })
 
   it('clears activeRepoId and drops the purged id from filterRepoIds', () => {

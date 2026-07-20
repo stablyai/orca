@@ -1,40 +1,49 @@
 import type { HostedReviewCreationBlockedReason } from '../../../../shared/hosted-review'
-import type { PRRefreshUpstreamErrorType } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-import { getGitHubUnavailableEmptyStateCopy } from './github-refresh-error-copy'
+import {
+  autoRetrySchedule,
+  capitalizeReviewLabel,
+  confirmedComposerMode,
+  ELIGIBILITY_SAFETY_BLOCKERS,
+  isBranchBlocker,
+  isHardRefreshError,
+  isTransientRefreshFailure,
+  workflowActionForComposer,
+  type ChecksPanelReviewState,
+  type ChecksPanelReviewStateInput
+} from './checks-panel-review-state-model'
+import {
+  concurrentLookupDetail,
+  hardRefreshErrorState,
+  skippedRefreshState,
+  transientRefreshState
+} from './checks-panel-review-copy'
+import { branchBlockerState, safetyBlockerState } from './checks-panel-blocker-copy'
 
-type PRRefreshStatus = 'queued' | 'in-flight' | 'paused' | 'error' | 'skipped' | undefined
-
-type ChecksPanelEmptyStateInput = {
-  operationLabel: string | null
-  prRefreshStatus: PRRefreshStatus
-  // Why: lets the error empty-state attribute a GitHub outage (5xx/network/rate
-  // limit) instead of showing generic "could not refresh" copy that reads like
-  // an Orca bug.
-  prRefreshErrorType?: PRRefreshUpstreamErrorType
-  hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
-  hasUpstream: boolean | undefined
-  hasCurrentBranch?: boolean
-  reviewLabel?: 'pull request' | 'merge request'
-  reviewShortLabel?: 'PR' | 'MR'
-  hasAmbiguousGitHubHostedReview?: boolean
-}
-
-type ChecksPanelEmptyStateCopy = {
-  title: string
-  description: string
-}
+export type {
+  ChecksPanelComposerMode,
+  ChecksPanelWorkflowAction,
+  ChecksPanelRecoveryAction,
+  ChecksPanelReviewState,
+  ChecksPanelRefreshInput,
+  ChecksPanelReviewStateInput
+} from './checks-panel-review-state-model'
 
 /**
- * Chooses neutral empty-state copy when GitHub review status is still ambiguous.
+ * One exhaustive selector for the Checks-panel empty state. Copy, composer mode,
+ * workflow action, and recovery actions are decided together — never in separate
+ * branches — so an error, pause, skip, or unknown state can never be rendered as
+ * "No {reviewLabel} found." See docs/design/pr-panel-refresh-guidance.md.
  */
-export function getChecksPanelEmptyStateCopy(
-  input: ChecksPanelEmptyStateInput
-): ChecksPanelEmptyStateCopy {
-  const reviewLabel = input.reviewLabel ?? 'pull request'
-  const reviewShortLabel = input.reviewShortLabel ?? 'PR'
+export function getChecksPanelReviewState(
+  input: ChecksPanelReviewStateInput
+): ChecksPanelReviewState {
+  const { reviewLabel, reviewShortLabel, providerName } = input
+
+  // 0. Operation in progress — never overridden by refresh copy.
   if (input.operationLabel) {
     return {
+      renderReview: false,
       title: translate(
         'auto.components.right.sidebar.checks.panel.empty.state.d77c513c1e',
         '{{value0}} in progress',
@@ -44,142 +53,186 @@ export function getChecksPanelEmptyStateCopy(
         'auto.components.right.sidebar.checks.panel.empty.state.05e4aec17b',
         '{{value0}} checks will be available after the operation completes',
         { value0: reviewShortLabel }
-      )
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
     }
   }
 
-  const blockedReason = input.hostedReviewBlockedReason
-  // Why: a GitHub hosted-review card with no cached PR is ambiguous. Resolve the
-  // whole empty state here so the copy stays stable across a background PR
-  // refresh's lifecycle (idle/queued/in-flight/paused/skipped). Previously only
-  // the idle statuses were handled and active ones fell through to the
-  // publish-branch branch, so the panel flip-flopped between "Branch not
-  // published" and "Pull request status unavailable" as refreshes cycled. Only a
-  // hard refresh error still surfaces a distinct — but equally stable — message.
-  if (input.hasAmbiguousGitHubHostedReview === true) {
-    if (input.prRefreshStatus === 'error') {
-      return (
-        getGitHubUnavailableEmptyStateCopy(input.prRefreshErrorType) ?? {
-          title: translate(
-            'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
-            'Could not refresh pull request'
-          ),
-          description: translate(
-            'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
-            'GitHub status could not be refreshed. Existing cached data was preserved.'
-          )
-        }
-      )
-    }
+  // 1. Renderable review wins over every empty state.
+  if (input.reviewLookup === 'found') {
     return {
+      renderReview: true,
+      title: '',
+      description: '',
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
+    }
+  }
+
+  const blockedReason = input.eligibilityBlockedReason
+
+  // 2. Eligibility safety states own their guidance (existing_review is a hard
+  //    create block in the positive-evidence family).
+  if (blockedReason && ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason)) {
+    return safetyBlockerState(input, blockedReason)
+  }
+
+  // 3. Positive unresolved review evidence: never offer Create / Push & Create.
+  if (input.reviewLookup === 'positive_unresolved' && !isBranchBlocker(blockedReason)) {
+    return {
+      renderReview: false,
       title: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.3322603418',
-        'Pull request status unavailable'
+        'auto.components.right.sidebar.checks.panel.review.positive.title',
+        '{{reviewLabelCap}} details unavailable',
+        { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
       ),
       description: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.b597440265',
-        'Refresh GitHub status for this branch to load checks and review.'
-      )
+        'auto.components.right.sidebar.checks.panel.review.positive.body',
+        'Orca has saved {{reviewLabel}} information for this branch but could not confirm its current status.',
+        { reviewLabel }
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: input.openReviewUrl ? ['open_review', 'retry'] : ['retry'],
+      openReviewUrl: input.openReviewUrl
     }
   }
 
-  if (
-    shouldShowChecksPanelPublishBranchAction({
-      hostedReviewBlockedReason: blockedReason,
-      hasUpstream: input.hasUpstream,
-      hasCurrentBranch: input.hasCurrentBranch
-    })
-  ) {
-    // Why: a local-only branch cannot have GitHub PR status yet; surfacing a
-    // refresh error here makes a normal pre-publish state look broken.
+  // 4. Actionable creation blockers (publish / sync / auth / needs_push).
+  if (isBranchBlocker(blockedReason)) {
+    return branchBlockerState(
+      input,
+      blockedReason as NonNullable<HostedReviewCreationBlockedReason>
+    )
+  }
+  // A ready Git status reporting no upstream is a publish state even before
+  // eligibility resolves. `hasUpstream === undefined` is unknown, never false.
+  if (input.gitStatusPhase === 'ready' && input.hasUpstream === false && input.hasCurrentBranch) {
+    return branchBlockerState(input, 'no_upstream')
+  }
+
+  // 5. Hard refresh error with no blocker above → hide composer until cleared.
+  if (isHardRefreshError(input.refresh)) {
+    return hardRefreshErrorState(input)
+  }
+
+  // 6. Accepted no-review for the exact context.
+  if (input.reviewLookup === 'not_found') {
+    const detail = isTransientRefreshFailure(input.refresh)
+      ? concurrentLookupDetail(input)
+      : undefined
+    const mode = confirmedComposerMode(input)
     return {
+      renderReview: false,
       title: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.41252bc53f',
-        'Branch not published'
+        'auto.components.right.sidebar.checks.panel.review.no_review.title',
+        'No {{reviewLabel}} found',
+        { reviewLabel }
       ),
       description: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.f8543140cc',
-        'Publish this branch before creating a {{value0}}.',
-        { value0: reviewLabel }
-      )
+        'auto.components.right.sidebar.checks.panel.review.no_review.body',
+        'Create a {{reviewLabel}} to start checks and review.',
+        { reviewLabel }
+      ),
+      detail,
+      composerMode: mode,
+      workflowAction: workflowActionForComposer(mode),
+      recovery: detail ? ['retry'] : ['refresh'],
+      ...(detail ? autoRetrySchedule(input) : {})
     }
   }
 
-  if (blockedReason === 'needs_push') {
+  // 7. Transient classified error / rate-limit pause with no accepted result.
+  if (isTransientRefreshFailure(input.refresh)) {
+    const mode = confirmedComposerMode(input)
+    return transientRefreshState(input, mode, workflowActionForComposer(mode))
+  }
+
+  // 8. Active refresh (queued / in-flight) with no accepted result.
+  if (input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight') {
+    const mode = confirmedComposerMode(input)
     return {
+      renderReview: false,
       title: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.76e15946a9',
-        'Branch has unpushed commits'
+        'auto.components.right.sidebar.checks.panel.review.active.title',
+        'Checking {{reviewLabel}} status',
+        { reviewLabel }
       ),
       description: translate(
-        'auto.components.right.sidebar.checks.panel.empty.state.6ce9d4e069',
-        'Push your branch before creating a {{value0}}.',
-        { value0: reviewLabel }
-      )
+        'auto.components.right.sidebar.checks.panel.review.active.body',
+        'Orca is checking {{provider}} for a {{reviewLabel}} on this branch.',
+        { reviewLabel, provider: providerName }
+      ),
+      composerMode: mode,
+      workflowAction: workflowActionForComposer(mode),
+      recovery: []
     }
   }
 
-  switch (input.prRefreshStatus) {
-    case 'error':
-      return (
-        getGitHubUnavailableEmptyStateCopy(input.prRefreshErrorType) ?? {
-          title: translate(
-            'auto.components.right.sidebar.checks.panel.empty.state.5f478ab3d3',
-            'Could not refresh pull request'
-          ),
-          description: translate(
-            'auto.components.right.sidebar.checks.panel.empty.state.2bdd7aaf2d',
-            'GitHub status could not be refreshed. Existing cached data was preserved.'
-          )
-        }
-      )
-    case 'queued':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.938b5606a6',
-          'Checking for pull request'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.6ba2440770',
-          'Waiting to refresh GitHub status for this branch'
-        )
-      }
-    case 'in-flight':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.938b5606a6',
-          'Checking for pull request'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.3d4af82ff4',
-          'Refreshing GitHub status for this branch'
-        )
-      }
-    case 'paused':
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.7c299df37b',
-          'No pull request found'
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.d372072df1',
-          'GitHub refresh is paused by the current rate-limit budget'
-        )
-      }
-    case 'skipped':
-    case undefined:
-      return {
-        title: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.13e1c7d5ed',
-          'No {{value0}} found',
-          { value0: reviewLabel }
-        ),
-        description: translate(
-          'auto.components.right.sidebar.checks.panel.empty.state.5b0cfae9a5',
-          'Create a {{value0}} to start checks and review.',
-          { value0: reviewLabel }
-        )
-      }
+  // 9. Git status loading / failure when upstream is still unknown.
+  if (input.gitStatusPhase === 'loading' && input.hasUpstream === undefined) {
+    return {
+      renderReview: false,
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_loading.title',
+        'Checking branch status'
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_loading.body',
+        'Orca is checking this branch before showing create or publish actions.'
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
+    }
+  }
+  if (input.gitStatusPhase === 'error' && input.hasUpstream === undefined) {
+    return {
+      renderReview: false,
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_error.title',
+        'Could not check branch status'
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.review.git_error.body',
+        "Orca could not confirm this branch's upstream from this environment. Retry before publishing or creating a {{reviewLabel}}.",
+        { reviewLabel }
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: ['retry']
+    }
+  }
+
+  // 10. Skipped structural reasons and missing / unknown — status unavailable.
+  if (input.refresh?.status === 'skipped' && input.refresh.skippedReason) {
+    if (input.refresh.skippedReason === 'rate-limit') {
+      const mode = confirmedComposerMode(input)
+      return transientRefreshState(input, mode, workflowActionForComposer(mode))
+    }
+    const skipped = skippedRefreshState(input, input.refresh.skippedReason)
+    if (skipped) {
+      return skipped
+    }
+  }
+  return {
+    renderReview: false,
+    title: translate(
+      'auto.components.right.sidebar.checks.panel.review.unknown.title',
+      '{{reviewLabelCap}} status unavailable',
+      { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
+    ),
+    description: translate(
+      'auto.components.right.sidebar.checks.panel.review.unknown.body',
+      'Orca has not confirmed the {{reviewLabel}} status for this branch. Retry to check again.',
+      { reviewLabel }
+    ),
+    composerMode: 'hidden',
+    workflowAction: null,
+    recovery: ['retry']
   }
 }
 

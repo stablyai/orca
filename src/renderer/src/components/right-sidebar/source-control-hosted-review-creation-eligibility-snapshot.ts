@@ -13,7 +13,9 @@ export function buildLoadingHostedReviewCreationEligibility(
     review: null,
     canCreate: false,
     blockedReason: null,
-    nextAction: null
+    nextAction: null,
+    // Why: a loading placeholder has no authoritative existing-review result.
+    reviewLookupOutcome: 'unavailable'
   }
 }
 
@@ -36,8 +38,8 @@ export function resolveHostedReviewCreationProviderForTarget(
 
 /**
  * Local-status-only eligibility used when the remote creation probe fails or
- * times out, so a failed probe still offers the actionable commit/publish/sync
- * preparation action instead of leaving an inert disabled button.
+ * times out, so the UI can show branch guidance without treating the failed
+ * lookup as authority to create a review.
  *
  * Mirrors the main process's own lookup-failure fallback exactly — both its
  * `canReturnLocalBlocker` guard and its blocker ordering
@@ -77,7 +79,9 @@ export function buildLocalBlockerHostedReviewCreationEligibility(
     review: null,
     canCreate: false as const,
     defaultBaseRef: null,
-    head: branch
+    head: branch,
+    // Why: local Git blockers cannot prove that a hosted review does not exist.
+    reviewLookupOutcome: 'unavailable' as const
   }
   if (status.hasUncommittedChanges) {
     return { ...base, blockedReason: 'dirty', nextAction: 'commit' }

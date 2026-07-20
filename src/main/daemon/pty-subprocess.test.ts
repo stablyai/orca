@@ -2363,7 +2363,8 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    const cwd = mkdtempSync(join(tmpdir(), 'daemon-pty-wsl-distro-test-'))
+    // Keep the fixture Windows-shaped even when this test runs on a Linux CI host.
+    const cwd = 'C:\\repo'
 
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
@@ -2380,18 +2381,11 @@ describe('createPtySubprocess', () => {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
-      rmSync(cwd, { recursive: true, force: true })
     }
-
-    const normalizedCwd = cwd.replace(/\\/g, '/')
-    const driveMatch = normalizedCwd.match(/^([A-Za-z]):\/?(.*)$/)
-    const expectedLinuxCwd = driveMatch
-      ? `/mnt/${driveMatch[1].toLowerCase()}${driveMatch[2] ? `/${driveMatch[2]}` : ''}`
-      : '/mnt/c'
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Debian', '--', 'sh', '-c', expect.stringContaining(`cd '${expectedLinuxCwd}'`)],
+      ['-d', 'Debian', '--', 'sh', '-c', expect.stringContaining("cd '/mnt/c/repo'")],
       expect.objectContaining({ cwd: expect.any(String) })
     )
   })

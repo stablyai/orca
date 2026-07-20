@@ -1202,9 +1202,13 @@ export type PRInfo = {
   conflictSummary?: PRConflictSummary
 }
 
-// server_error covers GitHub-side HTTP 5xx outages (githubstatus.com incidents),
-// distinct from a transport-level `network` failure or a `rate_limited` budget.
-export type PRRefreshUpstreamErrorType =
+/**
+ * Discriminates a classified GitHub PR-refresh failure. The renderer maps these
+ * to stable, non-destructive empty-state copy; a `hard` subset (auth, permission,
+ * repo_unavailable, gh_unavailable) means the existing-review lookup is currently
+ * impossible and must hide the Create composer.
+ */
+export type PRRefreshErrorType =
   | 'rate_limited'
   | 'auth'
   | 'network'
@@ -1214,14 +1218,23 @@ export type PRRefreshUpstreamErrorType =
   | 'server_error'
   | 'unknown'
 
+// Backward-compatible name used by outage-copy consumers added on main.
+export type PRRefreshUpstreamErrorType = PRRefreshErrorType
+
 export type PRRefreshOutcome =
   | { kind: 'found'; pr: PRInfo; fetchedAt: number }
   | { kind: 'no-pr'; fetchedAt: number }
   | {
       kind: 'upstream-error'
-      errorType: PRRefreshUpstreamErrorType
+      errorType: PRRefreshErrorType
       message: string
       fetchedAt: number
+      // Unified retry schedule (see docs/reference/pr-panel-refresh-guidance.md).
+      // `nextAutoRetryAt`: earliest time main expects to auto-retry this key.
+      // `retryDisabledUntil`: earliest time a manual Retry / refreshPRNow is
+      // accepted (rate-limit gates only, never ordinary network/auth backoff).
+      nextAutoRetryAt?: number
+      retryDisabledUntil?: number
     }
 
 export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr'
@@ -2809,14 +2822,12 @@ export type GlobalSettings = {
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking — unmounting long-hidden
    *  terminal panes while a pane-less watcher keeps PTY side effects alive.
-   *  Defaults to true; `false` disables parking entirely.
-   *  See docs/reference/terminal-hidden-view-parking.md. */
+   *  Defaults to true; `false` disables parking entirely. */
   terminalHiddenViewParking?: boolean
   /** Kill switch for main-process terminal side-effect authority: when true
    *  (default), local-daemon/SSH PTY title/bell/agent facts are consumed from
    *  the `pty:sideEffect` channel and renderer byte parsers stay unregistered
-   *  for those PTYs; `false` restores renderer byte parsing.
-   *  See docs/reference/terminal-side-effect-authority.md. */
+   *  for those PTYs; `false` restores renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
   /** Kill switch for main's hidden-delivery gate (Phase 4): when true
    *  (default) AND terminalMainSideEffectAuthority is on, main drops PTY byte
@@ -2826,8 +2837,7 @@ export type GlobalSettings = {
   /** Kill switch for the main model query responder (Phase 5): when true
    *  (default) AND both Phase-4 gate switches are on, main answers terminal
    *  queries (DA1/CPR/DECRPM, …) embedded in hidden-dropped chunks from the
-   *  runtime emulator. `false` silences the responder without changing drops.
-   *  See docs/reference/terminal-query-authority.md. */
+   *  runtime emulator. `false` silences the responder without changing drops. */
   terminalModelQueryAuthority?: boolean
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
@@ -2966,6 +2976,10 @@ export type GlobalSettings = {
    *  on read into [5_000ms, 60min] to defend against bad config.
    *  See docs/mobile-fit-hold.md. */
   mobileAutoRestoreFitMs: number | null
+  /** Preferred mobile pairing path for new QR codes: Anywhere (Orca Relay +
+   *  local) or same-network only. Missing/undefined defaults to Anywhere.
+   *  An explicit `local-only` means the user already chose that path. */
+  mobilePairingConnectionMode?: 'automatic' | 'local-only'
   /** Experimental: floating animated pet (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the

@@ -35,6 +35,7 @@ export type HeadlessEmulatorOptions = {
   onQueryReply?: (reply: string) => void
   pathFlavor?: 'posix' | 'win32'
   remotePosixFileUriAuthority?: boolean
+  wslDistro?: string
 }
 
 export type HeadlessEmulatorWriteOptions = {
@@ -93,7 +94,8 @@ export class HeadlessEmulator {
     this.remotePosixFileUriAuthority = opts.remotePosixFileUriAuthority === true
     this.oscText = new TerminalOscCwdTitleScanner({
       pathFlavor: this.pathFlavor,
-      remotePosixAuthority: this.remotePosixFileUriAuthority
+      remotePosixAuthority: this.remotePosixFileUriAuthority,
+      wslDistro: opts.wslDistro
     })
     this.terminal = new Terminal({
       cols: opts.cols,
@@ -129,7 +131,7 @@ export class HeadlessEmulator {
     // the visible casualty). Only main's runtime per-PTY emulators pass a
     // sink, and even then replies flow only for chunks the hidden-delivery
     // gate DROPPED, where the renderer never sees the bytes and main is the
-    // single answerer. See docs/reference/terminal-query-authority.md.
+    // single answerer under main's terminal query authority.
     this.onQueryReply = opts.onQueryReply ?? null
     if (this.onQueryReply) {
       this.terminal.onData((reply) => this.emitQueryReply(reply))

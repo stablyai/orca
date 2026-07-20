@@ -1,6 +1,6 @@
 /**
- * Phase 5 slice 2 (docs/reference/terminal-query-authority.md §View-attribute
- * bridge): main-side cache of the renderer's `pty:terminalViewAttributes`
+ * Phase 5 slice 2 (View-attribute bridge): main-side cache of the renderer's
+ * `pty:terminalViewAttributes`
  * push. One app-global snapshot, not per-PTY — per-pane font zoom never
  * affects these attributes and the color/cursor settings are global.
  *

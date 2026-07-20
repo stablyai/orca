@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { HistoryReader } from './history-reader'
 import { getHistorySessionDirName } from './history-paths'
 import type { SessionMeta } from './history-manager'
+import { encodeLogBatch, encodeLogHeader } from './terminal-history-log'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'history-reader-test-'))
@@ -162,6 +163,24 @@ describe('HistoryReader', () => {
       expect(info!.snapshotAnsi).toBe('fallback data\r\n')
       expect(info!.rehydrateSequences).toBe('')
     })
+  })
+
+  it('replays incremental hostname OSC-7 with the same WSL context', () => {
+    writeSessionWithCheckpoint(dir, 'wsl-log', makeMeta(), makeCheckpoint({ generation: 7 }))
+    const sessionDir = join(dir, getHistorySessionDirName('wsl-log'))
+    writeFileSync(
+      join(sessionDir, 'output.log'),
+      Buffer.concat([
+        encodeLogHeader(7),
+        encodeLogBatch(1, [
+          { kind: 'output', data: '\x1b]7;file://DESKTOP-ORCA/home/user/project\x07' }
+        ])
+      ])
+    )
+
+    const info = reader.detectColdRestore('wsl-log', { wslDistro: 'Ubuntu' })
+
+    expect(info?.cwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\user\\project')
   })
 
   describe('detectColdRestore — scrollback.bin fallback (backward compatibility)', () => {

@@ -16,6 +16,8 @@ import {
   reset as resetAssembler
 } from './native-chat-incremental-assembler'
 import { mergeNativeChatLiveSession } from './native-chat-live-status'
+import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { surfaceSkillInvocationUserTurns } from '../../../../shared/native-chat-command-envelope'
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT,
@@ -386,9 +388,22 @@ export function useNativeChatLiveSession(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseMessages, appended, sessionId, agent])
 
+  // Why: Claude-family harnesses record slash inputs as command envelopes,
+  // which the noise filter hides. A skill invocation is the user's chat turn,
+  // so surface it here — upstream of pending-echo pruning, view state, and the
+  // list — as the literal token; catalog commands keep their `Ran /x` marker.
+  const surfacedMessages = useMemo(
+    () =>
+      surfaceSkillInvocationUserTurns(
+        assembledMessages,
+        new Set(getVerifiedNativeChatCommands(agent).map((command) => command.name))
+      ),
+    [assembledMessages, agent]
+  )
+
   return useMemo<NativeChatLiveSession>(() => {
     const session = mergeNativeChatLiveSession({
-      sources: { transcript: assembledMessages },
+      sources: { transcript: surfacedMessages },
       sessionId,
       agent,
       hookState,
@@ -404,7 +419,7 @@ export function useNativeChatLiveSession(
     })
     return { ...session, hasMore, loadingEarlier, loadEarlier }
   }, [
-    assembledMessages,
+    surfacedMessages,
     read,
     sessionId,
     agent,

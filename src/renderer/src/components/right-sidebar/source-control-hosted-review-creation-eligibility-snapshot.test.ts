@@ -32,7 +32,7 @@ describe('resolveHostedReviewCreationProviderForTarget', () => {
 })
 
 describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
-  it('reports dirty when there are uncommitted changes', () => {
+  it('reports dirty without offering create intent when the review lookup failed', () => {
     const eligibility = buildLocalBlockerHostedReviewCreationEligibility('github', {
       ...featureBranch,
       hasUncommittedChanges: true,
@@ -40,9 +40,12 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
       ahead: 0,
       behind: 0
     })
-    expect(eligibility).toMatchObject({ blockedReason: 'dirty', nextAction: 'commit' })
-    // The synthesized blocker must drive the actionable Create PR intent so a
-    // failed remote probe still offers commit/publish preparation.
+    expect(eligibility).toMatchObject({
+      blockedReason: 'dirty',
+      nextAction: 'commit',
+      reviewLookupOutcome: 'unavailable'
+    })
+    // Why: branch guidance can remain specific, but a failed lookup cannot authorize creation.
     expect(
       resolveCreatePrIntentEligibility({
         stagedCount: 1,
@@ -53,7 +56,7 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
         hostedReviewCreation: eligibility,
         branchCommitsAhead: 0
       })
-    ).toEqual({ eligible: true, kind: 'dirty' })
+    ).toEqual({ eligible: false, kind: null })
   })
 
   it('prefers dirty over no_upstream when both apply, matching main-process ordering', () => {

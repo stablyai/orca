@@ -39,7 +39,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../../shared/git-credential-prompt-env'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
-import { getWslContextFromSessionId } from './wsl-session-context'
+import { resolveWslSessionContext } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
@@ -175,16 +175,6 @@ function removeInheritedDevAgentHookEndpoint(
     // needed by hooks whose runners scrub token-like env vars before exec.
     delete env.ORCA_AGENT_HOOK_ENDPOINT
   }
-}
-
-/**
- * Resolves a WSL launch context from a user-selected distro name.
- */
-function getWslContextFromPreferredDistro(
-  distro: string | null | undefined
-): { distro: string } | undefined {
-  const trimmed = distro?.trim()
-  return trimmed ? { distro: trimmed } : undefined
 }
 
 /**
@@ -605,18 +595,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // setting, relayed by main) takes priority over env.COMSPEC — otherwise
   // Windows always resolves to cmd.exe (COMSPEC) or PowerShell by fallback,
   // no matter which shell the user actually picked.
-  const cwdWslInfo = process.platform === 'win32' ? parseWslPath(opts.cwd ?? '') : null
-  const sessionWslContext =
-    process.platform === 'win32' ? getWslContextFromSessionId(opts.sessionId) : undefined
-  const preferredWslContext =
-    process.platform === 'win32'
-      ? getWslContextFromPreferredDistro(opts.terminalWindowsWslDistro)
-      : undefined
+  const resolvedWslContext = resolveWslSessionContext(opts)
   // Why: WSL worktree cwd is the repo's execution environment. Older persisted
   // tabs can carry a PowerShell/cmd shellOverride; ignore it so reconnects and
   // daemon-backed terminals enter the WSL distro just like LocalPtyProvider.
-  let shellPath =
-    cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
+  let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let startupCommandDeliveredInShellArgs = false
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
@@ -672,7 +655,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellPath,
       cwd: spawnCwd,
       defaultCwd: getDefaultCwd(),
-      wslContext: sessionWslContext ?? preferredWslContext,
+      wslContext: resolvedWslContext,
       startupCommand: opts.command
     })
     const primaryAttempt = windowsFallbackAttempts[0]
@@ -687,7 +670,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         shellPath,
         spawnCwd,
         getDefaultCwd(),
-        sessionWslContext ?? preferredWslContext,
+        resolvedWslContext,
         opts.command
       )
       shellArgs = resolved.shellArgs
@@ -703,8 +686,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       if (codexHomeWslInfo) {
-        const launchWslDistro =
-          cwdWslInfo?.distro ?? sessionWslContext?.distro ?? preferredWslContext?.distro
+        const launchWslDistro = resolvedWslContext?.distro
         if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
           delete env.CODEX_HOME
           delete env.ORCA_CODEX_HOME

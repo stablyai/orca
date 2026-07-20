@@ -5882,7 +5882,8 @@
           "aa1263e881": "휴대폰 크기로 유지(기본값)",
           "6436e56546": "모바일 페어링을 위한 QR 코드",
           "1b1b70279a": "아직 페어링된 기기가 없습니다.",
-          "1592afcc7a": "아직 페어링된 기기가 없습니다. Orca 모바일 앱으로 QR 코드를 스캔하세요."
+          "1592afcc7a": "아직 페어링된 기기가 없습니다. Orca 모바일 앱으로 QR 코드를 스캔하세요.",
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 릴리스",
@@ -5893,7 +5894,10 @@
           "174f4a3c6d": "휴대폰에서 terminals과 agents를 제어하세요.",
           "1de96ec8a6": "Orca Mobile 버튼 표시",
           "682293cadf": "왼쪽 사이드바 상단에 Orca Mobile 버튼을 표시합니다.",
-          "d4f2b65f30": "사이드바에 Orca Mobile 바로가기를 표시합니다."
+          "d4f2b65f30": "사이드바에 Orca Mobile 바로가기를 표시합니다.",
+          "installIntro": "다음 스토어에서 Orca Mobile 설치",
+          "installOutro": "하고 아래에서 페어링하세요.",
+          "androidApkLabel": "Android APK"
         },
         "NotificationsPane": {
           "906b4afebf": "테스트 알림 보내기",
@@ -8027,7 +8031,9 @@
               "671eb4173c": "휴대폰에서 terminals과 agents를 제어하세요.",
               "ffd52a96e4": "모바일",
               "1de96ec8a6": "Orca Mobile 버튼 표시",
-              "682293cadf": "왼쪽 사이드바 상단에 Orca Mobile 버튼을 표시합니다."
+              "682293cadf": "왼쪽 사이드바 상단에 Orca Mobile 버튼을 표시합니다.",
+              "e4f4daea0e": "릴레이",
+              "5d5af8e041": "iPhone"
             }
           }
         },
@@ -9171,28 +9177,26 @@
           "available": "사용 가능",
           "reconnecting": "다시 연결 중",
           "unavailable": "사용할 수 없음",
-          "title": "새 휴대폰을 어떻게 연결할까요?",
-          "anywhere": "Orca Relay로 연결",
-          "recommended": "권장",
-          "automaticDescription": "가능하면 직접 연결하고, 그렇지 않으면 Orca Relay를 사용합니다.",
-          "signInDescription": "Orca Relay를 사용하려면 이 데스크톱에서 로그인하세요.",
           "signIn": "로그인",
-          "localOnly": "로컬 네트워크만",
-          "localShort": "LAN 또는 Tailscale",
-          "localDescription": "이 휴대폰을 Orca Relay에 연결하지 않고 LAN 또는 Tailscale을 사용합니다."
+          "localDescription": "휴대폰이 이 Wi‑Fi 또는 Tailscale에 연결되어 있어야 합니다. 로그인이 필요하지 않습니다.",
+          "pathGroup": "휴대폰이 이 컴퓨터에 연결되는 방식",
+          "anywhereTitle": "Orca Relay",
+          "anywhereDescription": "휴대폰이 모바일 네트워크 또는 모든 Wi‑Fi에서 연결 가능합니다. 로그인이 필요합니다.",
+          "signInRequired": "Orca Mobile Relay를 사용하려면 로그인하세요.",
+          "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. 로컬 네트워크를 사용하세요.",
+          "signInAgain": "다시 로그인",
+          "localTitle": "로컬 네트워크"
         },
         "MobilePairingSetupSection": {
           "title": "휴대폰 페어링",
-          "automaticDescription": "페어링 코드에는 직접 연결과 암호화된 Orca Relay 대체 연결이 포함됩니다.",
-          "localDescription": "페어링 코드는 아래의 로컬 네트워크 주소로만 연결합니다.",
           "regenerate": "다시 생성",
           "generate": "QR 코드 생성",
-          "localSettings": "로컬 연결 설정",
-          "localAddressDescription": "Orca Mobile에서 이 컴퓨터에 직접 연결할 수 있는 LAN 또는 사설 네트워크 주소를 선택하세요.",
           "refresh": "네트워크 인터페이스 새로 고침",
-          "tailnet": "내 tailnet으로 연결",
-          "tailnetDescription": "이 컴퓨터와 휴대폰에 Tailscale을 설치하고 같은 tailnet에 로그인한 다음 위에서 100.x.y.z 주소를 선택하세요.",
-          "getTailscale": "Tailscale 받기"
+          "overview": "QR 코드를 생성한 후 Orca Mobile의 Pair Desktop에서 스캔하세요.",
+          "step1Title": "연결 방식",
+          "step2Title": "이 컴퓨터의 주소",
+          "step2RelayDescription": "가까운 곳에서는 빠른 직접 연결에 사용됩니다. 먼 거리에서는 Relay가 원격 액세스를 제공합니다.",
+          "step2LocalDescription": "휴대폰이 Wi‑Fi 또는 Tailscale을 통해 이 주소에 접근할 수 있어야 합니다."
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay 베타 정보",
@@ -9217,6 +9221,9 @@
           "howToUseDescription": "Ask an agent working a Linear-linked worktree to read context, post updates, move the ticket, or attach the PR.",
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
+        },
+        "MobileRelayBetaNotice": {
+          "notice": "Orca Relay is in beta."
         }
       },
       "right": {
@@ -9264,7 +9271,16 @@
             "f273f2271c": "agent를 시작했습니다. {{value0}}개 해결됨으로 표시, {{value1}}개 건너뜀, {{value2}}개 실패.",
             "aa95b81a3a": "agent를 시작했습니다. {{value0}}개 해결됨으로 표시, {{value1}}개 건너뜀, {{value2}}개 실패.",
             "495b2f8c4b": "agent를 시작했지만 선택한 댓글을 해결됨으로 표시할 수 없습니다.",
-            "3c3ad3a1d2": "agent를 시작했습니다. 호스트에서 해결됨으로 표시할 수 있는 선택된 댓글이 없습니다."
+            "3c3ad3a1d2": "agent를 시작했습니다. 호스트에서 해결됨으로 표시할 수 있는 선택된 댓글이 없습니다.",
+            "review": {
+              "auto_retry": "Orca가 {{time}}에 다시 시도합니다.",
+              "open_review": "검토 열기",
+              "retry": "다시 시도"
+            },
+            "sync": {
+              "pending": "Syncing…",
+              "branch": "Sync Branch"
+            }
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "취소",
@@ -9672,6 +9688,7 @@
             "createPrIntentPublishing": "브랜치를 게시하는 중…",
             "createPrIntentForcePushing": "lease로 강제 푸시하는 중…",
             "createPrIntentPushing": "commits을 푸시하는 중…",
+            "createPrIntentFastForwarding": "브랜치를 업데이트하는 중…",
             "createPrIntentRemoteFailed": "원격 브랜치를 업데이트할 수 없습니다. Create PR을 다시 시도하세요.",
             "createPrIntentGeneratingDetails": "리뷰 세부 정보 생성 중…",
             "createPrIntentBranchChangedDuringDetails": "리뷰 세부 정보를 생성하는 동안 브랜치가 변경되었습니다. Create PR을 다시 시도하세요.",
@@ -9704,9 +9721,7 @@
               "a9bf7c171a": "푸시 실패",
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
-            },
-            "createPrIntentSyncConflicts": "동기화 중 충돌이 발생했습니다. 해결한 다음 Create PR을 다시 시도하세요.",
-            "createPrIntentSyncing": "브랜치를 동기화하는 중…"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -9879,6 +9894,136 @@
                   "05e4aec17b": "{{value0}} 검사는 작업이 완료된 후에 사용할 수 있습니다.",
                   "d77c513c1e": "{{value0}} 진행 중",
                   "b597440265": "검사와 리뷰를 불러오려면 이 브랜치의 GitHub 상태를 새로 고치세요."
+                }
+              },
+              "review": {
+                "detail": {
+                  "positive": "Orca에는 확인할 수 없는 저장된 {{reviewLabel}} 정보가 있습니다.",
+                  "rate_limited": "{{provider}}가 요청을 일시적으로 제한하고 있어 Orca도 {{reviewLabel}} 상태를 확인할 수 없었습니다.",
+                  "network": "이 환경에서 {{provider}}에 연결할 수 없어 Orca도 {{reviewLabel}} 상태를 확인할 수 없었습니다.",
+                  "untyped": "Orca는 이 브랜치에 이미 {{reviewLabel}}가 있는지 확인할 수 없었습니다."
+                },
+                "positive": {
+                  "title": "{{reviewLabelCap}} 세부 정보를 사용할 수 없음",
+                  "body": "Orca는 이 브랜치의 {{reviewLabel}} 정보를 저장했지만 현재 상태를 확인할 수 없었습니다."
+                },
+                "no_review": {
+                  "title": "{{reviewLabel}}를 찾을 수 없음",
+                  "body": "{{reviewLabel}}를 만들어 검사와 리뷰를 시작하세요."
+                },
+                "active": {
+                  "title": "{{reviewLabel}} 상태 확인 중",
+                  "body": "Orca는 이 브랜치의 {{provider}}에서 {{reviewLabel}}를 확인하고 있습니다."
+                },
+                "git_loading": {
+                  "title": "브랜치 상태 확인 중",
+                  "body": "Orca는 생성 또는 게시 작업을 표시하기 전에 이 브랜치를 확인하고 있습니다."
+                },
+                "git_error": {
+                  "title": "브랜치 상태를 확인할 수 없음",
+                  "body": "Orca는 이 환경에서 이 브랜치의 업스트림을 확인할 수 없었습니다. 게시하거나 {{reviewLabel}}를 만들기 전에 다시 시도하세요."
+                },
+                "unknown": {
+                  "title": "{{reviewLabelCap}} 상태를 사용할 수 없음",
+                  "body": "Orca가 이 브랜치의 {{reviewLabel}} 상태를 확인하지 못했습니다. 다시 시도하여 확인하세요."
+                },
+                "paused": {
+                  "title": "{{provider}} 새로고침 일시 중지됨",
+                  "body": "{{provider}}가 요청을 일시적으로 제한하고 있습니다. 표시된 API 할당량이 소진되지 않은 경우에도 발생할 수 있습니다."
+                },
+                "network": {
+                  "title": "{{provider}}에 연결할 수 없음",
+                  "body": "이 환경에서 {{provider}}에 연결할 수 없었습니다. 연결을 확인한 후 다시 시도하세요."
+                },
+                "unknown_error": {
+                  "title": "{{reviewLabel}} 상태를 확인할 수 없음",
+                  "body": "조회에 실패하여 Orca는 이 브랜치에 이미 {{reviewLabel}}가 있는지 확인할 수 없었습니다."
+                },
+                "untyped": {
+                  "title": "{{reviewLabelCap}} 상태를 사용할 수 없음",
+                  "body": "Orca는 이 브랜치에 이미 {{reviewLabel}}가 있는지 확인할 수 없었습니다. 다시 시도하여 확인하세요."
+                },
+                "auth": {
+                  "title": "{{provider}} 인증 실패",
+                  "body": "{{provider}}는 이 환경에서 사용 가능한 자격 증명을 인증할 수 없었습니다. {{provider}} 로그인 또는 환경 토큰을 확인한 후 다시 시도하세요."
+                },
+                "permission": {
+                  "title": "{{provider}} 접근 거부됨",
+                  "body": "현재 {{provider}} 자격 증명으로는 이 리포지토리의 {{reviewLabel}}를 읽을 수 없습니다. 계정, 토큰 범위 및 리포지토리 접근 권한을 확인한 후 다시 시도하세요."
+                },
+                "repo": {
+                  "title": "{{provider}} 리포지토리를 사용할 수 없음",
+                  "body": "{{provider}}는 현재 리모트와 계정의 리포지토리를 확인하거나 접근할 수 없었습니다. 리모트와 리포지토리 접근 권한을 확인한 후 다시 시도하세요."
+                },
+                "cli": {
+                  "title": "{{provider}} CLI를 사용할 수 없음",
+                  "body": "Orca는 이 환경에서 {{provider}} CLI를 실행할 수 없었습니다. 여기에서 설정한 후 다시 시도하세요."
+                },
+                "skipped": {
+                  "disconnected": {
+                    "title": "호스트 연결 끊김",
+                    "body": "이 리포지토리의 실행 호스트가 연결 해제되어 Orca가 {{reviewLabel}} 상태를 새로고칠 수 없습니다."
+                  },
+                  "bare": {
+                    "title": "베어 리포지토리",
+                    "body": "이 리포지토리는 베어 리포지토리이므로 여기에서 {{reviewLabel}} 상태를 사용할 수 없습니다."
+                  },
+                  "archived": {
+                    "title": "리포지토리가 보관됨",
+                    "body": "이 리포지토리가 보관되어 있으므로 Orca가 {{reviewLabel}} 상태를 새로고치지 않습니다."
+                  },
+                  "not_git": {
+                    "title": "Git 리포지토리가 아님",
+                    "body": "Orca는 {{reviewLabel}} 상태용으로 이 폴더를 Git 리포지토리로 처리할 수 없었습니다."
+                  },
+                  "remote": {
+                    "title": "리모트 전용 컨텍스트",
+                    "body": "Orca는 이 리모트 컨텍스트의 {{reviewLabel}} 상태를 새로고칠 수 없었습니다. 호스트를 사용할 수 있을 때 다시 시도하세요."
+                  }
+                },
+                "no_upstream": {
+                  "title": "업스트림이 설정되지 않음",
+                  "body": "{{reviewLabel}}를 만들기 전에 이 브랜치를 게시하여 업스트림을 설정하세요."
+                },
+                "needs_sync": {
+                  "title": "브랜치 동기화 필요",
+                  "body": "{{reviewLabel}}를 만들기 전에 이 브랜치를 업스트림과 동기화하세요."
+                },
+                "auth_required": {
+                  "title": "{{provider}} 연결",
+                  "body": "Orca가 {{reviewLabel}}를 만들려면 이 환경에서 {{provider}}가 연결되어 있어야 합니다."
+                },
+                "needs_push": {
+                  "title": "브랜치에 푸시하지 않은 커밋이 있음",
+                  "body": "{{reviewLabel}}를 만들기 전에 최신 커밋을 푸시하세요."
+                },
+                "existing": {
+                  "title": "{{reviewLabelCap}}이(가) 이미 존재함",
+                  "body": "Orca는 이 브랜치의 기존 {{reviewLabel}}를 찾았습니다."
+                },
+                "detached": {
+                  "title": "현재 브랜치가 없음",
+                  "body": "{{reviewLabel}}를 만들기 전에 브랜치를 체크아웃하세요."
+                },
+                "dirty": {
+                  "title": "먼저 변경 사항을 커밋하세요",
+                  "body": "{{reviewLabel}}를 만들기 전에 변경 사항을 커밋하거나 스태시하세요."
+                },
+                "default_branch": {
+                  "title": "기본 브랜치 위에 있음",
+                  "body": "{{reviewLabel}}를 만들기 전에 기능 브랜치로 전환하세요."
+                },
+                "fork": {
+                  "title": "포크 헤드 지원되지 않음",
+                  "body": "Orca는 여기에서 이 포크 헤드의 {{reviewLabel}}를 만들 수 없습니다."
+                },
+                "base_missing": {
+                  "title": "기본 브랜치가 리모트에 없음",
+                  "body": "이 브랜치의 기본이 아직 리모트에 없으므로 {{reviewLabel}}가 이를 대상으로 할 수 없습니다."
+                },
+                "unsupported": {
+                  "title": "여기서 {{reviewLabelCap}}이(가) 지원되지 않음",
+                  "body": "이 리포지토리 제공자는 Orca에서 {{reviewLabel}}를 만드는 것을 지원하지 않습니다."
                 }
               }
             }
@@ -10731,7 +10876,8 @@
             "group": "릴리스 채널",
             "preview": "미리 보기",
             "stable": "안정 버전"
-          }
+          },
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
         },
         "MobilePage": {
           "e17393c6a3": "휴대폰 미리보기",
@@ -13299,7 +13445,22 @@
           "max": "최대",
           "on": "켜짐",
           "off": "꺼짐"
-        }
+        },
+        "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
+        "commands": "명령어",
+        "skills": "스킬",
+        "loadingSkills": "스킬 로딩 중…",
+        "skillsUnavailableHost": "이 호스트에서는 스킬을 사용할 수 없습니다",
+        "skillsLoadFailed": "이 호스트에서 스킬을 불러올 수 없습니다",
+        "retrySkills": "재시도",
+        "skillCommandCollision": "스킬 이름이기도 합니다 - 에이전트가 결정합니다",
+        "skillMultipleSources": "{{sourceCount}}개 소스 - 에이전트가 해결합니다",
+        "skillScopeProject": "프로젝트",
+        "skillScopePersonal": "개인",
+        "skillScopeBuiltIn": "내장",
+        "skillScopePlugin": "플러그인",
+        "skillsLoaded": "스킬 로드 완료",
+        "noCommands": "일치하는 명령어가 없습니다"
       },
       "tool": {
         "running": "실행 중…",

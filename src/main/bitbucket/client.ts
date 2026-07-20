@@ -87,7 +87,14 @@ function apiUrl(path: string, searchParams?: RequestOptions['searchParams']): st
   return url.toString()
 }
 
-async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T | null> {
+async function requestJson<T>(
+  path: string,
+  options: RequestOptions = {},
+  // Why: the existing-review lookup behind Create must distinguish a real
+  // transport/auth failure from an accepted "no PR". When true, a failed request
+  // throws instead of collapsing to null so callers never report false not_found.
+  throwOnFailure = false
+): Promise<T | null> {
   const config = getAuthConfig()
   try {
     const response = await fetch(apiUrl(path, options.searchParams), {
@@ -99,10 +106,16 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
+      if (throwOnFailure) {
+        throw new Error(`Bitbucket request failed: HTTP ${response.status}`)
+      }
       return null
     }
     return (await response.json()) as T
-  } catch {
+  } catch (error) {
+    if (throwOnFailure) {
+      throw error
+    }
     return null
   }
 }
@@ -184,7 +197,8 @@ export async function getBitbucketPullRequestForBranch(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  throwOnFailure = false
 ): Promise<BitbucketPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
@@ -214,7 +228,8 @@ export async function getBitbucketPullRequestForBranch(
           q: query,
           state: ALL_PULL_REQUEST_STATES
         }
-      }
+      },
+      throwOnFailure
     )
     const raw = list?.values?.[0]
     if (raw) {
@@ -226,9 +241,34 @@ export async function getBitbucketPullRequestForBranch(
     return null
   }
   const raw = await requestJson<RawBitbucketPullRequest>(
-    `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`
+    `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`,
+    {},
+    throwOnFailure
   )
   return raw ? normalizePullRequest(repo, raw) : null
+}
+
+/**
+ * Existing-review lookup that surfaces transport/auth failures instead of
+ * collapsing them to null. The hosted-review creation preflight uses this so a
+ * failed lookup becomes `reviewLookupOutcome: 'unavailable'`, never a false
+ * "No pull request found".
+ */
+export function getBitbucketPullRequestForBranchOrThrow(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber?: number | null,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<BitbucketPullRequestInfo | null> {
+  return getBitbucketPullRequestForBranch(
+    repoPath,
+    branch,
+    linkedPRNumber,
+    connectionId,
+    options,
+    true
+  )
 }
 
 export async function getBitbucketRepoSlug(
