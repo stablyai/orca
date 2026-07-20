@@ -82,6 +82,8 @@ type Props = {
   onRespondPermission?: (send: string) => Promise<boolean>
   /** Open a worktree file tapped in agent markdown. */
   onOpenFile?: (relativePath: string) => void
+  /** Speak an agent message aloud via mesh TTS (per-message speaker button). */
+  onSpeak?: (text: string) => void
   /** Pixels to lift the composer by when the soft keyboard is open. The route
    *  owns keyboard tracking (the app uses manual lift, not KeyboardAvoidingView). */
   keyboardInset?: number
@@ -120,6 +122,7 @@ export function MobileNativeChatView({
   permission,
   onRespondPermission,
   onOpenFile,
+  onSpeak,
   keyboardInset = 0
 }: Props): React.JSX.Element {
   const insets = useSafeAreaInsets()
@@ -227,9 +230,10 @@ export function MobileNativeChatView({
         messageIndex={index}
         onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
+        onSpeak={onSpeak}
       />
     ),
-    [pendingIds, toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
+    [pendingIds, toolsExpanded, fontScale, onScrollToMessage, onOpenFile, onSpeak]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
