@@ -25,7 +25,13 @@ export const CLAUDE_CONFIG_DIR_MARKERS = [
 const MANAGED_CONFIG_DIR_NAMES: ReadonlySet<string> = new Set(['.claude', '.openclaude'])
 
 export function isClaudeFlavorConfigDirName(name: string): boolean {
-  return !MANAGED_CONFIG_DIR_NAMES.has(name) && CLAUDE_FLAVOR_CONFIG_DIR_PATTERN.test(name)
+  if (MANAGED_CONFIG_DIR_NAMES.has(name) || name.includes('/') || name.includes('\\')) {
+    return false
+  }
+  const suffix = CLAUDE_FLAVOR_CONFIG_DIR_PATTERN.exec(name)?.[1]
+  // Why: ledger values may be tampered independently of readdir discovery.
+  // Keep every accepted value a single safe path segment on all host OSes.
+  return suffix !== undefined && suffix !== '.' && suffix !== '..'
 }
 
 export type LocalClaudeConfigDirFs = {

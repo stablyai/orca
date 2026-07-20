@@ -7,6 +7,20 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
+import type * as InstallerUtilsModule from '../agent-hooks/installer-utils'
+
+const installerUtilsTestState = vi.hoisted(() => ({ forceUpdateFailure: false }))
+
+vi.mock('../agent-hooks/installer-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof InstallerUtilsModule>()
+  return {
+    ...actual,
+    updateHooksJsonWithRetry: (
+      ...args: Parameters<typeof actual.updateHooksJsonWithRetry>
+    ): ReturnType<typeof actual.updateHooksJsonWithRetry> =>
+      installerUtilsTestState.forceUpdateFailure ? null : actual.updateHooksJsonWithRetry(...args)
+  }
+})
 
 vi.mock('electron', () => ({
   app: {
@@ -16,7 +30,7 @@ vi.mock('electron', () => ({
 
 import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
-import { ClaudeHookService } from './hook-service'
+import { ClaudeHookService, createClaudeConfigDirHookService } from './hook-service'
 import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
@@ -434,6 +448,56 @@ describe('ClaudeHookService.remove', () => {
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
+
+  it('reports an error when the guarded settings update cannot complete', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-remove-failed-update-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const service = new ClaudeHookService()
+      expect(service.install().state).toBe('installed')
+      installerUtilsTestState.forceUpdateFailure = true
+
+      const status = service.remove()
+
+      expect(status).toMatchObject({
+        state: 'error',
+        managedHooksPresent: false,
+        detail: 'Could not parse Claude settings.json'
+      })
+    } finally {
+      installerUtilsTestState.forceUpdateFailure = false
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('ClaudeHookService Devin import guard', () => {
+  it('limits the shared script skip to the default Claude config dir', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-flavor-devin-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      expect(createClaudeConfigDirHookService('.claude-grok').install().state).toBe('installed')
+
+      const script = readFileSync(
+        join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
+        'utf-8'
+      )
+      if (process.platform === 'win32') {
+        expect(script).toContain('if "%CLAUDE_CONFIG_DIR%"==""')
+        expect(script).toContain('%%~nxI"==".claude"')
+      } else {
+        expect(script).toContain('orca_claude_config_dir=${CLAUDE_CONFIG_DIR%/}')
+        expect(script).toContain('[ -z "$orca_claude_config_dir" ]')
+        expect(script).toContain('[ "${orca_claude_config_dir##*/}" = ".claude" ]')
+      }
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('ClaudeHookService.installRemote', () => {
@@ -472,6 +536,9 @@ describe('ClaudeHookService.installRemote', () => {
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
     expect(script).toContain('#!/bin/sh')
     expect(script).toContain('DEVIN_PROJECT_DIR')
+    expect(script).toContain('orca_claude_config_dir=${CLAUDE_CONFIG_DIR%/}')
+    expect(script).toContain('[ -z "$orca_claude_config_dir" ]')
+    expect(script).toContain('[ "${orca_claude_config_dir##*/}" = ".claude" ]')
     // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
     // on the curl command line (EDR oversized-command-line false positive),
     // matching the Windows curl.exe hook post.

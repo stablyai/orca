@@ -81,8 +81,13 @@ export async function writeHooksJsonRemote(
   let existingContent: string | null = null
   try {
     existingContent = await readFile(sftp, remotePath)
-  } catch {
-    // ENOENT or read error — treat as absent and fall through to the write.
+  } catch (error) {
+    // Why: only a proven missing file may skip the pristine backup. Treating
+    // EACCES, timeout, or channel failure as absence could overwrite an
+    // existing settings file without its one-shot recovery copy.
+    if (!isNoEntryError(error)) {
+      throw error
+    }
   }
   if (existingContent === serialized) {
     return

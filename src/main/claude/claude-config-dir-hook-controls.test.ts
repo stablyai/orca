@@ -41,7 +41,9 @@ function seedConfigDir(name: string, marker = 'settings.json', content = '{}'): 
   return markerPath
 }
 
-function readSettings(name: string): { hooks?: Record<string, { hooks?: { command?: string }[] }[]> } {
+function readSettings(name: string): {
+  hooks?: Record<string, { hooks?: { command?: string }[] }[]>
+} {
   return JSON.parse(readFileSync(join(tmpHome, name, 'settings.json'), 'utf-8'))
 }
 
@@ -185,6 +187,52 @@ describe('removeLedgeredClaudeConfigDirHooks', () => {
     expect(statuses.map((s) => s.state)).toEqual(['error'])
     expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-grok'])
   })
+
+  it('preserves a concurrently installed dir when removal updates the ledger', () => {
+    seedConfigDir('.claude-old')
+    installDiscoveredClaudeConfigDirHooks({ ledgerPath })
+
+    const installedStatus: AgentHookInstallStatus = {
+      agent: 'claude',
+      state: 'installed',
+      configPath: '',
+      managedHooksPresent: true,
+      detail: null
+    }
+    const removedStatus: AgentHookInstallStatus = {
+      agent: 'claude',
+      state: 'not_installed',
+      configPath: '',
+      managedHooksPresent: false,
+      detail: null
+    }
+
+    removeLedgeredClaudeConfigDirHooks({
+      ledgerPath,
+      createService: () => ({
+        install: () => installedStatus,
+        getStatus: () => installedStatus,
+        remove: () => {
+          installDiscoveredClaudeConfigDirHooks({
+            homeDir: tmpHome,
+            ledgerPath,
+            discoveryFs: {
+              readdirNames: () => ['.claude-new'],
+              pathExists: () => true
+            },
+            createService: () => ({
+              install: () => installedStatus,
+              getStatus: () => installedStatus,
+              remove: () => removedStatus
+            })
+          })
+          return removedStatus
+        }
+      })
+    })
+
+    expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-new'])
+  })
 })
 
 describe('readClaudeConfigDirLedger', () => {
@@ -201,7 +249,16 @@ describe('readClaudeConfigDirLedger', () => {
       ledgerPath,
       JSON.stringify({
         version: 1,
-        configDirNames: ['.claude', '.openclaude', 'evil', '../escape', '.claude-ok']
+        configDirNames: [
+          '.claude',
+          '.openclaude',
+          'evil',
+          '../escape',
+          '.claude-foo/../../escape',
+          '.claude-foo\\..\\escape',
+          '.claude-..',
+          '.claude-ok'
+        ]
       })
     )
     expect(readClaudeConfigDirLedger(ledgerPath)).toEqual(['.claude-ok'])

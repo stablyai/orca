@@ -222,6 +222,29 @@ describe('installer-utils-remote', () => {
     expect(fs.files.get(`${path}.orca-backup`)).toBe(original)
   })
 
+  it('preserves an existing settings file when its pre-write read fails', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const path = '/home/u/.claude/settings.json'
+    const original = `${JSON.stringify({ hooks: {}, userKey: 'pristine' }, null, 2)}\n`
+    fs.files.set(path, original)
+    sftp.readFile = ((
+      _path: string,
+      _encoding: string,
+      callback: (error: unknown, data?: string) => void
+    ): void => {
+      callback({ code: 3, message: 'permission denied' })
+    }) as unknown as SFTPWrapper['readFile']
+
+    await expect(
+      writeHooksJsonRemote(sftp, path, {
+        hooks: { Stop: [{ hooks: [{ type: 'command', command: 'replacement' }] }] }
+      })
+    ).rejects.toMatchObject({ code: 3 })
+
+    expect(fs.files.get(path)).toBe(original)
+    expect(fs.files.has(`${path}.orca-backup`)).toBe(false)
+  })
+
   it('does not write a backup on first install (no pre-existing settings.json)', async () => {
     const { sftp, fs } = createFakeSftp()
     const path = '/home/u/.claude/settings.json'

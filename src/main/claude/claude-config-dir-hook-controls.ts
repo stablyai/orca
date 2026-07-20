@@ -6,18 +6,20 @@
 // dir Orca installed into, so uninstall cleans exactly the dirs it touched
 // even when discovery results change later (marker deleted, dir renamed).
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { getDefaultOrcaUserDataPath } from '../../shared/orca-user-data-path'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { ClaudeHookService } from './hook-service'
 import { createClaudeConfigDirHookService } from './hook-service'
 import {
   discoverLocalClaudeConfigDirNames,
-  isClaudeFlavorConfigDirName,
   type LocalClaudeConfigDirFs
 } from './claude-config-dir-discovery'
+import { readClaudeConfigDirLedger, updateClaudeConfigDirLedger } from './claude-config-dir-ledger'
+
+export { readClaudeConfigDirLedger } from './claude-config-dir-ledger'
 
 export const CLAUDE_CONFIG_DIR_LEDGER_FILE_NAME = 'claude-config-dirs.json'
 
@@ -35,8 +37,7 @@ function resolveUserDataPath(): string {
   // Lazy-require electron and fall back to the shared userData convention so
   // the app and the offline CLI resolve the same ledger file.
   try {
-    const electronApp = (require('electron') as { app?: { getPath(name: 'userData'): string } })
-      .app
+    const electronApp = (require('electron') as { app?: { getPath(name: 'userData'): string } }).app
     if (electronApp) {
       return electronApp.getPath('userData')
     }
@@ -51,34 +52,6 @@ export type ClaudeConfigDirHookControlsDeps = {
   discoveryFs?: LocalClaudeConfigDirFs
   ledgerPath?: string
   createService?: (dirName: string) => Pick<ClaudeHookService, 'install' | 'remove' | 'getStatus'>
-}
-
-export function readClaudeConfigDirLedger(ledgerPath: string): string[] {
-  try {
-    const parsed = JSON.parse(readFileSync(ledgerPath, 'utf-8')) as {
-      configDirNames?: unknown
-    }
-    if (Array.isArray(parsed?.configDirNames)) {
-      // Why: re-validate against the naming convention on read — a corrupted
-      // or tampered ledger must never drive writes into `.claude` itself or
-      // an arbitrary directory.
-      return parsed.configDirNames.filter(
-        (name): name is string => typeof name === 'string' && isClaudeFlavorConfigDirName(name)
-      )
-    }
-  } catch {
-    // Missing or corrupt ledger — treat as empty.
-  }
-  return []
-}
-
-function writeClaudeConfigDirLedger(ledgerPath: string, dirNames: string[]): void {
-  mkdirSync(dirname(ledgerPath), { recursive: true })
-  writeFileSync(
-    ledgerPath,
-    `${JSON.stringify({ version: 1, configDirNames: dirNames }, null, 2)}\n`,
-    'utf-8'
-  )
 }
 
 function configDirStillExists(
@@ -118,11 +91,12 @@ export function installDiscoveredClaudeConfigDirHooks(
   // Why: prune ledger entries whose dir the user deleted entirely — nothing is
   // left to clean there, and keeping them would pin the aggregated claude
   // status at 'partial' forever.
-  const stillPresent = readClaudeConfigDirLedger(ledgerPath).filter((dirName) =>
-    configDirStillExists(homeDir, dirName, deps.discoveryFs)
-  )
-  const tracked = [...new Set([...stillPresent, ...discovered])].sort()
-  writeClaudeConfigDirLedger(ledgerPath, tracked)
+  updateClaudeConfigDirLedger(ledgerPath, (current) => {
+    const stillPresent = current.filter((dirName) =>
+      configDirStillExists(homeDir, dirName, deps.discoveryFs)
+    )
+    return [...stillPresent, ...discovered]
+  })
   return discovered.map((dirName) => {
     let status: AgentHookInstallStatus
     try {
@@ -149,6 +123,7 @@ export function removeLedgeredClaudeConfigDirHooks(
   const createService = deps.createService ?? createClaudeConfigDirHookService
   const statuses: AgentHookInstallStatus[] = []
   const remaining: string[] = []
+  const removed = new Set<string>()
   for (const dirName of readClaudeConfigDirLedger(ledgerPath)) {
     let status: AgentHookInstallStatus
     try {
@@ -158,10 +133,15 @@ export function removeLedgeredClaudeConfigDirHooks(
     }
     if (status.state === 'error') {
       remaining.push(dirName)
+    } else {
+      removed.add(dirName)
     }
     statuses.push(status)
   }
-  writeClaudeConfigDirLedger(ledgerPath, remaining)
+  updateClaudeConfigDirLedger(ledgerPath, (current) => [
+    ...current.filter((dirName) => !removed.has(dirName)),
+    ...remaining
+  ])
   return statuses
 }
 

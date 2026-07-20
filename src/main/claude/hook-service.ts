@@ -63,16 +63,17 @@ function getManagedScript(
       'setlocal',
       ...(options.skipWhenDevinImportsClaude
         ? [
-            // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
-            `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
+            // Why: Devin imports only the default Claude hooks; alternate config-dir launches still need their own status.
+            'if "%DEVIN_PROJECT_DIR%"=="" goto :orca_devin_guard_done',
+            `if "%CLAUDE_CONFIG_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
+            `for %%I in ("%CLAUDE_CONFIG_DIR%") do if /I "%%~nxI"==".claude" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
+            ':orca_devin_guard_done'
           ]
         : []),
       // Why: call the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls through to PTY env if missing.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: avoid a second PowerShell startup; configDir distinguishes alternate Claude configs without exposing credentials.
-      // Why: configDir identifies which CLAUDE_CONFIG_DIR flavor posted (path
-      // string only — never tokens); empty/absent means the default install.
+      // Why: avoid a second PowerShell startup and identify the config-dir flavor without exposing credentials.
       buildWindowsAgentHookCurlPostCommand('claude', ['configDir=%CLAUDE_CONFIG_DIR%']),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
@@ -85,8 +86,9 @@ function getManagedScript(
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenDevinImportsClaude
       ? [
-          // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
-          'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
+          // Why: Devin imports only the default Claude hooks; alternate config-dir launches still need their own status.
+          'orca_claude_config_dir=${CLAUDE_CONFIG_DIR%/}',
+          'if [ -n "$DEVIN_PROJECT_DIR" ] && { [ -z "$orca_claude_config_dir" ] || [ "${orca_claude_config_dir##*/}" = ".claude" ]; }; then',
           '  exit 0',
           'fi'
         ]
@@ -314,7 +316,7 @@ export class ClaudeHookService {
     // between our read and replace must be re-merged, not overwritten. The
     // null return keeps the no-op guarantee: nothing managed present means no
     // write at all (no file/dir creation, no reformat, no .bak roll).
-    updateHooksJsonWithRetry(configPath, (current) => {
+    const updated = updateHooksJsonWithRetry(configPath, (current) => {
       const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
         current,
         getManagedScriptFileName(this.options.settings)
@@ -325,6 +327,15 @@ export class ClaudeHookService {
       )
       return hooksChanged || statusLineChanged ? nextConfig : null
     })
+    if (!updated) {
+      return {
+        agent: this.options.agent,
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: `Could not parse ${this.options.displayName} settings.json`
+      }
+    }
     if (this.options.agent === 'claude') {
       try {
         // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
