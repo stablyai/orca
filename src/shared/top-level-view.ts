@@ -14,5 +14,7 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
 }
 
 export function isTopLevelView(value: unknown): value is TopLevelView {
-  return typeof value === 'string' && value in TOP_LEVEL_VIEW_LOOKUP
+  // Why: hasOwn (not `in`) so inherited keys like "constructor"/"__proto__" from a
+  // corrupt sidecar can't pass as a view and leave the main surface blank.
+  return typeof value === 'string' && Object.hasOwn(TOP_LEVEL_VIEW_LOOKUP, value)
 }

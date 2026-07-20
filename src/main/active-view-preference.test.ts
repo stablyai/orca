@@ -77,4 +77,15 @@ describe('ActiveViewPreference', () => {
     expect(preference.set('also-not-a-view')).toBe(false)
     expect(preference.get()).toBe('terminal')
   })
+
+  it('rejects inherited object keys from a corrupt sidecar', () => {
+    // Why: `constructor`/`__proto__` are truthy under `in`; the sidecar must not
+    // treat them as a valid view and leave the main surface blank.
+    writeFileSync(getActiveViewPreferenceFile(dataFile), '{"activeView":"constructor"}', 'utf-8')
+    const preference = new ActiveViewPreference(dataFile, 'tasks')
+
+    expect(preference.get()).toBe('tasks')
+    expect(preference.set('__proto__')).toBe(false)
+    expect(preference.get()).toBe('tasks')
+  })
 })

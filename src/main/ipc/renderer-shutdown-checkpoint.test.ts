@@ -81,4 +81,44 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
     expect(event.returnValue).toEqual({ ok: false })
   })
+
+  it('still flushes the active-view sidecar when the durable flush throws', () => {
+    // Why: the two stores are independent; a durable-state failure must not drop
+    // the tiny active-view checkpoint (and vice versa).
+    const store = {
+      setWorkspaceSession: vi.fn(),
+      updateUI: vi.fn(),
+      flushOrThrow: vi.fn(() => {
+        throw new Error('disk full')
+      }),
+      flushActiveViewPreferenceOrThrow: vi.fn()
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const event: { returnValue?: unknown } = {}
+    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
+
+    expect(store.flushActiveViewPreferenceOrThrow).toHaveBeenCalledTimes(1)
+    expect(event.returnValue).toEqual({ ok: false })
+  })
+
+  it('flushes the durable store even when the active-view flush throws', () => {
+    const store = {
+      setWorkspaceSession: vi.fn(),
+      updateUI: vi.fn(),
+      flushOrThrow: vi.fn(),
+      flushActiveViewPreferenceOrThrow: vi.fn(() => {
+        throw new Error('disk full')
+      })
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+
+    const handler = syncHandlers.get('app:persist-before-unload-sync')
+    const event: { returnValue?: unknown } = {}
+    handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
+
+    expect(store.flushOrThrow).toHaveBeenCalledTimes(1)
+    expect(event.returnValue).toEqual({ ok: false })
+  })
 })

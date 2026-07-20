@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { TopLevelView } from '../shared/types'
 import { isTopLevelView } from '../shared/top-level-view'
@@ -94,14 +94,15 @@ export class ActiveViewPreference {
     try {
       await mkdir(dirname(this.file), { recursive: true })
       await writeFile(tmpFile, serializeActiveView(activeView), 'utf-8')
+      // Why: keep the generation guard and the swap synchronous (no await between),
+      // or a concurrent flushOrThrow could rename a newer view that this stale write
+      // then clobbers, restoring the prior view on next launch.
       if (generation !== this.writeGeneration) {
         return
       }
-      await rename(tmpFile, this.file)
+      renameSync(tmpFile, this.file)
       renamed = true
-      if (generation === this.writeGeneration) {
-        this.persistedActiveView = activeView
-      }
+      this.persistedActiveView = activeView
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
