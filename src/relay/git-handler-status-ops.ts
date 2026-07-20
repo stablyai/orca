@@ -157,8 +157,10 @@ export async function getStatusOp(
     }
 
     // Why: cap conflict lookups too so a conflict-heavy merge cannot bypass the status bound.
-    const unmergedLimit = didHitLimit ? Math.max(0, limit - entries.length) : unmergedLines.length
-    for (const uLine of unmergedLines.slice(0, unmergedLimit)) {
+    for (const uLine of unmergedLines) {
+      if (didHitLimit && entries.length >= limit) {
+        break
+      }
       const entry = parseUnmergedEntry(worktreePath, uLine)
       if (entry) {
         entries.push(entry)

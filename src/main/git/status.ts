@@ -306,10 +306,10 @@ async function runGetStatus(
   const { head, branch, upstreamName, upstreamAheadBehind } = parser.branch
 
   // Why: cap conflict lookups too so a conflict-heavy merge cannot bypass the status bound.
-  const unmergedLimit = didHitLimit
-    ? Math.max(0, limit - entries.length)
-    : parser.unmergedLines.length
-  for (const line of parser.unmergedLines.slice(0, unmergedLimit)) {
+  for (const line of parser.unmergedLines) {
+    if (didHitLimit && entries.length >= limit) {
+      break
+    }
     const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
     if (unmergedEntry) {
       entries.push(unmergedEntry)

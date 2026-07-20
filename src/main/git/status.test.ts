@@ -1688,10 +1688,13 @@ describe('getStatus', () => {
   it('caps unmerged conflicts and keeps the visible conflict rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(true)
-    const lines = Array.from(
-      { length: 4 },
-      (_, i) => `u UU N... 100644 100644 100644 100644 aa bb cc conflict-${i}.ts`
-    ).join('\n')
+    const lines = [
+      'u UU S... 160000 160000 160000 160000 aa bb cc vendor/submodule',
+      ...Array.from(
+        { length: 3 },
+        (_, i) => `u UU N... 100644 100644 100644 100644 aa bb cc conflict-${i}.ts`
+      )
+    ].join('\n')
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${lines}\n` })
 

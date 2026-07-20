@@ -129,6 +129,10 @@ export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, option
       }
     }
     function onAbort(): void {
+      if (!child.pid) {
+        // Why: failed spawn reports ENOENT after abort cleanup; handle it so it cannot crash the relay.
+        child.once('error', () => {})
+      }
       stopWithError(createAbortError())
     }
 

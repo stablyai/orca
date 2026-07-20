@@ -16,7 +16,7 @@ import { streamRelayGitStdout } from './git-stdout-stream'
 type MockChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
-  pid: number
+  pid?: number
 }
 
 function createChild(): MockChild {
@@ -96,6 +96,24 @@ describe('streamRelayGitStdout', () => {
 
     await rejection
     expect(terminateMock).toHaveBeenCalledWith(child)
+    expect(child.listenerCount('error')).toBe(0)
+  })
+
+  it('handles a late spawn error after abort cleanup', async () => {
+    const child = createChild()
+    child.pid = undefined
+    spawnMock.mockReturnValue(child)
+    const controller = new AbortController()
+    const pending = streamRelayGitStdout(['status'], '/repo', {
+      signal: controller.signal,
+      onStdout: () => {}
+    })
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+
+    controller.abort()
+    await rejection
+
+    expect(() => child.emit('error', new Error('spawn git ENOENT'))).not.toThrow()
     expect(child.listenerCount('error')).toBe(0)
   })
 
