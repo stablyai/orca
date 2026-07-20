@@ -25,6 +25,8 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { joinPath } from '@/lib/path'
+import { detectLanguage } from '@/lib/language-detect'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
@@ -60,7 +62,8 @@ import type {
   PRInfo,
   PRCheckDetail,
   PRCheckRunDetails,
-  PRComment
+  PRComment,
+  GitBranchChangeEntry
 } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
 import {
@@ -372,6 +375,8 @@ async function resolveGitLabMRDiscussionForChecks(args: {
   })
 }
 
+const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
+
 export default function ChecksPanel(): React.JSX.Element {
   // Why: the sidebar stays mounted when closed (for performance). Gate
   // polling on visibility so we don't fetch checks/comments — or poll the
@@ -421,6 +426,17 @@ export default function ChecksPanel(): React.JSX.Element {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const openModal = useAppStore((s) => s.openModal)
+  const openDiff = useAppStore((s) => s.openDiff)
+  const openBranchDiff = useAppStore((s) => s.openBranchDiff)
+  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+  const branchEntries = useAppStore((s) =>
+    activeWorktreeId
+      ? (s.gitBranchChangesByWorktree[activeWorktreeId] ?? EMPTY_BRANCH_CHANGE_ENTRIES)
+      : EMPTY_BRANCH_CHANGE_ENTRIES
+  )
+  const branchSummary = useAppStore((s) =>
+    activeWorktreeId ? (s.gitBranchCompareSummaryByWorktree[activeWorktreeId] ?? null) : null
+  )
 
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const fetchPRCheckDetails = useAppStore((s) => s.fetchPRCheckDetails)
@@ -2585,6 +2601,42 @@ export default function ChecksPanel(): React.JSX.Element {
               ? 'Open a GitLab MR before resolving comments.'
               : undefined
 
+  const handleNavigateToFiles = useCallback(
+    (comment?: PRComment) => {
+      if (!comment || !comment.path || !activeWorktreeId || !activeWorktreePath) {
+        setRightSidebarTab('source-control')
+        return
+      }
+      // Why: set scrollToDiffCommentId so Monaco editor automatically scrolls to the comment line.
+      setScrollToDiffCommentId(`github-pr-comment:${comment.id}`)
+
+      const commentPathNormalized = comment.path.replace(/\\/g, '/').toLowerCase()
+      const branchEntry = branchEntries.find(
+        (e) => e.path.replace(/\\/g, '/').toLowerCase() === commentPathNormalized
+      )
+      // Why: prefer showing the branch compare diff for PR comments so changes are highlighted, falling back to local diff.
+      if (branchEntry && branchSummary?.status === 'ready') {
+        const language = detectLanguage(comment.path)
+        openBranchDiff(activeWorktreeId, activeWorktreePath, branchEntry, branchSummary, language)
+      } else {
+        const filePath = joinPath(activeWorktreePath, comment.path)
+        const language = detectLanguage(comment.path)
+        openDiff(activeWorktreeId, filePath, comment.path, language, false)
+      }
+      setRightSidebarTab('files')
+    },
+    [
+      activeWorktreeId,
+      activeWorktreePath,
+      branchEntries,
+      branchSummary,
+      openBranchDiff,
+      openDiff,
+      setRightSidebarTab,
+      setScrollToDiffCommentId
+    ]
+  )
+
   const handleAddPRComment = useCallback(
     async (body: string) => {
       if (!repo || !prNumber || !pr?.prRepo) {
@@ -3833,6 +3885,7 @@ export default function ChecksPanel(): React.JSX.Element {
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
         onEditComment={pr ? handleEditComment : undefined}
         onDeleteComment={pr ? handleDeleteComment : undefined}
+        onNavigateToFiles={handleNavigateToFiles}
       />
       <SourceControlAgentActionDialog
         open={sourceControlAiActionsVisible && agentComposerState !== null}

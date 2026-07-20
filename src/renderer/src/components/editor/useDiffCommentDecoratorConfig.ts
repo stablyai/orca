@@ -1,6 +1,9 @@
 import type { editor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
-import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
+import {
+  useDiffCommentDecorator,
+  type DecoratedDiffComment
+} from '../diff-comments/useDiffCommentDecorator'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 
 export function useDiffCommentDecoratorConfig({
@@ -22,16 +25,11 @@ export function useDiffCommentDecoratorConfig({
   modifiedEditor: editor.ICodeEditor | null
   relativePath: string
   worktreeId: string | undefined
-  allComments: {
-    id: string
-    lineNumber: number
-    startLine?: number
-    body: string
-  }[]
-  commentableLineNumbers: Set<number> | undefined
+  allComments: DecoratedDiffComment[]
+  commentableLineNumbers: readonly number[] | undefined
   addLineCommentLabel: string | undefined
   deleteDiffComment: (worktreeId: string, id: string) => void
-  updateDiffComment: (worktreeId: string, id: string, body: string) => void
+  updateDiffComment: (worktreeId: string, id: string, body: string) => Promise<boolean>
   pendingScrollForThisViewer: string | null
   setScrollToDiffCommentId: (id: string | null) => void
   diffBodyRef: React.RefObject<HTMLDivElement | null>

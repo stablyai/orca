@@ -213,7 +213,10 @@ export function useSavedSourceControlAgentActionAutoStart({
   useEffect(() => {
     if (!open) {
       autoStartedOpenCycleRef.current = 0
-      setReceiptState(null)
+      // Why: prevent infinite re-render loops when dialog is closed and dependencies (e.g. detectedAgents) are unstable.
+      if (receiptState !== null) {
+        setReceiptState(null)
+      }
       return
     }
     if (receiptState?.openCycle !== openCycle) {
@@ -222,6 +225,7 @@ export function useSavedSourceControlAgentActionAutoStart({
         receiptKey: receiptKey ?? NO_SAVED_RECEIPT_KEY,
         revealed: !receiptKey
       })
+      return
     }
     if (!matchedSavedReceiptTargetValue || !receiptKey || !savedAgentId) {
       return

@@ -1663,7 +1663,8 @@ function CommentRow({
   onReply,
   onEditComment,
   onDeleteComment,
-  onQueueForAgent
+  onQueueForAgent,
+  onNavigateToFiles
 }: {
   comment: PRComment
   botAuthorOverrides: ReadonlySet<string>
@@ -1681,6 +1682,7 @@ function CommentRow({
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
+  onNavigateToFiles?: (comment: PRComment) => void
 }): React.JSX.Element {
   const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
@@ -1818,10 +1820,24 @@ function CommentRow({
           </span>
         ) : null}
         {comment.path ? (
-          <span className={presentation.pathBadge} title={comment.path}>
-            {comment.path.split('/').pop()}
-            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              if (comment.path) {
+                onNavigateToFiles?.(comment)
+                useAppStore.getState().setScrollToDiffCommentId(`github-pr-comment:${comment.id}`)
+              }
+            }}
+            className="cursor-pointer hover:underline text-left"
+            title={comment.path}
+          >
+            <span className={presentation.pathBadge}>
+              {comment.path.split('/').pop()}
+              {formatLineRange(comment) && `:${formatLineRange(comment)}`}
+            </span>
+          </button>
         ) : null}
         <PRCommentActionBadge
           actionState={actionState}
@@ -1864,10 +1880,23 @@ function CommentRow({
           </span>
         )}
         {!isReply && comment.path && (
-          <span className={presentation.pathBadge}>
-            {comment.path.split('/').pop()}
-            {formatLineRange(comment) && `:${formatLineRange(comment)}`}
-          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              if (comment.path) {
+                onNavigateToFiles?.(comment)
+                useAppStore.getState().setScrollToDiffCommentId(`github-pr-comment:${comment.id}`)
+              }
+            }}
+            className="cursor-pointer hover:underline text-left"
+          >
+            <span className={presentation.pathBadge}>
+              {comment.path.split('/').pop()}
+              {formatLineRange(comment) && `:${formatLineRange(comment)}`}
+            </span>
+          </button>
         )}
         {!isReply ? (
           <PRCommentActionBadge
@@ -1967,7 +1996,8 @@ function PRCommentGroupView({
   onReply,
   onEditComment,
   onDeleteComment,
-  onQueueForAgent
+  onQueueForAgent,
+  onNavigateToFiles
 }: {
   group: PRCommentGroup
   botAuthorOverrides: ReadonlySet<string>
@@ -1985,6 +2015,7 @@ function PRCommentGroupView({
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
+  onNavigateToFiles?: (comment: PRComment) => void
 }): React.JSX.Element {
   // Reply targets a specific comment id so any comment in a thread — root or
   // nested reply — can be replied to, not just the thread root.
@@ -2021,7 +2052,8 @@ function PRCommentGroupView({
     onResolve,
     onEditComment,
     onDeleteComment,
-    onQueueForAgent
+    onQueueForAgent,
+    onNavigateToFiles
   }
 
   const content =
@@ -2103,7 +2135,8 @@ function ResolvedCommentGroupsSection({
   onCancelReply,
   onReply,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onNavigateToFiles
 }: {
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
@@ -2117,6 +2150,7 @@ function ResolvedCommentGroupsSection({
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onNavigateToFiles?: (comment: PRComment) => void
 }): React.JSX.Element | null {
   if (groups.length === 0) {
     return null
@@ -2152,6 +2186,7 @@ function ResolvedCommentGroupsSection({
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
+                onNavigateToFiles={onNavigateToFiles}
               />
             ))}
           </AccordionContent>
@@ -2218,7 +2253,8 @@ export function PRCommentsList({
   onReply,
   onResolve,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onNavigateToFiles
 }: {
   comments: PRComment[]
   commentsLoading: boolean
@@ -2235,6 +2271,7 @@ export function PRCommentsList({
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
+  onNavigateToFiles?: (comment: PRComment) => void
 }): React.JSX.Element {
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
@@ -2358,6 +2395,7 @@ export function PRCommentsList({
         onEditComment={onEditComment}
         onDeleteComment={onDeleteComment}
         onQueueForAgent={canQueue ? () => addGroupToSelection(groupId) : undefined}
+        onNavigateToFiles={onNavigateToFiles}
       />
     )
   }
@@ -2687,6 +2725,7 @@ export function PRCommentsList({
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}
+                onNavigateToFiles={onNavigateToFiles}
               />
             </>
           )}

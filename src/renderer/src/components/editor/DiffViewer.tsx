@@ -134,7 +134,15 @@ export default function DiffViewer({
     if (!worktreeId || !scrollToDiffCommentId) {
       return null
     }
-    return allComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
+    // Why: match scroll requests by either full ID, pr-prefixed ID, or raw ID from github-pr-comment prefix.
+    const targetComment = allComments.find(
+      (c) =>
+        c.id === scrollToDiffCommentId ||
+        c.id === `pr-${scrollToDiffCommentId}` ||
+        (scrollToDiffCommentId.startsWith('github-pr-comment:') &&
+          c.id === `pr-${scrollToDiffCommentId.substring('github-pr-comment:'.length)}`)
+    )
+    return targetComment ? targetComment.id : null
   }, [scrollToDiffCommentId, allComments, worktreeId])
 
   useDiffCommentDecoratorConfig({

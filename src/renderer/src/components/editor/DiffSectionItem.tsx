@@ -80,11 +80,7 @@ export function DiffSectionItem({
   renderHeaderTrailingContent?: (section: DiffSection, index: number) => ReactNode
   onAddLineComment?: (
     section: DiffSection,
-    args: {
-      lineNumber: number
-      startLine?: number
-      body: string
-    }
+    args: { lineNumber: number; startLine?: number; body: string }
   ) => Promise<boolean>
   addLineCommentLabel?: string
   addLineCommentPlaceholder?: string
@@ -163,15 +159,20 @@ export function DiffSectionItem({
     }
   }, [disposeDiffModels, section.collapsed])
 
-  // Why: only forward the pending scroll id when it matches a comment in this
-  // section so unrelated sections don't keep re-rendering their decorator
-  // every time the sidebar requests a scroll elsewhere.
   const pendingScrollForThisSection = useMemo(() => {
     if (!scrollToDiffCommentId) {
       return null
     }
-    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
-  }, [scrollToDiffCommentId, diffComments])
+    // Why: match scroll requests by either full ID, pr-prefixed ID, or raw ID from github-pr-comment prefix.
+    const targetComment = (inlineComments ?? (worktreeId ? diffComments : [])).find(
+      (c) =>
+        c.id === scrollToDiffCommentId ||
+        c.id === `pr-${scrollToDiffCommentId}` ||
+        (scrollToDiffCommentId.startsWith('github-pr-comment:') &&
+          c.id === `pr-${scrollToDiffCommentId.substring('github-pr-comment:'.length)}`)
+    )
+    return targetComment ? targetComment.id : null
+  }, [scrollToDiffCommentId, diffComments, inlineComments, worktreeId])
 
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
