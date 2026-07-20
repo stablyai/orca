@@ -10,9 +10,7 @@ import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixt
 
 const { muxRequestMock } = vi.hoisted(() => ({ muxRequestMock: vi.fn() }))
 
-vi.mock('./ssh-relay-deploy', () => ({
-  deployAndLaunchRelay: vi.fn()
-}))
+vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn().mockResolvedValue('')
@@ -47,10 +45,7 @@ vi.mock('../providers/ssh-pty-provider', () => ({
   }
 }))
 
-vi.mock('../herdr/herdr-provider-factory', () => ({
-  createSshHerdrPtyProvider: (provider: unknown) => provider
-}))
-
+vi.mock('../herdr/herdr-provider-factory', () => ({ createSshHerdrPtyProvider: (p: unknown) => p }))
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
