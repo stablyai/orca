@@ -6865,7 +6865,11 @@
             "fastDescription": "按住修饰键滚动时的额外倍数。",
             "tui": "TUI",
             "tuiDescription": "面向全屏终端应用的离散滚轮报告。"
-          }
+          },
+          "behavior_title": "Terminal Behavior",
+          "behavior_description": "Command input behavior for terminal panes.",
+          "autosuggest_title": "Command Autosuggest",
+          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "预览 {{value0}} 主题",
@@ -8573,7 +8577,9 @@
               "title": "主题模式",
               "keyword_target": "目标",
               "keyword_editing": "编辑"
-            }
+            },
+            "autosuggest_title": "Command Autosuggest",
+            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
           },
           "windows": {
             "search": {

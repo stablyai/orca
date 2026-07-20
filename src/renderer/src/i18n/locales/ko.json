@@ -6865,7 +6865,11 @@
             "fastDescription": "수정 키로 스크롤할 때 적용되는 추가 배율.",
             "tui": "TUI",
             "tuiDescription": "전체 화면 터미널 앱을 위한 개별 휠 보고."
-          }
+          },
+          "behavior_title": "Terminal Behavior",
+          "behavior_description": "Command input behavior for terminal panes.",
+          "autosuggest_title": "Command Autosuggest",
+          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} 테마 미리보기",
@@ -8573,7 +8577,9 @@
               "title": "테마 모드",
               "keyword_target": "대상",
               "keyword_editing": "편집"
-            }
+            },
+            "autosuggest_title": "Command Autosuggest",
+            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
           },
           "windows": {
             "search": {

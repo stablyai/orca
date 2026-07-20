@@ -6902,7 +6902,11 @@
             "fastDescription": "修飾キーを押しながらスクロールするときの追加倍率。",
             "tui": "TUI",
             "tuiDescription": "全画面ターミナルアプリ向けの離散的なホイール通知。"
-          }
+          },
+          "behavior_title": "Terminal Behavior",
+          "behavior_description": "Command input behavior for terminal panes.",
+          "autosuggest_title": "Command Autosuggest",
+          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "{{value0}} テーマのプレビュー",
@@ -8610,7 +8614,9 @@
               "title": "テーマモード",
               "keyword_target": "対象",
               "keyword_editing": "編集"
-            }
+            },
+            "autosuggest_title": "Command Autosuggest",
+            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
           },
           "windows": {
             "search": {

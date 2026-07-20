@@ -6940,7 +6940,11 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
-          }
+          },
+          "behavior_title": "Terminal Behavior",
+          "behavior_description": "Command input behavior for terminal panes.",
+          "autosuggest_title": "Command Autosuggest",
+          "autosuggest_description": "Show an inline suggestion from prior commands as you type; accept with the Right Arrow or End key."
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -8648,7 +8652,9 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "autosuggest_title": "Command Autosuggest",
+            "autosuggest_description": "Show an inline ghost-text suggestion from prior commands while typing at a shell prompt."
           },
           "windows": {
             "search": {
