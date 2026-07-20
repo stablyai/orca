@@ -3,129 +3,170 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Mic, Square } from 'lucide-react-native'
-import {
-  initialize,
-  tearDown,
-  toggleRecording,
-  useMicrophonePermissions,
-  useExpoTwoWayAudioEventListener
-} from '@orca/expo-two-way-audio'
+import { playPCMData, useExpoTwoWayAudioEventListener } from '@orca/expo-two-way-audio'
+import { loadHosts } from '../src/transport/host-store'
+import { useAllHostClients } from '../src/transport/client-context'
+import { useMobileDictation } from '../src/hooks/use-mobile-dictation'
+import { synthesizeViaMesh } from '../src/voice/mesh-voice-turn'
 import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 
-// A1 shell: dedicated Voice page. Talk control + live input waveform driven by
-// @orca/expo-two-way-audio volume events, plus the turn state machine. The
-// STT -> agent-PTY inject -> TTS return path is wired in A2 (see
-// plans/active/2026-07-20-orca-mobile-voice-pet-canvas.md); until then the
-// talk control records locally so the waveform + permission flow are
-// dogfoolable end to end on the Nord.
+// A2: the live voice turn. Input is Orca's NATIVE dictation
+// (useMobileDictation -> on-device Parakeet -> transcript); we do not
+// reimplement STT or terminal inject. Our only addition is TTS-back — speaking
+// the transcript aloud via the mesh Kokoro route, which native Orca voice does
+// not do. See plans/active/2026-07-20-orca-mobile-voice-pet-canvas.md.
 
-type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
 type TalkMode = 'hold' | 'toggle'
 
 const WAVE_BARS = 32
 
-const STATE_LABEL: Record<VoiceState, string> = {
-  idle: 'Tap to talk',
-  listening: 'Listening…',
-  processing: 'Thinking…',
-  speaking: 'Speaking…',
-  error: 'Something went wrong'
-}
-
 export default function VoiceScreen(): React.JSX.Element {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [permission, requestPermission] = useMicrophonePermissions()
-  const [state, setState] = useState<VoiceState>('idle')
   const [mode, setMode] = useState<TalkMode>('hold')
   const [levels, setLevels] = useState<number[]>(() => Array.from({ length: WAVE_BARS }, () => 0))
   const [transcript, setTranscript] = useState<string>('')
-  const audioReady = useRef(false)
-  const processingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [speaking, setSpeaking] = useState(false)
+  const speakingRef = useRef(false)
+  speakingRef.current = speaking
+  const speakTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [hostIds, setHostIds] = useState<string[]>([])
+  useEffect(() => {
+    loadHosts()
+      .then((hs) => setHostIds(hs.map((h) => h.id)))
+      .catch(() => {
+        // no hosts is fine; dictation stays disabled until one connects
+      })
+  }, [])
+  const clients = useAllHostClients(hostIds)
+  const primaryClient = useMemo(
+    () => clients.find((c) => c.state === 'connected')?.client ?? null,
+    [clients]
+  )
+
+  const speakBack = useCallback((text: string) => {
+    if (!text) {
+      return
+    }
+    setSpeaking(true)
+    synthesizeViaMesh(text)
+      .then((pcm16) => {
+        // eslint-disable-next-line no-console
+        console.log('[voice] tts pcm16 bytes', pcm16.byteLength)
+        playPCMData(pcm16)
+        const ms = (pcm16.byteLength / 2 / 16000) * 1000
+        speakTimer.current = setTimeout(() => setSpeaking(false), Math.min(ms + 500, 30000))
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.log('[voice] tts error', String(err))
+        setSpeaking(false)
+      })
+  }, [])
+
+  const [noSpeech, setNoSpeech] = useState(false)
+  const dictation = useMobileDictation({
+    client: primaryClient,
+    enabled: primaryClient !== null && !speaking,
+    onTranscript: (text) => {
+      const clean = text.trim()
+      if (!clean) {
+        setNoSpeech(true)
+        return
+      }
+      setTranscript(clean)
+      speakBack(clean)
+    },
+    onError: (err) => {
+      // "no speech" is a normal empty result, not a failure — keep it gentle.
+      if (/no speech/i.test(err.message)) {
+        setNoSpeech(true)
+      } else {
+        setTranscript(err.message)
+      }
+    }
+  })
 
   useEffect(() => {
-    let cancelled = false
-    initialize()
-      .then(() => {
-        if (!cancelled) {
-          audioReady.current = true
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setState('error')
-        }
-      })
     return () => {
-      cancelled = true
-      if (processingTimer.current) {
-        clearTimeout(processingTimer.current)
+      if (speakTimer.current) {
+        clearTimeout(speakTimer.current)
       }
-      try {
-        toggleRecording(false)
-      } catch {
-        // best effort on unmount
-      }
-      tearDown()
     }
   }, [])
 
-  // Push each input-volume sample into a fixed-width ring for the waveform.
-  useExpoTwoWayAudioEventListener('onInputVolumeLevelData', (event) => {
-    const v = Math.max(0, Math.min(1, event.data))
+  const pushLevel = useCallback((raw: number) => {
+    const v = Math.max(0, Math.min(1, raw))
     setLevels((prev) => {
       const next = prev.slice(1)
       next.push(v)
       return next
     })
+  }, [])
+  const isRecordingRef = useRef(false)
+  isRecordingRef.current = dictation.isRecording
+  // Waveform: mic level while dictating, playback level while speaking.
+  useExpoTwoWayAudioEventListener('onInputVolumeLevelData', (event) => {
+    if (isRecordingRef.current) {
+      pushLevel(event.data)
+    }
+  })
+  useExpoTwoWayAudioEventListener('onOutputVolumeLevelData', (event) => {
+    if (speakingRef.current) {
+      pushLevel(event.data)
+    }
   })
 
-  const stopListening = useCallback(() => {
-    try {
-      toggleRecording(false)
-    } catch {
-      // ignore
-    }
-    setLevels(Array.from({ length: WAVE_BARS }, () => 0))
-    // A2: hand the captured audio to mesh-stt-parakeet via the paired desktop,
-    // inject the transcript into the active agent PTY, then play the TTS reply.
-    setState('processing')
-    setTranscript('(transcription + agent reply wired in A2)')
-    processingTimer.current = setTimeout(() => setState('idle'), 900)
-  }, [])
-
-  const startListening = useCallback(async () => {
-    if (processingTimer.current) {
-      clearTimeout(processingTimer.current)
-      processingTimer.current = null
-    }
-    if (!permission?.granted) {
-      const res = await requestPermission()
-      if (!res.granted) {
-        setState('error')
-        return
-      }
+  const startTalk = useCallback(() => {
+    if (!primaryClient || speaking) {
+      return
     }
     setTranscript('')
-    setState('listening')
-    try {
-      toggleRecording(true)
-    } catch {
-      setState('error')
+    setNoSpeech(false)
+    void dictation.start()
+  }, [primaryClient, speaking, dictation])
+  const stopTalk = useCallback(() => {
+    if (dictation.isRecording) {
+      setLevels(Array.from({ length: WAVE_BARS }, () => 0))
+      void dictation.stop()
     }
-  }, [permission, requestPermission])
+  }, [dictation])
 
   const onTalkPress = useCallback(() => {
-    if (mode === 'toggle') {
-      if (state === 'listening') {
-        stopListening()
-      } else {
-        void startListening()
-      }
+    if (mode !== 'toggle') {
+      return
     }
-  }, [mode, state, startListening, stopListening])
+    if (dictation.isRecording) {
+      stopTalk()
+    } else {
+      startTalk()
+    }
+  }, [mode, dictation.isRecording, startTalk, stopTalk])
 
-  const isListening = state === 'listening'
+  const stateLabel = useMemo(() => {
+    if (speaking) {
+      return 'Speaking…'
+    }
+    if (noSpeech) {
+      return 'No speech — tap to talk'
+    }
+    switch (dictation.status) {
+      case 'starting':
+        return 'Starting…'
+      case 'recording':
+        return 'Listening…'
+      case 'processing':
+        return 'Transcribing…'
+      case 'error':
+        return 'Something went wrong'
+      default:
+        return primaryClient ? 'Tap to talk' : 'Connect a desktop to talk'
+    }
+  }, [speaking, noSpeech, dictation.status, primaryClient])
+
+  const isActive = dictation.isRecording || speaking
+  const isBusy = dictation.isProcessing || dictation.isStarting || speaking
   const talkHint = useMemo(
     () => (mode === 'hold' ? 'Hold to talk' : 'Tap to start / stop'),
     [mode]
@@ -141,9 +182,9 @@ export default function VoiceScreen(): React.JSX.Element {
       </View>
 
       <View style={styles.targetRow}>
-        <Text style={styles.targetLabel}>Target</Text>
+        <Text style={styles.targetLabel}>Input</Text>
         <View style={styles.targetChip}>
-          <Text style={styles.targetChipText}>Active terminal</Text>
+          <Text style={styles.targetChipText}>Orca dictation · speak-back on</Text>
         </View>
       </View>
 
@@ -156,13 +197,13 @@ export default function VoiceScreen(): React.JSX.Element {
                 styles.waveBar,
                 {
                   height: 4 + lvl * 96,
-                  backgroundColor: isListening ? colors.accentBlue : colors.borderSubtle
+                  backgroundColor: isActive ? colors.accentBlue : colors.borderSubtle
                 }
               ]}
             />
           ))}
         </View>
-        <Text style={styles.stateLabel}>{STATE_LABEL[state]}</Text>
+        <Text style={styles.stateLabel}>{stateLabel}</Text>
         <ScrollView style={styles.transcript} contentContainerStyle={styles.transcriptContent}>
           <Text style={styles.transcriptText}>{transcript || talkHint}</Text>
         </ScrollView>
@@ -184,16 +225,17 @@ export default function VoiceScreen(): React.JSX.Element {
         </View>
 
         <Pressable
-          style={[styles.talkButton, isListening && styles.talkButtonActive]}
+          style={[styles.talkButton, dictation.isRecording && styles.talkButtonActive]}
           onPress={onTalkPress}
-          onPressIn={mode === 'hold' ? () => void startListening() : undefined}
-          onPressOut={mode === 'hold' ? stopListening : undefined}
-          accessibilityLabel={isListening ? 'Stop talking' : 'Talk'}
+          onPressIn={mode === 'hold' && !isBusy ? startTalk : undefined}
+          onPressOut={mode === 'hold' ? stopTalk : undefined}
+          disabled={!primaryClient || (isBusy && !dictation.isRecording)}
+          accessibilityLabel={dictation.isRecording ? 'Stop talking' : 'Talk'}
         >
-          {isListening ? (
+          {dictation.isRecording ? (
             <Square size={30} color={colors.onAccent} fill={colors.onAccent} />
           ) : (
-            <Mic size={34} color={colors.textPrimary} />
+            <Mic size={34} color={primaryClient ? colors.textPrimary : colors.textMuted} />
           )}
         </Pressable>
         <Text style={styles.talkHint}>{talkHint}</Text>
