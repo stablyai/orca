@@ -12,9 +12,9 @@ import { decodeGitCQuotedPath } from './git-cquoted-path'
  * carried across chunks.
  *
  * Sync record types (1/2/?/!) are parsed into `entries`/`ignoredPaths` here.
- * Unmerged (`u`) records need async per-file git lookups, so their raw lines are
- * collected and resolved by the caller after the stream ends — they signal
- * conflict states and are never the source of huge output.
+ * Unmerged (`u`) records need per-file worktree lookups, so their raw lines are
+ * collected and resolved by the caller after the stream ends. They still count
+ * toward the limit so a conflict-heavy merge cannot bypass the cap.
  */
 export type BranchMetadata = {
   head?: string
@@ -123,6 +123,7 @@ export class StatusPorcelainParser {
       return
     }
     if (line.startsWith('u ')) {
+      this.count += 1
       this.unmergedLines.push(line)
     }
   }

@@ -1685,6 +1685,26 @@ describe('getStatus', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
+  it('caps unmerged conflicts and keeps the visible conflict rows', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(true)
+    const lines = Array.from(
+      { length: 4 },
+      (_, i) => `u UU N... 100644 100644 100644 100644 aa bb cc conflict-${i}.ts`
+    ).join('\n')
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `${lines}\n` })
+
+    const result = await getStatus('/repo', { limit: 2 })
+
+    expect(result.didHitLimit).toBe(true)
+    expect(result.statusLength).toBe(3)
+    expect(result.entries).toHaveLength(2)
+    expect(result.entries.map((entry) => entry.path)).toEqual(['conflict-0.ts', 'conflict-1.ts'])
+    expect(result.entries.every((entry) => entry.conflictStatus === 'unresolved')).toBe(true)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not flag didHitLimit for a normal repo under the limit', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)

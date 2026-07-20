@@ -154,12 +154,14 @@ export async function getStatusOp(
           }
         }
       }
+    }
 
-      for (const uLine of unmergedLines) {
-        const entry = parseUnmergedEntry(worktreePath, uLine)
-        if (entry) {
-          entries.push(entry)
-        }
+    // Why: cap conflict lookups too so a conflict-heavy merge cannot bypass the status bound.
+    const unmergedLimit = didHitLimit ? Math.max(0, limit - entries.length) : unmergedLines.length
+    for (const uLine of unmergedLines.slice(0, unmergedLimit)) {
+      const entry = parseUnmergedEntry(worktreePath, uLine)
+      if (entry) {
+        entries.push(entry)
       }
     }
   } catch (error) {

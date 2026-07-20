@@ -64,6 +64,7 @@ describe('StatusPorcelainParser', () => {
     parser.finish()
     expect(parser.entries).toEqual([])
     expect(parser.unmergedLines).toHaveLength(1)
+    expect(parser.statusLength).toBe(1)
   })
 
   it('carries a partial trailing line across chunk boundaries', () => {
@@ -91,6 +92,16 @@ describe('StatusPorcelainParser', () => {
     expect(stopped).toBe(true)
     // The fourth entry (index 3) is what pushed count past the limit of 3.
     expect(parser.entries.length).toBe(4)
+    expect(parser.statusLength).toBe(4)
+  })
+
+  it('counts unmerged records toward the stop limit', () => {
+    const parser = new StatusPorcelainParser()
+    const line = 'u UU N... 100644 100644 100644 100644 aa bb cc conflicted.ts\n'
+    const stopped = parser.update(line.repeat(4), 3)
+
+    expect(stopped).toBe(true)
+    expect(parser.unmergedLines).toHaveLength(4)
     expect(parser.statusLength).toBe(4)
   })
 

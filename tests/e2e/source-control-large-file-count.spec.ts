@@ -36,7 +36,7 @@ const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
 
 // A virtualized list mounts viewport + overscan rows only; anything past this
 // bound means the panel is mounting rows proportional to the change set again.
-const MAX_MOUNTED_ROWS = 1_000
+const MAX_MOUNTED_ROWS = 200
 const MAX_CAPPED_STATUS_PAYLOAD_BYTES = 200_000
 
 type LoadMeasurement = {
@@ -264,7 +264,7 @@ test.describe('Source Control large file count (#8013)', () => {
   // failing scale must not skip the others — every scenario is a data point.
   test.use({ seedTestRepo: false })
 
-  test('thousands of untracked files under the status cap stay responsive', async ({
+  test('a large untracked set under the status cap stays responsive', async ({
     orcaPage,
     electronApp,
     registerPostElectronShutdownCleanup
@@ -316,7 +316,7 @@ test.describe('Source Control large file count (#8013)', () => {
     }
   })
 
-  test('thousands of modified tracked files under the status cap stay responsive', async ({
+  test('a large modified set under the status cap stays responsive', async ({
     orcaPage,
     electronApp,
     registerPostElectronShutdownCleanup
