@@ -482,6 +482,33 @@ describe('orca root help', () => {
     )
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  it('documents the terminal read --json result schema in command help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['terminal', 'read', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    // Why: the RuntimeTerminalRead fields are otherwise only surfaced as loose
+    // text in the human formatter; --help is where consumers look them up.
+    expect(help).toContain('orca terminal read')
+    expect(help).toContain('--cursor <n>')
+    for (const field of [
+      'handle',
+      'status',
+      'tail',
+      'truncated',
+      'limited',
+      'oldestCursor',
+      'nextCursor',
+      'latestCursor',
+      'returnedLineCount'
+    ]) {
+      expect(help).toContain(field)
+    }
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('orca cli worktree awareness', () => {
