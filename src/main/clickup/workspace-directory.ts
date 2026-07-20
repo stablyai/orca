@@ -4,7 +4,12 @@ import type {
   ClickUpUser,
   ClickUpWorkspaceSelection
 } from '../../shared/types'
-import { clickUpRequest, getClients, type ClickUpClientForWorkspace } from './client'
+import {
+  clickUpRequest,
+  requireClickUpClient,
+  requireClickUpClients,
+  type ClickUpClientForWorkspace
+} from './client'
 import {
   asRecord,
   asString,
@@ -13,24 +18,6 @@ import {
   normalizeClickUpTag,
   normalizeClickUpUser
 } from './task-mapping'
-
-function requiredClient(workspaceId?: string): ClickUpClientForWorkspace {
-  const client = getClients(workspaceId)[0]
-  if (!client) {
-    throw new Error('Connect ClickUp and select a Workspace first.')
-  }
-  return client
-}
-
-function selectedClients(
-  workspaceId?: ClickUpWorkspaceSelection | null
-): ClickUpClientForWorkspace[] {
-  const clients = getClients(workspaceId)
-  if (clients.length === 0) {
-    throw new Error('Connect ClickUp and select a Workspace first.')
-  }
-  return clients
-}
 
 function normalizeList(
   value: unknown,
@@ -106,7 +93,7 @@ async function listsForWorkspace(client: ClickUpClientForWorkspace): Promise<Cli
 export async function listClickUpLists(
   workspaceId?: ClickUpWorkspaceSelection | null
 ): Promise<ClickUpList[]> {
-  const lists = await Promise.all(selectedClients(workspaceId).map(listsForWorkspace))
+  const lists = await Promise.all(requireClickUpClients(workspaceId).map(listsForWorkspace))
   return lists
     .flat()
     .sort((a, b) =>
@@ -117,7 +104,7 @@ export async function listClickUpLists(
 }
 
 export async function listClickUpWorkspaceMembers(workspaceId?: string): Promise<ClickUpUser[]> {
-  const client = requiredClient(workspaceId)
+  const client = requireClickUpClient(workspaceId)
   const response = await clickUpRequest<{ teams?: unknown[] }>(client, '/team')
   const workspace = (response.teams ?? [])
     .map(asRecord)
@@ -128,7 +115,7 @@ export async function listClickUpWorkspaceMembers(workspaceId?: string): Promise
 }
 
 export async function listClickUpWorkspaceTags(workspaceId?: string): Promise<ClickUpTag[]> {
-  const client = requiredClient(workspaceId)
+  const client = requireClickUpClient(workspaceId)
   const response = await clickUpRequest<{ tags?: unknown[] }>(
     client,
     `/team/${encodeURIComponent(client.workspace.id)}/tag`

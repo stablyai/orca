@@ -10,8 +10,9 @@ import type {
 import {
   ClickUpApiError,
   clickUpRequest,
-  getClients,
   getStatus,
+  requireClickUpClient,
+  requireClickUpClients,
   type ClickUpClientForWorkspace
 } from './client'
 import { dueDateToTimestamp, normalizeClickUpTask, type JsonRecord } from './task-mapping'
@@ -28,24 +29,6 @@ export {
 
 const TASK_PAGE_SIZE = 100
 const MAX_SEARCH_PAGES = 10
-
-function getRequiredClient(workspaceId?: string): ClickUpClientForWorkspace {
-  const client = getClients(workspaceId)[0]
-  if (!client) {
-    throw new Error('Connect ClickUp and select a Workspace first.')
-  }
-  return client
-}
-
-function selectedClients(
-  workspaceId?: ClickUpWorkspaceSelection | null
-): ClickUpClientForWorkspace[] {
-  const clients = getClients(workspaceId)
-  if (clients.length === 0) {
-    throw new Error('Connect ClickUp and select a Workspace first.')
-  }
-  return clients
-}
 
 function queryForTaskPage(
   page: number,
@@ -87,17 +70,37 @@ async function getWorkspaceTaskPage(
   client: ClickUpClientForWorkspace,
   page: number,
   filter: ClickUpTaskFilter
-): Promise<ClickUpTask[]> {
+): Promise<{ rawCount: number; tasks: ClickUpTask[] }> {
   const viewerId = getStatus().viewer?.id
   const query = queryForTaskPage(page, filter, viewerId)
   const response = await clickUpRequest<{ tasks?: unknown[] }>(
     client,
     `/team/${encodeURIComponent(client.workspace.id)}/task?${query}`
   )
-  return (response.tasks ?? [])
-    .map((task) => normalizeClickUpTask(task, client))
-    .filter((task): task is ClickUpTask => task !== null)
-    .filter((task) => matchesClientFilter(task, filter, viewerId))
+  const rawTasks = response.tasks ?? []
+  return {
+    rawCount: rawTasks.length,
+    tasks: rawTasks
+      .map((task) => normalizeClickUpTask(task, client))
+      .filter((task): task is ClickUpTask => task !== null)
+      .filter((task) => matchesClientFilter(task, filter, viewerId))
+  }
+}
+
+async function listWorkspaceTasks(
+  client: ClickUpClientForWorkspace,
+  filter: ClickUpTaskFilter,
+  limit: number
+): Promise<ClickUpTask[]> {
+  const matches: ClickUpTask[] = []
+  for (let page = 0; page < MAX_SEARCH_PAGES && matches.length < limit; page += 1) {
+    const result = await getWorkspaceTaskPage(client, page, filter)
+    matches.push(...result.tasks)
+    if (result.rawCount < TASK_PAGE_SIZE) {
+      break
+    }
+  }
+  return matches
 }
 
 export async function listTasks(
@@ -107,7 +110,9 @@ export async function listTasks(
 ): Promise<ClickUpTask[]> {
   const safeLimit = Math.min(Math.max(1, limit), TASK_PAGE_SIZE)
   const results = await Promise.all(
-    selectedClients(workspaceId).map((client) => getWorkspaceTaskPage(client, 0, filter))
+    requireClickUpClients(workspaceId).map((client) =>
+      listWorkspaceTasks(client, filter, safeLimit)
+    )
   )
   return results
     .flat()
@@ -125,27 +130,37 @@ export async function searchTasks(
     return []
   }
   const safeLimit = Math.min(Math.max(1, limit), 50)
-  const matches: ClickUpTask[] = []
-  for (const client of selectedClients(workspaceId)) {
-    for (let page = 0; page < MAX_SEARCH_PAGES && matches.length < safeLimit; page += 1) {
-      const tasks = await getWorkspaceTaskPage(client, page, 'all')
-      matches.push(
-        ...tasks.filter((task) =>
-          [task.id, task.customId, task.name, task.description]
-            .filter((value): value is string => Boolean(value))
-            .some((value) => value.toLocaleLowerCase().includes(needle))
+  const matches = await Promise.all(
+    requireClickUpClients(workspaceId).map(async (client) => {
+      const workspaceMatches: ClickUpTask[] = []
+      for (
+        let page = 0;
+        page < MAX_SEARCH_PAGES && workspaceMatches.length < safeLimit;
+        page += 1
+      ) {
+        const result = await getWorkspaceTaskPage(client, page, 'all')
+        workspaceMatches.push(
+          ...result.tasks.filter((task) =>
+            [task.id, task.customId, task.name, task.description]
+              .filter((value): value is string => Boolean(value))
+              .some((value) => value.toLocaleLowerCase().includes(needle))
+          )
         )
-      )
-      if (tasks.length < TASK_PAGE_SIZE) {
-        break
+        if (result.rawCount < TASK_PAGE_SIZE) {
+          break
+        }
       }
-    }
-  }
-  return matches.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, safeLimit)
+      return workspaceMatches
+    })
+  )
+  return matches
+    .flat()
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, safeLimit)
 }
 
 export async function getTask(taskId: string, workspaceId?: string): Promise<ClickUpTask | null> {
-  const clients = workspaceId ? [getRequiredClient(workspaceId)] : selectedClients()
+  const clients = workspaceId ? [requireClickUpClient(workspaceId)] : requireClickUpClients()
   for (const client of clients) {
     try {
       const response = await clickUpRequest<unknown>(
@@ -182,7 +197,7 @@ function createTaskBody(args: ClickUpCreateTaskArgs): JsonRecord {
 
 export async function createTask(args: ClickUpCreateTaskArgs): Promise<ClickUpCreateTaskResult> {
   try {
-    const client = getRequiredClient(args.workspaceId)
+    const client = requireClickUpClient(args.workspaceId)
     const response = await clickUpRequest<unknown>(
       client,
       `/list/${encodeURIComponent(args.listId)}/task`,
@@ -233,24 +248,32 @@ async function updateTags(
   const changes = [
     ...[...next]
       .filter((tag) => !current.has(tag))
-      .map((tag) =>
-        clickUpRequest(
+      .map((tag) => ({
+        description: `add "${tag}"`,
+        request: clickUpRequest(
           client,
           `/task/${encodeURIComponent(task.id)}/tag/${encodeURIComponent(tag)}`,
           { method: 'POST' }
         )
-      ),
+      })),
     ...[...current]
       .filter((tag) => !next.has(tag))
-      .map((tag) =>
-        clickUpRequest(
+      .map((tag) => ({
+        description: `remove "${tag}"`,
+        request: clickUpRequest(
           client,
           `/task/${encodeURIComponent(task.id)}/tag/${encodeURIComponent(tag)}`,
           { method: 'DELETE' }
         )
-      )
+      }))
   ]
-  await Promise.all(changes)
+  const results = await Promise.allSettled(changes.map((change) => change.request))
+  const failures = results.flatMap((result, index) =>
+    result.status === 'rejected' ? [changes[index]!.description] : []
+  )
+  if (failures.length > 0) {
+    throw new Error(`ClickUp could not ${failures.join(', ')}.`)
+  }
 }
 
 export async function updateTask(
@@ -259,7 +282,7 @@ export async function updateTask(
   workspaceId?: string
 ): Promise<ClickUpMutationResult> {
   try {
-    const client = getRequiredClient(workspaceId)
+    const client = requireClickUpClient(workspaceId)
     const current = await getTask(taskId, client.workspace.id)
     if (!current) {
       return { ok: false, error: 'ClickUp task not found.' }

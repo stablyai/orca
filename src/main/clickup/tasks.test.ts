@@ -17,7 +17,21 @@ vi.mock('./client', () => ({
   },
   clickUpRequest: (...args: unknown[]) => clickUpRequestMock(...args),
   getClients: (...args: unknown[]) => getClientsMock(...args),
-  getStatus: (...args: unknown[]) => getStatusMock(...args)
+  getStatus: (...args: unknown[]) => getStatusMock(...args),
+  requireClickUpClient: (workspaceId?: string) => {
+    const selected = getClientsMock(workspaceId)[0]
+    if (!selected) {
+      throw new Error('Connect ClickUp and select a Workspace first.')
+    }
+    return selected
+  },
+  requireClickUpClients: (workspaceId?: string) => {
+    const selected = getClientsMock(workspaceId)
+    if (selected.length === 0) {
+      throw new Error('Connect ClickUp and select a Workspace first.')
+    }
+    return selected
+  }
 }))
 
 function client(id = 'team-1'): ClickUpClientForWorkspace {
@@ -84,6 +98,41 @@ describe('ClickUp task operations', () => {
     ])
   })
 
+  it('continues listing after a full page contains no client-side filter matches', async () => {
+    clickUpRequestMock
+      .mockResolvedValueOnce({
+        tasks: Array.from({ length: 100 }, (_, index) => rawTask(`other-${index}`))
+      })
+      .mockResolvedValueOnce({
+        tasks: [rawTask('mine', { creator: { id: 7, username: 'Ada' } })]
+      })
+    const { listTasks } = await import('./tasks')
+
+    await expect(listTasks('created', 10, 'team-1')).resolves.toMatchObject([{ id: 'mine' }])
+    expect(clickUpRequestMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses the raw page size when deciding whether search should continue', async () => {
+    clickUpRequestMock
+      .mockResolvedValueOnce({
+        tasks: [
+          {},
+          ...Array.from({ length: 99 }, (_, index) =>
+            rawTask(`other-${index}`, { name: `Unrelated ${index}` })
+          )
+        ]
+      })
+      .mockResolvedValueOnce({
+        tasks: [rawTask('match', { name: 'Authentication regression' })]
+      })
+    const { searchTasks } = await import('./tasks')
+
+    await expect(searchTasks('authentication', 5, 'team-1')).resolves.toMatchObject([
+      { id: 'match' }
+    ])
+    expect(clickUpRequestMock).toHaveBeenCalledTimes(2)
+  })
+
   it('uses the task response Workspace when an all-Workspace client reads it', async () => {
     getStatusMock.mockReturnValue({
       connected: true,
@@ -125,6 +174,25 @@ describe('ClickUp task operations', () => {
       status: 'review',
       priority: 1,
       assignees: { add: [9], rem: [7] }
+    })
+    expect(clickUpRequestMock).toHaveBeenCalledWith(expect.anything(), '/task/abc/tag/security', {
+      method: 'POST'
+    })
+    expect(clickUpRequestMock).toHaveBeenCalledWith(expect.anything(), '/task/abc/tag/bug', {
+      method: 'DELETE'
+    })
+  })
+
+  it('reports each failed tag operation after attempting the full reconciliation', async () => {
+    clickUpRequestMock
+      .mockResolvedValueOnce(rawTask('abc'))
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(new Error('remove failed'))
+    const { updateTask } = await import('./tasks')
+
+    await expect(updateTask('abc', { tagNames: ['security'] }, 'team-1')).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('remove "bug"')
     })
     expect(clickUpRequestMock).toHaveBeenCalledWith(expect.anything(), '/task/abc/tag/security', {
       method: 'POST'

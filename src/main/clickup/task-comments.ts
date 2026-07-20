@@ -1,5 +1,5 @@
 import type { ClickUpComment, ClickUpCommentResult } from '../../shared/types'
-import { clickUpRequest, getClients, type ClickUpClientForWorkspace } from './client'
+import { clickUpRequest, requireClickUpClient } from './client'
 import {
   asRecord,
   asString,
@@ -7,14 +7,6 @@ import {
   timestampToIso,
   type JsonRecord
 } from './task-mapping'
-
-function requiredClient(workspaceId?: string): ClickUpClientForWorkspace {
-  const client = getClients(workspaceId)[0]
-  if (!client) {
-    throw new Error('Connect ClickUp and select a Workspace first.')
-  }
-  return client
-}
 
 function commentBody(value: unknown): string {
   if (typeof value === 'string') {
@@ -35,7 +27,7 @@ export async function getClickUpTaskComments(
   taskId: string,
   workspaceId?: string
 ): Promise<ClickUpComment[]> {
-  const client = requiredClient(workspaceId)
+  const client = requireClickUpClient(workspaceId)
   const response = await clickUpRequest<{ comments?: unknown[] }>(
     client,
     `/task/${encodeURIComponent(taskId)}/comment`
@@ -62,7 +54,7 @@ export async function addClickUpTaskComment(
   workspaceId?: string
 ): Promise<ClickUpCommentResult> {
   try {
-    const client = requiredClient(workspaceId)
+    const client = requireClickUpClient(workspaceId)
     const response = await clickUpRequest<JsonRecord>(
       client,
       `/task/${encodeURIComponent(taskId)}/comment`,
