@@ -13,7 +13,6 @@ import {
   childrenOfGroup,
   createPanelTreeGroup,
   deletePanelTreeGroup,
-  migrateLegacyPanelGroups,
   movePanelInTree,
   PANEL_TREE_ROOT_NODES,
   panelsInGroup,
@@ -27,7 +26,14 @@ import {
   SortableTerminalPanelButton,
   SortableWebPanelButton
 } from './SidebarPanelRows'
+import {
+  QuickAddTerminalForm,
+  QuickAddTerminalPanelButton,
+  QuickAddWebForm,
+  QuickAddWebPanelButton
+} from './QuickAddPanelPopovers'
 import { NodeGroupBranch } from './SidebarNodeGroupBranch'
+import { usePanelTreeMigrations } from './use-panel-tree-migrations'
 
 /**
  * Why: the pinned web + terminal panel rails live below Projects (operator
@@ -40,6 +46,10 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
+  // Why: forms mount only after + click — rail buttons stay free of
+  // useAppStore/Popover (React #185 at packaged boot).
+  const [webQuickAddOpen, setWebQuickAddOpen] = React.useState(false)
+  const [terminalQuickAddOpen, setTerminalQuickAddOpen] = React.useState(false)
   const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
   const activePinnedWebPanelId = useAppStore((s) => s.activePinnedWebPanelId)
   const pinnedWebPanels = useAppStore((s) => s.settings?.pinnedWebPanels)
@@ -97,38 +107,13 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
     [collapsedTerminalPanelGroups, updateSettings]
   )
 
-  // Why: one-shot migration from legacy string `group` labels into first-class
-  // panelTreeGroups + groupId (L0 structure only — no PTY moves). Ref-guard
-  // prevents a write→settings-churn→effect loop if migration deps keep new
-  // array identities (or if `group` is retained after groupId is assigned).
-  const legacyGroupMigrationAttempted = React.useRef(false)
-  React.useEffect(() => {
-    if (legacyGroupMigrationAttempted.current) {
-      return
-    }
-    const terms = pinnedTerminalPanelsSetting ?? []
-    const webs = pinnedWebPanels ?? []
-    const groups = panelTreeGroups ?? []
-    // Why: only panels still missing groupId need migration. Keeping the
-    // legacy `group` string after groupId is set is intentional for one-release
-    // readers — do NOT treat "has group label" alone as needs-migration (that
-    // re-fires forever after a successful migrate).
-    const needs = terms.some((p) => Boolean(p.group) && !p.groupId)
-    if (!needs) {
-      return
-    }
-    legacyGroupMigrationAttempted.current = true
-    const migrated = migrateLegacyPanelGroups({
-      groups,
-      terminalPanels: terms,
-      webPanels: webs
-    })
-    void updateSettings({
-      panelTreeGroups: migrated.groups,
-      pinnedTerminalPanels: migrated.terminalPanels,
-      pinnedWebPanels: migrated.webPanels
-    })
-  }, [panelTreeGroups, pinnedTerminalPanelsSetting, pinnedWebPanels, updateSettings])
+  usePanelTreeMigrations({
+    panelTreeGroups,
+    pinnedTerminalPanels: pinnedTerminalPanelsSetting,
+    pinnedWebPanels,
+    collapsedGroups: collapsedGroupsSetting,
+    updateSettings
+  })
 
   const nodeGroups = React.useMemo(
     () => (panelTreeGroups ?? []).filter((g) => g.root === PANEL_TREE_ROOT_NODES),
@@ -262,7 +247,9 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
                 )}
               </span>
             </button>
+            <QuickAddWebPanelButton open={webQuickAddOpen} onOpenChange={setWebQuickAddOpen} />
           </div>
+          {webQuickAddOpen ? <QuickAddWebForm onDone={() => setWebQuickAddOpen(false)} /> : null}
           {webPanelsCollapsed ? null : hasWebPanels ? (
             <SortableContext
               items={(pinnedWebPanels ?? []).map((panel) => panel.id)}
@@ -319,7 +306,14 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
             >
               <FolderPlus className="size-3.5" strokeWidth={2.25} />
             </Button>
+            <QuickAddTerminalPanelButton
+              open={terminalQuickAddOpen}
+              onOpenChange={setTerminalQuickAddOpen}
+            />
           </div>
+          {terminalQuickAddOpen ? (
+            <QuickAddTerminalForm onDone={() => setTerminalQuickAddOpen(false)} />
+          ) : null}
           {collapsedTerminalPanelGroups.has(PINNED_TERMINAL_PANELS_ROOT_FOLD) ? null : (
             <>
               {!hasTerminalPanels && !hasGroupedTerminals ? (

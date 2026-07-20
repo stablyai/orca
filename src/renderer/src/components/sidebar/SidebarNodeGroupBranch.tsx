@@ -45,8 +45,11 @@ export function NodeGroupBranch({
   onAddChild: (parentId: string) => void
 }): React.JSX.Element {
   const [renaming, setRenaming] = React.useState(false)
+  // Why: fold keys are group.id only. Legacy string-group folds stored the
+  // title ("node-e") in collapsedPinnedTerminalPanelGroups; if we OR title
+  // into collapsed forever, expand (which toggles id) never opens the branch.
   const foldKey = group.id
-  const collapsed = collapsedKeys.has(foldKey) || collapsedKeys.has(group.title)
+  const collapsed = collapsedKeys.has(foldKey)
   const members = panelsInGroup(panels, group.id)
   const childGroups = childrenOfGroup(allGroups, PANEL_TREE_ROOT_NODES, group.id)
   const indent = depth === 0 ? 'pl-4' : depth === 1 ? 'pl-6' : 'pl-8'
