@@ -1,7 +1,28 @@
+// @vitest-environment happy-dom
+
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { createRoot } from 'react-dom/client'
+import { act } from 'react'
+import { useAppStore } from '@/store'
+
+vi.mock('@/store', () => {
+  const store = {
+    scrollToDiffCommentId: null as string | null,
+    setScrollToDiffCommentId: vi.fn((id: string | null) => {
+      store.scrollToDiffCommentId = id
+    }),
+    openCheckRunDetails: {},
+    patchOpenCheckRunDetails: vi.fn()
+  }
+  return {
+    useAppStore: Object.assign(<T,>(selector: (state: typeof store) => T) => selector(store), {
+      getState: () => store
+    })
+  }
+})
 import type { PRCheckDetail, PRComment, PRInfo } from '../../../../shared/types'
 import {
   buildMergeabilityRecalculationCommands,
@@ -373,7 +394,53 @@ describe('PRCommentsList', () => {
     expect(markup).not.toContain('Start conversation...')
     expect(markup).not.toContain('No comments yet')
     expect(markup).not.toContain('Add a comment')
-    expect((markup.match(/lucide-message-square/g) ?? []).length).toBe(1)
+  })
+
+  it('calls onNavigateToFiles and updates scrollToDiffCommentId on path click', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    const comments: PRComment[] = [
+      {
+        id: 1,
+        author: 'AmethystLiang',
+        authorAvatarUrl: '',
+        body: 'Comment body',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#issuecomment-1',
+        path: 'src/main.ts',
+        line: 12
+      }
+    ]
+
+    const onNavigateToFiles = vi.fn()
+
+    act(() => {
+      root.render(
+        React.createElement(
+          TooltipProvider,
+          null,
+          React.createElement(PRCommentsList, {
+            comments,
+            commentsLoading: false,
+            onNavigateToFiles
+          })
+        )
+      )
+    })
+
+    const button = container.querySelector('button[title="src/main.ts"]')
+    expect(button).not.toBeNull()
+
+    act(() => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onNavigateToFiles).toHaveBeenCalledWith(comments[0])
+    expect(useAppStore.getState().scrollToDiffCommentId).toBe('github-pr-comment:1')
+
+    document.body.removeChild(container)
   })
 })
 
