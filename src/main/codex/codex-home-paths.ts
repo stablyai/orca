@@ -22,6 +22,7 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'hooks',
   'plugins',
   'plugin-state',
+  '.sandbox',
   'profile-v2',
   'themes',
   'prompts',

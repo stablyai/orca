@@ -83,6 +83,14 @@ function getRuntimeCodexHomePath(): string {
   return join(userDataDir, 'codex-runtime-home', 'home')
 }
 
+function getSystemSandboxPath(): string {
+  return join(getSystemCodexHomePath(), '.sandbox')
+}
+
+function getRuntimeSandboxPath(): string {
+  return join(getRuntimeCodexHomePath(), '.sandbox')
+}
+
 function normalizeLinkTarget(linkTarget: string): string {
   return process.platform === 'win32'
     ? linkTarget.replace(/^\\\\\?\\/, '').toLowerCase()
@@ -182,6 +190,18 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(existsSync(join(getRuntimeCodexHomePath(), 'history.jsonl'))).toBe(false)
   })
 
+  it('mirrors the system .sandbox resource into the managed runtime home', () => {
+    mkdirSync(getSystemSandboxPath(), { recursive: true })
+    writeFileSync(join(getSystemSandboxPath(), 'state.json'), '{"sandbox":"system"}\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(readFileSync(join(getRuntimeSandboxPath(), 'state.json'), 'utf-8')).toBe(
+      '{"sandbox":"system"}\n'
+    )
+    expectSymbolicLinkTargetIfLinked(getRuntimeSandboxPath(), getSystemSandboxPath())
+  })
+
   it('does not replace an existing runtime-owned resource entry', () => {
     mkdirSync(join(getSystemCodexHomePath(), 'skills'), { recursive: true })
     mkdirSync(join(getRuntimeCodexHomePath(), 'skills'), { recursive: true })
@@ -194,6 +214,36 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(lstatSync(runtimeSkillsPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(join(runtimeSkillsPath, 'runtime.md'), 'utf-8')).toBe('runtime\n')
     expect(existsSync(join(runtimeSkillsPath, 'system.md'))).toBe(false)
+  })
+
+  it('removes an owned .sandbox fallback copy when the system resource disappears', () => {
+    fsMockState.failSymlink = true
+    mkdirSync(getSystemSandboxPath(), { recursive: true })
+    writeFileSync(join(getSystemSandboxPath(), 'state.json'), '{"sandbox":"system"}\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(lstatSync(getRuntimeSandboxPath()).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(getRuntimeSandboxPath(), 'state.json'), 'utf-8')).toBe(
+      '{"sandbox":"system"}\n'
+    )
+
+    rmSync(getSystemSandboxPath(), { recursive: true, force: true })
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(existsSync(getRuntimeSandboxPath())).toBe(false)
+  })
+
+  it('preserves a non-owned managed .sandbox directory when the system resource is absent', () => {
+    mkdirSync(getRuntimeSandboxPath(), { recursive: true })
+    writeFileSync(join(getRuntimeSandboxPath(), 'state.json'), '{"sandbox":"runtime"}\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(lstatSync(getRuntimeSandboxPath()).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(getRuntimeSandboxPath(), 'state.json'), 'utf-8')).toBe(
+      '{"sandbox":"runtime"}\n'
+    )
   })
 
   it('removes owned symlinks for deleted system resources without touching unrelated runtime links', () => {
