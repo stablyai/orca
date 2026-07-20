@@ -1,11 +1,5 @@
-// Pure state machine for the native chat composer. Given the current draft,
-// caret position, sent-input history, and the active agent's known slash
-// commands/skills, it derives the autocomplete mode, the
-// query, and the filtered suggestions. Keeping this DOM-free makes the slash /
-// mention / skill / history behavior unit-testable; the .tsx only owns rendering and
-// the actual textarea/caret wiring.
-
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import type { NativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import {
   filterSlashCommands,
   isSlashCommandDraft,
@@ -13,145 +7,165 @@ import {
   slashCommandDispatchText,
   type SlashCommandSuggestion
 } from '../../../../shared/native-chat-slash-commands'
+import {
+  buildNativeChatPickerItems,
+  type NativeChatPickerItem,
+  type NativeChatSkillDiscoverySnapshot
+} from './native-chat-picker-items'
 
 export type { SlashCommandSuggestion }
 export { filterSlashCommands, isSlashCommandDraft, applySlashSuggestion, slashCommandDispatchText }
+export {
+  applyPickerSuggestion,
+  buildNativeChatPickerItems,
+  classifyNativeChatSend,
+  type NativeChatPickerItem,
+  type NativeChatSendClassification,
+  type NativeChatSkillDiscoverySnapshot
+} from './native-chat-picker-items'
 
 export type ComposerAutocompleteMode = 'none' | 'slash' | 'mention' | 'skill'
 
-export type ComposerAutocomplete =
-  | { mode: 'none' }
-  | { mode: 'slash'; query: string; suggestions: SlashCommandSuggestion[] }
-  | { mode: 'mention'; query: string }
-  | { mode: 'skill'; query: string; suggestions: DiscoveredSkill[] }
-
-export type ComposerDerivation = {
-  autocomplete: ComposerAutocomplete
+type PickerAutocomplete = {
+  query: string
+  items: NativeChatPickerItem[]
+  triggerKey: string
+  prefix: '/' | '$'
+  grouped: boolean
+  commandsEnabled: boolean
+  skillsEnabled: boolean
+  skillStatus: NativeChatSkillDiscoverySnapshot['status']
+  skillErrorKind?: NativeChatSkillDiscoverySnapshot['errorKind']
 }
 
-/**
- * Detect the active autocomplete trigger from the text before the caret.
- *
- * Rules (intentionally conservative to avoid firing inside ordinary prose):
- *  - Slash: the draft starts with `/` and the caret is within that first token
- *    (no whitespace between `/` and the caret). Agent slash commands are only
- *    valid at the very start of the input, mirroring how the TUIs accept them.
- *  - Mention: an `@` immediately preceded by start-of-input or whitespace, with
- *    no whitespace between it and the caret. Works anywhere in the line so you
- *    can reference a file mid-sentence.
- */
+export type ComposerAutocomplete =
+  | { mode: 'none' }
+  | ({ mode: 'slash' } & PickerAutocomplete)
+  | { mode: 'mention'; query: string }
+  | ({ mode: 'skill' } & PickerAutocomplete)
+
+const EMPTY_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills: [] }
+
 export function deriveComposerAutocomplete(
   draft: string,
   caret: number,
   agentCommands: readonly SlashCommandSuggestion[],
-  skills: readonly DiscoveredSkill[] = []
+  skills: readonly DiscoveredSkill[] = [],
+  profile: NativeChatAgentProfile | null = null,
+  discovery: NativeChatSkillDiscoverySnapshot = { ...EMPTY_DISCOVERY, skills },
+  dismissedTriggerKey: string | null = null
 ): ComposerAutocomplete {
   const before = draft.slice(0, caret)
-
-  // Slash: only at the absolute start of the input, and only while the caret is
-  // still inside the unbroken command token.
   if (before.startsWith('/') && !/\s/.test(before)) {
-    const query = before.slice(1)
-    return { mode: 'slash', query, suggestions: filterSlashCommands(agentCommands, query) }
+    return deriveSlashAutocomplete(before, agentCommands, profile, discovery, dismissedTriggerKey)
   }
-
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
   if (mentionMatch) {
     return { mode: 'mention', query: mentionMatch[1] }
   }
-
-  const skillMatch = before.match(/(?:^|\s)\$(\S*)$/)
-  if (skillMatch) {
-    const query = skillMatch[1]
-    return { mode: 'skill', query, suggestions: filterSkillSuggestions(skills, query) }
+  const skillMatch =
+    profile?.skillPrefix === '$' || (!profile && skills.length > 0)
+      ? before.match(/(?:^|\s)\$(\S*)$/)
+      : null
+  if (!skillMatch) {
+    return { mode: 'none' }
   }
-
-  return { mode: 'none' }
-}
-
-export function filterSkillSuggestions(
-  skills: readonly DiscoveredSkill[],
-  query: string
-): DiscoveredSkill[] {
-  const normalized = query.toLowerCase()
-  const installed = skills.filter((skill) => skill.installed)
-  if (normalized === '') {
-    return installed.slice(0, 12)
+  const triggerKey = `$:${before.length - skillMatch[1].length - 1}`
+  if (dismissedTriggerKey === triggerKey) {
+    return { mode: 'none' }
   }
-  return installed
-    .filter((skill) => {
-      const name = skill.name.toLowerCase()
-      const dirName = skill.directoryPath.split(/[\\/]/).findLast(Boolean)?.toLowerCase()
-      return name.startsWith(normalized) || dirName?.startsWith(normalized)
-    })
-    .slice(0, 12)
-}
-
-export type HistoryState = {
-  /** Most-recent-last list of previously sent drafts. */
-  entries: readonly string[]
-  /** Cursor into `entries`; null means "live draft" (not recalling). */
-  index: number | null
-}
-
-export const EMPTY_HISTORY: HistoryState = { entries: [], index: null }
-
-/** Append a sent draft to history and reset the recall cursor. Blank sends and
- *  immediate duplicates of the last entry are not recorded (shell-style). */
-export function pushHistory(history: HistoryState, sent: string): HistoryState {
-  if (sent.trim() === '') {
-    return { entries: history.entries, index: null }
-  }
-  if (history.entries.at(-1) === sent) {
-    return { entries: history.entries, index: null }
-  }
-  return { entries: [...history.entries, sent], index: null }
-}
-
-export type HistoryRecall = {
-  history: HistoryState
-  /** The draft text to show, or null to leave the live draft untouched. */
-  draft: string | null
-}
-
-/**
- * Move one step toward older entries (Up arrow). From the live draft this jumps
- * to the most recent entry; thereafter it walks backward and clamps at the
- * oldest. Returns the recalled draft, or null when there is nothing to recall.
- */
-export function recallPrevious(history: HistoryState): HistoryRecall {
-  if (history.entries.length === 0) {
-    return { history, draft: null }
-  }
-  const nextIndex =
-    history.index === null ? history.entries.length - 1 : Math.max(0, history.index - 1)
+  const query = skillMatch[1]
   return {
-    history: { entries: history.entries, index: nextIndex },
-    draft: history.entries[nextIndex]
+    mode: 'skill',
+    query,
+    triggerKey,
+    prefix: '$',
+    grouped: false,
+    commandsEnabled: false,
+    skillsEnabled: true,
+    items: buildNativeChatPickerItems([], discovery.skills, query, '$'),
+    skillStatus: discovery.status === 'idle' ? 'loading' : discovery.status,
+    ...(discovery.errorKind ? { skillErrorKind: discovery.errorKind } : {})
   }
 }
 
-/**
- * Move one step toward newer entries (Down arrow). Walking past the newest entry
- * returns to the live (empty) draft and clears the recall cursor. Returns null
- * draft when not currently recalling.
- */
-export function recallNext(history: HistoryState): HistoryRecall {
-  if (history.index === null) {
-    return { history, draft: null }
+function deriveSlashAutocomplete(
+  before: string,
+  agentCommands: readonly SlashCommandSuggestion[],
+  profile: NativeChatAgentProfile | null,
+  discovery: NativeChatSkillDiscoverySnapshot,
+  dismissedTriggerKey: string | null
+): ComposerAutocomplete {
+  const triggerKey = '/:0'
+  if (dismissedTriggerKey === triggerKey) {
+    return { mode: 'none' }
   }
-  const nextIndex = history.index + 1
-  if (nextIndex >= history.entries.length) {
-    return { history: { entries: history.entries, index: null }, draft: '' }
-  }
+  const query = before.slice(1)
+  const hasSlashSkills = profile?.skillPrefix === '/'
+  // Why: the caller owns catalog policy (e.g. Grok ships skills-only until a
+  // verified catalog lands); this derivation must not re-gate per agent.
+  const items = buildNativeChatPickerItems(
+    agentCommands,
+    hasSlashSkills ? discovery.skills : [],
+    query,
+    '/'
+  )
   return {
-    history: { entries: history.entries, index: nextIndex },
-    draft: history.entries[nextIndex]
+    mode: 'slash',
+    query,
+    triggerKey,
+    prefix: '/',
+    grouped: profile?.groupedSlash === true,
+    commandsEnabled: agentCommands.length > 0,
+    skillsEnabled: hasSlashSkills,
+    items,
+    skillStatus: hasSlashSkills
+      ? discovery.status === 'idle'
+        ? 'loading'
+        : discovery.status
+      : 'ready',
+    ...(hasSlashSkills && discovery.errorKind ? { skillErrorKind: discovery.errorKind } : {})
   }
 }
 
-/** Replace the active `@query` token before the caret with the chosen path.
- *  Returns the new full draft and the caret offset to place after insertion. */
+/** True when one edit both removed and inserted text across the dismissed
+ *  trigger token — a wholesale replacement (e.g. select-all + paste), which is
+ *  a new trigger occurrence even though a trigger character lands back on the
+ *  same draft position. Typing or deleting inside the token is not. */
+export function editReplacesTriggerToken(
+  previous: string,
+  next: string,
+  triggerKey: string
+): boolean {
+  const triggerPosition = Number.parseInt(triggerKey.slice(triggerKey.indexOf(':') + 1), 10)
+  if (!Number.isFinite(triggerPosition) || previous === next) {
+    return false
+  }
+  let commonPrefix = 0
+  const maxPrefix = Math.min(previous.length, next.length)
+  while (commonPrefix < maxPrefix && previous[commonPrefix] === next[commonPrefix]) {
+    commonPrefix += 1
+  }
+  let commonSuffix = 0
+  while (
+    commonSuffix < previous.length - commonPrefix &&
+    commonSuffix < next.length - commonPrefix &&
+    previous[previous.length - 1 - commonSuffix] === next[next.length - 1 - commonSuffix]
+  ) {
+    commonSuffix += 1
+  }
+  const removed = previous.length - commonPrefix - commonSuffix
+  const inserted = next.length - commonPrefix - commonSuffix
+  if (removed === 0 || inserted === 0) {
+    return false
+  }
+  let tokenEnd = triggerPosition + 1
+  while (tokenEnd < previous.length && !/\s/.test(previous[tokenEnd])) {
+    tokenEnd += 1
+  }
+  return commonPrefix < tokenEnd && previous.length - commonSuffix > triggerPosition
+}
+
 export function applyMentionSuggestion(
   draft: string,
   caret: number,
@@ -163,25 +177,38 @@ export function applyMentionSuggestion(
   if (!match) {
     return { draft, caret }
   }
-  const tokenStart = before.length - match[2].length - 1 // -1 for the '@'
-  const insertion = `@${path} `
-  const nextBefore = before.slice(0, tokenStart) + insertion
+  const tokenStart = before.length - match[2].length - 1
+  const nextBefore = `${before.slice(0, tokenStart)}@${path} `
   return { draft: nextBefore + after, caret: nextBefore.length }
 }
 
-export function applySkillSuggestion(
-  draft: string,
-  caret: number,
-  skillName: string
-): { draft: string; caret: number } {
-  const before = draft.slice(0, caret)
-  const after = draft.slice(caret)
-  const match = before.match(/(^|\s)\$(\S*)$/)
-  if (!match) {
-    return { draft, caret }
+export type HistoryState = { entries: readonly string[]; index: number | null }
+export const EMPTY_HISTORY: HistoryState = { entries: [], index: null }
+
+export function pushHistory(history: HistoryState, sent: string): HistoryState {
+  if (sent.trim() === '' || history.entries.at(-1) === sent) {
+    return { entries: history.entries, index: null }
   }
-  const tokenStart = before.length - match[2].length - 1 // -1 for the '$'
-  const insertion = `$${skillName} `
-  const nextBefore = before.slice(0, tokenStart) + insertion
-  return { draft: nextBefore + after, caret: nextBefore.length }
+  return { entries: [...history.entries, sent], index: null }
+}
+
+export type HistoryRecall = { history: HistoryState; draft: string | null }
+
+export function recallPrevious(history: HistoryState): HistoryRecall {
+  if (history.entries.length === 0) {
+    return { history, draft: null }
+  }
+  const index = history.index === null ? history.entries.length - 1 : Math.max(0, history.index - 1)
+  return { history: { entries: history.entries, index }, draft: history.entries[index] }
+}
+
+export function recallNext(history: HistoryState): HistoryRecall {
+  if (history.index === null) {
+    return { history, draft: null }
+  }
+  const index = history.index + 1
+  if (index >= history.entries.length) {
+    return { history: { entries: history.entries, index: null }, draft: '' }
+  }
+  return { history: { entries: history.entries, index }, draft: history.entries[index] }
 }

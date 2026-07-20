@@ -57,6 +57,7 @@ import {
 } from '@/lib/simulator-launch-coordination'
 import {
   normalizeAgentStatusPayload,
+  type AgentStatusClearIpcPayload,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
 } from '../../../shared/agent-status-types'
@@ -849,6 +850,8 @@ export function useIpcEvents(): void {
     }
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
+    const transientClearWatermarkByConnectionId = new Map<string, number>()
+    let agentStatusEffectDisposed = false
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
     // Why: applyAgentStatus -> store.setAgentStatus notifies the store
     // subscriber synchronously, which re-enters flushPendingAgentStatuses while
@@ -3147,6 +3150,15 @@ export function useIpcEvents(): void {
       const ownershipConnectionId = isWslHookRelayConnectionId(data.connectionId)
         ? null
         : data.connectionId
+      const transientClearWatermark =
+        typeof data.connectionId === 'string'
+          ? transientClearWatermarkByConnectionId.get(data.connectionId)
+          : undefined
+      // Why: delayed snapshots and queued relay events must not resurrect a
+      // status cleared by a newer disconnect from the same connection.
+      if (transientClearWatermark !== undefined && data.receivedAt <= transientClearWatermark) {
+        return 'dropped'
+      }
       const canAcceptPendingRemoteOwnership =
         ownershipConnectionId !== undefined &&
         ownershipConnectionId !== null &&
@@ -3242,7 +3254,8 @@ export function useIpcEvents(): void {
         {
           tabId: ownerTabId,
           worktreeId: statusWorktreeId,
-          terminalHandle: data.terminalHandle
+          terminalHandle: data.terminalHandle,
+          ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
         },
         data.providerSession || data.launchToken
           ? {
@@ -3288,7 +3301,7 @@ export function useIpcEvents(): void {
       const requestId = ++snapshotRequestId
       void getSnapshot()
         .then((entries) => {
-          if (requestId !== snapshotRequestId) {
+          if (agentStatusEffectDisposed || requestId !== snapshotRequestId) {
             return
           }
           const current = useAppStore.getState()
@@ -3304,6 +3317,9 @@ export function useIpcEvents(): void {
             return
           }
           void getMigrationUnsupportedSnapshot().then((unsupportedEntries) => {
+            if (agentStatusEffectDisposed || requestId !== snapshotRequestId) {
+              return
+            }
             const unsupportedStore = useAppStore.getState()
             if (!unsupportedStore.workspaceSessionReady) {
               return
@@ -3332,16 +3348,45 @@ export function useIpcEvents(): void {
         applyAgentStatus(data)
       })
     )
-    const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.((data) => {
-      if (typeof data?.paneKey !== 'string') {
-        return
+    const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
+      (data: AgentStatusClearIpcPayload) => {
+        if (typeof data !== 'object' || data === null) {
+          return
+        }
+        if ('transient' in data && data.transient === true) {
+          if (
+            typeof data.connectionId !== 'string' ||
+            data.connectionId.length === 0 ||
+            !Number.isFinite(data.clearedAt)
+          ) {
+            return
+          }
+          const previousWatermark =
+            transientClearWatermarkByConnectionId.get(data.connectionId) ?? -1
+          const effectiveWatermark = Math.max(previousWatermark, data.clearedAt)
+          transientClearWatermarkByConnectionId.set(data.connectionId, effectiveWatermark)
+          for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
+            const pending = pendingAgentStatusEvents[index].data
+            if (
+              pending.connectionId === data.connectionId &&
+              pending.receivedAt <= effectiveWatermark
+            ) {
+              pendingAgentStatusEvents.splice(index, 1)
+            }
+          }
+          useAppStore.getState().clearTransientAgentStatuses(data.connectionId, effectiveWatermark)
+          return
+        }
+        if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
+          return
+        }
+        const store = useAppStore.getState()
+        if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
+          return
+        }
+        store.removeAgentStatus(data.paneKey)
       }
-      const store = useAppStore.getState()
-      if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
-        return
-      }
-      store.removeAgentStatus(data.paneKey)
-    })
+    )
     if (unsubscribeAgentStatusClear) {
       unsubs.push(unsubscribeAgentStatusClear)
     }
@@ -3502,6 +3547,10 @@ export function useIpcEvents(): void {
     }
 
     return () => {
+      // Why: React remount can leave an older snapshot promise in flight. It
+      // must not write through after the replacement effect processes a clear.
+      agentStatusEffectDisposed = true
+      snapshotRequestId += 1
       if (pendingAgentStatusRetryTimer !== null) {
         globalThis.clearTimeout(pendingAgentStatusRetryTimer)
       }

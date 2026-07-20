@@ -341,7 +341,8 @@
               "2db0bd7515": "El registro de Orca CLI no está disponible",
               "8d6eedf97e": "No se pudo registrar Orca CLI en PATH.",
               "0f116999f1": "Reinicia tu shell o agrega el directorio de Orca CLI a PATH antes de la configuración.",
-              "15cbedc3e3": "Instala la CLI de Orca antes de configurar skills para agentes."
+              "15cbedc3e3": "Instala la CLI de Orca antes de configurar skills para agentes.",
+              "windowsPathUnknown": "Orca could not check your Windows user PATH"
             }
           }
         }
@@ -5326,7 +5327,8 @@
           "0c9f3cf9da": "Elige dónde Orca comprueba e instala agent skills globales.",
           "f00d6aa9b5": "WSL no está disponible en esta máquina.",
           "7c776ff9d8": "wsl",
-          "fc0fcf72fd": "Registra el comando de shell de WSL antes de configurar el skill."
+          "fc0fcf72fd": "Registra el comando de shell de WSL antes de configurar el skill.",
+          "windowsPathUnknown": "WSL shell command PATH could not be checked"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "Usado por repositorios que no han personalizado Source Control AI.",
@@ -5901,7 +5903,8 @@
           "aa1263e881": "Mantener en tamaño de teléfono (predeterminado)",
           "6436e56546": "Código QR para emparejamiento móvil",
           "1b1b70279a": "Aún no hay dispositivos emparejados.",
-          "1592afcc7a": "Aún no hay dispositivos emparejados. Escanea el código QR con la aplicación móvil de Orca."
+          "1592afcc7a": "Aún no hay dispositivos emparejados. Escanea el código QR con la aplicación móvil de Orca.",
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub Releases",
@@ -5912,7 +5915,10 @@
           "174f4a3c6d": "Controla terminales y agentes desde tu teléfono.",
           "1de96ec8a6": "Mostrar botón de Orca Mobile",
           "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda.",
-          "d4f2b65f30": "Mostrar el acceso directo de Orca Mobile en la barra lateral."
+          "d4f2b65f30": "Mostrar el acceso directo de Orca Mobile en la barra lateral.",
+          "installIntro": "Instala Orca Mobile desde la",
+          "installOutro": ", luego empareja a continuación.",
+          "androidApkLabel": "Android APK"
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar notificación de prueba",
@@ -8048,7 +8054,9 @@
               "671eb4173c": "Controla terminales y agentes desde tu teléfono.",
               "ffd52a96e4": "Móvil",
               "1de96ec8a6": "Mostrar botón de Orca Mobile",
-              "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda."
+              "682293cadf": "Mostrar el botón de Orca Mobile en la parte superior de la barra lateral izquierda.",
+              "e4f4daea0e": "relé",
+              "5d5af8e041": "iPhone"
             }
           }
         },
@@ -9177,28 +9185,26 @@
           "available": "Disponible",
           "reconnecting": "Reconectando",
           "unavailable": "No disponible",
-          "title": "¿Cómo debe conectarse el teléfono nuevo?",
-          "anywhere": "Conectar con Orca Relay",
-          "recommended": "Recomendado",
-          "automaticDescription": "Orca usa una conexión directa cuando está disponible y Relay en caso contrario.",
-          "signInDescription": "Inicia sesión en este ordenador para usar Orca Relay.",
           "signIn": "Iniciar sesión",
-          "localOnly": "Solo red local",
-          "localShort": "LAN o Tailscale",
-          "localDescription": "Usa LAN o Tailscale sin conectar este teléfono mediante Orca Relay."
+          "localDescription": "El teléfono debe estar en esta Wi‑Fi o en tu Tailscale. No requiere inicio de sesión.",
+          "pathGroup": "Cómo llega el teléfono a este ordenador",
+          "anywhereTitle": "Orca Relay",
+          "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Se requiere inicio de sesión.",
+          "signInRequired": "Inicia sesión para usar Orca Mobile Relay.",
+          "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa Red local.",
+          "signInAgain": "Iniciar sesión de nuevo",
+          "localTitle": "Red local"
         },
         "MobilePairingSetupSection": {
           "title": "Vincular un teléfono",
-          "automaticDescription": "El código de vinculación incluye acceso directo y Orca Relay cifrado como respaldo.",
-          "localDescription": "El código de vinculación solo se conecta mediante la dirección de red local indicada abajo.",
           "regenerate": "Regenerar",
           "generate": "Generar código QR",
-          "localSettings": "Configuración de conexión local",
-          "localAddressDescription": "Elige la dirección LAN o de red privada que Orca Mobile puede usar para acceder directamente a este ordenador.",
           "refresh": "Actualizar interfaces de red",
-          "tailnet": "Conectarse con tu propia tailnet",
-          "tailnetDescription": "Instala Tailscale en este ordenador y en tu teléfono, inicia sesión en la misma tailnet y selecciona arriba su dirección 100.x.y.z.",
-          "getTailscale": "Obtener Tailscale"
+          "overview": "Genera un código QR, luego escanéalo en Orca Mobile en Pair Desktop.",
+          "step1Title": "Método de conexión",
+          "step2Title": "Dirección de este ordenador",
+          "step2RelayDescription": "Se usa para una ruta directa más rápida cuando está cerca. Relay cubre el acceso remoto.",
+          "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Wi‑Fi o Tailscale."
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -9224,10 +9230,16 @@
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
         },
+        "MobileRelayBetaNotice": {
+          "notice": "Orca Relay is in beta."
+        },
         "clickup": {
-          "connectedDescription": "{{value0}} Workspace{{value1}} available",
+          "connectedDescriptionSingular": "{{value0}} Workspace available",
+          "connectedDescriptionPlural": "{{value0}} Workspaces available",
           "checkingDescription": "Checking ClickUp access before showing setup actions.",
           "disconnectedDescription": "Browse, create, update, and link ClickUp tasks.",
+          "statusConnected": "Connected",
+          "statusNotConnected": "Not connected",
           "replaceToken": "Replace token",
           "connect": "Connect ClickUp",
           "verified": "Verified",
@@ -9236,11 +9248,7 @@
           "disconnect": "Disconnect ClickUp",
           "tokenScope": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
           "setupHelp": "Use a Personal API token from ClickUp Settings → Apps.",
-          "recheck": "Re-check",
-          "statusConnected": "Connected",
-          "statusNotConnected": "Not connected",
-          "connectedDescriptionSingular": "{{value0}} Workspace available",
-          "connectedDescriptionPlural": "{{value0}} Workspaces available"
+          "recheck": "Re-check"
         }
       },
       "right": {
@@ -9288,7 +9296,16 @@
             "f273f2271c": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
             "aa95b81a3a": "Agente iniciado. Marcados como resueltos: {{value0}}; omitidos: {{value1}}; con error: {{value2}}.",
             "495b2f8c4b": "Agente iniciado, pero no se pudieron marcar los comentarios seleccionados como resueltos.",
-            "3c3ad3a1d2": "Agente iniciado. No se puede marcar ningún comentario seleccionado como resuelto en el host."
+            "3c3ad3a1d2": "Agente iniciado. No se puede marcar ningún comentario seleccionado como resuelto en el host.",
+            "review": {
+              "auto_retry": "Orca reintentará a las {{time}}.",
+              "open_review": "Abrir revisión",
+              "retry": "Reintentar"
+            },
+            "sync": {
+              "pending": "Syncing…",
+              "branch": "Sync Branch"
+            }
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancelar",
@@ -9696,6 +9713,7 @@
             "createPrIntentPublishing": "Publicando rama…",
             "createPrIntentForcePushing": "Haciendo force push con lease…",
             "createPrIntentPushing": "Haciendo push de commits…",
+            "createPrIntentFastForwarding": "Actualizando rama…",
             "createPrIntentRemoteFailed": "No se pudo actualizar la rama remota. Vuelve a intentar Crear PR.",
             "createPrIntentGeneratingDetails": "Generando detalles de revisión…",
             "createPrIntentBranchChangedDuringDetails": "La rama cambió mientras se generaban los detalles de la revisión. Vuelve a intentar Crear PR.",
@@ -9728,9 +9746,7 @@
               "a9bf7c171a": "Push fallido",
               "834cb3f23d": "Corregir con AI",
               "783a808870": "Cerrar"
-            },
-            "createPrIntentSyncConflicts": "La sincronización encontró conflictos. Resuélvelos y vuelve a intentar Crear PR.",
-            "createPrIntentSyncing": "Sincronizando rama…"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -9903,6 +9919,136 @@
                   "05e4aec17b": "Los checks de {{value0}} estarán disponibles cuando termine la operación",
                   "d77c513c1e": "{{value0}} en progreso",
                   "b597440265": "Actualiza el estado de GitHub de esta rama para cargar checks y revisión."
+                }
+              },
+              "review": {
+                "detail": {
+                  "positive": "Orca también tiene información de {{reviewLabel}} guardada que no pudo verificar.",
+                  "rate_limited": "Orca también no pudo verificar el estado de {{reviewLabel}} porque {{provider}} está limitando temporalmente las solicitudes.",
+                  "network": "Orca también no pudo verificar el estado de {{reviewLabel}} porque este entorno no pudo conectar con {{provider}}.",
+                  "untyped": "Orca también no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                },
+                "positive": {
+                  "title": "Detalles de {{reviewLabelCap}} no disponibles",
+                  "body": "Orca ha guardado información de {{reviewLabel}} para esta rama pero no pudo confirmar su estado actual."
+                },
+                "no_review": {
+                  "title": "No se encontró ningún {{reviewLabel}}",
+                  "body": "Crea un {{reviewLabel}} para iniciar las verificaciones y la revisión."
+                },
+                "active": {
+                  "title": "Verificando estado de {{reviewLabel}}",
+                  "body": "Orca está verificando {{provider}} para un {{reviewLabel}} en esta rama."
+                },
+                "git_loading": {
+                  "title": "Verificando estado de la rama",
+                  "body": "Orca está verificando esta rama antes de mostrar las acciones de creación o publicación."
+                },
+                "git_error": {
+                  "title": "No se pudo verificar el estado de la rama",
+                  "body": "Orca no pudo confirmar el upstream de esta rama desde este entorno. Reintenta antes de publicar o crear un {{reviewLabel}}."
+                },
+                "unknown": {
+                  "title": "Estado de {{reviewLabelCap}} no disponible",
+                  "body": "Orca no ha confirmado el estado de {{reviewLabel}} para esta rama. Reintenta para verificar de nuevo."
+                },
+                "paused": {
+                  "title": "Actualización de {{provider}} pausada",
+                  "body": "{{provider}} está limitando temporalmente las solicitudes. Esto puede ocurrir incluso cuando la cuota de API mostrada no está agotada."
+                },
+                "network": {
+                  "title": "No se pudo conectar con {{provider}}",
+                  "body": "Este entorno no pudo conectar con {{provider}}. Verifica su conexión y reintenta."
+                },
+                "unknown_error": {
+                  "title": "No se pudo verificar el estado de {{reviewLabel}}",
+                  "body": "La búsqueda falló, por lo que Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                },
+                "untyped": {
+                  "title": "Estado de {{reviewLabelCap}} no disponible",
+                  "body": "Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}. Reintenta para verificar de nuevo."
+                },
+                "auth": {
+                  "title": "Autenticación de {{provider}} fallida",
+                  "body": "{{provider}} no pudo autenticar las credenciales disponibles en este entorno. Verifica el inicio de sesión de {{provider}} o el token del entorno y reintenta."
+                },
+                "permission": {
+                  "title": "Acceso denegado por {{provider}}",
+                  "body": "Las credenciales actuales de {{provider}} no pueden leer los {{reviewLabel}} de este repositorio. Verifica la cuenta, los alcances del token y el acceso al repositorio, luego reintenta."
+                },
+                "repo": {
+                  "title": "Repositorio de {{provider}} no disponible",
+                  "body": "{{provider}} no pudo resolver o acceder al repositorio del remote y cuenta actuales. Verifica el remote y el acceso al repositorio, luego reintenta."
+                },
+                "cli": {
+                  "title": "CLI de {{provider}} no disponible",
+                  "body": "Orca no pudo ejecutar la CLI de {{provider}} en este entorno. Configúrala aquí y reintenta."
+                },
+                "skipped": {
+                  "disconnected": {
+                    "title": "Host desconectado",
+                    "body": "El host de ejecución de este repositorio está desconectado, por lo que Orca no puede actualizar el estado de {{reviewLabel}}."
+                  },
+                  "bare": {
+                    "title": "Repositorio bare",
+                    "body": "Este repositorio es bare, por lo que el estado de {{reviewLabel}} no está disponible aquí."
+                  },
+                  "archived": {
+                    "title": "Repositorio archivado",
+                    "body": "Este repositorio está archivado, por lo que Orca no está actualizando el estado de {{reviewLabel}}."
+                  },
+                  "not_git": {
+                    "title": "No es un repositorio Git",
+                    "body": "Orca no pudo tratar esta carpeta como un repositorio Git para el estado de {{reviewLabel}}."
+                  },
+                  "remote": {
+                    "title": "Contexto solo remoto",
+                    "body": "Orca no pudo actualizar el estado de {{reviewLabel}} para este contexto remoto. Reintenta cuando el host esté disponible."
+                  }
+                },
+                "no_upstream": {
+                  "title": "Sin upstream configurado",
+                  "body": "Publica esta rama para configurar su upstream antes de crear un {{reviewLabel}}."
+                },
+                "needs_sync": {
+                  "title": "La rama necesita sincronizarse",
+                  "body": "Sincroniza esta rama con su upstream antes de crear un {{reviewLabel}}."
+                },
+                "auth_required": {
+                  "title": "Conecta {{provider}}",
+                  "body": "{{provider}} debe estar conectado en este entorno antes de que Orca pueda crear un {{reviewLabel}}."
+                },
+                "needs_push": {
+                  "title": "La rama tiene commits sin enviar",
+                  "body": "Envía los últimos commits antes de crear un {{reviewLabel}}."
+                },
+                "existing": {
+                  "title": "{{reviewLabelCap}} ya existe",
+                  "body": "Orca encontró un {{reviewLabel}} existente para esta rama."
+                },
+                "detached": {
+                  "title": "Sin rama actual",
+                  "body": "Selecciona una rama antes de crear un {{reviewLabel}}."
+                },
+                "dirty": {
+                  "title": "Primero confirma los cambios",
+                  "body": "Confirma o guarda tus cambios antes de crear un {{reviewLabel}}."
+                },
+                "default_branch": {
+                  "title": "En la rama por defecto",
+                  "body": "Cambia a una rama de características antes de crear un {{reviewLabel}}."
+                },
+                "fork": {
+                  "title": "Fork head no soportado",
+                  "body": "Orca no puede crear un {{reviewLabel}} desde este fork head aquí."
+                },
+                "base_missing": {
+                  "title": "La rama base no está en el remote",
+                  "body": "La base de esta rama aún no está en el remote, por lo que un {{reviewLabel}} no puede apuntar a ella."
+                },
+                "unsupported": {
+                  "title": "{{reviewLabelCap}} no soportado aquí",
+                  "body": "Este proveedor de repositorio no soporta la creación de un {{reviewLabel}} desde Orca."
                 }
               }
             }
@@ -10758,7 +10904,8 @@
             "group": "Canal de versión",
             "preview": "Vista previa",
             "stable": "Estable"
-          }
+          },
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
         },
         "MobilePage": {
           "e17393c6a3": "Vista previa del teléfono",
@@ -13273,18 +13420,18 @@
           "description": "Description",
           "status": "Status",
           "priority": "Priority",
+          "priorityNone": "None",
+          "priorityUrgent": "Urgent",
+          "priorityHigh": "High",
+          "priorityNormal": "Normal",
+          "priorityLow": "Low",
           "dueDate": "Due date",
           "comments": "Comments",
           "commentPlaceholder": "Add a comment…",
           "addComment": "Add comment",
           "open": "Open in ClickUp",
           "startWorkspace": "Start workspace",
-          "save": "Save",
-          "priorityNone": "None",
-          "priorityUrgent": "Urgent",
-          "priorityHigh": "High",
-          "priorityNormal": "Normal",
-          "priorityLow": "Low"
+          "save": "Save"
         },
         "page": {
           "connectTitle": "Connect your ClickUp account",
@@ -13296,6 +13443,7 @@
           "clearSearch": "Clear search",
           "newTask": "New ClickUp task",
           "refresh": "Refresh ClickUp tasks",
+          "id": "ID",
           "name": "Name",
           "status": "Status",
           "list": "List",
@@ -13308,8 +13456,7 @@
           "filterOpen": "Open",
           "filterCreated": "Created by me",
           "filterCompleted": "Completed",
-          "filterAll": "All",
-          "id": "ID"
+          "filterAll": "All"
         },
         "dialog": {
           "title": "Connect ClickUp",
@@ -13323,6 +13470,9 @@
           "connecting": "Connecting…",
           "connect": "Connect"
         },
+        "token": {
+          "placeholder": "pk_..."
+        },
         "create": {
           "title": "Create ClickUp task",
           "description": "Choose the destination List, then add the task details.",
@@ -13334,9 +13484,6 @@
           "cancel": "Cancel",
           "creating": "Creating…",
           "submit": "Create task"
-        },
-        "token": {
-          "placeholder": "pk_..."
         }
       }
     },
@@ -13398,7 +13545,22 @@
           "max": "Máximo",
           "on": "Activado",
           "off": "Desactivado"
-        }
+        },
+        "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
+        "commands": "Comandos",
+        "skills": "Habilidades",
+        "loadingSkills": "Cargando habilidades…",
+        "skillsUnavailableHost": "Las habilidades no están disponibles para este host",
+        "skillsLoadFailed": "No se pudieron cargar las habilidades de este host",
+        "retrySkills": "Reintentar",
+        "skillCommandCollision": "También es un nombre de habilidad - el agente decide",
+        "skillMultipleSources": "{{sourceCount}} fuentes - el agente resuelve",
+        "skillScopeProject": "Proyecto",
+        "skillScopePersonal": "Personal",
+        "skillScopeBuiltIn": "Integrado",
+        "skillScopePlugin": "Plugin",
+        "skillsLoaded": "Habilidades cargadas",
+        "noCommands": "No hay comandos coincidentes"
       },
       "tool": {
         "running": "Ejecutando…",

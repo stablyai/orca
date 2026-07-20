@@ -341,7 +341,8 @@
               "2db0bd7515": "Orca CLI 注册不可用",
               "8d6eedf97e": "无法在 PATH 中注册 Orca CLI。",
               "0f116999f1": "在安装之前重新启动 shell 或将 Orca CLI 目录添加到 PATH。",
-              "15cbedc3e3": "在运行智能体技能设置之前安装 Orca CLI。"
+              "15cbedc3e3": "在运行智能体技能设置之前安装 Orca CLI。",
+              "windowsPathUnknown": "Orca could not check your Windows user PATH"
             }
           }
         }
@@ -5311,7 +5312,8 @@
           "0c9f3cf9da": "选择 Orca 检查和安装全局智能体技能的位置。",
           "f00d6aa9b5": "WSL 在此计算机上不可用。",
           "7c776ff9d8": "wsl",
-          "fc0fcf72fd": "在技​​能设置之前注册 WSL shell 命令。"
+          "fc0fcf72fd": "在技​​能设置之前注册 WSL shell 命令。",
+          "windowsPathUnknown": "WSL shell command PATH could not be checked"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "由未自定义源代码控制 AI 的存储库使用。",
@@ -5886,7 +5888,8 @@
           "aa1263e881": "保持手机尺寸（默认）",
           "6436e56546": "用于手机配对的二维码",
           "1b1b70279a": "尚未配对任何设备。",
-          "1592afcc7a": "尚未配对任何设备。使用 Orca 手机应用程序扫描二维码。"
+          "1592afcc7a": "尚未配对任何设备。使用 Orca 手机应用程序扫描二维码。",
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub 发布",
@@ -5897,7 +5900,10 @@
           "174f4a3c6d": "通过手机控制终端和智能体。",
           "1de96ec8a6": "显示 Orca 手机端按钮",
           "682293cadf": "在左侧边栏顶部显示 Orca 手机端按钮。",
-          "d4f2b65f30": "在边栏中显示 Orca 手机端 快捷入口。"
+          "d4f2b65f30": "在边栏中显示 Orca 手机端 快捷入口。",
+          "installIntro": "从以下应用商店安装 Orca Mobile",
+          "installOutro": "，然后在下方配对。",
+          "androidApkLabel": "Android APK"
         },
         "NotificationsPane": {
           "906b4afebf": "发送测试通知",
@@ -7990,7 +7996,7 @@
               "6db86f445f": "移动端",
               "707fc78052": "选择关闭应用程序或切换离开后，您在手机设备上查看的终端会发生什么情况。",
               "1e711aca11": "当您离开手机应用程序时",
-              "126afc5dbd": "偏僻的",
+              "126afc5dbd": "远程",
               "70f505f3c3": "局域网",
               "1802188b5d": "无线上网",
               "dd6e671aa9": "地址",
@@ -8023,7 +8029,7 @@
               "8d4ba0ef09": "Beta",
               "6bfa001752": "应用程序",
               "a7eececc1d": "安卓",
-              "7e801801ac": "偏僻的",
+              "7e801801ac": "远程",
               "0b7e585cb9": "扫描",
               "59b1d75fd1": "代码",
               "87816d1c59": "qr",
@@ -8033,7 +8039,9 @@
               "671eb4173c": "通过手机控制终端和智能体。",
               "ffd52a96e4": "移动端",
               "1de96ec8a6": "显示 Orca Mobile 按钮",
-              "682293cadf": "在左侧边栏顶部显示 Orca Mobile 按钮。"
+              "682293cadf": "在左侧边栏顶部显示 Orca Mobile 按钮。",
+              "e4f4daea0e": "中继",
+              "5d5af8e041": "iPhone"
             }
           }
         },
@@ -9177,28 +9185,26 @@
           "available": "可用",
           "reconnecting": "正在重新连接",
           "unavailable": "不可用",
-          "title": "新手机应如何连接？",
-          "anywhere": "使用 Orca Relay 连接",
-          "recommended": "推荐",
-          "automaticDescription": "Orca 会优先使用直接连接，否则使用 Orca Relay。",
-          "signInDescription": "请在此桌面端登录以使用 Orca Relay。",
           "signIn": "登录",
-          "localOnly": "仅限本地网络",
-          "localShort": "局域网或 Tailscale",
-          "localDescription": "使用局域网或 Tailscale，不通过 Orca Relay 连接这部手机。"
+          "localDescription": "手机必须连接此 Wi‑Fi 或您的 Tailscale。无需登录。",
+          "pathGroup": "手机访问此电脑的方式",
+          "anywhereTitle": "Orca Relay",
+          "anywhereDescription": "手机可通过蜂窝网络或任意 Wi‑Fi 连接。需要登录。",
+          "signInRequired": "请登录以使用 Orca Mobile Relay。",
+          "relayUnavailable": "此版本不支持 Orca Relay。请使用本地网络。",
+          "signInAgain": "重新登录",
+          "localTitle": "本地网络"
         },
         "MobilePairingSetupSection": {
           "title": "配对手机",
-          "automaticDescription": "配对码包含直接访问方式和加密的 Orca Relay 备用连接。",
-          "localDescription": "配对码仅通过下方的本地网络地址连接。",
           "regenerate": "重新生成",
           "generate": "生成二维码",
-          "localSettings": "本地连接设置",
-          "localAddressDescription": "选择 Orca Mobile 可用于直接访问此电脑的局域网或专用网络地址。",
           "refresh": "刷新网络接口",
-          "tailnet": "使用自己的 tailnet 连接",
-          "tailnetDescription": "在此电脑和手机上安装 Tailscale，登录同一个 tailnet，然后在上方选择其 100.x.y.z 地址。",
-          "getTailscale": "获取 Tailscale"
+          "overview": "生成二维码，然后在 Orca Mobile 的 Pair Desktop 中扫描。",
+          "step1Title": "连接方式",
+          "step2Title": "此电脑的地址",
+          "step2RelayDescription": "距离较近时用于快速直接连接。Relay 覆盖远程访问。",
+          "step2LocalDescription": "手机必须能通过 Wi‑Fi 或 Tailscale 访问此地址。"
         },
         "MobileRelayBetaAvailability": {
           "about": "关于 Orca Relay 测试版",
@@ -9224,10 +9230,16 @@
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
         },
+        "MobileRelayBetaNotice": {
+          "notice": "Orca Relay is in beta."
+        },
         "clickup": {
-          "connectedDescription": "{{value0}} Workspace{{value1}} available",
+          "connectedDescriptionSingular": "{{value0}} Workspace available",
+          "connectedDescriptionPlural": "{{value0}} Workspaces available",
           "checkingDescription": "Checking ClickUp access before showing setup actions.",
           "disconnectedDescription": "Browse, create, update, and link ClickUp tasks.",
+          "statusConnected": "Connected",
+          "statusNotConnected": "Not connected",
           "replaceToken": "Replace token",
           "connect": "Connect ClickUp",
           "verified": "Verified",
@@ -9236,11 +9248,7 @@
           "disconnect": "Disconnect ClickUp",
           "tokenScope": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
           "setupHelp": "Use a Personal API token from ClickUp Settings → Apps.",
-          "recheck": "Re-check",
-          "statusConnected": "Connected",
-          "statusNotConnected": "Not connected",
-          "connectedDescriptionSingular": "{{value0}} Workspace available",
-          "connectedDescriptionPlural": "{{value0}} Workspaces available"
+          "recheck": "Re-check"
         }
       },
       "right": {
@@ -9288,7 +9296,16 @@
             "f273f2271c": "已启动智能体。已标记 {{value0}} 个为已解决，跳过 {{value1}} 个，失败 {{value2}} 个。",
             "aa95b81a3a": "已启动智能体。已标记 {{value0}} 个为已解决，跳过 {{value1}} 个，失败 {{value2}} 个。",
             "495b2f8c4b": "已启动智能体，但无法将选中的评论标记为已解决。",
-            "3c3ad3a1d2": "已启动智能体。选中的评论中没有可在托管平台上标记为已解决的评论。"
+            "3c3ad3a1d2": "已启动智能体。选中的评论中没有可在托管平台上标记为已解决的评论。",
+            "review": {
+              "auto_retry": "Orca 将在 {{time}} 重试。",
+              "open_review": "打开评审",
+              "retry": "重试"
+            },
+            "sync": {
+              "pending": "Syncing…",
+              "branch": "Sync Branch"
+            }
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "取消",
@@ -9696,6 +9713,7 @@
             "createPrIntentPublishing": "正在发布分支…",
             "createPrIntentForcePushing": "正在使用 lease 强制推送…",
             "createPrIntentPushing": "正在推送提交…",
+            "createPrIntentFastForwarding": "正在更新分支…",
             "createPrIntentRemoteFailed": "无法更新远程分支。请重试创建 PR。",
             "createPrIntentGeneratingDetails": "正在生成审查详情…",
             "createPrIntentBranchChangedDuringDetails": "生成审查详情时分支已更改。请重试创建 PR。",
@@ -9728,9 +9746,7 @@
               "a9bf7c171a": "推送失败",
               "834cb3f23d": "使用 AI 修复",
               "783a808870": "关闭"
-            },
-            "createPrIntentSyncConflicts": "同步遇到冲突。请解决后重试创建 PR。",
-            "createPrIntentSyncing": "正在同步分支…"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -9903,6 +9919,136 @@
                   "05e4aec17b": "{{value0}} 检查将在操作完成后可用",
                   "d77c513c1e": "{{value0}} 正在进行中",
                   "b597440265": "刷新此分支的 GitHub 状态以加载检查和审核。"
+                }
+              },
+              "review": {
+                "detail": {
+                  "positive": "Orca 也有已保存的 {{reviewLabel}} 信息但无法验证。",
+                  "rate_limited": "Orca 无法检查 {{reviewLabel}} 状态，因为 {{provider}} 正在临时限制请求。",
+                  "network": "Orca 无法检查 {{reviewLabel}} 状态，因为当前环境无法连接到 {{provider}}。",
+                  "untyped": "Orca 无法确认此分支是否已有 {{reviewLabel}}。"
+                },
+                "positive": {
+                  "title": "{{reviewLabelCap}} 详细信息不可用",
+                  "body": "Orca 已为此分支保存了 {{reviewLabel}} 信息，但无法确认其当前状态。"
+                },
+                "no_review": {
+                  "title": "未找到 {{reviewLabel}}",
+                  "body": "创建 {{reviewLabel}} 以开始检查和评审。"
+                },
+                "active": {
+                  "title": "正在检查 {{reviewLabel}} 状态",
+                  "body": "Orca 正在检查 {{provider}} 上此分支的 {{reviewLabel}}。"
+                },
+                "git_loading": {
+                  "title": "正在检查分支状态",
+                  "body": "Orca 正在检查此分支，然后显示创建或发布操作。"
+                },
+                "git_error": {
+                  "title": "无法检查分支状态",
+                  "body": "Orca 无法从当前环境确认此分支的上游。请在发布或创建 {{reviewLabel}} 之前重试。"
+                },
+                "unknown": {
+                  "title": "{{reviewLabelCap}} 状态不可用",
+                  "body": "Orca 尚未确认此分支的 {{reviewLabel}} 状态。请重试以再次检查。"
+                },
+                "paused": {
+                  "title": "{{provider}} 刷新已暂停",
+                  "body": "{{provider}} 正在临时限制请求。即使显示的 API 配额未用完，也可能发生这种情况。"
+                },
+                "network": {
+                  "title": "无法连接到 {{provider}}",
+                  "body": "当前环境无法连接到 {{provider}}。请检查连接后重试。"
+                },
+                "unknown_error": {
+                  "title": "无法检查 {{reviewLabel}} 状态",
+                  "body": "查询失败，Orca 无法确认此分支是否已有 {{reviewLabel}}。"
+                },
+                "untyped": {
+                  "title": "{{reviewLabelCap}} 状态不可用",
+                  "body": "Orca 无法确认此分支是否已有 {{reviewLabel}}。请重试以再次检查。"
+                },
+                "auth": {
+                  "title": "{{provider}} 身份验证失败",
+                  "body": "{{provider}} 无法验证当前环境中的凭据。请检查 {{provider}} 登录或环境令牌后重试。"
+                },
+                "permission": {
+                  "title": "{{provider}} 访问被拒绝",
+                  "body": "当前 {{provider}} 凭据无法读取此仓库的 {{reviewLabel}}。请检查账户、令牌范围和仓库访问权限后重试。"
+                },
+                "repo": {
+                  "title": "{{provider}} 仓库不可用",
+                  "body": "{{provider}} 无法解析或访问当前远程和账户的仓库。请检查远程和仓库访问权限后重试。"
+                },
+                "cli": {
+                  "title": "{{provider}} CLI 不可用",
+                  "body": "Orca 无法在当前环境中运行 {{provider}} CLI。请在此处设置后重试。"
+                },
+                "skipped": {
+                  "disconnected": {
+                    "title": "主机已断开连接",
+                    "body": "此仓库的执行主机已断开连接，Orca 无法刷新 {{reviewLabel}} 状态。"
+                  },
+                  "bare": {
+                    "title": "裸仓库",
+                    "body": "此仓库是裸仓库，因此此处无法使用 {{reviewLabel}} 状态。"
+                  },
+                  "archived": {
+                    "title": "仓库已归档",
+                    "body": "此仓库已归档，Orca 不会刷新 {{reviewLabel}} 状态。"
+                  },
+                  "not_git": {
+                    "title": "不是 Git 仓库",
+                    "body": "Orca 无法将此文件夹作为 Git 仓库来获取 {{reviewLabel}} 状态。"
+                  },
+                  "remote": {
+                    "title": "仅远程上下文",
+                    "body": "Orca 无法刷新此远程上下文的 {{reviewLabel}} 状态。请在主机可用后重试。"
+                  }
+                },
+                "no_upstream": {
+                  "title": "未配置上游",
+                  "body": "请在创建 {{reviewLabel}} 之前发布此分支以设置其上游。"
+                },
+                "needs_sync": {
+                  "title": "分支需要同步",
+                  "body": "请在创建 {{reviewLabel}} 之前将此分支与其上游同步。"
+                },
+                "auth_required": {
+                  "title": "连接 {{provider}}",
+                  "body": "Orca 创建 {{reviewLabel}} 之前，必须在当前环境中连接 {{provider}}。"
+                },
+                "needs_push": {
+                  "title": "分支有未推送的提交",
+                  "body": "请在创建 {{reviewLabel}} 之前推送最新提交。"
+                },
+                "existing": {
+                  "title": "{{reviewLabelCap}} 已存在",
+                  "body": "Orca 找到了此分支的现有 {{reviewLabel}}。"
+                },
+                "detached": {
+                  "title": "没有当前分支",
+                  "body": "请在创建 {{reviewLabel}} 之前检出分支。"
+                },
+                "dirty": {
+                  "title": "请先提交更改",
+                  "body": "请在创建 {{reviewLabel}} 之前提交或暂存更改。"
+                },
+                "default_branch": {
+                  "title": "在默认分支上",
+                  "body": "请在创建 {{reviewLabel}} 之前切换到功能分支。"
+                },
+                "fork": {
+                  "title": "不支持 Fork 头",
+                  "body": "Orca 无法从此处的 Fork 头创建 {{reviewLabel}}。"
+                },
+                "base_missing": {
+                  "title": "基础分支不在远程上",
+                  "body": "此分支的基础尚未在远程上，因此无法将 {{reviewLabel}} 定向到它。"
+                },
+                "unsupported": {
+                  "title": "此处不支持 {{reviewLabelCap}}",
+                  "body": "此仓库提供程序不支持从 Orca 创建 {{reviewLabel}}。"
                 }
               }
             }
@@ -10758,7 +10904,8 @@
             "group": "发布渠道",
             "preview": "预览版",
             "stable": "稳定版"
-          }
+          },
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
         },
         "MobilePage": {
           "e17393c6a3": "手机预览",
@@ -13273,18 +13420,18 @@
           "description": "Description",
           "status": "Status",
           "priority": "Priority",
+          "priorityNone": "None",
+          "priorityUrgent": "Urgent",
+          "priorityHigh": "High",
+          "priorityNormal": "Normal",
+          "priorityLow": "Low",
           "dueDate": "Due date",
           "comments": "Comments",
           "commentPlaceholder": "Add a comment…",
           "addComment": "Add comment",
           "open": "Open in ClickUp",
           "startWorkspace": "Start workspace",
-          "save": "Save",
-          "priorityNone": "None",
-          "priorityUrgent": "Urgent",
-          "priorityHigh": "High",
-          "priorityNormal": "Normal",
-          "priorityLow": "Low"
+          "save": "Save"
         },
         "page": {
           "connectTitle": "Connect your ClickUp account",
@@ -13296,6 +13443,7 @@
           "clearSearch": "Clear search",
           "newTask": "New ClickUp task",
           "refresh": "Refresh ClickUp tasks",
+          "id": "ID",
           "name": "Name",
           "status": "Status",
           "list": "List",
@@ -13308,8 +13456,7 @@
           "filterOpen": "Open",
           "filterCreated": "Created by me",
           "filterCompleted": "Completed",
-          "filterAll": "All",
-          "id": "ID"
+          "filterAll": "All"
         },
         "dialog": {
           "title": "Connect ClickUp",
@@ -13323,6 +13470,9 @@
           "connecting": "Connecting…",
           "connect": "Connect"
         },
+        "token": {
+          "placeholder": "pk_..."
+        },
         "create": {
           "title": "Create ClickUp task",
           "description": "Choose the destination List, then add the task details.",
@@ -13334,9 +13484,6 @@
           "cancel": "Cancel",
           "creating": "Creating…",
           "submit": "Create task"
-        },
-        "token": {
-          "placeholder": "pk_..."
         }
       }
     },
@@ -13398,7 +13545,22 @@
           "max": "最大",
           "on": "开",
           "off": "关"
-        }
+        },
+        "noCommandsOrSkills": "没有匹配的命令或技能",
+        "commands": "命令",
+        "skills": "技能",
+        "loadingSkills": "正在加载技能…",
+        "skillsUnavailableHost": "此主机不可用技能",
+        "skillsLoadFailed": "无法从此主机加载技能",
+        "retrySkills": "重试",
+        "skillCommandCollision": "也是技能名称 - 由代理决定",
+        "skillMultipleSources": "{{sourceCount}} 个来源 - 由代理解析",
+        "skillScopeProject": "项目",
+        "skillScopePersonal": "个人",
+        "skillScopeBuiltIn": "内置",
+        "skillScopePlugin": "插件",
+        "skillsLoaded": "技能已加载",
+        "noCommands": "没有匹配的命令"
       },
       "tool": {
         "running": "正在运行…",

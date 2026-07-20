@@ -73,8 +73,7 @@ vi.mock('../ipc/pty', () => ({
   clearPtyOwnershipForConnection: vi.fn(),
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
-  setPtyOwnership: vi.fn(),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
+  setPtyOwnership: vi.fn()
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -152,7 +151,9 @@ describe('SshRelaySession', () => {
     expect(runtime.onPtyData).toHaveBeenCalledWith(
       'ssh-pty-1',
       'hidden ssh output',
-      expect.any(Number)
+      expect.any(Number),
+      'hidden ssh output'.length,
+      undefined
     )
     expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
     // Why out-of-band: an in-band empty pty:data sentinel is ambiguous with
@@ -207,7 +208,8 @@ describe('SshRelaySession', () => {
 
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
       id: 'ssh-pty-1',
-      data: 'still delivered'
+      data: 'still delivered',
+      rawLength: 'still delivered'.length
     })
   })
 

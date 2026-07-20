@@ -11,8 +11,7 @@
  * gate ON answers from main's '2031-subscribe' fact (no parked bytes exist),
  * gate OFF keeps the byte sidecar (parked-terminal-mode2031-responder.ts).
  * Either way the reply is sent from the renderer — query authority never
- * moves to main. See docs/reference/terminal-hidden-view-parking.md and
- * docs/reference/terminal-side-effect-authority.md.
+ * moves to main.
  */
 import { isClaudeAgent } from '../../../../shared/agent-detection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'

@@ -13,6 +13,7 @@ import {
   type PendingStreamDataBatch
 } from './daemon-stream-keep-tail-drop'
 import type { DaemonEvent } from './types'
+import { appendDaemonStreamData, type DaemonStreamEnqueueOptions } from './daemon-stream-data-entry'
 
 type StreamDataClient = {
   streamSocket: Socket | null
@@ -59,11 +60,6 @@ const HELD_WRITE_THROUGH_TOTAL_CHARS = 32 * 1024 * 1024
 // sessions × this ≈ tens of KB.
 const SMALL_SESSION_HOLD_BYPASS_CHARS = 4 * 1024
 
-type EnqueueOptions = {
-  flushImmediately?: boolean
-  flushMaxChars?: number
-}
-
 type DaemonStreamDataBatcherOptions = {
   maxLineBytes?: number
   /** Fires after each stream-socket write — the only place backlog grows, so
@@ -97,26 +93,19 @@ export class DaemonStreamDataBatcher {
     this.salvageDroppedData = options.salvageDroppedData ?? (() => '')
   }
 
-  enqueue(clientId: string, sessionId: string, data: string, options: EnqueueOptions = {}): void {
+  enqueue(
+    clientId: string,
+    sessionId: string,
+    data: string,
+    options: DaemonStreamEnqueueOptions = {}
+  ): void {
     const client = this.getClient(clientId)
     if (!client?.streamSocket || client.streamSocket.destroyed) {
       return
     }
 
     const batch = this.getOrCreateBatch(clientId)
-    const last = batch.queue.at(-1)
-    // Never coalesce across a control entry — it marks a position in the
-    // session's byte order.
-    if (last?.sessionId === sessionId && !last.control) {
-      last.data += data
-    } else {
-      batch.queue.push({ sessionId, data })
-    }
-    batch.queuedChars += data.length
-    batch.queuedCharsBySession.set(
-      sessionId,
-      (batch.queuedCharsBySession.get(sessionId) ?? 0) + data.length
-    )
+    appendDaemonStreamData(batch, sessionId, data, options)
 
     if (this.isSessionDroppable(sessionId)) {
       // Keep-tail scales down as more backgrounded sessions queue, bounding
@@ -256,12 +245,16 @@ export class DaemonStreamDataBatcher {
         })
       }
       const end =
-        entry.data.length <= BULK_WRITE_SLICE_CHARS
+        entry.transformed || entry.data.length <= BULK_WRITE_SLICE_CHARS
           ? entry.data.length
           : clampToSafeSplitIndex(entry.data, 0, BULK_WRITE_SLICE_CHARS)
       const slice = entry.data.slice(0, end)
       const entrySequenceChars = entry.sequenceChars ?? entry.data.length
-      const sliceSequenceChars = entrySequenceChars === 0 ? 0 : slice.length
+      const sliceSequenceChars = entry.transformed
+        ? entrySequenceChars
+        : entrySequenceChars === 0
+          ? 0
+          : slice.length
       if (end >= entry.data.length) {
         batch.queue.shift()
       } else {
@@ -278,7 +271,15 @@ export class DaemonStreamDataBatcher {
       } else {
         batch.queuedCharsBySession.set(entry.sessionId, sessionHeldAfter)
       }
-      writeStreamDataEvents(socket, entry.sessionId, slice, this.maxLineBytes, sliceSequenceChars)
+      writeStreamDataEvents(
+        socket,
+        entry.sessionId,
+        slice,
+        this.maxLineBytes,
+        sliceSequenceChars,
+        entry.seq,
+        entry.transformed
+      )
       this.onAfterSocketWrite?.()
     }
     if (retained.length > 0) {
@@ -369,7 +370,9 @@ export class DaemonStreamDataBatcher {
           entry.sessionId,
           entry.data,
           this.maxLineBytes,
-          entry.sequenceChars ?? entry.data.length
+          entry.sequenceChars ?? entry.data.length,
+          entry.seq,
+          entry.transformed
         )
         this.onAfterSocketWrite?.()
       }

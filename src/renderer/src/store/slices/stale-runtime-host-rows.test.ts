@@ -97,4 +97,20 @@ describe('dropWorktreeRowsForRemovedRuntimeEnvironments', () => {
     expect(result.rowsByRepo.repoChanging).not.toBe(changing)
     expect(result.rowsByRepo.repoChanging).toEqual([row('w-keep', 'local')])
   })
+
+  it('drops unhosted rows only for an unambiguously removed sole-owner repo', () => {
+    const rowsByRepo = {
+      removedRepo: [row('w-legacy')],
+      ambiguousRepo: [row('w-ambiguous')]
+    }
+    const result = dropWorktreeRowsForRemovedRuntimeEnvironments(
+      rowsByRepo,
+      new Set(['env-a']),
+      new Set(['removedRepo'])
+    )
+
+    expect(result.rowsByRepo.removedRepo).toEqual([])
+    expect(result.rowsByRepo.ambiguousRepo).toEqual([row('w-ambiguous')])
+    expect(result.removedWorktreeIds).toEqual(['w-legacy'])
+  })
 })

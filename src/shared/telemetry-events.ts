@@ -470,6 +470,22 @@ const nativeChatMessageSentSchema = z
     runtime: nativeChatRuntimeSchema
   })
   .strict()
+const nativeChatPickerOpenedSchema = z
+  .object({ agent_kind: agentKindSchema, prefix: z.enum(['slash', 'dollar']) })
+  .strict()
+const nativeChatPickerItemAcceptedSchema = z
+  .object({ agent_kind: agentKindSchema, item_kind: z.enum(['command', 'skill']) })
+  .strict()
+const nativeChatSendClassifiedSchema = z
+  .object({ agent_kind: agentKindSchema, outcome: z.enum(['chat', 'command', 'unknown-token']) })
+  .strict()
+const nativeChatSkillDiscoverySchema = z
+  .object({
+    agent_kind: agentKindSchema,
+    outcome: z.enum(['ready', 'error', 'timeout', 'unavailable']),
+    execution_host_kind: z.enum(['local', 'runtime', 'ssh'])
+  })
+  .strict()
 
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
@@ -1432,6 +1448,10 @@ export const eventSchemas = {
 
   native_chat_toggled: nativeChatToggledSchema,
   native_chat_message_sent: nativeChatMessageSentSchema,
+  native_chat_picker_opened: nativeChatPickerOpenedSchema,
+  native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
+  native_chat_send_classified: nativeChatSendClassifiedSchema,
+  native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,

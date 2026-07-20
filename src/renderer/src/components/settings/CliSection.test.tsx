@@ -1,5 +1,8 @@
+// @vitest-environment happy-dom
+
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { CliSection } from './CliSection'
 
@@ -12,6 +15,9 @@ const capturedPanel = vi.hoisted(() => ({
   },
   useInstalledAgentSkill: vi.fn()
 }))
+const toastError = vi.hoisted(() => vi.fn())
+
+vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   GLOBAL_AGENT_SKILL_SOURCE_KINDS: ['global'],
@@ -23,6 +29,12 @@ capturedPanel.useInstalledAgentSkill.mockReturnValue({
   loading: false,
   error: null,
   refresh: vi.fn()
+})
+
+afterEach(() => {
+  cleanup()
+  toastError.mockReset()
+  vi.unstubAllGlobals()
 })
 
 vi.mock('./AgentSkillSetupPanel', () => ({
@@ -97,5 +109,41 @@ describe('CliSection project runtime defaults', () => {
     )
     expect(getWslInstallStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
     expect(getWslInstallStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders an inline unknown PATH state without offering a mutation', async () => {
+    const getInstallStatus = vi.fn().mockResolvedValue({
+      platform: 'win32',
+      commandName: 'orca',
+      commandPath: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      pathDirectory: 'C:\\Program Files\\Orca\\resources\\bin',
+      pathConfigured: null,
+      launcherPath: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      installMethod: 'wrapper',
+      supported: true,
+      state: 'installed',
+      currentTarget: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      unsupportedReason: null,
+      detail: 'Orca could not read the Windows user PATH registry value.'
+    })
+    Object.assign(window, {
+      api: {
+        cli: {
+          getInstallStatus,
+          getWslInstallStatus: vi.fn(),
+          install: vi.fn(),
+          remove: vi.fn()
+        },
+        shell: { openPath: vi.fn() }
+      }
+    })
+
+    render(<CliSection currentPlatform="win32" settings={getDefaultSettings('/tmp')} />)
+
+    expect(await screen.findByText(/could not read the Windows user PATH/i)).toBeDefined()
+    const registrationSwitch = screen.getByRole('switch') as HTMLButtonElement
+    expect(registrationSwitch.disabled).toBe(true)
+    expect(registrationSwitch.getAttribute('aria-checked')).toBe('false')
+    expect(toastError).not.toHaveBeenCalled()
   })
 })

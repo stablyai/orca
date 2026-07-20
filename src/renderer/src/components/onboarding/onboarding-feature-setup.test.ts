@@ -301,4 +301,24 @@ describe('onboarding feature setup runner', () => {
       installCli.mock.invocationCallOrder[0]
     )
   })
+
+  it('warns without changing PATH when the Windows registry read is unknown', async () => {
+    const unknownStatus: CliInstallStatus = {
+      ...INSTALLED_CLI_STATUS,
+      platform: 'win32',
+      pathConfigured: null,
+      detail: 'Orca could not read the Windows user PATH registry value.'
+    }
+    const deps = createDeps({ getCliStatus: vi.fn(async () => unknownStatus) })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: true, computerUse: false, orchestration: false, linearTickets: false },
+      deps
+    )
+
+    expect(result.cliTouched).toBe(false)
+    expect(result.warnings).toContainEqual({ featureId: 'cli', message: unknownStatus.detail })
+    expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
+    expect(deps.installCli).not.toHaveBeenCalled()
+  })
 })

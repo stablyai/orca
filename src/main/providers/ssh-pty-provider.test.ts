@@ -49,6 +49,21 @@ describe('SshPtyProvider', () => {
       expect(result).toEqual({ id: scopedPty1 })
     })
 
+    it('gates fresh startup intent with the relay ingress capability version', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-1' })
+      const startupIngress = {
+        colors: { foreground: '#eeeeee', background: '#111111' },
+        deadlineMs: 5_000
+      }
+
+      await provider.spawn({ cols: 80, rows: 24, startupIngress })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.spawn',
+        expect.objectContaining({ startupIngressVersion: 1, startupIngress })
+      )
+    })
+
     it('passes cwd and env through', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 
@@ -324,6 +339,26 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('never sends fresh startup intent on relay reattach', async () => {
+      mux.request.mockResolvedValue({ replay: 'restored' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: scopedPty1,
+        startupIngress: {
+          colors: { foreground: '#eeeeee', background: '#111111' },
+          deadlineMs: 5_000
+        }
+      })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.attach',
+        expect.not.objectContaining({ startupIngress: expect.anything() })
+      )
+      expect(mux.request).not.toHaveBeenCalledWith('pty.spawn', expect.anything())
+    })
+
     it('reattaches scoped app ids using raw relay ids', async () => {
       mux.request.mockResolvedValue({ replay: 'buffered-output' })
 
@@ -529,6 +564,28 @@ describe('SshPtyProvider', () => {
       notifHandler('pty.data', { id: 'pty-1', data: 'output' })
 
       expect(handler).toHaveBeenCalledWith({ id: scopedPty1, data: 'output' })
+    })
+
+    it('forwards empty transformed relay spans without reinterpreting them', () => {
+      const handler = vi.fn()
+      provider.onData(handler)
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+
+      notifHandler('pty.data', {
+        id: 'pty-1',
+        data: '',
+        rawLength: 9,
+        seq: 9,
+        transformed: true
+      })
+
+      expect(handler).toHaveBeenCalledWith({
+        id: scopedPty1,
+        data: '',
+        sequenceChars: 9,
+        seq: 9,
+        transformed: true
+      })
     })
 
     it('forwards pty.replay notifications to replay listeners', () => {

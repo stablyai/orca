@@ -8,7 +8,6 @@
  * reveal, tab close, PTY exit, or worktree teardown. The bookkeeping maps
  * live in terminal-parked-watcher-registry so the terminals store slice can
  * dispose watchers without importing this store-coupled module.
- * See docs/reference/terminal-hidden-view-parking.md.
  */
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'

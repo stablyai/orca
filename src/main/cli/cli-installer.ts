@@ -18,6 +18,12 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:pat
 import { promisify } from 'node:util'
 import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-install-types'
 import { buildAppImageCliWrapper } from './appimage-cli-wrapper'
+import {
+  invalidateWindowsUserPathRegistryCache,
+  readFreshWindowsUserPathRegistry,
+  readWindowsUserPathRegistry,
+  type WindowsUserPathReadResult
+} from './windows-user-path-registry'
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_MAC_COMMAND_PATH = '/usr/local/bin/orca'
@@ -25,7 +31,7 @@ const DEV_COMMAND_NAME = 'orca-dev'
 const LINUX_COMMAND_NAME = 'orca-ide'
 const LEGACY_LINUX_COMMAND_NAME = 'orca'
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
-const WINDOWS_PATH_COMMAND_TIMEOUT_MS = 5_000
+const WINDOWS_PATH_WRITE_TIMEOUT_MS = 5_000
 
 type CliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -41,8 +47,11 @@ type CliInstallerOptions = {
   /** Feeds into the /usr/local/bin existence check at construction time; used in tests to simulate absent /usr/local/bin on arm64 without relying on real filesystem state. */
   defaultMacCommandPath?: string
   privilegedRunner?: (command: string) => Promise<void>
-  userPathReader?: () => Promise<string | null>
+  userPathReader?: () => Promise<WindowsUserPathReadResult>
+  userPathMutationReader?: () => Promise<WindowsUserPathReadResult>
   userPathWriter?: (value: string) => Promise<void>
+  userPathCacheInvalidator?: () => void
+  windowsEnvironment?: NodeJS.ProcessEnv
   /** Why: AppImage reports a stable outer file path via $APPIMAGE while bundled resources live in an ephemeral FUSE mount. */
   appImagePath?: string | null
 }
@@ -65,8 +74,11 @@ export class CliInstaller {
   private readonly commandPathOverride: string | null
   private readonly macCommandPath: string
   private readonly privilegedRunner: (command: string) => Promise<void>
-  private readonly userPathReader: () => Promise<string | null>
+  private readonly userPathReader: () => Promise<WindowsUserPathReadResult>
+  private readonly userPathMutationReader: () => Promise<WindowsUserPathReadResult>
   private readonly userPathWriter: (value: string) => Promise<void>
+  private readonly userPathCacheInvalidator: () => void
+  private readonly windowsEnvironment: NodeJS.ProcessEnv
   private readonly appImagePath: string | null
 
   private get commandName(): string {
@@ -105,8 +117,13 @@ export class CliInstaller {
       ? candidateMacPath
       : join(this.homePath, '.local', 'bin', 'orca')
     this.privilegedRunner = options.privilegedRunner ?? runMacPrivilegedCommand
-    this.userPathReader = options.userPathReader ?? (() => readWindowsUserPath())
+    this.userPathReader = options.userPathReader ?? readWindowsUserPathRegistry
+    this.userPathMutationReader =
+      options.userPathMutationReader ?? options.userPathReader ?? readFreshWindowsUserPathRegistry
     this.userPathWriter = options.userPathWriter ?? ((value) => writeWindowsUserPath(value))
+    this.userPathCacheInvalidator =
+      options.userPathCacheInvalidator ?? invalidateWindowsUserPathRegistryCache
+    this.windowsEnvironment = options.windowsEnvironment ?? process.env
     this.appImagePath =
       this.platform === 'linux' && this.isPackaged
         ? (options.appImagePath ?? process.env.APPIMAGE ?? null)
@@ -164,8 +181,8 @@ export class CliInstaller {
           ? await this.inspectAppImageWrapper(spec.commandPath, launcherPath)
           : await this.inspectWindowsWrapper(spec.commandPath, launcherPath)
     const pathDirectory = dirname(spec.commandPath)
-    const pathConfigured = await this.isPathConfigured(pathDirectory)
-    return this.withPathInfo(baseStatus, pathDirectory, pathConfigured)
+    const pathProbe = await this.probePathConfiguration(pathDirectory)
+    return this.withPathInfo(baseStatus, pathDirectory, pathProbe)
   }
 
   async install(): Promise<CliInstallStatus> {
@@ -763,23 +780,40 @@ export class CliInstaller {
     }
   }
 
-  private async isPathConfigured(pathDirectory: string): Promise<boolean> {
-    const pathValue =
-      this.platform === 'win32' ? await this.userPathReader() : (this.processPathEnv ?? '')
-    return splitPathEntries(this.platform, pathValue).some((entry) =>
-      samePathEntry(this.platform, entry, pathDirectory)
-    )
+  private async probePathConfiguration(
+    pathDirectory: string
+  ): Promise<{ configured: boolean | null; detail: string | null }> {
+    if (this.platform !== 'win32') {
+      return {
+        configured: splitPathEntries(this.platform, this.processPathEnv ?? '').some((entry) =>
+          samePathEntry(this.platform, entry, pathDirectory)
+        ),
+        detail: null
+      }
+    }
+
+    const result = await this.userPathReader()
+    if (result.state === 'unknown') {
+      return { configured: null, detail: result.detail }
+    }
+    return {
+      configured: splitPathEntries('win32', result.value).some((entry) =>
+        samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, result.expandable)
+      ),
+      detail: null
+    }
   }
 
   private withPathInfo(
     status: CliInstallStatus,
     pathDirectory: string,
-    pathConfigured: boolean
+    pathProbe: { configured: boolean | null; detail: string | null }
   ): CliInstallStatus {
+    const { configured: pathConfigured } = pathProbe
     if (
       this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath) &&
       status.state === 'installed' &&
-      !pathConfigured
+      pathConfigured === false
     ) {
       return {
         ...status,
@@ -788,6 +822,17 @@ export class CliInstaller {
         state: 'not_installed',
         currentTarget: null,
         detail: `Register ${status.commandPath} to use Orca from Command Prompt or PowerShell.`
+      }
+    }
+
+    if (pathConfigured === null) {
+      return {
+        ...status,
+        pathDirectory,
+        pathConfigured,
+        detail:
+          pathProbe.detail ??
+          'The Orca launcher exists, but Orca could not check your Windows user PATH.'
       }
     }
 
@@ -819,9 +864,13 @@ export class CliInstaller {
   }
 
   private async ensureWindowsPathEntry(pathDirectory: string): Promise<void> {
-    const current = await this.userPathReader()
-    const entries = splitPathEntries('win32', current)
-    if (entries.some((entry) => samePathEntry('win32', entry, pathDirectory))) {
+    const current = await this.readWindowsUserPathForMutation()
+    const entries = splitPathEntries('win32', current.value)
+    if (
+      entries.some((entry) =>
+        samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, current.expandable)
+      )
+    ) {
       return
     }
     entries.push(pathDirectory)
@@ -832,13 +881,29 @@ export class CliInstaller {
     if (this.platform !== 'win32') {
       return
     }
-    const current = await this.userPathReader()
-    const entries = splitPathEntries('win32', current)
-    const nextEntries = entries.filter((entry) => !samePathEntry('win32', entry, pathDirectory))
+    const current = await this.readWindowsUserPathForMutation()
+    const entries = splitPathEntries('win32', current.value)
+    const nextEntries = entries.filter(
+      (entry) =>
+        !samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, current.expandable)
+    )
     if (nextEntries.length === entries.length) {
       return
     }
     await this.writeWindowsUserPathEntry(nextEntries.join(';'), pathDirectory, 'remove')
+  }
+
+  private async readWindowsUserPathForMutation(): Promise<{
+    value: string | null
+    expandable: boolean
+  }> {
+    const result = await this.userPathMutationReader()
+    if (result.state === 'success') {
+      return { value: result.value, expandable: result.expandable }
+    }
+    // Why: PATH updates are read-modify-write; continuing after an unknown read
+    // could replace the user's existing PATH with an incomplete value.
+    throw new Error(`${result.detail} No PATH changes were made.`)
   }
 
   // Why: raw PowerShell errors reach the UI, so translate denied PATH writes
@@ -850,6 +915,7 @@ export class CliInstaller {
   ): Promise<void> {
     try {
       await this.userPathWriter(value)
+      this.userPathCacheInvalidator()
     } catch (error) {
       if (!isWindowsUserPathPermissionError(error)) {
         throw error
@@ -1019,9 +1085,16 @@ function uniquePathEntries(platform: NodeJS.Platform, entries: string[]): string
   return result
 }
 
-function samePathEntry(platform: NodeJS.Platform, left: string, right: string): boolean {
+function samePathEntry(
+  platform: NodeJS.Platform,
+  left: string,
+  right: string,
+  windowsEnvironment: NodeJS.ProcessEnv = process.env,
+  expandWindowsVariables = true
+): boolean {
   return platform === 'win32'
-    ? normalizeWindowsPath(left) === normalizeWindowsPath(right)
+    ? normalizeWindowsPath(left, windowsEnvironment, expandWindowsVariables) ===
+        normalizeWindowsPath(right, windowsEnvironment, expandWindowsVariables)
     : left === right
 }
 
@@ -1043,8 +1116,22 @@ async function isExecutableFile(commandPath: string): Promise<boolean> {
   }
 }
 
-function normalizeWindowsPath(value: string): string {
-  return value.replaceAll('/', '\\').replace(/\\+$/, '').toLowerCase()
+function normalizeWindowsPath(
+  value: string,
+  env: NodeJS.ProcessEnv = process.env,
+  expandEnvironmentVariables = true
+): string {
+  return (expandEnvironmentVariables ? expandWindowsEnvironmentVariables(value, env) : value)
+    .replaceAll('/', '\\')
+    .replace(/\\+$/, '')
+    .toLowerCase()
+}
+
+function expandWindowsEnvironmentVariables(value: string, env: NodeJS.ProcessEnv): string {
+  return value.replace(/%([^%]+)%/g, (match, rawName: string) => {
+    const envKey = Object.keys(env).find((key) => key.toLowerCase() === rawName.toLowerCase())
+    return envKey && env[envKey] ? env[envKey] : match
+  })
 }
 
 function escapeWindowsBatchValue(value: string): string {
@@ -1108,15 +1195,6 @@ function isAbsoluteForPlatform(platform: NodeJS.Platform, value: string): boolea
   return isAbsolute(value)
 }
 
-async function readWindowsUserPath(): Promise<string | null> {
-  const stdout = await runWindowsPathCommand([
-    '-NoProfile',
-    '-Command',
-    "[Environment]::GetEnvironmentVariable('Path','User')"
-  ])
-  return stdout.trim() || null
-}
-
 async function writeWindowsUserPath(value: string): Promise<void> {
   await runWindowsPathCommand([
     '-NoProfile',
@@ -1150,16 +1228,14 @@ function runWindowsPathCommand(args: string[]): Promise<string> {
     // not keep command registration status or install/remove pending forever.
     const timeout = setTimeout(() => {
       child?.kill()
-      finish(
-        new Error(`Windows PATH command timed out after ${WINDOWS_PATH_COMMAND_TIMEOUT_MS}ms.`)
-      )
-    }, WINDOWS_PATH_COMMAND_TIMEOUT_MS)
+      finish(new Error(`Windows PATH command timed out after ${WINDOWS_PATH_WRITE_TIMEOUT_MS}ms.`))
+    }, WINDOWS_PATH_WRITE_TIMEOUT_MS)
 
     try {
       child = execFile(
         'powershell',
         args,
-        { encoding: 'utf8', timeout: WINDOWS_PATH_COMMAND_TIMEOUT_MS },
+        { encoding: 'utf8', timeout: WINDOWS_PATH_WRITE_TIMEOUT_MS },
         (error, stdout) => {
           finish(error ?? null, stdout)
         }

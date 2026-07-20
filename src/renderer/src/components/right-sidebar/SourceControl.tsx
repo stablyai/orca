@@ -195,7 +195,10 @@ import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
-import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
+import {
+  isBehindOnlyUpstream,
+  shouldForcePushWithLeaseForUpstream
+} from '../../../../shared/git-upstream-status'
 import type {
   DiffComment,
   GitBranchChangeEntry,
@@ -258,7 +261,6 @@ import {
   createPrIntentRunTokenMatches,
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
-  isCreatePrIntentSyncConflictError,
   resolveCreatePrIntentReviewBase,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
@@ -2515,6 +2517,16 @@ function SourceControlInner(): React.JSX.Element {
   // chevron dropdown can trigger. Keeps the error-swallow pattern in one
   // place — store slices already surface actionable toasts, so additional
   // try/catch here would duplicate the notification.
+  // Why: callers must distinguish real failures from "a newer remote action won
+  // the sequence" and "this call was a no-op (missing target/base)". Collapsing
+  // those into `{ ok: false, error: null }` made Create PR treat supersession as
+  // a destructive remote failure.
+  type RunRemoteActionResult =
+    | { status: 'ok' }
+    | { status: 'failed'; error: SourceControlActionError }
+    | { status: 'superseded' }
+    | { status: 'skipped' }
+
   const runRemoteAction = useCallback(
     async (
       kind:
@@ -2530,10 +2542,7 @@ function SourceControlInner(): React.JSX.Element {
         target?: SourceControlOperationTarget
         baseRef?: string | null
       }
-      // Why: return the failure inline (null error = success or superseded) so
-      // callers like the Create PR intent flow can classify it without a
-      // stale-prone mirror of remoteActionErrors.
-    ): Promise<{ ok: boolean; error: SourceControlActionError | null }> => {
+    ): Promise<RunRemoteActionResult> => {
       const target =
         options?.target ??
         (activeWorktreeId && worktreePath
@@ -2546,7 +2555,7 @@ function SourceControlInner(): React.JSX.Element {
             }
           : null)
       if (!target) {
-        return { ok: false, error: null }
+        return { status: 'skipped' }
       }
       const sequence = (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] ?? 0) + 1
       remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] = sequence
@@ -2572,7 +2581,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return { ok: true, error: null }
+          return { status: 'ok' }
         }
         if (kind === 'push') {
           // Why: kind 'push' must stay a regular push. Force-with-lease is only
@@ -2587,7 +2596,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return { ok: true, error: null }
+          return { status: 'ok' }
         }
         if (kind === 'force_push') {
           await pushBranch(
@@ -2598,7 +2607,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { forceWithLease: true, runtimeTargetSettings: target.settings }
           )
-          return { ok: true, error: null }
+          return { status: 'ok' }
         }
         if (kind === 'pull') {
           await pullBranch(
@@ -2610,7 +2619,7 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return { ok: true, error: null }
+          return { status: 'ok' }
         }
         if (kind === 'fast_forward') {
           await fastForwardBranch(
@@ -2620,7 +2629,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return { ok: true, error: null }
+          return { status: 'ok' }
         }
         if (kind === 'fetch') {
           await fetchBranch(
@@ -2632,12 +2641,12 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return { ok: true, error: null }
+          return { status: 'ok' }
         }
         if (kind === 'rebase') {
           const baseRef = options?.baseRef ?? effectiveBaseRef
           if (!baseRef) {
-            return { ok: false, error: null }
+            return { status: 'skipped' }
           }
           await rebaseFromBase(
             target.worktreeId,
@@ -2647,7 +2656,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return { ok: true, error: null }
+          return { status: 'ok' }
         }
         await syncBranch(
           target.worktreeId,
@@ -2661,14 +2670,14 @@ function SourceControlInner(): React.JSX.Element {
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
           setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
         }
-        return { ok: true, error: null }
+        return { status: 'ok' }
       } catch (error) {
         // Why: remote action failures are surfaced by editor-slice actions to keep
         // one consistent toast path and avoid duplicate notifications in the UI.
         // Keep the latest failure inline too: dropdown-only actions like Fetch can
         // otherwise look like nothing happened once the menu closes.
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
-          return { ok: false, error: null }
+          return { status: 'superseded' }
         }
         const actionError: SourceControlActionError = {
           kind,
@@ -2682,7 +2691,7 @@ function SourceControlInner(): React.JSX.Element {
           sequence
         }
         setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: actionError }))
-        return { ok: false, error: actionError }
+        return { status: 'failed', error: actionError }
       } finally {
         if (!options?.target) {
           refreshSourceControlAfterRemoteAction({
@@ -3333,10 +3342,8 @@ function SourceControlInner(): React.JSX.Element {
         if (stale) {
           return
         }
-        // Why: a failed/timed-out remote probe must not leave an inert disabled
-        // button. When the local git status determines a blocker (dirty, no
-        // upstream, needs push/sync), surface the actionable preparation intent;
-        // otherwise fall back to the retryable failed state.
+        // Why: a failed remote probe can provide branch guidance, but it cannot
+        // authorize hosted-review creation.
         const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
           resolveCurrentHostedReviewCreationProvider(),
           {
@@ -3967,6 +3974,42 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
 
+      // Why: fast-forward behind-only *before* commit so a dirty worktree does
+      // not become ahead+behind after Create PR commits, then dead-end at the
+      // explicit sync-first stop. --ff-only refuses if the branch diverged mid
+      // flight or local edits would be overwritten — never auto-merges.
+      if (isBehindOnlyUpstream(latestUpstreamStatus)) {
+        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+          tone: 'muted',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.createPrIntentFastForwarding',
+            'Updating branch…'
+          )
+        })
+        const earlyFfResult = await runRemoteAction('fast_forward', {
+          target: operationTarget
+        })
+        if (abortIfStale()) {
+          return
+        }
+        if (earlyFfResult.status === 'superseded') {
+          return
+        }
+        if (earlyFfResult.status !== 'ok') {
+          setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            tone: 'destructive',
+            message: translate(
+              'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
+              'Could not update the remote branch. Retry Create PR.'
+            )
+          })
+          return
+        }
+        if (!(await refreshIntentSnapshot())) {
+          return
+        }
+      }
+
       if (!(await stageLatestIntentPaths())) {
         return
       }
@@ -4100,7 +4143,7 @@ function SourceControlInner(): React.JSX.Element {
       if (remoteStep === 'blocked' || remoteStep === 'none') {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'muted',
-          // Why: a diverged branch is deliberately not auto-synced (that would
+          // Why: a diverged branch is deliberately not auto-prepared (that would
           // merge without consent), so keep the explicit sync-first guidance.
           message:
             eligibility.blockedReason === 'needs_sync'
@@ -4131,10 +4174,10 @@ function SourceControlInner(): React.JSX.Element {
                   'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing',
                   'Force pushing with lease…'
                 )
-              : remoteStep === 'sync'
+              : remoteStep === 'fast_forward'
                 ? translate(
-                    'auto.components.right.sidebar.SourceControl.createPrIntentSyncing',
-                    'Syncing branch…'
+                    'auto.components.right.sidebar.SourceControl.createPrIntentFastForwarding',
+                    'Updating branch…'
                   )
                 : translate(
                     'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
@@ -4148,20 +4191,17 @@ function SourceControlInner(): React.JSX.Element {
       if (abortIfStale()) {
         return
       }
-      if (!remoteResult.ok) {
-        // A sync push-stage rejection is not a conflict — it falls to the generic
-        // copy so the push-recovery panel drives the fix.
+      // Superseded by a newer remote action — drop quietly, same as target drift.
+      if (remoteResult.status === 'superseded') {
+        return
+      }
+      if (remoteResult.status !== 'ok') {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
-          message: isCreatePrIntentSyncConflictError(remoteResult.error)
-            ? translate(
-                'auto.components.right.sidebar.SourceControl.createPrIntentSyncConflicts',
-                'Sync hit conflicts. Resolve them, then retry Create PR.'
-              )
-            : translate(
-                'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
-                'Could not update the remote branch. Retry Create PR.'
-              )
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
+            'Could not update the remote branch. Retry Create PR.'
+          )
         })
         return
       }

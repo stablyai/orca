@@ -39,6 +39,10 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { sliceCheckLogTail } from './check-job-log-tail-slice'
+import {
+  classifyPRRefreshError,
+  safePRRefreshErrorMessage
+} from './pr-refresh-error-classification'
 import { getPRConflictSummary } from './conflict-summary'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -47,7 +51,6 @@ import {
   execFileAsync,
   ghExecFileAsync,
   gitExecFileAsync,
-  extractExecError,
   acquire,
   release,
   getOwnerRepo,
@@ -63,6 +66,9 @@ import {
   type LocalGitExecOptions,
   type OwnerRepo
 } from './gh-utils'
+// Import the pure error-parsing helpers from the lightweight module, not
+// `./gh-utils`, so tests that mock gh-utils still resolve the real functions.
+import { extractExecError, parseRetryAfterMs } from '../git/exec-error'
 import {
   isCommitPartOfMergedPR,
   type MergedPRCommitMembership
@@ -181,61 +187,28 @@ async function assertRateLimitBudget(bucket: RateLimitBucketKind): Promise<void>
   }
 }
 
-function classifyPRRefreshError(
-  err: unknown
-): Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType'] {
-  const message = err instanceof Error ? err.message : String(err)
-  // Why: GitHub-unreachable buckets (5xx outage / network / rate limit) share
-  // one detector with the Tasks work-item path so both surfaces attribute an
-  // outage to GitHub identically. Rate-limit responses also carry "HTTP 403",
-  // so this must run before the permission check below.
-  const unavailable = classifyGitHubUnavailable(message)
-  if (unavailable) {
-    return unavailable
-  }
-  const lower = message.toLowerCase()
-  if (lower.includes('http 403') || lower.includes('resource not accessible')) {
-    return 'permission'
-  }
-  if (lower.includes('http 404') || lower.includes('could not resolve to a repository')) {
-    return 'repo_unavailable'
-  }
-  return /auth|login|credential/i.test(message) ? 'auth' : 'unknown'
-}
-
-function safePRRefreshErrorMessage(
-  errorType: Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType']
-): string {
-  switch (errorType) {
-    case 'rate_limited':
-      return 'GitHub rate limit is low. Try again after the limit resets.'
-    case 'auth':
-      return 'GitHub authentication is unavailable. Check your gh login.'
-    case 'network':
-      return 'GitHub is unreachable right now. Check your network and try again.'
-    case 'server_error':
-      return "GitHub's API is temporarily unavailable (server error). This is a GitHub-side issue."
-    case 'permission':
-      return 'GitHub did not allow access to this pull request.'
-    case 'repo_unavailable':
-      return 'The GitHub repository is unavailable or cannot be resolved.'
-    case 'gh_unavailable':
-      return 'GitHub CLI is unavailable.'
-    case 'unknown':
-      return 'GitHub pull request refresh failed.'
-  }
-}
-
 function prRefreshUpstreamError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }> {
   const errorType = classifyPRRefreshError(err)
-  return {
+  const outcome: Extract<PRRefreshOutcome, { kind: 'upstream-error' }> = {
     kind: 'upstream-error',
     errorType,
     message: safePRRefreshErrorMessage(errorType),
     fetchedAt: Date.now()
   }
+  // Why: a rate limit that carries a Retry-After is a real cooldown — surface it
+  // as the retry schedule so the renderer disables manual Retry until the reset
+  // and shows a truthful auto-retry time, instead of retrying into another 429.
+  if (errorType === 'rate_limited') {
+    const retryAfterMs = parseRetryAfterMs(extractExecError(err).stderr)
+    if (retryAfterMs !== null && retryAfterMs > 0) {
+      const retryAt = Date.now() + retryAfterMs
+      outcome.nextAutoRetryAt = retryAt
+      outcome.retryDisabledUntil = retryAt
+    }
+  }
+  return outcome
 }
 
 function isNoPullRequestError(err: unknown): boolean {

@@ -14,7 +14,8 @@ describe('skill freshness inventory limits', () => {
         label: `Repo ${index}`,
         path: `/repo-${index}/.agents/skills`,
         sourceKind: 'repo',
-        providers: ['agent-skills']
+        providers: ['agent-skills'],
+        owner: null
       })
     )
 

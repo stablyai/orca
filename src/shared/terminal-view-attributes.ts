@@ -1,6 +1,6 @@
 /**
- * Phase 5 slice 2 (docs/reference/terminal-query-authority.md §View-attribute
- * bridge): payload contract for the renderer→main `pty:terminalViewAttributes`
+ * Phase 5 slice 2 (View-attribute bridge): payload contract for the
+ * renderer→main `pty:terminalViewAttributes`
  * push, plus main/renderer mirrors of xterm's XParseColor color-spec grammar
  * so main's responder replies byte-identically to a visible renderer xterm.
  */

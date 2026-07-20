@@ -41,8 +41,7 @@ import {
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
   deletePtyOwnership,
-  setPtyOwnership,
-  answerStartupTerminalColorQueriesForPty
+  setPtyOwnership
 } from '../ipc/pty'
 import {
   recordHiddenRendererPtyDataDrop,
@@ -1020,6 +1019,10 @@ export class SshRelaySession {
 
     if (reason === 'shutdown') {
       clearPtyOwnershipForConnection(this.targetId)
+    } else {
+      // Why: handlers are detached above, so no late event can recreate a
+      // stamped status between this clear and reconnect replay.
+      agentHookServer.clearStatusEntriesForConnection(this.targetId)
     }
 
     const ptyProvider = getSshPtyProvider(this.targetId)
@@ -1116,8 +1119,14 @@ export class SshRelaySession {
 
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
     ptyProvider.onData((payload) => {
-      const seq = this.runtime?.onPtyData(payload.id, payload.data, Date.now())
-      const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
+      const rawLength = payload.sequenceChars ?? payload.data.length
+      const seq = this.runtime?.onPtyData(
+        payload.id,
+        payload.data,
+        Date.now(),
+        rawLength,
+        payload.transformed
+      )
       const win = this.getMainWindow()
       if (!win || win.isDestroyed()) {
         return
@@ -1129,7 +1138,7 @@ export class SshRelaySession {
       // OSC-9999-only chunks legitimately strip to empty in the renderer.
       const store = this.store as { getSettings?: Store['getSettings'] }
       if (shouldDropHiddenRendererPtyData(payload.id, store.getSettings?.())) {
-        const drop = recordHiddenRendererPtyDataDrop(payload.id, payload.data.length)
+        const drop = recordHiddenRendererPtyDataDrop(payload.id, rawLength)
         if (drop.shouldEmitRestoreMarker) {
           win.webContents.send('pty:modelRestoreNeeded', {
             id: payload.id,
@@ -1139,16 +1148,12 @@ export class SshRelaySession {
         }
         return
       }
-      // Why: startup color-query answering can strip query-only chunks to
-      // empty; skip empty sends and only attach seq metadata when the chunk
-      // reaches the renderer unmodified (seq tracks raw stream offsets).
-      if (rendererData.length > 0) {
+      if (payload.data.length > 0 || payload.transformed) {
         win.webContents.send('pty:data', {
           ...payload,
-          data: rendererData,
-          ...(rendererData === payload.data && typeof seq === 'number'
-            ? { seq, rawLength: payload.data.length }
-            : {})
+          ...(typeof seq === 'number' ? { seq } : {}),
+          rawLength,
+          ...(payload.transformed ? { transformed: true } : {})
         })
       }
     })

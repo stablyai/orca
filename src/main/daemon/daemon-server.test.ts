@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
-import { getDaemonSocketPath } from './daemon-spawner'
+import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 
 const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
@@ -58,6 +58,7 @@ type DaemonServerPrivate = {
       clientId: string
       controlSocket: Socket
       streamSocket: Socket | null
+      authenticatedPairEstablished: boolean
     }
   >
   routeRequest(clientId: string, request: DaemonRequest): Promise<unknown>
@@ -67,6 +68,7 @@ describe('DaemonServer', () => {
   let dir: string
   let socketPath: string
   let tokenPath: string
+  let pidPath: string
   let server: DaemonServer
   let client: DaemonClient
 
@@ -75,6 +77,7 @@ describe('DaemonServer', () => {
     dir = createTestDir()
     socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
+    pidPath = getDaemonPidPath(dir)
   })
 
   afterEach(async () => {
@@ -83,10 +86,11 @@ describe('DaemonServer', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  async function startServer(): Promise<void> {
+  async function startServer(launchNonce?: string): Promise<void> {
     server = new DaemonServer({
       socketPath,
       tokenPath,
+      ...(launchNonce ? { pidPath, launchNonce } : {}),
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
@@ -290,12 +294,12 @@ describe('DaemonServer', () => {
         spawnSubprocess
       })
       await server.start()
-      const daemon = server as unknown as DaemonServerPrivate
+      const c = await connectClient()
 
-      const create = daemon.routeRequest('shutdown-client', {
-        id: 'shutdown-create',
-        type: 'createOrAttach',
-        payload: { sessionId: 'shutdown-pending', cols: 80, rows: 24 }
+      const create = c.request('createOrAttach', {
+        sessionId: 'shutdown-pending',
+        cols: 80,
+        rows: 24
       })
       const canceledCreate = expect(create).rejects.toThrow(
         'Attach canceled for session shutdown-pending'
@@ -535,7 +539,8 @@ describe('DaemonServer', () => {
         daemon.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
-          streamSocket
+          streamSocket,
+          authenticatedPairEstablished: true
         })
 
         await daemon.routeRequest('client-1', {
@@ -591,7 +596,8 @@ describe('DaemonServer', () => {
         daemon.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
-          streamSocket
+          streamSocket,
+          authenticatedPairEstablished: true
         })
 
         await daemon.routeRequest('client-1', {
@@ -648,7 +654,8 @@ describe('DaemonServer', () => {
         daemon.clients.set('client-1', {
           clientId: 'client-1',
           controlSocket,
-          streamSocket
+          streamSocket,
+          authenticatedPairEstablished: true
         })
         await daemon.routeRequest('client-1', {
           id: 'req-1',
@@ -780,6 +787,68 @@ describe('DaemonServer', () => {
   })
 
   describe('shutdown', () => {
+    it('waits for the ordinary shutdown reply write before destroying resources', async () => {
+      await startServer()
+      const c = await connectClient()
+      const daemon = server as unknown as DaemonServerPrivate & {
+        host: { dispose: () => Promise<void> }
+      }
+      const controlSocket = [...daemon.clients.values()][0].controlSocket
+      const originalWrite = controlSocket.write.bind(controlSocket)
+      let replyFlushed: (() => void) | undefined
+      vi.spyOn(controlSocket, 'write').mockImplementation(((
+        chunk: string | Uint8Array,
+        ...args: unknown[]
+      ) => {
+        replyFlushed = args.find((arg) => typeof arg === 'function') as (() => void) | undefined
+        return originalWrite(chunk)
+      }) as unknown as Socket['write'])
+      const dispose = vi.spyOn(daemon.host, 'dispose')
+
+      await expect(c.request('shutdown', { killSessions: false })).resolves.toEqual({})
+      expect(dispose).not.toHaveBeenCalled()
+      expect(existsSync(tokenPath)).toBe(true)
+
+      replyFlushed?.()
+      await waitFor(() => !existsSync(tokenPath))
+      expect(dispose).toHaveBeenCalledOnce()
+    })
+
+    it('removes only its owned token and PID record', async () => {
+      const launchNonce = 'ordinary-shutdown'
+      writeFileSync(
+        pidPath,
+        serializeDaemonPidFile({ pid: process.pid, startedAtMs: null, launchNonce })
+      )
+      await startServer(launchNonce)
+
+      await server.shutdown()
+
+      expect(existsSync(tokenPath)).toBe(false)
+      expect(existsSync(pidPath)).toBe(false)
+    })
+
+    it('preserves token and PID artifacts replaced before ordinary cleanup', async () => {
+      await startServer('mine')
+      writeFileSync(tokenPath, 'replacement-token')
+      writeFileSync(
+        pidPath,
+        serializeDaemonPidFile({
+          pid: process.pid,
+          startedAtMs: null,
+          launchNonce: 'replacement'
+        })
+      )
+
+      await server.shutdown()
+
+      expect(readFileSync(tokenPath, 'utf8')).toBe('replacement-token')
+      expect(JSON.parse(readFileSync(pidPath, 'utf8'))).toMatchObject({
+        pid: process.pid,
+        launchNonce: 'replacement'
+      })
+    })
+
     it('stops accepting connections after shutdown', async () => {
       await startServer()
       await server.shutdown()
@@ -800,9 +869,7 @@ describe('DaemonServer', () => {
       )
 
       const c = await connectClient()
-      // The daemon may self-terminate before the reply flushes; callers treat
-      // that as success, so only the observable teardown below is asserted.
-      await c.request('shutdown', { killSessions: true }).catch(() => {})
+      await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
 
       await waitFor(() => daemon.server === null)
       await waitFor(() => !existsSync(socketPath))

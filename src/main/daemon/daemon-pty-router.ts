@@ -17,6 +17,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string
     data: string
     sequenceChars?: number
+    transformed?: boolean
+    seq?: number
   }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
 
@@ -143,6 +145,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.adapterFor(id).clearBuffer(id)
   }
 
+  async closeStartupQueryAuthority(id: string): Promise<number> {
+    return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
+  }
+
   acknowledgeDataEvent(id: string, charCount: number): void {
     this.adapterFor(id).acknowledgeDataEvent(id, charCount)
   }
@@ -183,7 +189,13 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   onData(
-    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
+    callback: (payload: {
+      id: string
+      data: string
+      sequenceChars?: number
+      transformed?: boolean
+      seq?: number
+    }) => void
   ): () => void {
     this.dataListeners.push(callback)
     return () => {

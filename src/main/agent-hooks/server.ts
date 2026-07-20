@@ -44,6 +44,7 @@ import {
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusClearIpcPayload,
   type AgentStatusIpcPayload,
   type AgentType,
   type AgentStatusState,
@@ -93,7 +94,7 @@ export type AgentHookStatusChangeEntry = {
 }
 
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
-type PaneStatusClearListener = (paneKey: string) => void
+type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
@@ -528,6 +529,7 @@ export class AgentHookServer {
   private promptSentHashSalt = randomBytes(16).toString('hex')
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
+  private connectionTimestampWatermarkById = new Map<string, number>()
   // Why: identity check — skip writes when the JSON-stringified contents
   // exactly match the last successful disk write. Cheap protection against
   // re-firing trailing timers when nothing changed.
@@ -896,7 +898,15 @@ export class AgentHookServer {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    const now = Date.now()
+    const connectionClearWatermark = payload.connectionId
+      ? this.connectionTimestampWatermarkById.get(payload.connectionId)
+      : undefined
+    // Why: Date.now() can repeat across disconnect and reconnect. A remote
+    // replay must sort strictly after its connection's transient clear.
+    const now = Math.max(Date.now(), (connectionClearWatermark ?? -1) + 1)
+    if (payload.connectionId) {
+      this.connectionTimestampWatermarkById.set(payload.connectionId, now)
+    }
     if (payload.providerSessionOnly) {
       // Why: Pi session_start must replace stale turn state and survive snapshot
       // replay, but it must not emit prompt telemetry or a fabricated status.
@@ -1305,7 +1315,7 @@ export class AgentHookServer {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       for (const paneKey of clearedStatusPaneKeys) {
-        this.onPaneStatusCleared?.(paneKey)
+        this.onPaneStatusCleared?.({ paneKey })
       }
     }
   }
@@ -1677,6 +1687,7 @@ export class AgentHookServer {
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()
+    this.connectionTimestampWatermarkById.clear()
     this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
@@ -1690,19 +1701,67 @@ export class AgentHookServer {
    *  lands. clearPaneState (which wipes all three caches) is the right shape
    *  only for PTY-teardown. */
   dropStatusEntry(paneKey: string): void {
-    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-    if (!this.state.lastStatusByPaneKey.has(resolvedPaneKey)) {
+    if (!this.deleteStatusEntry(paneKey)) {
       return
-    }
-    const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey)
-    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
-    this.clearAssistantMessageRetry(resolvedPaneKey)
-    this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
-    if (existing?.payload.state === 'done') {
-      this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     }
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
+  }
+
+  /** Clear statuses proven to belong to one lost SSH transport. */
+  clearStatusEntriesForConnection(connectionId: string): void {
+    const normalizedConnectionId = connectionId.trim()
+    if (normalizedConnectionId.length === 0) {
+      return
+    }
+    const clearedAt = Math.max(
+      Date.now(),
+      (this.connectionTimestampWatermarkById.get(normalizedConnectionId) ?? -1) + 1
+    )
+    this.connectionTimestampWatermarkById.set(normalizedConnectionId, clearedAt)
+    let statusChanged = false
+    for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
+      const entry = rawEntry as EnrichedAgentHookEventPayload
+      // Why: legacy/unstamped rows cannot be safely attributed to one host.
+      // Leave them for normal pane teardown instead of risking cross-host loss.
+      if (entry.connectionId !== normalizedConnectionId) {
+        continue
+      }
+      if (this.deleteStatusEntry(paneKey)) {
+        statusChanged = true
+      }
+    }
+    if (statusChanged) {
+      // Why: one disconnect can own many panes; persist and notify subscribers
+      // once so cleanup cost does not fan out with the pane count.
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+    // Why: another host can overwrite the same pane key in main's cache while
+    // renderer still shows this connection's older row. Always send the
+    // connection cutoff, even when no current main entry matched.
+    this.onPaneStatusCleared?.({
+      transient: true,
+      connectionId: normalizedConnectionId,
+      clearedAt
+    })
+  }
+
+  private deleteStatusEntry(paneKey: string): EnrichedAgentHookEventPayload | null {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!existing) {
+      return null
+    }
+    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    this.clearAssistantMessageRetry(resolvedPaneKey)
+    this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
+    if (existing.payload.state === 'done') {
+      this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
+    }
+    return existing
   }
 
   dropStatusEntriesByTabPrefix(tabId: string): void {
@@ -1802,7 +1861,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
-      this.onPaneStatusCleared?.(resolvedPaneKey)
+      this.onPaneStatusCleared?.({ paneKey: resolvedPaneKey })
     }
   }
 
@@ -1917,6 +1976,15 @@ export class AgentHookServer {
           entry.payload = hydratedPayload
         }
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
+        if (entry.connectionId) {
+          // Why: a restarted process can observe an earlier wall clock; seed
+          // transport ordering so new events and clears stay after disk state.
+          const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)
+          this.connectionTimestampWatermarkById.set(
+            entry.connectionId,
+            Math.max(previousWatermark ?? -1, entry.receivedAt)
+          )
+        }
         // Why: preserve only working children across restart. Live activity
         // confirms them; a later complete inventory may reap stale seeds.
         if (entry.payload.subagents) {
@@ -2043,6 +2111,10 @@ export class AgentHookServer {
   _resetPromptSentDedupeForTests(): void {
     this.promptSentDedupeByPaneKey.clear()
   }
+
+  _resetConnectionTimestampWatermarksForTests(): void {
+    this.connectionTimestampWatermarkById.clear()
+  }
 }
 
 export const agentHookServer = new AgentHookServer()
@@ -2061,5 +2133,6 @@ export const _internals = {
   resetCachesForTests: (): void => {
     clearAllListenerCaches(agentHookServer._getStateForTests())
     agentHookServer._resetPromptSentDedupeForTests()
+    agentHookServer._resetConnectionTimestampWatermarksForTests()
   }
 }

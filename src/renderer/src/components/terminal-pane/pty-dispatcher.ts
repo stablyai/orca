@@ -37,6 +37,7 @@ import { installTerminalFreezeReport } from './terminal-freeze-report'
 export type PtyDataMeta = {
   seq?: number
   rawLength?: number
+  transformed?: boolean
   background?: boolean
   /** Main dropped this PTY's buffered output at the pending cap; the pane
    *  must repaint from the main-owned snapshot instead of the live stream. */
@@ -170,6 +171,7 @@ function handleDispatchedPtyData(payload: {
   data: string
   seq?: number
   rawLength?: number
+  transformed?: boolean
   background?: boolean
   droppedOutput?: boolean
 }): void {
@@ -181,6 +183,10 @@ function handleDispatchedPtyData(payload: {
   if (typeof payload.rawLength === 'number') {
     meta ??= {}
     meta.rawLength = payload.rawLength
+  }
+  if (payload.transformed === true) {
+    meta ??= {}
+    meta.transformed = true
   }
   if (payload.background === true) {
     meta ??= {}

@@ -341,7 +341,8 @@
               "2db0bd7515": "Orca CLI 登録は利用できません",
               "8d6eedf97e": "Orca CLI を PATH に登録できませんでした。",
               "0f116999f1": "セットアップ前にシェルを再起動するか、Orca CLI ディレクトリを PATH に追加します。",
-              "15cbedc3e3": "agent スキル セットアップを実行する前に、Orca CLI をインストールします。"
+              "15cbedc3e3": "agent スキル セットアップを実行する前に、Orca CLI をインストールします。",
+              "windowsPathUnknown": "Orca could not check your Windows user PATH"
             }
           }
         }
@@ -5311,7 +5312,8 @@
           "0c9f3cf9da": "Orca がグローバル agent スキルをチェックしてインストールする場所を選択します。",
           "f00d6aa9b5": "このマシンでは WSL を利用できません。",
           "7c776ff9d8": "wsl",
-          "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。"
+          "fc0fcf72fd": "スキルセットアップ前に WSL シェルコマンドを登録してください。",
+          "windowsPathUnknown": "WSL shell command PATH could not be checked"
         },
         "CommitMessageAiPane": {
           "841ed9884a": "ソース管理 AI をカスタマイズしていない repos によって使用されます。",
@@ -5923,7 +5925,8 @@
           "aa1263e881": "スマートフォンサイズを維持（デフォルト）",
           "6436e56546": "モバイルペアリング用のQRコード",
           "1b1b70279a": "まだデバイスがペアリングされていません。",
-          "1592afcc7a": "まだデバイスがペアリングされていません。 Orca モバイル アプリで QR コードをスキャンします。"
+          "1592afcc7a": "まだデバイスがペアリングされていません。 Orca モバイル アプリで QR コードをスキャンします。",
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network. Regenerate to try again."
         },
         "MobileSettingsPane": {
           "9a3c280e49": "GitHub リリース",
@@ -5934,7 +5937,10 @@
           "174f4a3c6d": "スマートフォンから terminals と agents を操作",
           "1de96ec8a6": "Orca Mobile ボタンを表示",
           "682293cadf": "左サイドバー上部に Orca Mobile ボタンを表示します。",
-          "d4f2b65f30": "サイドバーに Orca Mobile ショートカットを表示します。"
+          "d4f2b65f30": "サイドバーに Orca Mobile ショートカットを表示します。",
+          "installIntro": "Orca Mobile は",
+          "installOutro": "からインストールし、以下でペアリングしてください。",
+          "androidApkLabel": "Android APK"
         },
         "NotificationsPane": {
           "906b4afebf": "テスト通知を送信する",
@@ -8070,7 +8076,9 @@
               "671eb4173c": "スマートフォンから terminals と agents を操作",
               "ffd52a96e4": "モバイル",
               "1de96ec8a6": "Orca Mobile ボタンを表示",
-              "682293cadf": "左サイドバー上部に Orca Mobile ボタンを表示します。"
+              "682293cadf": "左サイドバー上部に Orca Mobile ボタンを表示します。",
+              "e4f4daea0e": "リレー",
+              "5d5af8e041": "iPhone"
             }
           }
         },
@@ -9177,28 +9185,26 @@
           "available": "利用可能",
           "reconnecting": "再接続中",
           "unavailable": "利用不可",
-          "title": "新しいスマートフォンをどのように接続しますか？",
-          "anywhere": "Orca Relay で接続",
-          "recommended": "推奨",
-          "automaticDescription": "利用可能な場合は直接接続し、それ以外ではOrca Relayを使用します。",
-          "signInDescription": "Orca Relayを使用するには、このデスクトップでサインインしてください。",
           "signIn": "サインイン",
-          "localOnly": "ローカルネットワークのみ",
-          "localShort": "LAN または Tailscale",
-          "localDescription": "このスマートフォンをOrca Relayに接続せず、LANまたはTailscaleを使用します。"
+          "localDescription": "スマートフォンがこの Wi‑Fi または Tailscale に接続されている必要があります。サインインは不要です。",
+          "pathGroup": "スマートフォンがこのコンピューターに到達する方法",
+          "anywhereTitle": "Orca Relay",
+          "anywhereDescription": "スマートフォンはモバイル回線または Wi‑Fi から接続できます。サインインが必要です。",
+          "signInRequired": "Orca Mobile Relay を使用するにはサインインしてください。",
+          "relayUnavailable": "このビルドでは Orca Relay を利用できません。ローカルネットワークをご利用ください。",
+          "signInAgain": "再サインイン",
+          "localTitle": "ローカルネットワーク"
         },
         "MobilePairingSetupSection": {
           "title": "スマートフォンをペアリング",
-          "automaticDescription": "ペアリングコードには、直接接続と暗号化されたOrca Relayのフォールバックが含まれます。",
-          "localDescription": "ペアリングコードは、下のローカルネットワークアドレスだけを使用します。",
           "regenerate": "再生成",
           "generate": "QRコードを生成",
-          "localSettings": "ローカル接続設定",
-          "localAddressDescription": "Orca Mobileからこのコンピューターへ直接接続できるLANまたはプライベートネットワークのアドレスを選択します。",
           "refresh": "ネットワークインターフェースを更新",
-          "tailnet": "自分のtailnetで接続",
-          "tailnetDescription": "このコンピューターとスマートフォンにTailscaleをインストールし、同じtailnetにサインインして、上で100.x.y.zアドレスを選択します。",
-          "getTailscale": "Tailscaleを入手"
+          "overview": "QR コードを生成し、Orca Mobile の Pair Desktop でスキャンしてください。",
+          "step1Title": "接続方法",
+          "step2Title": "このコンピューターのアドレス",
+          "step2RelayDescription": "近くでは高速な直接接続に使用されます。Relay はリモートアクセスに対応します。",
+          "step2LocalDescription": "スマートフォンが Wi‑Fi または Tailscale でこのアドレスに到達できる必要があります。"
         },
         "MobileRelayBetaAvailability": {
           "about": "Orca Relay ベータについて",
@@ -9224,10 +9230,16 @@
           "terminalTitle": "Linear skill setup",
           "terminalAriaLabel": "Linear skill install terminal"
         },
+        "MobileRelayBetaNotice": {
+          "notice": "Orca Relay is in beta."
+        },
         "clickup": {
-          "connectedDescription": "{{value0}} Workspace{{value1}} available",
+          "connectedDescriptionSingular": "{{value0}} Workspace available",
+          "connectedDescriptionPlural": "{{value0}} Workspaces available",
           "checkingDescription": "Checking ClickUp access before showing setup actions.",
           "disconnectedDescription": "Browse, create, update, and link ClickUp tasks.",
+          "statusConnected": "Connected",
+          "statusNotConnected": "Not connected",
           "replaceToken": "Replace token",
           "connect": "Connect ClickUp",
           "verified": "Verified",
@@ -9236,11 +9248,7 @@
           "disconnect": "Disconnect ClickUp",
           "tokenScope": "One token grants access to the Workspaces listed above and is stored by the active runtime.",
           "setupHelp": "Use a Personal API token from ClickUp Settings → Apps.",
-          "recheck": "Re-check",
-          "statusConnected": "Connected",
-          "statusNotConnected": "Not connected",
-          "connectedDescriptionSingular": "{{value0}} Workspace available",
-          "connectedDescriptionPlural": "{{value0}} Workspaces available"
+          "recheck": "Re-check"
         }
       },
       "right": {
@@ -9288,7 +9296,16 @@
             "f273f2271c": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
             "aa95b81a3a": "agent を開始しました。{{value0}} 件を解決済みにし、{{value1}} 件をスキップ、{{value2}} 件が失敗しました。",
             "495b2f8c4b": "agent を開始しましたが、選択したコメントを解決済みにできませんでした。",
-            "3c3ad3a1d2": "agent を開始しました。選択したコメントにホスト上で解決済みにできるものはありません。"
+            "3c3ad3a1d2": "agent を開始しました。選択したコメントにホスト上で解決済みにできるものはありません。",
+            "review": {
+              "auto_retry": "Orca は {{time}} に再試行します。",
+              "open_review": "レビューを開く",
+              "retry": "再試行"
+            },
+            "sync": {
+              "pending": "Syncing…",
+              "branch": "Sync Branch"
+            }
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "キャンセル",
@@ -9696,6 +9713,7 @@
             "createPrIntentPublishing": "ブランチを公開中…",
             "createPrIntentForcePushing": "lease 付きで強制プッシュ中…",
             "createPrIntentPushing": "commits をプッシュ中…",
+            "createPrIntentFastForwarding": "ブランチを更新中…",
             "createPrIntentRemoteFailed": "リモートブランチを更新できませんでした。Create PR を再試行してください。",
             "createPrIntentGeneratingDetails": "レビューの詳細を生成中…",
             "createPrIntentBranchChangedDuringDetails": "レビューの詳細を生成中にブランチが変更されました。Create PR を再試行してください。",
@@ -9728,9 +9746,7 @@
               "a9bf7c171a": "プッシュ失敗",
               "834cb3f23d": "AIで修正",
               "783a808870": "閉じる"
-            },
-            "createPrIntentSyncConflicts": "同期で競合が発生しました。解決してから Create PR を再試行してください。",
-            "createPrIntentSyncing": "ブランチを同期中…"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した agent を開始できませんでした。",
@@ -9903,6 +9919,136 @@
                   "05e4aec17b": "{{value0}} チェックは操作の完了後に利用可能になります",
                   "d77c513c1e": "{{value0}} が進行中です",
                   "b597440265": "Refresh GitHub status for this branch to load checks and review."
+                }
+              },
+              "review": {
+                "detail": {
+                  "positive": "Orca は保存された {{reviewLabel}} 情報を持っていますが、検証できませんでした。",
+                  "rate_limited": "Orca は {{provider}} がリクエストを一時的に制限しているため、{{reviewLabel}} ステータスを確認できませんでした。",
+                  "network": "Orca はこの環境から {{provider}} に接続できないため、{{reviewLabel}} ステータスを確認できませんでした。",
+                  "untyped": "Orca はこのブランチに {{reviewLabel}} が既に存在するかどうかを確認できませんでした。"
+                },
+                "positive": {
+                  "title": "{{reviewLabelCap}} の詳細が利用できません",
+                  "body": "Orca はこのブランチの {{reviewLabel}} 情報を保存しましたが、現在のステータスを確認できませんでした。"
+                },
+                "no_review": {
+                  "title": "{{reviewLabel}} が見つかりません",
+                  "body": "{{reviewLabel}} を作成して、チェックとレビューを開始します。"
+                },
+                "active": {
+                  "title": "{{reviewLabel}} ステータスを確認中",
+                  "body": "Orca はこのブランチの {{provider}} 上の {{reviewLabel}} を確認しています。"
+                },
+                "git_loading": {
+                  "title": "ブランチのステータスを確認中",
+                  "body": "Orca はこのブランチの作成または公開アクションを表示する前に確認しています。"
+                },
+                "git_error": {
+                  "title": "ブランチのステータスを確認できませんでした",
+                  "body": "Orca はこの環境からこのブランチのアップストリームを確認できませんでした。公開または {{reviewLabel}} の作成前に再試行してください。"
+                },
+                "unknown": {
+                  "title": "{{reviewLabelCap}} ステータスが利用できません",
+                  "body": "Orca はこのブランチの {{reviewLabel}} ステータスを確認していません。再試行して再度確認してください。"
+                },
+                "paused": {
+                  "title": "{{provider}} の更新が一時停止されています",
+                  "body": "{{provider}} がリクエストを一時的に制限しています。表示された API クォータが枯渇していない場合でも発生する可能性があります。"
+                },
+                "network": {
+                  "title": "{{provider}} に接続できませんでした",
+                  "body": "この環境から {{provider}} に接続できませんでした。接続を確認して再試行してください。"
+                },
+                "unknown_error": {
+                  "title": "{{reviewLabel}} ステータスを確認できませんでした",
+                  "body": "検索に失敗したため、Orca はこのブランチに {{reviewLabel}} が既に存在するかどうかを確認できませんでした。"
+                },
+                "untyped": {
+                  "title": "{{reviewLabelCap}} ステータスが利用できません",
+                  "body": "Orca はこのブランチに {{reviewLabel}} が既に存在するかどうかを確認できませんでした。再試行して再度確認してください。"
+                },
+                "auth": {
+                  "title": "{{provider}} の認証に失敗しました",
+                  "body": "{{provider}} はこの環境で使用可能な資格情報を認証できませんでした。{{provider}} のログインまたは環境トークンを確認して再試行してください。"
+                },
+                "permission": {
+                  "title": "{{provider}} のアクセスが拒否されました",
+                  "body": "現在の {{provider}} の資格情報ではこのリポジトリの {{reviewLabel}} を読み取れません。アカウント、トークンスコープ、リポジトリのアクセス権を確認して再試行してください。"
+                },
+                "repo": {
+                  "title": "{{provider}} リポジトリが利用できません",
+                  "body": "{{provider}} は現在のリモートとアカウントのリポジトリを解決またはアクセスできませんでした。リモートとリポジトリのアクセス権を確認して再試行してください。"
+                },
+                "cli": {
+                  "title": "{{provider}} CLI が利用できません",
+                  "body": "Orca はこの環境で {{provider}} CLI を実行できませんでした。ここでセットアップして再試行してください。"
+                },
+                "skipped": {
+                  "disconnected": {
+                    "title": "ホストが切断されました",
+                    "body": "このリポジトリの実行ホストが切断されたため、Orca は {{reviewLabel}} ステータスを更新できません。"
+                  },
+                  "bare": {
+                    "title": "ベアリポジトリ",
+                    "body": "このリポジトリはベアリポジトリであるため、{{reviewLabel}} ステータスはここでは利用できません。"
+                  },
+                  "archived": {
+                    "title": "リポジトリがアーカイブされています",
+                    "body": "このリポジトリはアーカイブされているため、Orca は {{reviewLabel}} ステータスを更新しません。"
+                  },
+                  "not_git": {
+                    "title": "Git リポジトリではありません",
+                    "body": "Orca はこのフォルダを {{reviewLabel}} ステータス用の Git リポジトリとして扱えませんでした。"
+                  },
+                  "remote": {
+                    "title": "リモートのみのコンテキスト",
+                    "body": "Orca はこのリモートコンテキストの {{reviewLabel}} ステータスを更新できませんでした。ホストが利用可能になった後に再試行してください。"
+                  }
+                },
+                "no_upstream": {
+                  "title": "アップストリームが設定されていません",
+                  "body": "このブランチを公開してアップストリームを設定してから {{reviewLabel}} を作成してください。"
+                },
+                "needs_sync": {
+                  "title": "ブランチの同期が必要です",
+                  "body": "{{reviewLabel}} を作成する前に、このブランチをアップストリームと同期してください。"
+                },
+                "auth_required": {
+                  "title": "{{provider}} を接続してください",
+                  "body": "Orca が {{reviewLabel}} を作成する前に、この環境で {{provider}} を接続する必要があります。"
+                },
+                "needs_push": {
+                  "title": "ブランチに未プッシュのコミットがあります",
+                  "body": "{{reviewLabel}} を作成する前に、最新のコミットをプッシュしてください。"
+                },
+                "existing": {
+                  "title": "{{reviewLabelCap}} は既に存在します",
+                  "body": "Orca はこのブランチの既存の {{reviewLabel}} を見つけました。"
+                },
+                "detached": {
+                  "title": "現在のブランチがありません",
+                  "body": "{{reviewLabel}} を作成する前にブランチをチェックアウトしてください。"
+                },
+                "dirty": {
+                  "title": "まず変更をコミットしてください",
+                  "body": "{{reviewLabel}} を作成する前に、変更をコミットまたはスタッシュしてください。"
+                },
+                "default_branch": {
+                  "title": "デフォルトブランチ上です",
+                  "body": "{{reviewLabel}} を作成する前に、フィーチャーブランチに切り替えてください。"
+                },
+                "fork": {
+                  "title": "フォークヘッドはサポートされていません",
+                  "body": "Orca はここからこのフォークヘッドの {{reviewLabel}} を作成できません。"
+                },
+                "base_missing": {
+                  "title": "ベースブランチがリモートにありません",
+                  "body": "このブランチのベースがまだリモートにないため、{{reviewLabel}} をターゲットにできません。"
+                },
+                "unsupported": {
+                  "title": "ここでは {{reviewLabelCap}} はサポートされていません",
+                  "body": "このリポジトリプロバイダーは、Orca からの {{reviewLabel}} の作成をサポートしていません。"
                 }
               }
             }
@@ -10758,7 +10904,8 @@
             "group": "リリースチャンネル",
             "preview": "プレビュー",
             "stable": "安定版"
-          }
+          },
+          "relayDegradedNotice": "Relay couldn’t be reached — this code only works on your local network."
         },
         "MobilePage": {
           "e17393c6a3": "スマートフォンプレビュー",
@@ -13273,18 +13420,18 @@
           "description": "Description",
           "status": "Status",
           "priority": "Priority",
+          "priorityNone": "None",
+          "priorityUrgent": "Urgent",
+          "priorityHigh": "High",
+          "priorityNormal": "Normal",
+          "priorityLow": "Low",
           "dueDate": "Due date",
           "comments": "Comments",
           "commentPlaceholder": "Add a comment…",
           "addComment": "Add comment",
           "open": "Open in ClickUp",
           "startWorkspace": "Start workspace",
-          "save": "Save",
-          "priorityNone": "None",
-          "priorityUrgent": "Urgent",
-          "priorityHigh": "High",
-          "priorityNormal": "Normal",
-          "priorityLow": "Low"
+          "save": "Save"
         },
         "page": {
           "connectTitle": "Connect your ClickUp account",
@@ -13296,6 +13443,7 @@
           "clearSearch": "Clear search",
           "newTask": "New ClickUp task",
           "refresh": "Refresh ClickUp tasks",
+          "id": "ID",
           "name": "Name",
           "status": "Status",
           "list": "List",
@@ -13308,8 +13456,7 @@
           "filterOpen": "Open",
           "filterCreated": "Created by me",
           "filterCompleted": "Completed",
-          "filterAll": "All",
-          "id": "ID"
+          "filterAll": "All"
         },
         "dialog": {
           "title": "Connect ClickUp",
@@ -13323,6 +13470,9 @@
           "connecting": "Connecting…",
           "connect": "Connect"
         },
+        "token": {
+          "placeholder": "pk_..."
+        },
         "create": {
           "title": "Create ClickUp task",
           "description": "Choose the destination List, then add the task details.",
@@ -13334,9 +13484,6 @@
           "cancel": "Cancel",
           "creating": "Creating…",
           "submit": "Create task"
-        },
-        "token": {
-          "placeholder": "pk_..."
         }
       }
     },
@@ -13398,7 +13545,22 @@
           "max": "最大",
           "on": "オン",
           "off": "オフ"
-        }
+        },
+        "noCommandsOrSkills": "一致するコマンドやスキルがありません",
+        "commands": "コマンド",
+        "skills": "スキル",
+        "loadingSkills": "スキルを読み込み中…",
+        "skillsUnavailableHost": "このホストではスキルが利用できません",
+        "skillsLoadFailed": "このホストからスキルを読み込めませんでした",
+        "retrySkills": "再試行",
+        "skillCommandCollision": "スキル名でもあります - エージェントが判断します",
+        "skillMultipleSources": "{{sourceCount}} 個のソース - エージェントが解決します",
+        "skillScopeProject": "プロジェクト",
+        "skillScopePersonal": "個人",
+        "skillScopeBuiltIn": "組み込み",
+        "skillScopePlugin": "プラグイン",
+        "skillsLoaded": "スキルを読み込みました",
+        "noCommands": "一致するコマンドがありません"
       },
       "tool": {
         "running": "実行中…",

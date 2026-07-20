@@ -64,6 +64,7 @@ const REPLAY_GUARD_STALL_CHECK_MS = 10_000
 
 type ReplayTerminalOptions = {
   shouldRefreshViewportSynchronously?: () => boolean
+  shouldReleaseRenderPause?: () => boolean
   stallCheckMs?: number
 }
 
@@ -208,6 +209,7 @@ export function replayIntoTerminal(
     forceViewportRefresh: true,
     followupViewportRefresh: true,
     shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
+    shouldReleaseRenderPause: options.shouldReleaseRenderPause,
     onParsed: guardCallbacks.onParsed,
     onWriteFailure: guardCallbacks.onWriteFailure
   })
@@ -242,6 +244,7 @@ export function replayIntoTerminalAsync(
       forceViewportRefresh: true,
       followupViewportRefresh: true,
       shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
+      shouldReleaseRenderPause: options.shouldReleaseRenderPause,
       onParsed: guardCallbacks.onParsed,
       onWriteFailure: guardCallbacks.onWriteFailure
     })
