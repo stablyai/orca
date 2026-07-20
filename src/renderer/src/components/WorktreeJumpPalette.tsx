@@ -7,6 +7,7 @@ import {
   FileText,
   FolderTree,
   Globe,
+  LayoutGrid,
   Plus,
   Server,
   ServerOff,
@@ -52,6 +53,10 @@ import {
   getWorktreePaletteSelectionItemIds,
   getWorktreePaletteCreateActionState
 } from '@/lib/worktree-palette-create-action'
+import {
+  searchPanelPaletteResults,
+  type PanelPaletteSearchResult
+} from '@/lib/panel-palette-search'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import {
   isBlankBrowserUrl,
@@ -164,6 +169,12 @@ type ProjectTargetPaletteItem = {
   result: CmdJProjectSearchResult
 }
 
+type PinnedPanelPaletteItem = {
+  id: string
+  type: 'pinned-panel'
+  result: PanelPaletteSearchResult
+}
+
 type SectionHeader = {
   id: string
   type: 'section-header'
@@ -191,6 +202,7 @@ type PaletteItem =
   | BrowserPaletteItem
   | SimulatorPaletteItem
   | WorkspaceTabPaletteItem
+  | PinnedPanelPaletteItem
 
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 
@@ -916,6 +928,31 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     ]
   )
 
+  // Why: query-gated — empty Cmd+J stays a worktree switcher; typing surfaces
+  // fleet panels without dumping every nvtop row on open.
+  const pinnedPanelItems = useMemo<PinnedPanelPaletteItem[]>(
+    () =>
+      hasQuery
+        ? searchPanelPaletteResults({
+            query: deferredQuery,
+            webPanels: settings?.pinnedWebPanels ?? [],
+            terminalPanels: settings?.pinnedTerminalPanels ?? [],
+            layouts: settings?.panelLayouts ?? []
+          }).map((result) => ({
+            id: result.id,
+            type: 'pinned-panel' as const,
+            result
+          }))
+        : [],
+    [
+      deferredQuery,
+      hasQuery,
+      settings?.panelLayouts,
+      settings?.pinnedTerminalPanels,
+      settings?.pinnedWebPanels
+    ]
+  )
+
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()
     const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
@@ -1007,6 +1044,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     const visibleWorktreeItems = hasQuery ? worktreeItems : worktreeItems.slice(0, worktreeCap)
     const visibleProjectTargetItems = hasQuery ? projectTargetItems : []
     const visibleMiddleItems = hasQuery ? middleItems : []
+    const visiblePinnedPanelItems = hasQuery ? pinnedPanelItems : []
     const visibleOpenTabItems = hasQuery
       ? openTabItems
       : openTabItems.slice(0, EMPTY_QUERY_OPEN_TAB_CAP)
@@ -1016,16 +1054,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       visibleWorktreeItems,
       visibleProjectTargetItems,
       visibleMiddleItems,
+      visiblePinnedPanelItems,
       visibleOpenTabItems,
       showWorktreeHint
     }
-  }, [worktreeItems, projectTargetItems, middleItems, openTabItems, hasQuery])
+  }, [worktreeItems, projectTargetItems, middleItems, pinnedPanelItems, openTabItems, hasQuery])
 
   const selectableItems = useMemo<PaletteItem[]>(
     () => [
       ...paletteSections.visibleWorktreeItems,
       ...paletteSections.visibleProjectTargetItems,
       ...paletteSections.visibleMiddleItems,
+      ...paletteSections.visiblePinnedPanelItems,
       ...paletteSections.visibleOpenTabItems
     ],
     [paletteSections]
@@ -1046,6 +1086,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       visibleWorktreeItems,
       visibleProjectTargetItems,
       visibleMiddleItems,
+      visiblePinnedPanelItems,
       visibleOpenTabItems,
       showWorktreeHint
     } = paletteSections
@@ -1054,6 +1095,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       visibleWorkspaceItemCount,
       visibleProjectTargetItems.length,
       visibleMiddleItems.length,
+      visiblePinnedPanelItems.length,
       visibleOpenTabItems.length
     ].filter((count) => count > 0).length
 
@@ -1070,6 +1112,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     const showProjectTargetHeader =
       hasQuery && visibleProjectTargetItems.length > 0 && populatedSectionCount > 1
     const showMiddleHeader = hasQuery && visibleMiddleItems.length > 0 && populatedSectionCount > 1
+    const showPinnedPanelsHeader =
+      hasQuery && visiblePinnedPanelItems.length > 0 && populatedSectionCount > 1
 
     if (visibleWorkspaceItemCount > 0) {
       if (showWorktreeHeader) {
@@ -1124,6 +1168,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         })
       }
       appendPaletteListEntries(entries, visibleMiddleItems)
+    }
+    if (visiblePinnedPanelItems.length > 0) {
+      if (showPinnedPanelsHeader) {
+        entries.push({
+          id: '__header_panels__',
+          type: 'section-header',
+          label: translate('auto.components.WorktreeJumpPalette.panelsHeader', 'Panels')
+        })
+      }
+      appendPaletteListEntries(entries, visiblePinnedPanelItems)
     }
     if (visibleOpenTabItems.length > 0) {
       if (showOpenTabsHeader) {
@@ -1493,6 +1547,34 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     ]
   )
 
+  const openPinnedWebPanelPage = useAppStore((s) => s.openPinnedWebPanelPage)
+  const openPinnedTerminalPanelPage = useAppStore((s) => s.openPinnedTerminalPanelPage)
+  const openPanelLayoutInCanvas = useAppStore((s) => s.openPanelLayoutInCanvas)
+
+  const handleSelectPinnedPanel = useCallback(
+    (result: PanelPaletteSearchResult) => {
+      skipRestoreFocusRef.current = true
+      closeModal()
+      queueMicrotask(() => {
+        if (result.kind === 'web') {
+          openPinnedWebPanelPage(result.targetId)
+          return
+        }
+        if (result.kind === 'terminal') {
+          openPinnedTerminalPanelPage(result.targetId)
+          return
+        }
+        const layout = (useAppStore.getState().settings?.panelLayouts ?? []).find(
+          (entry) => entry.id === result.targetId
+        )
+        if (layout) {
+          openPanelLayoutInCanvas(layout)
+        }
+      })
+    },
+    [closeModal, openPanelLayoutInCanvas, openPinnedTerminalPanelPage, openPinnedWebPanelPage]
+  )
+
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
       if (item.type === 'worktree') {
@@ -1507,12 +1589,15 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         handleSelectWorkspaceTab(item.result)
       } else if (item.type === 'settings') {
         handleSelectSettings(item.result)
+      } else if (item.type === 'pinned-panel') {
+        handleSelectPinnedPanel(item.result)
       } else {
         handleSelectQuickAction(item.result)
       }
     },
     [
       handleSelectBrowserPage,
+      handleSelectPinnedPanel,
       handleSelectProjectTarget,
       handleSelectQuickAction,
       handleSelectSettings,
@@ -2048,6 +2133,53 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       </div>
                       <div className="mt-1 truncate text-[12px] leading-5 text-muted-foreground/88">
                         {result.description}
+                      </div>
+                    </div>
+                  </CommandItem>
+                )
+              }
+
+              if (entry.type === 'pinned-panel') {
+                const result = entry.result
+                const Icon =
+                  result.kind === 'web'
+                    ? Globe
+                    : result.kind === 'terminal'
+                      ? SquareTerminal
+                      : LayoutGrid
+                const kindLabel =
+                  result.kind === 'web'
+                    ? translate('auto.components.WorktreeJumpPalette.panelWebBadge', 'Web panel')
+                    : result.kind === 'terminal'
+                      ? translate(
+                          'auto.components.WorktreeJumpPalette.panelTerminalBadge',
+                          'Terminal panel'
+                        )
+                      : translate('auto.components.WorktreeJumpPalette.panelLayoutBadge', 'Layout')
+                return (
+                  <CommandItem
+                    key={entry.id}
+                    value={entry.id}
+                    onSelect={() => handleSelectItem(entry)}
+                    className={cn(
+                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
+                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
+                    )}
+                  >
+                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                      <Icon className="size-3.5" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                          {result.title}
+                        </span>
+                        <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                          {kindLabel}
+                        </span>
+                      </div>
+                      <div className="mt-1 truncate text-[12px] leading-5 text-muted-foreground/88">
+                        {result.subtitle}
                       </div>
                     </div>
                   </CommandItem>

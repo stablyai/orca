@@ -1894,7 +1894,11 @@
         "workspaceTabMissing": "La pestaña ya no existe",
         "projectsGroupsHeader": "Proyectos y grupos",
         "projectBadge": "Proyecto",
-        "repoGroupBadge": "Grupo de repositorios"
+        "repoGroupBadge": "Grupo de repositorios",
+        "panelsHeader": "Panels",
+        "panelWebBadge": "Web panel",
+        "panelTerminalBadge": "Terminal panel",
+        "panelLayoutBadge": "Layout"
       },
       "github": {
         "pr": {

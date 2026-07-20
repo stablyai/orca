@@ -1894,7 +1894,11 @@
         "workspaceTabMissing": "标签页不再存在",
         "projectsGroupsHeader": "项目和分组",
         "projectBadge": "项目",
-        "repoGroupBadge": "仓库组"
+        "repoGroupBadge": "仓库组",
+        "panelsHeader": "Panels",
+        "panelWebBadge": "Web panel",
+        "panelTerminalBadge": "Terminal panel",
+        "panelLayoutBadge": "Layout"
       },
       "github": {
         "pr": {

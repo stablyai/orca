@@ -1894,7 +1894,11 @@
         "workspaceTabMissing": "タブはもう存在しません",
         "projectsGroupsHeader": "プロジェクトとグループ",
         "projectBadge": "プロジェクト",
-        "repoGroupBadge": "リポジトリグループ"
+        "repoGroupBadge": "リポジトリグループ",
+        "panelsHeader": "Panels",
+        "panelWebBadge": "Web panel",
+        "panelTerminalBadge": "Terminal panel",
+        "panelLayoutBadge": "Layout"
       },
       "github": {
         "pr": {
