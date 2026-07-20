@@ -2,6 +2,8 @@ export type TerminalWebglAutoDecision = {
   allowWebgl: boolean
   reason:
     | 'non-linux'
+    | 'non-linux-webgl2-unavailable'
+    | 'non-linux-software-renderer'
     | 'linux-wayland'
     | 'linux-hardware-renderer'
     | 'linux-webgl2-unavailable'
@@ -13,8 +15,8 @@ export type TerminalWebglAutoDecision = {
 
 let cachedDecision: TerminalWebglAutoDecision | null = null
 
-const LINUX_SOFTWARE_RENDERER_PATTERN =
-  /\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|virgl|svga3d)\b/i
+const SOFTWARE_RENDERER_PATTERN =
+  /\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|microsoft basic render(?: driver)?|d3d11 warp|virgl|svga3d)\b/i
 
 export function resetTerminalWebglAutoDecision(): void {
   cachedDecision = null
@@ -38,24 +40,62 @@ function readRendererDisplayServer(): 'wayland' | 'x11' | null {
   }
 }
 
+function releaseWebglProbe(
+  canvas: HTMLCanvasElement | null,
+  gl: WebGL2RenderingContext | null
+): void {
+  try {
+    // Why: auto policy only needs renderer identity; keeping the probe context
+    // alive defeats the software-renderer fallback this check is protecting.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+  } catch {
+    /* ignore - renderer probing must stay best-effort */
+  }
+  if (canvas) {
+    canvas.width = 0
+    canvas.height = 0
+  }
+}
+
 function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | 'vendor'> & {
   hasWebgl2: boolean
   hasRendererInfo: boolean
+  probeAvailable: boolean
 } {
   if (typeof document === 'undefined') {
-    return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
+    return {
+      hasWebgl2: false,
+      hasRendererInfo: false,
+      probeAvailable: false,
+      renderer: null,
+      vendor: null
+    }
   }
 
+  let canvas: HTMLCanvasElement | null = null
+  let gl: WebGL2RenderingContext | null = null
   try {
-    const canvas = document.createElement('canvas')
-    const gl = canvas.getContext('webgl2')
+    canvas = document.createElement('canvas')
+    gl = canvas.getContext('webgl2')
     if (!gl) {
-      return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
+      return {
+        hasWebgl2: false,
+        hasRendererInfo: false,
+        probeAvailable: true,
+        renderer: null,
+        vendor: null
+      }
     }
 
     const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
     if (!debugInfo) {
-      return { hasWebgl2: true, hasRendererInfo: false, renderer: null, vendor: null }
+      return {
+        hasWebgl2: true,
+        hasRendererInfo: false,
+        probeAvailable: true,
+        renderer: null,
+        vendor: null
+      }
     }
 
     const renderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? '')
@@ -63,11 +103,20 @@ function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | '
     return {
       hasWebgl2: true,
       hasRendererInfo: renderer.length > 0 || vendor.length > 0,
+      probeAvailable: true,
       renderer: renderer || null,
       vendor: vendor || null
     }
   } catch {
-    return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
+    return {
+      hasWebgl2: false,
+      hasRendererInfo: false,
+      probeAvailable: true,
+      renderer: null,
+      vendor: null
+    }
+  } finally {
+    releaseWebglProbe(canvas, gl)
   }
 }
 
@@ -77,11 +126,34 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
   }
 
   if (!isLinuxRendererHost()) {
+    const rendererInfo = readWebglRendererInfo()
+    if (rendererInfo.probeAvailable && !rendererInfo.hasWebgl2) {
+      cachedDecision = {
+        allowWebgl: false,
+        reason: 'non-linux-webgl2-unavailable',
+        renderer: rendererInfo.renderer,
+        vendor: rendererInfo.vendor
+      }
+      return cachedDecision
+    }
+    const identity = `${rendererInfo.vendor ?? ''} ${rendererInfo.renderer ?? ''}`
+    if (rendererInfo.hasRendererInfo && SOFTWARE_RENDERER_PATTERN.test(identity)) {
+      // Why: Windows software rendering fallback disables GPU compositing, but
+      // xterm WebGL can still attach through ANGLE/SwiftShader unless auto
+      // recognizes the software renderer and chooses the DOM renderer.
+      cachedDecision = {
+        allowWebgl: false,
+        reason: 'non-linux-software-renderer',
+        renderer: rendererInfo.renderer,
+        vendor: rendererInfo.vendor
+      }
+      return cachedDecision
+    }
     cachedDecision = {
       allowWebgl: true,
       reason: 'non-linux',
-      renderer: null,
-      vendor: null
+      renderer: rendererInfo.renderer,
+      vendor: rendererInfo.vendor
     }
     return cachedDecision
   }
@@ -122,7 +194,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
   }
 
   const identity = `${rendererInfo.vendor ?? ''} ${rendererInfo.renderer ?? ''}`
-  if (LINUX_SOFTWARE_RENDERER_PATTERN.test(identity)) {
+  if (SOFTWARE_RENDERER_PATTERN.test(identity)) {
     cachedDecision = {
       allowWebgl: false,
       reason: 'linux-software-renderer',
