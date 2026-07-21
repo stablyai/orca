@@ -170,6 +170,16 @@ describe('closed-sidebar Cmd+1-9 ordering (#9497)', () => {
     expect(getVisibleWorktreeIds()).toEqual([])
   })
 
+  it("renders 'project-group' as the Project view, never the PR grouping branch", () => {
+    // Why: buildRows' fall-through branch groups by PR status; a raw 'project-group'
+    // value landed there and reordered by prCache instead of by repo.
+    const main = makeMainWorktree('wt-main', { sortOrder: 0 })
+    const feature = makeWorktree('wt-feature', { sortOrder: 1 })
+    seedStore([feature, main], { groupBy: 'project-group' })
+
+    expect(getVisibleWorktreeIds()).toEqual(['wt-main', 'wt-feature'])
+  })
+
   it('numbers folder workspaces, which the flat fallback omitted entirely', () => {
     const group = makeProjectGroup('group-1')
     const folderWorkspace = makeFolderWorkspace('fw-1', group.id)

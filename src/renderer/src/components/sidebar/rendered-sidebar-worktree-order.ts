@@ -7,7 +7,11 @@ import {
 } from '../../../../shared/execution-host'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
-import { buildRows, getPinnedWorktreeDisplayPolicy } from './worktree-list-groups'
+import {
+  buildRows,
+  effectiveGroupByForRender,
+  getPinnedWorktreeDisplayPolicy
+} from './worktree-list-groups'
 import { addHostSectionRows } from './host-section-rows'
 import { orderHostSectionOptions } from './host-section-order'
 import { buildSidebarHostOptions } from './sidebar-host-options'
@@ -52,8 +56,10 @@ export function computeRenderedSidebarWorktreeOrder(
     state.worktreeCardProperties
   )
 
+  // Why: 'project-group' renders as the Project view on desktop; without this
+  // the unmounted-sidebar order falls into buildRows' PR-grouping branch.
   const rows = buildRows(
-    state.groupBy,
+    effectiveGroupByForRender(state.groupBy),
     [...visibleWorktrees],
     getRepoMapFromState(state),
     prCache,

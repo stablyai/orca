@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { WORKSPACE_GROUP_OPTIONS, WORKSPACE_SORT_OPTIONS } from './workspace-list-picker-options'
+import {
+  MOBILE_PROJECT_GROUP_SYNC_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
+} from '../../../src/shared/protocol-version'
+import {
+  WORKSPACE_GROUP_OPTIONS,
+  WORKSPACE_SORT_OPTIONS,
+  workspaceGroupOptionsForCapabilities
+} from './workspace-list-picker-options'
 
 describe('WORKSPACE_SORT_OPTIONS', () => {
   it('keeps the persisted sort values stable for desktop compatibility', () => {
@@ -37,5 +45,20 @@ describe('WORKSPACE_GROUP_OPTIONS', () => {
       value: 'projectGroup',
       label: 'Project Group'
     })
+  })
+
+  it('does not offer project-group until the host can persist the new enum', () => {
+    expect(workspaceGroupOptionsForCapabilities([]).map((option) => option.value)).not.toContain(
+      'projectGroup'
+    )
+    expect(
+      workspaceGroupOptionsForCapabilities([MOBILE_PROJECT_GROUP_SYNC_RUNTIME_CAPABILITY]).map(
+        (option) => option.value
+      )
+    ).toContain('projectGroup')
+  })
+
+  it('advertises the project-group sync contract from current hosts', () => {
+    expect(RUNTIME_CAPABILITIES).toContain(MOBILE_PROJECT_GROUP_SYNC_RUNTIME_CAPABILITY)
   })
 })

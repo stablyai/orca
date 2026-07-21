@@ -27,10 +27,7 @@ const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSetting
   workspaceStatus: 'workspace-status',
   repo: 'repo',
   prStatus: 'pr-status',
-  // Mixed-version caveat: a desktop predating 'project-group' rejects this value on
-  // ui.set (strict enum), so the mode won't persist there. toDesktopViewSettingsPayload
-  // only sends groupBy when the mode itself changes, so only that one call fails —
-  // unrelated settings still sync. Self-heals on desktop update.
+  // Why: the picker capability-gates this strict enum so older hosts cannot reject a user selection.
   projectGroup: 'project-group'
 }
 
@@ -101,9 +98,8 @@ export function applyDesktopViewSettings(
 }
 
 // Build the ui.set payload for a mobile view-settings change. groupBy is included
-// ONLY when the grouping mode actually changed (patch carries groupMode), so a
-// desktop that rejects a newer value (strict enum, e.g. 'project-group') fails only
-// the grouping change itself instead of dropping every other bundled setting too.
+// only when the grouping mode changed, so a stale retained value cannot make an
+// older desktop drop unrelated setting updates.
 export function toDesktopViewSettingsPayload(
   next: MobileViewState,
   patch: Partial<MobileViewState>

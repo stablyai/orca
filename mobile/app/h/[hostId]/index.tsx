@@ -93,9 +93,9 @@ import { WorktreeCatalogSnapshotClient } from '../../../src/worktree/worktree-ca
 import { HostWorkspaceListStates } from '../../../src/worktree/host-workspace-list-states'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
-  WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS,
-  groupModeToolbarLabel
+  groupModeToolbarLabel,
+  workspaceGroupOptionsForCapabilities
 } from '../../../src/worktree/workspace-list-picker-options'
 import {
   buildProjectGroupByRepoId,
@@ -736,6 +736,10 @@ void client.sendRequest('ui.set', toDesktopViewSettingsPayload(next, patch)).cat
   }, [filters])
   const selectedSortLabel =
     SORT_OPTIONS.find((option) => option.value === sortMode)?.label ?? 'Recent'
+  const groupOptions = useMemo(
+    () => workspaceGroupOptionsForCapabilities(hostCapabilities),
+    [hostCapabilities]
+  )
 
   const handleGroupChange = useCallback(
     (value: MobileGroupMode) => {
@@ -1228,7 +1232,7 @@ void client.sendRequest('ui.set', toDesktopViewSettingsPayload(next, patch)).cat
       <PickerModal
         visible={showGroupPicker}
         title="Group By"
-        options={GROUP_OPTIONS}
+        options={groupOptions}
         selected={groupMode}
         onSelect={handleGroupChange}
         onClose={() => setShowGroupPicker(false)}
