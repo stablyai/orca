@@ -39,6 +39,44 @@ describe('agent process recognition', () => {
     expect(recognizeAgentProcess('adal-project')).toBeNull()
   })
 
+  it('recognizes AdaL through its bundled Bun launcher without matching arbitrary scripts', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '/Users/dev/.adal/versions/1.5.0/runtime/bun /Users/dev/.adal/versions/1.5.0/adal-cli.js'
+      )
+    ).toEqual({ agent: 'adal', processName: 'adal' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`C:\Users\dev\.adal\versions\current\runtime\bun.exe C:\Users\dev\.adal\versions\current\adal-cli.js`
+      )
+    ).toEqual({ agent: 'adal', processName: 'adal' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '/opt/homebrew/bin/bun /usr/local/lib/node_modules/@sylphai/adal-cli-darwin-arm64/adal-cli.js'
+      )
+    ).toEqual({ agent: 'adal', processName: 'adal' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/local/lib/node_modules/@sylphai/adal-cli/bin/adal-cli.js'
+      )
+    ).toEqual({ agent: 'adal', processName: 'adal' })
+    expect(recognizeAgentProcessFromCommandLine('bun /tmp/adal-cli.js')).toBeNull()
+  })
+
+  it('does not classify AdaL headless queries as an interactive agent', () => {
+    expect(recognizeAgentProcessFromCommandLine('adal -q "review this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('adal --query=review --yolo')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        '/opt/bun /Users/dev/.adal/versions/1.5.0/adal-cli.js -qreview'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('adal --resume session-123')).toEqual({
+      agent: 'adal',
+      processName: 'adal'
+    })
+  })
+
   it('recognizes the Droid foreground process on Windows', () => {
     expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\droid.cmd`)).toEqual({
       agent: 'droid',
@@ -248,6 +286,8 @@ describe('agent process recognition', () => {
     expect(isAgentForegroundWrapperProcess('node.exe')).toBe(true)
     expect(isAgentForegroundWrapperProcess('/usr/bin/python3')).toBe(true)
     expect(isAgentForegroundWrapperProcess('python3.12.exe')).toBe(true)
+    // Why: generic Bun apps must not trigger Windows-wide process scans; AdaL is recognized from shell-rooted descendants instead.
+    expect(isAgentForegroundWrapperProcess('bun.exe')).toBe(false)
     expect(isAgentForegroundWrapperProcess('bash')).toBe(false)
     expect(isAgentForegroundWrapperProcess('vim.exe')).toBe(false)
   })

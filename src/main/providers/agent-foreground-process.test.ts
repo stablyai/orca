@@ -109,6 +109,17 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'node')).resolves.toBe('codex')
   })
 
+  it('reports AdaL through its installed Bun launcher', async () => {
+    mockPs(
+      [
+        '100 99 Ss   zsh -l',
+        '101 100 S+   /Users/dev/.adal/versions/1.5.0/runtime/bun /Users/dev/.adal/versions/1.5.0/adal-cli.js'
+      ].join('\n')
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'bun')).resolves.toBe('adal')
+  })
+
   // Why: OMP embeds Pi, but the outer process is the user-visible identity (#6364).
   it('reports the outer omp wrapper, not the wrapped pi child', async () => {
     mockPs(['101 100 S+   omp', '102 101 S+   pi'].join('\n'))
@@ -287,6 +298,29 @@ describe('resolveAgentForegroundProcess', () => {
     )
 
     await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('codex')
+  })
+
+  it('recognizes Windows shell-rooted AdaL launches through bundled Bun', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockPs(
+      windowsProcessJsonRows([
+        {
+          CommandLine: 'powershell.exe',
+          Name: 'powershell.exe',
+          ParentProcessId: 99,
+          ProcessId: 100
+        },
+        {
+          CommandLine:
+            'C:\\Users\\dev\\.adal\\versions\\current\\runtime\\bun.exe C:\\Users\\dev\\.adal\\versions\\current\\adal-cli.js',
+          Name: 'bun.exe',
+          ParentProcessId: 100,
+          ProcessId: 101
+        }
+      ])
+    )
+
+    await expect(resolveAgentForegroundProcess(100, 'powershell.exe')).resolves.toBe('adal')
   })
 
   it('recognizes Windows Git Bash shell-rooted agent launches', async () => {

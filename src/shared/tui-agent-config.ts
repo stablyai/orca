@@ -87,8 +87,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'adal',
     launchCmd: 'adal',
     expectedProcess: 'adal',
-    // AdaL's interactive mode is launched without -q; prompt delivery uses
-    // Orca's generic post-start path rather than unsupported positional args.
+    // Why: `-q` is headless, so keep the TUI alive and inject only after its process owns the terminal.
     promptInjectionMode: 'stdin-after-start'
   },
   autohand: {
