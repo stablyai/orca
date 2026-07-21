@@ -3023,6 +3023,47 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('uses a captured folder parent after the active workspace changes', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      instanceId: 'child-instance'
+    })
+    store.setState({
+      activeWorkspaceKey: worktreeWorkspaceKey('repo1::/path/other')
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    const createWorktree = store.getState().createWorktree
+    const createArgs: Parameters<typeof createWorktree> = ['repo1', 'feature', 'origin/main']
+    createArgs[25] = { parentWorkspace: folderWorkspaceKey('folder-1') }
+
+    await createWorktree(...createArgs)
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({ parentWorkspace: folderWorkspaceKey('folder-1') })
+    )
+  })
+
+  it('does not infer a parent when the submitted request captured none', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({ activeWorkspaceKey: folderWorkspaceKey('folder-1') } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    const createWorktree = store.getState().createWorktree
+    const createArgs: Parameters<typeof createWorktree> = ['repo1', 'feature', 'origin/main']
+    createArgs[25] = { parentWorkspace: null }
+
+    await createWorktree(...createArgs)
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ parentWorkspace: expect.anything() })
+    )
+  })
+
   it('merges create result metadata into a worktree inserted by the watcher race', async () => {
     const store = createTestStore()
     const watcherWorktree = makeWorktree({

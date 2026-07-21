@@ -21,6 +21,7 @@ import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-a
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import {
   resolveTuiAgentLaunchArgs,
@@ -3691,6 +3692,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
 
+      const activeWorkspaceScope = parseWorkspaceKey(
+        useAppStore.getState().activeWorkspaceKey ?? ''
+      )
+      const parentWorkspace =
+        activeWorkspaceScope?.type === 'folder'
+          ? folderWorkspaceKey(activeWorkspaceScope.folderWorkspaceId)
+          : null
       setCreateError(null)
       setCreating(true)
       try {
@@ -3959,6 +3967,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
         const request: WorktreeCreationRequest = {
           repoId,
+          parentWorkspace,
           ...(ephemeralVmRecipe ? { ephemeralVmRecipe } : {}),
           worktreeCreateProgressMode:
             activeEphemeralVmRecipeId ||

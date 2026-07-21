@@ -4,6 +4,7 @@ import type {
   SetupDecision,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
+  WorkspaceKey,
   WorkspaceStatus,
   WorktreeStartupLaunch
 } from '../../../shared/types'
@@ -29,6 +30,9 @@ export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
  */
 export type WorktreeCreationRequest = {
   repoId: string
+  /** Folder workspace captured when the request was submitted. `null` freezes
+   *  an intentionally unparented create; `undefined` preserves legacy fallback. */
+  parentWorkspace?: WorkspaceKey | null
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null

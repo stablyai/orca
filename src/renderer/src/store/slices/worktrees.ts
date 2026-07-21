@@ -2920,6 +2920,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     options
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
+    const hasCapturedParentWorkspace =
+      options != null && Object.prototype.hasOwnProperty.call(options, 'parentWorkspace')
     try {
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         const candidateName = getClientWorktreeCreateCandidate(name, attempt)
@@ -2931,8 +2933,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
           const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
           const activeScope = parseWorkspaceKey(get().activeWorkspaceKey ?? '')
-          const parentWorkspace =
-            activeScope?.type === 'folder'
+          const parentWorkspace = hasCapturedParentWorkspace
+            ? (options.parentWorkspace ?? undefined)
+            : activeScope?.type === 'folder'
               ? folderWorkspaceKey(activeScope.folderWorkspaceId)
               : undefined
           const createArgs = {

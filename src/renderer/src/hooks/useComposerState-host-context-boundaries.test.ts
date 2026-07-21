@@ -383,6 +383,18 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickCreate).toBeGreaterThan(quickPolicySave)
   })
 
+  it('captures the folder parent before quick-create preflight can change focus', () => {
+    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
+    const captureParent = quickSubmit.indexOf('const parentWorkspace =')
+    const firstPreflightAwait = quickSubmit.indexOf('await resolvePendingSmartGitHubSubmit()')
+    const request = quickSubmit.indexOf('const request: WorktreeCreationRequest = {')
+
+    expect(captureParent).toBeGreaterThanOrEqual(0)
+    expect(captureParent).toBeLessThan(firstPreflightAwait)
+    expect(request).toBeGreaterThan(firstPreflightAwait)
+    expect(quickSubmit.slice(request)).toContain('parentWorkspace,')
+  })
+
   it('resolves submit-time GitHub smart input when folder child repos exist', () => {
     expect(
       canResolveFolderSmartGitHubSubmit({

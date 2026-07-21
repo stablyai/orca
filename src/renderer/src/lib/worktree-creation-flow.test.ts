@@ -199,6 +199,30 @@ describe('runBackgroundWorktreeCreation', () => {
     )
   })
 
+  it('preserves the folder parent captured before background creation starts', async () => {
+    store.createWorktree.mockResolvedValue({
+      worktree: { id: 'repo-1::/workspace/feature', repoId: 'repo-1' }
+    })
+
+    runBackgroundWorktreeCreation(makeRequest({ parentWorkspace: 'folder:folder-1' }))
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[25]).toEqual({ parentWorkspace: 'folder:folder-1' })
+  })
+
+  it('preserves an intentionally unparented background creation', async () => {
+    store.createWorktree.mockResolvedValue({
+      worktree: { id: 'repo-1::/workspace/feature', repoId: 'repo-1' }
+    })
+
+    runBackgroundWorktreeCreation(makeRequest({ parentWorkspace: null }))
+
+    await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[25]).toEqual({ parentWorkspace: null })
+  })
+
   it('shows a VM provisioning phase and creates the worktree on the prepared runtime repo', async () => {
     store.repos = [
       {
