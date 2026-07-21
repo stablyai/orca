@@ -85,6 +85,7 @@ export async function launchAgentBackgroundSession(
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath =
     getTuiAgentPromptInjectionMode(agent, launchPlatform) === 'stdin-after-start'
+
   const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
   const startupPlan = buildAgentStartupPlan({
     agent,
