@@ -12790,6 +12790,12 @@
           "failed": "Re-pair failed",
           "descriptionShareComputer": "{{name}}이(가) 더 이상 이 컴퓨터를 허용하지 않습니다. {{name}}에서 설정 → 원격 Orca 서버 → 이 컴퓨터 공유를 열고 다른 Orca용 링크를 만든 다음 여기에 붙여 넣으세요."
         },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "편집기 키 바인딩",
+          "1b23c01cc6": "기본값",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "표준 편집 대신 코드 편집기에서 Vim 모달 키 바인딩을 사용합니다."
+        },
         "usageCredentialHost": {
           "outdated": "이 키를 {{host}}에 저장하려면 해당 호스트의 Orca를 업데이트하세요.",
           "unreachable": "{{host}}에 연결할 수 없어 키가 저장되어 있는지 알 수 없습니다.",

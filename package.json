@@ -300,6 +300,7 @@
     "marked": "^17.0.1",
     "mermaid": "^11.17.2",
     "monaco-editor": "^0.55.1",
+    "monaco-vim": "^0.4.4",
     "node-gyp": "12.3.0",
     "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",

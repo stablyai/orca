@@ -13131,6 +13131,12 @@
           "failed": "Re-pair failed",
           "descriptionShareComputer": "{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this computer, create a link for another Orca, then paste it here."
         },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "Editor Keybindings",
+          "1b23c01cc6": "Default",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "Use Vim modal keybindings in the code editor instead of standard editing."
+        },
         "usageCredentialHost": {
           "outdated": "Update Orca on {{host}} to save this key there.",
           "unreachable": "Could not reach {{host}}, so whether a key is saved there is unknown.",
