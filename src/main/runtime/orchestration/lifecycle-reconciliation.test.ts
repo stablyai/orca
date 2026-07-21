@@ -409,4 +409,122 @@ describe('lifecycle reconciliation', () => {
     expect(db.getMessageById(lateHeartbeat.id)).toMatchObject({ read: 1 })
     expect(db.getMessageById(lateHeartbeat.id)?.delivered_at).not.toBeNull()
   })
+
+  it('completes a null-id worker_done sent from the pane that owns the sole dispatch', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const done = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({}),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, done)).toEqual({
+      action: 'completed',
+      taskId: task.id,
+      dispatchId: dispatch.id
+    })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+  })
+
+  it('does not let a re-read of a fallback-resolved worker_done complete a later dispatch to the same pane', () => {
+    db = new OrchestrationDb(':memory:')
+    const taskA = db.createTask({ spec: 'work A' })
+    const dispatchA = db.createDispatchContext(taskA.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const done = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({}),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    // First reconcile completes A via the sole-active-dispatch fallback.
+    expect(reconcileLifecycleMessage(db, done)).toMatchObject({
+      action: 'completed',
+      taskId: taskA.id,
+      dispatchId: dispatchA.id
+    })
+
+    // The same pane now owns a fresh dispatch B.
+    const taskB = db.createTask({ spec: 'work B' })
+    const dispatchB = db.createDispatchContext(taskB.id, 'term_worker', `tab_w:${LEAF_A}`)
+
+    // Re-reading the ORIGINAL message (as the coordinator does) must re-target A, not B.
+    const reread = db.getMessageById(done.id)
+    expect(reread && reconcileLifecycleMessage(db, reread)).toMatchObject({
+      action: 'completed',
+      taskId: taskA.id,
+      dispatchId: dispatchA.id
+    })
+    expect(db.getTask(taskB.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(dispatchB.id)?.status).toBe('dispatched')
+  })
+
+  it('ignores a null-id worker_done sent from a foreign pane and handle', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w:${LEAF_A}`)
+    const logs: string[] = []
+    const done = db.insertMessage({
+      from: 'term_stranger',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({}),
+      senderPaneKey: `tab_w:${LEAF_B}`
+    })
+
+    expect(reconcileLifecycleMessage(db, done, (line) => logs.push(line))).toEqual({
+      action: 'ignored'
+    })
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    expect(logs.some((line) => line.includes('without taskId'))).toBe(true)
+  })
+
+  it('ignores a null-id worker_done when the sender has no active dispatch', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    db.updateTaskStatus(task.id, 'completed')
+    const done = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done again',
+      type: 'worker_done',
+      payload: JSON.stringify({}),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, done)).toEqual({ action: 'ignored' })
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+  })
+
+  it('ignores a null-id worker_done when the sender matches two active dispatches', () => {
+    db = new OrchestrationDb(':memory:')
+    const ownTask = db.createTask({ spec: 'work' })
+    const ownDispatch = db.createDispatchContext(ownTask.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const paneTask = db.createTask({ spec: 'other work' })
+    const paneDispatch = db.createDispatchContext(paneTask.id, 'term_other', `tab_w:${LEAF_B}`)
+    // Sender matches one dispatch by handle and another by pane, so neither can be attributed.
+    const done = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({}),
+      senderPaneKey: `tab_w:${LEAF_B}`
+    })
+
+    expect(reconcileLifecycleMessage(db, done)).toEqual({ action: 'ignored' })
+    expect(db.getDispatchContextById(ownDispatch.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(paneDispatch.id)?.status).toBe('dispatched')
+  })
 })

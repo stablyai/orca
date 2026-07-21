@@ -170,17 +170,11 @@ function reconcileWorkerDoneMessage(
     return persistedRejection
   }
 
-  const taskId = payload.taskId
-  if (typeof taskId !== 'string' || taskId.length === 0) {
-    onLog(`Warning: worker_done without taskId from ${msg.from_handle}`)
+  const target = resolveWorkerDoneTarget(db, msg, payload, onLog)
+  if (!target) {
     return { action: 'ignored' }
   }
-
-  const dispatchId = payload.dispatchId
-  if (typeof dispatchId !== 'string' || dispatchId.length === 0) {
-    onLog(`Warning: worker_done without dispatchId from ${msg.from_handle}`)
-    return { action: 'ignored' }
-  }
+  const { taskId, dispatchId } = target
 
   const task = db.getTask(taskId)
   if (!task) {
@@ -237,6 +231,39 @@ function reconcileWorkerDoneMessage(
 
   onLog(`Task ${taskId} completed`)
   return { action: 'completed', taskId, dispatchId }
+}
+
+// Why: a worker_done from the pane that owns the sole in-flight dispatch is still
+// authoritative (#7429); the payload ids are a convenience, not the authority.
+function resolveWorkerDoneTarget(
+  db: OrchestrationDb,
+  msg: MessageRow,
+  payload: Record<string, unknown>,
+  onLog: LogFn
+): { taskId: string; dispatchId: string } | undefined {
+  const payloadTaskId = payload.taskId
+  const payloadDispatchId = payload.dispatchId
+  const taskId = typeof payloadTaskId === 'string' && payloadTaskId.length > 0 ? payloadTaskId : ''
+  const dispatchId =
+    typeof payloadDispatchId === 'string' && payloadDispatchId.length > 0 ? payloadDispatchId : ''
+  if (taskId && dispatchId) {
+    return { taskId, dispatchId }
+  }
+
+  const fallback = db.getSoleActiveDispatchForSender(msg.from_handle, msg.sender_pane_key)
+  if (fallback && hasLifecycleAuthority(fallback, msg)) {
+    const resolved = { taskId: taskId || fallback.task_id, dispatchId: dispatchId || fallback.id }
+    // Why: persist before completion so a re-read of this same message uses the recorded ids; else the sole-dispatch fallback would re-resolve onto a later dispatch B and wrongly complete it (#7429).
+    db.stampResolvedWorkerDoneIds(msg.id, resolved.taskId, resolved.dispatchId)
+    return resolved
+  }
+
+  onLog(
+    taskId
+      ? `Warning: worker_done without dispatchId from ${msg.from_handle}`
+      : `Warning: worker_done without taskId from ${msg.from_handle}`
+  )
+  return undefined
 }
 
 function buildLifecycleAuthorityRejectionReason(
