@@ -379,6 +379,12 @@ function getBrowserTabsByWorktree(state: AppState): AppState['browserTabsByWorkt
   return state.browserTabsByWorktree ?? EMPTY_BROWSER_TABS_BY_WORKTREE
 }
 
+function isRuntimeMirroredBrowserWorkspace(state: AppState, workspaceId: string): boolean {
+  return (state.browserPagesByWorkspace?.[workspaceId] ?? []).some(
+    (page) => state.remoteBrowserPageHandlesByPageId?.[page.id] !== undefined
+  )
+}
+
 function getBrowserPagesByWorkspace(state: AppState): AppState['browserPagesByWorkspace'] {
   return state.browserPagesByWorkspace ?? EMPTY_BROWSER_PAGES_BY_WORKSPACE
 }
@@ -709,18 +715,23 @@ export function buildMobileSessionTabSnapshots(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
     const browserWorkspaceByIdForWorktree = new Map(
-      (getBrowserTabsByWorktree(state)[worktreeId] ?? []).map((workspace) => [
-        workspace.id,
-        workspace
-      ])
+      (getBrowserTabsByWorktree(state)[worktreeId] ?? [])
+        .filter((workspace) => !isRuntimeMirroredBrowserWorkspace(state, workspace.id))
+        .map((workspace) => [workspace.id, workspace])
     )
     const unifiedTabByIdForWorktree = new Map(
       (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
     const openFilesForWorktree = openFileIndexes.byWorktreeAndId.get(worktreeId)
+    const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
+    const unifiedEditorFileIds = new Set(unifiedEditorTabs.map((tab) => tab.entityId))
     const editorIds = (openFileIndexes.idsByWorktree.get(worktreeId) ?? []).filter((fileId) => {
       const file = openFilesForWorktree?.get(fileId)
-      return file ? isMobilePublishableOpenFile(file) : false
+      return Boolean(
+        file &&
+        isMobilePublishableOpenFile(file) &&
+        (!state.workspaceSessionReady || unifiedEditorFileIds.has(file.id))
+      )
     })
     const publishableTerminalIds = [...terminalTabByIdForWorktree.values()]
       .filter((terminal) => !isWebOnlyMirroredTerminalTab(state, terminal))
@@ -795,8 +806,6 @@ export function buildMobileSessionTabSnapshots(
     // Why: split-group projection can miss plain editor files during hydration; publish them so mobile/web still mirror.
     const fallbackEditorTabs: FallbackEditorTabTarget[] = []
     if (openFilesForWorktree) {
-      const unifiedEditorTabs = getEditorUnifiedTabsForWorktree(state, worktreeId)
-      const unifiedEditorFileIds = new Set(unifiedEditorTabs.map((tab) => tab.entityId))
       for (const unifiedTab of unifiedEditorTabs) {
         if (emittedEditorTabIds.has(unifiedTab.id)) {
           continue
@@ -820,30 +829,32 @@ export function buildMobileSessionTabSnapshots(
         })
         emittedEditorTabIds.add(unifiedTab.id)
       }
-      for (const file of openFilesForWorktree.values()) {
-        if (!isMobilePublishableOpenFile(file)) {
-          continue
-        }
-        if (emittedEditorFileIds.has(file.id)) {
-          continue
-        }
-        if (unifiedEditorFileIds.has(file.id)) {
+      if (!state.workspaceSessionReady) {
+        for (const file of openFilesForWorktree.values()) {
+          if (!isMobilePublishableOpenFile(file)) {
+            continue
+          }
+          if (emittedEditorFileIds.has(file.id)) {
+            continue
+          }
+          if (unifiedEditorFileIds.has(file.id)) {
+            emittedEditorFileIds.add(file.id)
+            continue
+          }
+          const markdown = buildMobileMarkdownTab(
+            state,
+            openFileIndexes.byWorktreeAndId,
+            editorDraftVersionByFileId,
+            file
+          )
+          const fallbackTab = markdown ?? buildMobileFileTab(state, file)
+          tabs.push(fallbackTab)
+          fallbackEditorTabs.push({
+            tabId: fallbackTab.id,
+            groupId: null
+          })
           emittedEditorFileIds.add(file.id)
-          continue
         }
-        const markdown = buildMobileMarkdownTab(
-          state,
-          openFileIndexes.byWorktreeAndId,
-          editorDraftVersionByFileId,
-          file
-        )
-        const fallbackTab = markdown ?? buildMobileFileTab(state, file)
-        tabs.push(fallbackTab)
-        fallbackEditorTabs.push({
-          tabId: fallbackTab.id,
-          groupId: null
-        })
-        emittedEditorFileIds.add(file.id)
       }
     }
 
@@ -1481,8 +1492,8 @@ function isMobileUnsupportedCombinedDiffSource(
 }
 
 function isMobilePublishableOpenFile(file: AppState['openFiles'][number]): boolean {
-  // Why: combined diff tabs use display labels as paths and need the desktop renderer; mobile would mis-call files.read.
-  return !isMobileUnsupportedCombinedDiffSource(file.diffSource)
+  // Why: combined diffs need the desktop renderer, while runtime mirrors belong to their host and must never be republished as this client's state.
+  return !file.mirroredFromRuntimeSession && !isMobileUnsupportedCombinedDiffSource(file.diffSource)
 }
 
 function buildMobileBrowserTab(

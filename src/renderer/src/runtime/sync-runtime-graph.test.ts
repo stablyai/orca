@@ -932,6 +932,107 @@ describe('buildMobileSessionTabSnapshots', () => {
     })
   })
 
+  it('does not publish post-hydration openFiles that have no visible unified tab', () => {
+    const fileId = '/repo/src/orphan.ts'
+    const snapshot = buildMobileSessionTabSnapshots(
+      makeState({
+        workspaceSessionReady: true,
+        openFiles: [
+          {
+            id: fileId,
+            filePath: fileId,
+            relativePath: 'src/orphan.ts',
+            worktreeId: 'wt-1',
+            language: 'typescript',
+            mode: 'edit',
+            isDirty: false
+          }
+        ]
+      })
+    )[0]
+
+    expect(snapshot?.tabs).toEqual([])
+  })
+
+  it('does not republish a runtime-mirrored editor as this renderer state', () => {
+    const fileId = '/repo/src/mirrored.ts'
+    const snapshot = buildMobileSessionTabSnapshots(
+      makeState({
+        workspaceSessionReady: true,
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'editor-tab-1',
+              groupId: 'group-1',
+              contentType: 'editor',
+              entityId: fileId,
+              title: 'mirrored.ts'
+            }
+          ]
+        } as unknown as AppState['unifiedTabsByWorktree'],
+        openFiles: [
+          {
+            id: fileId,
+            filePath: fileId,
+            relativePath: 'src/mirrored.ts',
+            worktreeId: 'wt-1',
+            language: 'typescript',
+            mode: 'edit',
+            isDirty: false,
+            mirroredFromRuntimeSession: true
+          }
+        ]
+      })
+    )[0]
+
+    expect(snapshot?.tabs).toEqual([])
+  })
+
+  it('does not republish a runtime-mirrored browser workspace as this renderer state', () => {
+    const snapshot = buildMobileSessionTabSnapshots(
+      makeState({
+        workspaceSessionReady: true,
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'browser-tab-1',
+              groupId: 'group-1',
+              contentType: 'browser',
+              entityId: 'browser-1',
+              title: 'Remote browser'
+            }
+          ]
+        } as unknown as AppState['unifiedTabsByWorktree'],
+        browserTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'browser-1',
+              worktreeId: 'wt-1',
+              activePageId: 'page-1',
+              pageIds: ['page-1']
+            }
+          ]
+        } as unknown as AppState['browserTabsByWorktree'],
+        browserPagesByWorkspace: {
+          'browser-1': [
+            {
+              id: 'page-1',
+              workspaceId: 'browser-1',
+              worktreeId: 'wt-1',
+              url: 'https://example.test',
+              title: 'Remote browser'
+            }
+          ]
+        } as unknown as AppState['browserPagesByWorkspace'],
+        remoteBrowserPageHandlesByPageId: {
+          'page-1': { environmentId: 'runtime-1', remotePageId: 'host-page-1' }
+        }
+      })
+    )[0]
+
+    expect(snapshot?.tabs).toEqual([])
+  })
+
   it('does not conflate same-path edit and diff editor tabs in the fallback', () => {
     const fileId = '/repo/src/app.ts'
     const diffId = 'wt-1::diff::unstaged::src/app.ts'
