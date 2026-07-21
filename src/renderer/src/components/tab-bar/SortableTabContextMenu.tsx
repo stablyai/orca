@@ -141,6 +141,7 @@ export function SortableTabContextMenu({
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
+  const togglePinShortcut = useOptionalShortcutLabel('tab.togglePin')
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -193,6 +194,9 @@ export function SortableTabContextMenu({
           {isPinned
             ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
             : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
+          {togglePinShortcut ? (
+            <DropdownMenuShortcut>{togglePinShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>

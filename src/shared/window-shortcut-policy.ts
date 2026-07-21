@@ -46,6 +46,9 @@ export type WindowShortcutAction =
   | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
   | { type: 'dictationKeyDown' }
+  | { type: 'toggleCurrentWorkspacePin' }
+  | { type: 'copyCurrentWorkspacePath' }
+  | { type: 'sleepCurrentWorkspace' }
 
 type WindowShortcutResolveOptions = KeybindingMatchOptions
 
@@ -243,6 +246,18 @@ export function resolveWindowShortcutAction(
     return { type: 'openWorkspaceBoard' }
   }
 
+  if (actionMatches('workspace.togglePin', input, platform, keybindings, options)) {
+    return { type: 'toggleCurrentWorkspacePin' }
+  }
+
+  if (actionMatches('workspace.copyPath', input, platform, keybindings, options)) {
+    return { type: 'copyCurrentWorkspacePath' }
+  }
+
+  if (actionMatches('workspace.sleep', input, platform, keybindings, options)) {
+    return { type: 'sleepCurrentWorkspace' }
+  }
+
   if (actionMatches('voice.dictation', input, platform, keybindings, options)) {
     return { type: 'dictationKeyDown' }
   }
@@ -292,49 +307,43 @@ export function resolveWindowShortcutAction(
   return null
 }
 
+const WINDOW_SHORTCUT_ACTION_IDS: Record<
+  Exclude<WindowShortcutAction['type'], 'zoom' | 'worktreeHistoryNavigate'>,
+  KeybindingActionId
+> = {
+  openSettings: 'app.settings',
+  forceReload: 'app.forceReload',
+  toggleWorktreePalette: 'worktree.palette',
+  toggleFloatingTerminal: 'floatingTerminal.toggle',
+  toggleLeftSidebar: 'sidebar.left.toggle',
+  toggleRightSidebar: 'sidebar.right.toggle',
+  openQuickOpen: 'worktree.quickOpen',
+  toggleQuickCommandsMenu: 'tab.openQuickCommandsMenu',
+  openNewWorkspace: 'workspace.create',
+  deleteCurrentWorkspace: 'workspace.delete',
+  openWorkspaceBoard: 'workspace.openBoard',
+  toggleCurrentWorkspacePin: 'workspace.togglePin',
+  copyCurrentWorkspacePath: 'workspace.copyPath',
+  sleepCurrentWorkspace: 'workspace.sleep',
+  openTasks: 'view.tasks',
+  switchRecentTab: 'tab.previousRecent',
+  dictationKeyDown: 'voice.dictation',
+  jumpToWorktreeIndex: 'workspace.selectByIndex',
+  jumpToTabIndex: 'tab.selectByIndex'
+}
+
 export function getWindowShortcutActionId(action: WindowShortcutAction): KeybindingActionId | null {
-  switch (action.type) {
-    case 'zoom':
-      return action.direction === 'in'
-        ? 'zoom.in'
-        : action.direction === 'out'
-          ? 'zoom.out'
-          : 'zoom.reset'
-    case 'openSettings':
-      return 'app.settings'
-    case 'forceReload':
-      return 'app.forceReload'
-    case 'toggleWorktreePalette':
-      return 'worktree.palette'
-    case 'toggleFloatingTerminal':
-      return 'floatingTerminal.toggle'
-    case 'toggleLeftSidebar':
-      return 'sidebar.left.toggle'
-    case 'toggleRightSidebar':
-      return 'sidebar.right.toggle'
-    case 'openQuickOpen':
-      return 'worktree.quickOpen'
-    case 'toggleQuickCommandsMenu':
-      return 'tab.openQuickCommandsMenu'
-    case 'openNewWorkspace':
-      return 'workspace.create'
-    case 'deleteCurrentWorkspace':
-      return 'workspace.delete'
-    case 'openWorkspaceBoard':
-      return 'workspace.openBoard'
-    case 'openTasks':
-      return 'view.tasks'
-    case 'switchRecentTab':
-      return 'tab.previousRecent'
-    case 'worktreeHistoryNavigate':
-      return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
-    case 'dictationKeyDown':
-      return 'voice.dictation'
-    case 'jumpToWorktreeIndex':
-      return 'workspace.selectByIndex'
-    case 'jumpToTabIndex':
-      return 'tab.selectByIndex'
+  if (action.type === 'zoom') {
+    return action.direction === 'in'
+      ? 'zoom.in'
+      : action.direction === 'out'
+        ? 'zoom.out'
+        : 'zoom.reset'
   }
+  if (action.type === 'worktreeHistoryNavigate') {
+    return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
+  }
+  return WINDOW_SHORTCUT_ACTION_IDS[action.type]
 }
 
 export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {

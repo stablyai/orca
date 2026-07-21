@@ -148,7 +148,8 @@ import { getSystemPrefersDark } from './lib/terminal-theme'
 import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
-import { useShortcutLabel } from './hooks/useShortcutLabel'
+import { useShortcutLabel, useShortcutKeyDetails } from './hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from './components/ShortcutKeyCombo'
 import {
   folderRelativePathToIncludeGlob,
   selectedExplorerFolderRelativePath
@@ -158,8 +159,10 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
-import { selectFloatingVisibleTabCount } from './store/selectors'
+import { selectFloatingVisibleTabCount, getWorktreeMapFromState } from './store/selectors'
 import { selectActiveTerminalChromeState } from './store/active-terminal-chrome-selector'
+import { hasSleepableWorkspaceActivity } from './components/sidebar/WorktreeContextMenu'
+import { runSleepWorktrees } from './components/sidebar/sleep-worktree-flow'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState, UpdateStatus } from '../../shared/types'
@@ -499,6 +502,7 @@ function App(): React.JSX.Element {
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
+  const expandPaneShortcut = useShortcutKeyDetails('terminal.expandPane')
   const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
@@ -1613,6 +1617,62 @@ function App(): React.JSX.Element {
         return
       }
 
+      if (
+        workspaceChromeActive &&
+        !floatingWorkspaceFocused &&
+        activeWorktreeId &&
+        matchShortcut('workspace.togglePin')
+      ) {
+        const store = useAppStore.getState()
+        const activeWorktree = getWorktreeMapFromState(store).get(activeWorktreeId)
+        if (activeWorktree) {
+          input.preventDefault()
+          notifyTerminalCapture('workspace.togglePin')
+          store.setWorktreesPinnedAndReveal([activeWorktreeId], !activeWorktree.isPinned)
+          return
+        }
+      }
+
+      if (
+        workspaceChromeActive &&
+        !floatingWorkspaceFocused &&
+        activeWorktreeId &&
+        matchShortcut('workspace.copyPath')
+      ) {
+        const store = useAppStore.getState()
+        const activeWorktree = getWorktreeMapFromState(store).get(activeWorktreeId)
+        if (activeWorktree) {
+          input.preventDefault()
+          notifyTerminalCapture('workspace.copyPath')
+          void window.api.ui.writeClipboardText(activeWorktree.path)
+          return
+        }
+      }
+
+      if (
+        workspaceChromeActive &&
+        !floatingWorkspaceFocused &&
+        activeWorktreeId &&
+        matchShortcut('workspace.sleep')
+      ) {
+        const store = useAppStore.getState()
+        const activeWorktree = getWorktreeMapFromState(store).get(activeWorktreeId)
+        if (
+          activeWorktree &&
+          hasSleepableWorkspaceActivity(
+            activeWorktreeId,
+            store.tabsByWorktree,
+            store.ptyIdsByTabId,
+            store.browserTabsByWorktree
+          )
+        ) {
+          input.preventDefault()
+          notifyTerminalCapture('workspace.sleep')
+          void runSleepWorktrees([activeWorktreeId])
+          return
+        }
+      }
+
       if (matchShortcut('workspace.openBoard') && activeView !== 'settings') {
         input.preventDefault()
         notifyTerminalCapture('workspace.openBoard')
@@ -1955,8 +2015,14 @@ function App(): React.JSX.Element {
               <Minimize2 size={14} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.App.c1cf0b0e4a', 'Collapse pane')}
+          <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
+            <span>{translate('auto.App.c1cf0b0e4a', 'Collapse pane')}</span>
+            {expandPaneShortcut.keys.length > 0 && (
+              <ShortcutKeyCombo
+                keys={expandPaneShortcut.keys}
+                doubleTap={expandPaneShortcut.doubleTap}
+              />
+            )}
           </TooltipContent>
         </Tooltip>
       )}

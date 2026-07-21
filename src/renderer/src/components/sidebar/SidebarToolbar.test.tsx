@@ -18,6 +18,10 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Partial<AppState>) => unknown) => selector(mocks.state)
 }))
 
+vi.mock('@/hooks/useShortcutLabel', () => ({
+  useShortcutKeyDetails: () => ({ keys: ['⌘', 'B'], doubleTap: false })
+}))
+
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children, open }: { children: ReactNode; open?: boolean }) => {
     mocks.activeTooltipOpen = open === true
@@ -74,6 +78,36 @@ async function renderToolbar(onWorkspaceBoardToggle = vi.fn()): Promise<{
 describe('SidebarToolbar moved workspace board hint', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    if (
+      !window.localStorage ||
+      typeof window.localStorage.clear !== 'function' ||
+      typeof window.localStorage.getItem !== 'function' ||
+      typeof window.localStorage.setItem !== 'function' ||
+      typeof window.localStorage.removeItem !== 'function'
+    ) {
+      const store = new Map<string, string>()
+      const mockLocalStorage = {
+        getItem: vi.fn((key: string) => store.get(key) ?? null),
+        setItem: vi.fn((key: string, value: string) => {
+          store.set(key, String(value))
+        }),
+        removeItem: vi.fn((key: string) => {
+          store.delete(key)
+        }),
+        clear: vi.fn(() => {
+          store.clear()
+        }),
+        get length() {
+          return store.size
+        },
+        key: vi.fn((index: number) => Array.from(store.keys())[index] ?? null)
+      }
+      Object.defineProperty(window, 'localStorage', {
+        value: mockLocalStorage,
+        writable: true,
+        configurable: true
+      })
+    }
     window.localStorage.clear()
     mocks.activeTooltipOpen = false
     mocks.state = {

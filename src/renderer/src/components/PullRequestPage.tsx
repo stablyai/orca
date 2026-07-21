@@ -71,7 +71,8 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isScreenSubmitShortcut, getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
@@ -6454,7 +6455,14 @@ function GHCommentComposer({
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
+          <span className="flex items-center gap-2">
+            <span>{translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}</span>
+            <ShortcutKeyCombo
+              keys={[getScreenSubmitModifierLabel(), 'Enter']}
+              className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
+              separatorClassName="mx-0 text-[10px] text-muted-foreground"
+            />
+          </span>
         </TooltipContent>
       </Tooltip>
     </div>

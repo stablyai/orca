@@ -737,6 +737,40 @@ describe('keybindings', () => {
     )
   })
 
+  it('exposes frequent workspace and tab pin actions for customization', () => {
+    const macPinWorkspace = {
+      key: 'p',
+      code: 'KeyP',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+    const linuxPinWorkspace = { ...macPinWorkspace, control: true, meta: false }
+
+    expect(getEffectiveKeybindingsForAction('workspace.togglePin', 'darwin')).toEqual(['Mod+Alt+P'])
+    expect(keybindingMatchesAction('workspace.togglePin', macPinWorkspace, 'darwin')).toBe(true)
+    expect(getEffectiveKeybindingsForAction('workspace.togglePin', 'linux')).toEqual([])
+    expect(keybindingMatchesAction('workspace.togglePin', linuxPinWorkspace, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.togglePin', linuxPinWorkspace, 'linux', {
+        'workspace.togglePin': ['Mod+Alt+P']
+      })
+    ).toBe(true)
+
+    expect(getEffectiveKeybindingsForAction('workspace.copyPath', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('workspace.sleep', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.togglePin', 'darwin')).toEqual([])
+    expect(getKeybindingDefinition('workspace.togglePin')?.title).toBe('Pin / Unpin Workspace')
+    expect(getKeybindingDefinition('tab.togglePin')?.title).toBe('Pin / Unpin Tab')
+    expect(getKeybindingDefinition('workspace.togglePin')?.conflictGroup).toBe('workspace-pin')
+    expect(getKeybindingDefinition('tab.togglePin')?.conflictGroup).toBe('workspace-pin')
+    expect(getKeybindingDefinition('workspace.copyPath')?.title).toBe('Copy Workspace Path')
+    expect(getKeybindingDefinition('workspace.sleep')?.title).toBe('Sleep Workspace')
+    expect(getKeybindingDefinition('workspace.copyPath')?.allowInTerminal).toBe(true)
+    expect(getKeybindingDefinition('workspace.sleep')?.allowInTerminal).toBe(true)
+  })
+
   it('keeps the sleeping-workspaces toggle unassigned until users customize it', () => {
     const binding = {
       key: 's',

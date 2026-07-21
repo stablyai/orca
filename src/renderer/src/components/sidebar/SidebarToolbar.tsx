@@ -1,4 +1,6 @@
 import React from 'react'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { Kanban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -29,6 +31,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   const hasUsedWorkspaceBoard = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'workspace-board')
   )
+  const openBoardShortcut = useShortcutKeyDetails('workspace.openBoard')
 
   React.useEffect(() => {
     if (!persistedUIReady) {
@@ -95,21 +98,29 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
                 <Kanban className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {workspaceBoardMovedHintOpen
-                ? translate(
-                    'auto.components.sidebar.SidebarToolbar.87d0064026',
-                    'Workspace board moved to the bottom bar'
-                  )
-                : workspaceBoardOpen
+            <TooltipContent side="top" sideOffset={4} className="flex items-center gap-2">
+              <span>
+                {workspaceBoardMovedHintOpen
                   ? translate(
-                      'auto.components.sidebar.SidebarToolbar.a30e34eb5c',
-                      'Close workspace board'
+                      'auto.components.sidebar.SidebarToolbar.87d0064026',
+                      'Workspace board moved to the bottom bar'
                     )
-                  : translate(
-                      'auto.components.sidebar.SidebarToolbar.49f62c5665',
-                      'Workspace board'
-                    )}
+                  : workspaceBoardOpen
+                    ? translate(
+                        'auto.components.sidebar.SidebarToolbar.a30e34eb5c',
+                        'Close workspace board'
+                      )
+                    : translate(
+                        'auto.components.sidebar.SidebarToolbar.49f62c5665',
+                        'Workspace board'
+                      )}
+              </span>
+              {!workspaceBoardMovedHintOpen && openBoardShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo
+                  keys={openBoardShortcut.keys}
+                  doubleTap={openBoardShortcut.doubleTap}
+                />
+              )}
             </TooltipContent>
           </Tooltip>
         </div>

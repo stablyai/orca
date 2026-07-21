@@ -120,6 +120,9 @@ import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/ty
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import type { KeybindingActionId } from '../../../shared/keybindings'
 
 type WorktreePaletteItem = {
   id: string
@@ -320,6 +323,69 @@ function getSettingsTargetFromSectionId(sectionId: string): {
     return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
   }
   return { pane: sectionId as SettingsNavTarget, repoId: null }
+}
+
+function getEntryActionId(entry: PaletteListEntry): KeybindingActionId | null {
+  if (entry.type === 'quick-action') {
+    const result = entry.result
+    const record = result as Record<string, unknown>
+    if (typeof record.actionId === 'string') {
+      return record.actionId as KeybindingActionId
+    }
+    if (typeof record.action === 'string') {
+      return record.action as KeybindingActionId
+    }
+
+    // Local mapping for high-confidence actions only:
+    if (result.id === 'new-browser-tab') {
+      return 'tab.newBrowser'
+    }
+    if (result.id === 'new-markdown-file') {
+      return 'tab.newMarkdown'
+    }
+    if (result.id === 'new-terminal-tab') {
+      return 'tab.newTerminal'
+    }
+    if (result.id === 'create-workspace') {
+      return 'workspace.create'
+    }
+    if (result.id === 'delete-workspace') {
+      return 'workspace.delete'
+    }
+  } else if (entry.type === 'settings') {
+    const result = entry.result
+    const record = result as Record<string, unknown>
+    if (typeof record.actionId === 'string') {
+      return record.actionId as KeybindingActionId
+    }
+    if (typeof record.action === 'string') {
+      return record.action as KeybindingActionId
+    }
+
+    if (result.sectionId === 'general' || result.id === 'settings:general') {
+      return 'app.settings'
+    }
+  }
+  return null
+}
+
+function ShortcutChip({ actionId }: { actionId: KeybindingActionId }): React.JSX.Element | null {
+  const combos = useShortcutKeyComboDetails(actionId)
+  const firstCombo = combos[0]
+  if (!firstCombo || firstCombo.keys.length === 0) {
+    return null
+  }
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <ShortcutKeyCombo
+        keys={firstCombo.keys}
+        doubleTap={firstCombo.doubleTap}
+        className="gap-0.5"
+        keyCapClassName="min-w-0 px-1.5 py-0 text-[10px] shadow-none"
+        separatorClassName="text-[10px] text-muted-foreground"
+      />
+    </div>
+  )
 }
 
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
@@ -1940,6 +2006,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   entry.type === 'settings'
                     ? translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
                     : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
+                const actionId = getEntryActionId(entry)
                 return (
                   <CommandItem
                     key={entry.id}
@@ -1954,16 +2021,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       <Icon className="size-3.5" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                          {result.title}
-                        </span>
-                        <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                          {kindLabel}
-                        </span>
-                      </div>
-                      <div className="mt-1 truncate text-[12px] leading-5 text-muted-foreground/88">
-                        {result.description}
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                              {result.title}
+                            </span>
+                            <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                              {kindLabel}
+                            </span>
+                          </div>
+                          <div className="mt-1 truncate text-[12px] leading-5 text-muted-foreground/88">
+                            {result.description}
+                          </div>
+                        </div>
+                        {actionId && <ShortcutChip actionId={actionId} />}
                       </div>
                     </div>
                   </CommandItem>

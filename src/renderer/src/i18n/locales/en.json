@@ -1808,7 +1808,8 @@
         "jiraToggleSortDirection": "Sort {{value0}}",
         "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
         "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved."
+        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
+        "focusSearch": "Focus search"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -1834,7 +1835,8 @@
         "0f3066256e": "Previous match",
         "42e466b9f1": "Regex",
         "90c61387d9": "Case sensitive",
-        "e07012f26e": "Search..."
+        "e07012f26e": "Search...",
+        "or": "or"
       },
       "UpdateCard": {
         "68b235d264": "Restart to Update",

@@ -94,6 +94,7 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const togglePinShortcut = useOptionalShortcutLabel('tab.togglePin')
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -140,6 +141,9 @@ export function EditorFileTabContextMenu({
           {isPinned
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
+          {togglePinShortcut ? (
+            <DropdownMenuShortcut>{togglePinShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>

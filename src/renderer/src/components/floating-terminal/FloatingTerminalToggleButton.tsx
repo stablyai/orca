@@ -3,7 +3,8 @@ import { PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useAppStore } from '@/store'
 import { selectFloatingWorkspaceHasUnread } from '@/store/selectors'
 import {
@@ -63,7 +64,7 @@ export function FloatingTerminalToggleButton({
   open: boolean
   onToggle: () => void
 }): React.JSX.Element {
-  const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
+  const shortcut = useShortcutKeyDetails('floatingTerminal.toggle')
   // Why: show an attention dot while minimized (closed) when any floating-
   // workspace tab still has an unacknowledged bell or agent completion. Derived
   // from the shared unread maps, so it clears when the user engages with — or
@@ -250,11 +251,20 @@ export function FloatingTerminalToggleButton({
             ) : null}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="left" sideOffset={6}>
-          {translate(
-            'auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70',
-            '{{value0}} floating workspace ({{value1}})',
-            { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel }
+        <TooltipContent side="left" sideOffset={6} className="flex items-center gap-2">
+          <span>
+            {open
+              ? translate(
+                  'auto.components.floating.terminal.FloatingTerminalToggleButton.5785dd9148',
+                  'Minimize floating workspace'
+                )
+              : translate(
+                  'auto.components.floating.terminal.FloatingTerminalToggleButton.3b04b065b5',
+                  'Show floating workspace'
+                )}
+          </span>
+          {shortcut.keys.length > 0 && (
+            <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
           )}
         </TooltipContent>
       </Tooltip>

@@ -83,6 +83,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
@@ -3070,6 +3071,7 @@ const hasUpstreamCandidateDivergence = (
   !sameGitHubOwnerRepo(s.sources.originCandidate, s.sources.upstreamCandidate)
 
 export default function TaskPage(): React.JSX.Element {
+  const isMac = navigator.userAgent.includes('Mac')
   useTranslation()
   const settings = useAppStore((s) => s.settings)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -8298,7 +8300,25 @@ export default function TaskPage(): React.JSX.Element {
                         onChange={(change) => applyPRFilterChange(change)}
                       />
                       <div className="relative min-w-0 flex-1 basis-64">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground cursor-default flex items-center justify-center">
+                              <Search className="size-3.5" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            <span className="flex items-center gap-2">
+                              <span>
+                                {translate('auto.components.TaskPage.focusSearch', 'Focus search')}
+                              </span>
+                              <ShortcutKeyCombo
+                                keys={[isMac ? '⌘' : 'Ctrl', 'F']}
+                                className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
+                                separatorClassName="mx-0 text-[10px] text-muted-foreground"
+                              />
+                            </span>
+                          </TooltipContent>
+                        </Tooltip>
                         <Input
                           ref={taskSearchInputRef}
                           data-github-items-search-input

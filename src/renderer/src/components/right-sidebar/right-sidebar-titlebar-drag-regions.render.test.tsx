@@ -56,7 +56,9 @@ vi.mock('@/hooks/useSidebarResize', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: (actionId: string) => actionId
+  useShortcutLabel: (actionId: string) => actionId,
+  useShortcutKeyDetails: (actionId: string) => ({ keys: [actionId], doubleTap: false }),
+  useOptionalShortcutLabel: (actionId: string) => actionId
 }))
 
 vi.mock('@/store', async () => {

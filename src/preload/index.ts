@@ -3248,6 +3248,21 @@ const api = {
       ipcRenderer.on('ui:deleteCurrentWorkspace', listener)
       return () => ipcRenderer.removeListener('ui:deleteCurrentWorkspace', listener)
     },
+    onToggleCurrentWorkspacePin: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleCurrentWorkspacePin', listener)
+      return () => ipcRenderer.removeListener('ui:toggleCurrentWorkspacePin', listener)
+    },
+    onCopyCurrentWorkspacePath: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:copyCurrentWorkspacePath', listener)
+      return () => ipcRenderer.removeListener('ui:copyCurrentWorkspacePath', listener)
+    },
+    onSleepCurrentWorkspace: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:sleepCurrentWorkspace', listener)
+      return () => ipcRenderer.removeListener('ui:sleepCurrentWorkspace', listener)
+    },
     onOpenWorkspaceBoard: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openWorkspaceBoard', listener)

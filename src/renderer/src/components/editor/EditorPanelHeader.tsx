@@ -4,6 +4,8 @@ import { useAppStore } from '@/store'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA
@@ -15,8 +17,6 @@ import { EditorPanelMarkdownActionsMenu } from './EditorPanelMarkdownActionsMenu
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -98,6 +98,7 @@ export function EditorPanelHeader({
   const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
+  const previewShortcut = useShortcutKeyDetails('editor.markdownPreview')
 
   return (
     <div className="editor-header">
@@ -125,10 +126,18 @@ export function EditorPanelHeader({
                 <Eye size={14} />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.editor.EditorPanelHeader.fb8331694e',
-                'Open Preview to the Side'
+            <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+              <span>
+                {translate(
+                  'auto.components.editor.EditorPanelHeader.fb8331694e',
+                  'Open Preview to the Side'
+                )}
+              </span>
+              {previewShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo
+                  keys={previewShortcut.keys}
+                  doubleTap={previewShortcut.doubleTap}
+                />
               )}
             </TooltipContent>
           </Tooltip>
@@ -183,6 +192,7 @@ export function EditorPanelHeader({
           iconClassName="size-3"
         />
       )}
+
       {isDiffSurface && (
         // Why: the adjacent diff controls use the same tooltip timing, so they
         // share one provider instead of creating redundant Radix contexts.

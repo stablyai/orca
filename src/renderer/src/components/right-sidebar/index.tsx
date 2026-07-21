@@ -10,6 +10,7 @@ import type { ActivityBarPosition } from '@/store/slices/editor'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -26,7 +27,7 @@ import {
 } from './activity-bar-buttons'
 import { getActiveChecksStatus } from './active-checks-status'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
   RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
@@ -56,11 +57,16 @@ function RightSidebarInner(): React.JSX.Element {
     platform: getRendererAppPlatform(),
     isWebClient: isPairedWebClientWindow()
   })
-  const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
-  const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
-  const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
-  const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
-  const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
+  const rightSidebarShortcutDetails = useShortcutKeyDetails('sidebar.right.toggle')
+  const explorerShortcutDetails = useShortcutKeyDetails('sidebar.explorer.toggle')
+  const sourceControlShortcutDetails = useShortcutKeyDetails('sidebar.sourceControl.toggle')
+  const checksShortcutDetails = useShortcutKeyDetails('sidebar.checks.toggle')
+  const portsShortcutDetails = useShortcutKeyDetails('sidebar.ports.toggle')
+
+  const explorerShortcutLabel = useOptionalShortcutLabel('sidebar.explorer.toggle')
+  const sourceControlShortcutLabel = useOptionalShortcutLabel('sidebar.sourceControl.toggle')
+  const checksShortcutLabel = useOptionalShortcutLabel('sidebar.checks.toggle')
+  const portsShortcutLabel = useOptionalShortcutLabel('sidebar.ports.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
@@ -91,7 +97,9 @@ function RightSidebarInner(): React.JSX.Element {
         id: 'explorer',
         icon: Files,
         title: translate('auto.components.right.sidebar.index.8bc2bbc3a0', 'Explorer'),
-        shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
+        shortcut: explorerShortcutLabel ?? '',
+        actionId: 'sidebar.explorer.toggle',
+        shortcutDetails: explorerShortcutDetails
       },
       {
         id: 'vault',
@@ -120,25 +128,40 @@ function RightSidebarInner(): React.JSX.Element {
         id: 'source-control',
         icon: GitBranch,
         title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
-        shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
+        shortcut: sourceControlShortcutLabel ?? '',
+        actionId: 'sidebar.sourceControl.toggle',
+        shortcutDetails: sourceControlShortcutDetails,
         gitOnly: true
       },
       {
         id: 'checks',
         icon: ListChecks,
         title: translate('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
-        shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
+        shortcut: checksShortcutLabel ?? '',
+        actionId: 'sidebar.checks.toggle',
+        shortcutDetails: checksShortcutDetails,
         gitOnly: true
       },
       {
         id: 'ports',
         icon: Plug,
         title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
-        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
+        shortcut: portsShortcutLabel ?? '',
+        actionId: 'sidebar.ports.toggle',
+        shortcutDetails: portsShortcutDetails,
         sshOnly: true
       }
     ],
-    [checksShortcut, explorerShortcut, portsShortcut, sourceControlShortcut]
+    [
+      explorerShortcutLabel,
+      explorerShortcutDetails,
+      sourceControlShortcutLabel,
+      sourceControlShortcutDetails,
+      checksShortcutLabel,
+      checksShortcutDetails,
+      portsShortcutLabel,
+      portsShortcutDetails
+    ]
   )
 
   const visibleItems = useMemo(
@@ -263,11 +286,15 @@ function RightSidebarInner(): React.JSX.Element {
           <PanelRight size={16} />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {translate(
-          'auto.components.right.sidebar.index.9fffaf17c1',
-          'Toggle right sidebar ({{value0}})',
-          { value0: rightSidebarShortcut }
+      <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
+        <span>
+          {translate('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
+        </span>
+        {rightSidebarShortcutDetails.keys.length > 0 && (
+          <ShortcutKeyCombo
+            keys={rightSidebarShortcutDetails.keys}
+            doubleTap={rightSidebarShortcutDetails.doubleTap}
+          />
         )}
       </TooltipContent>
     </Tooltip>

@@ -2814,6 +2814,9 @@ export type PreloadApi = {
     onToggleQuickCommandsMenu: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
+    onToggleCurrentWorkspacePin: (callback: () => void) => () => void
+    onCopyCurrentWorkspacePath: (callback: () => void) => () => void
+    onSleepCurrentWorkspace: (callback: () => void) => () => void
     onOpenWorkspaceBoard: (callback: () => void) => () => void
     onOpenTasks: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void

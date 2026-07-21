@@ -1,4 +1,6 @@
 import React from 'react'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { MoreHorizontal } from 'lucide-react'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
@@ -19,6 +21,8 @@ export type ActivityBarItem = {
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
   shortcut: string
+  actionId?: string
+  shortcutDetails?: ShortcutKeyComboDetails
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
   /** When true, shown only for folder workspaces. */
@@ -147,8 +151,18 @@ export function ActivityBarButton({
           )}
         </button>
       </TooltipTrigger>
-      <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
-        {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
+      <TooltipContent
+        side={isTop ? 'bottom' : 'left'}
+        sideOffset={6}
+        className="flex items-center gap-2"
+      >
+        <span>{item.title}</span>
+        {item.shortcutDetails && item.shortcutDetails.keys.length > 0 && (
+          <ShortcutKeyCombo
+            keys={item.shortcutDetails.keys}
+            doubleTap={item.shortcutDetails.doubleTap}
+          />
+        )}
       </TooltipContent>
     </Tooltip>
   )

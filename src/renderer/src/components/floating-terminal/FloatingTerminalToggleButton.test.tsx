@@ -77,7 +77,8 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: () => 'Cmd+`'
+  useShortcutLabel: () => 'Cmd+`',
+  useShortcutKeyDetails: () => ({ keys: ['⌘', '⌥', 'A'], doubleTap: false })
 }))
 
 vi.mock('./FloatingTerminalIconContextMenu', () => ({
@@ -169,10 +170,14 @@ function getToggleButton(element: unknown): ReactElementLike {
 function getMockedLocalStorage(): {
   getItem: ReturnType<typeof vi.fn>
   setItem: ReturnType<typeof vi.fn>
+  removeItem: ReturnType<typeof vi.fn>
+  clear: ReturnType<typeof vi.fn>
 } {
   return window.localStorage as unknown as {
     getItem: ReturnType<typeof vi.fn>
     setItem: ReturnType<typeof vi.fn>
+    removeItem: ReturnType<typeof vi.fn>
+    clear: ReturnType<typeof vi.fn>
   }
 }
 
@@ -191,7 +196,9 @@ describe('FloatingTerminalToggleButton positioning', () => {
     hookRuntime.values = []
     const localStorage = {
       getItem: vi.fn(() => null),
-      setItem: vi.fn()
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn()
     }
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),

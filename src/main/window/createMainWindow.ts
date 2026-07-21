@@ -627,6 +627,15 @@ export function createMainWindow(
       case 'openWorkspaceBoard':
         mainWindow.webContents.send('ui:openWorkspaceBoard')
         return
+      case 'toggleCurrentWorkspacePin':
+        mainWindow.webContents.send('ui:toggleCurrentWorkspacePin')
+        return
+      case 'copyCurrentWorkspacePath':
+        mainWindow.webContents.send('ui:copyCurrentWorkspacePath')
+        return
+      case 'sleepCurrentWorkspace':
+        mainWindow.webContents.send('ui:sleepCurrentWorkspace')
+        return
       case 'openTasks':
         mainWindow.webContents.send('ui:openTasks')
         return

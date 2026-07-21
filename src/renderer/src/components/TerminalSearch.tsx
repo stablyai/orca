@@ -6,6 +6,10 @@ import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
+import { formatKeybinding } from '../../../shared/keybindings'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 type TerminalSearchProps = {
   isOpen: boolean
@@ -24,6 +28,11 @@ export default function TerminalSearch({
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)
   const requestQuery = getFindRequestQuery(query)
+  const platform = getShortcutPlatform()
+  const enterKeys = ['Enter']
+  const shiftEnterKeys = ['Shift', 'Enter']
+  const modGKeys = formatKeybinding('Mod+G', platform)
+  const modShiftGKeys = formatKeybinding('Mod+Shift+G', platform)
 
   // Why: the default xterm SearchAddon highlights blend into common
   // terminal backgrounds (see orca#612). Providing explicit decoration
@@ -114,83 +123,134 @@ export default function TerminalSearch({
   }
 
   return (
-    <div
-      data-terminal-search-root
-      className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
-      style={{ width: 300 }}
-      onKeyDown={handleKeyDown}
-    >
-      <input
-        ref={handleInputRef}
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={translate('auto.components.TerminalSearch.e07012f26e', 'Search...')}
-        className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
-      />
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        onClick={() => setCaseSensitive((v) => !v)}
-        className={`flex size-6 shrink-0 items-center justify-center rounded ${
-          caseSensitive ? 'bg-zinc-700/50 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
-        }`}
-        title={translate('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
+    <TooltipProvider delayDuration={300}>
+      <div
+        data-terminal-search-root
+        className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
+        style={{ width: 300 }}
+        onKeyDown={handleKeyDown}
       >
-        <CaseSensitive size={14} />
-      </Button>
+        <input
+          ref={handleInputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={translate('auto.components.TerminalSearch.e07012f26e', 'Search...')}
+          className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+        />
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        onClick={() => setRegex((v) => !v)}
-        className={`flex size-6 shrink-0 items-center justify-center rounded ${
-          regex ? 'bg-zinc-700/50 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
-        }`}
-        title={translate('auto.components.TerminalSearch.42e466b9f1', 'Regex')}
-      >
-        <Regex size={14} />
-      </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setCaseSensitive((v) => !v)}
+              className={`flex size-6 shrink-0 items-center justify-center rounded ${
+                caseSensitive ? 'bg-zinc-700/50 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              aria-label={translate('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
+            >
+              <CaseSensitive size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
+          </TooltipContent>
+        </Tooltip>
 
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setRegex((v) => !v)}
+              className={`flex size-6 shrink-0 items-center justify-center rounded ${
+                regex ? 'bg-zinc-700/50 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              aria-label={translate('auto.components.TerminalSearch.42e466b9f1', 'Regex')}
+            >
+              <Regex size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.TerminalSearch.42e466b9f1', 'Regex')}
+          </TooltipContent>
+        </Tooltip>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        onClick={findPrevious}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.TerminalSearch.0f3066256e', 'Previous match')}
-      >
-        <ChevronUp size={14} />
-      </Button>
+        <div className="mx-0.5 h-4 w-px bg-zinc-700" />
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        onClick={findNext}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.TerminalSearch.7cb40c04eb', 'Next match')}
-      >
-        <ChevronDown size={14} />
-      </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={findPrevious}
+              className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+              aria-label={translate('auto.components.TerminalSearch.0f3066256e', 'Previous match')}
+            >
+              <ChevronUp size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+            <span>{translate('auto.components.TerminalSearch.0f3066256e', 'Previous match')}</span>
+            <div className="flex items-center gap-1.5">
+              <ShortcutKeyCombo keys={shiftEnterKeys} />
+              <span className="text-[10px] text-muted-foreground">
+                {translate('auto.components.TerminalSearch.or', 'or')}
+              </span>
+              <ShortcutKeyCombo keys={modShiftGKeys} />
+            </div>
+          </TooltipContent>
+        </Tooltip>
 
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={findNext}
+              className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+              aria-label={translate('auto.components.TerminalSearch.7cb40c04eb', 'Next match')}
+            >
+              <ChevronDown size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+            <span>{translate('auto.components.TerminalSearch.7cb40c04eb', 'Next match')}</span>
+            <div className="flex items-center gap-1.5">
+              <ShortcutKeyCombo keys={enterKeys} />
+              <span className="text-[10px] text-muted-foreground">
+                {translate('auto.components.TerminalSearch.or', 'or')}
+              </span>
+              <ShortcutKeyCombo keys={modGKeys} />
+            </div>
+          </TooltipContent>
+        </Tooltip>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        onClick={onClose}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.TerminalSearch.db234b7519', 'Close')}
-      >
-        <X size={14} />
-      </Button>
-    </div>
+        <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={onClose}
+              className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+              aria-label={translate('auto.components.TerminalSearch.db234b7519', 'Close')}
+            >
+              <X size={14} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {translate('auto.components.TerminalSearch.db234b7519', 'Close')}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </TooltipProvider>
   )
 }

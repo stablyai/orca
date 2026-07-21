@@ -28,7 +28,12 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { useAppStore } from '@/store'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut,
+  getScreenSubmitModifierLabel
+} from '@/lib/screen-submit-shortcut'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   useTeamStates,
@@ -1205,19 +1210,33 @@ export function LinearIssueCommentFooter({
         rows={1}
         className="scrollbar-sleek min-h-[32px] max-h-[96px] flex-1 resize-none overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-[13px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
-      <Button
-        size="icon"
-        onClick={handleSubmit}
-        disabled={!canSubmitComment || submitting}
-        className="size-8 shrink-0"
-        aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
-      >
-        {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            size="icon"
+            onClick={handleSubmit}
+            disabled={!canSubmitComment || submitting}
+            className="size-8 shrink-0"
+            aria-label={translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
+          >
+            {submitting ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Send className="size-3.5" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <span className="flex items-center gap-2">
+            <span>{translate('auto.components.LinearItemDrawer.d369841269', 'Send comment')}</span>
+            <ShortcutKeyCombo
+              keys={[getScreenSubmitModifierLabel(), 'Enter']}
+              className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
+              separatorClassName="mx-0 text-[10px] text-muted-foreground"
+            />
+          </span>
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

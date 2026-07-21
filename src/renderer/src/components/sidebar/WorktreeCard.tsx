@@ -1,5 +1,7 @@
 /* eslint-disable max-lines -- Why: the worktree card centralizes sidebar card state (selection, drag, agent status, git info, context menu) in one cohesive component so sidebar rendering doesn't fan out across files. */
 import React, { useEffect, useCallback, useState } from 'react'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
@@ -231,6 +233,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  const deleteShortcut = useShortcutKeyDetails('workspace.delete')
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -1564,10 +1567,18 @@ const WorktreeCard = React.memo(function WorktreeCard({
                       <Trash2 className="size-3.5" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    {translate(
-                      'auto.components.sidebar.WorktreeCard.6f09f58541',
-                      'Delete workspace'
+                  <TooltipContent side="right" sideOffset={8} className="flex items-center gap-2">
+                    <span>
+                      {translate(
+                        'auto.components.sidebar.WorktreeCard.6f09f58541',
+                        'Delete workspace'
+                      )}
+                    </span>
+                    {deleteShortcut.keys.length > 0 && (
+                      <ShortcutKeyCombo
+                        keys={deleteShortcut.keys}
+                        doubleTap={deleteShortcut.doubleTap}
+                      />
                     )}
                   </TooltipContent>
                 </Tooltip>

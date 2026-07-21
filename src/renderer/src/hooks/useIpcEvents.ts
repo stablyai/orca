@@ -11,6 +11,7 @@ import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
+import { hasSleepableWorkspaceActivity } from '@/components/sidebar/WorktreeContextMenu'
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
@@ -1292,6 +1293,62 @@ export function useIpcEvents(): void {
             return
           }
           runWorktreeDelete(store.activeWorktreeId)
+        })
+      )
+    }
+
+    if (window.api.ui.onToggleCurrentWorkspacePin) {
+      unsubs.push(
+        window.api.ui.onToggleCurrentWorkspacePin(() => {
+          const store = useAppStore.getState()
+          const { activeWorktreeId } = store
+          if (!activeWorktreeId) {
+            return
+          }
+          const activeWorktree = getWorktreeMapFromState(store).get(activeWorktreeId)
+          if (activeWorktree) {
+            store.setWorktreesPinnedAndReveal([activeWorktreeId], !activeWorktree.isPinned)
+          }
+        })
+      )
+    }
+
+    if (window.api.ui.onCopyCurrentWorkspacePath) {
+      unsubs.push(
+        window.api.ui.onCopyCurrentWorkspacePath(() => {
+          const store = useAppStore.getState()
+          const { activeWorktreeId } = store
+          if (!activeWorktreeId) {
+            return
+          }
+          const activeWorktree = getWorktreeMapFromState(store).get(activeWorktreeId)
+          if (activeWorktree) {
+            void window.api.ui.writeClipboardText(activeWorktree.path)
+          }
+        })
+      )
+    }
+
+    if (window.api.ui.onSleepCurrentWorkspace) {
+      unsubs.push(
+        window.api.ui.onSleepCurrentWorkspace(() => {
+          const store = useAppStore.getState()
+          const { activeWorktreeId } = store
+          if (!activeWorktreeId) {
+            return
+          }
+          const activeWorktree = getWorktreeMapFromState(store).get(activeWorktreeId)
+          if (
+            activeWorktree &&
+            hasSleepableWorkspaceActivity(
+              activeWorktreeId,
+              store.tabsByWorktree,
+              store.ptyIdsByTabId,
+              store.browserTabsByWorktree
+            )
+          ) {
+            void runSleepWorktree(activeWorktreeId)
+          }
         })
       )
     }

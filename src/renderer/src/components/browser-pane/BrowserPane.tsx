@@ -56,6 +56,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
@@ -124,7 +125,11 @@ import { BrowserImportHintButton } from './BrowserImportHintButton'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
-import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  getShortcutPlatform,
+  useShortcutLabel,
+  useShortcutKeyDetails
+} from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import {
   getRemoteBrowserKeyboardShortcut,
@@ -934,6 +939,9 @@ function RemoteBrowserPagePane({
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const keybindings = useAppStore((state) => state.keybindings)
+  const backShortcut = useShortcutKeyDetails('browser.back')
+  const forwardShortcut = useShortcutKeyDetails('browser.forward')
+  const reloadShortcut = useShortcutKeyDetails('browser.reload')
 
   // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
   const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
@@ -2561,34 +2569,74 @@ function RemoteBrowserPagePane({
         className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
         data-contextual-tour-target="browser-toolbar"
       >
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void runRemoteNavigation('browser.back')}
-        >
-          <ArrowLeft className="size-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void runRemoteNavigation('browser.forward')}
-        >
-          <ArrowRight className="size-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void runRemoteNavigation('browser.reload')}
-        >
-          {busy || browserTab.loading ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RefreshCw className="size-4" />
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => void runRemoteNavigation('browser.back')}
+              >
+                <ArrowLeft className="size-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+            <span>{translate('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}</span>
+            {backShortcut.keys.length > 0 && (
+              <ShortcutKeyCombo keys={backShortcut.keys} doubleTap={backShortcut.doubleTap} />
+            )}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => void runRemoteNavigation('browser.forward')}
+              >
+                <ArrowRight className="size-4" />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+            <span>
+              {translate('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}
+            </span>
+            {forwardShortcut.keys.length > 0 && (
+              <ShortcutKeyCombo keys={forwardShortcut.keys} doubleTap={forwardShortcut.doubleTap} />
+            )}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => void runRemoteNavigation('browser.reload')}
+              >
+                {busy || browserTab.loading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4" />
+                )}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+            <span>
+              {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+            </span>
+            {reloadShortcut.keys.length > 0 && (
+              <ShortcutKeyCombo keys={reloadShortcut.keys} doubleTap={reloadShortcut.doubleTap} />
+            )}
+          </TooltipContent>
+        </Tooltip>
         <BrowserAddressBar
           value={addressBarValue}
           onChange={setAddressBarValue}
@@ -2830,6 +2878,9 @@ function BrowserPagePane({
   const browserDefaultZoomLevelRef = useRef(normalizedBrowserDefaultZoomLevel)
   browserDefaultZoomLevelRef.current = normalizedBrowserDefaultZoomLevel
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
+  const backShortcut = useShortcutKeyDetails('browser.back')
+  const forwardShortcut = useShortcutKeyDetails('browser.forward')
+  const reloadShortcut = useShortcutKeyDetails('browser.reload')
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
@@ -4898,48 +4949,93 @@ function BrowserPagePane({
           className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
           data-contextual-tour-target="browser-toolbar"
         >
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => webviewRef.current?.goBack()}
-            disabled={!browserTab.canGoBack}
-          >
-            <ArrowLeft className="size-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => webviewRef.current?.goForward()}
-            disabled={!browserTab.canGoForward}
-          >
-            <ArrowRight className="size-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            onClick={() => {
-              const webview = webviewRef.current
-              if (!webview) {
-                return
-              }
-              if (browserTab.loading) {
-                webview.stop()
-              } else if (browserTab.loadError) {
-                retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
-              } else {
-                webview.reload()
-              }
-            }}
-          >
-            {browserTab.loading ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={() => webviewRef.current?.goBack()}
+                  disabled={!browserTab.canGoBack}
+                >
+                  <ArrowLeft className="size-4" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+              <span>
+                {translate('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}
+              </span>
+              {backShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo keys={backShortcut.keys} doubleTap={backShortcut.doubleTap} />
+              )}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={() => webviewRef.current?.goForward()}
+                  disabled={!browserTab.canGoForward}
+                >
+                  <ArrowRight className="size-4" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+              <span>
+                {translate('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}
+              </span>
+              {forwardShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo
+                  keys={forwardShortcut.keys}
+                  doubleTap={forwardShortcut.doubleTap}
+                />
+              )}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    const webview = webviewRef.current
+                    if (!webview) {
+                      return
+                    }
+                    if (browserTab.loading) {
+                      webview.stop()
+                    } else if (browserTab.loadError) {
+                      retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+                    } else {
+                      webview.reload()
+                    }
+                  }}
+                >
+                  {browserTab.loading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4} className="flex items-center gap-2">
+              <span>
+                {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+              </span>
+              {reloadShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo keys={reloadShortcut.keys} doubleTap={reloadShortcut.doubleTap} />
+              )}
+            </TooltipContent>
+          </Tooltip>
 
           <BrowserAddressBar
             value={addressBarValue}

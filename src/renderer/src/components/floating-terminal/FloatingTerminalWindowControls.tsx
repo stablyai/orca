@@ -16,7 +16,8 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 
@@ -29,14 +30,6 @@ type FloatingTerminalWindowControlsProps = {
 const controlButtonClassName =
   'border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground'
 
-// Why: matches the repo convention (e.g. ReviewPRViewAnimatedVisual) of
-// surfacing the live keybinding in a tooltip as "Label (shortcut)", while
-// degrading to a bare label when the action is unbound (default on Win/Linux,
-// and for minimize on every platform).
-function withShortcutHint(label: string, shortcutLabel: string | null): string {
-  return shortcutLabel ? `${label} (${shortcutLabel})` : label
-}
-
 export function FloatingTerminalWindowControls({
   maximized,
   onToggleMaximized,
@@ -46,8 +39,8 @@ export function FloatingTerminalWindowControls({
   const createTab = useAppStore((s) => s.createTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const activateTab = useAppStore((s) => s.activateTab)
-  const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
-  const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
+  const maximizeShortcut = useShortcutKeyDetails('floatingWorkspace.maximize')
+  const minimizeShortcut = useShortcutKeyDetails('floatingWorkspace.minimize')
 
   const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const defaultAgent =
@@ -182,22 +175,38 @@ export function FloatingTerminalWindowControls({
             {maximized ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {maximized
-            ? withShortcutHint(
-                translate(
+        <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
+          {maximized ? (
+            <>
+              <span>
+                {translate(
                   'auto.components.floating.terminal.FloatingTerminalWindowControls.b5686fee1e',
                   'Restore'
-                ),
-                maximizeShortcutLabel
-              )
-            : withShortcutHint(
-                translate(
+                )}
+              </span>
+              {maximizeShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo
+                  keys={maximizeShortcut.keys}
+                  doubleTap={maximizeShortcut.doubleTap}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <span>
+                {translate(
                   'auto.components.floating.terminal.FloatingTerminalWindowControls.109870e023',
                   'Maximize'
-                ),
-                maximizeShortcutLabel
+                )}
+              </span>
+              {maximizeShortcut.keys.length > 0 && (
+                <ShortcutKeyCombo
+                  keys={maximizeShortcut.keys}
+                  doubleTap={maximizeShortcut.doubleTap}
+                />
               )}
+            </>
+          )}
         </TooltipContent>
       </Tooltip>
       <Tooltip>
@@ -216,13 +225,15 @@ export function FloatingTerminalWindowControls({
             <Minus className="size-3.5" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {withShortcutHint(
-            translate(
+        <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
+          <span>
+            {translate(
               'auto.components.floating.terminal.FloatingTerminalWindowControls.2f6054342c',
               'Minimize'
-            ),
-            minimizeShortcutLabel
+            )}
+          </span>
+          {minimizeShortcut.keys.length > 0 && (
+            <ShortcutKeyCombo keys={minimizeShortcut.keys} doubleTap={minimizeShortcut.doubleTap} />
           )}
         </TooltipContent>
       </Tooltip>

@@ -1042,6 +1042,21 @@ export function FloatingTerminalPanel({
         state.setRenamingTabId(activeTab.id)
         return true
       }
+      if (matchesFloatingChrome('tab.togglePin') && activeTab) {
+        consume()
+        if (activeTab.isPinned) {
+          state.unpinTab(activeTab.id)
+        } else if (
+          activeTab.contentType !== 'terminal' &&
+          activeTab.contentType !== 'browser' &&
+          activeTab.contentType !== 'simulator'
+        ) {
+          state.pinFile(activeTab.entityId, activeTab.id)
+        } else {
+          state.pinTab(activeTab.id)
+        }
+        return true
+      }
       const selectedTabIndex = matchKeybindingDigitIndex(
         'tab.selectByIndex',
         input,

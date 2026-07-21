@@ -274,6 +274,24 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
+// Why: Radix tooltip primitives call useContext, which the headless React mock
+// above leaves without a dispatcher; replace them with inert pass-through
+// nodes just like the dropdown-menu mock so expandNode can walk the tree.
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: function Tooltip(props: { children?: unknown }) {
+    return { type: 'Tooltip', props }
+  },
+  TooltipTrigger: function TooltipTrigger(props: { children?: unknown }) {
+    return { type: 'TooltipTrigger', props }
+  },
+  TooltipContent: function TooltipContent(props: { children?: unknown }) {
+    return { type: 'TooltipContent', props }
+  },
+  TooltipProvider: function TooltipProvider(props: { children?: unknown }) {
+    return { type: 'TooltipProvider', props }
+  }
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>

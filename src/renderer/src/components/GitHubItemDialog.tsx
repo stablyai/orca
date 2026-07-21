@@ -53,6 +53,8 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
@@ -6701,7 +6703,14 @@ function GHCommentComposer({
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
+          <span className="flex items-center gap-2">
+            <span>{translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}</span>
+            <ShortcutKeyCombo
+              keys={[getScreenSubmitModifierLabel(), 'Enter']}
+              className="shrink text-[10px] [&_span]:min-w-0 [&_span]:px-1"
+              separatorClassName="mx-0 text-[10px] text-muted-foreground"
+            />
+          </span>
         </TooltipContent>
       </Tooltip>
     </div>

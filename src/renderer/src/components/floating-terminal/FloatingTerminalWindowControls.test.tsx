@@ -75,7 +75,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useOptionalShortcutLabel: () => null
+  useOptionalShortcutLabel: () => null,
+  useShortcutKeyDetails: () => ({ keys: [], doubleTap: false })
 }))
 
 vi.mock('@/components/ui/button', () => ({

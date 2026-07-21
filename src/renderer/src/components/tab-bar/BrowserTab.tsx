@@ -6,6 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -112,6 +113,7 @@ export default function BrowserTab({
   onDuplicate,
   onTogglePin,
   dragData,
+  togglePinShortcutLabel = null,
   dropIndicator,
   includeTopTabBorder = true
 }: {
@@ -124,6 +126,7 @@ export default function BrowserTab({
   onCloseToRight: () => void
   onDuplicate: () => void
   onTogglePin: () => void
+  togglePinShortcutLabel?: string | null
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
@@ -136,6 +139,7 @@ export default function BrowserTab({
   })
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+  const togglePinShortcut = togglePinShortcutLabel
 
   // Why: about:blank and other non-http URLs should not be sent to the
   // system browser. Disable the context menu item instead of silently
@@ -294,6 +298,9 @@ export default function BrowserTab({
             {isPinned
               ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
+            {togglePinShortcut ? (
+              <DropdownMenuShortcut>{togglePinShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
