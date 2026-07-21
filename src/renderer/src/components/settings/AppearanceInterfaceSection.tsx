@@ -19,11 +19,17 @@ import {
   getLanguageEntries,
   getMenuBarIconEntries,
   getSystemTrayEntries,
+  getTabWidthEntries,
   getThemeEntries,
   getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
+import {
+  DEFAULT_TERMINAL_TAB_WIDTH,
+  normalizeTerminalTabWidth,
+  type TerminalTabWidth
+} from '../../../../shared/terminal-tab-width'
 import {
   getUiLanguageChoiceLabel,
   SHOW_UI_LANGUAGE_SETTING,
@@ -66,6 +72,9 @@ export function AppearanceInterfaceSection({
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
+  const tabWidthEntry = getTabWidthEntries()[0]
+  const tabWidthLabel = translate('settings.appearance.tabWidth.title', 'Tab Width')
+  const tabWidth = normalizeTerminalTabWidth(settings.terminalTabWidth)
   const advancedEntries = [
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTitlebarEntries(),
@@ -153,6 +162,47 @@ export function AppearanceInterfaceSection({
               onChange={(value) =>
                 updateSettings({ appFontFamily: value.trim() || DEFAULT_APP_FONT_FAMILY })
               }
+            />
+          }
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={tabWidthLabel}
+        description={tabWidthEntry?.description}
+        keywords={tabWidthEntry?.keywords ?? ['tab', 'width', 'size']}
+        forceVisible={forceVisiblePrimary}
+      >
+        <SettingsRow
+          label={tabWidthLabel}
+          // Why: the presets only shift the flex floor/ceiling; the effect isn't obvious from the labels alone.
+          description={translate(
+            'settings.appearance.tabWidth.description',
+            'Control how wide tabs grow and how narrow they shrink before overflowing.'
+          )}
+          control={
+            <SettingsSegmentedControl
+              ariaLabel={tabWidthLabel}
+              value={tabWidth}
+              onChange={(option: TerminalTabWidth) => updateSettings({ terminalTabWidth: option })}
+              options={[
+                {
+                  value: 'hug',
+                  label: translate('settings.appearance.tabWidth.option.hug', 'Hug')
+                },
+                {
+                  value: DEFAULT_TERMINAL_TAB_WIDTH,
+                  label: translate('settings.appearance.tabWidth.option.default', 'Default')
+                },
+                {
+                  value: 'large',
+                  label: translate('settings.appearance.tabWidth.option.large', 'Large')
+                },
+                {
+                  value: 'x-large',
+                  label: translate('settings.appearance.tabWidth.option.xlarge', 'X-Large')
+                }
+              ]}
             />
           }
         />

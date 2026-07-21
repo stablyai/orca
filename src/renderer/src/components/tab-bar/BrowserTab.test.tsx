@@ -132,6 +132,15 @@ vi.mock('../browser-pane/browser-runtime', () => ({
   getLiveBrowserUrl: () => null
 }))
 
+// Why: this shallow harness calls the component as a plain function, so the
+// store-backed width hook can't run; stub it with the default preset's classes.
+vi.mock('./use-tab-container-width', () => ({
+  useTabWidthClasses: () => ({
+    container: 'min-w-[120px] max-w-[280px] flex-[1_1_180px] min-[1280px]:flex-[1_1_220px]',
+    label: 'min-w-0 flex-1 truncate'
+  })
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>

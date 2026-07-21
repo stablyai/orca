@@ -106,6 +106,23 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+export const getTabWidthEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('settings.appearance.tabWidth.title', 'Tab Width'),
+    description: translate(
+      'settings.appearance.tabWidth.description',
+      'Control how wide tabs grow and how narrow they shrink before overflowing.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.tabWidth.keyword.tab', 'tab'),
+      ...translateSearchKeyword('settings.appearance.tabWidth.keyword.width', 'width'),
+      ...translateSearchKeyword('settings.appearance.tabWidth.keyword.size', 'size'),
+      ...translateSearchKeyword('settings.appearance.tabWidth.keyword.strip', 'tab strip'),
+      ...translateSearchKeyword('settings.appearance.tabWidth.keyword.hug', 'hug')
+    ]
+  }
+])
+
 export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
@@ -226,6 +243,7 @@ function buildAppearancePaneSearchEntries(
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTypographyEntries(),
     ...getZoomEntries(),
+    ...getTabWidthEntries(),
     ...getTerminalAppearanceSearchEntries(options),
     ...getLayoutEntries(),
     ...getTitlebarEntries(),

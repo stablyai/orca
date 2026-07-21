@@ -35,6 +35,16 @@
       "menuBarIcon": {
         "title": "メニューバーアイコンを表示",
         "description": "macOS メニューバーに Orca のショートカットとアクティビティインジケーターを表示します。"
+      },
+      "tabWidth": {
+        "title": "Tab Width",
+        "description": "Control how wide tabs grow and how narrow they shrink before overflowing.",
+        "option": {
+          "hug": "Hug",
+          "default": "Default",
+          "large": "Large",
+          "xlarge": "X-Large"
+        }
       }
     }
   },

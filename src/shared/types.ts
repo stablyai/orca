@@ -34,6 +34,7 @@ import type { SleepingAgentLaunchConfig, SleepingAgentSessionRecord } from './ag
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
+import type { TerminalTabWidth } from './terminal-tab-width'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type {
@@ -2665,6 +2666,8 @@ export type GlobalSettings = {
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
+  /** Tab-strip width preset: how narrow tabs may shrink before overflow / how wide they grow. */
+  terminalTabWidth?: TerminalTabWidth
   windowBackgroundBlur?: boolean
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean

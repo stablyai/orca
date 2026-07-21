@@ -12,6 +12,7 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import BrowserTab from './BrowserTab'
 import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
+import { getTabContainerWidthClasses } from './tab-width-rules'
 
 let mockTabAgent: TuiAgent | null = null
 
@@ -188,9 +189,10 @@ function textSpanHtml(markup: string, text: string): string {
 
 function expectTabContainerWidth(markup: string, root: string): void {
   const container = firstOpeningTag(markup)
-  const widthClasses = 'min-w-[88px] max-w-[280px] flex-[1_1_180px] min-[1280px]:flex-[1_1_220px]'
+  // Why: derive from source so the default preset's floor/ceiling can change
+  // without this assertion drifting; width lives on the wrapper, never the root.
+  const widthClasses = getTabContainerWidthClasses()
   expect(container).toContain(widthClasses)
-  expect(root).not.toContain('min-w-[88px]')
   expect(root).not.toContain('max-w-[280px]')
   expect(root).not.toContain('flex-[1_1_180px]')
 }

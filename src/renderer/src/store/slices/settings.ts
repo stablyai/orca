@@ -22,6 +22,7 @@ import {
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { normalizeTerminalTabWidth } from '../../../../shared/terminal-tab-width'
 import { translate } from '@/i18n/i18n'
 
 export type SettingsSlice = SettingsSearchState & {
@@ -134,6 +135,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
         sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
           updates.terminalScrollbackRows
         )
+      }
+      if ('terminalTabWidth' in updates) {
+        sanitizedUpdates.terminalTabWidth = normalizeTerminalTabWidth(updates.terminalTabWidth)
       }
       const nextSettings = await window.api.settings.set(sanitizedUpdates)
       set((s) => ({ settings: (nextSettings as GlobalSettings | undefined) ?? s.settings }))

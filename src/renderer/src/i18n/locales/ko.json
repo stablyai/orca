@@ -35,6 +35,16 @@
       "menuBarIcon": {
         "title": "메뉴 바 아이콘 표시",
         "description": "macOS 메뉴 바에 Orca 바로가기 및 활동 표시기를 유지합니다."
+      },
+      "tabWidth": {
+        "title": "Tab Width",
+        "description": "Control how wide tabs grow and how narrow they shrink before overflowing.",
+        "option": {
+          "hug": "Hug",
+          "default": "Default",
+          "large": "Large",
+          "xlarge": "X-Large"
+        }
       }
     }
   },
