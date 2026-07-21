@@ -60,10 +60,13 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     tracker.scan('\x1b[>1u')
     expect(tracker.flags).toBe(1)
     tracker.scan('\x1b[?1049h')
+    expect(tracker.hasObservedAlternateScreenSwitch).toBe(true)
+    expect(tracker.isAlternateScreen).toBe(true)
     expect(tracker.flags).toBe(0)
     tracker.scan('\x1b[>2u')
     expect(tracker.flags).toBe(2)
     tracker.scan('\x1b[?1049l')
+    expect(tracker.isAlternateScreen).toBe(false)
     expect(tracker.flags).toBe(1)
   })
 

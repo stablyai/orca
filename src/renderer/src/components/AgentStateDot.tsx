@@ -1,6 +1,7 @@
 import React from 'react'
 import { CircleCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 
 // Why: shared state-indicator primitive so the dashboard and the sidebar's
 // agent hover share a single state vocabulary. Most states render as a dot;
@@ -30,6 +31,7 @@ export type AgentDotState =
   // worktree-level permission dot.
   | 'permission'
 
+/** Return the accessible label shared by every visual agent-state marker. */
 export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
@@ -57,6 +59,7 @@ type Props = {
   className?: string
 }
 
+/** Render the compact state glyph used by agent rows and terminal tabs. */
 export const AgentStateDot = React.memo(function AgentStateDot({
   state,
   size = 'sm',
@@ -72,14 +75,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
         aria-label={agentStateLabel(state)}
       >
-        <span
-          className={cn(
-            // Why: match the sidebar worktree spinner's stepped cadence so
-            // long-running visible agents do not keep a full-frame-rate loop.
-            'block rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]',
-            inner
-          )}
-        />
+        <AgentWorkingSpinner className={inner} />
       </span>
     )
   }

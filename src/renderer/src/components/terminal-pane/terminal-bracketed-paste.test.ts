@@ -89,6 +89,17 @@ describe('terminal bracketed paste policy', () => {
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
+  it('normalizes forced Windows multiline paste like xterm native paste', () => {
+    const terminal = createTerminal(false)
+
+    pasteTerminalText(terminal, 'one\r\ntwo\nthree', {
+      forceBracketedPaste: true
+    })
+
+    expect(terminal.input).toHaveBeenCalledWith('\x1b[200~one\rtwo\rthree\x1b[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
   it('renders embedded escape bytes inert when forcing bracketed paste', () => {
     const terminal = createTerminal(false)
 

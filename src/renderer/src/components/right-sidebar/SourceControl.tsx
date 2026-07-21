@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownUp,
   AlertTriangle,
@@ -195,7 +195,10 @@ import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
-import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
+import {
+  isBehindOnlyUpstream,
+  shouldForcePushWithLeaseForUpstream
+} from '../../../../shared/git-upstream-status'
 import type {
   DiffComment,
   GitBranchChangeEntry,
@@ -266,6 +269,10 @@ import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-i
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
 import {
   buildLoadingHostedReviewCreationEligibility,
+  buildLocalBlockerHostedReviewCreationEligibility,
+  resolveHostedReviewCreationProviderForTarget
+} from './source-control-hosted-review-creation-eligibility-snapshot'
+import {
   resolveCreatePrHeaderAction,
   resolveProvisionalHostedReviewProvider
 } from './source-control-primary-create-pr-intent-action'
@@ -282,6 +289,7 @@ import {
   resolveHostedReviewStateForActions
 } from './source-control-hosted-review-push-target'
 import { buildSourceControlManualReviewUrlFromContext } from './source-control-manual-review-url'
+import { parseRemoteRepo } from './source-control-remote-repo'
 export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningCommitMessageGenerationRecord,
@@ -369,13 +377,7 @@ export function resolveSourceControlBaseRef(input: {
   return worktreeBaseRef || input.repoBaseRef?.trim() || input.defaultBaseRef?.trim() || null
 }
 
-// Why: the compare/diff view's base is conceptually distinct from the PR/rebase
-// merge target (effectiveBaseRef). When the setting is on, default the compare
-// base to the current branch's upstream so the panel surfaces local changes
-// instead of the full delta vs the repo default branch. Branches without an
-// upstream fall back to effectiveBaseRef so the automatic policy never makes
-// the committed-changes comparison disappear unexpectedly. When the setting is
-// off, fall back to effectiveBaseRef so behavior is unchanged.
+// Why: the compare base is distinct from the PR/rebase target; when enabled it defaults to the branch upstream (else effectiveBaseRef) to surface local changes.
 export function resolveSourceControlCompareBaseRef(input: {
   enabled: boolean
   worktreeBaseRef?: string | null
@@ -393,10 +395,7 @@ export function resolveSourceControlCompareBaseRef(input: {
   return input.upstreamName?.trim() || input.fallbackBaseRef?.trim() || null
 }
 
-// Why: only drop a stale branch-compare summary once we know there is truly no
-// compare base. While upstream status is still loading (remoteStatus undefined)
-// compareBaseRef can momentarily resolve to null, so clearing then would make
-// the committed-changes summary flicker until upstream loads.
+// Why: only clear the branch-compare summary once we truly have no base; compareBaseRef is momentarily null while upstream loads, which would flicker.
 export function shouldClearBranchCompareForMissingBase(input: {
   isFolder: boolean
   compareBaseRef: string | null
@@ -491,13 +490,7 @@ function rewriteCompareBaseBranchFromCandidate(
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
-// Why: directional signifiers ahead of each primary action label. Commit
-// (✓) is affirmative; Push (↑) points in the direction data flows; Sync
-// (↕) is bidirectional; Publish gets a cloud-up to distinguish the
-// first-time publish from a subsequent push. Pull is intentionally
-// icon-less — the down-arrow read as a download/save affordance and was
-// removed. Keeping the mapping outside the render function avoids
-// reallocating it on every render.
+// Why: directional icons per action; Pull stays icon-less (down-arrow read as download/save). Hoisted out of render to avoid per-render alloc.
 const PRIMARY_ICONS: Partial<
   Record<
     PrimaryAction['kind'],
@@ -532,16 +525,15 @@ const CONFLICTS_SECTION_LABEL = {
   fallback: 'Conflicts'
 }
 
-// Why: 5s branch compare polling churned git subprocesses in large repos.
-// Explicit commit, remote, manual, and base-ref refresh paths still run immediately.
+// Why: 30s poll — 5s churned git subprocesses in large repos; explicit commit/remote/manual/base-ref refreshes still run immediately.
 export const BRANCH_REFRESH_INTERVAL_MS = 30_000
-// Why: row action buttons host Radix Tooltip triggers. Keeping the overlay
-// measurable prevents transient top-left tooltip placement during hover.
+// Why: keep the overlay measurable so Radix Tooltip triggers don't get transient top-left placement on hover.
 const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
   'absolute right-0 top-0 bottom-0 flex shrink-0 items-center gap-1.5 bg-accent pr-3 pl-2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
 const SOURCE_CONTROL_TREE_INDENT_PX = 12
 const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
+const CAPPED_STATUS_RETRY_TIMEOUT_MS = 15_000
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 const SUBMODULE_WORKTREE_ONLY_LABEL = 'Stage inside submodule'
@@ -567,8 +559,7 @@ function useCopyFeedbackState<T>(resetValue: T): [T, (value: T) => void] {
     }
   }, [])
 
-  // Why: copy feedback timers are event-owned, but still need unmount cleanup
-  // so delayed clipboard/timer work cannot update a destroyed component.
+  // Why: copy feedback timers are event-owned but still need unmount cleanup so delayed work can't update a destroyed component.
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -623,9 +614,7 @@ function requestSourceControlEditorRevealFrame(
   }
 }
 
-// Why: the pure state-machine logic now lives in
-// ./source-control-primary-action.ts. It is imported directly by callers
-// (tests and other components) instead of going through this module.
+// The primary-action state machine now lives in ./source-control-primary-action.ts, imported directly by callers.
 
 type CommitDraftsByWorktree = Record<string, string>
 
@@ -749,9 +738,7 @@ export function refreshSourceControlAfterRemoteAction({
   refreshGitHistory: () => Promise<void>
   onError?: (error: unknown) => void
 }): void {
-  // Why: fetch/sync can move the remote base ref without changing local files.
-  // Refresh all three visible git projections so the branch comparison table
-  // re-runs against the newly fetched base instead of waiting for polling.
+  // Why: fetch/sync can move the remote base without touching local files; refresh all three projections so branch compare re-runs immediately.
   void Promise.all([refreshGitStatus(), refreshBranchCompare(), refreshGitHistory()]).catch(onError)
 }
 
@@ -802,16 +789,11 @@ export function clearRemoteActionErrorsForCompletedConflictOperations({
 
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
-  // Why: the changed-file sections virtualize against the panel's shared
-  // scroller rather than owning a nested scroll container. State (not a ref)
-  // so the lists re-render and start observing once the element attaches.
+  // Why: virtualize against the panel's shared scroller; use state (not a ref) so lists re-render and start observing once the element attaches.
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
-  // Why: React setState is async, so a rapid double-click on the Commit
-  // button can both pass the isCommitting state guard before the disabled
-  // state re-renders. A ref flipped synchronously at the start of
-  // handleCommit gives us a true single-flight lock.
+  // Why: setState is async, so a double-click can pass the isCommitting guard before re-render; a synchronously-flipped ref gives a true single-flight lock.
   const commitInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -822,6 +804,10 @@ function SourceControlInner(): React.JSX.Element {
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const activeRepoId = activeRepo?.id ?? null
+  const activeRepoPath = activeRepo?.path ?? null
+  const activeRepoConnectionId = activeRepo?.connectionId ?? null
+  const activeRepoExecutionHostId = activeRepo?.executionHostId ?? null
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branchName = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
@@ -848,8 +834,7 @@ function SourceControlInner(): React.JSX.Element {
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
   )
   const conflictOperationsByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
-  // Why: leave undefined until fetchUpstreamStatus resolves for this worktree.
-  // A synthetic "no upstream" flashes "Publish Branch" during worktree switches.
+  // Why: leave undefined until fetchUpstreamStatus resolves; a synthetic "no upstream" flashes "Publish Branch" on worktree switch.
   const remoteStatus = useAppStore((s) =>
     activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
   )
@@ -880,19 +865,28 @@ function SourceControlInner(): React.JSX.Element {
           true
         )
       : null
-  // Why: background worktree review refreshes replace both cache maps; this
-  // large panel only needs the entries for its active repo and branch.
+  // Why: background review refreshes replace both cache maps; this panel only needs its active repo/branch entries.
   const hostedReviewEntry = useAppStore((s) =>
     selectReviewCacheEntry(s.hostedReviewCache, hostedReviewCacheKey)
   )
   const hostedReviewEntryData = hostedReviewEntry?.data ?? null
   const activePrFromQueue = useAppStore((s) => selectReviewCacheData(s.prCache, activePrCacheKey))
-  // Why: git/file mutations and repo metadata requests belong to the repo
-  // OWNER host, not the currently focused host in the sidebar.
+  // Why: git/file mutations and repo metadata belong to the repo OWNER host, not the currently focused sidebar host.
   const activeRepoSettings = useMemo(
-    () => getRepoOwnerRoutedSettings(settings, activeRepo ?? null),
-    [activeRepo, settings]
+    () =>
+      getRepoOwnerRoutedSettings(
+        settings,
+        activeRepoId
+          ? {
+              id: activeRepoId,
+              connectionId: activeRepoConnectionId,
+              executionHostId: activeRepoExecutionHostId
+            }
+          : null
+      ),
+    [activeRepoConnectionId, activeRepoExecutionHostId, activeRepoId, settings]
   )
+  const activeRepoRuntimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId ?? null
   const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -940,18 +934,12 @@ function SourceControlInner(): React.JSX.Element {
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  // Why: pass activeWorktreeId directly (even when null/undefined) so the
-  // selector returns its stable empty sentinel. An
-  // inline `[]` fallback would allocate a new array each store update, break
-  // Zustand's Object.is equality, and cause this component plus the
-  // diffCommentCountByPath memo to churn on every unrelated store change.
+  // Why: pass activeWorktreeId even when null so the selector returns its stable empty sentinel; an inline [] would break Zustand's Object.is and churn.
   const diffCommentsForActive = useAppStore((s) =>
     selectWorktreeDiffCommentsOrEmpty(s, activeWorktreeId)
   )
   const diffCommentCount = diffCommentsForActive.length
-  // Why: per-file counts are fed into each UncommittedEntryRow so a comment
-  // badge can appear next to the status letter. Compute once per render so
-  // rows don't each re-filter the full list.
+  // Why: compute per-file comment counts once per render so rows don't each re-filter the full list.
   const diffCommentCountByPath = useMemo(() => {
     const map = new Map<string, number>()
     for (const c of diffCommentsForActive) {
@@ -969,8 +957,7 @@ function SourceControlInner(): React.JSX.Element {
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
   const setSourceControlRoot = useCallback((node: HTMLDivElement | null) => {
-    // Why: markdown-note reveal frames target the Source Control surface; cancel
-    // them when that surface unmounts instead of from a passive Effect.
+    // Why: markdown-note reveal frames target this surface; cancel them on unmount rather than via a passive Effect.
     if (node === null) {
       cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
     }
@@ -985,8 +972,7 @@ function SourceControlInner(): React.JSX.Element {
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
       showDiffCommentsCopied(true)
     } catch {
-      // Why: swallow — clipboard write can fail when the window isn't focused.
-      // No dedicated error surface is warranted for a best-effort copy action.
+      // Why: swallow — clipboard write can fail when unfocused; best-effort copy needs no error surface.
     }
   }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 
@@ -1005,8 +991,7 @@ function SourceControlInner(): React.JSX.Element {
     pendingCount: pendingDiffCommentsClearCount
   })
   if (resolvedPendingDiffCommentsClear !== pendingDiffCommentsClear) {
-    // Why: the confirmation is purely local UI state; clear impossible
-    // confirmations before children observe a stale open dialog.
+    // Why: the confirmation is local UI state; clear impossible ones before children observe a stale open dialog.
     setPendingDiffCommentsClear(resolvedPendingDiffCommentsClear)
   }
 
@@ -1064,13 +1049,10 @@ function SourceControlInner(): React.JSX.Element {
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
-  // Why: start null rather than 'origin/main' so branch compare doesn't fire
-  // with a fabricated ref before the IPC resolves. effectiveBaseRef stays
-  // falsy until we have a real answer from the main process.
+  // Why: start null (not 'origin/main') so branch compare doesn't fire with a fabricated ref before the IPC resolves.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
-  // Why: Source Control unmounts when the user switches tabs, so keep commit
-  // drafts in a module-scoped session cache and restore them on remount.
+  // Why: Source Control unmounts on tab switch; keep commit drafts in a module-scoped session cache and restore on remount.
   const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>(() =>
     loadSessionCommitDrafts()
   )
@@ -1082,10 +1064,7 @@ function SourceControlInner(): React.JSX.Element {
   >({})
   const remoteActionErrorSequenceByWorktreeRef = useRef<Record<string, number>>({})
   const previousConflictOperationsRef = useRef<Record<string, GitConflictOperation>>({})
-  // Why: keep commit-in-flight state per-worktree. A single boolean would be
-  // cleared when the user switched worktrees, letting them double-click Commit
-  // on worktree A after briefly navigating to B and back while A's original
-  // commit is still running.
+  // Why: keep commit-in-flight per-worktree; a single boolean would clear on worktree switch, allowing a double-commit on the original.
   const [commitInFlightByWorktree, setCommitInFlightByWorktree] = useState<Record<string, boolean>>(
     {}
   )
@@ -1095,8 +1074,7 @@ function SourceControlInner(): React.JSX.Element {
   const isAbortingOperation = abortOperationInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const confirmAction = useConfirmationDialog()
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
-  // Why: parallel state to commit. Same per-worktree shape so navigating between
-  // worktrees mid-generation never silently cancels the in-flight request.
+  // Why: per-worktree shape (like commit) so navigating worktrees mid-generation never cancels the in-flight request.
   const generateInFlightRef = useRef<Record<string, boolean>>({})
   const [generateInFlightByWorktree, setGenerateInFlightByWorktree] = useState<
     Record<string, boolean>
@@ -1152,8 +1130,7 @@ function SourceControlInner(): React.JSX.Element {
   )
   const getCreatePrIntentOperationTarget = useCallback(
     (token: CreatePrIntentRunToken): SourceControlOperationTarget => ({
-      // Why: Create PR intent continues after navigation; keep git commands
-      // pinned to the worktree and runtime host that started the sequence.
+      // Why: Create PR intent continues after navigation; pin git commands to the worktree/host that started the sequence.
       settings: activeRepoSettings,
       worktreeId: token.worktreeId,
       worktreePath: token.worktreePath,
@@ -1201,8 +1178,7 @@ function SourceControlInner(): React.JSX.Element {
   const updateCommitDrafts = useCallback(
     (updater: (drafts: CommitDraftsByWorktree) => CommitDraftsByWorktree): void => {
       const next = updater(commitDraftsRef.current)
-      // Why: Create PR intent reads this ref after awaits to avoid overwriting
-      // user edits made before React's passive state sync effect runs.
+      // Why: Create PR intent reads this ref after awaits so it doesn't overwrite user edits made before React's passive state sync runs.
       commitDraftsRef.current = next
       setCommitDrafts(next)
     },
@@ -1239,7 +1215,7 @@ function SourceControlInner(): React.JSX.Element {
   const generateError =
     activeCommitMessageGenerationRecord?.error ?? generateErrors[activeWorktreeId ?? ''] ?? null
   const activeConnectionId = activeWorktreeId
-    ? (getConnectionId(activeWorktreeId) ?? activeRepo?.connectionId ?? null)
+    ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
@@ -1268,42 +1244,43 @@ function SourceControlInner(): React.JSX.Element {
     record: activePullRequestGenerationRecord
   })
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
-  // Why: gate polling on both the active tab AND the sidebar being open.
-  // The sidebar now stays mounted when closed (for performance), so without
-  // this guard the branchCompare interval and PR fetch would keep running
-  // with no visible consumer, wasting git process spawns and API calls.
+  // Why: the sidebar stays mounted when closed, so gate polling on tab AND open or branchCompare/PR fetch would run with no visible consumer.
   const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
 
-  const refreshActiveGitStatus = useCallback(async (): Promise<void> => {
-    if (!activeWorktreeId || !worktreePath || isFolder) {
-      return
-    }
-    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-    await refreshGitStatusForWorktree({
-      // Why: route git status by the repo OWNER host, not the focused runtime.
-      settings: activeRepoSettings,
-      worktreeId: activeWorktreeId,
-      worktreePath,
-      connectionId,
-      pushTarget: activeWorktree?.pushTarget,
-      deps: {
-        setGitStatus,
-        updateWorktreeGitIdentity,
-        setUpstreamStatus,
-        fetchUpstreamStatus
+  const refreshActiveGitStatus = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      if (!activeWorktreeId || !worktreePath || isFolder) {
+        return
       }
-    })
-  }, [
-    activeRepoSettings,
-    activeWorktreeId,
-    activeWorktree?.pushTarget,
-    fetchUpstreamStatus,
-    isFolder,
-    setGitStatus,
-    setUpstreamStatus,
-    updateWorktreeGitIdentity,
-    worktreePath
-  ])
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      await refreshGitStatusForWorktree({
+        // Why: route git status by the repo OWNER host, not the focused runtime.
+        settings: activeRepoSettings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId,
+        pushTarget: activeWorktree?.pushTarget,
+        deps: {
+          setGitStatus,
+          updateWorktreeGitIdentity,
+          setUpstreamStatus,
+          fetchUpstreamStatus
+        },
+        ...(signal ? { request: { signal } } : {})
+      })
+    },
+    [
+      activeRepoSettings,
+      activeWorktreeId,
+      activeWorktree?.pushTarget,
+      fetchUpstreamStatus,
+      isFolder,
+      setGitStatus,
+      setUpstreamStatus,
+      updateWorktreeGitIdentity,
+      worktreePath
+    ]
+  )
 
   const refreshActiveGitStatusAfterMutation = useCallback(async (): Promise<void> => {
     try {
@@ -1313,11 +1290,7 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [refreshActiveGitStatus])
 
-  // Why: when status is truncated at the entry limit, offer (once per worktree)
-  // to .gitignore the folder most likely flooding it — the usual cause is a
-  // build/dependency dir that should have been ignored. Accepting writes the
-  // .gitignore and refreshes, which clears the huge flag and resumes polling.
-  // Local-only: the SSH huge-folder write path isn't wired, so skip remote.
+  // Why: when status is truncated, offer once per worktree to .gitignore the flooding folder; local-only since the SSH huge-folder write path isn't wired.
   useEffect(() => {
     if (!repositoryHuge || !activeWorktreeId || !worktreePath || activeConnectionId) {
       return
@@ -1353,8 +1326,7 @@ function SourceControlInner(): React.JSX.Element {
                 'Add to .gitignore'
               ),
               onClick: () => {
-                // Why: the toast can outlive its worktree; a purged probe must
-                // not write .gitignore in a same-path replacement.
+                // Why: the toast can outlive its worktree; a purged probe must not write .gitignore in a same-path replacement.
                 if (!hasDismissedHugeRepoWarning(warningProbe)) {
                   return
                 }
@@ -1387,8 +1359,7 @@ function SourceControlInner(): React.JSX.Element {
       }
       try {
         await refreshGitStatusForWorktree({
-          // Why: generation can finish after the user switches hosts; refresh
-          // the same host that owned the generation request.
+          // Why: generation can finish after a host switch; refresh the host that owned the generation request.
           settings: context.runtimeTargetSettings,
           worktreeId: context.worktreeId,
           worktreePath: context.worktreePath,
@@ -1416,32 +1387,27 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder) {
+    if (!isBranchVisible || !activeRepoId || isFolder) {
       return
     }
 
-    // Why: reset to null so that effectiveBaseRef becomes falsy until the IPC
-    // resolves.  This prevents the branch compare from firing with a stale
-    // defaultBaseRef left over from a *different* repo (e.g. 'origin/master'
-    // when the new repo uses 'origin/main'), which would cause a transient
-    // "invalid-base" error every time the user switches between repos.
+    // Why: reset to null so that effectiveBaseRef becomes falsy until the IPC resolves, so branch compare can't fire with a stale defaultBaseRef from a different repo (transient "invalid-base" on switch).
     setDefaultBaseRef(null)
 
     let stale = false
-    void getRuntimeRepoBaseRefDefault(activeRepoSettings, activeRepo.id)
+    void getRuntimeRepoBaseRefDefault(
+      { activeRuntimeEnvironmentId: activeRepoRuntimeEnvironmentId },
+      activeRepoId
+    )
       .then((result) => {
         if (!stale) {
-          // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
-          // this component only needs `defaultBaseRef`. `remoteCount` is used
-          // by BaseRefPicker for the multi-remote hint.
+          // IPC returns a { defaultBaseRef, remoteCount } envelope; only defaultBaseRef is needed here (remoteCount powers BaseRefPicker's multi-remote hint).
           setDefaultBaseRef(result.defaultBaseRef)
         }
       })
       .catch((err) => {
         console.error('[SourceControl] getBaseRefDefault failed', err)
-        // Why: leave defaultBaseRef null on failure instead of fabricating
-        // 'origin/main'. effectiveBaseRef stays falsy, so branch compare and
-        // PR fetch skip running against a ref that may not exist.
+        // Why: leave defaultBaseRef null on failure (not a fabricated 'origin/main') so branch compare/PR fetch skip a possibly-nonexistent ref.
         if (!stale) {
           setDefaultBaseRef(null)
         }
@@ -1450,7 +1416,15 @@ function SourceControlInner(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [activeRepo, activeRepoSettings, isBranchVisible, isFolder])
+  }, [
+    // Why: only repo/host ownership changes should reset the base; unrelated metadata churn must not restart eligibility's timeout.
+    activeRepoConnectionId,
+    activeRepoExecutionHostId,
+    activeRepoId,
+    activeRepoRuntimeEnvironmentId,
+    isBranchVisible,
+    isFolder
+  ])
 
   const normalizedWorktreeBaseRef = activeWorktree?.baseRef?.trim() || null
   const normalizedRepoBaseRef = activeRepo?.worktreeBaseRef?.trim() || null
@@ -1484,8 +1458,7 @@ function SourceControlInner(): React.JSX.Element {
     repoBaseRef: normalizedRepoBaseRef,
     defaultBaseRef
   })
-  // Why: the compare/diff view uses this base; the PR/rebase merge target keeps
-  // using effectiveBaseRef. When the setting is off, this equals effectiveBaseRef.
+  // Why: the compare/diff view uses this base; the PR/rebase merge target keeps effectiveBaseRef (equal when the setting is off).
   const compareBaseRef = resolveSourceControlCompareBaseRef({
     enabled: settings?.sourceControlCompareAgainstUpstream ?? false,
     worktreeBaseRef: normalizedWorktreeBaseRef,
@@ -1565,6 +1538,11 @@ function SourceControlInner(): React.JSX.Element {
     hostedReviewCreationRequestMatchesCurrent &&
     hostedReviewCreationRequestState.status === 'loading' &&
     hostedReview === null
+  // Why: infer provider from the remote host when unknown, so a GitLab (etc.) repo shows its own review copy instead of the GitHub default.
+  const remoteInferredHostedReviewProvider = useMemo(
+    () => parseRemoteRepo(activeRepo?.gitRemoteIdentity?.remoteUrl ?? '')?.provider ?? null,
+    [activeRepo?.gitRemoteIdentity?.remoteUrl]
+  )
   const provisionalHostedReviewProvider = useMemo(
     () =>
       resolveProvisionalHostedReviewProvider({
@@ -1581,7 +1559,8 @@ function SourceControlInner(): React.JSX.Element {
         linkedGitLabMR,
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
-        linkedGiteaPR
+        linkedGiteaPR,
+        remoteInferredProvider: remoteInferredHostedReviewProvider
       }),
     [
       activeRepo?.id,
@@ -1592,8 +1571,16 @@ function SourceControlInner(): React.JSX.Element {
       linkedBitbucketPR,
       linkedGitHubPR,
       linkedGitLabMR,
-      linkedGiteaPR
+      linkedGiteaPR,
+      remoteInferredHostedReviewProvider
     ]
+  )
+  const resolveCurrentHostedReviewCreationProvider = useEffectEvent(() =>
+    resolveHostedReviewCreationProviderForTarget(
+      hostedReviewCreationProviderHintRef.current,
+      { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+      provisionalHostedReviewProvider
+    )
   )
   useEffect(() => {
     const hasConcreteProviderHint =
@@ -1629,22 +1616,18 @@ function SourceControlInner(): React.JSX.Element {
     provisionalHostedReviewProvider
   ])
   const hostedReviewCreationForHeader = useMemo(() => {
-    // Why: a fresh preflight must disable stale Create PR eligibility while
-    // upstream/dirty/base state is reconciling after commit or push, while
-    // preserving provider copy from the previous safe snapshot.
+    // Why: during a fresh preflight, disable stale Create PR eligibility while state reconciles, but preserve provider copy from the last snapshot.
     if (isHostedReviewCreationLoading) {
-      const providerHint = hostedReviewCreationProviderHintRef.current
-      const provider =
-        providerHint.repoId === (activeRepo?.id ?? null) &&
-        providerHint.worktreeId === (activeWorktreeId ?? null) &&
-        providerHint.branch === branchName
-          ? providerHint.provider
-          : provisionalHostedReviewProvider
+      const provider = resolveHostedReviewCreationProviderForTarget(
+        hostedReviewCreationProviderHintRef.current,
+        { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
+        provisionalHostedReviewProvider
+      )
       return buildLoadingHostedReviewCreationEligibility(provider)
     }
     return hostedReviewCreation
   }, [
-    activeRepo?.id,
+    activeRepoId,
     activeWorktreeId,
     branchName,
     hostedReviewCreation,
@@ -1659,12 +1642,7 @@ function SourceControlInner(): React.JSX.Element {
     linkedAzureDevOpsPR,
     linkedGiteaPR
   })
-  // Why: when activeRepo.connectionId is truthy, neither the SourceControl
-  // effect below nor WorktreeCard.tsx fetches hostedReview for this branch,
-  // so hostedReviewEntry would stay undefined forever and would permanently
-  // block Publish Branch on SSH-backed worktrees with linked review metadata
-  // and no upstream. Skip the loading state for those repos so the publish
-  // gate doesn't latch.
+  // Why: SSH-backed (connectionId) repos never fetch hostedReview, so skip the loading state or it would permanently block Publish Branch.
   const isHostedReviewStateLoading =
     !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
   const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
@@ -1673,8 +1651,7 @@ function SourceControlInner(): React.JSX.Element {
     linkedGitLabMR
   })
   useEffect(() => {
-    // Why: resolving review heads can hit provider/SSH APIs, so keep it tied
-    // to the visible Source Control branch view like the adjacent PR polling.
+    // Why: resolving review heads can hit provider/SSH APIs; gate on the visible branch view like the adjacent PR polling.
     if (!isBranchVisible || isFolder || !activeWorktreeId || activeWorktree?.pushTarget) {
       return
     }
@@ -1730,10 +1707,7 @@ function SourceControlInner(): React.JSX.Element {
     ) {
       return
     }
-    // Why: the Source Control panel renders branch review status directly.
-    // When a terminal checkout moves this worktree onto a new branch, fetch
-    // immediately; carry a known PR number because branch lookup is lossy for
-    // fork/deleted-head PRs.
+    // Why: fetch review immediately on branch change; carry a known PR number because branch lookup is lossy for fork/deleted-head PRs.
     void fetchHostedReviewForBranch(activeRepo.path, branchName, {
       repoId: activeRepo.id,
       linkedGitHubPR,
@@ -1744,8 +1718,7 @@ function SourceControlInner(): React.JSX.Element {
       linkedGiteaPR,
       staleWhileRevalidate: true
     })
-    // Why: the GitHub-specific cache powers grouping/check panels; keep that
-    // refresh behind the coordinator so Source Control does not bypass pacing.
+    // Why: keep the GitHub cache refresh behind the coordinator so Source Control doesn't bypass pacing.
     enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
   }, [
     activeRepo,
@@ -1763,12 +1736,7 @@ function SourceControlInner(): React.JSX.Element {
     linkedGiteaPR
   ])
 
-  // Why: eligibility is recomputed below, after prGenerating / isCreatingPr are
-  // available, so the effect can pause refetches while a user-initiated PR flow
-  // is in flight. AI generation runs `git fetch` + `git rebase`, which mutates
-  // ahead/behind counts; without this guard the next refetch would return
-  // canCreate:false (typically needs_push), flip primaryAction.kind off
-  // create_pr, unmount the composer, and cancel the in-flight generation.
+  // Why: eligibility is recomputed later to pause refetches during an in-flight PR flow, since AI gen's fetch+rebase would flip canCreate off and cancel generation.
 
   const grouped = useMemo(() => {
     const groups: SourceControlEntryGroups = { staged: [], unstaged: [], untracked: [] }
@@ -1821,8 +1789,7 @@ function SourceControlInner(): React.JSX.Element {
       roots[section.id] =
         section.id === 'conflicts'
           ? applyGitStatusEntryAreasToSourceControlTree(
-              // Why: conflict rows can mirror normal paths, so their folder
-              // collapse keys must not share state with normal area sections.
+              // Why: conflict rows can mirror normal paths, so their folder collapse keys must not share state with normal sections.
               namespaceSourceControlTreeDirectoryKeys(sectionRoots, 'conflicts')
             )
           : sectionRoots
@@ -1850,8 +1817,7 @@ function SourceControlInner(): React.JSX.Element {
     submoduleStatusByKey
   ])
 
-  // List view needs the same lazy submodule expansion as the tree view, just
-  // spliced into the flat entry list instead of the tree-row list.
+  // List view needs the same lazy submodule expansion as tree view, spliced into the flat entry list.
   const visibleListRowsBySection = useMemo(() => {
     const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>> = {}
     for (const section of displaySections) {
@@ -1877,9 +1843,7 @@ function SourceControlInner(): React.JSX.Element {
 
   const visibleSelectionEntries = useMemo(() => {
     const arr: FlatEntry[] = []
-    // Why: list view splices lazily-loaded submodule child rows into the
-    // rendered list, so selection/range/open-key bookkeeping must read the same
-    // injected rows instead of the pre-injection flat entries.
+    // Why: list view splices in lazy submodule rows, so selection/range bookkeeping must read the injected rows, not the pre-injection entries.
     if (sourceControlViewMode === 'list') {
       for (const section of displaySections) {
         if (collapsedSections.has(section.id)) {
@@ -1990,11 +1954,7 @@ function SourceControlInner(): React.JSX.Element {
     sourceControlAiActionsVisible
   ])
 
-  // Why: orphaned draft/error/in-flight entries accumulate when worktrees are
-  // removed from the store (long sessions with many create/destroy cycles).
-  // Prune them so a deleted-then-reused worktree ID doesn't inherit stale
-  // state — especially commitInFlightRef, which would permanently disable
-  // Commit for that ID if left stuck at `true`.
+  // Why: prune per-worktree state for removed worktrees so a reused ID doesn't inherit stale state (e.g. a stuck commitInFlightRef disabling Commit).
   useEffect(() => {
     const pruneRecord = <T,>(prev: Record<string, T>): Record<string, T> => {
       let changed = false
@@ -2053,9 +2013,7 @@ function SourceControlInner(): React.JSX.Element {
   }, [commitDrafts])
 
   useEffect(() => {
-    // Why: users often finish merge/rebase conflicts in a terminal. Once git
-    // status observes that operation end, the old Source Control failure banner
-    // is stale and should not survive the successful external continue/abort.
+    // Why: conflicts are often resolved in a terminal; clear the stale failure banner once git status sees the operation end.
     const previousConflictOperations = previousConflictOperationsRef.current
     setRemoteActionErrors((prev) =>
       clearRemoteActionErrorsForCompletedConflictOperations({
@@ -2067,10 +2025,7 @@ function SourceControlInner(): React.JSX.Element {
     previousConflictOperationsRef.current = conflictOperationsByWorktree
   }, [conflictOperationsByWorktree])
 
-  // Why: the sidebar no longer uses key={activeWorktreeId} to force a full
-  // remount on worktree switch (that caused an IPC storm on Windows).
-  // Instead, reset worktree-specific local state here so the previous
-  // worktree's UI state doesn't leak into the new one.
+  // Why: reset worktree-specific state manually instead of key-remounting on switch (which caused a Windows IPC storm).
   useEffect(() => {
     setFilterExpanded(false)
     setCollapsedSections(createDefaultCollapsedSections())
@@ -2079,24 +2034,13 @@ function SourceControlInner(): React.JSX.Element {
     setPendingDiscard(null)
     setPendingDiffCommentsClear(null)
     setIsClearingDiffComments(false)
-    // Why: do NOT reset defaultBaseRef here. It is repo-scoped, not
-    // worktree-scoped, and is resolved by the effect above on activeRepo
-    // change. Resetting it to a hard-coded 'origin/main' on every worktree
-    // switch within the same repo clobbered the correct value (e.g.
-    // 'origin/master' for repos whose default branch isn't main), causing
-    // a persistent "Branch compare unavailable" until the user switched
-    // repos and back to re-trigger the resolver.
+    // Why: don't reset defaultBaseRef here — it's repo-scoped (resolved on activeRepo change); resetting would clobber non-main defaults.
     setFilterQuery('')
     setIsExecutingBulk(false)
-    // Why: no reset for commit-in-flight state — it now lives in a per-worktree
-    // map, so it cannot leak across worktrees. Resetting here would actually
-    // clear in-flight state for the *incoming* worktree if the user is coming
-    // back to a worktree mid-commit, re-enabling the button while the commit
-    // still runs.
+    // Why: don't reset commit-in-flight state — it's per-worktree; resetting would re-enable Commit for an incoming worktree mid-commit.
   }, [activeWorktreeId])
 
-  // Why: returns true on success so compound actions ("Commit & Push" etc.)
-  // can skip the follow-up remote operation when the commit itself failed.
+  // Why: returns true on success so compound actions can skip the follow-up remote op when the commit failed.
   const handleCommit = useCallback(
     async (
       messageOverride?: string,
@@ -2152,12 +2096,7 @@ function SourceControlInner(): React.JSX.Element {
           return false
         }
 
-        // Why: the textarea stays enabled during the in-flight commit (only the
-        // button is disabled), so the user can keep typing after clicking Commit.
-        // Unconditionally clearing the draft here would silently discard those
-        // in-progress edits — the commit used the OLD `message` captured in this
-        // closure, so the dropped text would never have been committed either.
-        // Only clear when the current draft still matches what we committed.
+        // Why: textarea stays editable during commit, so only clear the draft when it still matches what we committed — else we'd discard edits typed after Commit.
         updateCommitDrafts((prev) => {
           const current = prev[target.worktreeId]
           if (current !== undefined && current.trim() !== message) {
@@ -2170,21 +2109,7 @@ function SourceControlInner(): React.JSX.Element {
         if (!options?.target) {
           void refreshActiveGitStatusAfterMutation()
         }
-        // Why: flip branchSummary to 'loading' synchronously so the empty-state
-        // guard
-        //   (!hasUncommittedEntries && branchSummary.status === 'ready' &&
-        //    branchEntries.length === 0)
-        // doesn't briefly read true between setGitStatus clearing the
-        // uncommitted list and the next branchCompare poll landing the new
-        // commit. Without this flip "No changes on this branch" flashes for
-        // the full poll-interval window.
-        //
-        // Then fire-and-forget refreshBranchCompare so the "Committed on
-        // Branch" section repopulates as soon as the IPC returns instead of
-        // waiting for the next poll. Unawaited on purpose:
-        // compound flows (runCompoundCommitAction) need handleCommit to
-        // resolve immediately so the push step starts without delay. Errors
-        // here are best-effort — the polling tick will retry.
+        // Why: flip branchSummary to 'loading' synchronously so "No changes on this branch" doesn't flash before the branchCompare poll lands the commit.
         if (!options?.target && compareBaseRef) {
           beginGitBranchCompareRequest(
             target.worktreeId,
@@ -2280,8 +2205,7 @@ function SourceControlInner(): React.JSX.Element {
         )
 
         if (!result.success) {
-          // Why: cancellation is a deliberate user action, not a failure to
-          // surface. Clear any prior error and stay quiet.
+          // Why: cancellation is a deliberate user action, not a failure to surface.
           if (result.canceled) {
             setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
             updateCommitMessageGenerationRecord(activeCommitMessageGenerationKey, (record) =>
@@ -2315,9 +2239,7 @@ function SourceControlInner(): React.JSX.Element {
             message: result.message
           })
         )
-        // Why: race protection — the user may have started typing into the
-        // textarea while the agent was running. In that case we silently drop
-        // the generated message rather than overwrite their in-progress edits.
+        // Why: race protection — drop the generated message if the user typed into the textarea while the agent ran, rather than overwrite their edits.
         updateCommitDrafts((prev) => {
           const current = prev[activeWorktreeId]
           if (current && current.length > 0) {
@@ -2446,9 +2368,7 @@ function SourceControlInner(): React.JSX.Element {
       resolveCommitMessageGenerationCancel(record)
     )
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-    // Why: fire-and-forget — the in-flight generateCommitMessage promise
-    // resolves with `{canceled: true}` once the kill propagates, which is
-    // where the spinner is cleared. Awaiting here would just delay UI feedback.
+    // Why: fire-and-forget; the in-flight promise resolves {canceled: true} where the spinner clears, so awaiting would just delay UI feedback.
     void cancelRuntimeGenerateCommitMessage({
       // Why: route the cancel by the repo OWNER host, not the focused runtime.
       settings: activeRepoSettings,
@@ -2464,10 +2384,14 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
-  // Why: a single dispatcher for every remote-only action the split button or
-  // chevron dropdown can trigger. Keeps the error-swallow pattern in one
-  // place — store slices already surface actionable toasts, so additional
-  // try/catch here would duplicate the notification.
+  // Why: single dispatcher for remote-only actions; error-swallow lives here since store slices already surface actionable toasts.
+  // Why: statuses distinguish real failures from supersession and no-ops; collapsing to { ok: false } made Create PR treat supersession as a destructive failure.
+  type RunRemoteActionResult =
+    | { status: 'ok' }
+    | { status: 'failed'; error: SourceControlActionError }
+    | { status: 'superseded' }
+    | { status: 'skipped' }
+
   const runRemoteAction = useCallback(
     async (
       kind:
@@ -2483,7 +2407,7 @@ function SourceControlInner(): React.JSX.Element {
         target?: SourceControlOperationTarget
         baseRef?: string | null
       }
-    ): Promise<boolean> => {
+    ): Promise<RunRemoteActionResult> => {
       const target =
         options?.target ??
         (activeWorktreeId && worktreePath
@@ -2496,7 +2420,7 @@ function SourceControlInner(): React.JSX.Element {
             }
           : null)
       if (!target) {
-        return false
+        return { status: 'skipped' }
       }
       const sequence = (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] ?? 0) + 1
       remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] = sequence
@@ -2522,13 +2446,10 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { status: 'ok' }
         }
         if (kind === 'push') {
-          // Why: kind 'push' must stay a regular push. Force-with-lease is only
-          // for kind 'force_push' (and callers that choose it). Auto-upgrading
-          // here made the always-enabled dropdown Push row silently force-push
-          // while its tooltip claimed a normal push might merely fail.
+          // Why: kind 'push' must stay a regular push; auto-upgrading made the always-enabled dropdown Push row silently force-push against its tooltip.
           await pushBranch(
             target.worktreeId,
             target.worktreePath,
@@ -2537,7 +2458,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { status: 'ok' }
         }
         if (kind === 'force_push') {
           await pushBranch(
@@ -2548,7 +2469,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { forceWithLease: true, runtimeTargetSettings: target.settings }
           )
-          return true
+          return { status: 'ok' }
         }
         if (kind === 'pull') {
           await pullBranch(
@@ -2560,7 +2481,7 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return true
+          return { status: 'ok' }
         }
         if (kind === 'fast_forward') {
           await fastForwardBranch(
@@ -2570,7 +2491,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { status: 'ok' }
         }
         if (kind === 'fetch') {
           await fetchBranch(
@@ -2582,12 +2503,12 @@ function SourceControlInner(): React.JSX.Element {
               runtimeTargetSettings: target.settings
             }
           )
-          return true
+          return { status: 'ok' }
         }
         if (kind === 'rebase') {
           const baseRef = options?.baseRef ?? effectiveBaseRef
           if (!baseRef) {
-            return false
+            return { status: 'skipped' }
           }
           await rebaseFromBase(
             target.worktreeId,
@@ -2597,7 +2518,7 @@ function SourceControlInner(): React.JSX.Element {
             target.pushTarget,
             { runtimeTargetSettings: target.settings }
           )
-          return true
+          return { status: 'ok' }
         }
         await syncBranch(
           target.worktreeId,
@@ -2611,30 +2532,25 @@ function SourceControlInner(): React.JSX.Element {
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] === sequence) {
           setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
         }
-        return true
+        return { status: 'ok' }
       } catch (error) {
-        // Why: remote action failures are surfaced by editor-slice actions to keep
-        // one consistent toast path and avoid duplicate notifications in the UI.
-        // Keep the latest failure inline too: dropdown-only actions like Fetch can
-        // otherwise look like nothing happened once the menu closes.
+        // Why: editor-slice actions own the failure toast; keep the latest failure inline too since dropdown-only actions like Fetch look silent once the menu closes.
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
-          return false
+          return { status: 'superseded' }
         }
-        setRemoteActionErrors((prev) => ({
-          ...prev,
-          [target.worktreeId]: {
-            kind,
-            message: resolveRemoteActionError(kind, error),
-            rawError: error instanceof Error ? error.message : String(error),
-            syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
-            branchName: failureBranchName,
-            worktreePath: target.worktreePath,
-            entriesSnapshot: recoveryEntrySnapshot.entries,
-            entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
-            sequence
-          }
-        }))
-        return false
+        const actionError: SourceControlActionError = {
+          kind,
+          message: resolveRemoteActionError(kind, error),
+          rawError: error instanceof Error ? error.message : String(error),
+          syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
+          branchName: failureBranchName,
+          worktreePath: target.worktreePath,
+          entriesSnapshot: recoveryEntrySnapshot.entries,
+          entriesSnapshotTotalCount: recoveryEntrySnapshot.totalCount,
+          sequence
+        }
+        setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: actionError }))
+        return { status: 'failed', error: actionError }
       } finally {
         if (!options?.target) {
           refreshSourceControlAfterRemoteAction({
@@ -2764,23 +2680,14 @@ function SourceControlInner(): React.JSX.Element {
     [handleAbortMerge, handleAbortRebase]
   )
 
-  // Why: compound actions must commit first and only run the follow-up remote
-  // op when the commit succeeds. handleCommit's return value carries that
-  // signal — a failure leaves commitError populated and short-circuits here
-  // so we never push a commit the user didn't actually land. The primary
-  // button never takes this path (it always emits a single-action kind);
-  // compound flows are reached only from the dropdown, which offers
-  // 'commit_push' and 'commit_sync' (there is no 'Commit & Publish' row).
+  // Why: commit first and run the follow-up remote op only if handleCommit succeeded, so we never push a commit the user didn't land.
   const runCompoundCommitAction = useCallback(
     async (remoteKind: 'push' | 'sync'): Promise<void> => {
       const ok = await handleCommit()
       if (!ok) {
         return
       }
-      // Why: "Commit & Force Push" still invokes remoteKind 'push' from the
-      // dropdown kind map. Route to force_push when the upstream shape requires
-      // lease force so compound commit does not silently fall back to a regular
-      // push after we stopped auto-upgrading kind 'push'.
+      // Why: "Commit & Force Push" maps to remoteKind 'push', so route to force_push when the upstream shape requires lease force (kind 'push' no longer auto-upgrades).
       if (
         remoteKind === 'push' &&
         shouldForcePushWithLeaseForUpstream(remoteStatusForActions ?? remoteStatus)
@@ -2905,8 +2812,7 @@ function SourceControlInner(): React.JSX.Element {
   }, [setRightSidebarOpen, setRightSidebarTab])
 
   const handleBranchChangedByPullRequestGeneration = useCallback(async (): Promise<void> => {
-    // Why: AI PR detail generation may rebase before summarizing; if HEAD moved,
-    // refresh status before letting the user submit the generated draft.
+    // Why: AI PR detail generation may rebase before summarizing, so refresh status if HEAD moved before the user submits the draft.
     await refreshActiveGitStatusAfterMutation()
   }, [refreshActiveGitStatusAfterMutation])
 
@@ -2936,8 +2842,7 @@ function SourceControlInner(): React.JSX.Element {
         runtimeTargetSettings: activeRepoSettings
       }
       const seed = { ...fields }
-      // Why: SourceControl can unmount on tab switches; persisting the running
-      // record lets the embedded PR composer resume when the user returns.
+      // Why: SourceControl can unmount on tab switches; the persisted record lets the PR composer resume on return.
       setPullRequestGenerationRecord(
         generationKey,
         createRunningPullRequestGenerationRecord(context, seed, fieldRevisions)
@@ -3034,8 +2939,7 @@ function SourceControlInner(): React.JSX.Element {
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
-      // Why: the user can switch hosts while generation runs; cancel the
-      // original request owner instead of the current focused host.
+      // Why: the user can switch hosts while generation runs; cancel the original request owner, not the focused host.
       settings: record.context.runtimeTargetSettings,
       worktreeId: record.context.worktreeId,
       worktreePath: record.context.worktreePath,
@@ -3146,8 +3050,7 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    // Why: on Source Control remount, the PR fields hook seeds eligibility
-    // defaults in an effect; hydrating before that effect runs gets overwritten.
+    // Why: on remount the PR fields hook seeds eligibility defaults in an effect; hydrating before it runs gets overwritten.
     if (
       !activePullRequestGenerationKey ||
       !activePullRequestGenerationRecord ||
@@ -3188,8 +3091,7 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    // Why: direct commit-message generation can finish after Source Control
-    // unmounts; the store record lets the remounted textarea consume it once.
+    // Why: generation can finish after Source Control unmounts; the store record lets the remounted textarea consume it once.
     if (
       !activeCommitMessageGenerationKey ||
       !activeWorktreeId ||
@@ -3222,32 +3124,35 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || isFolder || !branchName || !activeWorktreeId) {
+    if (
+      !isBranchVisible ||
+      !activeRepoId ||
+      !activeRepoPath ||
+      isFolder ||
+      !branchName ||
+      !activeWorktreeId
+    ) {
       setHostedReviewCreationState(null)
       setHostedReviewCreationRequestState(null)
       return
     }
-    // Why: skip refetches while the user's PR flow is mid-flight. AI generation,
-    // Create PR intent, and submission can all perturb ahead/behind or dirty
-    // state temporarily. Recomputing eligibility mid-flow can tear down the
-    // composer or rotate dropdown hints before the final refresh restores truth.
+    // Why: skip refetches while a PR flow is mid-flight — recomputing eligibility then can tear down the composer before the final refresh restores truth.
     if (prGenerating || isCreatingPr || isCreatePrIntentInFlight) {
       setHostedReviewCreationRequestState(null)
       return
     }
     let stale = false
     setHostedReviewCreationRequestState({
-      repoId: activeRepo.id,
+      repoId: activeRepoId,
       worktreeId: activeWorktreeId,
       branch: branchName,
       status: 'loading'
     })
-    // Why: upstream/status changes can make the previous eligibility unsafe
-    // to click while the new preflight is still resolving.
+    // Why: upstream/status changes can make the previous eligibility unsafe to click while the new preflight resolves.
     setHostedReviewCreationState(null)
     void getHostedReviewCreationEligibility({
-      repoPath: activeRepo.path,
-      repoId: activeRepo.id,
+      repoPath: activeRepoPath,
+      repoId: activeRepoId,
       ...(worktreePath ? { worktreePath } : {}),
       branch: branchName,
       base: effectiveBaseRef ?? null,
@@ -3265,7 +3170,7 @@ function SourceControlInner(): React.JSX.Element {
       .then((result) => {
         if (!stale) {
           setHostedReviewCreationState({
-            repoId: activeRepo.id,
+            repoId: activeRepoId,
             worktreeId: activeWorktreeId,
             branch: branchName,
             data: result
@@ -3275,21 +3180,48 @@ function SourceControlInner(): React.JSX.Element {
       })
       .catch((error) => {
         console.warn('[SourceControl] hosted review creation eligibility failed', error)
-        if (!stale) {
-          setHostedReviewCreationState(null)
-          setHostedReviewCreationRequestState({
-            repoId: activeRepo.id,
+        if (stale) {
+          return
+        }
+        // Why: a failed remote probe can give branch guidance but cannot authorize hosted-review creation.
+        const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
+          resolveCurrentHostedReviewCreationProvider(),
+          {
+            branch: branchName,
+            baseRef: effectiveBaseRef,
+            hasUncommittedChanges: hasUncommittedEntries,
+            hasUpstream: remoteStatus?.hasUpstream,
+            ahead: remoteStatus?.ahead,
+            behind: remoteStatus?.behind
+          }
+        )
+        if (localBlocker) {
+          setHostedReviewCreationState({
+            repoId: activeRepoId,
             worktreeId: activeWorktreeId,
             branch: branchName,
-            status: 'failed'
+            data: localBlocker
           })
+          setHostedReviewCreationRequestState(null)
+          return
         }
+        setHostedReviewCreationState(null)
+        setHostedReviewCreationRequestState({
+          repoId: activeRepoId,
+          worktreeId: activeWorktreeId,
+          branch: branchName,
+          status: 'failed'
+        })
       })
     return () => {
       stale = true
     }
   }, [
-    activeRepo,
+    // Why: unrelated repo metadata replacement must not restart a hung probe's timeout.
+    activeRepoConnectionId,
+    activeRepoExecutionHostId,
+    activeRepoId,
+    activeRepoPath,
     branchName,
     effectiveBaseRef,
     getHostedReviewCreationEligibility,
@@ -3326,8 +3258,7 @@ function SourceControlInner(): React.JSX.Element {
     }
 
     if (!hostedReviewCreation.canCreate) {
-      // Why: blocked Create Review clicks are intentional for actionable states;
-      // the inline notice tells users which prerequisite to clear next.
+      // Why: blocked Create Review clicks are intentional; the inline notice tells the user which prerequisite to clear.
       const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
       if (message) {
         setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
@@ -3541,8 +3472,7 @@ function SourceControlInner(): React.JSX.Element {
           }
           if (generated.success) {
             fields = {
-              // Why: Create PR intent auto-submits; generated details should
-              // not retarget the review without user confirmation.
+              // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
               base: fields.base,
               title: generated.fields.title.trim() || fields.title,
               body: generated.fields.body,
@@ -3693,8 +3623,7 @@ function SourceControlInner(): React.JSX.Element {
       beginGitBranchCompareRequest(token.worktreeId, requestKey, baseRef)
       const result = await getRuntimeGitBranchCompare(
         {
-          // Why: the intent flow may continue after a worktree switch; use the
-          // token's original host target, not whatever branch is focused later.
+          // Why: intent may continue after a worktree switch; use the token's original host target, not whatever is focused later.
           settings: activeRepoSettings,
           worktreeId: token.worktreeId,
           worktreePath: token.worktreePath,
@@ -3765,8 +3694,7 @@ function SourceControlInner(): React.JSX.Element {
       }
       const target = getCreatePrIntentOperationTarget(token)
       return await refreshGitStatusForWorktreeStrict({
-        // Why: Create PR intent can finish in the background after navigation,
-        // but branch-safety checks must inspect the worktree that started it.
+        // Why: intent can finish in the background after navigation; branch-safety checks must inspect the worktree that started it.
         settings: target.settings,
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
@@ -3810,8 +3738,7 @@ function SourceControlInner(): React.JSX.Element {
       worktreeId: activeWorktreeId,
       worktreePath,
       branch: branchName,
-      // Why: Create PR intent crosses async commit/push steps; the review
-      // target must stay tied to the base selected when the run started.
+      // Why: intent crosses async commit/push steps, so the base stays tied to what was selected when the run started.
       baseRef: effectiveBaseRef ?? null
     })
     const operationTarget = getCreatePrIntentOperationTarget(token)
@@ -3844,9 +3771,7 @@ function SourceControlInner(): React.JSX.Element {
         if (!refreshed) {
           return false
         }
-        // Why: terminal checkouts are observed by this strict status snapshot
-        // before React updates createPrIntentCurrentTargetRef. Stop before the
-        // intent flow stages, commits, or pushes on a different branch.
+        // Why: a terminal checkout may land in this snapshot before React updates the target ref; stop before staging/committing/pushing on a different branch.
         if (!createPrIntentGitStatusMatchesToken(token, refreshed.status)) {
           abortedByStaleTarget = true
           return false
@@ -3880,6 +3805,39 @@ function SourceControlInner(): React.JSX.Element {
 
       if (!(await refreshIntentSnapshot())) {
         return
+      }
+
+      // Why: fast-forward behind-only before commit so a dirty worktree can't become ahead+behind and dead-end at the sync-first stop; --ff-only never auto-merges.
+      if (isBehindOnlyUpstream(latestUpstreamStatus)) {
+        setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+          tone: 'muted',
+          message: translate(
+            'auto.components.right.sidebar.SourceControl.createPrIntentFastForwarding',
+            'Updating branch…'
+          )
+        })
+        const earlyFfResult = await runRemoteAction('fast_forward', {
+          target: operationTarget
+        })
+        if (abortIfStale()) {
+          return
+        }
+        if (earlyFfResult.status === 'superseded') {
+          return
+        }
+        if (earlyFfResult.status !== 'ok') {
+          setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+            tone: 'destructive',
+            message: translate(
+              'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
+              'Could not update the remote branch. Retry Create PR.'
+            )
+          })
+          return
+        }
+        if (!(await refreshIntentSnapshot())) {
+          return
+        }
       }
 
       if (!(await stageLatestIntentPaths())) {
@@ -3950,9 +3908,7 @@ function SourceControlInner(): React.JSX.Element {
           return
         }
         if (!committed) {
-          // Why: pre-commit/lint hooks may rewrite tracked files before
-          // failing. Re-stage those safe hook outputs so retrying Create PR
-          // does not strand changes outside the intended all-in commit.
+          // Why: pre-commit/lint hooks may rewrite tracked files before failing; re-stage those outputs so retrying Create PR doesn't strand changes.
           if (await refreshIntentSnapshot()) {
             await stageLatestIntentPaths()
           }
@@ -4015,41 +3971,57 @@ function SourceControlInner(): React.JSX.Element {
       if (remoteStep === 'blocked' || remoteStep === 'none') {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'muted',
-          message: translate(
+          // Why: a diverged branch is deliberately not auto-prepared (would merge without consent), so keep explicit sync-first guidance.
+          message:
             eligibility.blockedReason === 'needs_sync'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentNeedsSync'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
-            eligibility.blockedReason === 'needs_sync'
-              ? 'Sync this branch before creating a review.'
-              : 'Branch is not ready to create a review yet.'
-          )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentNeedsSync',
+                  'Sync this branch before creating a review.'
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentBranchNotReady',
+                  'Branch is not ready to create a review yet.'
+                )
         })
         return
       }
 
       setCreatePrIntentNoticeForWorktree(token.worktreeId, {
         tone: 'muted',
-        message: translate(
+        // Why: keep each translate() key a string literal so the localization-catalog verifier can statically detect it.
+        message:
           remoteStep === 'publish'
-            ? 'auto.components.right.sidebar.SourceControl.createPrIntentPublishing'
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentPublishing',
+                'Publishing branch…'
+              )
             : remoteStep === 'force_push'
-              ? 'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing'
-              : 'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
-          remoteStep === 'publish'
-            ? 'Publishing branch…'
-            : remoteStep === 'force_push'
-              ? 'Force pushing with lease…'
-              : 'Pushing commits…'
-        )
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.createPrIntentForcePushing',
+                  'Force pushing with lease…'
+                )
+              : remoteStep === 'fast_forward'
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentFastForwarding',
+                    'Updating branch…'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.createPrIntentPushing',
+                    'Pushing commits…'
+                  )
       })
-      const remoteOk = await runRemoteAction(remoteStep, {
+      const remoteResult = await runRemoteAction(remoteStep, {
         target: operationTarget,
         baseRef: token.baseRef
       })
       if (abortIfStale()) {
         return
       }
-      if (!remoteOk) {
+      // Superseded by a newer remote action — drop quietly, same as target drift.
+      if (remoteResult.status === 'superseded') {
+        return
+      }
+      if (remoteResult.status !== 'ok') {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
           message: translate(
@@ -4322,10 +4294,7 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
-  // Why: maps both the primary button click and any chevron dropdown item
-  // click to the right handler. Commit-ish kinds flow through handleCommit
-  // (which returns a boolean); compound actions use runCompoundCommitAction;
-  // pure remote actions go through runRemoteAction.
+  // Dispatch primary + dropdown action kinds to their handlers.
   const handleActionInvoke = useCallback(
     (kind: DropdownActionKind): void => {
       if (prGenerating || isCreatingPr || isCreatePrIntentInFlight) {
@@ -4378,8 +4347,7 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
-  // Why: modifier-click should keep the current pane intact by opening the
-  // selected Source Control file in a fresh split to the right.
+  // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
   const resolveSplitTargetGroupId = useCallback(
     (event?: SourceControlRowOpenEvent): string | undefined => {
       if (!event || !activeWorktreeId || !isSourceControlSplitOpenModifier(event, isMac)) {
@@ -4395,10 +4363,7 @@ function SourceControlInner(): React.JSX.Element {
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
-  // Why: a stable string signature keeps this selector referentially stable so
-  // the panel only re-renders when the active editor file (or its diff source)
-  // actually changes. Gated on the visible tab being an editor so the highlight
-  // clears when the user switches to a terminal or browser surface.
+  // Why: a stable string signature keeps this selector referentially stable so the panel re-renders only when the active editor file changes; null when the tab isn't an editor.
   const activeOpenFileSignature = useAppStore((s) => {
     if (!activeWorktreeId) {
       return null
@@ -4451,14 +4416,7 @@ function SourceControlInner(): React.JSX.Element {
       }
       const language = detectLanguage(entry.path)
       const filePath = joinPath(worktreePath, entry.path)
-      // Why: unstaged markdown diffs open as a normal edit tab in Changes
-      // view mode rather than a dedicated diff tab. This unifies sidebar
-      // clicks with the header's Edit|Changes toggle: there is exactly one
-      // tab per markdown file, and the sidebar click flips that tab's view
-      // mode. Staged diffs still open as a separate diff tab because the
-      // staged content is not what the editor would be editing. Non-markdown
-      // files keep the existing diff-tab flow until the diff-tab type is
-      // eventually collapsed (see reviews/changes-view-mode-plan.md §"Follow-up").
+      // Why: unstaged markdown diffs open as an edit tab in Changes view (one tab per file); staged diffs still get a separate diff tab since that isn't what the editor edits.
       if (language === 'markdown' && entry.area === 'unstaged') {
         openFile(
           {
@@ -4679,10 +4637,7 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
-  // Why: 'stage' primary stages every unstaged + untracked path in one
-  // bulkStage call. It bypasses handleActionInvoke because that handler is
-  // typed to DropdownActionKind and 'stage' is intentionally not in the
-  // dropdown union — the dropdown surface is unchanged.
+  // Why: bypasses handleActionInvoke because that handler is typed to DropdownActionKind and 'stage' is intentionally not in the dropdown union.
   const handleStageAllPrimary = useCallback(async (): Promise<void> => {
     if (!worktreePath || isExecutingBulk) {
       return
@@ -4722,22 +4677,14 @@ function SourceControlInner(): React.JSX.Element {
     refreshActiveGitStatusAfterMutation
   ])
 
-  // Why: PrimaryActionKind is narrowed to the single-action kinds the
-  // primary can emit ('commit' | 'stage' | 'push' | 'pull' | 'sync' |
-  // 'publish' | 'create_pr') — compound commit_* kinds are dropdown-only. An exhaustive
-  // switch keeps the mapping honest: if a new PrimaryActionKind is added,
-  // TypeScript lights up the missing case instead of silently falling
-  // through. 'stage' routes to a dedicated primary-only handler because
-  // handleActionInvoke is typed to DropdownActionKind.
+  // Why: 'stage' routes to a primary-only handler since handleActionInvoke is typed to DropdownActionKind (compound commit_* kinds are dropdown-only).
   const handlePrimaryClick = useCallback((): void => {
     switch (primaryAction.kind) {
       case 'stage':
         void handleStageAllPrimary()
         return
       case 'push':
-        // Why: primary labels "Force Push" while keeping kind 'push'. Invoke the
-        // explicit force path when lease force is required so regular push stays
-        // non-force for the dropdown.
+        // Why: primary labels "Force Push" but keeps kind 'push', so invoke the explicit force path when lease force is required.
         handleActionInvoke(
           shouldForcePushWithLeaseForUpstream(remoteStatusForActions ?? remoteStatus)
             ? 'force_push'
@@ -4792,13 +4739,7 @@ function SourceControlInner(): React.JSX.Element {
     const existingSummary =
       useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId]
 
-    // Why: only show the loading spinner for the very first branch compare
-    // request, or when the base ref has changed (user picked a new one, or
-    // getBaseRefDefault corrected a stale cross-repo value).  Polling retries
-    // — whether the previous result was 'ready' *or* an error — keep the
-    // current UI visible until the new IPC result arrives.  Resetting to
-    // 'loading' on every poll when the compare is in an error state caused a
-    // visible loading→error→loading→error flicker.
+    // Why: only reset to 'loading' on the first request or a base-ref change; resetting on every poll caused a visible loading→error→loading flicker.
     const baseRefChanged = existingSummary && existingSummary.baseRef !== compareBaseRef
     const shouldResetToLoading = !existingSummary || baseRefChanged
     if (shouldResetToLoading) {
@@ -4856,10 +4797,7 @@ function SourceControlInner(): React.JSX.Element {
 
     branchCompareInFlightRef.current = true
     const runPromise = (async (): Promise<void> => {
-      // Why: branch compare shells out to git from both event-driven refreshes
-      // and the fallback timer. Keep one compare chain in flight and
-      // collapse skipped ticks into one trailing refresh instead of stacking
-      // subprocesses while preserving the await contract for direct callers.
+      // Why: keep one branch-compare chain in flight and collapse skipped ticks into one trailing refresh instead of stacking git subprocesses.
       try {
         await runBranchCompare()
       } finally {
@@ -4984,8 +4922,7 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
 
-    // Why: pushing a branch can move its remote-tracking base and ahead count
-    // without changing local HEAD, so the HEAD-change effect alone misses it.
+    // Why: pushing a branch can move its remote base and ahead count without changing local HEAD, which the HEAD-change effect alone misses.
     const current = {
       ahead: remoteStatus?.ahead ?? null,
       baseRef: compareBaseRef,
@@ -5016,8 +4953,7 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
 
-    // Why: git-status HEAD changes refresh branch compare immediately. Keep a
-    // visible-window fallback for base refs or remote updates that do not move HEAD.
+    // Why: HEAD changes refresh branch compare immediately; keep a visible-window fallback for base/remote updates that don't move HEAD.
     return installWindowVisibilityInterval({
       run: () => void refreshBranchCompareRef.current(),
       intervalMs: BRANCH_REFRESH_INTERVAL_MS
@@ -5025,10 +4961,7 @@ function SourceControlInner(): React.JSX.Element {
   }, [activeWorktreeId, compareBaseRef, isBranchVisible, isFolder, worktreePath])
 
   useEffect(() => {
-    // Why: when the compare-base policy resolves to no base, runBranchCompare
-    // bails out; drop any stale summary so the
-    // committed-changes section and "vs" row disappear and only the working tree
-    // shows. Wait until upstream status has loaded so the summary doesn't flicker.
+    // Why: when compare-base resolves to no base, drop the stale summary (gate on loaded upstream status to avoid flicker).
     if (
       !activeWorktreeId ||
       !shouldClearBranchCompareForMissingBase({ isFolder, compareBaseRef, remoteStatus })
@@ -5039,15 +4972,13 @@ function SourceControlInner(): React.JSX.Element {
   }, [activeWorktreeId, clearGitBranchCompare, compareBaseRef, isFolder, remoteStatus])
 
   useEffect(() => {
-    // Why: history shells out to git. Defer the first load until the user
-    // expands Commits so source control stays cheap for large/remote repos.
+    // Why: history shells out to git; defer first load until the user expands Commits so source control stays cheap for large/remote repos.
     if (!isBranchVisible || !isGitHistoryExpanded || !isGitHistoryVisible) {
       return
     }
     void refreshGitHistoryRef.current()
   }, [
-    // Why: history is fetched with compareBaseRef, so re-run when the upstream
-    // compare base changes — effectiveBaseRef can stay put while it moves.
+    // Why: history is fetched with compareBaseRef, so re-run when it changes (effectiveBaseRef can stay put while it moves).
     activeWorktreeId,
     compareBaseRef,
     isBranchVisible,
@@ -5058,10 +4989,7 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    // Why: gate on isBranchVisible so we don't spawn git processes while the
-    // sidebar is closed. Store-slice remote operations refresh upstream-status
-    // on success anyway, so the user's first sidebar open will show accurate
-    // state.
+    // Why: gate on isBranchVisible so we don't spawn git processes while the sidebar is closed.
     if (!activeWorktreeId || !worktreePath || isFolder || !isBranchVisible) {
       return
     }
@@ -5138,17 +5066,7 @@ function SourceControlInner(): React.JSX.Element {
       resolveSplitTargetGroupId
     })
 
-  // Why: a note's filePath is the same relative path used by GitStatusEntry /
-  // GitBranchChangeEntry, so we can route the click to whichever diff surface
-  // currently owns that file. Prefer the `unstaged` entry when a path is also
-  // staged — diff comments are authored against the working-tree (unstaged)
-  // diff card. Fall back to the branch compare, and finally just open the
-  // file as a normal editor tab so the user still gets navigation when
-  // neither side has the path anymore. When `commentId` is supplied and the
-  // route lands on a diff surface, also stamp scrollToDiffCommentId so the
-  // diff decorator scrolls that note into view; we clear any prior request
-  // first, so the editor-tab fallback then leaves the global null and a
-  // future DiffViewer mount can't accidentally consume a stale id.
+  // Why: route the note by relative filePath to whichever diff surface owns it — unstaged, then branch compare, else a plain editor tab.
   const handleOpenComment = useCallback(
     (comment: DiffComment) => {
       if (!activeWorktreeId || !worktreePath) {
@@ -5156,8 +5074,7 @@ function SourceControlInner(): React.JSX.Element {
       }
       const filePath = comment.filePath
       const commentId = comment.id
-      // Defensively clear any dangling prior scroll request before routing
-      // this click; only the diff branches below will re-stamp it.
+      // Clear any dangling prior scroll request; only the diff branches below re-stamp it.
       cancelSourceControlEditorRevealFrames(pendingCommentEditorRevealFrameIdsRef)
       setScrollToDiffCommentId(null)
       if (getDiffCommentSource(comment) === 'markdown') {
@@ -5206,13 +5123,7 @@ function SourceControlInner(): React.JSX.Element {
         }
         return
       }
-      // Why: fall through to a normal editor tab when neither the working-tree
-      // nor branch-compare diff has the file (e.g. the change has since been
-      // committed and merged, but the note still references the file). Force
-      // the editor tab into 'changes' mode and stamp scrollToDiffCommentId so
-      // the DiffViewer that EditorContent renders in changes mode picks up
-      // the scroll request — same surface the user can flip into manually
-      // via the editor's Edit/Changes toggle.
+      // Why: neither diff surface has the file (e.g. change committed+merged), so open a plain editor tab in 'changes' mode where DiffViewer picks up the scroll request.
       const absPath = joinPath(worktreePath, filePath)
       const language = detectLanguage(filePath)
       openFile({
@@ -5293,10 +5204,7 @@ function SourceControlInner(): React.JSX.Element {
     [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
   )
 
-  // Why: split into two variants — `discardSingle` throws so bulk callers can
-  // aggregate failures into a single toast via `runDiscardAllForArea`'s
-  // onError, while `handleDiscard` swallows for the per-row fire-and-forget UI
-  // contract (no individual failure toast).
+  // Why: discardSingle throws so bulk callers can aggregate failures into one toast; handleDiscard swallows for per-row fire-and-forget.
   const discardSingle = useCallback(
     async (filePath: string) => {
       if (!worktreePath || !activeWorktreeId) {
@@ -5304,9 +5212,7 @@ function SourceControlInner(): React.JSX.Element {
       }
       const runtimeEnvironmentId =
         useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
-      // Why: git discard replaces the working tree version of this file. Any
-      // pending editor autosave must be quiesced first so it cannot recreate
-      // the discarded edits after git restores the file.
+      // Why: quiesce pending editor autosaves first so a delayed save can't recreate the discarded edits after git restores the file.
       await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
         worktreePath,
@@ -5341,9 +5247,7 @@ function SourceControlInner(): React.JSX.Element {
       }
       const runtimeEnvironmentId =
         useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
-      // Why: bulk discard replaces many working-tree files at once. Quiesce
-      // any matching editor autosaves before git mutates the files so a delayed
-      // save cannot recreate edits after the restore.
+      // Why: quiesce matching editor autosaves first so a delayed save can't recreate edits after git mutates the files.
       await Promise.all(
         filePaths.map((relativePath) =>
           requestEditorSaveQuiesce({
@@ -5383,22 +5287,14 @@ function SourceControlInner(): React.JSX.Element {
         await discardSingle(filePath)
         await refreshActiveGitStatusAfterMutation()
       } catch {
-        // Why: per-row discard is fire-and-forget for the UI; failures are not
-        // surfaced individually. Bulk callers use `discardSingle` directly so
-        // they can aggregate failures into a single toast.
+        // Why: per-row discard is fire-and-forget; bulk callers use discardSingle directly to aggregate failures into one toast.
       }
     },
     [discardSingle, refreshActiveGitStatusAfterMutation]
   )
 
-  // Why: "Discard all" mirrors the per-row discard rules — it skips unresolved
-  // and resolved_locally rows because discarding those can silently re-create
-  // the conflict or lose the resolution (no v1 UX to explain this clearly).
-  // The happy path uses bulk discard IPC; the sequencing helper falls back to
-  // per-file discard when an older SSH relay does not support that method yet.
-  // The sequencing + filter rules live in discard-all-sequence.ts so they can
-  // be unit-tested independently of the full component (staged area needs a
-  // bulk-unstage first, and a failed unstage must skip the discard loop).
+  // Why: "Discard all" skips unresolved/resolved_locally rows (discarding can re-create the conflict or lose the resolution; no v1 UX for it).
+  // Why: sequencing/filter rules live in discard-all-sequence.ts for independent unit tests, with per-file fallback when an older SSH relay lacks bulk discard.
   const handleRevertAllInArea = useCallback(
     async (area: DiscardAllArea, confirmedPaths?: readonly string[]) => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
@@ -5411,10 +5307,7 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(true)
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-        // Why: `onError` fires once per failure — both for the bulk-unstage
-        // pre-step and for each per-file discard failure. Aggregate into one
-        // toast after the sequence completes so a partial failure across N
-        // files doesn't spam N error toasts.
+        // Why: onError fires per failure; aggregate into one toast so a partial failure across N files doesn't spam N toasts.
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
           bulkUnstage: (filePaths) =>
@@ -5446,9 +5339,7 @@ function SourceControlInner(): React.JSX.Element {
             }
           )
         } else if (result.failed.length > 0) {
-          // Why: only include the first error message to avoid a huge toast
-          // body on bulk failures; a short sample of failed paths gives users
-          // enough context to retry or investigate.
+          // Why: show only the first error + a sample of failed paths to avoid a huge toast body on bulk failures.
           const firstMsg = errors[0] instanceof Error ? errors[0].message : undefined
           const sample = result.failed.slice(0, 3).join(', ')
           const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
@@ -5591,14 +5482,7 @@ function SourceControlInner(): React.JSX.Element {
           </div>
         )}
 
-        {/* Why: Diff-comments live on the worktree and apply across every diff
-            view the user opens. The header row expands inline to show per-file
-            comment previews plus a Copy-all action so the user can hand the
-            set off to whichever tool they want without leaving the sidebar.
-            Hidden when count is 0: notes are created from the diff view, so
-            an empty Notes shelf in the sidebar is pure chrome — it adds a
-            border, a row of space, and an expand control that only reveals
-            a redirect hint. */}
+        {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <div className="border-b border-border">
             <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">
@@ -5765,10 +5649,7 @@ function SourceControlInner(): React.JSX.Element {
               />
             </div>
           )}
-          {/* Why: show operation banner when rebase/merge/cherry-pick is in progress
-              but there are no unresolved conflicts (e.g. between rebase steps, or
-              after resolving all conflicts before running --continue). The
-              ConflictSummaryCard handles the "has conflicts" case above. */}
+          {/* Why: show the operation banner when a rebase/merge/cherry-pick is in progress with no unresolved conflicts (the ConflictSummaryCard above handles the conflicts case). */}
           {unresolvedConflictReviewEntries.length === 0 && conflictOperation !== 'unknown' && (
             <div className="px-3 pb-2">
               <OperationBanner
@@ -5781,7 +5662,12 @@ function SourceControlInner(): React.JSX.Element {
 
           {repositoryHuge && (
             <div className="px-3 pb-2">
-              <TooManyChangesBanner limit={repositoryHuge.limit} />
+              {/* Why: a slow SSH retry must not keep the next worktree's Retry disabled after navigation. */}
+              <TooManyChangesBanner
+                key={activeWorktreeId}
+                limit={repositoryHuge.limit}
+                onRetry={refreshActiveGitStatus}
+              />
             </div>
           )}
 
@@ -5806,16 +5692,7 @@ function SourceControlInner(): React.JSX.Element {
             />
           )}
 
-          {/* Why: keep CommitArea mounted across normal source-control states.
-              The split-button primary rotates through Push / Pull / Sync /
-              Publish on a clean tree and disables Commit with a "Nothing to
-              commit" tooltip when nothing is staged — gating on
-              hasUncommittedEntries (added by #1448 for the older Commit-only
-              design) would unmount the whole action surface on clean
-              worktrees and tear it down mid-commit when the staged list
-              clears. Active merge/rebase/cherry-pick operations are the
-              exception: commits would be misleading before the user continues
-              or aborts the operation. */}
+          {/* Why: keep CommitArea mounted across normal states — gating on hasUncommittedEntries (#1448) would unmount the action surface on clean worktrees and mid-commit as the staged list clears. Active merge/rebase/cherry-pick is the exception. */}
           {activeWorktree?.pushTarget && activeWorktree.pushTarget.remoteName !== 'origin' ? (
             <div
               className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground"
@@ -5892,7 +5769,6 @@ function SourceControlInner(): React.JSX.Element {
                 groupId={activeGroupId ?? activeWorktreeId}
                 showComposer={!showGenericEmptyState}
                 sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-                aiEnabled={sourceControlAiActionsVisible && resolvedCommitMessageAi?.ok === true}
                 aiAgentConfigured={resolvedCommitMessageAi?.ok === true}
                 isGenerating={isGenerating}
                 generateError={generateError}
@@ -5929,14 +5805,8 @@ function SourceControlInner(): React.JSX.Element {
               {displaySections.map((section) => {
                 const { area, id, items } = section
                 const isCollapsed = collapsedSections.has(id)
-                // Why: "Stage all"/"Unstage all" operate on the *unfiltered*
-                // group for the area — acting on just the filter-visible subset
-                // would surprise users who don't realize a filter is active.
-                // The +/- is hidden when the filter is active to avoid that
-                // mismatch between what's shown and what would be staged.
-                // Why: visibility and execution both resolve paths through the
-                // same eligibility rules as the handlers so the button can
-                // never show for a set the handler would then filter to empty.
+                // Why: bulk stage/unstage act on the *unfiltered* group; the +/- hides while filtering to avoid acting on more than what's shown.
+                // Why: visibility and execution resolve paths via the same eligibility rules, so the button never shows for a set the handler would filter to empty.
                 const actionSection = unfilteredDisplaySectionsById.get(id) ?? section
                 const actionItems = actionSection.items
                 const stageAllPaths = actionItems
@@ -5962,24 +5832,12 @@ function SourceControlInner(): React.JSX.Element {
                       onToggle={() => toggleSection(id)}
                       actions={
                         <>
-                          {/* Why: bulk action buttons are hover-only on
-                              pointer devices to avoid cluttering the section
-                              header with persistent icons. On no-hover
-                              pointers (touch, and SSH sessions where hover
-                              state is unreliable — see AGENTS.md "SSH Use
-                              Case"), force them visible so they're reachable
-                              without tabbing. One outer wrapper so that
-                              focusing any action reveals all three siblings —
-                              otherwise keyboard users tab into an invisible
-                              next stop. */}
+                          {/* Why: bulk actions are hover-only, but forced visible on no-hover pointers (touch/SSH; see AGENTS.md "SSH Use Case"). One wrapper so focusing any action reveals all three (else keyboard tabs into an invisible stop). */}
                           <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
                             {canRevertAll && (
                               <ActionButton
                                 icon={area === 'untracked' ? Trash : Undo2}
-                                // Why: for untracked files, discard deletes the file
-                                // outright (rm -rf via git.discard's untracked branch).
-                                // A generic "Discard all" label hides that severity —
-                                // label explicitly for the destructive variant.
+                                // Why: for untracked files, discard deletes outright (rm -rf), so label the destructive variant explicitly.
                                 title={
                                   area === 'untracked'
                                     ? translate(
@@ -6301,9 +6159,7 @@ function SourceControlInner(): React.JSX.Element {
           )}
 
           {isGitHistoryVisible && (
-            // Why: the graph is reference context for the whole panel, so when
-            // file sections are short it should occupy the bottom, and when the
-            // pane scrolls it should remain docked as branch context.
+            // Why: the graph is reference context, so keep it docked at the bottom as the pane scrolls.
             <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
               <GitHistoryPanel
                 state={gitHistoryState}
@@ -6525,7 +6381,6 @@ type CommitAreaProps = {
   isCreatePrIntentInFlight?: boolean
   showComposer?: boolean
   sourceControlAiActionsVisible: boolean
-  aiEnabled: boolean
   aiAgentConfigured: boolean
   isGenerating: boolean
   generateError: string | null
@@ -6572,7 +6427,6 @@ export function CommitArea({
   isCreatePrIntentInFlight = false,
   showComposer = true,
   sourceControlAiActionsVisible,
-  aiEnabled,
   aiAgentConfigured,
   isGenerating,
   generateError,
@@ -6595,19 +6449,9 @@ export function CommitArea({
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
-  // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
-  // the Commit button off-screen. The textarea keeps `resize-none` (matching
-  // the existing style) — the browser scrolls internally past 12 rows.
+  // Why: cap at 12 rows so a pasted multi-page message doesn't push the Commit button off-screen (textarea scrolls internally past that).
   const rows = getCommitMessageTextareaRows(commitMessage)
-  // Why: only spin the primary when its label matches what's actually
-  // running. The commit-area resolver overrides the primary kind to mirror
-  // the in-flight op (e.g. user picks Sync from the dropdown → primary
-  // becomes "Sync"), so the equality check spins the button for any primary-
-  // eligible remote op the user triggered. Background ops the primary
-  // doesn't show (Fetch) leave primaryAction.kind unchanged and the
-  // mismatch keeps the spinner off — the disabled state alone is enough
-  // signal there. Commit still spins on isCommitting because that path
-  // doesn't go through inFlightRemoteOpKind.
+  // Why: only spin the primary when its label matches the running op; mismatched background ops (Fetch) keep it off. Commit spins via isCommitting instead.
   const primaryHostsRemoteOperation =
     primaryAction.kind === inFlightRemoteOpKind ||
     (primaryAction.kind === 'push' && inFlightRemoteOpKind === 'force_push')
@@ -6617,13 +6461,7 @@ export function CommitArea({
       : primaryAction.kind === 'commit'
         ? isCommitting
         : isRemoteOperationActive && primaryHostsRemoteOperation
-  // Why: when the primary doesn't host the in-flight op (e.g. Fetch, or any
-  // dropdown action that mismatches the primary's natural label) the click
-  // would otherwise be silent — the toast only fires on failure and a
-  // no-op fetch leaves status counts unchanged. Spinning the chevron gives
-  // the user immediate feedback that the action they picked is running,
-  // while still leaving the menu reachable to read the disabled-row
-  // tooltips.
+  // Why: spin the chevron when the primary doesn't host the in-flight op (e.g. Fetch), since the click is otherwise silent — no toast until failure, no count change on a no-op fetch.
   const showChevronSpinner =
     (isCommitting || isCreatingPr || isRemoteOperationActive) && !showSpinner
   const commitFailureSummary = useMemo(
@@ -6642,12 +6480,7 @@ export function CommitArea({
         : false,
     [commitError, commitFailureSummary]
   )
-  // Why: most primary-kind labels are anchored by a directional icon so
-  // the affirmative Commit (✓) reads distinctly from the remote-state
-  // labels sharing this slot — Push (↑), Sync (↕), Publish (☁︎↑). Pull is
-  // intentionally icon-less because the down-arrow read as a
-  // download/save affordance. The icon is decorative; the label and
-  // title attribute carry the meaning for assistive tech.
+  // Why: directional icons disambiguate the labels sharing this slot; Pull stays icon-less (down-arrow read as download). Icon is decorative — label/title carry a11y meaning.
   const PrimaryIcon = PRIMARY_ICONS[primaryAction.kind]
 
   const hasMessage = commitMessage.trim().length > 0
@@ -6670,31 +6503,23 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
-  // Why: only render Generate when it has a runnable path; otherwise the
-  // composer should stay focused on the normal Commit action.
-  // Why: Create PR intent owns message generation and surfaces status via the
-  // inline notice; a second composer spinner stacks on the primary spinner.
-  const showGenerate =
-    showComposer && aiEnabled && !isCreatePrIntentInFlight && (aiAgentConfigured || isGenerating)
-  let generateDisabledReason: string | undefined
+  // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
+  // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
+  const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
+  let generateTooltip: string | undefined
   if (isGenerating) {
-    generateDisabledReason = 'Generating commit message…'
+    generateTooltip = 'Generating commit message…'
   } else if (isCommitting) {
-    generateDisabledReason = 'Commit in progress…'
-  } else if (!aiAgentConfigured) {
-    generateDisabledReason = 'Pick an agent in Settings -> Git -> Source Control AI.'
+    generateTooltip = 'Commit in progress…'
   } else if (stagedCount === 0) {
-    generateDisabledReason = 'Stage at least one file to generate a message.'
+    generateTooltip = 'Stage at least one file to generate a message.'
   } else if (hasMessage) {
-    generateDisabledReason = 'Clear the message to regenerate.'
+    generateTooltip = 'Clear the message to regenerate.'
+  } else if (!aiAgentConfigured) {
+    generateTooltip = 'Pick an agent in Settings -> Git -> Source Control AI.'
   }
   const isGenerateDisabled =
-    !aiAgentConfigured ||
-    isGenerating ||
-    isCommitting ||
-    stagedCount === 0 ||
-    hasMessage ||
-    hasUnresolvedConflicts
+    isGenerating || isCommitting || stagedCount === 0 || hasMessage || hasUnresolvedConflicts
   const moreCommitAndRemoteActionsLabel = translate(
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
@@ -6763,21 +6588,15 @@ export function CommitArea({
               'Commit message'
             )}
             aria-describedby={describedBy || undefined}
-            // Why: reserve right padding so typed text does not slide under the
-            // absolute-positioned Generate icon in the top-right corner.
-            // Why: match Input surface tokens and pin disabled:border-input so
-            // Chromium's UA disabled styles don't wash out the field outline.
+            // Why: reserve right padding so text doesn't slide under the absolute-positioned Generate icon.
+            // Why: pin disabled:border-input so Chromium's UA disabled styles don't wash out the field outline.
             className={`mt-0.5 min-h-14 w-full resize-none appearance-none rounded-md border border-input bg-background shadow-xs px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:border-input disabled:bg-background disabled:text-foreground disabled:shadow-xs dark:bg-input/30 dark:disabled:bg-input/30 ${
               showGenerate ? 'pr-8' : ''
             }`}
           />
           {showGenerate &&
             (isGenerating ? (
-              // Why: while generating the icon doubles as the cancel affordance.
-              // Default state shows the spinning RefreshCw; on hover/focus we
-              // swap to a Square ("stop") with a destructive tint so the user
-              // sees that clicking will abort the run. Group/group-hover toggles
-              // keep this stateless on the React side.
+              // Why: while generating, the icon doubles as cancel — hover/focus swaps the spinner to a destructive Square via CSS group toggles (stateless in React).
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -6818,7 +6637,7 @@ export function CommitArea({
                       onGenerate()
                     }}
                     title={
-                      generateDisabledReason ??
+                      generateTooltip ??
                       translate(
                         'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
                         'ai commit msg'
@@ -6838,7 +6657,7 @@ export function CommitArea({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  {generateDisabledReason ??
+                  {generateTooltip ??
                     translate(
                       'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
                       'ai commit msg'
@@ -6848,17 +6667,12 @@ export function CommitArea({
             ))}
         </div>
       ) : null}
-      {/* Why: the current manual action + chevron sit together as a visual
-          split button so the edit → commit → push loop stays in a single
-          vertical band. The chevron exposes the full action surface without
-          forcing morphing labels to carry every possible intent. */}
+      {/* Why: action + chevron form one split button so the edit → commit → push loop stays in a single vertical band. */}
       <div
         className={cn(showComposer ? 'mt-1 flex items-stretch gap-1' : 'flex items-stretch gap-1')}
       >
         <div className="flex flex-1 items-stretch">
-          {/* Why: match the hosted-review action buttons in Checks
-              (size="xs", px-3 text-[11px]) so the sidebar has a consistent
-              action-button shape across Source Control and Checks. */}
+          {/* Why: match the Checks hosted-review buttons so action-button shape is consistent across Source Control and Checks. */}
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="flex flex-1">
@@ -6895,11 +6709,7 @@ export function CommitArea({
                       size="xs"
                       className={cn(
                         'rounded-l-none border-l border-border px-1.5 shrink-0',
-                        // Why: mirror the primary's disabled dimming so the split
-                        // button reads as one unit when Commit is unavailable. The
-                        // chevron itself stays clickable — its dropdown exposes
-                        // independently-gated remote actions (push / fetch / pull)
-                        // that are still valid when the primary is disabled.
+                        // Why: mirror the primary's disabled dimming for a unified look, but the chevron stays clickable (its push/fetch/pull stay valid when Commit is disabled).
                         primaryAction.disabled && 'opacity-50'
                       )}
                       aria-label={moreCommitAndRemoteActionsLabel}
@@ -7006,8 +6816,7 @@ export function CommitArea({
               : 'text-muted-foreground'
           )}
         >
-          {/* Why: Create Review blockers carry recovery steps; truncating them hides
-          the action the user needs in the default narrow sidebar. */}
+          {/* Why: Create Review blockers carry recovery steps; truncating hides the action the user needs in a narrow sidebar. */}
           <span className="min-w-0 flex-1 break-words leading-4 [overflow-wrap:anywhere]">
             {createPrIntentNotice.message}
           </span>
@@ -7284,10 +7093,7 @@ function SectionHeader({
   onToggle: () => void
   actions?: React.ReactNode
 }): React.JSX.Element {
-  // Why: wrap the toggle button and actions in a shared rounded container
-  // so the hover background spans the entire row instead of clipping around
-  // the label. The outer div keeps the vertical spacing that separates
-  // sections; the inner wrapper owns the hover rectangle.
+  // Why: shared rounded container so the hover background spans the whole row instead of clipping around the label.
   return (
     <div className="pl-1 pr-3 pt-3 pb-1">
       <div className="group/section flex items-center rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
@@ -7361,13 +7167,10 @@ function DiffCommentsInlineList({
   comments: DiffComment[]
   onDelete: (commentId: string) => void
   onClearFile: (filePath: string) => void
-  // Why: clicking the note row navigates the user to that file's diff (or
-  // editor as a fallback) and, when a `commentId` is supplied, scrolls the
-  // diff to that specific note via the scrollToDiffCommentId UI slice.
+  // Why: opens the comment's file diff (or editor fallback), scrolling to the note via scrollToDiffCommentId when an id is given.
   onOpen: (comment: DiffComment) => void
 }): React.JSX.Element {
-  // Why: group by filePath so the inline list mirrors the structure in the
-  // Notes tab — a compact section per file with line-number prefixes.
+  // Why: group by filePath so the inline list mirrors the Notes tab's per-file sections.
   const groups = useMemo(() => {
     const map = new Map<string, DiffComment[]>()
     for (const c of comments) {
@@ -7454,12 +7257,7 @@ function DiffCommentsInlineList({
               >
                 <button
                   type="button"
-                  // Why: a single inner button is the click/keyboard target so
-                  // the row's action buttons (copy/delete) can stay as
-                  // siblings without nesting interactive elements — that
-                  // pattern violates ARIA's no-interactive-descendants rule
-                  // for buttons and lets bubbled key events from the children
-                  // fire the row's open handler.
+                  // Why: single inner target keeps copy/delete as siblings, not nested interactive elements (violates ARIA no-interactive-descendants).
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
                   onClick={() => onOpen(c)}
                   title={translate(
@@ -7610,8 +7408,7 @@ export function ConflictSummaryCard({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            // Why: abort is the escape hatch for this state, so match the quiet
-            // outline conflict-review action instead of reading as destructive.
+            // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
             variant="outline"
             size="sm"
             className="mt-1.5 h-7 w-full text-xs"
@@ -7629,11 +7426,7 @@ export function ConflictSummaryCard({
   )
 }
 
-// Why: this banner is separate from ConflictSummaryCard because a rebase (or
-// merge/cherry-pick) can be in progress without any conflicts — e.g. between
-// rebase steps, or after resolving all conflicts but before --continue. The
-// user needs to see the operation state so they know the worktree is mid-rebase
-// and that they should run `git rebase --continue` or `--abort`.
+// Why: separate from ConflictSummaryCard because a rebase/merge/cherry-pick can be in progress with no conflicts (between steps, or resolved but pre-continue).
 export function OperationBanner({
   conflictOperation,
   isAbortingOperation = false,
@@ -7663,8 +7456,7 @@ export function OperationBanner({
       {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
         <Button
           type="button"
-          // Why: abort is the escape hatch for this state, so match the quiet
-          // outline conflict-review action instead of reading as destructive.
+          // Why: abort is the escape hatch, so use the quiet outline action instead of reading as destructive.
           variant="outline"
           size="sm"
           className="mt-2 h-7 w-full text-xs"
@@ -7681,18 +7473,89 @@ export function OperationBanner({
   )
 }
 
-export function TooManyChangesBanner({ limit }: { limit: number }): React.JSX.Element {
+export function TooManyChangesBanner({
+  limit,
+  onRetry
+}: {
+  limit: number
+  onRetry: (signal: AbortSignal) => Promise<void>
+}): React.JSX.Element {
+  const [isRetrying, setIsRetrying] = useState(false)
+  const [showSpinner, setShowSpinner] = useState(false)
+  const retryControllerRef = useRef<AbortController | null>(null)
+  const isMountedRef = useRef(false)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      retryControllerRef.current?.abort()
+    }
+  }, [])
+  useEffect(() => {
+    if (!isRetrying) {
+      setShowSpinner(false)
+      return
+    }
+    const timer = window.setTimeout(() => setShowSpinner(true), 1_000)
+    return () => window.clearTimeout(timer)
+  }, [isRetrying])
+
+  const handleRetry = async (): Promise<void> => {
+    if (isRetrying) {
+      return
+    }
+    const controller = new AbortController()
+    retryControllerRef.current = controller
+    const timeout = window.setTimeout(() => controller.abort(), CAPPED_STATUS_RETRY_TIMEOUT_MS)
+    setIsRetrying(true)
+    try {
+      await onRetry(controller.signal)
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return
+      }
+      // Why: a failed local/SSH retry must leave the capped warning usable
+      // instead of becoming an unhandled click rejection.
+      console.warn('[SourceControl] capped status retry failed', error)
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.SourceControl.97e7124eac',
+          'Could not refresh Source Control. Try again.'
+        )
+      )
+    } finally {
+      window.clearTimeout(timeout)
+      if (retryControllerRef.current === controller) {
+        retryControllerRef.current = null
+      }
+      if (isMountedRef.current) {
+        setIsRetrying(false)
+      }
+    }
+  }
+
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
       <div className="flex items-center gap-2">
         <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="text-xs text-foreground">
+        <span className="min-w-0 flex-1 text-xs text-foreground">
           {translate(
             'auto.components.right.sidebar.SourceControl.tooManyChanges',
             'Too many changes detected. Only the first {{value0}} are shown.',
             { value0: limit.toLocaleString() }
           )}
         </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="w-24 shrink-0 text-xs"
+          disabled={isRetrying}
+          onClick={() => void handleRetry()}
+        >
+          {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
+          {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+        </Button>
       </div>
     </div>
   )
@@ -7719,8 +7582,7 @@ function SourceControlTreeDirectoryRow({
   onStagePaths: (paths: readonly string[]) => Promise<void>
   onUnstagePaths: (paths: readonly string[]) => Promise<void>
 }): React.JSX.Element {
-  // Why: filtered tree nodes only contain visible descendants. Folder-wide
-  // bulk labels would overpromise if they acted on that filtered subset.
+  // Why: filtered tree nodes only contain visible descendants, so folder-wide bulk labels would overpromise on the subset.
   const canStage = !hideBulkActions && actionPaths.stagePaths.length > 0
   const canUnstage = !hideBulkActions && actionPaths.unstagePaths.length > 0
   const canDiscard = !hideBulkActions && actionPaths.discardPaths.length > 0
@@ -7847,9 +7709,7 @@ function SourceControlBranchTreeDirectoryRow({
   )
 }
 
-// Why: a compact +added/-removed magnitude lets users gauge change size at a
-// glance. Use git decoration tokens so the source-control sidebar follows the
-// documented light/dark status palette.
+// Why: use git decoration tokens so counts follow the documented light/dark status palette.
 function DiffLineCounts({
   added,
   removed
@@ -7877,7 +7737,7 @@ function SubmodulePlaceholderRow({
   message
 }: {
   depth: number
-  state: 'loading' | 'empty' | 'error'
+  state: 'loading' | 'empty' | 'error' | 'truncated'
   message?: string
 }): React.JSX.Element {
   const fallback =
@@ -7885,7 +7745,12 @@ function SubmodulePlaceholderRow({
       ? SUBMODULE_ERROR_LABEL
       : state === 'empty'
         ? SUBMODULE_EMPTY_LABEL
-        : SUBMODULE_LOADING_LABEL
+        : state === 'truncated'
+          ? translate(
+              'auto.components.right.sidebar.SourceControl.submoduleTruncated',
+              'More submodule changes were omitted'
+            )
+          : SUBMODULE_LOADING_LABEL
   return (
     <div
       className={cn(
@@ -7939,8 +7804,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onDiscard: (entry: GitStatusEntry) => void
   commentCount: number
   showPathHint?: boolean
-  // When set, the row is a dirty submodule: clicking toggles lazy expansion of
-  // its inner changes instead of opening a (uninformative) gitlink diff.
+  // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
   const FileIcon = getFileTypeIcon(entry.path)
@@ -7952,22 +7816,11 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const conflictLabel = entry.conflictKind
     ? getLocalizedConflictKindLabel(entry.conflictKind)
     : null
-  // Why: the hint text ("Open and edit…", "Decide whether to…") was removed
-  // from the sidebar because it's not actionable here — the user can only
-  // click the row, and the conflict-kind label alone is sufficient context.
-  // Why: Stage is suppressed for unresolved conflicts because `git add` would
-  // immediately erase the `u` record — the only live conflict signal in the
-  // sidebar — before the user has actually reviewed the file. The user should
-  // resolve in the editor first, then stage from the post-resolution state.
-  //
-  // Discard is hidden for both unresolved AND resolved_locally rows in v1.
-  // For unresolved: discarding is too easy to misfire on a high-risk file.
-  // For resolved_locally: discarding can silently re-create the conflict or
-  // lose the resolution, and v1 does not have UX to explain this clearly.
+  // Why: Stage is suppressed for unresolved conflicts because `git add` erases the `u` record (the only live conflict signal) before review.
+  // Why: Discard is hidden for unresolved (too easy to misfire) and resolved_locally (can silently re-create the conflict or lose the resolution) rows in v1.
   const canDiscard = canDiscardStatusEntry(entry)
   const canStage = canStageStatusEntry(entry)
-  // Why: a submodule-internal staged row is read-only from the parent worktree,
-  // so the parent repo's Unstage must not be offered (mirrors bulk unstage).
+  // Why: a submodule-internal staged row is read-only from the parent worktree, so don't offer Unstage (mirrors bulk unstage).
   const canUnstage = canUnstageStatusEntry(entry)
 
   return (
@@ -7987,9 +7840,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-testid="source-control-entry"
         data-source-control-path={entry.path}
         data-source-control-area={entry.area}
-        // Why: the currently open file gets the strongest "current row" accent
-        // (full `bg-accent` + `data-current`) per the styleguide, outranking the
-        // lighter bulk-selection tint so the open file always reads as active.
+        // Why: open file gets the strongest accent, outranking the bulk-selection tint so it always reads as active.
         data-current={isOpenFile ? 'true' : undefined}
         className={cn(
           'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
@@ -8011,8 +7862,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         }}
         onClick={(e) => {
           if (submoduleExpansion) {
-            // Why: a double-click emits two click events; without this guard it
-            // expands and immediately collapses the submodule row.
+            // Why: a double-click emits two click events; without this guard it expands then immediately collapses.
             if (e.detail > 1) {
               return
             }
@@ -8052,8 +7902,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
           )}
           {isSubmoduleWorktreeOnly && (
-            // Why: parent git can stage a changed gitlink, but not nested
-            // worktree dirtiness. Keep that boundary visible in the row.
+            // Why: parent git stages the changed gitlink but not nested worktree dirtiness; keep that boundary visible.
             <div
               className="truncate text-[11px] text-muted-foreground"
               title={SUBMODULE_WORKTREE_ONLY_TOOLTIP}
@@ -8063,9 +7912,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           )}
         </div>
         {commentCount > 0 && (
-          // Why: show a small note marker on any row that has diff notes
-          // so the user can tell at a glance which files have review notes
-          // attached, without opening the Notes tab.
+          // Why: surface a per-row marker so files with review notes are visible without opening the Notes tab.
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
             title={translate(
@@ -8305,22 +8152,9 @@ export function ActionButton({
   onClick: (event: React.MouseEvent) => void
   disabled?: boolean
 }): React.JSX.Element {
-  // Why: use the Radix Tooltip instead of the native `title` attribute so the
-  // label matches the rest of the sidebar chrome (consistent styling, no OS
-  // delay quirks, dismissible on pointer leave).
-  //
-  // Why (no local TooltipProvider): the app root mounts a single
-  // TooltipProvider (see App.tsx); nesting another one here gives this subtree
-  // its own delay-timing state and breaks Radix's "skip the open delay when
-  // moving between adjacent tooltip triggers" handoff between sibling action
-  // buttons in the section header.
-  //
-  // Why (disabled handling): Radix's TooltipTrigger asChild on a disabled
-  // <button> gets pointer-events blocked in Chromium, which suppresses the
-  // tooltip entirely — a regression vs. the native `title` attribute it
-  // replaced. We keep the button interactive and rely on the caller's
-  // `isExecutingBulk` early-return to no-op the click during bulk ops;
-  // `aria-disabled` + visual dimming preserves the disabled affordance.
+  // Why: use Radix Tooltip (not native title) to match sidebar chrome.
+  // Why (no local TooltipProvider): reuse App.tsx's single one so Radix's adjacent-trigger delay-skip handoff still works.
+  // Why (disabled): a disabled <button> loses pointer-events in Chromium and hides the Radix tooltip; keep it interactive and no-op via the caller's isExecutingBulk early-return.
   return (
     <Tooltip>
       <TooltipTrigger asChild>

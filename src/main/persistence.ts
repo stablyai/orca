@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: persistence keeps schema defaults, migration,
-load/save, and flush logic in one file so the full storage contract is reviewable
-as a unit instead of being scattered across modules. */
+/* eslint-disable max-lines -- Why: persistence keeps schema defaults, migration, and load/save/flush in one file so the storage contract reviews as a unit. */
 import { app, safeStorage } from 'electron'
 import {
   readFileSync,
@@ -105,6 +103,7 @@ import {
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
@@ -172,6 +171,7 @@ import {
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import { normalizeManualRepoOrder } from '../shared/manual-repo-order'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardColumnWidth,
@@ -216,6 +216,7 @@ import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-sett
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
+import { ActiveViewPreference } from './active-view-preference'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
@@ -257,18 +258,12 @@ function decrypt(ciphertext: string): string {
   try {
     return safeStorage.decryptString(Buffer.from(ciphertext, 'base64'))
   } catch {
-    // Why: if decryption fails, it likely means the value was stored as
-    // plaintext (pre-encryption build) or the OS keychain changed. Fall
-    // back to the raw string so users don't lose their cookie after upgrade.
+    // Why: decrypt failure usually means plaintext (pre-encryption) or a changed keychain; return raw so the cookie survives upgrade.
     console.warn(
       '[persistence] safeStorage decryption failed — returning ciphertext as-is. Possible keychain reset.'
     )
     return ciphertext
   }
-}
-
-function encryptOptionalSecret(value: string | null | undefined): string | null {
-  return value ? encrypt(value) : null
 }
 
 function decryptOptionalSecret(value: string | null | undefined): string | null {
@@ -307,8 +302,7 @@ function retireLegacyInstructionsForClearedTextActionRecipes(
     if (instructionsByOperation?.[actionId] === '') {
       continue
     }
-    // Why: `{basePrompt}` is the explicit clear state; an empty instruction
-    // shadows rollback `commitMessageAi.customPrompt` during normalize/project.
+    // Why: {basePrompt} is the explicit clear state; an empty instruction shadows rollback commitMessageAi.customPrompt on normalize/project.
     instructionsByOperation = { ...instructionsByOperation, [actionId]: '' }
     changed = true
   }
@@ -316,19 +310,8 @@ function retireLegacyInstructionsForClearedTextActionRecipes(
   return changed ? { ...sourceControlAi, instructionsByOperation } : sourceControlAi
 }
 
-// Why: the data-file path must not be a module-level constant. Module-level
-// code runs at import time — before configureDevUserDataPath() redirects the
-// userData path in index.ts — so a constant would capture the default (non-dev)
-// path, causing dev and production instances to share the same file and silently
-// overwrite each other.
-//
-// It also must not be resolved lazily on every call, because app.setName('Orca')
-// runs before the Store constructor and would change the resolved path from
-// lowercase 'orca' to uppercase 'Orca'. On case-sensitive filesystems (Linux)
-// this would look in the wrong directory and lose existing user data.
-//
-// Solution: index.ts calls initDataPath() right after configureDevUserDataPath()
-// but before app.setName(), capturing the correct path at the right moment.
+// Why capture once (not a module const, not per-call): a const resolves before configureDevUserDataPath() redirects userData (dev/prod collide);
+// per-call resolves after app.setName('Orca') flips path case and loses data on case-sensitive FS. index.ts calls initDataPath() at the right moment.
 let _dataFile: string | null = null
 let _userDataDir: string | null = null
 
@@ -348,38 +331,25 @@ function getDataFile(): string {
   return _dataFile
 }
 
-// Why a sidecar: githubCache is a refetchable 5-min-TTL poll cache whose
-// fetchedAt stamps change on every refresh — keeping it inside orca-data.json
-// made every poll cycle rewrite the whole multi-MB durable state (defeating
-// the content-hash guard by design). It lives in memory during the session
-// and is snapshotted here best-effort at quit so PR/issue badges still paint
-// instantly on the next launch. Loss of this file costs nothing.
+// Why a sidecar: githubCache refreshes every poll and would rewrite the whole multi-MB orca-data.json each cycle.
+// Snapshotted best-effort at quit for instant badges next launch; safe to lose.
 function getGithubCacheFile(dataFile = getDataFile()): string {
   return join(dirname(dataFile), 'orca-github-cache.json')
 }
 
-// Why: worktrees deleted outside Orca (git CLI worktree remove, rm -rf,
-// agent scripts) purge renderer session state but nothing removed their
-// worktreeMeta, so the map grew monotonically (63% dead entries measured on
-// a heavy install). GC is deliberately narrow: local-host entries only
-// (SSH/runtime metas embed remote paths a local existsSync would falsely
-// condemn; WSL UNC paths are skipped the same way), and only after a
-// 30-day idle grace so pushTarget cleanup for recently-vanished worktrees
-// and quick recreations keep their metadata.
+// Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
+// GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
 const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
 
 function gcStaleWorktreeMeta(state: PersistedState): number {
-  // Why: a hand-corrupted file with `"worktreeMeta": null` overrides the
-  // defaults merge; normalize instead of throwing outside the parse guard.
+  // Why: a hand-corrupted "worktreeMeta": null overrides the defaults merge; normalize here instead of throwing.
   state.worktreeMeta ??= {}
   const repoById = new Map(state.repos.map((repo) => [repo.id, repo]))
   const projectIds = new Set((state.projects ?? []).map((project) => project.id))
   const now = Date.now()
   let removed = 0
   for (const key of Object.keys(state.worktreeMeta)) {
-    // Why: folder-project workspace instances are keyed
-    // `repoId::path::workspace:<uuid>` and their meta IS the workspace
-    // record — never a filesystem-checkout row. Skip them entirely.
+    // Why: folder-project workspace instances (keyed repoId::path::workspace:<uuid>) ARE the workspace record, not a checkout row; skip them.
     if (key.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)) {
       continue
     }
@@ -396,29 +366,22 @@ function gcStaleWorktreeMeta(state: PersistedState): number {
         continue
       }
     } else if (projectIds.has(ownerId)) {
-      // Project-owned metas keep project/host semantics on the entry itself;
-      // stay conservative and leave them to their own lifecycle.
+      // Project-owned metas keep their own project/host lifecycle; leave them alone.
       continue
     }
-    // Unowned entries (repo removed before removeProject pruned metas) fall
-    // through to the same missing-path + idle-grace gate.
+    // Unowned entries (repo removed before metas were pruned) fall through to the same missing-path + idle-grace gate.
     if (meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) {
       continue
     }
     if (!isAbsolute(worktreePath) || isWslUncPath(worktreePath)) {
       continue
     }
-    // Why: WSL linked worktrees on Windows carry Linux-style paths from git
-    // porcelain; a Windows existsSync cannot probe those and would falsely
-    // condemn live worktrees.
+    // Why: WSL worktrees on Windows carry Linux-style paths that Windows existsSync can't probe and would falsely condemn.
     if (process.platform === 'win32' && !isWindowsAbsolutePathLike(worktreePath)) {
       continue
     }
-    // Why keep timestamp-less entries: without lastActivityAt/createdAt we
-    // cannot prove the 30-day idle grace elapsed; the measured dead entries
-    // all carry timestamps, so this costs almost nothing in reclaimed bytes.
-    // Grace runs before the stat so healthy profiles skip the existsSync
-    // fan-out (and its slow-NFS tail) for active entries entirely.
+    // Why keep timestamp-less entries: without timestamps we can't prove the 30-day grace elapsed (measured dead entries all had them).
+    // Grace is checked before existsSync so active entries skip the stat fan-out (and its slow-NFS tail).
     const newestTouch = Math.max(meta?.lastActivityAt ?? 0, meta?.createdAt ?? 0)
     if (newestTouch === 0 || now - newestTouch < WORKTREE_META_GC_GRACE_MS) {
       continue
@@ -453,13 +416,9 @@ function readGithubCacheSnapshot(dataFile: string): PersistedState['githubCache'
 }
 
 /**
- * Return the userData directory captured at initDataPath() time, before
- * app.setName() can change how app.getPath('userData') resolves.
+ * Return the userData directory captured at initDataPath() time, before app.setName() can change how app.getPath('userData') resolves.
  *
- * Subsystems that must share storage with orca-data.json (mobile pairing's
- * DeviceRegistry, E2EE keypair, runtime metadata) read this instead of
- * resolving the path late, which on case-sensitive filesystems can land in a
- * different directory and lose paired devices across restarts/updates.
+ * Subsystems sharing storage with orca-data.json read this instead of resolving late, which on case-sensitive FS can lose paired devices.
  */
 export function getCanonicalUserDataPath(): string {
   if (!_userDataDir) {
@@ -472,10 +431,7 @@ export function getCanonicalUserDataPath(): string {
 /**
  * Copy legacy mobile pairing credentials into the canonical userData directory.
  *
- * Existing installs may already have credentials in the late app.getPath('userData')
- * directory. Before switching the runtime server to the canonical path, copy the
- * registry and E2EE keypair forward as a pair so an update does not force one
- * last re-pair or mix devices with the wrong key.
+ * Copies the registry and E2EE keypair forward as a pair so an update doesn't force a re-pair or mix devices with the wrong key.
  */
 export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDir: string): void {
   const targetUserDataDir = getCanonicalUserDataPath()
@@ -497,16 +453,12 @@ export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDi
   mkdirSync(targetUserDataDir, { recursive: true })
   for (const { sourcePath, targetPath } of migrations) {
     copyFileSync(sourcePath, targetPath)
-    // Why: these are credential files (device tokens, E2EE secret key). copyFileSync
-    // does not carry Windows ACLs, so re-assert the current-user-only restriction on
-    // the copy instead of relying on the runtime's later lazy re-harden on read.
+    // Why: copyFileSync drops Windows ACLs, so re-assert current-user-only on these credential copies (device tokens, E2EE key).
     hardenExistingSecureFile(targetPath)
   }
 }
 
-// Why (issue #1158): keep 5 rolling backups of orca-data.json so a corrupt or
-// empty write leaves at least one earlier copy recoverable. Five snapshots at
-// >=1-hour spacing cover recent work without churning disk on every debounce.
+// Why (issue #1158): keep 5 rolling backups at >=1h spacing so a corrupt/empty write leaves an earlier copy recoverable.
 const BACKUP_COUNT = 5
 const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
 const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceSessionState>([
@@ -529,11 +481,8 @@ function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatc
   )
 }
 
-/** Normalize the persisted non-'local' host partitions. 'local' is intentionally
- *  dropped here — it is the legacy workspaceSession blob — so the two surfaces
- *  never diverge. Each partition is zod-validated independently: a corrupt host
- *  drops to defaults without taking out the others. Idempotent: re-running on an
- *  already-normalized map yields the same shape. */
+/** Normalize non-'local' host partitions; 'local' (the legacy workspaceSession blob) is dropped so the two surfaces never diverge.
+ *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
 function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState
@@ -544,8 +493,7 @@ function parseWorkspaceSessionsByHostId(
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
-    // Why: 'local' belongs in workspaceSession; an invalid/local key here is
-    // legacy noise and must not shadow the canonical local partition.
+    // Why: 'local' lives in workspaceSession; a local/invalid key here is legacy noise that must not shadow the canonical partition.
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue
     }
@@ -704,8 +652,7 @@ function migrateAgentYoloDefaults(
   }
 
   return {
-    // Why: legacy users could only customize per-agent launch defaults via
-    // command overrides, so those agents are treated as already user-owned.
+    // Why: legacy users could only customize launch defaults via command overrides, so those agents count as already user-owned.
     agentDefaultArgs: migratedArgs,
     agentDefaultEnv: migratedEnv,
     agentYoloDefaultsMigrated: true
@@ -1090,8 +1037,7 @@ function backfillLegacyAutomationContexts(
     )
     const next: Automation = { ...automation }
     if (!Object.hasOwn(next, 'runContext')) {
-      // Why: pre-host-context automations only stored a repo id. Backfill the
-      // explicit run target once so dispatch/precheck no longer infer it later.
+      // Why: pre-host-context automations only stored a repo id; backfill the run target once so dispatch/precheck stop inferring it.
       next.runContext = contexts.runContext
       changed = true
     }
@@ -1144,22 +1090,19 @@ type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncGracePeriodSeconds?: unknown
 }
 
-// Why: old persisted targets predate configHost. Default to label-based lookup
-// so imported SSH aliases keep resolving through ssh -G after upgrade.
+// Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
 function normalizeSshTarget(t: SshTarget): SshTarget {
   const target = { ...(t as LegacySshTarget) }
   const legacySyncEnabled = target.remoteWorkspaceSyncEnabled
   const currentGracePeriodSeconds = target.relayGracePeriodSeconds
   const legacyGracePeriodSeconds = target.remoteWorkspaceSyncGracePeriodSeconds
   const systemSshConnectionReuse = target.systemSshConnectionReuse
-  // Why: remote workspace sync now follows the SSH relay lifecycle, so the
-  // retired per-target sync opt-out and grace-period fields stop at disk load.
+  // Why: remote sync now follows the SSH relay lifecycle, so retired per-target sync/grace fields are dropped at disk load.
   delete target.remoteWorkspaceSyncEnabled
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
-  // Why: synced legacy targets ignored stale relayGracePeriodSeconds values.
-  // Prefer the synced grace so a user's "unlimited" (0) survives migration.
+  // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
       ? legacyGracePeriodSeconds
@@ -1168,8 +1111,7 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
-  // Why: the old SSH form eagerly persisted 10800 even when the user had not
-  // chosen a timeout; treat that legacy default as the new implicit default.
+  // Why: old SSH form persisted 10800 even without a user choice; treat that legacy default as the new implicit default.
   if (
     relayGracePeriodSeconds !== undefined &&
     relayGracePeriodSeconds !== LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -1182,14 +1124,7 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   return normalized
 }
 
-// Why: shared by load-time merge and the IPC update handler so the same
-// strict whitelist guards every entry into onboarding state — arbitrary
-// renderer/disk input cannot inject unknown keys or wrong-typed values.
-// Returns only validated fields; unknown keys are dropped silently.
-// Why: returns Partial<...> with a partial checklist so the IPC update path
-// merges over current state without wiping previously-true keys. Invalid
-// top-level fields are OMITTED (not coerced to fallbacks) so partial updates
-// don't clobber valid persisted state; the load-path caller spreads defaults.
+// Why: strict whitelist rejects unknown/bad-typed keys; returns Partial so partial updates don't clobber valid persisted state.
 type SanitizeOnboardingUpdateOptions = {
   migrateLegacyProgress?: boolean
 }
@@ -1201,14 +1136,11 @@ function remapLegacyOnboardingLastCompletedStep(
   if (raw.outcome === 'completed' && lastCompletedStep >= 4) {
     return ONBOARDING_FINAL_STEP
   }
-  // Why: v3 was the four-step flow before the Windows terminal preference
-  // page. Step 4 already meant notifications, so open progress should resume
-  // there rather than treating it as the newly inserted Windows step.
+  // Why: v3 (pre-Windows-terminal-page) step 4 already meant notifications, so resume there, not the inserted Windows step.
   if (raw.flowVersion === 3) {
     return Math.min(4, lastCompletedStep)
   }
-  // Why: v2 was the five-step flow; missing/older versions were seven-step
-  // data where step 4 was removed agent setup, not completed integrations.
+  // Why: v2's five-step flow had step 4 = removed agent setup, not completed integrations.
   if (raw.flowVersion === 2) {
     if (lastCompletedStep === 3) {
       return 2
@@ -1243,10 +1175,7 @@ export function sanitizeOnboardingUpdate(
   } = {}
 
   if ('closedAt' in raw) {
-    // Why: `typeof raw.closedAt === 'number'` would let NaN/Infinity through;
-    // JSON.stringify writes those as `null` on save, which silently reverts
-    // closedAt and re-opens the wizard on next load. Require a finite,
-    // non-negative timestamp so live state matches what disk can persist.
+    // Why: NaN/Infinity serialize to null on save, reverting closedAt and reopening the wizard; require a finite timestamp.
     if (typeof raw.closedAt === 'number' && Number.isFinite(raw.closedAt) && raw.closedAt >= 0) {
       out.closedAt = raw.closedAt
     } else if (raw.closedAt === null) {
@@ -1275,8 +1204,7 @@ export function sanitizeOnboardingUpdate(
     if (typeof v === 'number' && Number.isInteger(v) && v >= -1) {
       const isLegacyFlow =
         options.migrateLegacyProgress && raw.flowVersion !== ONBOARDING_FLOW_VERSION
-      // Why: removing two wizard pages changed numeric meanings. Migrate raw
-      // legacy disk values before the new final-step bound can drop them.
+      // Why: removing two wizard pages changed step numbering; migrate legacy values before the final-step bound drops them.
       const normalized = isLegacyFlow ? remapLegacyOnboardingLastCompletedStep(v, raw) : v
       if (normalized <= ONBOARDING_FINAL_STEP) {
         out.lastCompletedStep = normalized
@@ -1287,8 +1215,7 @@ export function sanitizeOnboardingUpdate(
   if ('checklist' in raw) {
     const rawChecklist = raw.checklist
     if (rawChecklist && typeof rawChecklist === 'object' && !Array.isArray(rawChecklist)) {
-      // Why: copy ONLY caller-sent boolean keys so partial updates (e.g.
-      // `{ addedRepo: true }`) don't reset other checklist items to false.
+      // Why: copy ONLY caller-sent boolean keys so partial updates don't reset other checklist items to false.
       const defaults = getDefaultOnboardingState().checklist
       const rc = rawChecklist as Record<string, unknown>
       const checklist: Partial<OnboardingChecklistState> = {}
@@ -1310,12 +1237,7 @@ function normalizeLoadedOnboardingState(
   input: unknown,
   defaults: OnboardingState
 ): OnboardingState {
-  // Why: if we successfully parsed an existing orca-data.json that lacks an
-  // onboarding block, this is an upgrade-cohort user — backfill as completed
-  // (not dismissed) so they don't get dropped into the wizard regardless of
-  // whether they currently have repos, SSH targets, or just non-default
-  // settings. Analytics still distinguish this from users who explicitly
-  // bailed mid-funnel.
+  // Why: an existing file with no onboarding block is an upgrade user; backfill as completed so they skip the wizard.
   if (!input) {
     return {
       ...defaults,
@@ -1324,16 +1246,11 @@ function normalizeLoadedOnboardingState(
       lastCompletedStep: ONBOARDING_FINAL_STEP
     }
   }
-  // Why: validate every persisted onboarding key explicitly via the shared
-  // sanitizer instead of spreading raw values. A type-flipped field on disk
-  // (string where number expected, unknown checklist key) is dropped or
-  // coerced to the default rather than poisoning in-memory state.
+  // Why: sanitize persisted onboarding keys so a type-flipped field on disk can't poison in-memory state.
   const sanitized = sanitizeOnboardingUpdate(input, {
     migrateLegacyProgress: true
   })
-  // Why: a persisted completed/dismissed outcome means the user left
-  // onboarding. Recover from a bad/missing/null closedAt instead of reopening
-  // the new-user sidebar checklist.
+  // Why: a completed/dismissed outcome means the user left; recover a bad closedAt instead of reopening the checklist.
   const recoveredClosedAt =
     typeof sanitized.closedAt === 'number'
       ? sanitized.closedAt
@@ -1355,13 +1272,11 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   persistedDismissed: unknown,
   onboarding: OnboardingState
 ): boolean {
-  // Why: the sidebar checklist is a new-user prompt. Once onboarding is
-  // closed, persisted false is just the old default value, not a user opt-in.
+  // Why: once onboarding is closed, persisted false is just the old default, not a user opt-in to the sidebar checklist.
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
-// Why: read a settings field that was removed from GlobalSettings but can
-// still exist on disk. One-shot use for the inline-agents migration.
+// Why: read a settings field removed from GlobalSettings but still on disk; one-shot for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
   return (
     (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
@@ -1756,8 +1671,7 @@ function collectMigrationUnsupportedPtyEntries(args: {
     if (!numeric) {
       return false
     }
-    // Why: persisted PaneManager ids are 1-based. A zero-based alias in split
-    // layouts would make tab:1 ambiguous and can route the first pane to the second.
+    // Why: PaneManager ids are 1-based; a zero-based alias in split layouts makes tab:1 ambiguous and misroutes panes.
     const legacyPaneKey = `${args.tabId}:${numeric}`
     agentHookServer.registerPaneKeyAlias(legacyPaneKey, paneKey, ptyId)
     registeredLegacyPaneKeys.add(legacyPaneKey)
@@ -1808,9 +1722,7 @@ function collectMigrationUnsupportedPtyEntries(args: {
       }
     }
   }
-  // Why: legacy numeric pane keys are now bridged by aliases instead of
-  // persisted as restart-required rows. Existing saved rows are pruned during
-  // normalizePersistedPaneIdentityState.
+  // Why: legacy numeric pane keys are now bridged by aliases, not persisted as restart-required rows.
   return { migrationUnsupportedEntries: [], legacyPaneKeyAliasEntries }
 }
 
@@ -1837,9 +1749,7 @@ function legacyMigrationUnsupportedRowsToAliasEntries(
     if (!entry.paneKey) {
       continue
     }
-    // Why: pre-stable dev/RC migration rows did not store the old numeric
-    // key. Only synthesize the single-pane aliases when the row is unambiguous
-    // for its tab; split rows need layout-derived aliases instead of a guess.
+    // Why: pre-stable rows lack the old numeric key; only synthesize single-pane aliases when the row is unambiguous.
     for (const legacyPaneKey of [`${tabId}:0`, `${tabId}:1`]) {
       aliasEntries.push({
         ptyId: entry.ptyId,
@@ -1880,8 +1790,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
         ? preferredLayout.expandedLeafId
         : null)
     inputSnapshot = { ...inputSnapshot, root, activeLeafId, expandedLeafId }
-    // Why: a debounced renderer writer can still hold the createTab-era empty
-    // layout after persistPtyBinding has already sync-flushed the UUID root.
+    // Why: a debounced renderer writer can still hold the createTab-era empty layout after the UUID root was sync-flushed.
     changed = true
   }
   const inputRoot = inputSnapshot.root
@@ -2012,8 +1921,7 @@ function normalizeWorkspaceSessionPaneIdentities(
       normalizedLayout: normalized.snapshot,
       leafIdByInputLeafId: normalized.leafIdByInputLeafId
     })
-    // Why: old persisted split layouts can generate enough alias rows to
-    // exceed V8's argument limit if the arrays are spread into push().
+    // Why: old split layouts can generate enough alias rows to exceed V8's argument limit if spread into push().
     for (const entry of migrationEntries.migrationUnsupportedEntries) {
       migrationUnsupportedEntries.push(entry)
     }
@@ -2068,8 +1976,7 @@ function remapSshRemotePtyLeaseLeafIds(
       return { ...lease, leafId: nextLeafId }
     }
     const next = { ...lease }
-    // Why: unmatched legacy leaf ids are ambiguous after migration; do not
-    // re-persist them as durable pane identity.
+    // Why: unmatched legacy leaf ids are ambiguous after migration; don't re-persist them as durable pane identity.
     delete next.leafId
     return next
   })
@@ -2178,9 +2085,7 @@ function remapAcknowledgedAgentPaneKeys(
     }
 
     try {
-      // Why: UI acks are keyed by paneKey just like hook rows. When a legacy
-      // numeric/pane:* leaf is promoted to a UUID, carry the read marker over
-      // so already-seen Activity/sidebar rows do not come back unread.
+      // Why: when a legacy leaf is promoted to a UUID, carry the read marker over so seen rows don't come back unread.
       setAcknowledgement(makePaneKey(tabId, remappedLeafId), acknowledgedAt)
       changed = true
     } catch {
@@ -2191,21 +2096,17 @@ function remapAcknowledgedAgentPaneKeys(
   return { acknowledgements: next, changed }
 }
 
-// Why: bounds a corrupt/bloated persisted list — the gate only ever needs the
-// handful of Claude sessions a daemon can realistically keep alive.
+// Why: bounds a corrupt/bloated persisted list — the gate only needs the few Claude sessions a daemon can keep alive.
 const MAX_CLAUDE_LIVE_PTY_SESSION_IDS = 200
 
-// Why: bound the removed-SSH-target history so remove/re-add churn can't grow
-// the state file without limit. Re-adoption only needs recent removals.
+// Why: bound removed-SSH-target history so remove/re-add churn can't grow the file unbounded.
 const MAX_REMOVED_SSH_TARGET_TOMBSTONES = 50
 
 function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
-  // Why: scan newest-first so the cap keeps the most recent ids, matching
-  // addClaudeLivePtySessionId's eviction policy while bounding the work done
-  // on an oversized/corrupt list.
+  // Why: scan newest-first so the cap keeps the most recent ids, matching addClaudeLivePtySessionId's eviction policy.
   const ids: string[] = []
   for (let index = value.length - 1; index >= 0; index -= 1) {
     const entry = value[index]
@@ -2264,9 +2165,31 @@ function normalizeLegacyPaneKeyAliasEntries(value: unknown): LegacyPaneKeyAliasE
       return false
     }
     const legacy = parseLegacyNumericPaneKey(candidate.legacyPaneKey)
+    const relocatedSource = parsePaneKey(candidate.legacyPaneKey)
     const stable = parsePaneKey(candidate.stablePaneKey)
-    return Boolean(legacy && stable && legacy.tabId === stable.tabId)
+    return Boolean(stable && ((legacy && legacy.tabId === stable.tabId) || relocatedSource))
   })
+}
+
+function registerPersistedPaneKeyAlias(entry: LegacyPaneKeyAliasEntry): void {
+  if (parseLegacyNumericPaneKey(entry.legacyPaneKey)) {
+    agentHookServer.registerPaneKeyAlias(
+      entry.legacyPaneKey,
+      entry.stablePaneKey,
+      entry.ptyId,
+      entry.updatedAt,
+      { overwriteExisting: false }
+    )
+    return
+  }
+  // Why: detached agents keep their UUID pane key across restarts; restore the physical-to-owner mapping before hook replay.
+  agentHookServer.transferPaneAuthority(
+    entry.legacyPaneKey,
+    entry.stablePaneKey,
+    entry.ptyId,
+    entry.updatedAt,
+    { authorityVerified: false }
+  )
 }
 
 function mergeLegacyPaneKeyAliasEntries(
@@ -2339,8 +2262,7 @@ function mergeProjectHostSetupCompatibilityState(
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
-  // Why: legacy/repo-backed setup rows use the repo id as the setup id. Keep
-  // only independent setup rows here so repo deletion does not leave ghosts.
+  // Why: legacy/repo-backed setup rows reuse the repo id; keep only independent rows so repo deletion leaves no ghosts.
   const independentSetups = (state.projectHostSetups ?? []).filter((setup) => {
     if (projectedSetupIds.has(setup.id)) {
       return false
@@ -2603,19 +2525,14 @@ export type StoreOptions = {
 export class Store {
   private state: PersistedState
   private readonly dataFile: string
+  private readonly activeViewPreference: ActiveViewPreference
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
-  // Why: after a profile transfer rewrites this store's file on disk behind
-  // its back, the stale in-memory state must never be persisted again — a
-  // late sync flush before the relaunch would resurrect the moved project.
+  // Why: after a profile transfer rewrites this file on disk, a late flush of stale in-memory state would resurrect the moved project.
   private writesFrozen = false
-  // Why: hash of the plaintext state as of the last successful write. Saves
-  // triggered by mutations that net out to identical state skip the full
-  // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
-  // written payload) because encrypt() uses a random IV per call, so the
-  // on-disk bytes differ even for identical state.
+  // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
@@ -2631,8 +2548,7 @@ export class Store {
   private uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
 
   constructor(options: StoreOptions = {}) {
-    // Why: profile switching creates more than one possible state path. Capture
-    // the path per Store instance so late async writes cannot follow a global path.
+    // Why: profile switching yields multiple state paths; capture per Store so late async writes can't follow a global path.
     this.dataFile = options.dataFile ?? getDataFile()
     const profileSnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(this.dataFile)
     const legacySnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(getDataFile())
@@ -2643,18 +2559,15 @@ export class Store {
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
+    // Why: activeView is a frequent, tiny preference; keeping it beside the
+    // profile avoids serializing the multi-MB recovery store on navigation.
+    this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
-      agentHookServer.registerPaneKeyAlias(
-        entry.legacyPaneKey,
-        entry.stablePaneKey,
-        entry.ptyId,
-        entry.updatedAt,
-        { overwriteExisting: false }
-      )
+      registerPersistedPaneKeyAlias(entry)
     }
     setMigrationUnsupportedPtyPersistenceListener((entries) => {
       this.state.migrationUnsupportedPtyEntries = entries
@@ -2665,17 +2578,13 @@ export class Store {
       this.scheduleSave()
     })
     if (normalized.changed || this.loadNeedsSave || adaptedProjectGroups) {
-      // Why: upgraded sessions may contain legacy pane:1 leaves. Rewrite them at
-      // the main persistence boundary so older renderer writes cannot revive them.
-      // Other one-shot load migrations also set loadNeedsSave to persist their
-      // guard flags before the next restart.
+      // Why: rewrite legacy pane:1 leaves so older renderer writes can't revive them; other migrations also set loadNeedsSave.
       this.scheduleSave()
     }
   }
 
   private adaptFlatFolderScanProjectGroups(): boolean {
-    // Why: older folder imports persisted a real parent path but kept all repos
-    // flat. Upgrade that shape into v1 sparse folder scopes on load.
+    // Why: older folder imports kept a real parent path but flat repos; upgrade that shape into v1 sparse folder scopes.
     const groups = this.state.projectGroups ?? []
     const repos = this.state.repos
     if (groups.length === 0 || repos.length === 0) {
@@ -2753,9 +2662,7 @@ export class Store {
     return changed
   }
 
-  // Why (issue #1158): debounced writes fire as often as every 300ms during
-  // active use. The backup ring should capture meaningfully different moments,
-  // not five near-identical snapshots from one burst of store updates.
+  // Why (#1158): debounced writes fire ~every 300ms; throttle backups to distinct moments, not near-identical snapshots.
   private shouldRotateBackups(now: number, dataFile: string): boolean {
     try {
       const mtime = statSync(backupPath(dataFile, 0)).mtimeMs
@@ -2765,9 +2672,7 @@ export class Store {
     }
   }
 
-  // Why: rotate oldest to discarded and shift .bak.i to .bak.i+1 by rename;
-  // then copy the current data file to .bak.0 so load() has a JSON recovery
-  // source even if a later primary write is truncated or corrupted.
+  // Why: rotate current file into the .bak ring so load() can recover if a later primary write is truncated or corrupt.
   private async rotateBackupsAsync(dataFile: string): Promise<void> {
     if (!existsSync(dataFile)) {
       return
@@ -2841,13 +2746,7 @@ export class Store {
   }
 
   private load(allowBackupRecovery = true): PersistedState {
-    // Capture once, at the top: this is the unambiguous "has the user run
-    // Orca before?" signal used by the telemetry cohort migration below.
-    // Field-based inference (e.g., `settings.telemetry` presence) does not
-    // work on the telemetry release itself — `telemetry` is new here, so it
-    // would be absent on every pre-telemetry install and misclassify existing
-    // users as fresh, flipping them to default-on in violation of the
-    // social contract we installed them under.
+    // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
     const dataFile = this.dataFile
     const fileExistedOnLoad = existsSync(dataFile)
     logPersistenceStartupMilestone('persistence-load-start', {
@@ -2867,8 +2766,7 @@ export class Store {
         const parsed = JSON.parse(raw) as PersistedState
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
-        // Why: secret settings are stored encrypted on disk via safeStorage.
-        // Decrypt at the load boundary so the rest of the app sees plaintext.
+        // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
         }
@@ -2908,19 +2806,7 @@ export class Store {
               parsed.settings?.sourceControlAi,
               legacyCommitMessageAi
             )
-        // Why: before the layout-aware 'auto' mode shipped (issue #903),
-        // terminalMacOptionAsAlt defaulted to 'true' globally. That silently
-        // broke Option-layer characters (@ on Turkish via Option+Q, @ on
-        // German via Option+L, € on French via Option+E) for non-US users.
-        // We can't distinguish a persisted 'true' that the user chose
-        // explicitly from one they inherited from the old default — so on
-        // first launch after upgrade, flip 'true' back to 'auto' and let
-        // the renderer's keyboard-layout probe pick the right value per
-        // layout. US users land on 'true' via detection (no change); non-US
-        // users land on 'false' (correct). 'false'/'left'/'right' are
-        // definitionally explicit choices (they never matched the old
-        // default) so we carry those forward unchanged. The migrated flag
-        // guards against re-running this on subsequent launches.
+        // Why (issue #903): old 'true' default broke non-US Option-layer chars; flip 'true'→'auto' once so the layout probe decides.
         const rawOptionAsAlt = parsed.settings?.terminalMacOptionAsAlt
         const alreadyMigrated = parsed.settings?.terminalMacOptionAsAltMigrated === true
         const migratedOptionAsAlt: 'auto' | 'true' | 'false' | 'left' | 'right' = alreadyMigrated
@@ -2930,17 +2816,13 @@ export class Store {
             : rawOptionAsAlt
         const floatingTerminalDefaultedForAllUsers =
           parsed.settings?.floatingTerminalDefaultedForAllUsers === true
-        // Why: early floating-terminal builds persisted the old off-by-default
-        // value into user profiles. Flip only unmigrated profiles so a later
-        // deliberate opt-out still survives reload.
+        // Why: early builds persisted the old off default; flip only unmigrated profiles so a later opt-out survives reload.
         const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
           ? (parsed.settings?.floatingTerminalEnabled ?? true)
           : true
         const floatingTerminalCwdMigrated =
           parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
-        // Why: an earlier migration wrote '' for the default app-owned notes
-        // directory. Floating terminals should still open at home by default;
-        // markdown notes resolve their app-owned directory through a separate IPC.
+        // Why: an earlier migration wrote '' for the notes dir; floating terminals still open at home, notes use a separate IPC.
         const migratedFloatingTerminalCwd = floatingTerminalCwdMigrated
           ? !parsed.settings?.floatingTerminalCwd
             ? defaults.settings.floatingTerminalCwd
@@ -2973,8 +2855,7 @@ export class Store {
             canonicalLegacyCwd &&
             !migratedFloatingTerminalTrustedCwds.includes(canonicalLegacyCwd)
           ) {
-            // Why: pre-grant profiles with an explicit Floating Workspace cwd
-            // already represented user intent; migrate only that legacy value.
+            // Why: pre-grant profiles with an explicit Floating Workspace cwd already showed intent; migrate only that legacy value.
             migratedFloatingTerminalTrustedCwds.push(canonicalLegacyCwd)
             normalizedFloatingTerminalTrustedCwds.changed = true
           }
@@ -2984,15 +2865,13 @@ export class Store {
         }
         const experimentalActivityDefaultedOffForAllUsers =
           parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
-        // Why: the Agents view moved back behind Experimental. Flip every
-        // pre-migration profile off once, then preserve future user opt-ins.
+        // Why: the Agents view moved back behind Experimental; flip pre-migration profiles off once, then preserve opt-ins.
         const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
           ? (parsed.settings?.experimentalActivity ?? false)
           : false
         const autoRenameBranchFromWorkDefaultedOn =
           parsed.settings?.autoRenameBranchFromWorkDefaultedOn === true
-        // Why: default-on rollout should activate old profiles once, but a
-        // later Settings opt-out must survive reloads.
+        // Why: default-on rollout activates old profiles once, but a later Settings opt-out survives reloads.
         const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
           parsed.settings
         )
@@ -3077,6 +2956,18 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        // Why (#9537): migrate the indistinguishable legacy host default once so WSL-default users follow their runtime.
+        const localAccountRuntimeAlreadyMigrated =
+          parsed.settings?.localAccountRuntimeDefaultedToAutoForAllUsers === true
+        const migratedLocalAccountRuntime: GlobalSettings['localAccountRuntime'] =
+          localAccountRuntimeAlreadyMigrated
+            ? (parsed.settings?.localAccountRuntime ?? defaults.settings.localAccountRuntime)
+            : parsed.settings?.localAccountRuntime === 'wsl'
+              ? 'wsl'
+              : 'auto'
+        if (!localAccountRuntimeAlreadyMigrated) {
+          this.loadNeedsSave = true
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
@@ -3118,23 +3009,15 @@ export class Store {
           ),
           settings: {
             ...defaults.settings,
-            // Why (#7977): a persisted experimentalNewWorktreeCardStyle:true is
-            // kept even though the default is now false. The v1.4.130 open-
-            // onboarding auto-default wrote the same plain boolean as a real
-            // opt-in, so a rollback migration would also revert genuine opt-ins;
-            // product intent was only to change the default, and the setting
-            // stays user-toggleable.
+            // Why (#7977): keep persisted experimentalNewWorktreeCardStyle:true — v1.4.130's onboarding auto-wrote it as a plain boolean, so it's indistinguishable from a real opt-in; only the default changed.
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides
             ),
-            // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
-            // the old persisted flag forward once so enabled users don't lose it.
+            // Why: v1.3.42 renamed the sidekick setting to pet; carry the old flag forward once so enabled users don't lose it.
             experimentalPet:
               parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
-            // Why: early primary-selection builds saved the disabled default.
-            // Flip Linux/macOS profiles once so terminal-style defaults match
-            // platform convention; the guards preserve future opt-outs.
+            // Why: early builds saved the disabled default; flip Linux/macOS profiles once to match platform, guards keep opt-outs.
             primarySelectionMiddleClickPaste: migratePrimarySelectionPlatformDefault
               ? true
               : (parsed.settings?.primarySelectionMiddleClickPaste ??
@@ -3147,8 +3030,7 @@ export class Store {
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
             terminalLineHeight: migratedTerminalLineHeight,
-            // Why: the old global true default was inherited, while false was
-            // always an explicit opt-out and must survive this one-shot reset.
+            // Why: the old true default was inherited, but false was always an explicit opt-out and must survive this one-shot reset.
             terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
               ? (parsed.settings?.terminalRightClickToPaste ??
                 defaults.settings.terminalRightClickToPaste)
@@ -3159,13 +3041,14 @@ export class Store {
             ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
-            // Why: compact worktree cards graduated from Experimental; preserve
-            // the old opt-in for profiles written during the rollout.
+            // Why: compact worktree cards graduated from Experimental; preserve the old opt-in for rollout-era profiles.
             compactWorktreeCards: loadedCompactWorktreeCards,
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
+            localAccountRuntime: migratedLocalAccountRuntime,
+            localAccountRuntimeDefaultedToAutoForAllUsers: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -3179,9 +3062,10 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
-            // Why: persisted settings can be user-edited or written by older
-            // builds; keep tray-minimize false unless the stored value is true.
+            // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+            // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
+            showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -3198,9 +3082,7 @@ export class Store {
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             sourceControlGroupOrder: normalizedSourceControlGroupOrder,
-            // Why: new builds read sourceControlAi, but rollback builds still
-            // write commitMessageAi; after merging those writes, refresh the
-            // legacy projection for continued rollback compatibility.
+            // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
             commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(
               migratedSourceControlAi,
               parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
@@ -3210,12 +3092,7 @@ export class Store {
               ...parsed.settings?.voice
             }
           },
-          // Why: 'recent' used to mean the weighted smart sort. One-shot
-          // migration moves it to 'smart'; the flag prevents re-firing after
-          // a user intentionally selects the new last-activity 'recent' sort.
-          // Gate on the *raw* persisted value, not the normalized one: the
-          // default sortBy is now 'recent', so a fresh install with no
-          // persisted sortBy would otherwise be mis-migrated to 'smart'.
+          // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
           ui: (() => {
             const rawSort = parsed.ui?.sortBy
             const sort = normalizeSortBy(rawSort)
@@ -3231,16 +3108,13 @@ export class Store {
             }
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
-            // Why: a short-lived default put Done on the left. Repair only
-            // the exact raw payload once; user-authored reorders then survive.
+            // Why: a short-lived default put Done on the left; repair only the exact raw payload once so user reorders survive.
             const workspaceStatusesReorderedDefaultRepaired =
               parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
-            // Why: only exact legacy default payloads are migrated; users who
-            // customized status labels, colors, icons, or order keep theirs.
+            // Why: only exact legacy default payloads migrate; customized status labels/colors/icons/order are kept.
             const workspaceStatusesDefaultWorkflowMigrated =
               parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
-            // Why: visual migration has its own guard so later user choices
-            // of valid legacy color/icon IDs are preserved by runtime writes.
+            // Why: visual migration has its own guard so later user choices of valid legacy color/icon IDs are preserved.
             const workspaceStatusesDefaultVisualsMigrated =
               parsed.ui?._workspaceStatusesDefaultVisualsMigrated === true
             const workspaceStatuses = normalizePersistedWorkspaceStatuses(
@@ -3292,9 +3166,7 @@ export class Store {
                   return candidate
                 }
                 const next = [...candidate]
-                // Why: Linear used to be controlled by the generic issue
-                // property and Ports were always visible. Add the split-out
-                // properties once so existing cards keep their prior surface.
+                // Why: Linear rode the 'issue' property and Ports were always shown; split them out once to preserve existing cards.
                 if (candidate.includes('issue') && !candidate.includes('linear-issue')) {
                   next.push('linear-issue' as const)
                 }
@@ -3326,9 +3198,7 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
-            // Why: only upgraded profiles that still use the new default get
-            // the one-time usage-display change notice; brand-new profiles and
-            // users who already chose remaining stay quiet.
+            // Why: only upgraded profiles still on the new default get the one-time usage-display notice; fresh profiles stay quiet.
             const usagePercentageDisplayChangeNoticeDismissed =
               resolveUsagePercentageDisplayChangeNoticeDismissed({
                 rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
@@ -3347,14 +3217,12 @@ export class Store {
             }
             return {
               ...defaults.ui,
-              // Why: missing card properties should follow the persisted card
-              // layout mode; explicit property choices are preserved below.
+              // Why: missing card properties follow the persisted layout mode; explicit choices are preserved below.
               worktreeCardProperties: getWorktreeCardModeProperties(
                 loadedCompactWorktreeCards ? 'Compact' : 'Default'
               ),
               ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
-              // Why: migrate once from the retired Appearance setting only
-              // when no explicit persisted chrome preference exists yet.
+              // Why: migrate once from the retired Appearance setting only when no explicit chrome preference exists yet.
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
@@ -3378,21 +3246,13 @@ export class Store {
               ...(migratedCardProps !== undefined
                 ? { worktreeCardProperties: migratedCardProps }
                 : {}),
-              // Why: keep stamping the legacy flag for forward-compat with
-              // a rollback to a pre-default-on build that still reads it.
-              // The new flag is the one that actually gates the migration.
+              // Why: keep stamping the legacy flag for rollback forward-compat; the new flag actually gates the migration.
               _inlineAgentsDefaultedForExperiment: true,
               _inlineAgentsDefaultedForAllUsers: true,
               _expandedWorktreeCardPropertiesDefaulted: true
             }
           })(),
-          // Why: the workspace session is the most volatile persisted surface
-          // (schema evolves per release, daemon session IDs embedded in it).
-          // Zod-validate at the read boundary so a field-type flip from an
-          // older build — or a truncated write from a crash — gets rejected
-          // cleanly instead of poisoning Zustand state and crashing the
-          // renderer on mount. On validation failure, fall back to defaults
-          // and log; a corrupt session file shouldn't trap the user out.
+          // Why: volatile schema; zod-validate workspaceSession at read so a bad payload falls to defaults, not a renderer crash.
           workspaceSession: (() => {
             if (parsed.workspaceSession === undefined) {
               return defaults.workspaceSession
@@ -3407,11 +3267,7 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
-          // Why: per-host session partitions for non-'local' hosts. 'local'
-          // stays in workspaceSession (legacy field) so a downgrade still
-          // reads the user's workspace. Each entry is zod-validated the same
-          // way as the legacy blob — a corrupt partition drops to that host's
-          // defaults without poisoning the others.
+          // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
           workspaceSessionsByHostId: parseWorkspaceSessionsByHostId(
             parsed.workspaceSessionsByHostId,
             defaults.workspaceSession
@@ -3438,8 +3294,7 @@ export class Store {
               return []
             }
             const runs = pruneAutomationRuns(backfillAutomationRunNumbers(parsed.automationRuns))
-            // Why: nothing else on the load path marks state dirty, so without
-            // this an oversized legacy file only shrinks at the next unrelated save.
+            // Why: nothing else marks dirty, so an oversized legacy file would otherwise only shrink at the next unrelated save.
             if (runs.length !== parsed.automationRuns.length) {
               this.loadNeedsSave = true
             }
@@ -3452,11 +3307,7 @@ export class Store {
       console.error('[persistence] Failed to load primary state, trying backups:', err)
     }
 
-    // Corrupt-file catch path and "no file on disk" path converge here. The
-    // telemetry migration below runs on whichever branch produced `result`,
-    // because a user whose `orca-data.json` got corrupted is not a fresh
-    // install of the telemetry release — they still count as existing and
-    // must see the opt-in banner, not the default-on toast.
+    // Corrupt-file and no-file paths converge here; a corrupted install counts as existing, so it sees the opt-in banner.
     if (result === null && allowBackupRecovery) {
       let hasBackup = false
       for (let i = 0; i < BACKUP_COUNT; i++) {
@@ -3523,20 +3374,19 @@ export class Store {
       this.loadNeedsSave = true
     }
 
-    const migrated = this.migrateTelemetry(result, fileExistedOnLoad)
+    const migrated = this.migrateTabSwitchKeybindings(
+      this.migrateTelemetry(result, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
 
-    // githubCache lives in a sidecar file now (see getGithubCacheFile). A
-    // legacy in-file cache (pre-sidecar build, or a downgrade round-trip) is
-    // kept as this session's seed and stripped from the durable file by the
-    // save scheduled below; otherwise seed from the sidecar snapshot.
+    // githubCache is a sidecar file now (see getGithubCacheFile); legacy in-file caches seed the session, then get stripped.
     const legacyCache = migrated.githubCache
     const hasLegacyCache =
       Object.keys(legacyCache?.pr ?? {}).length > 0 ||
       Object.keys(legacyCache?.issue ?? {}).length > 0
     if (hasLegacyCache) {
       this.loadNeedsSave = true
-      // Why: mark dirty so the first flush writes the sidecar even if no
-      // poll refresh happens this session — the seed survives the migration.
+      // Why: mark dirty so the first flush writes the sidecar even without a poll refresh this session, preserving the seed.
       this.githubCacheDirty = true
     } else {
       migrated.githubCache = readGithubCacheSnapshot(this.dataFile) ?? migrated.githubCache
@@ -3549,22 +3399,31 @@ export class Store {
     return migrated
   }
 
-  // One-shot telemetry cohort migration. Runs on every `load()` but is a
-  // no-op once `existedBeforeTelemetryRelease` is set, so subsequent launches
-  // pay only the property lookup. Populates:
-  //   - `existedBeforeTelemetryRelease` — cohort discriminator (drives
-  //     whether the existing-user opt-in banner is shown in PR 3;
-  //     new users get no first-launch surface).
-  //   - `optedIn` — new users start opted in; existing users are `null` until
-  //     the banner resolves (the consent resolver returns `pending_banner`
-  //     until then, so nothing transmits).
-  //   - `installId` — anonymous UUID v4. Stable across launches; not surfaced in the UI.
+  // One-shot telemetry cohort migration: seeds existedBeforeTelemetryRelease, optedIn, and installId (no-op once set).
+  // One-shot tab-switch cohort freeze: fileExistedOnLoad tells existing vs fresh only on the first launch, so persist now.
+  private migrateTabSwitchKeybindings(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const existing = state.settings?.tabSwitchKeybindingSeed
+    if (existing === 'pending' || existing === 'done') {
+      return state
+    }
+    // Why: mark dirty so the frozen cohort persists; else a fresh install re-reads as "existing" after its file lands.
+    this.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        // Existing installs pin old chords via a keybindings.json seed; fresh installs use the new registry defaults.
+        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+      }
+    }
+  }
+
   private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
-    // Why: the one-shot is complete only when all three invariants hold.
-    // Keying on `existedBeforeTelemetryRelease` alone would let a partially-
-    // written telemetry block (crash mid-save, hand-edit, future bug) short-
-    // circuit migration and leave `installId` undefined or `optedIn` wiped.
+    // Why: require all three invariants; keying on existedBeforeTelemetryRelease alone lets a partial block skip migration.
     if (
       typeof existing?.existedBeforeTelemetryRelease === 'boolean' &&
       typeof existing.installId === 'string' &&
@@ -3573,11 +3432,7 @@ export class Store {
     ) {
       return state
     }
-    // Why: cohort is the authoritative discriminator per invariant #8, so
-    // resolve it once and reuse it below — the `optedIn` fallback must not
-    // re-infer cohort from `fileExistedOnLoad` or field presence, or a
-    // partially-written telemetry block could land a new user in the
-    // existing-user `pending_banner` state.
+    // Why: resolve cohort once; re-inferring it in the optedIn fallback could misclassify a partially-written new user.
     const resolvedExistedBefore =
       typeof existing?.existedBeforeTelemetryRelease === 'boolean'
         ? existing.existedBeforeTelemetryRelease
@@ -3589,10 +3444,7 @@ export class Store {
         telemetry: {
           ...existing,
           existedBeforeTelemetryRelease: resolvedExistedBefore,
-          // Why: preserve an explicit opt-in/out if the user has ever resolved
-          // it. Only fall back to the cohort default (new users: on; existing
-          // users: undecided until the first-launch banner resolves) when
-          // optedIn is truly unset (undefined), never when it is `false`.
+          // Why: preserve any explicit opt-in/out; fall back to cohort default only when optedIn is undefined, never when false.
           optedIn:
             existing?.optedIn === true || existing?.optedIn === false || existing?.optedIn === null
               ? existing.optedIn
@@ -3608,11 +3460,7 @@ export class Store {
     }
   }
 
-  // Why 1s trailing + 5s max-wait (previously 300ms trailing, unbounded):
-  // sustained sub-interval mutation bursts used to either rewrite the full
-  // multi-MB state ~3x/sec or postpone the write indefinitely by resetting
-  // the timer. The max-wait bounds crash staleness at 5s while bursts
-  // coalesce; the content-hash guard in the writers skips no-op payloads.
+  // Why 1s trailing + 5s max-wait (was 300ms unbounded): coalesce mutation bursts; max-wait bounds crash staleness at 5s.
   private static SAVE_DEBOUNCE_MS = 1_000
   private static SAVE_MAX_WAIT_MS = 5_000
 
@@ -3627,8 +3475,7 @@ export class Store {
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
       this.firstPendingSaveAt = null
-      // Why (issue #1158): serialize async writes so backup rotation never has
-      // two callers racing over the same dataFile/tmp/.bak paths.
+      // Why (issue #1158): serialize async writes so backup rotation can't race two callers over the same paths.
       const prev = this.pendingWrite ?? Promise.resolve()
       const next = prev
         .then(() => this.writeToDiskAsync())
@@ -3646,81 +3493,99 @@ export class Store {
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
   async waitForPendingWrite(): Promise<void> {
-    if (this.pendingWrite) {
-      await this.pendingWrite
-    }
+    await Promise.all([this.pendingWrite, this.activeViewPreference.waitForPendingWrite()])
   }
 
-  // Why githubCache is omitted: it is memory-only during the session (see
-  // getGithubCacheFile) — excluding it from both the payload and the hash
-  // keeps cache refreshes from ever touching the durable file.
+  // Why githubCache is omitted: memory-only this session (see getGithubCacheFile), so refreshes never touch the durable file.
   private getDurableState(): Omit<PersistedState, 'githubCache'> {
     const { githubCache: _memoryOnly, ...durable } = this.state
     return durable
   }
 
-  private computeStateHash(): string {
-    return createHash('sha1').update(JSON.stringify(this.getDurableState())).digest('hex')
-  }
-
-  // Why: builds the on-disk payload synchronously so the hash and the
-  // serialized bytes reflect the same state tick (no mutation can interleave
-  // before an await).
-  private buildStateToSave(): string {
-    // Why: secrets must be encrypted on disk. Clone state so the in-memory
-    // this.state stays plaintext for the rest of the app.
+  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave). One full-state stringify serves both the on-disk payload and the no-op-write guard hash: each secret slot is serialized as a fresh unguessable sentinel, then sentinels are substituted to ciphertext for the payload and to plaintext for the hash. The hash is thus a pure function of plaintext state (skips a byte-identical rewrite) without a second stringify.
+  private buildStateToSave(): { payload: string; stateHash: string } {
+    // Why sentinels (not a blob/key string match): the substitution must be
+    // position-exact. A plain search for the ciphertext — or even for a
+    // `"key":"blob"` token — can be mimicked by user-controlled state (e.g. an
+    // agentDefaultEnv var named after a secret field, or a value equal to a
+    // ciphertext), which would substitute the wrong site and let two DISTINCT
+    // states normalize equal → a silently dropped write (data loss), reachable
+    // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
+    // random UUID can't occur anywhere else in the serialized state (the user
+    // sets their data before it is minted), so it appears exactly once.
+    const secretSubs: { sentinel: string; blob: string; plaintext: string }[] = []
+    const encryptToSentinel = (plaintext: string): string => {
+      const blob = encrypt(plaintext)
+      // Deterministic already (empty secret / safeStorage unavailable / encrypt
+      // failure): blob === plaintext, so no normalization — and no sentinel,
+      // which also avoids substituting an empty or plaintext-shaped slot.
+      if (blob === plaintext) {
+        return blob
+      }
+      const sentinel = `orca-secret-slot-${randomUUID()}`
+      secretSubs.push({ sentinel, blob, plaintext })
+      return sentinel
+    }
+    // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encrypt(this.state.settings.httpProxyUrl ?? '')
+        opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
+        httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
       },
       ui: {
         ...this.state.ui,
-        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
+        browserKagiSessionLink: this.state.ui.browserKagiSessionLink
+          ? encryptToSentinel(this.state.ui.browserKagiSessionLink)
+          : null
       }
     }
-    return JSON.stringify(stateToSave, null, 2)
+    // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
+    // One full-state stringify; secret slots currently hold sentinels.
+    const serialized = JSON.stringify(stateToSave)
+    // Substitute each unique sentinel exactly once: ciphertext for the on-disk
+    // payload, plaintext for the guard hash. Function-form replacement keeps
+    // `$` in blob/plaintext inert; both sides read the sentinel as JSON-escaped
+    // in `serialized`, so each replace is byte-for-byte position-exact.
+    let payload = serialized
+    let hashInput = serialized
+    for (const { sentinel, blob, plaintext } of secretSubs) {
+      const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
+      payload = payload.replace(escapedSentinel, () => blob)
+      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(plaintext).slice(1, -1))
+    }
+    const stateHash = createHash('sha1').update(hashInput).digest('hex')
+    return { payload, stateHash }
   }
 
-  // Why: async writes avoid blocking the main Electron thread on every
-  // debounced save during active use.
+  // Why: async writes avoid blocking the main Electron thread on every debounced save.
   private async writeToDiskAsync(): Promise<void> {
     if (this.writesFrozen) {
       return
     }
     const gen = this.writeGeneration
-    const stateHash = this.computeStateHash()
-    // Why: a mutation burst that nets out to already-persisted state (or a
-    // flush that raced ahead) must not rewrite a byte-identical multi-MB file.
+    const { payload, stateHash } = this.buildStateToSave()
+    // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
       return
     }
-    const payload = this.buildStateToSave()
     const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    // Why: wrap write+rename in try/finally-on-error so any failure (ENOSPC,
-    // ENFILE, EIO, permission) removes the tmp file rather than leaving a
-    // multi-megabyte orphan behind. Successful rename consumes the tmp file.
+    // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
     let renamed = false
     try {
       await writeFile(tmpFile, payload, 'utf-8')
-      // Why: if flush() ran while this async write was in-flight, it bumped
-      // writeGeneration and already wrote the latest state synchronously.
-      // Renaming this stale tmp file would overwrite the fresh data.
+      // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
       if (this.writeGeneration !== gen) {
         return
       }
       await rename(tmpFile, dataFile)
       renamed = true
-      // Why the gen re-check: a sync flush can interleave during the rename
-      // await, write fresher state, and record its own hash. Recording this
-      // stale hash over it would make later saves skip against content that
-      // is not what the file holds.
+      // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
       if (this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
       }
@@ -3729,8 +3594,7 @@ export class Store {
         await rm(tmpFile).catch(() => {})
       }
     }
-    // Why (issue #1158): rotate only after the atomic rename succeeded; then
-    // re-check the generation so a concurrent flush owns any backup rotation.
+    // Why (issue #1158): rotate backups only after rename succeeded, and let a concurrent flush own rotation.
     if (this.writeGeneration !== gen) {
       return
     }
@@ -3740,18 +3604,13 @@ export class Store {
     }
   }
 
-  // Why: synchronous variant kept only for flush() at shutdown, where the
-  // process may exit before an async write completes.
+  // Why: sync variant only for flush() at shutdown, where the process may exit before an async write completes.
   private writeToDiskSync(opts: { force?: boolean } = {}): void {
     if (this.writesFrozen) {
       return
     }
-    const stateHash = this.computeStateHash()
-    // Why: skipping is safe under flushOrThrow's durability contract — a
-    // matching hash means this exact state is already the file's content.
-    // Except when an async write was in flight at flush entry (force): its
-    // rename may already be dispatched past the generation check, and only
-    // an unconditional sync write afterwards reliably out-orders it.
+    const { payload, stateHash } = this.buildStateToSave()
+    // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
     }
@@ -3762,11 +3621,7 @@ export class Store {
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
 
-    const payload = this.buildStateToSave()
-
-    // Why: mirror the async path — on any failure between writeFileSync and
-    // renameSync, remove the tmp file so crashes during shutdown don't leak
-    // orphans into userData.
+    // Why: on any write/rename failure, remove the tmp file so shutdown crashes don't leak orphans.
     let renamed = false
     try {
       writeFileSync(tmpFile, payload, 'utf-8')
@@ -3788,18 +3643,21 @@ export class Store {
     }
   }
 
-  private flushOrThrow(): void {
+  flushOrThrow(): void {
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
     }
     this.firstPendingSaveAt = null
     const asyncWriteWasInFlight = this.pendingWrite !== null
-    // Why: bump writeGeneration so any in-flight async writeToDiskAsync skips
-    // its rename, preventing a stale snapshot from overwriting this sync write.
+    // Why: bump writeGeneration so an in-flight async write skips its rename and can't overwrite this sync write.
     this.writeGeneration++
     this.pendingWrite = null
     this.writeToDiskSync({ force: asyncWriteWasInFlight })
+  }
+
+  flushActiveViewPreferenceOrThrow(): void {
+    this.activeViewPreference.flushOrThrow()
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -3867,8 +3725,7 @@ export class Store {
       createdAt: now,
       updatedAt: now
     }
-    // Why: this is the first non-repo-backed setup creation path; it must
-    // persist independently so future repo projection sync does not erase it.
+    // Why: persist independently so future repo projection sync doesn't erase this non-repo-backed setup.
     this.state.projectHostSetups.push(setup)
     this.scheduleSave()
     return { project, setup }
@@ -3922,11 +3779,7 @@ export class Store {
     return { project, setup }
   }
 
-  /**
-   * O(1) read of the persisted repo count. Use this when you only need the
-   * count (e.g. cohort-classifier) — `getRepos()` hydrates each repo, which
-   * is wasteful when the caller only reads `.length`.
-   */
+  /** O(1) repo count; unlike `getRepos()` this skips per-repo hydration. */
   getRepoCount(): number {
     return this.state.repos.length
   }
@@ -3937,9 +3790,8 @@ export class Store {
   }
 
   /**
-   * Record a background-resolved git username (repo-git-username-enrichment).
-   * Kept out of updateRepo's whitelist so the renderer-facing update surface
-   * cannot write it directly. Returns true when the hydrated value changed.
+   * Record a background-resolved git username; kept out of updateRepo's whitelist so the renderer can't write it directly.
+   * @returns true when the hydrated value changed.
    */
   setResolvedRepoGitUsername(id: string, username: string): boolean {
     const repo = this.state.repos.find((r) => r.id === id)
@@ -3952,8 +3804,7 @@ export class Store {
       return false
     }
     if (username) {
-      // Why: persisting the resolved value lets the next launch hydrate repos
-      // with the right branch prefix before enrichment has re-run.
+      // Why: persist so the next launch hydrates repos with the right branch prefix before enrichment re-runs.
       repo.gitUsername = username
     } else {
       delete repo.gitUsername
@@ -4023,8 +3874,7 @@ export class Store {
     if ((this.state.projectGroups?.length ?? 0) === before) {
       return false
     }
-    // Why: groups are sidebar organization only. Deleting one must not delete
-    // repos or worktrees, so contained repos from the full subtree are ungrouped.
+    // Why: groups are sidebar organization only, so deleting one ungroups its repos rather than deleting them.
     this.state.repos = this.state.repos.map((repo) =>
       repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
         ? { ...repo, projectGroupId: null }
@@ -4220,9 +4070,7 @@ export class Store {
     this.scheduleSave()
   }
 
-  // Why: returns false on a stale permutation (concurrent add/remove races
-  // the renderer's drag) so the caller can tell the renderer to resync rather
-  // than persist an order that drops or duplicates ids.
+  // Why: return false on a stale permutation (concurrent add/remove) so the caller resyncs instead of persisting an order that drops/duplicates ids.
   reorderRepos(orderedIds: string[]): boolean {
     const current = this.state.repos
     if (orderedIds.length !== current.length) {
@@ -4253,47 +4101,65 @@ export class Store {
     return true
   }
 
+  // Why: repo ids are unique only within an execution host; drags persist one permutation per host when local and SSH repos coexist.
+  reorderReposForHost(orderedIds: string[], hostId: ExecutionHostId): boolean {
+    const current = this.state.repos
+    const hostRepos = current.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+    if (orderedIds.length !== hostRepos.length) {
+      return false
+    }
+    const byId = new Map(hostRepos.map((repo) => [repo.id, repo]))
+    if (byId.size !== hostRepos.length) {
+      return false
+    }
+    const seen = new Set<string>()
+    const reorderedHostRepos: Repo[] = []
+    for (const id of orderedIds) {
+      const repo = typeof id === 'string' && !seen.has(id) ? byId.get(id) : undefined
+      if (!repo) {
+        return false
+      }
+      seen.add(id)
+      reorderedHostRepos.push(repo)
+    }
+    let nextHostIndex = 0
+    this.state.repos = current.map((repo) =>
+      getRepoExecutionHostId(repo) === hostId ? reorderedHostRepos[nextHostIndex++] : repo
+    )
+    this.syncProjectHostSetupCompatibilityState()
+    this.scheduleSave()
+    return true
+  }
+
   removeProject(id: string): void {
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
     this.syncProjectHostSetupCompatibilityState()
-    // Why: presets are repo-scoped, so removing the repo means the presets
-    // can never be referenced again — drop them with the parent.
+    // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
     delete this.state.sparsePresetsByRepo[id]
     this.pruneWorktreeStateForRepo(id, null)
     this.scheduleSave()
   }
 
-  // Why: the same repo id can exist on more than one execution host (local, an
-  // SSH target, a re-added SSH target). Forgetting one host's copy must remove
-  // only that host's repo row and worktree metadata — never the local or
-  // another host's records that happen to share the id.
+  // Why: the same repo id can exist on multiple execution hosts; remove only this host's row and metadata, never another host's.
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
     this.state.repos = this.state.repos.filter(
       (r) => !(r.id === id && getRepoExecutionHostId(r) === hostId)
     )
     const idStillPresent = this.state.repos.some((r) => r.id === id)
-    // Why: presets are repo-id-scoped (not host-scoped); only drop them once the
-    // last host's copy of this repo is gone, or a surviving host loses its presets.
+    // Why: presets are repo-id-scoped (not host-scoped); drop them only when the last host's copy is gone.
     if (!idStillPresent) {
       delete this.state.sparsePresetsByRepo[id]
     }
     this.syncProjectHostSetupCompatibilityState()
-    // Why: if the id survives on another host, prune only this host's worktree
-    // metas; otherwise prune everything for the id (matches removeProject).
+    // Why: prune only this host's worktree metas if the id survives elsewhere; otherwise prune everything (matches removeProject).
     this.pruneWorktreeStateForRepo(id, idStillPresent ? hostId : null)
     this.scheduleSave()
   }
 
-  // Clean up worktree meta, lineage, and workspace lineage for a repo id.
-  // When hostId is null, prune all of the repo's entries; when a hostId is
-  // given, prune only entries whose meta.hostId resolves to that host (a
-  // missing hostId is treated as local).
+  // Prune worktree meta/lineage for a repo id; hostId null prunes all entries, else only that host's (missing meta.hostId = local).
   private pruneWorktreeStateForRepo(id: string, hostId: ExecutionHostId | null): void {
     const prefix = `${id}::`
-    // Why: snapshot host membership up front. Lineage pruning below checks the
-    // meta.hostId of worktree keys that may already have been deleted from
-    // worktreeMeta in the first loop, so reading hostId live would misclassify
-    // an SSH worktree as local once its meta is gone.
+    // Why snapshot up front: the first loop deletes metas, so reading meta.hostId live later would misclassify an SSH worktree as local.
     const hostMembership = new Map<string, boolean>()
     const belongsToHost = (key: string): boolean => {
       if (!key.startsWith(prefix)) {
@@ -4306,11 +4172,7 @@ export class Store {
       if (cached !== undefined) {
         return cached
       }
-      // Why default to local: worktree metas created on/after host-ownership
-      // stamping carry hostId. A metas without it predates that and is treated as
-      // local, so a host-scoped (non-local) prune conservatively leaves it — it
-      // may leak a stale entry for a legacy SSH worktree sharing a repo id with a
-      // local repo, but it never deletes the wrong host's live meta.
+      // Why default to local: metas without hostId predate host stamping, so a host-scoped prune skips them rather than risk deleting another host's live meta.
       const metaHostId = this.state.worktreeMeta[key]?.hostId ?? LOCAL_EXECUTION_HOST_ID
       const result = metaHostId === hostId
       hostMembership.set(key, result)
@@ -4397,8 +4259,7 @@ export class Store {
       repo.externalWorktreeVisibilityLegacy === undefined
         ? isLegacyRepoForExternalWorktreeVisibility(repo)
         : undefined
-    // Why: selected repo fields use `undefined` as an explicit clear signal,
-    // so delete them before assigning the rest of the patch.
+    // Why: selected repo fields use `undefined` as an explicit clear signal, so delete them before assigning the patch.
     if (
       'issueSourcePreference' in sanitizedUpdates &&
       sanitizedUpdates.issueSourcePreference === undefined
@@ -4414,8 +4275,7 @@ export class Store {
       'externalWorktreeVisibility' in sanitizedUpdates &&
       repo.externalWorktreeVisibilityLegacy === undefined
     ) {
-      // Why: old persisted repos have no explicit marker. Stamp it the first
-      // time visibility changes so later hide/show choices keep legacy safety.
+      // Why: old persisted repos have no marker; stamp it on first visibility change so later hide/show keeps legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
     if (
@@ -4550,12 +4410,7 @@ export class Store {
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
     const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
-    // Why: username resolution spawns git/gh subprocesses, so it must never
-    // run inside hydration — the first getRepos() of a launch executes on the
-    // Electron main thread and a stuck probe froze startup for minutes on
-    // Windows (issue #7225). Hydration only reads the enrichment cache or the
-    // value persisted by a previous launch; repo-git-username-enrichment.ts
-    // refreshes both in the background.
+    // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ?? repo.gitUsername ?? '')
@@ -4758,8 +4613,7 @@ export class Store {
       return existing
     }
     const now = Date.now()
-    // Why: retention prunes old runs, so the count of retained runs is no longer
-    // the run's ordinal — carry the number forward from the newest survivor.
+    // Why: retention prunes old runs, so the retained count isn't the ordinal — carry the number forward from the newest survivor.
     const runNumber = nextAutomationRunNumber(
       (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
     )
@@ -4941,15 +4795,10 @@ export class Store {
   }
 
   /**
-   * Move every worktreeId-keyed record from `oldWorktreeId` to `newWorktreeId`
-   * after the worktree's folder (and thus its `${repoId}::${path}` id) was
-   * renamed on disk, so a post-move refresh re-binds the worktree's state under
-   * the new id instead of orphaning it. Records the old id on the new meta's
-   * `priorWorktreeIds` so the session GC/hydration can still recognize PTY
-   * sessions minted under the old (path-derived) id. No-op when the ids match.
-   *
-   * Renderer counterpart: `buildWorktreeRenameState` in store/slices/worktrees.ts
-   * re-keys the renderer's own worktree-scoped maps for the same id change.
+   * Re-key every worktreeId-keyed record from `oldWorktreeId` to `newWorktreeId` after the worktree folder (and its
+   * `${repoId}::${path}` id) was renamed on disk, so a refresh re-binds state instead of orphaning it. Records the old id on
+   * the new meta's `priorWorktreeIds` so session GC/hydration still recognizes PTY sessions minted under it. No-op when ids match.
+   * Renderer counterpart: `buildWorktreeRenameState` in store/slices/worktrees.ts.
    */
   migrateWorktreeIdentity(oldWorktreeId: string, newWorktreeId: string): void {
     if (oldWorktreeId === newWorktreeId) {
@@ -5085,9 +4934,7 @@ export class Store {
     if (movedLineage && movedLineage.worktreeId === oldWorktreeId) {
       movedLineage.worktreeId = newWorktreeId
     }
-    // Why: other worktrees created from this one carry it as parentWorktreeId;
-    // the stable parentWorktreeInstanceId is unaffected, but keep the denormalized
-    // path-derived id consistent too.
+    // Why: children carry this as parentWorktreeId; keep the denormalized path-derived id consistent (parentWorktreeInstanceId is stable).
     for (const lineage of Object.values(this.state.worktreeLineageById)) {
       if (lineage.parentWorktreeId === oldWorktreeId) {
         lineage.parentWorktreeId = newWorktreeId
@@ -5184,10 +5031,7 @@ export class Store {
     }
   }
 
-  // Why: UI view-state (group/sort/filters etc.) is written from both the
-  // desktop renderer and mobile (via the ui.set RPC) into one shared store.
-  // Without this, a mobile change persisted but the desktop renderer — which
-  // hydrates UI state once — never learned of it, breaking bi-directional sync.
+  // Why: UI view-state is written from both desktop and mobile (ui.set RPC), so notify to keep bi-directional sync (desktop hydrates UI only once).
   onUIChanged(listener: (ui: PersistedState['ui']) => void): () => void {
     this.uiChangeListeners.add(listener)
     return () => {
@@ -5210,11 +5054,12 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
-    // Why: coerce strictly to boolean here (not at the IPC edge) so every write
-    // path is covered and a non-bool renderer payload can never persist a
-    // truthy non-bool that later reads as "tray-minimize on".
+    // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+    }
+    if ('showMenuBarIcon' in updates) {
+      sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
     }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
@@ -5288,8 +5133,7 @@ export class Store {
       sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
     }
     if ('prBotAuthorOverrides' in updates) {
-      // Why: every writer (desktop IPC, paired web RPC, and migrations) reaches
-      // this boundary, so the persisted list stays bounded and well-formed.
+      // Why: every writer (desktop IPC, web RPC, migrations) hits this boundary, so the persisted list stays bounded and well-formed.
       sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         updates.prBotAuthorOverrides
       )
@@ -5301,12 +5145,7 @@ export class Store {
     if (historyWithPreviousLayout) {
       sanitizedUpdates.workspaceDirHistory = historyWithPreviousLayout
     }
-    // Why: `telemetry` is deep-merged for the same reason `notifications` is —
-    // partial updates from the Privacy pane / consent flow (e.g., flipping
-    // only `optedIn`) must not clobber sibling fields like `installId` or
-    // `existedBeforeTelemetryRelease`. The field is optional, so we only
-    // synthesize a `telemetry` key on the result when at least one side has
-    // one.
+    // Why deep-merge telemetry: a partial update (e.g. flipping only `optedIn`) must not clobber siblings like `installId`.
     const mergedTelemetry =
       sanitizedUpdates.telemetry !== undefined
         ? { ...this.state.settings.telemetry, ...sanitizedUpdates.telemetry }
@@ -5384,14 +5223,15 @@ export class Store {
       usagePercentageDisplay: normalizeUsagePercentageDisplay(
         this.state.ui?.usagePercentageDisplay
       ),
-      // Why: strict boolean coercion so a missing/legacy value reads as false
-      // (first-run notice still fires) rather than leaking a non-bool through.
+      statusBarUsageMode: normalizeStatusBarUsageMode(this.state.ui?.statusBarUsageMode),
+      // Why: strict boolean coercion so a missing/legacy value reads as false (first-run notice still fires).
       trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
       ),
       workspaceHostOrder: normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder: normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         this.state.ui?.browserDefaultZoomLevel
       ),
@@ -5400,16 +5240,30 @@ export class Store {
       ),
       featureTipsSeenIds: normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
       contextualToursSeenIds: normalizeContextualTourIds(this.state.ui?.contextualToursSeenIds),
-      featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions)
+      featureInteractions: normalizeFeatureInteractions(this.state.ui?.featureInteractions),
+      activeView: this.activeViewPreference.get()
     }
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
-    const previousUI = this.getUI()
+    const { activeView, ...durableUpdates } = sanitizedUpdates
+    const activeViewChanged = this.activeViewPreference.set(activeView)
+    if (Object.keys(durableUpdates).length === 0) {
+      if (activeViewChanged) {
+        this.notifyUIChanged()
+      }
+      return
+    }
     const currentUI = {
       ...getDefaultUIState(),
       ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
+    }
+    const previousUI = {
+      ...this.getUI(),
+      // Why: the legacy field stays unchanged as a migration/downgrade
+      // fallback; the profile sidecar is authoritative in current builds.
+      activeView: currentUI.activeView
     }
     const nextRightSidebarTab =
       sanitizedUpdates.rightSidebarTab !== undefined
@@ -5429,16 +5283,17 @@ export class Store {
             )
     const nextUI = {
       ...currentUI,
-      ...sanitizedUpdates,
-      groupBy: sanitizedUpdates.groupBy
-        ? normalizeGroupBy(sanitizedUpdates.groupBy)
+      ...durableUpdates,
+      groupBy: durableUpdates.groupBy
+        ? normalizeGroupBy(durableUpdates.groupBy)
         : normalizeGroupBy(this.state.ui?.groupBy),
-      sortBy: sanitizedUpdates.sortBy
-        ? normalizeSortBy(sanitizedUpdates.sortBy)
+      sortBy: durableUpdates.sortBy
+        ? normalizeSortBy(durableUpdates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
       projectOrderBy: updates.projectOrderBy
         ? normalizeProjectOrderBy(updates.projectOrderBy)
         : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
+      activeView: currentUI.activeView,
       rightSidebarTab: nextRightSidebarTab,
       rightSidebarExplorerView: nextRightSidebarExplorerView,
       worktreeCardProperties:
@@ -5466,6 +5321,9 @@ export class Store {
       usagePercentageDisplay: normalizeUsagePercentageDisplay(
         sanitizedUpdates.usagePercentageDisplay ?? this.state.ui?.usagePercentageDisplay
       ),
+      statusBarUsageMode: normalizeStatusBarUsageMode(
+        sanitizedUpdates.statusBarUsageMode ?? this.state.ui?.statusBarUsageMode
+      ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),
@@ -5477,6 +5335,10 @@ export class Store {
         updates.workspaceHostOrder !== undefined
           ? normalizeExecutionHostOrder(updates.workspaceHostOrder)
           : normalizeExecutionHostOrder(this.state.ui?.workspaceHostOrder),
+      manualRepoOrder:
+        updates.manualRepoOrder !== undefined
+          ? normalizeManualRepoOrder(updates.manualRepoOrder)
+          : normalizeManualRepoOrder(this.state.ui?.manualRepoOrder),
       browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
         updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
@@ -5488,8 +5350,7 @@ export class Store {
         sanitizedUpdates.featureTipsSeenIds !== undefined
           ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
           : normalizeFeatureTipIds(this.state.ui?.featureTipsSeenIds),
-      // Why: renderer and paired clients can mark different tours seen from
-      // stale UI snapshots; union them so completed tours stay suppressed.
+      // Why: renderer and paired clients can mark different tours seen from stale snapshots; union so completed tours stay suppressed.
       contextualToursSeenIds:
         updates.contextualToursSeenIds !== undefined
           ? mergeContextualTourSeenIds(
@@ -5497,9 +5358,7 @@ export class Store {
               updates.contextualToursSeenIds
             )
           : normalizeContextualTourIds(this.state.ui?.contextualToursSeenIds),
-      // Why: runtime RPCs and the renderer can both record education state.
-      // Merge instead of replacing so a stale renderer snapshot cannot erase
-      // runtime-only feature interactions.
+      // Why: runtime RPCs and the renderer both record education state; merge so a stale renderer snapshot can't erase runtime-only interactions.
       featureInteractions:
         sanitizedUpdates.featureInteractions !== undefined
           ? mergeFeatureInteractions(
@@ -5509,6 +5368,9 @@ export class Store {
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
     if (persistedUIValuesEqual(previousUI, nextUI)) {
+      if (activeViewChanged) {
+        this.notifyUIChanged()
+      }
       return
     }
     this.state.ui = nextUI
@@ -5600,19 +5462,14 @@ export class Store {
   }
 
   setGitHubCache(cache: PersistedState['githubCache']): void {
-    // Why no scheduleSave: the cache is memory-only during the session and
-    // snapshotted to its sidecar file at flush (quit/reload) time. Every poll
-    // refresh restamps fetchedAt, so persisting here rewrote the whole
-    // durable state file once per poll cycle for refetchable data.
+    // Why no scheduleSave: cache is memory-only and snapshotted to a sidecar at flush; persisting here rewrote the whole state file every poll cycle.
     this.state.githubCache = cache
     this.githubCacheDirty = true
   }
 
   // ── Workspace Session ─────────────────────────────────────────────
 
-  /** Resolve an execution host argument to a canonical id. Unknown/empty
-   *  values fall back to 'local' so legacy callers without a hostId keep
-   *  reading and writing the local partition exactly as before. */
+  /** Resolve an execution host argument to a canonical id; unknown/empty falls back to 'local' for legacy callers. */
   private resolveHostId(hostId?: string | null): ExecutionHostId {
     return normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   }
@@ -5629,8 +5486,7 @@ export class Store {
     return readTerminalScrollbackSnapshotSync(ref, this.terminalScrollbackSnapshotStorage)
   }
 
-  /** Resolve the worktree a terminal tab belongs to, from the session's
-   *  tab→worktree map. More reliable than agent-echoed hook fields. */
+  /** Resolve the worktree a terminal tab belongs to; more reliable than agent-echoed hook fields. */
   getWorktreeIdForTab(tabId: string): string | undefined {
     return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
   }
@@ -5644,9 +5500,7 @@ export class Store {
     this.setHostWorkspaceSession(resolved, session)
   }
 
-  /** Persist a non-'local' host partition. The PTY-binding race protections in
-   *  setLocalWorkspaceSession only apply to the local daemon, so remote hosts
-   *  take the lighter prune-and-store path. */
+  /** Persist a non-'local' host partition; remote hosts skip setLocalWorkspaceSession's local-daemon PTY-binding race guards. */
   private setHostWorkspaceSession(hostId: ExecutionHostId, session: WorkspaceSessionState): void {
     const pruned = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
@@ -5663,13 +5517,7 @@ export class Store {
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
     )
 
-    // Why: closes the second half of the SIGKILL race (Issue #217). The
-    // renderer's debounced session writer captures its state BEFORE pty:spawn
-    // returns, so the snapshot it later flushes via session:set has no
-    // tab.ptyId / ptyIdsByLeafId for the just-spawned PTY. If that stale
-    // snapshot lands AFTER persistPtyBinding's sync flush, it would overwrite
-    // the durable binding and re-open the orphan window. Merge in any
-    // existing bindings whenever the incoming snapshot's binding is empty.
+    // Why (Issue #217): merge existing bindings when the incoming binding is empty, so a stale pre-spawn snapshot can't overwrite the durable PTY binding.
     const prior = this.state.workspaceSession
     const normalized = normalizeWorkspaceSessionPaneIdentities(
       session,
@@ -5689,13 +5537,7 @@ export class Store {
       }
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
-      agentHookServer.registerPaneKeyAlias(
-        entry.legacyPaneKey,
-        entry.stablePaneKey,
-        entry.ptyId,
-        entry.updatedAt,
-        { overwriteExisting: false }
-      )
+      registerPersistedPaneKeyAlias(entry)
     }
     session = normalized.session
     const remappedLeases = remapSshRemotePtyLeaseLeafIds(
@@ -5755,8 +5597,7 @@ export class Store {
             ([leafId, ptyId]) =>
               liveLeafIds.has(leafId) &&
               incoming[leafId] === undefined &&
-              // Why: an empty layout map can be a stale pre-spawn snapshot; a
-              // partial map is intentional unless a durable SSH lease proves it.
+              // Why: an empty layout map may be a stale pre-spawn snapshot; a partial map is intentional unless a durable SSH lease proves it.
               (incomingHasAnyBinding
                 ? this.hasRestorableSshRemotePtyLease({
                     ptyId,
@@ -5770,8 +5611,7 @@ export class Store {
         )
         if (Object.keys(restorableBindings).length > 0) {
           layout.ptyIdsByLeafId = { ...restorableBindings, ...incoming }
-          // Why: the same stale session write that drops ptyIdsByLeafId can
-          // also be from an older renderer that lacks UUID-keyed metadata.
+          // Why: the same stale write that drops ptyIdsByLeafId may come from an older renderer lacking UUID-keyed metadata.
           const buffersByLeafId = preserveMissingLeafRecordEntries(
             priorLayout.buffersByLeafId,
             layout.buffersByLeafId,
@@ -5812,9 +5652,7 @@ export class Store {
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = this.resolveHostId(hostId)
-    // Why: the renderer's debounced hot path sends only changed top-level
-    // session slices. Scalar/UI patches avoid the terminal normalization path;
-    // terminal topology/layout patches still reuse the stale-PTY protections.
+    // Why: the debounced hot path sends only changed slices; scalar/UI patches skip terminal normalization, topology patches keep stale-PTY protections.
     let next: WorkspaceSessionState = {
       ...this.getWorkspaceSession(resolved),
       ...patch
@@ -5895,10 +5733,7 @@ export class Store {
     if (lease.ptyId !== bindingPtyId) {
       return false
     }
-    // Why: remote PTY ids are scoped to a relay target. Workspace PTY bindings
-    // only store the id, so derive target/context when possible and require
-    // stored lease context to match instead of treating missing fields as
-    // wildcards that can tombstone unrelated panes.
+    // Why: remote PTY ids are scoped to a relay target; require stored lease context to match so missing fields don't tombstone unrelated panes.
     return (
       (binding.targetId === undefined ||
         binding.targetId === null ||
@@ -5940,9 +5775,7 @@ export class Store {
     if (lease.targetId !== binding.targetId || lease.ptyId !== bindingPtyId) {
       return false
     }
-    // Why: target removal is destructive. Legacy/contextless leases should
-    // scrub matching workspace bindings before the lease record is deleted,
-    // otherwise removing the tombstone can let stale PTY ids revive later.
+    // Why: target removal is destructive; scrub matching bindings before deleting the lease, else removing the tombstone can revive stale PTY ids.
     return (
       (binding.worktreeId === undefined ||
         lease.worktreeId === undefined ||
@@ -5959,12 +5792,7 @@ export class Store {
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
-  // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217). The
-  // renderer's debounced session writer (~450 ms total) is normally the only
-  // path that writes tab.ptyId / ptyIdsByLeafId; a force-quit inside that
-  // window orphans the daemon's history dir. Patching + sync flushing here
-  // before pty:spawn returns guarantees the renderer cannot observe a
-  // spawn-success without the binding already being durable on disk.
+  // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
   persistPtyBinding(args: {
     worktreeId: string
     tabId: string
@@ -5982,9 +5810,7 @@ export class Store {
     if (tab) {
       tab.ptyId = args.ptyId
     } else {
-      // Why: pty:spawn can beat the debounced session writer for a newly
-      // created tab. Persist a minimal tab so hydration does not prune the
-      // crash-safe layout binding below as an orphaned tab id.
+      // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
       const nextTabs = [
         ...(tabs ?? []),
         createMinimalPersistedTerminalTab({
@@ -6004,8 +5830,7 @@ export class Store {
       }
     }
     if (!isTerminalLeafId(args.leafId)) {
-      // Why: legacy renderer-local pane ids may arrive from older callers; keep
-      // them out of durable leaf-keyed layout state after the UUID migration.
+      // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
       try {
         this.flushOrThrow()
       } catch (err) {
@@ -6017,15 +5842,12 @@ export class Store {
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
       if (!layout.root) {
-        // Why: createTab can persist an empty layout before TerminalPane mounts.
-        // The sync spawn binding must still leave a durable UUID root behind.
+        // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
         layout.root = { type: 'leaf', leafId: args.leafId }
         layout.activeLeafId = args.leafId
         layout.expandedLeafId = null
       } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
-        // Why: splitPane publishes the new pane and starts pty:spawn before the
-        // debounced full layout snapshot reaches main. Add a minimal leaf so a
-        // crash in that window cannot make the new pane's binding unreachable.
+        // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
         layout.root = {
           type: 'split',
           direction: 'vertical',
@@ -6042,12 +5864,7 @@ export class Store {
         [args.leafId]: args.ptyId
       }
     } else {
-      // Why: first-spawn-ever for a new tab — the renderer's debounced writer
-      // creates the layout entry on PaneManager init, but the binding has to
-      // be on disk before pty:spawn returns or a SIGKILL inside the same
-      // window would lose ptyIdsByLeafId for split-pane cold restore. The
-      // renderer will overwrite this minimal layout once persistLayoutSnapshot
-      // fires.
+      // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
       session.terminalLayoutsByTabId = {
         ...session.terminalLayoutsByTabId,
         [args.tabId]: {
@@ -6122,11 +5939,9 @@ export class Store {
     if (ids.includes(sessionId)) {
       return
     }
-    // Why: drop the oldest entry at the cap — stale ids are pruned against the
-    // daemon at startup anyway, so recency is the only thing worth keeping.
+    // Why: drop oldest at the cap — stale ids get pruned against the daemon at startup, so only recency matters.
     this.state.claudeLivePtySessionIds = [...ids, sessionId].slice(-MAX_CLAUDE_LIVE_PTY_SESSION_IDS)
-    // Why: flush synchronously — a force-quit right after a Claude spawn must
-    // still seed the live-PTY gate on the next launch.
+    // Why: flush sync so a force-quit right after a Claude spawn still seeds the live-PTY gate next launch.
     this.flush()
   }
 
@@ -6173,8 +5988,7 @@ export class Store {
 
   addRemovedSshTargetTombstone(tombstone: RemovedSshTargetTombstone): void {
     const existing = this.state.removedSshTargetTombstones ?? []
-    // Why: dedupe by oldTargetId so a remove/re-remove of the same id can't
-    // stack duplicate tombstones. Newest wins.
+    // Why: dedupe by oldTargetId so re-removing the same id can't stack duplicate tombstones; newest wins.
     const filtered = existing.filter((t) => t.oldTargetId !== tombstone.oldTargetId)
     // Cap the history so pathological churn can't grow the state file unbounded.
     this.state.removedSshTargetTombstones = [...filtered, tombstone].slice(
@@ -6193,10 +6007,8 @@ export class Store {
   }
 
   /**
-   * Re-point every repo and worktree meta pinned to a removed SSH target id
-   * onto a re-added target's id, so orphaned workspaces reattach to the live
-   * host instead of remaining un-removable ghosts. Returns the ids of repos
-   * re-pointed (empty when nothing referenced the old id).
+   * Re-point every repo and worktree meta pinned to a removed SSH target id onto
+   * a re-added target's id so orphaned workspaces reattach. Returns re-pointed repo ids.
    */
   reassignSshTargetId(oldTargetId: string, newTargetId: string): string[] {
     if (oldTargetId === newTargetId) {
@@ -6214,10 +6026,7 @@ export class Store {
       if (matchesConnection) {
         repo.connectionId = newTargetId
       }
-      // Why: only rewrite executionHostId when it was actually set to the old
-      // SSH host. SSH repos created via addRemoteRepoFromPath leave it unset and
-      // derive the host from connectionId, so we must not stamp a value where
-      // there wasn't one.
+      // Why: don't stamp executionHostId where it was unset — addRemoteRepoFromPath repos derive the host from connectionId.
       if (matchesHost) {
         repo.executionHostId = newHostId
       }
@@ -6231,9 +6040,7 @@ export class Store {
         metaChanged = true
       }
     }
-    // Why: the old id also survives in session pty ids, the startup reconnect
-    // list, sleeping-agent records, host setups, host-scope UI, and pty leases;
-    // any un-migrated carrier later throws `SSH target not found` (STA-1468).
+    // Why: any carrier still holding the old id later throws `SSH target not found` (STA-1468); migrate them all.
     let carrierChanged = migrateWorkspaceSessionSshTargetId(
       this.state.workspaceSession,
       oldTargetId,
@@ -6244,10 +6051,7 @@ export class Store {
         carrierChanged = true
       }
     }
-    // Why: partitions are read by host id, so one stored under the removed id
-    // would be orphaned. No writer keys partitions by ssh host today, but the
-    // schema tolerates it — re-key rather than strand it. If the new key
-    // already has a partition, that one is live; drop the dead old one.
+    // Why: partitions are read by host id; re-key from the removed id to the new one (keep new if it already exists).
     const partitions = this.state.workspaceSessionsByHostId
     const oldPartition = partitions?.[oldHostId]
     if (partitions && oldPartition) {
@@ -6275,8 +6079,7 @@ export class Store {
         (entry) =>
           entry !== setup && entry.projectId === setup.projectId && entry.hostId === newHostId
       )
-      // Why: a setup already exists for the re-added host — the old row is a
-      // stale ghost that would violate the (projectId, hostId) uniqueness.
+      // Why: drop the old ghost row that would violate (projectId, hostId) uniqueness with the re-added host's setup.
       if (duplicate) {
         setupsChanged = true
         continue
@@ -6289,9 +6092,7 @@ export class Store {
     if (setupsChanged) {
       this.state.projectHostSetups = keptSetups
     }
-    // Why: repo-row and host-setup rewrites can affect host-setup compatibility,
-    // but meta-only rewrites cannot — keep that sync under this gate. Persist
-    // whenever anything changed, so partial re-points aren't lost on quit.
+    // Why: repo-row and host-setup rewrites affect host-setup compatibility; meta-only rewrites don't, so gate the sync here.
     if (repoIds.size > 0 || setupsChanged) {
       this.syncProjectHostSetupCompatibilityState()
     }
@@ -6317,8 +6118,7 @@ export class Store {
     if (normalizedLease.leafId !== undefined && !isTerminalLeafId(normalizedLease.leafId)) {
       delete normalizedLease.leafId
     }
-    // Why: app-facing SSH PTY ids are globally scoped; durable relay leases
-    // stay target-local so reconnect can call relay pty.attach with raw ids.
+    // Why: store target-local pty ids in leases so reconnect can call relay pty.attach with raw ids (app ids are global).
     normalizedLease.ptyId = this.getRelayPtyIdForSshLeaseStorage(
       normalizedLease.targetId,
       normalizedLease.ptyId
@@ -6507,12 +6307,15 @@ export class Store {
     } catch (err) {
       console.error('[persistence] Failed to flush state:', err)
     }
+    try {
+      this.flushActiveViewPreferenceOrThrow()
+    } catch (err) {
+      console.error('[active-view] Failed to flush preference:', err)
+    }
     this.writeGithubCacheSnapshotSync()
   }
 
-  // Why: called after a project move rewrote this store's data file directly.
-  // From that point until relaunch, the in-memory state is stale and any
-  // write (debounced, sync, or shutdown flush) would undo the transfer.
+  // Why: a project move rewrote the data file directly; in-memory state is now stale and any write would undo the transfer.
   freezeWrites(): void {
     this.writesFrozen = true
     if (this.writeTimer) {
@@ -6521,8 +6324,7 @@ export class Store {
     }
   }
 
-  // Why best-effort: the sidecar is a refetchable cache — a failed write only
-  // costs a cold badge paint on next launch, never data.
+  // Why best-effort: the sidecar is a refetchable cache; a failed write only costs a cold badge paint next launch, never data.
   private writeGithubCacheSnapshotSync(): void {
     if (!this.githubCacheDirty) {
       return

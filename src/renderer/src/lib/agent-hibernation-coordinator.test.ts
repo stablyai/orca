@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
@@ -24,6 +26,7 @@ import type { AppState } from '@/store/types'
 
 const NOW = 10_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
+const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 const mockRuntimeEnvironmentCall = vi.fn()
 
@@ -188,6 +191,52 @@ describe('agent sleep coordinator', () => {
       ptyId: 'pty-1'
     })
     expect(useAppStore.getState().shutdownWorktreeTerminals).not.toHaveBeenCalled()
+  })
+
+  it('hibernates completed Pi after the periodic recovery capture', async () => {
+    vi.useFakeTimers()
+    const piEntry = {
+      ...entry(),
+      agentType: 'pi' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'pi-session-1',
+        transcriptPath: PI_TRANSCRIPT_PATH
+      }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      agentStatusByPaneKey: { [piEntry.paneKey]: piEntry },
+      sleepingAgentSessionsByPaneKey: {
+        [piEntry.paneKey]: {
+          paneKey: piEntry.paneKey,
+          tabId: piEntry.tabId,
+          worktreeId: piEntry.worktreeId!,
+          agent: 'pi',
+          providerSession: piEntry.providerSession,
+          prompt: '',
+          state: 'working',
+          capturedAt: piEntry.updatedAt,
+          updatedAt: piEntry.updatedAt,
+          origin: 'live'
+        }
+      }
+    })
+
+    const liveRecord = useAppStore.getState().sleepingAgentSessionsByPaneKey[piEntry.paneKey]
+    useAppStore.getState().captureAllSleepingAgentSessions('periodic')
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[piEntry.paneKey]).toBe(liveRecord)
+
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(shutdown).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).toHaveBeenCalledWith('wt-bg', {
+      paneKey: piEntry.paneKey,
+      tabId: 'tab-1',
+      leafId: LEAF,
+      ptyId: 'pty-1'
+    })
   })
 
   it('hibernates an eligible pane when a sibling shell PTY is live', async () => {

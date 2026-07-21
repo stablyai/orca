@@ -57,6 +57,8 @@ vi.mock('./feedback', () => ({
 
 vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
   getCrashBreadcrumbSnapshot: vi.fn(() => []),
+  // Renderer breadcrumb routing is covered in crash-reporting-renderer-breadcrumbs.test.ts.
+  recordCoalescedCrashBreadcrumb: vi.fn(),
   recordCrashBreadcrumb: (...args: unknown[]) => recordCrashBreadcrumbMock(...args)
 }))
 
@@ -781,69 +783,5 @@ describe('registerCrashReportingHandlers', () => {
     })
 
     expect(recordMock).toHaveBeenCalledTimes(261)
-  })
-
-  it('records sanitized renderer breadcrumbs', () => {
-    registerCrashReportingHandlers({
-      getLatestPending: vi.fn(),
-      getById: vi.fn(),
-      dismiss: vi.fn(),
-      markSent: vi.fn(),
-      listRecent: vi.fn(),
-      record: vi.fn(),
-      formatDiagnosticText: vi.fn()
-    } as never)
-
-    listeners.get('crashReports:recordBreadcrumb')?.(null, {
-      name: 'renderer_error',
-      data: {
-        message: 'boom',
-        count: 2,
-        ok: true,
-        empty: null,
-        badNumber: Number.POSITIVE_INFINITY,
-        object: { ignored: true }
-      }
-    })
-
-    expect(recordCrashBreadcrumbMock).toHaveBeenCalledWith('renderer_error', {
-      message: 'boom',
-      count: 2,
-      ok: true,
-      empty: null
-    })
-    expect(startSpanMock).toHaveBeenCalledWith('renderer.breadcrumb', {
-      attributes: {
-        kind: 'crash-breadcrumb',
-        'breadcrumb.name': 'renderer_error',
-        'breadcrumb.data': {
-          message: 'boom',
-          count: 2,
-          ok: true,
-          empty: null
-        }
-      }
-    })
-    expect(spanEndMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores renderer breadcrumbs without a string name', () => {
-    registerCrashReportingHandlers({
-      getLatestPending: vi.fn(),
-      getById: vi.fn(),
-      dismiss: vi.fn(),
-      markSent: vi.fn(),
-      listRecent: vi.fn(),
-      record: vi.fn(),
-      formatDiagnosticText: vi.fn()
-    } as never)
-
-    listeners.get('crashReports:recordBreadcrumb')?.(null, {
-      name: 123,
-      data: { message: 'boom' }
-    })
-
-    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
-    expect(startSpanMock).not.toHaveBeenCalled()
   })
 })

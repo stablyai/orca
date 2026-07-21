@@ -64,13 +64,14 @@ describe('registerMobileHandlers', () => {
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
       utun4: [{ family: 'IPv4', internal: false, address: '100.102.47.57' }]
     })
-    const createPairingOffer = vi.fn().mockReturnValue({
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
-      deviceId: 'mobile-1'
+      deviceId: 'mobile-1',
+      connectionMode: 'automatic'
     })
-    const rpcServer = { createPairingOffer }
+    const rpcServer = { createMobilePairingOffer }
 
     registerMobileHandlers(rpcServer as never)
 
@@ -78,15 +79,37 @@ describe('registerMobileHandlers', () => {
       available: true,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
-      deviceId: 'mobile-1'
+      deviceId: 'mobile-1',
+      // The encoded mode passes through so the UI can flag a degraded mint.
+      connectionMode: 'automatic'
     })
 
-    expect(createPairingOffer).toHaveBeenCalledWith({
+    expect(createMobilePairingOffer).toHaveBeenCalledWith({
       address: '100.102.47.57',
+      connectionMode: undefined,
       rotate: undefined,
-      name: expect.stringMatching(/^Mobile /),
-      scope: 'mobile'
+      name: expect.stringMatching(/^Mobile /)
     })
+  })
+
+  it('forwards an explicit local-only pairing choice', async () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
+    })
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://192.168.1.24:6768',
+      deviceId: 'mobile-local',
+      connectionMode: 'local-only'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+    await handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
+
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionMode: 'local-only' })
+    )
   })
 
   it('lists only paired mobile-scoped devices', () => {
@@ -227,6 +250,27 @@ describe('registerMobileHandlers', () => {
       revoked: true
     })
     expect(revokeRuntimeAccess).toHaveBeenCalledWith('runtime-1')
+  })
+
+  it('awaits mobile device revocation before replying', async () => {
+    const revokeMobileDevice = vi.fn().mockResolvedValue(true)
+    const rpcServer = {
+      getDeviceRegistry: () => ({}),
+      revokeMobileDevice
+    }
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:revokeDevice')?.(null, { deviceId: 'mobile-1' })
+    ).resolves.toEqual({ revoked: true })
+    expect(revokeMobileDevice).toHaveBeenCalledWith('mobile-1')
+  })
+
+  it('reports the current relay broker status without exposing a toggle', () => {
+    registerMobileHandlers({} as never, { getRelayStatus: () => 'registered' })
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
   })
 
   it('inspects and repairs the current packaged Windows websocket port', async () => {

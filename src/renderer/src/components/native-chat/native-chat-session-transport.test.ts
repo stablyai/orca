@@ -82,6 +82,59 @@ describe('getNativeChatSessionTransport — selection', () => {
     expect(nativeChatReadSession).not.toHaveBeenCalled()
   })
 
+  it('validates lifecycle metadata on runtime read responses', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+    runtimeEnvironmentsCall
+      .mockResolvedValueOnce(okEnvelope({ messages: [message('valid')], lifecycle }))
+      .mockResolvedValueOnce(
+        okEnvelope({
+          messages: [message('invalid')],
+          lifecycle: { state: 'completed', turnId: '', timestamp: undefined }
+        })
+      )
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('valid')],
+      lifecycle
+    })
+    // An invalid lifecycle payload is dropped, leaving prose recovery to settle.
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('invalid')]
+    })
+  })
+
+  it('accepts interrupted lifecycle metadata from a remote runtime', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const lifecycle = { state: 'interrupted', turnId: 'turn-2', timestamp: 43 } as const
+    runtimeEnvironmentsCall.mockResolvedValueOnce(
+      okEnvelope({ messages: [message('interrupted')], lifecycle })
+    )
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await expect(transport.readSession('codex', 'sess-1')).resolves.toEqual({
+      messages: [message('interrupted')],
+      lifecycle
+    })
+  })
+
+  it('keeps lifecycle metadata whose timestamp is omitted, normalizing it to null', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    runtimeEnvironmentsCall.mockResolvedValueOnce(
+      okEnvelope({
+        messages: [message('no-ts')],
+        lifecycle: { state: 'completed', turnId: 'turn-3' }
+      })
+    )
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('no-ts')],
+      lifecycle: { state: 'completed', turnId: 'turn-3', timestamp: null }
+    })
+  })
+
   it('returns the local adapter on the web client even with an owner (R3 guard)', async () => {
     ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     nativeChatReadSession.mockResolvedValue({ messages: [] })
@@ -119,22 +172,139 @@ describe('runtime subscribe', () => {
     }
   }
 
-  it('forwards only appended frames with an array of messages', async () => {
+  it('normalizes the first frame to a snapshot and reconnect replays to appends', async () => {
     markRuntimeEnvironmentCompatible(ENV)
     const { deliver } = stubSubscribe()
-    const onAppended = vi.fn()
+    const onFrame = vi.fn()
     const transport = getNativeChatSessionTransport(ENV)
 
-    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onAppended)
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
     await Promise.resolve()
 
     deliver({ type: 'appended', messages: [message('m-1')] })
+    deliver({ type: 'snapshot', messages: [message('m-snapshot')] })
+    deliver({ type: 'replacement', messages: [message('m-replacement')], hasMore: true })
     deliver({ type: 'ready' }) // non-appended, ignored
     deliver({ type: 'appended', messages: undefined }) // no array, ignored
     deliver({ type: 'appended', messages: [message('m-2')] }, false) // !ok, ignored
 
-    expect(onAppended).toHaveBeenCalledTimes(1)
-    expect(onAppended).toHaveBeenCalledWith([message('m-1')])
+    expect(onFrame).toHaveBeenCalledTimes(3)
+    expect(onFrame).toHaveBeenNthCalledWith(1, {
+      type: 'snapshot',
+      messages: [message('m-1')],
+      hasMore: false
+    })
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'snapshot',
+      messages: [message('m-snapshot')],
+      hasMore: false
+    })
+    expect(onFrame).toHaveBeenNthCalledWith(3, {
+      type: 'replacement',
+      messages: [message('m-replacement')],
+      hasMore: true
+    })
+  })
+
+  it('validates lifecycle metadata on runtime stream frames', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+    deliver({
+      type: 'snapshot',
+      messages: [message('valid')],
+      lifecycle
+    })
+    deliver({
+      type: 'appended',
+      messages: [message('invalid')],
+      lifecycle: { state: 'completed', turnId: '', timestamp: undefined }
+    })
+
+    expect(onFrame).toHaveBeenNthCalledWith(1, {
+      type: 'snapshot',
+      messages: [message('valid')],
+      hasMore: false,
+      lifecycle
+    })
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'appended',
+      messages: [message('invalid')]
+    })
+  })
+
+  it('omits an invalid lifecycle payload from a stream frame', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+    deliver({
+      type: 'snapshot',
+      messages: [message('seed')],
+      hasMore: false,
+      lifecycle: { state: 'completed', turnId: 'turn-ok', timestamp: 1 }
+    })
+    deliver({
+      type: 'appended',
+      messages: [message('bad-lifecycle')],
+      lifecycle: { state: 'completed', turnId: '', timestamp: undefined }
+    })
+
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'appended',
+      messages: [message('bad-lifecycle')]
+    })
+  })
+
+  it('settles with an empty snapshot when the first ok frame is an unrecognized shape', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+
+    // An ok response we can't parse must still un-stick the view exactly once,
+    // carrying any error the runtime sent.
+    deliver({ type: 'ready', error: 'boom' })
+    deliver({ type: 'ready' })
+
+    expect(onFrame).toHaveBeenCalledTimes(1)
+    expect(onFrame).toHaveBeenCalledWith({
+      type: 'snapshot',
+      messages: [],
+      hasMore: false,
+      error: 'boom'
+    })
+  })
+
+  it('carries an error on a post-initial reconnect snapshot', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
+    await Promise.resolve()
+
+    deliver({ type: 'snapshot', messages: [message('m-1')] })
+    deliver({ type: 'snapshot', messages: [], error: 'runtime too old' })
+
+    expect(onFrame).toHaveBeenLastCalledWith({
+      type: 'snapshot',
+      messages: [],
+      hasMore: false,
+      error: 'runtime too old'
+    })
   })
 
   it('sync unsubscribe closes the dedicated stream and issues no unsubscribe RPC (KTD-6)', async () => {
@@ -181,6 +351,115 @@ describe('runtime subscribe', () => {
       drop() // a late close after teardown must not reconnect
       await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
       expect(subscribeCount()).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps retrying when a reconnect subscribe rejects', async () => {
+    vi.useFakeTimers()
+    try {
+      markRuntimeEnvironmentCompatible(ENV)
+      const attempts: {
+        callbacks: {
+          onResponse: (response: { ok: boolean; result?: unknown }) => void
+          onClose?: () => void
+        }
+        resolve: (handle: { unsubscribe: () => void; sendBinary: () => void }) => void
+        reject: (error: Error) => void
+      }[] = []
+      runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
+        return new Promise((resolve, reject) => attempts.push({ callbacks, resolve, reject }))
+      })
+      const transport = getNativeChatSessionTransport(ENV)
+
+      transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, vi.fn())
+      attempts[0]!.resolve({ unsubscribe: vi.fn(), sendBinary: vi.fn() })
+      attempts[0]!.callbacks.onResponse({
+        ok: true,
+        result: { type: 'snapshot', messages: [], hasMore: false }
+      })
+      attempts[0]!.callbacks.onClose?.()
+      await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
+      expect(attempts).toHaveLength(2)
+
+      attempts[1]!.reject(new Error('reconnect failed'))
+      await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
+
+      expect(attempts).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('closes and retries when an established reconnect returns an error envelope', async () => {
+    vi.useFakeTimers()
+    try {
+      markRuntimeEnvironmentCompatible(ENV)
+      const attempts: {
+        callbacks: {
+          onResponse: (response: { ok: boolean; result?: unknown }) => void
+          onClose?: () => void
+        }
+        unsubscribe: ReturnType<typeof vi.fn>
+      }[] = []
+      runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
+        const unsubscribe = vi.fn()
+        attempts.push({ callbacks, unsubscribe })
+        return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
+      })
+      const transport = getNativeChatSessionTransport(ENV)
+
+      transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, vi.fn())
+      await vi.advanceTimersByTimeAsync(0)
+      attempts[0]!.callbacks.onResponse({
+        ok: true,
+        result: { type: 'snapshot', messages: [], hasMore: false }
+      })
+      attempts[0]!.callbacks.onClose?.()
+      await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
+      expect(attempts).toHaveLength(2)
+
+      attempts[1]!.callbacks.onResponse({ ok: false })
+      attempts[1]!.callbacks.onClose?.()
+      expect(attempts[1]!.unsubscribe).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
+
+      expect(attempts).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('closes an out-of-order stale handle without replacing the active reconnect', async () => {
+    vi.useFakeTimers()
+    try {
+      markRuntimeEnvironmentCompatible(ENV)
+      const attempts: {
+        callbacks: { onClose?: () => void }
+        resolve: (handle: { unsubscribe: () => void; sendBinary: () => void }) => void
+      }[] = []
+      runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
+        return new Promise((resolve) => attempts.push({ callbacks, resolve }))
+      })
+      const transport = getNativeChatSessionTransport(ENV)
+      const stop = transport.subscribe(
+        { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
+        vi.fn()
+      )
+
+      attempts[0]!.callbacks.onClose?.()
+      await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
+      const activeUnsubscribe = vi.fn()
+      attempts[1]!.resolve({ unsubscribe: activeUnsubscribe, sendBinary: vi.fn() })
+      await Promise.resolve()
+      const staleUnsubscribe = vi.fn()
+      attempts[0]!.resolve({ unsubscribe: staleUnsubscribe, sendBinary: vi.fn() })
+      await Promise.resolve()
+      stop()
+
+      expect(staleUnsubscribe).toHaveBeenCalledOnce()
+      expect(activeUnsubscribe).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }

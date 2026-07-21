@@ -84,4 +84,37 @@ describe('RPC optional pipe schemas', () => {
     })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.prefetchCreateBase'), { repo: 'repo-1' })
   })
+
+  it('accepts worktree.create payloads sent by the previous mobile protocol', () => {
+    const create = methodParams(WORKTREE_METHODS, 'worktree.create')
+
+    expectParses(create, {
+      repo: 'id:repo-github',
+      name: 'fix-mobile-tasks',
+      displayName: 'Fix mobile tasks',
+      setupDecision: 'run',
+      activate: true,
+      startupDraft: 'https://github.com/acme/app/pull/123',
+      createdWithAgent: 'codex',
+      linkedPR: 123,
+      baseBranch: 'origin/main',
+      compareBaseRef: 'origin/main',
+      branchNameOverride: 'feature/mobile-tasks',
+      pushTarget: { remoteName: 'origin', branchName: 'feature/mobile-tasks' }
+    })
+    expectParses(create, {
+      repo: 'id:repo-gitlab',
+      name: 'mr-7',
+      linkedGitLabMR: 7,
+      sparseCheckout: { directories: ['mobile'], presetId: 'mobile' },
+      comment: 'keep mobile parity'
+    })
+    expectParses(create, {
+      repo: 'id:repo-linear',
+      name: 'eng-42',
+      linkedLinearIssue: 'ENG-42',
+      linkedLinearIssueWorkspaceId: 'workspace-1',
+      linkedLinearIssueOrganizationUrlKey: 'acme'
+    })
+  })
 })

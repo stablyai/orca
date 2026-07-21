@@ -1,14 +1,6 @@
 import { isPushHookFailure } from './source-control-push-failure'
 
-// Why: git's stderr often embeds the full remote URL, which can include a
-// credential. Redact carefully: classic `user:password@` forms always carry
-// a credential on any scheme (HTTPS, ssh://, git://, git+ssh://), but a
-// lone `user@` is a credential ONLY for HTTP(S) (e.g. token-only PATs like
-// `https://ghp_xxx@host`). For `ssh://git@host/...` the `git` login is
-// required by the SSH remote — stripping it would produce a broken URL in
-// the surfaced error and hide which remote actually failed. The two
-// scheme-scoped patterns below keep SSH user-info intact while still
-// scrubbing passwords on any scheme and HTTPS token-only forms.
+// Why: strip `user:password@` on any scheme, but a lone `user@` only on HTTP(S) — SSH's git@host user-info is required, so stripping breaks the URL.
 const USERPASS_URL_PATTERN = /([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi
 const HTTPS_TOKEN_URL_PATTERN = /(https?:\/\/)[^\s/@:]+@/gi
 const SUBMODULE_PUSH_FAILURE_PATTERN = /Unable to push submodule ['"](.+?)['"]/i
@@ -20,6 +12,11 @@ const NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN =
   /(?:^|:\s)((?:Submodule '[^'\n]+'|A submodule) (?:has remote changes\. Pull inside the submodule, then try again\.|could not be pushed\. Resolve the submodule push error, then try again\.))(?:$|\s)/i
 const DIVERGENT_PULL_RECONCILIATION_PATTERN =
   /Need to specify how to reconcile divergent branches|divergent branches and need to specify how to reconcile them/i
+// Why: these args already pin a reconcile strategy; the merge fallback must not override an explicit choice like --ff-only.
+const RECONCILIATION_PULL_ARG_PATTERN =
+  /^(--rebase|--no-rebase|--ff-only|--ff|--no-ff|--merge|-r)(=|$)/
+// Why: --no-rebase (historical merge default) predates the 2.25 baseline, so this fallback is safe on every supported Git.
+export const MERGE_RECONCILIATION_PULL_ARGS = ['--no-rebase']
 
 export function stripCredentialsFromMessage(message: string): string {
   return message.replace(USERPASS_URL_PATTERN, '$1').replace(HTTPS_TOKEN_URL_PATTERN, '$1')
@@ -36,8 +33,7 @@ export function formatSubmodulePushFailureDetail(message: string): string | null
     return null
   }
 
-  // Why: recursive push can hide the actionable nested rejection behind a
-  // top-level "failed to push all needed submodules" fatal line.
+  // Why: recursive push hides the actionable nested rejection behind a top-level "failed to push all needed submodules" line.
   const submoduleName = trimmed.match(SUBMODULE_PUSH_FAILURE_PATTERN)?.[1]?.trim()
   const subject = submoduleName ? `Submodule '${submoduleName}'` : 'A submodule'
   if (SUBMODULE_REMOTE_CHANGED_PATTERN.test(trimmed)) {
@@ -47,10 +43,7 @@ export function formatSubmodulePushFailureDetail(message: string): string | null
 }
 
 function extractTailLine(message: string): string {
-  // Why: execFile rejections prefix the message with "Command failed: git ..."
-  // followed by the full stderr. The meaningful diagnostic is typically the
-  // last non-empty line; surfacing the full blob risks leaking local paths or
-  // environment details to the UI.
+  // Why: last non-empty stderr line is the diagnostic; the full blob risks leaking local paths/env to the UI.
   for (const rawLine of iterateLinesFromEnd(message)) {
     const line = rawLine.trim()
     if (line.length > 0) {
@@ -81,6 +74,36 @@ function* iterateLinesFromEnd(value: string): Generator<string> {
   yield value.slice(0, lineEnd)
 }
 
+// Why: Git 2.27+ refuses divergent pulls when no pull.rebase/pull.ff policy is set; detected so callers can retry as merge.
+export function isDivergentPullReconciliationError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return DIVERGENT_PULL_RECONCILIATION_PATTERN.test(stripCredentialsFromMessage(error.message))
+}
+
+// Why: if the pull already specifies a reconcile strategy, the caller's choice must win over the merge fallback.
+export function pullArgsSpecifyReconciliation(pullArgs: string[]): boolean {
+  return pullArgs.some((arg) => RECONCILIATION_PULL_ARG_PATTERN.test(arg))
+}
+
+// Why: on hosts with no pull.rebase/pull.ff policy, Git 2.27+ refuses divergent pulls; retry as merge (Git's historical default).
+// Not GitCapabilityCache-routed: this is per-repo config/branch state, not a stable host capability.
+export async function runPullWithDivergenceFallback(
+  pullArgs: string[],
+  runPull: (effectiveArgs: string[]) => Promise<void>
+): Promise<void> {
+  try {
+    await runPull(pullArgs)
+  } catch (error) {
+    if (!pullArgsSpecifyReconciliation(pullArgs) && isDivergentPullReconciliationError(error)) {
+      await runPull([...MERGE_RECONCILIATION_PULL_ARGS, ...pullArgs])
+      return
+    }
+    throw error
+  }
+}
+
 export type GitRemoteOperation = 'push' | 'pull' | 'fetch' | 'upstream'
 
 export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOperation): string {
@@ -88,10 +111,7 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return 'Git remote operation failed.'
   }
 
-  // Why: scrub credentials up-front so every downstream branch — including
-  // any future refactor that returns a substring of `raw` — operates on
-  // already-redacted text. The fast-path branches below return fixed
-  // literals today, but this hardens against accidental leakage later.
+  // Why: scrub credentials up-front so every downstream branch operates on already-redacted text.
   const raw = stripCredentialsFromMessage(error.message)
 
   const submodulePushFailureDetail = formatSubmodulePushFailureDetail(raw)
@@ -99,12 +119,7 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return submodulePushFailureDetail
   }
 
-  // Why: `non-fast-forward` / `fetch first` can appear on fetch (after a
-  // remote force-push updating a tracking ref) and on pull (with
-  // `pull.ff=only`), so the "pull or sync first" guidance only makes sense
-  // when the user was actually pushing. For other operations, fall through
-  // to the generic tail-line path. `operation === undefined` keeps the
-  // legacy push-shaped message for any caller that hasn't been updated yet.
+  // Why: `non-fast-forward`/`fetch first` also occur on fetch/pull, so gate this push-specific guidance to push.
   if (
     (operation === 'push' || operation === undefined) &&
     (raw.includes('non-fast-forward') || raw.includes('fetch first'))
@@ -113,8 +128,7 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
   }
 
   if (operation === 'push' && isPushHookFailure(raw)) {
-    // Why: local pre-push hooks put the actionable lint/hook output before
-    // git's generic "failed to push some refs" tail line.
+    // Why: pre-push hook output is the actionable part, printed before git's generic "failed to push some refs" tail line.
     return raw.trim()
   }
 
@@ -149,27 +163,11 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return 'Pull would overwrite untracked files. Move, remove, or add them before pulling.'
   }
 
-  // Fallthrough: extract only the tail stderr line. `raw` was already
-  // credential-scrubbed at the top of the function, so no further scrub needed.
+  // Fallthrough: raw was already credential-scrubbed at top, so just extract the tail stderr line.
   return extractTailLine(raw)
 }
 
-// Why: we only swallow clearly-no-upstream signals — an expected state, not a
-// failure. Other errors ('not a git repository', 'corrupt', auth failures,
-// sparse-checkout errors, etc.) must fall through to the caller so users can
-// act on them. We explicitly avoid matching `HEAD@{u}` alone because execFile
-// wraps errors with "Command failed: git rev-parse --abbrev-ref HEAD@{u}…",
-// which would cause every non-repo/corrupt failure to spuriously look like
-// no-upstream. We also do NOT match 'no such branch' — that phrase is too
-// broad and can mask real errors on corrupt refs or sparse-checkout failures.
-// Additionally gate the phrase match on a `fatal:` prefix: git always
-// prefixes these diagnostics with `fatal:`, so requiring it prevents
-// `HEAD does not point` / `Needed a single revision` from matching unrelated
-// output (e.g. hook stdout, progress lines) and silently hiding real
-// corrupt-repo / unborn-HEAD / ambiguous-ref failures behind a spurious
-// "0 ahead / 0 behind, no upstream" UI state. The one ambiguous-ref
-// exception is HEAD@{u}: git emits it when branch config points at a
-// tracking ref that is missing locally, which is the same expected UX state.
+// Why: require a `fatal:` prefix so wrapped command text or hook/progress output can't spuriously match and mask real failures.
 const NO_UPSTREAM_PHRASE_PATTERN =
   /no upstream configured|no tracking information|HEAD does not point|Needed a single revision|ambiguous argument 'HEAD@\{u\}'/i
 const FATAL_PREFIX_PATTERN = /(^|\n)fatal:/i

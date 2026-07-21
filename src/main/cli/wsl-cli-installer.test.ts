@@ -194,9 +194,37 @@ describe('WslCliInstaller', () => {
     )
     expect(wsl.getBridge()).toBe(_internals.buildWslBridgeScript())
     const installCommand = wsl.calls.find((command) => command.includes('cat > "$command_tmp"'))
+    expect(installCommand).toBeDefined()
     expect(installCommand).toContain("legacy_command_path='/home/alice/.local/bin/orca'")
     expect(installCommand).toContain('rm -f "$legacy_command_path"')
+    // Why: the new bridge accepts the old launcher's positional arguments, so
+    // publishing it first keeps interrupted upgrades usable.
+    const bridgePublishIndex = installCommand?.indexOf('mv -f "$bridge_tmp"') ?? -1
+    const launcherPublishIndex = installCommand?.indexOf('mv -f "$command_tmp"') ?? -1
+    expect(bridgePublishIndex).toBeGreaterThan(-1)
+    expect(bridgePublishIndex).toBeLessThan(launcherPublishIndex)
     expect(installCommand).toContain('[ ! -L "$legacy_command_path" ]')
+  })
+
+  it('continues checking WSL when the host launcher exists but host PATH is unknown', async () => {
+    const wsl = createWslRunner()
+    const hostStatus = {
+      ...makeHostStatus(),
+      pathConfigured: null,
+      detail: 'Orca could not read the Windows user PATH registry value.'
+    } satisfies CliInstallStatus
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => hostStatus },
+      wslRunner: wsl.runner
+    })
+
+    await expect(installer.getStatus()).resolves.toMatchObject({
+      supported: true,
+      state: 'not_installed',
+      commandPath: '/home/alice/.local/bin/orca-ide'
+    })
   })
 
   it('derives the shared WSL bridge path for current and legacy command names', () => {
@@ -296,12 +324,34 @@ describe('WslCliInstaller', () => {
       'Orca WSL CLI requires Windows interop and could not find powershell.exe.'
     )
     expect(launcher).toContain('"$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File')
-    expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" "$@"')
+    expect(launcher).toContain('ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {')
+    expect(launcher).toContain('ORCA_WSL_CWD=/')
+    expect(launcher).toContain('cd /')
+    expect(launcher).toContain('ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")')
+    expect(launcher.indexOf('ORCA_WSL_CWD=$(pwd -P')).toBeLessThan(
+      launcher.indexOf('ORCA_BRIDGE_PS1_WIN=$(wslpath')
+    )
+    expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
     expect(launcher).not.toContain('-Command')
+    expect(bridge).toContain('[CmdletBinding(PositionalBinding=$false)]')
+    expect(bridge).toContain('[Parameter(Mandatory=$true, Position=0)]')
+    expect(bridge).toContain('[string]$WslCwd')
     expect(bridge).toContain('[Parameter(ValueFromRemainingArguments=$true)]')
+    expect(bridge).toContain('if ([string]::IsNullOrEmpty($WslCwd))')
+    expect(bridge).toContain('$env:ORCA_CLI_CWD = $WslCwd')
+    expect(bridge).toContain('Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)')
     expect(bridge).toContain('& $OrcaLauncher @ForwardArgs')
+    const nullExitCodeBranch = bridge.indexOf('if ($null -eq $LASTEXITCODE)')
+    const invocationFailureBranch = bridge.indexOf('if (-not $?)')
+    expect(nullExitCodeBranch).toBeGreaterThan(-1)
+    // Why: native launchers can set a non-zero LASTEXITCODE while $? is false;
+    // checking the native status first preserves that specific exit code.
+    expect(nullExitCodeBranch).toBeLessThan(invocationFailureBranch)
+    expect(bridge).toContain('$exitCode = $LASTEXITCODE')
+    expect(bridge).toContain('Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue')
     expect(bridge).toContain('catch')
-    expect(bridge).toContain('exit 1')
+    expect(bridge).toContain('$exitCode = 1')
+    expect(bridge).toContain('exit $exitCode')
   })
 
   it('wraps WSL bash scripts as a single encoded command line', () => {

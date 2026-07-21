@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
   chmodSync
 } from 'node:fs'
@@ -23,6 +25,7 @@ import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
+  readHooksJsonWithRaw,
   wrapWindowsHookCommand,
   writeManagedScript,
   writeHooksJson,
@@ -41,7 +44,50 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
+describe('readHooksJsonWithRaw', () => {
+  it('returns the parsed config together with the exact bytes it came from', () => {
+    const contents = '{"hooks": {"Stop": []}, "custom": 1}\n'
+    writeFileSync(configPath, contents, 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({
+      raw: contents,
+      config: { hooks: { Stop: [] }, custom: 1 }
+    })
+  })
+
+  it('reports a missing file as an empty config with no raw bytes', () => {
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: null, config: {} })
+  })
+
+  it('keeps the raw bytes when the contents are not a JSON object', () => {
+    writeFileSync(configPath, 'not json\n', 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: 'not json\n', config: null })
+  })
+})
+
 describe('writeHooksJson', () => {
+  it('updates a symlink target without replacing the hook config link', () => {
+    const targetPath = join(tmpDir, 'dotfiles-hooks.json')
+    writeFileSync(targetPath, '{"hooks":{}}\n')
+    symlinkSync(targetPath, configPath)
+
+    writeHooksJson(configPath, { hooks: { Stop: [] } })
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(JSON.parse(readFileSync(targetPath, 'utf-8'))).toEqual({ hooks: { Stop: [] } })
+  })
+
+  it('does not replace a dangling hook config symlink', () => {
+    const targetPath = join(tmpDir, 'missing-dotfiles-hooks.json')
+    symlinkSync(targetPath, configPath)
+
+    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow()
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(targetPath)).toBe(false)
+  })
+
   it('writes the config as formatted JSON', () => {
     const config: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'foo' }] }] }
@@ -70,6 +116,22 @@ describe('writeHooksJson', () => {
 
     const bak = JSON.parse(readFileSync(`${configPath}.bak`, 'utf-8'))
     expect(bak).toEqual(original)
+  })
+
+  it('does not follow an existing .bak symlink', () => {
+    const original = '{"hooks":{}}\n'
+    const backupTarget = join(tmpDir, 'dotfiles-backup.json')
+    writeFileSync(configPath, original, 'utf-8')
+    writeFileSync(backupTarget, 'pristine backup target\n', 'utf-8')
+    symlinkSync(backupTarget, `${configPath}.bak`)
+
+    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow(
+      'Refusing to overwrite symlinked backup'
+    )
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(lstatSync(`${configPath}.bak`).isSymbolicLink()).toBe(true)
+    expect(readFileSync(backupTarget, 'utf-8')).toBe('pristine backup target\n')
   })
 
   it('does not create a .bak file when the config does not yet exist', () => {
@@ -454,27 +516,32 @@ describe('wrapWindowsHookCommand', () => {
 })
 
 describe('wrapWindowsCmdHookCommand', () => {
-  it('keeps the safe-path launcher PowerShell-free and drains non-file paths', () => {
+  it('returns the bare, directly-spawnable path for a cmd-safe managed script', () => {
+    // Why: Codex/Antigravity/Devin launch the command as a program (argv[0]),
+    // not via cmd.exe, so the launcher must be a single spawnable token — a bare
+    // .cmd path. A cmd-builtin `if …` launcher has argv[0] = `if`, which is
+    // unspawnable and fails every hook with exit 1 (#8430 regression).
     const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
     const command = wrapWindowsCmdHookCommand(scriptPath)
-    expect(command).toContain(`if exist "${scriptPath}\\."`)
-    expect(command).toContain(`if exist "${scriptPath}" (call "${scriptPath}")`)
-    expect(command).toContain('"%SystemRoot%\\System32\\more.com" >nul 2>nul')
+    expect(command).toBe(scriptPath)
+    expect(command).not.toMatch(/^if\b/)
     expect(command).not.toMatch(/powershell/i)
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'drains stdin when a directory occupies the managed script path',
+    'resolves the launcher to a real executable file, not a shell fragment',
     () => {
-      const scriptPath = 'directory-hook.cmd'
-      mkdirSync(join(tmpDir, scriptPath))
-      const result = spawnSync('cmd.exe', ['/d', '/c', wrapWindowsCmdHookCommand(scriptPath)], {
-        cwd: tmpDir,
-        input: Buffer.alloc(1_000_000, 'x')
-      })
-
-      expect(result.error).toBeUndefined()
-      expect(result.status).toBe(0)
+      // Regression guard for #8430: Codex/Antigravity/Devin spawn the launcher as
+      // a program (argv[0]), so it must be an existing, launchable file. The broken
+      // `if exist … (call …)` form had argv[0] = `if` — a cmd builtin, not a file —
+      // which is unspawnable and failed every hook. The bare path is the file.
+      // win32-only: the real temp path is cmd-safe only with backslashes; a POSIX
+      // tmpDir has `/`, which routes to the encoded fallback by design.
+      const scriptPath = join(tmpDir, 'codex-hook.cmd')
+      writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n', 'utf-8')
+      const command = wrapWindowsCmdHookCommand(scriptPath)
+      expect(command).toBe(scriptPath)
+      expect(existsSync(command)).toBe(true)
     }
   )
 

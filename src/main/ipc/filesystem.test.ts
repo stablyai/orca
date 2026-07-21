@@ -1,11 +1,13 @@
 /* eslint-disable max-lines -- Why: filesystem authorization and git/file IPC invariants are exercised end-to-end here, so the scenarios stay together to keep the security boundary readable. */
 import path from 'node:path'
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
 const {
   handleMock,
   showSaveDialogMock,
+  showOpenDialogMock,
   fromWebContentsMock,
   trashItemMock,
   readdirMock,
@@ -43,10 +45,12 @@ const {
   getSshFilesystemProviderMock,
   getSshGitProviderMock,
   tryDeleteWslUncPathMock,
-  recordCrashBreadcrumbMock
+  recordCrashBreadcrumbMock,
+  promoteLocalDownloadedFolderMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   showSaveDialogMock: vi.fn(),
+  showOpenDialogMock: vi.fn(),
   fromWebContentsMock: vi.fn(),
   trashItemMock: vi.fn(),
   readdirMock: vi.fn(),
@@ -84,7 +88,8 @@ const {
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
   tryDeleteWslUncPathMock: vi.fn(),
-  recordCrashBreadcrumbMock: vi.fn()
+  recordCrashBreadcrumbMock: vi.fn(),
+  promoteLocalDownloadedFolderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -92,7 +97,8 @@ vi.mock('electron', () => ({
     fromWebContents: fromWebContentsMock
   },
   dialog: {
-    showSaveDialog: showSaveDialogMock
+    showSaveDialog: showSaveDialogMock,
+    showOpenDialog: showOpenDialogMock
   },
   ipcMain: {
     handle: handleMock
@@ -120,6 +126,10 @@ vi.mock('../wsl-unc-delete', () => ({
 
 vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
   recordCrashBreadcrumb: recordCrashBreadcrumbMock
+}))
+
+vi.mock('../local-downloaded-folder-promotion', () => ({
+  promoteLocalDownloadedFolder: promoteLocalDownloadedFolderMock
 }))
 
 vi.mock('../git/status', () => ({
@@ -222,6 +232,10 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 describe('registerFilesystemHandlers', () => {
+  const folderDownloadSender = Object.assign(new EventEmitter(), {
+    isDestroyed: vi.fn(() => false)
+  })
+  const folderDownloadEvent = { sender: folderDownloadSender }
   const store = {
     getRepos: () => [
       {
@@ -238,10 +252,13 @@ describe('registerFilesystemHandlers', () => {
   }
 
   beforeEach(() => {
+    folderDownloadSender.removeAllListeners()
+    folderDownloadSender.isDestroyed.mockReset().mockReturnValue(false)
     handlers.clear()
     for (const mock of [
       handleMock,
       showSaveDialogMock,
+      showOpenDialogMock,
       fromWebContentsMock,
       trashItemMock,
       readdirMock,
@@ -278,7 +295,8 @@ describe('registerFilesystemHandlers', () => {
       cancelGeneratePullRequestFieldsLocalMock,
       getSshFilesystemProviderMock,
       getSshGitProviderMock,
-      tryDeleteWslUncPathMock
+      tryDeleteWslUncPathMock,
+      promoteLocalDownloadedFolderMock
     ]) {
       mock.mockReset()
     }
@@ -304,7 +322,9 @@ describe('registerFilesystemHandlers', () => {
     trashItemMock.mockResolvedValue(undefined)
     // Default: not a WSL UNC path, so deletePath falls through to shell.trashItem.
     tryDeleteWslUncPathMock.mockResolvedValue(false)
+    promoteLocalDownloadedFolderMock.mockResolvedValue(undefined)
     showSaveDialogMock.mockResolvedValue({ canceled: true })
+    showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
     fromWebContentsMock.mockReturnValue(null)
     getSshGitProviderMock.mockReturnValue(null)
     statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
@@ -709,6 +729,246 @@ describe('registerFilesystemHandlers', () => {
     expect(renameMock.mock.calls[0]).toEqual(['/downloads/report.pdf', backupPath])
     expect(renameMock.mock.calls[1]).toEqual([tempPath, '/downloads/report.pdf'])
     expect(rmMock).toHaveBeenCalledWith(backupPath, { force: true })
+  })
+
+  it('downloads remote folders into a temporary sibling before promotion', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ canceled: false, destinationPath: path.join('/downloads', 'src') })
+
+    const tempPath = provider.downloadFolder.mock.calls[0][1]
+    expect(path.dirname(tempPath)).toBe(path.normalize('/downloads'))
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      properties: ['openDirectory', 'createDirectory']
+    })
+    expect(provider.downloadFolder).toHaveBeenCalledWith(
+      '/remote/src',
+      tempPath,
+      expect.objectContaining({ signal: expect.anything() })
+    )
+    expect(folderDownloadSender.listenerCount('destroyed')).toBe(0)
+    expect(promoteLocalDownloadedFolderMock).toHaveBeenCalledWith(
+      tempPath,
+      path.join('/downloads', 'src'),
+      expect.anything()
+    )
+  })
+
+  it('returns canceled remote folder downloads without transferring', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ canceled: true })
+
+    expect(provider.downloadFolder).not.toHaveBeenCalled()
+  })
+
+  it('aborts before opening the folder picker when the renderer is already destroyed', async () => {
+    const provider = {
+      downloadFolder: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    folderDownloadSender.isDestroyed.mockReturnValue(true)
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('window closed')
+
+    expect(showOpenDialogMock).not.toHaveBeenCalled()
+    expect(provider.downloadFolder).not.toHaveBeenCalled()
+    expect(folderDownloadSender.listenerCount('destroyed')).toBe(0)
+  })
+
+  it('opens the folder picker before SSH folder validation', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockImplementation(async () => {
+      expect(provider.downloadFolder).not.toHaveBeenCalled()
+      return { canceled: false, filePaths: ['/downloads'] }
+    })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ canceled: false, destinationPath: path.join('/downloads', 'src') })
+
+    expect(provider.downloadFolder).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects remote folder downloads when the destination folder already exists', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('Destination folder already exists')
+
+    expect(provider.downloadFolder).not.toHaveBeenCalled()
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects remote folder downloads when the remote path is not a directory', async () => {
+    const provider = {
+      downloadFolder: vi.fn().mockRejectedValue(new Error('Cannot download a file as a folder'))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/file.txt',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('Cannot download a file as a folder')
+
+    expect(provider.downloadFolder).toHaveBeenCalledTimes(1)
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects remote folder downloads when the SSH provider cannot transfer folders', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 })
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('Remote folder download is unavailable')
+
+    expect(showOpenDialogMock).not.toHaveBeenCalled()
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('cleans up a temporary remote folder download when transfer fails', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn().mockRejectedValue(new Error('transfer failed'))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('transfer failed')
+
+    const tempPath = provider.downloadFolder.mock.calls[0][1]
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+    expect(rmMock).toHaveBeenCalledWith(tempPath, { recursive: true, force: true })
+  })
+
+  it('logs a recursive temporary-folder cleanup failure without masking the transfer error', async () => {
+    const provider = {
+      downloadFolder: vi.fn().mockRejectedValue(new Error('transfer failed'))
+    }
+    const cleanupError = new Error('cleanup denied')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    rmMock.mockRejectedValueOnce(cleanupError)
+    registerFilesystemHandlers(store as never)
+
+    try {
+      await expect(
+        handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+          dirPath: '/remote/src',
+          connectionId: 'ssh-1'
+        })
+      ).rejects.toThrow('transfer failed')
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to remove temporary folder download'),
+        cleanupError
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('aborts and cleans up a remote folder download when its renderer closes', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn(
+        (_source: string, _destination: string, options?: { signal?: AbortSignal }) =>
+          new Promise<void>((_resolve, reject) => {
+            options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), {
+              once: true
+            })
+          })
+      )
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    const result = handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+      dirPath: '/remote/src',
+      connectionId: 'ssh-1'
+    })
+    await vi.waitFor(() => expect(provider.downloadFolder).toHaveBeenCalledTimes(1))
+    folderDownloadSender.emit('destroyed')
+
+    await expect(result).rejects.toThrow('window closed')
+    const tempPath = provider.downloadFolder.mock.calls[0][1]
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+    expect(rmMock).toHaveBeenCalledWith(tempPath, { recursive: true, force: true })
+    expect(folderDownloadSender.listenerCount('destroyed')).toBe(0)
   })
 
   it('rejects readFile when the real path escapes allowed roots', async () => {
@@ -1118,6 +1378,30 @@ describe('registerFilesystemHandlers', () => {
     expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
   })
 
+  it('returns capped-state metadata unchanged across local and SSH status IPC', async () => {
+    const cappedStatus = {
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown',
+      didHitLimit: true,
+      statusLength: 1_001
+    }
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue(cappedStatus)
+    const sshProvider = { getStatus: vi.fn().mockResolvedValue(cappedStatus) }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+    ).resolves.toEqual(cappedStatus)
+    await expect(
+      handlers.get('git:status')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual(cappedStatus)
+  })
+
   it('forwards upstream-negative-cache bypass through local and SSH git status IPC', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
@@ -1146,6 +1430,72 @@ describe('registerFilesystemHandlers', () => {
       includeIgnored: false,
       bypassEffectiveUpstreamNegativeCache: true
     })
+  })
+
+  it('forwards line-stat reuse through local and SSH git status IPC', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const sshProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      reuseLineStats: true
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      reuseLineStats: true
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      includeIgnored: false,
+      reuseLineStats: true
+    })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      includeIgnored: false,
+      reuseLineStats: true
+    })
+  })
+
+  it('aborts tokenized local status without crossing renderer boundaries', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    const statusSignals: AbortSignal[] = []
+    getStatusMock.mockImplementation(
+      (_worktreePath: string, options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          if (options.signal) {
+            statusSignals.push(options.signal)
+            options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+              once: true
+            })
+          }
+        })
+    )
+    registerFilesystemHandlers(store as never)
+
+    const firstEvent = { sender: { id: 7 } }
+    const secondEvent = { sender: { id: 8 } }
+    const firstRequest = handlers.get('git:status')!(firstEvent, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      requestToken: 'status-1'
+    }) as Promise<unknown>
+    const secondRequest = handlers.get('git:status')!(secondEvent, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      requestToken: 'status-1'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(statusSignals).toHaveLength(2))
+    await handlers.get('git:cancelStatus')!(firstEvent, { requestToken: 'status-1' })
+
+    expect(statusSignals[0]?.aborted).toBe(true)
+    expect(statusSignals[1]?.aborted).toBe(false)
+    await expect(firstRequest).rejects.toThrow('aborted')
+
+    await handlers.get('git:cancelStatus')!(secondEvent, { requestToken: 'status-1' })
+    await expect(secondRequest).rejects.toThrow('aborted')
   })
 
   it('checks ignored paths through local and SSH git providers', async () => {
@@ -2364,20 +2714,23 @@ describe('registerFilesystemHandlers', () => {
 
     registerFilesystemHandlers(store as never)
 
-    const pending = handlers.get('fs:listFiles')!(null, {
+    // Why: cancellation keys are scoped to the issuing webContents, so the
+    // cancel must come from the same sender as the listing request.
+    const senderEvent = { sender: { id: 7 } }
+    const pending = handlers.get('fs:listFiles')!(senderEvent, {
       rootPath: '/home/user/repo',
       connectionId: 'conn-1',
       requestToken: 'token-1'
     }) as Promise<string[]>
 
     expect(capturedSignal?.aborted).toBe(false)
-    await handlers.get('fs:cancelListFiles')!(null, { requestToken: 'token-1' })
+    await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
     expect(capturedSignal?.aborted).toBe(true)
     await expect(pending).rejects.toThrow('listing cancelled')
 
     // Unknown or already-settled tokens are a no-op, not an error.
     expect(() =>
-      handlers.get('fs:cancelListFiles')!(null, { requestToken: 'unknown' })
+      handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
     ).not.toThrow()
   })
 })

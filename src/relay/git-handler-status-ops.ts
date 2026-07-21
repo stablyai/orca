@@ -1,16 +1,15 @@
 /**
  * Status and conflict-detection operations extracted from git-handler.ts.
- *
- * Why: oxlint max-lines (300) requires splitting large files.
- * These functions are pure data operations on git state — no class coupling.
+ * Why: split to satisfy oxlint max-lines (300); pure data ops on git state, no class coupling.
  */
 import * as path from 'node:path'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
-import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
+import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/types'
+import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
@@ -19,7 +18,12 @@ import {
   parseNumstat,
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
-import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
+import { resolveGitStatusLimit } from '../shared/git-status-limit'
+import {
+  beginGitStatusLineStatsCacheWrite,
+  clearGitStatusLineStatsCacheKey,
+  reuseOrRecomputeGitStatusLineStats
+} from '../shared/git-status-line-stats-cache'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -58,7 +62,9 @@ export async function detectConflictOperation(worktreePath: string): Promise<str
 
 export async function getStatusOp(
   git: GitExec,
-  params: Record<string, unknown>
+  streamGit: RelayGitStreamExec,
+  params: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {}
 ): Promise<{
   entries: Record<string, unknown>[]
   conflictOperation: string
@@ -70,14 +76,11 @@ export async function getStatusOp(
   statusLength?: number
 }> {
   const worktreePath = params.worktreePath as string
+  const lineStatsCacheKey = `relay\0${worktreePath}`
+  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
-  // Why: reject non-finite/negative limits so the cap guard stays reliable
-  // (NaN would silently disable capping; negatives would over-truncate).
-  const rawLimit = params.limit
-  const limit =
-    typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit >= 0
-      ? Math.floor(rawLimit)
-      : DEFAULT_GIT_STATUS_LIMIT
+  // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
+  const limit = resolveGitStatusLimit(params.limit)
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
@@ -88,10 +91,7 @@ export async function getStatusOp(
   let statusLength = 0
 
   try {
-    // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8 in
-    // git's stdout instead of C-style octal escapes; without it the parsed
-    // entry.path renders as gibberish in the source-control sidebar and
-    // downstream blob lookups miss.
+    // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
     const statusArgs = [
       '-c',
       'core.quotePath=false',
@@ -103,37 +103,37 @@ export async function getStatusOp(
     if (includeIgnored) {
       statusArgs.push('--ignored=matching')
     }
-    const { stdout } = await git(statusArgs, worktreePath, {
-      // Why: status polling is read-like; avoid refreshing the index and racing
-      // terminal Git commands on `.git/worktrees/*/index.lock`.
-      disableOptionalLocks: true
+    const parser = new StatusPorcelainParser()
+    const { stoppedEarly } = await streamGit(statusArgs, worktreePath, {
+      // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
+      disableOptionalLocks: true,
+      signal: options.signal,
+      onStdout: (chunk) => parser.update(chunk, limit)
     })
-    const parsed = parseStatusOutput(stdout)
-    head = parsed.head
-    branch = parsed.branch
-    upstreamStatus = parsed.upstreamStatus
-    ignoredPaths = parsed.ignoredPaths
-    statusLength = parsed.entries.length
-    // Why: cap the entry count to match the local path. A repo with an enormous
-    // un-ignored folder would otherwise push tens of thousands of rows through
-    // every poll; truncating keeps the SCM view (and its "too many changes"
-    // state) consistent across local and SSH repos.
-    if (limit !== 0 && parsed.entries.length > limit) {
-      didHitLimit = true
-      for (let i = 0; i < limit; i++) {
-        entries.push(parsed.entries[i])
-      }
-    } else {
-      for (const entry of parsed.entries) {
-        entries.push(entry)
-      }
+    if (!stoppedEarly) {
+      parser.finish()
     }
+    head = parser.branch.head
+    branch = parser.branch.branch
+    ignoredPaths = parser.ignoredPaths
+    statusLength = parser.statusLength
+    didHitLimit = stoppedEarly
+    const { upstreamName, upstreamAheadBehind } = parser.branch
+    upstreamStatus = upstreamName
+      ? {
+          hasUpstream: true,
+          upstreamName,
+          ahead: upstreamAheadBehind?.ahead ?? 0,
+          behind: upstreamAheadBehind?.behind ?? 0
+        }
+      : { hasUpstream: false, ahead: 0, behind: 0 }
 
     if (!didHitLimit) {
       if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
         const branchName = getShortBranchName(branch)
         if (branchName) {
           try {
+            // Why: this probe coalesces across concurrent status reads, so one request's abort must not reject the shared in-flight promise.
             upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
               { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
               (args) => git(args, worktreePath),
@@ -142,30 +142,55 @@ export async function getStatusOp(
               }
             )
           } catch {
-            // Why: status polling should keep returning working-tree entries even
-            // if the richer upstream probe hits a transient SSH/git ref error.
+            // Why: keep returning working-tree entries even if the upstream probe hits a transient SSH/git ref error.
           }
         }
       }
+    }
 
-      for (const uLine of parsed.unmergedLines) {
-        const entry = parseUnmergedEntry(worktreePath, uLine)
+    // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
+    // an early conflict behind ordinary rows that appeared later in the stream.
+    for (const record of parser.statusRecords) {
+      if (didHitLimit && entries.length >= limit) {
+        break
+      }
+      if (record.type === 'entry') {
+        entries.push(record.entry as Record<string, unknown>)
+      } else {
+        const entry = parseUnmergedEntry(worktreePath, record.line)
         if (entry) {
           entries.push(entry)
         }
       }
     }
-  } catch {
+  } catch (error) {
+    // Why: an aborted scan must reject, not resolve as a completed (empty) status result.
+    if (options.signal?.aborted) {
+      throw error
+    }
     // not a git repo or git not available
   }
 
-  // Why: attach per-area line counts for the sidebar. Diffs run after status
-  // (we need the entry list first) and only for areas that have entries, so a
-  // clean tree costs zero extra git calls. Skipped when the limit was hit —
-  // running numstat over a huge change set would reintroduce the cost the limit
-  // exists to avoid.
+  // Why: skip line-stats when the limit was hit — numstat over a huge change set would reintroduce the cost the limit avoids.
   if (!didHitLimit) {
-    await attachLineStats(git, worktreePath, entries)
+    await reuseOrRecomputeGitStatusLineStats({
+      cacheKey: lineStatsCacheKey,
+      head,
+      entries,
+      writeToken: lineStatsWriteToken,
+      reuse: params.reuseLineStats === true,
+      isAborted: () => options.signal?.aborted === true,
+      recompute: () => attachLineStats(git, worktreePath, entries, options.signal)
+    })
+  } else {
+    clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
+  }
+
+  // Why: a late abort (during unmerged/upstream/line-stats work) must still reject, not resolve as completed.
+  if (options.signal?.aborted) {
+    const error = new Error('The operation was aborted.')
+    error.name = 'AbortError'
+    throw error
   }
 
   return {
@@ -182,29 +207,35 @@ export async function getStatusOp(
 async function runNumstat(
   git: GitExec,
   worktreePath: string,
-  cached: boolean
-): Promise<Map<string, GitLineStats>> {
+  cached: boolean,
+  signal?: AbortSignal
+): Promise<Map<string, GitLineStats> | null> {
   try {
     const { stdout } = await git(
       ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
       worktreePath,
-      { disableOptionalLocks: true }
+      { disableOptionalLocks: true, signal }
     )
     return parseNumstat(stdout)
-  } catch {
-    // Why: a numstat failure should leave rows without counts rather than break
-    // the whole status refresh.
-    return new Map()
+  } catch (error) {
+    // Why: an aborted pass must reject so a cancelled scan is never treated as completed.
+    if (signal?.aborted) {
+      throw error
+    }
+    // Why: null (vs an empty map) tells the caller the pass is incomplete and must not be cached.
+    return null
   }
 }
 
+/** Returns false when a numstat pass failed, so callers skip caching it. */
 async function attachLineStats(
   git: GitExec,
   worktreePath: string,
-  entries: Record<string, unknown>[]
-): Promise<void> {
+  entries: Record<string, unknown>[],
+  signal?: AbortSignal
+): Promise<boolean> {
   if (entries.length === 0) {
-    return
+    return true
   }
   const hasStaged = entries.some((entry) => entry.area === 'staged')
   const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
@@ -213,21 +244,22 @@ async function attachLineStats(
     .map((entry) => entry.path as string)
   const emptyStats = new Map<string, GitLineStats>()
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
-    hasStaged ? runNumstat(git, worktreePath, true) : Promise.resolve(emptyStats),
-    hasUnstaged ? runNumstat(git, worktreePath, false) : Promise.resolve(emptyStats),
-    collectUntrackedAdditions(worktreePath, untrackedPaths)
+    hasStaged ? runNumstat(git, worktreePath, true, signal) : Promise.resolve(emptyStats),
+    hasUnstaged ? runNumstat(git, worktreePath, false, signal) : Promise.resolve(emptyStats),
+    collectUntrackedAdditions(worktreePath, untrackedPaths, signal)
   ])
   for (const entry of entries) {
     const filePath = entry.path as string
     applyLineStats(
       entry as { added?: number; removed?: number },
       entry.area === 'staged'
-        ? stagedStats.get(filePath)
+        ? (stagedStats ?? emptyStats).get(filePath)
         : entry.area === 'unstaged'
-          ? unstagedStats.get(filePath)
+          ? (unstagedStats ?? emptyStats).get(filePath)
           : untrackedStats.get(filePath)
     )
   }
+  return stagedStats !== null && unstagedStats !== null
 }
 
 function getShortBranchName(branch: string | undefined): string | null {

@@ -299,6 +299,80 @@ describe('createMainWindow', () => {
     }
   })
 
+  it('keeps main-window background throttling enabled while repainting macOS visibility transitions', () => {
+    vi.useFakeTimers()
+    const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
+    let windowSize: [number, number] = [1200, 800]
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        const handlers = windowHandlers.get(event) ?? []
+        handlers.push(handler)
+        windowHandlers.set(event, handlers)
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => windowSize),
+      setSize: vi.fn((width: number, height: number) => {
+        windowSize = [width, height]
+      }),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    withPlatform('darwin', () => createMainWindow(null))
+
+    // Why: throttling-off pins visibilityState 'visible' and renders occluded
+    // windows at full rate; this guards against reintroducing it.
+    expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
+
+    expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
+    expect(windowHandlers.get('restore')).toHaveLength(1)
+    expect(windowHandlers.get('show')).toHaveLength(1)
+    expect(windowHandlers.get('focus')).toHaveLength(1)
+
+    windowHandlers.get('show')?.[0]?.()
+    windowHandlers.get('restore')?.[0]?.()
+
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+    expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(1, 1201, 800)
+    expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(32)
+    expect(browserWindowInstance.setSize).toHaveBeenNthCalledWith(2, 1200, 800)
+
+    vi.advanceTimersByTime(217)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(1)
+    expect(webContents.invalidate).toHaveBeenCalledTimes(3)
+
+    // Why: focus covers occlusion-uncover with invalidate only — no setSize
+    // jiggle that would resize terminals on every window focus.
+    const setSizeCalls = browserWindowInstance.setSize.mock.calls.length
+    windowHandlers.get('focus')?.[0]?.()
+    expect(webContents.invalidate).toHaveBeenCalledTimes(4)
+    expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(setSizeCalls)
+  })
+
   it('supports all minus key variants for terminal zoom out', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -1410,6 +1484,7 @@ describe('createMainWindow', () => {
 
     windowHandlers['will-prevent-unload']()
     expect(onQuitAborted).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('window:unload-prevented')
   })
 
   it('allows close after the renderer process is gone', () => {
@@ -2837,11 +2912,39 @@ describe('createMainWindow', () => {
     })
   })
 
-  it('does not install the startup reveal fallback off Windows', () => {
+  it('reveals the startup window on Linux when ready-to-show never fires', () => {
     vi.useFakeTimers()
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('linux', () => {
+      createMainWindow(null)
+      vi.advanceTimersByTime(9_999)
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('cancels the Linux startup reveal fallback after ready-to-show', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(null)
+      windowHandlers['ready-to-show']()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not install the startup reveal fallback on macOS', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('darwin', () => {
       createMainWindow(null)
       vi.advanceTimersByTime(10_000)
 
@@ -2892,6 +2995,57 @@ describe('createMainWindow', () => {
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('win32', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      browserWindowInstance.isDestroyed.mockReturnValue(true)
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('keeps the headless E2E window hidden when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const previousHeadless = process.env.ORCA_E2E_HEADLESS
+    process.env.ORCA_E2E_HEADLESS = '1'
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    try {
+      withPlatform('linux', () => {
+        createMainWindow(createStartupRevealStore(true) as never)
+        vi.advanceTimersByTime(10_000)
+
+        expect(browserWindowInstance.show).not.toHaveBeenCalled()
+        expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+      })
+    } finally {
+      if (previousHeadless === undefined) {
+        delete process.env.ORCA_E2E_HEADLESS
+      } else {
+        process.env.ORCA_E2E_HEADLESS = previousHeadless
+      }
+    }
+  })
+
+  it('clears the Linux startup reveal fallback when the window is closed', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers.closed()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not show or maximize a destroyed window when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
       createMainWindow(createStartupRevealStore(true) as never)
       browserWindowInstance.isDestroyed.mockReturnValue(true)
       vi.advanceTimersByTime(10_000)

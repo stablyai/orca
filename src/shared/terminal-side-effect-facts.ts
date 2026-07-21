@@ -3,7 +3,6 @@
  * (main → renderer). Events are facts, not decisions: main parses every
  * local-daemon/SSH PTY byte exactly once and emits what it observed; the
  * renderer store handler owns notification/unread policy.
- * See docs/reference/terminal-side-effect-authority.md.
  */
 
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'

@@ -258,6 +258,7 @@ export default function ProjectViewList({
                     onEditIssueType={(issueType) => onEditIssueType?.(row, issueType)}
                     onStartWork={() => onStartWork?.(row)}
                     onOpenInBrowser={() => onOpenInBrowser?.(row)}
+                    sourceHost={table.project.host}
                     sourceSettings={sourceSettings}
                   />
                 ))

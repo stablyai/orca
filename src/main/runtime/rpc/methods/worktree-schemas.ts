@@ -3,6 +3,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -56,7 +57,8 @@ export const WorktreeSelector = z.object({
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
 export const WorktreeCreate = z
@@ -143,6 +145,9 @@ export const WorktreeCreate = z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
       .optional(),
+    // Why: mobile retries a create interrupted by a connection migration with the
+    // same key so the host dedupes instead of spawning a duplicate worktree.
+    clientMutationId: z.string().min(1).max(128).optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {

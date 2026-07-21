@@ -8,8 +8,10 @@ const {
   appRelaunchMock,
   spawnMock,
   destroySystemTrayMock,
+  relaunchAppMock,
   showOpenDialogMock,
-  grantFloatingWorkspaceDirectoryMock
+  grantFloatingWorkspaceDirectoryMock,
+  registerRendererShutdownCheckpointHandlerMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -17,8 +19,10 @@ const {
   appRelaunchMock: vi.fn(),
   spawnMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
+  relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
-  grantFloatingWorkspaceDirectoryMock: vi.fn()
+  grantFloatingWorkspaceDirectoryMock: vi.fn(),
+  registerRendererShutdownCheckpointHandlerMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -91,10 +95,18 @@ vi.mock('../tray/system-tray', () => ({
   destroySystemTray: destroySystemTrayMock
 }))
 
+vi.mock('../app-relaunch', () => ({
+  relaunchApp: relaunchAppMock
+}))
+
 vi.mock('./floating-workspace-directory', () => ({
   ensureDefaultFloatingWorkspacePath: vi.fn(),
   grantFloatingWorkspaceDirectory: grantFloatingWorkspaceDirectoryMock,
   resolveFloatingTerminalCwd: vi.fn()
+}))
+
+vi.mock('./renderer-shutdown-checkpoint', () => ({
+  registerRendererShutdownCheckpointHandler: registerRendererShutdownCheckpointHandlerMock
 }))
 
 import { registerAppHandlers } from './app'
@@ -113,8 +125,11 @@ describe('registerAppHandlers', () => {
     appRelaunchMock.mockReset()
     spawnMock.mockReset()
     destroySystemTrayMock.mockReset()
+    relaunchAppMock.mockReset()
+    relaunchAppMock.mockImplementation(() => appRelaunchMock())
     showOpenDialogMock.mockReset()
     grantFloatingWorkspaceDirectoryMock.mockReset()
+    registerRendererShutdownCheckpointHandlerMock.mockReset()
     processKillSpy = vi.spyOn(process, 'kill').mockReturnValue(true)
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
@@ -123,6 +138,14 @@ describe('registerAppHandlers', () => {
     processKillSpy.mockRestore()
     vi.useRealTimers()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('registers the combined renderer shutdown checkpoint', () => {
+    const store = {}
+
+    registerAppHandlers(store as never)
+
+    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store)
   })
 
   it('marks relaunch as expected shutdown before exiting', async () => {
@@ -139,6 +162,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
+    expect(relaunchAppMock).toHaveBeenCalledWith('renderer-request')
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
     expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -187,6 +211,7 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(relaunchAppMock).toHaveBeenCalledWith('admin-restart')
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).not.toHaveBeenCalled()
   })

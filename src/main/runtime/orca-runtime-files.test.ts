@@ -19,6 +19,7 @@ const {
   resolveAuthorizedPathMock,
   statMock,
   watchInWatcherProcessMock,
+  closeWatcherInWatcherProcessMock,
   checkRgAvailableMock,
   getLocalGitOptionsForRegisteredWorktreeMock,
   wslAwareSpawnMock,
@@ -33,6 +34,7 @@ const {
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
   watchInWatcherProcessMock: vi.fn(),
+  closeWatcherInWatcherProcessMock: vi.fn(),
   wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
@@ -61,6 +63,7 @@ vi.mock('fs/promises', async () => {
 })
 
 vi.mock('./file-watcher-host', () => ({
+  closeFileExplorerWatcherInWatcherProcess: closeWatcherInWatcherProcessMock,
   watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
 }))
 
@@ -200,6 +203,7 @@ describe('RuntimeFileCommands', () => {
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
     watchInWatcherProcessMock.mockReset()
+    closeWatcherInWatcherProcessMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
     vi.mocked(getSshFilesystemProvider).mockReset()
@@ -248,6 +252,8 @@ describe('RuntimeFileCommands', () => {
   it('opens text files through the renderer host (inheriting active runtime env)', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/readme.md')
+    statMock.mockResolvedValue({ isDirectory: () => false })
 
     const result = await commands.openMobileFile('id:wt-1', 'docs/readme.md')
 
@@ -268,6 +274,8 @@ describe('RuntimeFileCommands', () => {
   it('opens previewable images through the renderer host as an image tab', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/assets/logo.png')
+    statMock.mockResolvedValue({ isDirectory: () => false })
 
     const result = await commands.openMobileFile('id:wt-1', 'assets/logo.png')
 
@@ -292,12 +300,50 @@ describe('RuntimeFileCommands', () => {
     const result = await commands.openMobileFile('id:wt-1', 'dist/bundle.zip')
 
     expect(openFile).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
     expect(result).toEqual({
       worktree: 'wt-1',
       relativePath: 'dist/bundle.zip',
       kind: 'binary',
       opened: false
     })
+  })
+
+  it('rejects missing local files without creating an editor tab', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/missing.md')
+    statMock.mockRejectedValue(enoent())
+
+    await expect(commands.openMobileFile('id:wt-1', 'docs/missing.md')).rejects.toThrow(
+      "ENOENT: no such file or directory, open '/repo/docs/missing.md'"
+    )
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
+  it('rejects missing remote files without creating an editor tab', async () => {
+    const openFile = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/remote/repo'
+      },
+      connectionId: 'ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({
+      openFile,
+      path: '/remote/repo',
+      resolveRuntimeFileTarget
+    })
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({
+      stat: vi.fn().mockRejectedValue(new Error('ENOENT: no such file or directory'))
+    } as never)
+
+    await expect(commands.openMobileFile('id:wt-1', 'docs/missing.md')).rejects.toThrow(
+      "ENOENT: no such file or directory, open '/remote/repo/docs/missing.md'"
+    )
+    expect(openFile).not.toHaveBeenCalled()
   })
 
   it('does not follow symlinks when reading runtime-local file explorer dirs', async () => {
@@ -410,12 +456,12 @@ describe('RuntimeFileCommands', () => {
       value: 'win32'
     })
 
-    const close = vi.fn()
-    const on = vi.fn()
+    const watcher = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> }
+    watcher.close = vi.fn(() => queueMicrotask(() => watcher.emit('close')))
     let listener: (() => void) | null = null
     watchMock.mockImplementation((_rootPath, _options, callback) => {
       listener = callback
-      return { close, on }
+      return watcher
     })
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
@@ -437,8 +483,8 @@ describe('RuntimeFileCommands', () => {
     expect(onEvents).toHaveBeenCalledTimes(1)
     expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: 'C:\\repo' }])
 
-    unsubscribe()
-    expect(close).toHaveBeenCalledTimes(1)
+    await unsubscribe()
+    expect(watcher.close).toHaveBeenCalledTimes(1)
   })
 
   it('delegates local recursive watching to the watcher process', async () => {
@@ -463,6 +509,77 @@ describe('RuntimeFileCommands', () => {
     unsubscribe()
     await awaitRuntimeFileWatcherUnsubscribes()
     expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps SSH runtime watches on the remote filesystem provider', async () => {
+    const remoteDispose = vi.fn()
+    const providerWatch = vi.fn(() => remoteDispose)
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({ watch: providerWatch } as never)
+    const { commands, store } = createRuntimeFileCommands({ path: '/remote/repo' })
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+    const onEvents = vi.fn()
+
+    const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
+
+    expect(providerWatch).toHaveBeenCalledWith('/remote/repo', onEvents, {
+      signal: undefined,
+      onTerminalError: expect.any(Function)
+    })
+    expect(watchInWatcherProcessMock).not.toHaveBeenCalled()
+    await unsubscribe()
+    expect(remoteDispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('indexes SSH runtime watches so remote deletion can await them', async () => {
+    let resolveDispose: () => void = () => {}
+    const remoteDispose = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDispose = resolve
+        })
+    )
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({
+      watch: vi.fn(() => remoteDispose)
+    } as never)
+    const { commands, store } = createRuntimeFileCommands({ path: '/remote/repo' })
+    store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+    await commands.watchFileExplorer('id:wt-1', vi.fn())
+
+    let closed = false
+    const close = commands.closeFileExplorerWatchersForPath('/remote/repo', 'ssh-1').then(() => {
+      closed = true
+    })
+    await Promise.resolve()
+    expect(remoteDispose).toHaveBeenCalledTimes(1)
+    expect(closed).toBe(false)
+
+    resolveDispose()
+    await close
+  })
+
+  it('scopes same-path runtime watcher teardown to its SSH execution host', async () => {
+    const firstDispose = vi.fn()
+    const secondDispose = vi.fn()
+    vi.mocked(getSshFilesystemProvider).mockImplementation(
+      (connectionId) =>
+        ({
+          watch: vi.fn(() => (connectionId === 'ssh-1' ? firstDispose : secondDispose))
+        }) as never
+    )
+    const first = createRuntimeFileCommands({ path: '/same/repo' })
+    const second = createRuntimeFileCommands({ path: '/same/repo' })
+    first.store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+    second.store.getRepo.mockReturnValue({ connectionId: 'ssh-2' })
+
+    await first.commands.watchFileExplorer('id:wt-1', vi.fn())
+    await second.commands.watchFileExplorer('id:wt-1', vi.fn())
+    await first.commands.closeFileExplorerWatchersForPath('/same/repo', 'ssh-1')
+
+    expect(firstDispose).toHaveBeenCalledTimes(1)
+    expect(secondDispose).not.toHaveBeenCalled()
+
+    await second.commands.closeFileExplorerWatchersForPath('/same/repo', 'ssh-2')
+    expect(secondDispose).toHaveBeenCalledTimes(1)
   })
 
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {

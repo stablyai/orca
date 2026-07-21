@@ -17,6 +17,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string
     data: string
     sequenceChars?: number
+    transformed?: boolean
+    seq?: number
   }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
 
@@ -62,6 +64,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     return result
   }
 
+  supportsGitCredentialGuardHost(sessionId?: string): boolean {
+    const adapter = sessionId ? this.adapterFor(sessionId) : this.current
+    return adapter.supportsGitCredentialGuardHost()
+  }
+
   async attach(id: string): Promise<void> {
     await this.adapterFor(id).attach(id)
   }
@@ -94,7 +101,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(id).setPtyBackgrounded(id, background)
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
     await this.adapterFor(id).shutdown(id, opts)
     // Why: sleep passes keepHistory=true and re-spawns against the same
     // sessionId on wake. If we delete the routing entry here, adapterFor()
@@ -130,8 +140,16 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.adapterFor(id).getBufferSnapshot(id, opts)
   }
 
+  canProvideAuthoritativeBufferSnapshot(id: string): boolean {
+    return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
+  }
+
+  async closeStartupQueryAuthority(id: string): Promise<number> {
+    return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {
@@ -158,10 +176,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.current.revive(state)
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
-    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
+    const results = await Promise.all(
+      this.allAdapters().map((adapter) => adapter.listProcesses(opts))
+    )
     return results.flat()
   }
 
@@ -174,7 +194,13 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   onData(
-    callback: (payload: { id: string; data: string; sequenceChars?: number }) => void
+    callback: (payload: {
+      id: string
+      data: string
+      sequenceChars?: number
+      transformed?: boolean
+      seq?: number
+    }) => void
   ): () => void {
     this.dataListeners.push(callback)
     return () => {

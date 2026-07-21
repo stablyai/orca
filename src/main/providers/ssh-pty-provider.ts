@@ -2,8 +2,16 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
+import { PTY_STARTUP_INGRESS_VERSION } from '../../shared/pty-startup-ingress'
+import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
 
-type DataCallback = (payload: { id: string; data: string }) => void
+type DataCallback = (payload: {
+  id: string
+  data: string
+  sequenceChars?: number
+  transformed?: boolean
+  seq?: number
+}) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
 type ExitCallback = (payload: { id: string; code: number }) => void
 type RemoteCliBridgeEnv = {
@@ -27,6 +35,13 @@ export function isSshPtyIdentityMismatchError(err: unknown): boolean {
   return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
 }
 
+// Why: providers take an absolute teardown deadline, but the mux takes a relative
+// timeout — convert only here, at the RPC itself, so sequential relay calls share
+// the remaining budget (undefined keeps the multiplexer default timeout).
+function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
+  return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
+}
+
 /**
  * Remote PTY provider that proxies all operations through the relay
  * via the JSON-RPC multiplexer. Implements the same IPtyProvider interface
@@ -42,6 +57,7 @@ export class SshPtyProvider implements IPtyProvider {
   // multiplexer. Without this, notification callbacks keep firing after
   // the provider is torn down on disconnect, routing events to stale state.
   private unsubscribeNotifications: (() => void) | null = null
+  readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
 
   constructor(
     connectionId: string,
@@ -50,13 +66,22 @@ export class SshPtyProvider implements IPtyProvider {
   ) {
     this.connectionId = connectionId
     this.mux = mux
+    this.getAppliedSize = createSshPtyAppliedSizeReader(mux, connectionId)
 
     // Subscribe to relay notifications for PTY events
     this.unsubscribeNotifications = mux.onNotification((method, params) => {
       switch (method) {
         case 'pty.data':
           for (const cb of this.dataListeners) {
-            cb({ id: this.toAppPtyId(params.id as string), data: params.data as string })
+            cb({
+              id: this.toAppPtyId(params.id as string),
+              data: params.data as string,
+              ...(typeof params.rawLength === 'number'
+                ? { sequenceChars: params.rawLength as number }
+                : {}),
+              ...(params.transformed === true ? { transformed: true } : {}),
+              ...(typeof params.seq === 'number' ? { seq: params.seq as number } : {})
+            })
           }
           break
 
@@ -154,6 +179,7 @@ export class SshPtyProvider implements IPtyProvider {
       // Pi-compatible agent is being launched, while commandDelivery tells it
       // whether to submit the command itself for runtime-owned background PTYs.
       ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.shellOverride !== undefined ? { shellOverride: opts.shellOverride } : {}),
       ...(opts.terminalWindowsWslDistro !== undefined
         ? { terminalWindowsWslDistro: opts.terminalWindowsWslDistro }
@@ -166,7 +192,13 @@ export class SshPtyProvider implements IPtyProvider {
       // remote hooks are disabled, but the relay still needs attach identity
       // metadata to reject cross-generation PTY id collisions.
       ...(opts.paneKey ? { paneKey: opts.paneKey } : {}),
-      ...(opts.tabId ? { tabId: opts.tabId } : {})
+      ...(opts.tabId ? { tabId: opts.tabId } : {}),
+      ...(opts.startupIngress
+        ? {
+            startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+            startupIngress: opts.startupIngress
+          }
+        : {})
     })
     return {
       ...(result as PtySpawnResult),
@@ -234,12 +266,19 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux.notify('pty.resize', { id: this.toRelayPtyId(id), cols, rows })
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.mux.request('pty.shutdown', {
-      id: this.toRelayPtyId(id),
-      immediate: opts.immediate ?? false,
-      keepHistory: opts.keepHistory ?? false
-    })
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+  ): Promise<void> {
+    await this.mux.request(
+      'pty.shutdown',
+      {
+        id: this.toRelayPtyId(id),
+        immediate: opts.immediate ?? false,
+        keepHistory: opts.keepHistory ?? false
+      },
+      relayTimeoutOptions(opts.deadlineMs)
+    )
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -258,6 +297,13 @@ export class SshPtyProvider implements IPtyProvider {
 
   async clearBuffer(id: string): Promise<void> {
     await this.mux.request('pty.clearBuffer', { id: this.toRelayPtyId(id) })
+  }
+
+  async closeStartupQueryAuthority(id: string): Promise<number> {
+    const result = (await this.mux.request('pty.closeStartupQueryAuthority', {
+      id: this.toRelayPtyId(id)
+    })) as { appliedSeq?: number }
+    return result.appliedSeq ?? 0
   }
 
   acknowledgeDataEvent(id: string, charCount: number): void {
@@ -285,8 +331,12 @@ export class SshPtyProvider implements IPtyProvider {
     await this.mux.request('pty.revive', { state })
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
-    const result = await this.mux.request('pty.listProcesses')
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    const result = await this.mux.request(
+      'pty.listProcesses',
+      undefined,
+      relayTimeoutOptions(opts?.deadlineMs)
+    )
     return (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)

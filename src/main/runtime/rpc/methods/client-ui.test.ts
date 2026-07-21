@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
+import {
+  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
+  MAX_QUICK_COMMAND_ID_LENGTH,
+  MAX_QUICK_COMMAND_LABEL_LENGTH,
+  MAX_QUICK_COMMAND_REPO_ID_LENGTH,
+  MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
+} from '../../../../shared/terminal-quick-commands'
 import type { PersistedUIState } from '../../../../shared/types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
@@ -25,7 +32,14 @@ describe('client UI RPC methods', () => {
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       githubProjects: {
-        pinned: [],
+        pinned: [
+          {
+            owner: 'stablyai',
+            ownerType: 'organization' as const,
+            number: 1,
+            host: 'ghe.example:8443'
+          }
+        ],
         recent: [],
         lastViewByProject: {},
         activeProject: null
@@ -61,7 +75,12 @@ describe('client UI RPC methods', () => {
         lastViewByProject: {
           'organization:stablyai:1': { viewId: 'view-1' }
         },
-        activeProject: { owner: 'stablyai', ownerType: 'organization', number: 1 }
+        activeProject: {
+          owner: 'stablyai',
+          ownerType: 'organization' as const,
+          number: 1,
+          host: 'ghe.example:8443'
+        }
       }
     }
     const runtime = {
@@ -133,6 +152,150 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
       prBotAuthorOverrides: ['another-bot', 'gretelflux']
     })
+  })
+
+  it('loads and normalizes quick commands through the targeted payload', async () => {
+    const commands = [
+      {
+        id: 'review',
+        label: 'Review',
+        action: 'agent-prompt' as const,
+        agent: 'codex' as const,
+        prompt: 'Review this diff',
+        scope: { type: 'global' as const }
+      }
+    ]
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getClientTerminalQuickCommands: vi.fn(() => commands),
+      updateClientTerminalQuickCommands: vi.fn(() => commands)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const getResponse = await dispatcher.dispatch(makeRequest('settings.getTerminalQuickCommands'))
+    const updateResponse = await dispatcher.dispatch(
+      makeRequest('settings.updateTerminalQuickCommands', {
+        mutation: {
+          type: 'upsert',
+          command: {
+            id: ' review ',
+            label: ' Review ',
+            action: 'agent-prompt',
+            agent: 'codex',
+            prompt: 'Review this diff\n',
+            scope: { type: 'global' }
+          }
+        }
+      })
+    )
+
+    expect(getResponse).toMatchObject({ ok: true, result: { terminalQuickCommands: commands } })
+    expect(runtime.updateClientTerminalQuickCommands).toHaveBeenCalledWith({
+      type: 'upsert',
+      command: commands[0]
+    })
+    expect(updateResponse).toMatchObject({
+      ok: true,
+      result: { terminalQuickCommands: commands }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.updateTerminalQuickCommands', {
+        mutation: { type: 'delete', id: 'review' }
+      })
+    )
+    expect(runtime.updateClientTerminalQuickCommands).toHaveBeenLastCalledWith({
+      type: 'delete',
+      id: 'review'
+    })
+  })
+
+  it('rejects malformed quick-command mutations instead of changing persisted commands', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientTerminalQuickCommands: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    for (const mutation of [
+      null,
+      'not-a-mutation',
+      { type: 'delete', id: '' },
+      { type: 'upsert', command: null },
+      { type: 'upsert', command: { id: 'incomplete' } },
+      {
+        type: 'upsert',
+        command: {
+          id: 'unsupported-agent',
+          label: 'Unsupported agent',
+          action: 'agent-prompt',
+          agent: 'aider',
+          prompt: 'Review this diff'
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-command',
+          label: 'Oversized command',
+          action: 'terminal-command',
+          command: 'x'.repeat(MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH + 1),
+          appendEnter: true
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'x'.repeat(MAX_QUICK_COMMAND_ID_LENGTH + 1),
+          label: 'Oversized id',
+          action: 'terminal-command',
+          command: 'true',
+          appendEnter: true
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-label',
+          label: 'x'.repeat(MAX_QUICK_COMMAND_LABEL_LENGTH + 1),
+          action: 'terminal-command',
+          command: 'true',
+          appendEnter: true
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-repo',
+          label: 'Oversized repo',
+          action: 'terminal-command',
+          command: 'true',
+          appendEnter: true,
+          scope: { type: 'repo', repoId: 'x'.repeat(MAX_QUICK_COMMAND_REPO_ID_LENGTH + 1) }
+        }
+      },
+      {
+        type: 'upsert',
+        command: {
+          id: 'oversized-prompt',
+          label: 'Oversized prompt',
+          action: 'agent-prompt',
+          agent: 'codex',
+          prompt: 'x'.repeat(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1)
+        }
+      },
+      { type: 'upsert', command: { id: 'default-pwd', label: 'Removed', command: 'pwd' } }
+    ]) {
+      const response = await dispatcher.dispatch(
+        makeRequest('settings.updateTerminalQuickCommands', { mutation })
+      )
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+    }
+    expect(runtime.updateClientTerminalQuickCommands).not.toHaveBeenCalled()
   })
 
   it('caps oversized bot-author override payloads', async () => {
@@ -269,7 +432,8 @@ describe('client UI RPC methods', () => {
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
       usageEmptyStateDismissed: true,
-      browserDefaultZoomLevel: 1.5
+      browserDefaultZoomLevel: 1.5,
+      manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -310,7 +474,8 @@ describe('client UI RPC methods', () => {
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
       usageEmptyStateDismissed: true,
-      browserDefaultZoomLevel: 1.5
+      browserDefaultZoomLevel: 1.5,
+      manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 

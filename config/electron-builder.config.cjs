@@ -18,6 +18,12 @@ const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
 }
+// Why: freshness detection needs immutable identity metadata from this exact
+// app build, but never needs the skill package bytes or a runtime network read.
+const skillFreshnessResources = {
+  from: 'resources/skills',
+  to: 'skills'
+}
 // Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
 // apps. Keeping relay assets as extraResources makes them real directories
 // instead of paths hidden inside app.asar.
@@ -29,9 +35,7 @@ const relayExtraResource = {
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
-
-const commonExtraResources = [relayExtraResource, ...packagedRuntimeNodeModuleResources]
+const commonExtraResources = [relayExtraResource, skillFreshnessResources]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -62,7 +66,14 @@ module.exports = {
     '!mobile{,/**/*}',
     '!native{,/**/*}',
     '!skills{,/**/*}',
+    // Why: authoritative guide markdown is compiled into out/cli; shipping the
+    // authoring sources too would duplicate content without a runtime consumer.
+    '!skill-guides{,/**/*}',
     '!tests{,/**/*}',
+    // Why: pr-evidence/ is a local e2e screenshot output (ORCA_CAPTURE_EVIDENCE);
+    // it is gitignored, but exclude it defensively so a stray local capture at
+    // package time never bloats app.asar.
+    '!pr-evidence{,/**/*}',
     '!Casks{,/**/*}',
     '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
     '!out/**/*.test.js',
@@ -72,7 +83,8 @@ module.exports = {
     '!tsconfig.json',
     // Why: feature-wall media is copied via extraResources so runtime can read
     // it from process.resourcesPath; exclude the source copy from app.asar.
-    '!resources/onboarding/feature-wall/**'
+    '!resources/onboarding/feature-wall/**',
+    '!resources/skills/**'
   ],
   // Why: the CLI entry-point lives in out/cli/ but imports shared modules
   // from out/shared/ and local hook mutators from out/main/. These paths must be
@@ -180,6 +192,7 @@ module.exports = {
     },
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('win32'),
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
@@ -243,6 +256,7 @@ module.exports = {
     notarize: isMacRelease,
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
@@ -306,6 +320,7 @@ module.exports = {
     },
     extraResources: [
       ...commonExtraResources,
+      ...createPackagedRuntimeNodeModuleResources('linux'),
       linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',

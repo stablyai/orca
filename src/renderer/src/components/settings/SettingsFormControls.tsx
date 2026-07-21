@@ -7,6 +7,7 @@ import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
@@ -62,6 +63,7 @@ type SettingsRowProps = {
   label: React.ReactNode
   description?: React.ReactNode
   control: React.ReactNode
+  className?: string
   /** Optional id applied to the label so the control can reference it via aria-labelledby. */
   labelId?: string
   /** When true, top-align label/description and control. Useful for tall control columns. */
@@ -73,6 +75,7 @@ export function SettingsRow({
   label,
   description,
   control,
+  className,
   labelId,
   alignTop
 }: SettingsRowProps): React.JSX.Element {
@@ -81,7 +84,8 @@ export function SettingsRow({
       className={cn(
         'flex gap-4',
         description ? 'py-3' : 'py-2',
-        alignTop ? 'items-start' : 'items-center justify-between'
+        alignTop ? 'items-start' : 'items-center justify-between',
+        className
       )}
     >
       <div className={cn('min-w-0 flex-1', description ? 'space-y-1' : 'space-y-0.5')}>
@@ -102,6 +106,7 @@ type SettingsSwitchRowProps = {
   description?: React.ReactNode
   checked: boolean
   onChange: () => void
+  className?: string
   ariaLabel?: string
 }
 
@@ -110,12 +115,14 @@ export function SettingsSwitchRow({
   description,
   checked,
   onChange,
+  className,
   ariaLabel
 }: SettingsSwitchRowProps): React.JSX.Element {
   return (
     <SettingsRow
       label={label}
       description={description}
+      className={className}
       control={
         <SettingsSwitch
           checked={checked}
@@ -132,6 +139,8 @@ type SegmentedOption<T extends string | number> = {
   label: React.ReactNode
   disabled?: boolean
   ariaLabel?: string
+  /** Optional hover label describing what the option does. */
+  tooltip?: React.ReactNode
 }
 
 type SettingsSegmentedControlProps<T extends string | number> = {
@@ -163,7 +172,7 @@ export function SettingsSegmentedControl<T extends string | number>({
     >
       {options.map((opt) => {
         const active = opt.value === value
-        return (
+        const button = (
           <button
             key={String(opt.value)}
             type="button"
@@ -189,6 +198,15 @@ export function SettingsSegmentedControl<T extends string | number>({
           >
             {opt.label}
           </button>
+        )
+        if (opt.tooltip == null) {
+          return button
+        }
+        return (
+          <Tooltip key={String(opt.value)}>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent>{opt.tooltip}</TooltipContent>
+          </Tooltip>
         )
       })}
     </div>

@@ -35,7 +35,35 @@ describe('session tab RPC methods', () => {
 
     expect(response.ok).toBe(true)
     expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', 'leaf-1', {
-      notifyClients: false
+      notifyClients: false,
+      clientNavigationId: undefined,
+      navigation: 'caller'
+    })
+  })
+
+  it('defaults legacy paired activation to the authenticated caller identity', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.activate', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        notifyClients: true
+      }),
+      (response) => replies.push(response),
+      { clientKind: 'runtime', pairedDeviceId: 'device-a' }
+    )
+
+    expect(replies).toHaveLength(1)
+    expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', undefined, {
+      notifyClients: true,
+      clientNavigationId: 'device-a',
+      navigation: 'caller'
     })
   })
 
@@ -142,12 +170,14 @@ describe('session tab RPC methods', () => {
         command: 'zsh',
         cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         launchToken: 'launch-token-123',
         launchConfig: {
           agentArgs: '--model gpt-5',
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
         launchAgent: 'codex',
+        viewMode: 'chat',
         activate: true
       })
     )
@@ -159,6 +189,7 @@ describe('session tab RPC methods', () => {
       command: 'zsh',
       cwd: '/repo/packages/app',
       env: { CODEX_PROFILE: 'captured' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       startupCommandDelivery: undefined,
       agent: undefined,
       launchToken: 'launch-token-123',
@@ -167,8 +198,44 @@ describe('session tab RPC methods', () => {
         agentEnv: { CODEX_PROFILE: 'captured' }
       },
       launchAgent: 'codex',
-      activate: true
+      viewMode: 'chat',
+      activate: true,
+      select: undefined,
+      clientNavigationId: undefined,
+      navigation: 'all'
     })
+  })
+
+  it('defaults legacy paired terminal creation to caller-owned selection', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn().mockResolvedValue({
+        tab: { type: 'terminal', id: 'tab-1::leaf-1' },
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        activate: true,
+        clientMutationId: 'create-1'
+      }),
+      () => {},
+      { clientKind: 'runtime', pairedDeviceId: 'device-a' }
+    )
+
+    expect(runtime.createMobileSessionTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        activate: true,
+        clientMutationId: 'create-1',
+        clientNavigationId: 'device-a',
+        navigation: 'caller'
+      })
+    )
   })
 
   it('dispatches terminal creation with a requested agent preset', async () => {
@@ -194,7 +261,8 @@ describe('session tab RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('session.tabs.createTerminal', {
         worktree: 'id:wt-1',
-        agent: 'codex'
+        agent: 'codex',
+        agentPrompt: 'Review this diff'
       })
     )
 
@@ -205,8 +273,33 @@ describe('session tab RPC methods', () => {
       command: undefined,
       startupCommandDelivery: undefined,
       agent: 'codex',
-      activate: undefined
+      agentPrompt: 'Review this diff',
+      activate: undefined,
+      select: undefined,
+      clientNavigationId: undefined,
+      navigation: 'all'
     })
+  })
+
+  it('rejects agent prompts without an agent preset', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        agentPrompt: 'Review this diff'
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument', message: 'Agent prompt requires an agent preset' }
+    })
+    expect(runtime.createMobileSessionTerminal).not.toHaveBeenCalled()
   })
 
   it('dispatches terminal creation with startup command delivery metadata', async () => {
@@ -244,7 +337,10 @@ describe('session tab RPC methods', () => {
       command: "codex 'linked issue context'",
       startupCommandDelivery: 'shell-ready',
       agent: undefined,
-      activate: undefined
+      activate: undefined,
+      select: undefined,
+      clientNavigationId: undefined,
+      navigation: 'all'
     })
   })
 

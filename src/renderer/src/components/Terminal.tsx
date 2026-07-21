@@ -34,6 +34,7 @@ import {
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { Tab, TabContentType, TabGroupLayoutNode, TuiAgent } from '../../../shared/types'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
@@ -61,11 +62,15 @@ import { resolveRepairedActiveTerminalTabId } from './terminal/active-terminal-r
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
   applyBackgroundMountTabRestriction,
+  canDeferColdActivationTabsForHost,
+  planColdActivationTabDeferral,
   pruneClosedBackgroundMountTabs,
+  revealActivationDeferredTabs,
   shouldMountBackgroundWorktreeTab,
   takeAllPendingBackgroundTerminalWorktreeMounts,
   takePendingBackgroundTerminalWorktreeMount
 } from './terminal/background-terminal-worktree-mount'
+import { hasRegisteredRuntimeTerminalTab } from '../runtime/sync-runtime-graph'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
@@ -81,10 +86,12 @@ import {
 import { getTerminalParkingPolicyOverrides } from './terminal-pane/terminal-parking-e2e-overrides'
 import {
   canWatcherCoverParkedTerminalTab,
+  disposeAllParkedTerminalWatchers,
   pruneParkedTerminalWatchers,
   shouldDeferParkedPtyExitTabClose,
   syncParkedTerminalTabWatchers
 } from './terminal-pane/terminal-parked-tab-watchers'
+import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
@@ -105,6 +112,8 @@ import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { listBoundAgentTabActions, resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
+import { terminalProviderHasAuthoritativeSnapshot } from './terminal/terminal-provider-snapshot-capability'
+import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -125,15 +134,12 @@ import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-e
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
-// Why: after a close-dialog handler advances the queue and renders the next
-// dialog, gate new handler runs for this long so a stray carry-over click
-// from the prior dialog can't silently act on the new one. Short enough to
-// feel responsive on a deliberate follow-up click; long enough to absorb the
-// trailing edge of a physical double-click (~150 ms on most hardware).
+// Why: gate handler runs after a dialog advances so a stray carry-over click can't act on the next dialog; ~200ms absorbs a physical double-click while staying responsive.
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
@@ -254,10 +260,19 @@ function Terminal(): React.JSX.Element | null {
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const renderedActiveWorktreeId = activeWorktreeId
+  const activeWorktreeDeferralHostId = useAppStore((s) =>
+    getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
+  )
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
+  const terminalTitleSnapshotAuthorityEnabled = useAppStore((s) =>
+    isMainTerminalSideEffectAuthorityForPty({
+      settings: s.settings,
+      runtimeEnvironmentId: null
+    })
+  )
   const activeTabId = useAppStore((s) => s.activeTabId)
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
   const createTab = useAppStore((s) => s.createTab)
@@ -307,12 +322,7 @@ function Terminal(): React.JSX.Element | null {
   const tabBarOrder = renderedActiveWorktreeId
     ? tabBarOrderByWorktree[renderedActiveWorktreeId]
     : undefined
-  // Why (anchored to selected thread, not active tab): the activity page
-  // publishes the full {target, worktreeId, tabId} descriptor sourced from
-  // its selectedThread. Deriving worktreeId/tabId from activeWorktreeId/
-  // activeTabId here used to flash the wrong terminal — selectThread updates
-  // the store in multiple steps and intermediate renders briefly pointed the
-  // portal at the new worktree's stale last-active tab.
+  // Why: use the activity page's selectedThread descriptor, not activeWorktreeId/activeTabId — selectThread updates the store in steps, so deriving here flashed the wrong terminal.
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
     activeView === 'activity'
   )
@@ -328,8 +338,7 @@ function Terminal(): React.JSX.Element | null {
   }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
 
   useEffect(() => {
-    // Why: hibernation must treat terminals portaled into foreground surfaces
-    // as visible even when they are not the singular active terminal tab.
+    // Why: hibernation must treat terminals portaled into foreground surfaces as visible even when not the active tab.
     setForegroundTerminalTabIds(foregroundTerminalTabIds)
     return () => setForegroundTerminalTabIds([])
   }, [foregroundTerminalTabIds])
@@ -338,18 +347,16 @@ function Terminal(): React.JSX.Element | null {
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
     [renderedActiveWorktreeId, tabsByWorktree]
   )
+  useTerminalProviderSnapshotCapability(workspaceSessionReady && hydrationSucceeded)
 
-  // Why: the TabBar is rendered into the titlebar via a portal so tabs share
-  // the same row as the "Orca" title. The target element is created by App.tsx.
+  // Why: TabBar portals into the titlebar (target created by App.tsx) so tabs share the "Orca" title row.
   const titlebarTabsTarget = document.getElementById('titlebar-tabs')
 
   useEffect(() => {
     if (!activeWorktreeId) {
       return
     }
-    // Why: split-group ownership is now the real path. Ensure the active
-    // worktree always has a root group so terminal-first fallback can attach
-    // fresh tabs to a concrete owner even before any explicit split exists.
+    // Why: ensure a root group exists so terminal-first fallback can attach fresh tabs to a concrete owner before any explicit split.
     ensureWorktreeRootGroup(activeWorktreeId)
   }, [activeWorktreeId, ensureWorktreeRootGroup])
 
@@ -394,21 +401,10 @@ function Terminal(): React.JSX.Element | null {
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
   const pendingEditorCloseQueueRef = useRef<string[]>([])
 
-  // Why: while a save-and-close is awaiting the file to disappear from
-  // openFiles, concurrent queueEditorCloseRequests calls (e.g. user clicks X
-  // on another dirty tab, or a split-group dispatch fires
-  // ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT) must not re-open the dialog over
-  // the in-flight save. Track the in-flight file here so
-  // getNextQueuedEditorClose can skip it as an un-advanceable head.
+  // Why: track the file whose save-and-close is in flight so getNextQueuedEditorClose skips it and concurrent close requests can't re-open the dialog over it.
   const inFlightSaveFileIdRef = useRef<string | null>(null)
 
-  // Why: after a Save/Discard/Cancel handler dismisses its dialog and advances
-  // the queue, a rapid second physical click can land on the freshly-rendered
-  // next dialog's button before the user has read the filename — silently
-  // discarding or saving work they didn't consciously choose to act on. Gate
-  // the three handlers on this ref and release after CLOSE_DIALOG_DEBOUNCE_MS
-  // so the stray click from the previous dialog is absorbed while a genuine
-  // new click on the next dialog still works.
+  // Why: gate the Save/Discard/Cancel handlers so a stray carry-over click doesn't act on the next dialog before the user reads it; released after CLOSE_DIALOG_DEBOUNCE_MS.
   const isClosingRef = useRef(false)
   const closeDialogDebounceTimersRef = useRef<Set<number>>(new Set())
   const releaseCloseDialogGuardAfterDebounce = useCallback(() => {
@@ -419,49 +415,54 @@ function Terminal(): React.JSX.Element | null {
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
 
-  // Window close confirmation dialog — shown for local terminals with running
-  // child processes. SSH terminals detach/persist through the relay lifecycle.
+  // Window close confirmation, shown for local terminals with running children (SSH terminals detach/persist via the relay).
   const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
 
-  // Why: when the main process requests a close while editor tabs are dirty, we
-  // must not call confirmWindowClose() until the user saves or discards. The
-  // global beforeunload guard still calls preventDefault() while any file is
-  // dirty, so an immediate confirm would leave the window open with no UI.
+  // Why: defer confirmWindowClose() while tabs are dirty — the beforeunload guard preventDefault()s, so an immediate confirm leaves the window open with no UI.
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
 
-  const proceedToNativeWindowClose = useCallback((isQuitting: boolean) => {
-    // Why: defer this synthetic unload until we are actually ready to close so
-    // a dirty-tab preventDefault() does not fire during the initial quit IPC
-    // (that path can emit will-prevent-unload and clear isQuitting in main).
-    window.dispatchEvent(new Event('beforeunload'))
-    if (!isQuitting) {
-      const state = useAppStore.getState()
-      const localPtyIds = Object.entries(state.tabsByWorktree).flatMap(
-        ([worktreeId, worktreeTabs]) => {
-          const connectionId = getConnectionId(worktreeId)
-          if (connectionId !== null) {
-            return []
-          }
-          return worktreeTabs
-            .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
-            .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
-        }
-      )
-      if (localPtyIds.length > 0) {
-        void Promise.all(localPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
-          (results) => {
-            if (results.some(Boolean)) {
-              setWindowCloseDialogOpen(true)
-            } else {
-              window.api.ui.confirmWindowClose()
-            }
-          }
-        )
-        return
-      }
+  const confirmNativeWindowClose = useCallback(() => {
+    // Why: capture only after every close guard has committed. A canceled child-
+    // process prompt must not consume App's synthetic/native unload guard.
+    const accepted = window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
+    if (!accepted) {
+      return
     }
     window.api.ui.confirmWindowClose()
   }, [])
+
+  const proceedToNativeWindowClose = useCallback(
+    (isQuitting: boolean) => {
+      if (!isQuitting) {
+        const state = useAppStore.getState()
+        const localPtyIds = Object.entries(state.tabsByWorktree).flatMap(
+          ([worktreeId, worktreeTabs]) => {
+            const connectionId = getConnectionId(worktreeId)
+            if (connectionId !== null) {
+              return []
+            }
+            return worktreeTabs
+              .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+              .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
+          }
+        )
+        if (localPtyIds.length > 0) {
+          void Promise.all(localPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
+            (results) => {
+              if (results.some(Boolean)) {
+                setWindowCloseDialogOpen(true)
+              } else {
+                confirmNativeWindowClose()
+              }
+            }
+          )
+          return
+        }
+      }
+      confirmNativeWindowClose()
+    },
+    [confirmNativeWindowClose]
+  )
 
   const waitForFileClosed = useCallback((fileId: string, timeoutMs: number): Promise<boolean> => {
     if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
@@ -480,9 +481,7 @@ function Terminal(): React.JSX.Element | null {
           resolve(true)
         }
       })
-      // Why: zustand only fires subscribers on subsequent state changes. If
-      // the file closed between the initial guard and subscribe, the
-      // transition was missed — re-check synchronously after subscribe.
+      // Why: zustand only fires subscribers on later changes, so re-check in case the file closed between the guard and subscribe.
       if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
         window.clearTimeout(timeoutId)
         unsub?.()
@@ -492,14 +491,10 @@ function Terminal(): React.JSX.Element | null {
   }, [])
 
   const getNextQueuedEditorClose = useCallback((): string | null => {
-    // Why: bulk close actions can enqueue files that become clean or disappear
-    // before they reach the front. Drain those entries eagerly so the dialog
-    // only blocks on tabs that still require an explicit close decision.
+    // Why: bulk closes enqueue files that may go clean or vanish before reaching the front; drain them so the dialog only blocks on tabs still needing a decision.
     while (pendingEditorCloseQueueRef.current.length > 0) {
       const fileId = pendingEditorCloseQueueRef.current[0]
-      // Why: if a save is still in-flight for this fileId, do not re-open the
-      // dialog on top of it. waitForFileClosed will re-advance the queue once
-      // the file finishes closing (or the save times out).
+      // Why: skip a fileId with an in-flight save; waitForFileClosed re-advances the queue once it closes or times out.
       if (inFlightSaveFileIdRef.current === fileId) {
         return null
       }
@@ -521,9 +516,7 @@ function Terminal(): React.JSX.Element | null {
   const advanceEditorCloseQueue = useCallback(() => {
     const nextFileId = getNextQueuedEditorClose()
     if (nextFileId) {
-      // Why: the queue can cross worktree boundaries during window-close
-      // flows. Switch to the target file's worktree before opening the
-      // dialog so the UI behind the dialog matches the filename in it.
+      // Why: the queue can cross worktrees during window-close; switch to the file's worktree so the UI behind the dialog matches its filename.
       const state = useAppStore.getState()
       const file = state.openFiles.find((f) => f.id === nextFileId)
       if (file && file.worktreeId !== state.activeWorktreeId) {
@@ -598,10 +591,7 @@ function Terminal(): React.JSX.Element | null {
       return
     }
 
-    // Why: save-and-close must flush the latest draft even when the visible
-    // editor panel has already unmounted. The headless autosave controller
-    // owns that write path now, so the dialog signals it through a custom
-    // event instead of poking at editor component refs.
+    // Why: signal the headless autosave controller via event (not editor refs) so save-and-close flushes even when the editor panel has unmounted.
     setSaveDialogFileId(null)
     window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
     inFlightSaveFileIdRef.current = fileId
@@ -609,18 +599,13 @@ function Terminal(): React.JSX.Element | null {
     try {
       closed = await waitForFileClosed(fileId, 10_000)
     } finally {
-      // Why: clear the in-flight ref regardless of success/timeout so the
-      // queue head is no longer treated as un-advanceable by
-      // getNextQueuedEditorClose before we re-advance the queue below.
+      // Why: clear the in-flight ref on success or timeout so getNextQueuedEditorClose no longer treats the queue head as un-advanceable.
       if (inFlightSaveFileIdRef.current === fileId) {
         inFlightSaveFileIdRef.current = null
       }
     }
     if (!closed) {
-      // Why: the save may have resolved in the tiny gap after the timeout
-      // fired. Re-check synchronously so we don't re-open a stale dialog
-      // for a file that is already gone — drain the queue entry and
-      // advance instead. Toast only for the genuine timeout case.
+      // Why: the save may have resolved just after the timeout fired; re-check so we drain/advance instead of re-opening a stale dialog, toasting only real timeouts.
       if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
         pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
           (id) => id !== fileId
@@ -636,9 +621,7 @@ function Terminal(): React.JSX.Element | null {
         )
       )
       setSaveDialogFileId(fileId)
-      // Why: a genuine timeout leaves the user back on the same dialog, so
-      // release the guard immediately — a new click here is a deliberate
-      // retry, not a stray carry-over from a prior dialog.
+      // Why: on a genuine timeout the user stays on the same dialog, so release the guard now — a new click is a deliberate retry.
       isClosingRef.current = false
       return
     }
@@ -664,21 +647,14 @@ function Terminal(): React.JSX.Element | null {
     isClosingRef.current = true
     const fileId = saveDialogFileId
 
-    // Why: dismiss the dialog synchronously before awaiting quiesce. A rapid
-    // double-click on "Don't Save" would otherwise fire the handler twice
-    // with the same captured fileId, causing two concurrent queue advances
-    // after the quiesce settles. Mirrors handleSaveDialogSave's early clear.
+    // Why: dismiss synchronously before awaiting quiesce so a double-click can't fire twice with the same fileId and double-advance the queue.
     setSaveDialogFileId(null)
 
-    // Why: autosave runs on a background timer. Wait for any pending/in-flight
-    // write to settle before honoring "Don't Save", otherwise the file can be
-    // written after the user explicitly chose to discard their edits.
+    // Why: wait for background autosave to settle before "Don't Save", else a write can land after the user chose to discard.
     try {
       await requestEditorSaveQuiesce({ fileId })
     } catch (error) {
-      // Why: quiesce failure must not trap the user in a close dialog loop, but
-      // silently swallowing it also hides broken autosave state. Warn so a
-      // stuck controller is visible in devtools instead of disappearing.
+      // Why: don't trap the user in the close-dialog loop on quiesce failure, but still warn so a stuck controller stays visible.
       console.warn('Autosave quiesce failed before discard', error)
     }
     markFileDirty(fileId, false)
@@ -731,9 +707,7 @@ function Terminal(): React.JSX.Element | null {
     const rememberedTabId = renderedActiveWorktreeId
       ? (activeTabIdByWorktree[renderedActiveWorktreeId] ?? null)
       : null
-    // Why: prefer the worktree's remembered active tab over the first tab so a
-    // repair firing on a transient worktree-switch render restores the tab the
-    // user left on instead of permanently resetting the selection to Terminal 1.
+    // Why: prefer the remembered active tab so a repair on a transient switch render doesn't reset selection to Terminal 1.
     const repairedTabId = resolveRepairedActiveTerminalTabId({
       activeTabType,
       activeTabId,
@@ -743,14 +717,9 @@ function Terminal(): React.JSX.Element | null {
     if (!repairedTabId) {
       return
     }
-    // Why: mutating Zustand during render trips React's "Cannot update a
-    // component while rendering a different component" warning. Keep the repair
-    // terminal-only so inactive CLI-created tabs cannot steal editor/browser focus.
+    // Why: run in an effect (Zustand mutation during render trips React's cross-component update warning); keep terminal-only so inactive CLI-created tabs can't steal editor/browser focus.
     setActiveTab(repairedTabId)
-    // Why: `tabs` is intentionally the dependency here because the repair must
-    // react to tab-order/content changes, not just scalar IDs. The list comes
-    // from Zustand selectors and is small in practice, so this explicit repair
-    // effect is preferred over duplicating reconciliation state.
+    // Why: `tabs` is the dependency so the repair reacts to tab-order/content changes, not just scalar IDs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeTabId,
@@ -761,19 +730,19 @@ function Terminal(): React.JSX.Element | null {
     renderedActiveWorktreeId
   ])
 
-  // Track which worktrees have been activated during this app session.
-  // Only mount TerminalPanes for visited worktrees to prevent mass PTY
-  // spawning when restoring a session with many saved worktree tabs.
+  // Why: only mount TerminalPanes for visited worktrees, else restoring many saved tabs mass-spawns PTYs.
   const measurableBackgroundWorktreeTimersRef = useRef(new Map<string, number>())
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
   const [terminalParkingRevision, setTerminalParkingRevision] = useState(0)
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
-  // Why: background-mounted worktrees restricted to specific tabs (targeted
-  // wake/resume) must not instantiate a TerminalPane per saved tab. A worktree
-  // absent from this map mounts all of its tabs.
+  // Tab restriction for targeted background mounts (wake/resume); a worktree absent from this map mounts all its tabs.
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
+  // Why: only cold-activation deferral (not targeted mounts, which share the map above) creates watcher coverage for every unmounted tab.
+  const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
+  // Why: run the cold-activation deferral decision once per activation transition, not on every re-render.
+  const lastActivationWorktreeIdRef = useRef<string | null>(null)
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
     const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
@@ -785,6 +754,17 @@ function Terminal(): React.JSX.Element | null {
         worktreeId,
         detail.tabIds
       )
+      // Why: a targeted wake can reveal an earlier activation-deferred tab; drop it from watcher ownership before its pane mounts.
+      const worktreeTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map(
+        (tab) => tab.id
+      )
+      revealActivationDeferredTabs({
+        restrictions: backgroundMountTabIdsByWorktreeRef.current,
+        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+        worktreeId,
+        allTabIds: worktreeTabIds,
+        immediateTabIds: new Set(detail.tabIds ?? worktreeTabIds)
+      })
       scheduleBackgroundTerminalWorktreeMeasure({
         mountedWorktreeIds: mountedWorktreeIdsRef.current,
         measurableBackgroundWorktreeIds: measurableBackgroundWorktreeIdsRef.current,
@@ -808,8 +788,7 @@ function Terminal(): React.JSX.Element | null {
       BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
       onBackgroundMountTerminalWorktree as EventListener
     )
-    // Requests made while the lazy Terminal bundle/effect was absent stay in
-    // the registry and are replayed only after the listener owns the surface.
+    // Replay mounts requested while the lazy Terminal bundle/effect was absent, now that the listener owns the surface.
     for (const pending of takeAllPendingBackgroundTerminalWorktreeMounts()) {
       applyBackgroundMount(pending)
     }
@@ -822,8 +801,7 @@ function Terminal(): React.JSX.Element | null {
         window.clearTimeout(timer)
       }
       timers.clear()
-      // Why: close-dialog debounce timers are Terminal-owned and only need
-      // unmount cleanup; keep them with the existing Terminal lifetime cleanup.
+      // Close-dialog debounce timers are Terminal-owned, so clear them with the Terminal lifetime cleanup.
       for (const timer of closeDialogDebounceTimers) {
         window.clearTimeout(timer)
       }
@@ -841,9 +819,7 @@ function Terminal(): React.JSX.Element | null {
     }
   }, [])
 
-  // Why: worktree-level cold-park policy — hiddenSince bookkeeping, parked-set
-  // selection, and one recheck timer per still-pending deadline so React
-  // re-renders exactly when the hysteresis elapses instead of polling.
+  // Worktree cold-park policy: hiddenSince bookkeeping, parked-set selection, and one recheck timer per deadline so React re-renders when hysteresis elapses instead of polling.
   useEffect(() => {
     const parkingTimers = terminalWorktreeParkingTimersRef.current
     for (const timer of parkingTimers.values()) {
@@ -895,10 +871,7 @@ function Terminal(): React.JSX.Element | null {
       nowMs,
       ...overrides
     })
-    // Why: a worktree with any tab the byte watchers cannot cover (no
-    // capture, no layout snapshot, legacy leaf ids) must never park — it
-    // would go silent for bells/titles/completions, the failure that sank
-    // the first parking attempt.
+    // Why: a worktree with any watcher-uncoverable tab must never park, or it goes silent for bells/titles/completions (sank the first parking attempt).
     for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
       const tabs = tabsByWorktree[worktreeId] ?? []
       if (!tabs.every((tab) => canWatcherCoverParkedTerminalTab(worktreeId, tab))) {
@@ -946,21 +919,112 @@ function Terminal(): React.JSX.Element | null {
     terminalParkingRevision,
     workspaceSurfaces
   ])
-  // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
-  // before reconnectPersistedTerminals() has finished eagerly spawning PTYs.
-  // Without this gate, Phase 1 (hydrateWorkspaceSession) sets activeWorktreeId
-  // with ptyId: null, and TerminalPane would call connectPanePty → pty:spawn,
-  // creating a duplicate PTY for the same tab.
+  // Why: gate on workspaceSessionReady so TerminalPane doesn't mount and spawn a duplicate PTY before reconnectPersistedTerminals() finishes.
   if (renderedActiveWorktreeId && workspaceSessionReady) {
+    // Why: mounting every saved tab at once (scrollback replay + WebGL + sync-IPC snapshot per pane) freezes the renderer, so hidden tabs defer and mount on first reveal.
+    const worktreeTabs = tabsByWorktree[renderedActiveWorktreeId] ?? []
+    const coldActivationDeferralEnabled =
+      terminalParkingEnabled && terminalTitleSnapshotAuthorityEnabled
+    const immediateTabIds = new Set<string>()
+    if (activeTabId) {
+      immediateTabIds.add(activeTabId)
+    }
+    // Why: on a fresh switch the global activeTabId lags to the previous worktree for one pass; the remembered per-worktree tab is the one about to show.
+    const rememberedActiveTabId = activeTabIdByWorktree[renderedActiveWorktreeId]
+    if (rememberedActiveTabId) {
+      immediateTabIds.add(rememberedActiveTabId)
+    }
+    // Why groups: split mode shows each group's active tab at once, so none may defer; map the unified-tab id to its entity id (keep the raw id for legacy groups that stored entity ids).
+    const unifiedTabById = new Map(
+      (useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId] ?? []).map(
+        (unifiedTab) => [unifiedTab.id, unifiedTab]
+      )
+    )
+    for (const group of groupsByWorktree[renderedActiveWorktreeId] ?? []) {
+      if (!group.activeTabId) {
+        continue
+      }
+      immediateTabIds.add(group.activeTabId)
+      const activeUnifiedTab = unifiedTabById.get(group.activeTabId)
+      if (activeUnifiedTab?.contentType === 'terminal') {
+        immediateTabIds.add(activeUnifiedTab.entityId)
+      }
+    }
+    for (const portal of activityTerminalPortals) {
+      if (portal.worktreeId === renderedActiveWorktreeId) {
+        immediateTabIds.add(portal.tabId)
+      }
+    }
+    // Why: a queued startup needs a mounted pane to run; pendingActivationSpawn is excluded because hydration marks every persisted tab and a deferred reveal consumes it later.
+    for (const tab of worktreeTabs) {
+      if (pendingStartupByTabId[tab.id] !== undefined) {
+        immediateTabIds.add(tab.id)
+      }
+    }
+    const activationHostSupportsDeferral = canDeferColdActivationTabsForHost({
+      executionHostId: activeWorktreeDeferralHostId
+    })
+    if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
+      lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
+      const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
+      planColdActivationTabDeferral({
+        restrictions: backgroundMountTabIdsByWorktreeRef.current,
+        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+        worktreeId: renderedActiveWorktreeId,
+        allTabIds: worktreeTabs.map((tab) => tab.id),
+        isTabLive: hasRegisteredRuntimeTerminalTab,
+        // Why the coverage gate: parked byte watchers own an unmounted tab's bells/titles/completions, so a tab they can't cover must mount immediately.
+        isTabDeferrable: (tabId) => {
+          const tab = tabById.get(tabId)
+          return (
+            // Why: byte-mode watchers can't reconstruct pre-registration output; remote/unresolved ownership mounts eagerly since only a local daemon has snapshots.
+            coldActivationDeferralEnabled &&
+            activationHostSupportsDeferral &&
+            tab !== undefined &&
+            canWatcherCoverParkedTerminalTab(
+              renderedActiveWorktreeId,
+              tab,
+              terminalProviderHasAuthoritativeSnapshot
+            )
+          )
+        },
+        immediateTabIds
+      })
+    } else if (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) {
+      // Why: kill-switch or host-ownership change while active must restore eager mounting, not strand an old restriction.
+      backgroundMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
+      activationDeferredMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
+    } else {
+      // Why: tabs added after activation never passed the coverage gate — uncoverable/no-PTY ones must mount now to spawn or keep their live transport.
+      for (const tab of worktreeTabs) {
+        if (
+          !canWatcherCoverParkedTerminalTab(
+            renderedActiveWorktreeId,
+            tab,
+            terminalProviderHasAuthoritativeSnapshot
+          )
+        ) {
+          immediateTabIds.add(tab.id)
+        }
+      }
+      revealActivationDeferredTabs({
+        restrictions: backgroundMountTabIdsByWorktreeRef.current,
+        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+        worktreeId: renderedActiveWorktreeId,
+        allTabIds: worktreeTabs.map((tab) => tab.id),
+        immediateTabIds
+      })
+    }
     mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)
-    // Why: a real activation supersedes any targeted background mount — the
-    // visible worktree needs all of its tabs.
-    backgroundMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
+  } else {
+    // Why: reset so the next ready activation re-runs the deferral decision even for the same worktree.
+    lastActivationWorktreeIdRef.current = null
   }
   pruneClosedBackgroundMountTabs(
     backgroundMountTabIdsByWorktreeRef.current,
     mountedWorktreeIdsRef.current,
-    tabsByWorktree
+    tabsByWorktree,
+    activationDeferredMountTabIdsByWorktreeRef.current
   )
   // Prune IDs of worktrees that no longer exist (deleted/removed)
   const allWorktreeIds = new Set(workspaceSurfaces.map((workspace) => workspace.id))
@@ -968,6 +1032,7 @@ function Terminal(): React.JSX.Element | null {
     if (!allWorktreeIds.has(id)) {
       mountedWorktreeIdsRef.current.delete(id)
       backgroundMountTabIdsByWorktreeRef.current.delete(id)
+      activationDeferredMountTabIdsByWorktreeRef.current.delete(id)
     }
   }
   const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
@@ -977,11 +1042,7 @@ function Terminal(): React.JSX.Element | null {
     groupsByWorktree,
     activeGroupIdByWorktree
   )
-  // Why: parked byte-watcher reconciliation for the legacy (non-split)
-  // terminal host, which renders TerminalPanes directly. In split mode each
-  // TerminalPaneOverlayLayer owns its worktree's watchers, so here we only
-  // dispose worktrees that render no overlay layer (no layout / unmounted)
-  // and prune watchers for deleted worktrees.
+  // Why: legacy (non-split) host owns watcher reconciliation; split mode's overlay layers own theirs, so only dispose worktrees with no overlay layer.
   useEffect(() => {
     pruneParkedTerminalWatchers(new Set(workspaceSurfaces.map((workspace) => workspace.id)))
     for (const workspace of workspaceSurfaces) {
@@ -994,6 +1055,7 @@ function Terminal(): React.JSX.Element | null {
       }
       const tabs = tabsByWorktree[workspace.id] ?? []
       const parkedTabIds = new Set<string>()
+      let deferredTabIds: ReadonlySet<string> | null = null
       if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspace.id)) {
         const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
         const shouldMeasureHiddenWorktree =
@@ -1011,25 +1073,52 @@ function Terminal(): React.JSX.Element | null {
             }
           }
         }
+        // Why: activation-deferred tabs are unmounted like parked ones — the same byte watchers own their side effects until first reveal.
+        deferredTabIds =
+          activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+        for (const tab of tabs) {
+          if (
+            deferredTabIds?.has(tab.id) &&
+            !parkedTabIds.has(tab.id) &&
+            canWatcherCoverParkedTerminalTab(workspace.id, tab) &&
+            !findActivityTerminalPortal(activityTerminalPortals, {
+              worktreeId: workspace.id,
+              tabId: tab.id
+            })
+          ) {
+            parkedTabIds.add(tab.id)
+          }
+        }
       }
-      syncParkedTerminalTabWatchers({ worktreeId: workspace.id, tabs, parkedTabIds })
+      syncParkedTerminalTabWatchers({
+        worktreeId: workspace.id,
+        tabs,
+        parkedTabIds,
+        // Why: activation-deferred tabs never mounted a pane to restore their title, unlike ordinary parked tabs.
+        ...(deferredTabIds ? { restoreTitleOnStartTabIds: deferredTabIds } : {})
+      })
     }
   }, [
+    // Why activeTabId: revealing a deferred tab mutates the mount restriction in the same render; sync must re-run so its watcher disposes before the pane attaches.
+    activeTabId,
     activeView,
     activityTerminalPortals,
+    activeTabIdByWorktree,
     anyMountedWorktreeHasLayout,
     backgroundMountRevision,
     getEffectiveLayoutForWorktree,
+    groupsByWorktree,
     parkedTerminalWorktreeIds,
+    pendingStartupByTabId,
     renderedActiveWorktreeId,
     tabsByWorktree,
+    terminalParkingEnabled,
+    terminalTitleSnapshotAuthorityEnabled,
+    workspaceSessionReady,
     workspaceSurfaces
   ])
-  // Why: symmetric with useTerminalTabColdParking's unmount cleanup — when
-  // the terminal host unmounts, no reconciliation effect will run again, so
-  // dispose every remaining parked watcher here (overlay-layer children have
-  // already disposed theirs by the time this parent cleanup runs).
-  useEffect(() => () => pruneParkedTerminalWatchers(new Set()), [])
+  // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher here.
+  useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
   // Auto-create first tab when worktree activates
   useEffect(() => {
     if (!workspaceSessionReady) {
@@ -1038,24 +1127,17 @@ function Terminal(): React.JSX.Element | null {
     if (!activeWorktreeId) {
       return
     }
-    // Why: in the paired web client, host session-tabs are authoritative.
-    // Creating a local fallback races the host's initial terminal and duplicates tabs.
+    // Why: host session-tabs are authoritative in the paired web client; a local fallback races the host's initial terminal and duplicates tabs.
     if (isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))) {
       return
     }
 
-    // Why: this fallback exists to give a newly activated/restored worktree a
-    // focusable surface when the reconciled tab model has nothing renderable.
-    // Re-running it on ordinary tab-count changes would recreate a terminal
-    // immediately after the user intentionally closed the last visible one.
+    // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
     const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
     if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
       return
     }
-    // Why: this tab only exists because the user clicked a never-visited
-    // worktree. Tag it so the PTY spawn it triggers does not count as
-    // activity and reshuffle the sidebar. Explicit "New Tab" actions
-    // (handleNewTab below) still bump normally.
+    // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
   }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
 
@@ -1068,9 +1150,7 @@ function Terminal(): React.JSX.Element | null {
       return
     }
     startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
-    // Why: startup hydration restores the active worktree without calling
-    // activateAndRevealWorktree, so orphaned live/quit records need a terminal
-    // surface pass after pane-level cold restore had first chance.
+    // Why: startup hydration restores the worktree without activateAndRevealWorktree, so orphaned live/quit records need a terminal-surface pass after cold restore.
     resumeSleepingAgentSessionsForWorktree(activeWorktreeId)
   }, [activeWorktreeId, hydrationSucceeded, workspaceSessionReady])
 
@@ -1099,10 +1179,7 @@ function Terminal(): React.JSX.Element | null {
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
       setActiveTabType('terminal')
-      // Why: persist the tab bar order with the new terminal at the end of the
-      // current visual order. Without this, reconcileOrder falls back to
-      // terminals-first when tabBarOrderByWorktree is unset, causing a new
-      // terminal to jump to index 0 instead of appending after editor tabs.
+      // Why: persist tab-bar order with the new terminal appended; else reconcileOrder falls back to terminals-first and jumps it to index 0 before editor tabs.
       const state = useAppStore.getState()
       const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
       const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
@@ -1124,8 +1201,7 @@ function Terminal(): React.JSX.Element | null {
       const order = base.filter((id) => id !== newTab.id)
       order.push(newTab.id)
       setTabBarOrder(activeWorktreeId, order)
-      // Why: shell-specific creation still uses the legacy path; keep the
-      // keyboard shortcut focused until the lifted action accepts shell overrides.
+      // Why: shell-specific creation still uses the legacy path; keep focus here until the lifted action accepts shell overrides.
       focusTerminalTabSurface(newTab.id)
     },
     [
@@ -1328,15 +1404,13 @@ function Terminal(): React.JSX.Element | null {
       if (consumeSuppressedPtyExit(ptyId)) {
         return
       }
-      // Why: a parked multi-leaf tab has no PaneManager to promote split
-      // siblings, so closing the tab here would kill them; the reveal
-      // remount handles dead PTYs per leaf instead.
+      // Why: a parked multi-leaf tab has no PaneManager to promote split siblings, so closing here would kill them; reveal-remount handles dead PTYs per leaf.
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }
-      handleCloseTab(tabId)
+      closeTerminalTab(tabId, { reason: 'pty-exit' })
     },
-    [consumeSuppressedPtyExit, handleCloseTab]
+    [consumeSuppressedPtyExit]
   )
 
   const handleCloseOthers = useCallback(
@@ -1364,11 +1438,16 @@ function Terminal(): React.JSX.Element | null {
             (unifiedTab?.contentType === 'browser' &&
               browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
         ) {
-          void closeWebRuntimeSessionTab({
-            worktreeId: activeWorktreeId,
-            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
-            environmentId: runtimeEnvironmentId
-          })
+          if (unifiedTab.contentType === 'terminal') {
+            // Why: paired-host bulk close must revoke renderer resume and hook authority, not just remove the host session tab.
+            closeTerminalTab(unifiedTab.entityId)
+          } else {
+            void closeWebRuntimeSessionTab({
+              worktreeId: activeWorktreeId,
+              tabId: unifiedTab.id,
+              environmentId: runtimeEnvironmentId
+            })
+          }
           continue
         }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
@@ -1423,11 +1502,16 @@ function Terminal(): React.JSX.Element | null {
             (unifiedTab?.contentType === 'browser' &&
               browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
         ) {
-          void closeWebRuntimeSessionTab({
-            worktreeId: activeWorktreeId,
-            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
-            environmentId: runtimeEnvironmentId
-          })
+          if (unifiedTab.contentType === 'terminal') {
+            // Why: route terminal close through the destructive local lifecycle boundary before the paired-host RPC.
+            closeTerminalTab(unifiedTab.entityId)
+          } else {
+            void closeWebRuntimeSessionTab({
+              worktreeId: activeWorktreeId,
+              tabId: unifiedTab.id,
+              environmentId: runtimeEnvironmentId
+            })
+          }
           continue
         }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
@@ -1556,10 +1640,7 @@ function Terminal(): React.JSX.Element | null {
           keybindings
         })
       }
-      // Why: Cmd/Ctrl+T always opens a new terminal, regardless of which
-      // surface is active. Browser-tab creation has its own shortcut
-      // (Cmd/Ctrl+Shift+B) so users have a predictable way to spawn a
-      // terminal from anywhere in the central pane.
+      // Why: Cmd/Ctrl+T always opens a terminal regardless of active surface; browser tabs have their own chord (Cmd/Ctrl+Shift+B).
       if (!e.repeat && matchShortcut('tab.newTerminal')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newTerminal')
@@ -1571,11 +1652,8 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Alt+T (macOS default) — launch the default agent in a new
-      // tab; per-agent chords (Settings → Shortcuts → Agents) launch their
-      // specific agent. Unlike Cmd+T this never targets the floating panel:
-      // agent sessions belong to a worktree, so the launch always lands in
-      // the active workspace's tab bar.
+      // Cmd/Ctrl+Alt+T — launch the default agent in a new tab (per-agent chords launch specific agents).
+      // Why: unlike Cmd+T this never targets the floating panel — agent sessions belong to a worktree.
       if (!e.repeat) {
         const state = useAppStore.getState()
         let agentActionId: KeybindingActionId | null = null
@@ -1598,9 +1676,7 @@ function Terminal(): React.JSX.Element | null {
           )) {
             if (matchShortcut(bound.actionId)) {
               agentActionId = bound.actionId
-              // Why: a per-agent chord is an explicit request for that agent,
-              // so launch it even when detection hasn't (or can't have)
-              // confirmed the binary; a missing CLI fails visibly in the tab.
+              // Why: a per-agent chord is explicit, so launch even if detection didn't confirm the binary — a missing CLI fails visibly in the tab.
               agentToLaunch = bound.agent
               break
             }
@@ -1623,20 +1699,11 @@ function Terminal(): React.JSX.Element | null {
         }
       }
 
-      // Cmd/Ctrl+Shift+T — reopen closed browser tab when browser is active,
-      // otherwise reopen the most recently closed editor tab.
+      // Cmd/Ctrl+Shift+T — reopen the most recently closed tab (terminal/browser/editor), Chrome-style; repeats walk back through history.
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
-        const state = useAppStore.getState()
-        if (state.activeTabType === 'browser') {
-          const restored = state.reopenClosedBrowserTab(activeWorktreeId)
-          if (restored === null) {
-            state.reopenClosedEditorTab(activeWorktreeId)
-          }
-        } else {
-          state.reopenClosedEditorTab(activeWorktreeId)
-        }
+        useAppStore.getState().reopenClosedTab(activeWorktreeId)
         return
       }
 
@@ -1662,10 +1729,7 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Save active editor file (fallback for when focus is
-      // outside the editor content area, e.g. on the tab bar or sidebar).
-      // When the editor itself has focus, editor-local handlers own the save
-      // shortcut, so we skip this when the target is editable.
+      // Save active editor file — fallback for when focus is outside the editor (tab bar/sidebar); editor-local handlers own save when the editor is focused.
       if (!e.repeat && matchShortcut('editor.save')) {
         const target = e.target as HTMLElement | null
         const inEditor =
@@ -1707,11 +1771,8 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+W - close active editor tab, browser tab, or terminal pane.
-      // Terminal pane/tab close is handled by the pane-level keyboard handler
-      // in keyboard-handlers.ts so it can close individual split panes and
-      // show a confirmation dialog. We still preventDefault here so Electron
-      // doesn't close the window as its default Cmd+W action.
+      // Cmd/Ctrl+W — close active editor/browser tab or terminal pane. Terminal close lives in keyboard-handlers.ts (split panes + confirm dialog).
+      // Why: still preventDefault here so Electron doesn't run its default Cmd+W window-close.
       if (!e.repeat && matchShortcut('tab.close')) {
         const state = useAppStore.getState()
         if (state.activeTabType === 'terminal' && context === 'terminal') {
@@ -1727,9 +1788,8 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Alt+W - close every editor file tab in the active worktree.
-      // Why: reuse the context-menu close-all path so pinned and dirty-file
-      // rules stay identical; terminal focus still honors shortcut policy.
+      // Cmd/Ctrl+Alt+W — close every editor file tab in the active worktree.
+      // Why: reuse the context-menu close-all path so pinned/dirty-file rules stay identical.
       if (!e.repeat && matchShortcut('tab.closeAll')) {
         e.preventDefault()
         notifyTerminalCapture('tab.closeAll')
@@ -1754,14 +1814,7 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs (scoped to the
-      // active tab type). Cmd/Ctrl+Alt+] and Cmd/Ctrl+Alt+[ cycles across
-      // every tab type as an escape hatch from the type-scoped default, and
-      // matches the platform tab-switch chord on macOS.
-      // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
-      // as the key value (the shifted character), not '['. Option+[ also
-      // composes to dead-key / punctuation on many layouts, so matching on
-      // event.key would miss the chord entirely on non-US layouts.
+      // Why: match on e.code, not e.key — macOS Shift+[ reports '{' and Option+[ composes dead-keys, so e.key misses the chord on many layouts.
       const switchSameTypeDirection = matchShortcut('tab.nextSameType')
         ? 1
         : matchShortcut('tab.previousSameType')
@@ -1773,11 +1826,7 @@ function Terminal(): React.JSX.Element | null {
           ? -1
           : null
       if (!e.repeat && (switchSameTypeDirection !== null || switchAllTypesDirection !== null)) {
-        // Why: delegate to the shared handler used by the IPC shortcut path
-        // so both code paths share one implementation. Always consume the
-        // chord — even when the switch is a no-op (e.g. single tab), we own
-        // this key combo and shouldn't let it reach xterm or the browser
-        // guest's default handling.
+        // Why: share the IPC-path handler and always consume the chord (even single-tab no-op) so it never reaches xterm or the browser guest.
         e.preventDefault()
         e.stopPropagation()
         e.stopImmediatePropagation()
@@ -1803,30 +1852,15 @@ function Terminal(): React.JSX.Element | null {
         }
       }
 
-      // Ctrl+PageDown/PageUp - switch terminal tabs only
-      // Why: this chord intentionally uses Ctrl on every platform; on macOS,
-      // Cmd+PageUp/PageDown is an OS desktop-switch shortcut we should not steal.
-      // Why: also reject Shift so Ctrl+Shift+PageUp/PageDown stays available
-      // for focused terminal / editor consumers and matches the unshifted
-      // predicate in browser-guest-ui.ts and the chord advertised in
-      // ShortcutsPane.
+      // Ctrl+PageDown/PageUp — switch terminal tabs only. Ctrl on every platform since macOS Cmd+PageUp/Down is an OS desktop-switch shortcut.
+      // Why: reject Shift too so Ctrl+Shift+PageUp/Down stays free for focused terminal/editor consumers.
       const terminalTabDirection = matchShortcut('tab.nextTerminal')
         ? 1
         : matchShortcut('tab.previousTerminal')
           ? -1
           : null
       if (!e.repeat && terminalTabDirection !== null) {
-        // Why: always consume the chord before xterm's textarea listener
-        // sees it, regardless of whether we actually switched tabs. xterm
-        // translates plain Ctrl+PageUp/PageDown into \e[5~ / \e[6~ escape
-        // sequences and writes them to the shell; that stray output then
-        // also flips the tab's unread/bell indicator. In the single-terminal
-        // case handleSwitchTerminalTab is a no-op, but we still need to
-        // swallow the event — otherwise pressing the chord on the only
-        // terminal leaves "5~" in the shell and lights up a phantom
-        // notification on the tab that already has focus. preventDefault
-        // alone does not stop xterm's own keydown listener, so we also
-        // stop propagation.
+        // Why: fully consume the chord (preventDefault alone won't stop xterm's listener); else xterm writes \e[5~/\e[6~ escapes to the shell even in the single-terminal no-op case.
         e.preventDefault()
         e.stopPropagation()
         e.stopImmediatePropagation()
@@ -1859,27 +1893,21 @@ function Terminal(): React.JSX.Element | null {
   // Warn on window close if there are unsaved editor files
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent): void => {
-      // Why: update/manual restarts pre-save dirty tabs and then intentionally
-      // close the app. Do not let stale dirty flags veto the relaunch path.
+      // Why: intentional restarts pre-save dirty tabs, so don't let stale dirty flags veto the relaunch.
       if (isIntentionalAppRestartInProgress()) {
         return
       }
       const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
       if (dirtyFiles.length > 0) {
-        e.preventDefault()
+        preventUnloadAndScheduleShutdownCheckpointReset(e, window)
       }
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  // Handle main-process window close requests. Terminal sessions are detached
-  // by the daemon/SSH lifecycle; only dirty editor files should block close
-  // here. Explicit destructive terminal actions keep their own confirms.
-  // Why: register into the coordinator rather than subscribing to IPC directly.
-  // The single IPC subscription lives at the always-mounted App root, so quits
-  // on the no-workspace landing page (where Terminal is not mounted) are still
-  // handled instead of deadlocking the window (#5144).
+  // Handle main-process window close requests: only dirty editor files block close (terminal sessions detach via daemon/SSH).
+  // Why: register into the coordinator, not IPC directly, so quits on the Terminal-less landing page are still handled (#5144).
   useEffect(() => {
     setWindowCloseRequestHandler(({ isQuitting }) => {
       if (isIntentionalAppRestartInProgress()) {
@@ -1887,9 +1915,7 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Why: if a previous close request is already being handled (user is
-      // working through dirty-file dialogs), ignore duplicate quit signals
-      // to avoid overwriting the in-flight ref and losing the close sequence.
+      // Why: ignore duplicate quit signals while a close is in flight, else the in-flight ref is overwritten and the close sequence is lost.
       if (windowCloseAfterDirtyRef.current) {
         return
       }
@@ -1908,10 +1934,7 @@ function Terminal(): React.JSX.Element | null {
     return () => setWindowCloseRequestHandler(null)
   }, [proceedToNativeWindowClose, queueEditorCloseRequests])
 
-  // Why: browser page state can disappear through store-only paths (CLI tab
-  // close, worktree deletion). The store cannot call destroyPersistentWebview
-  // because that function owns renderer DOM nodes, so this subscriber tears down
-  // webviews whose backing page records were removed.
+  // Why: browser pages can vanish via store-only paths; the store can't destroy webviews (owns DOM nodes), so this subscriber tears down orphaned ones.
   const prevBrowserWebviewIdsRef = useRef<Set<string>>(
     collectBrowserWebviewIds(
       useAppStore.getState().browserTabsByWorktree,
@@ -1943,12 +1966,7 @@ function Terminal(): React.JSX.Element | null {
     })
   }, [])
 
-  // Why: defensive guard against state inconsistency. If activeTabType is
-  // 'browser' but no browser tab can be rendered (e.g. activeBrowserTabId is
-  // null or doesn't match any tab), fall back to terminal view instead of
-  // rendering a blank screen. This runs as an effect (not during render)
-  // because calling Zustand mutations during render interferes with React's
-  // render cycle and causes blank screens when creating new tabs.
+  // Why: fall back to terminal when activeTabType 'browser' has no renderable tab; run as effect, not render (Zustand mutations mid-render blank the screen).
   useEffect(() => {
     const activeWorktreeBrowserTabs = renderedActiveWorktreeId
       ? (useAppStore.getState().browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
@@ -1982,9 +2000,7 @@ function Terminal(): React.JSX.Element | null {
     >
       <EditorAutosaveController />
 
-      {/* Why: once split groups are enabled, each group owns its own tab strip
-          inline. The old titlebar portal stays only as a fallback
-          before the root-group layout has been established. */}
+      {/* Why: with split groups each group owns its inline tab strip; this titlebar portal is only a fallback before the root-group layout exists. */}
       {renderedActiveWorktreeId &&
         !effectiveActiveLayout &&
         titlebarTabsTarget &&
@@ -2041,18 +2057,13 @@ function Terminal(): React.JSX.Element | null {
           titlebarTabsTarget
         )}
 
-      {/* Why: the full-width titlebar is no longer rendered in workspace view
-          — tab groups + terminal extend to the top of the window instead.
-          The old summary label (workspace / active surface) is removed. */}
+      {/* Why: no full-width titlebar in workspace view — tab groups + terminal extend to the window top. */}
 
       {anyMountedWorktreeHasLayout ? (
         <div
           className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${effectiveActiveLayout ? '' : ' hidden'}`}
         >
-          {/* Why: each mounted worktree surface is absolutely positioned so we
-              can preserve hidden trees without reflowing the active one. Keep
-              a relative anchor here so those panes size to the workspace body
-              rather than some outer ancestor when split groups are enabled. */}
+          {/* Why: absolutely position each mounted surface so hidden trees don't reflow the active one; the relative anchor sizes panes to the workspace body. */}
           {workspaceSurfaces
             .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
             .map((workspace) => {
@@ -2060,8 +2071,7 @@ function Terminal(): React.JSX.Element | null {
               if (!layout) {
                 return null
               }
-              // Why: use strict equality with 'terminal' instead of !== 'settings'
-              // so the terminal/browser surface hides on the tasks page too.
+              // Why: strict '=== terminal' (not !== settings) so the terminal/browser surface hides on the tasks page too.
               const isVisible =
                 activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
               const shouldMeasureHiddenWorktree =
@@ -2084,6 +2094,9 @@ function Terminal(): React.JSX.Element | null {
                   backgroundMountTabIds={
                     backgroundMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
                   }
+                  activationDeferredMountTabIds={
+                    activationDeferredMountTabIdsByWorktreeRef.current.get(workspace.id) ?? null
+                  }
                 />
               )
             })}
@@ -2092,32 +2105,11 @@ function Terminal(): React.JSX.Element | null {
 
       {!effectiveActiveLayout && !anyMountedWorktreeHasLayout && (
         <>
-          {/* Why: split-group layouts render their own terminal/browser/editor
-              surfaces through TabGroupPanel plus stable overlay layers.
-              Keeping the legacy workspace-level panes mounted underneath
-              as hidden DOM creates duplicate
-              TerminalPane/BrowserPane instances for the same tab, which lets
-              two React trees race over one PTY or webview. Render only one
-              surface model at a time.
-
-              Also gate on !anyMountedWorktreeHasLayout: when the active
-              worktree goes null (e.g. during shutdown-from-focused, which
-              calls setActiveWorktree(null) before shutdownWorktreeTerminals)
-              effectiveActiveLayout becomes undefined but other mounted
-              worktrees still have layouts. Without this guard, the legacy
-              branch mounts fresh TerminalPanes for every worktree in
-              mountedWorktreeIdsRef, each running connectPanePty →
-              startFreshSpawn → new PTY. That respawn is exactly what flips
-              getWorktreeStatus back to 'active' and re-lights the sidebar
-              dot green moments after the user clicked Shutdown. */}
+          {/* Why: render only one surface model — legacy panes mounted alongside split-group panes race two React trees over one PTY/webview; gate on !anyMountedWorktreeHasLayout too so shutdown-from-focused doesn't respawn PTYs and re-light the sidebar dot. */}
           {/* Terminal panes container - hidden when editor tab active */}
           <div
             className={`relative flex-1 min-h-0 overflow-hidden ${
-              // Why: only hide the terminal container when another tab type has
-              // content to display. Hiding unconditionally for non-terminal types
-              // causes a blank screen when activeTabType is stale (e.g. 'editor'
-              // with no files after session restore). The terminal stays visible
-              // as a fallback until another surface is ready.
+              // Why: only hide the terminal when another tab type has content; else a stale activeTabType (e.g. 'editor' with no files after restore) blanks the screen.
               (activeTabType === 'editor' && worktreeFiles.length > 0) ||
               (activeTabType === 'browser' && worktreeBrowserTabs.length > 0) ||
               activeTabType === 'simulator'
@@ -2128,8 +2120,7 @@ function Terminal(): React.JSX.Element | null {
             {workspaceSurfaces
               .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
               .map((workspace) => {
-                // Why: use strict equality with 'terminal' instead of !== 'settings'
-                // so the terminal/browser surface hides on the tasks page too.
+                // Why: strict '=== terminal' (not !== settings) so the terminal/browser surface hides on the tasks page too.
                 const isVisible =
                   activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
                 const shouldMeasureHiddenWorktree =
@@ -2166,8 +2157,7 @@ function Terminal(): React.JSX.Element | null {
                         const isActivityPortalTab = activityTerminalPortal !== null
                         const isActiveTerminalTab =
                           isVisible && tab.id === activeTabId && activeTabType === 'terminal'
-                        // Why: parking unmounts the view while preserving the PTY;
-                        // an Activity portal remains mounted as a visible consumer.
+                        // Why: parking unmounts the view but keeps the PTY; an Activity portal stays mounted as a visible consumer.
                         if (shouldColdParkTerminalPanes && !isActivityPortalTab) {
                           return null
                         }
@@ -2180,18 +2170,11 @@ function Terminal(): React.JSX.Element | null {
                             isActive={
                               isActiveTerminalTab || activityTerminalPortal?.active === true
                             }
-                            // Why: the activity page hosts this existing pane via
-                            // portal while the workspace surface remains hidden.
-                            // Keeping `isVisible` true for the portaled tab lets
-                            // xterm fit and stream foreground output in-place.
+                            // Why: keep isVisible true for the portaled tab so xterm fits/streams while the workspace surface stays hidden.
                             isVisible={isActiveTerminalTab || isActivityPortalTab}
-                            // Why: inactive tabs in the visible legacy surface
-                            // are tab-hidden, not worktree-hidden, so they need
-                            // the same light resume path as split-group overlays.
+                            // Why: inactive tabs here are tab-hidden (not worktree-hidden), so they need the same light resume path as split-group overlays.
                             isWorktreeActive={isVisible || isActivityPortalTab}
-                            // Why: when portaled to Activity for a specific agent
-                            // pane, isolate that leaf so split siblings stay
-                            // hidden. Workspace renders pass null → no override.
+                            // Why: isolate the portaled Activity leaf so split siblings stay hidden; workspace renders pass null.
                             isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
                             onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
                             onCloseTab={() => handleCloseTab(tab.id)}
@@ -2211,9 +2194,7 @@ function Terminal(): React.JSX.Element | null {
               })}
           </div>
 
-          {/* Browser panes container — only the active pane mounts so inactive
-              webviews park into the bounded registry instead of keeping hidden
-              Electron guest renderers alive indefinitely. */}
+          {/* Browser panes: only the active pane mounts so inactive webviews park rather than keep hidden guest renderers alive. */}
           <div
             className={`relative flex-1 min-h-0 overflow-hidden ${
               activeTabType !== 'browser' ? 'hidden' : ''
@@ -2221,8 +2202,7 @@ function Terminal(): React.JSX.Element | null {
           >
             {workspaceSurfaces.map((workspace) => {
               const browserTabs = browserTabsByWorktree[workspace.id] ?? []
-              // Why: use strict equality with 'terminal' instead of !== 'settings'
-              // so browser panes also hide on the tasks page.
+              // Why: strict '=== terminal' (not !== settings) so browser panes hide on the tasks page too.
               const isVisibleWorktree =
                 activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
               if (browserTabs.length === 0) {
@@ -2347,7 +2327,7 @@ function Terminal(): React.JSX.Element | null {
               autoFocus
               onClick={() => {
                 setWindowCloseDialogOpen(false)
-                window.api.ui.confirmWindowClose()
+                confirmNativeWindowClose()
               }}
             >
               {translate('auto.components.Terminal.73768427cf', 'Close')}
@@ -2359,19 +2339,8 @@ function Terminal(): React.JSX.Element | null {
   )
 }
 
-// Why: each TabGroupPanel tags its body element with an `anchor-name`, and
-// worktree-level overlay layers render every terminal/browser tab once —
-// keyed by pane id only — then pin each pane to the owning group's anchor via
-// CSS `position-anchor`. Moving a tab between groups now only changes which
-// anchor-name the overlay references, so terminals do not remount and
-// webviews do not reparent/reload.
-//
-// Why `React.memo`: Terminal.tsx has many store subscriptions and re-renders
-// on unrelated updates (terminal keystrokes, editor edits, focus changes).
-// Without memoization, every Terminal re-render would cascade into
-// BrowserPaneOverlayLayer and its BrowserPane subtrees. Memoizing here means
-// the surface only re-renders when its own props (worktreeId / layout /
-// focusedGroupId / isVisible) actually change.
+// Why: overlay pins each once-rendered pane (keyed by pane id) to its group's CSS anchor, so cross-group moves avoid terminal remount / webview reload.
+// React.memo: Terminal.tsx re-renders on unrelated store updates; memoize so this surface only re-renders on its own prop changes.
 const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
   worktreePath,
@@ -2381,7 +2350,8 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   shouldMeasureHiddenWorktree,
   shouldColdParkTerminalPanes,
   activityTerminalPortals,
-  backgroundMountTabIds
+  backgroundMountTabIds,
+  activationDeferredMountTabIds
 }: {
   worktreeId: string
   worktreePath: string
@@ -2392,6 +2362,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   shouldColdParkTerminalPanes: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
   backgroundMountTabIds: ReadonlySet<string> | null
+  activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
   const browserPageIds = useAppStore(
     useShallow((state) =>
@@ -2414,8 +2385,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
             ? 'absolute inset-0 flex opacity-0 pointer-events-none'
             : 'absolute inset-0 hidden'
       }
-      // Why: automation and mobile control need paintable webviews, but hidden
-      // worktree controls cannot remain reachable by Tab or assistive tech.
+      // Why: paintable-but-hidden webviews must be inert so they stay unreachable by Tab / assistive tech.
       inert={!isVisible}
       aria-hidden={!isVisible}
     >
@@ -2434,6 +2404,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
+        activationDeferredMountTabIds={activationDeferredMountTabIds}
       />
       {isVisible || backgroundMountTabIds === null ? (
         <>

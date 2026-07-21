@@ -178,6 +178,169 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
+  it('falls back to the legacy keychain token when the scoped token is rejected as stale', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
+      dir
+        ? JSON.stringify({
+            claudeAiOauth: { accessToken: 'stale-scoped-token', refreshToken: 'refresh-1' }
+          })
+        : JSON.stringify({ claudeAiOauth: { accessToken: 'fresh-legacy-token' } })
+    )
+    netFetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string> | undefined)?.Authorization
+      return auth === 'Bearer fresh-legacy-token'
+        ? new Response(
+            JSON.stringify({ five_hour: { utilization: 12 }, seven_day: { utilization: 34 } }),
+            { status: 200 }
+          )
+        : new Response(
+            JSON.stringify({ error: { message: 'Invalid authentication credentials' } }),
+            { status: 401 }
+          )
+    })
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 },
+      weekly: { usedPercent: 34 }
+    })
+
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('prefers a legacy access token over scoped refresh-only credentials', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
+      dir
+        ? JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh-only' } })
+        : JSON.stringify({ claudeAiOauth: { accessToken: 'fresh-legacy-token' } })
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: { usedPercent: 12 }
+    })
+
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://api.anthropic.com/api/oauth/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer fresh-legacy-token' })
+      })
+    )
+  })
+
+  it('does not retry with the legacy keychain for managed account credentials', async () => {
+    const configDir = '/Users/test/managed-account'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: true,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
+      dir ? JSON.stringify({ claudeAiOauth: { accessToken: 'stale-managed-token' } }) : null
+    )
+    netFetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'Invalid authentication credentials' } }), {
+        status: 401
+      })
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error'
+    })
+
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(readActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalledWith(undefined)
+  })
+
+  it('does not retry with the legacy keychain for WSL targets', async () => {
+    // Why: a WSL target's stale credentials must never be answered with the
+    // host user's legacy macOS Keychain account.
+    const configDir = '\\\\wsl$\\Ubuntu\\home\\test\\.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      wslLinuxConfigDir: '/home/test/.claude',
+      envPatch: { CLAUDE_CONFIG_DIR: '/home/test/.claude' },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (dir) =>
+      dir
+        ? JSON.stringify({ claudeAiOauth: { accessToken: 'stale-wsl-token' } })
+        : JSON.stringify({ claudeAiOauth: { accessToken: 'fresh-legacy-token' } })
+    )
+    netFetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'Invalid authentication credentials' } }), {
+        status: 401
+      })
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error'
+    })
+
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(readActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalledWith(undefined)
+  })
+
+  it('skips the legacy retry when the legacy item mirrors the failed scoped token', async () => {
+    // Why: Claude's usage endpoint has a tight request budget; retrying the
+    // identical token would double the request for a guaranteed second 401.
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'mirrored-token' } })
+    )
+    netFetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: 'Invalid authentication credentials' } }), {
+        status: 401
+      })
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error'
+    })
+
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+    expect(readActiveClaudeKeychainCredentialsStrict).toHaveBeenCalledWith(undefined)
+  })
+
   it('accepts Claude Code statusline-style rate limit window fields', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
@@ -260,7 +423,7 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
-  it('ignores inactive scoped Fable usage and retains the legacy OAuth fallback', async () => {
+  it('surfaces inactive scoped Fable usage over the legacy OAuth fallback', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
@@ -291,7 +454,47 @@ describe('fetchClaudeRateLimits', () => {
     )
 
     await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
-      fableWeekly: { usedPercent: 33 }
+      fableWeekly: { usedPercent: 90 }
+    })
+  })
+
+  it('surfaces an inactive scoped Fable entry when no legacy Fable field exists (#8979)', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          five_hour: { utilization: 11 },
+          seven_day: { utilization: 22 },
+          limits: [
+            {
+              kind: 'weekly_scoped',
+              percent: 64,
+              resets_at: '2026-07-24T20:00:00+00:00',
+              is_active: false,
+              scope: { model: { display_name: 'Fable' } }
+            }
+          ]
+        }),
+        { status: 200 }
+      )
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      fableWeekly: {
+        usedPercent: 64,
+        resetsAt: Date.parse('2026-07-24T20:00:00+00:00')
+      }
     })
   })
 
@@ -653,15 +856,20 @@ describe('fetchClaudeRateLimits', () => {
             message: 'Rate limited. Please try again later.'
           }
         }),
-        { status: 429 }
+        { status: 429, headers: { 'retry-after': '3000' } }
       )
     )
 
-    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+    const before = Date.now()
+    const result = await fetchClaudeRateLimits({ authPreparation })
+    expect(result).toMatchObject({
       provider: 'claude',
       status: 'error',
-      error: 'Claude usage is rate limited right now.'
+      error: 'Claude usage is rate limited right now.',
+      usageMetadata: expect.objectContaining({ failureKind: 'rate-limited' })
     })
+    expect(result.usageMetadata?.retryAtMs).toBeGreaterThanOrEqual(before + 3000 * 1000)
+    expect(result.usageMetadata?.retryAtMs).toBeLessThanOrEqual(Date.now() + 3000 * 1000)
 
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
@@ -671,6 +879,41 @@ describe('fetchClaudeRateLimits', () => {
         })
       })
     )
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('omits retryAtMs when a 429 has no Retry-After header', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'expired-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'rate_limit_error',
+            message: 'Rate limited. Please try again later.'
+          }
+        }),
+        { status: 429 }
+      )
+    )
+
+    const result = await fetchClaudeRateLimits({ authPreparation })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.retryAtMs).toBeUndefined()
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
@@ -734,6 +977,9 @@ describe('fetchClaudeRateLimits', () => {
           }
         })
       )
+      // Legacy item absent — the stale-scoped legacy fallback must not preempt
+      // CLI repair in this scenario.
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(
         JSON.stringify({
           claudeAiOauth: {

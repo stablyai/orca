@@ -233,6 +233,97 @@ describe('refreshGitStatusForWorktree', () => {
     expect(deps.setUpstreamStatus).toHaveBeenCalledWith('wt-race', strictStatus.upstreamStatus)
   })
 
+  it('does not let an older automatic status overwrite the latest automatic result', async () => {
+    const olderStatus = deferred<GitStatusResult>()
+    const latestStatus: GitStatusResult = {
+      entries: [{ path: 'latest.ts', status: 'modified', area: 'unstaged' }],
+      conflictOperation: 'unknown',
+      head: 'latest'
+    }
+    const gitStatus = vi
+      .fn()
+      .mockReturnValueOnce(olderStatus.promise)
+      .mockResolvedValueOnce(latestStatus)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    const olderRefresh = refreshGitStatusForWorktree({
+      worktreeId: 'wt-automatic-race',
+      worktreePath: '/repo',
+      deps
+    })
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-automatic-race',
+      worktreePath: '/repo',
+      deps
+    })
+    olderStatus.resolve({
+      entries: [{ path: 'older.ts', status: 'modified', area: 'unstaged' }],
+      conflictOperation: 'unknown',
+      head: 'older'
+    })
+    await olderRefresh
+
+    expect(deps.setGitStatus).toHaveBeenCalledTimes(1)
+    expect(deps.setGitStatus).toHaveBeenCalledWith('wt-automatic-race', latestStatus)
+  })
+
+  it('applies an earlier automatic result when a later automatic refresh fails', async () => {
+    const olderStatus = deferred<GitStatusResult>()
+    const gitStatus = vi
+      .fn()
+      .mockReturnValueOnce(olderStatus.promise)
+      .mockRejectedValueOnce(new Error('transient index.lock'))
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    const olderRefresh = refreshGitStatusForWorktree({
+      worktreeId: 'wt-failed-veto',
+      worktreePath: '/repo',
+      deps
+    })
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+    await expect(
+      refreshGitStatusForWorktree({
+        worktreeId: 'wt-failed-veto',
+        worktreePath: '/repo',
+        deps
+      })
+    ).rejects.toThrow('transient index.lock')
+
+    const freshStatus: GitStatusResult = {
+      entries: [{ path: 'fresh.ts', status: 'modified', area: 'unstaged' }],
+      conflictOperation: 'unknown',
+      head: 'fresh'
+    }
+    olderStatus.resolve(freshStatus)
+    await olderRefresh
+
+    expect(deps.setGitStatus).toHaveBeenCalledWith('wt-failed-veto', freshStatus)
+  })
+
+  it('does not apply a status result after its liveness guard expires', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      head: 'stale'
+    }
+    vi.stubGlobal('window', { api: { git: { status: vi.fn().mockResolvedValue(status) } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-stale',
+      worktreePath: '/repo',
+      deps,
+      request: { shouldApply: () => false }
+    })
+
+    expect(deps.setGitStatus).not.toHaveBeenCalled()
+    expect(deps.updateWorktreeGitIdentity).not.toHaveBeenCalled()
+    expect(deps.fetchUpstreamStatus).not.toHaveBeenCalled()
+  })
+
   it('does not let an older automatic explicit upstream fetch overwrite a strict result', async () => {
     const automaticFetch = deferred<GitUpstreamStatus | null>()
     const strictStatus: GitStatusResult = {

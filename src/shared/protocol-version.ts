@@ -38,11 +38,19 @@ export const AI_VAULT_RUNTIME_CAPABILITY = 'aiVault.v1' as const
 // offscreen backend). Advertised only when that backend is actually available, so
 // clients never fall back to a local desktop browser tab for a remote-owned page.
 export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as const
+export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate-trust.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+// Why: older hosts lack the targeted settings RPCs and strip agentPrompt from
+// terminal creation, so mobile must hide Quick Commands unless both are present.
+export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
+// Why: older hosts strip worktree.create's clientMutationId, so mobile must only
+// replay ambiguous cutovers when the host advertises idempotent create support.
+export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'worktree.create-idempotency.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -59,7 +67,9 @@ export const RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
-  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

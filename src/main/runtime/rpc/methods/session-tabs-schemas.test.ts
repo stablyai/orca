@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { UpdatePaneLayout } from './session-tabs-schemas'
+import { ActivateTab, UpdatePaneLayout } from './session-tabs-schemas'
 
 const WT = 'id:wt'
+
+describe('ActivateTab.navigation', () => {
+  it('accepts declared targets and rejects unknown fanout', () => {
+    expect(ActivateTab.parse({ worktree: WT, tabId: 'tab', navigation: 'all' }).navigation).toBe(
+      'all'
+    )
+    expect(
+      ActivateTab.safeParse({ worktree: WT, tabId: 'tab', navigation: 'others' }).success
+    ).toBe(false)
+  })
+})
 
 describe('UpdatePaneLayout.root (untrusted remote pane-layout tree)', () => {
   it('accepts a valid split tree', () => {

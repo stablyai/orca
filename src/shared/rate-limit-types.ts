@@ -15,7 +15,7 @@ export type RateLimitBucket = RateLimitWindow & {
   name: string
 }
 
-export type UsageRateLimitSource = 'oauth' | 'cli' | 'web'
+export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
 
 export type UsageRateLimitFailureKind =
   | 'missing-credentials'
@@ -41,6 +41,8 @@ export type UsageRateLimitMetadata = {
   authProvenance?: string
   deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
+  /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
+  retryAtMs?: number
 }
 
 export type ProviderRateLimits = {
@@ -59,7 +61,7 @@ export type ProviderRateLimits = {
   weekly: RateLimitWindow | null
   /** Claude Fable 7-day weekly window, null if not available. */
   fableWeekly?: RateLimitWindow | null
-  /** 30-day monthly window (OpenCode Go only), null if not available. */
+  /** 30-day monthly window (OpenCode Go, Grok unified billing), null if not available. */
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
@@ -76,6 +78,8 @@ export type ProviderRateLimits = {
       grantedAt: number | null
     }[]
   } | null
+  /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
+  planType?: string | null
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */

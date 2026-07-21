@@ -25,6 +25,17 @@ export type SlowTaskBackoffOptions = {
 // so a fixed idle gap makes polling effectively continuous (#7983). Scale the
 // gap with the previous run's duration — aggressively for evidence-free timer
 // ticks, mildly for change signals — capped so results never go minutes-stale.
+// Shared with the git-status refresh scheduler so both pacing machines keep
+// the same guarantee: sustained triggers can never run the task back-to-back.
+export function slowTaskRequiredIdleMs(
+  lastRunDurationMs: number,
+  multiplier: number,
+  minIntervalMs: number,
+  maxIntervalMs: number
+): number {
+  return Math.max(minIntervalMs, Math.min(lastRunDurationMs * multiplier, maxIntervalMs))
+}
+
 export function createCoalescedPollRunner(
   task: () => Promise<void>,
   options?: {
@@ -49,7 +60,12 @@ export function createCoalescedPollRunner(
     const multiplier = trigger?.changeSignal
       ? backoff.changeSignalMultiplier
       : backoff.idleMultiplier
-    return Math.max(minIntervalMs, Math.min(lastRunDurationMs * multiplier, backoff.maxIntervalMs))
+    return slowTaskRequiredIdleMs(
+      lastRunDurationMs,
+      multiplier,
+      minIntervalMs,
+      backoff.maxIntervalMs
+    )
   }
 
   const clearScheduledRun = (): void => {

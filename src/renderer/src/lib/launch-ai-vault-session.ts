@@ -19,6 +19,7 @@ export function launchAiVaultSessionInNewTab(args: {
   worktreeId: string
   command: string
   env?: Record<string, string>
+  envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   targetGroupId?: string
   splitDirection?: TabSplitDirection
@@ -33,6 +34,7 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(targetGroupId ? { targetGroupId } : {}),
       command: args.command,
       ...(args.env ? { env: args.env } : {}),
+      ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
       ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
       launchAgent: args.agent,
       activate: true
@@ -59,6 +61,7 @@ export function launchAiVaultSessionInNewTab(args: {
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),
+    ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
     ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(args.agent),

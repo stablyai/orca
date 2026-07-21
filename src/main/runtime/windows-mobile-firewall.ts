@@ -5,6 +5,7 @@ import type {
   WindowsMobileFirewallStatus,
   WindowsNetworkCategory
 } from '../../shared/windows-mobile-firewall'
+import { hasSufficientWindowsFirewallRemoteScope } from './windows-firewall-remote-scope'
 
 const FIREWALL_RULE_NAME = 'Orca.MobilePairing'
 const FIREWALL_RULE_DISPLAY_NAME = 'Orca Mobile Pairing'
@@ -22,7 +23,10 @@ export type WindowsMobileFirewallEnvironment = {
 }
 
 type FirewallInspection = {
-  ruleAllowed: boolean
+  matchingRuleScopes?: unknown
+  blockingRuleDetected?: unknown
+  localAddress?: unknown
+  localPrefixLength?: unknown
   privateFirewallEnabled: boolean
   networkCategory: string
 }
@@ -48,10 +52,20 @@ export async function inspectWindowsMobileFirewall(
       POWERSHELL_TIMEOUT_MS
     )
     const result = JSON.parse(stdout.trim()) as FirewallInspection
+    // Why: the phone address is unknown before pairing, so any matching Block
+    // rule must fail this advisory check closed instead of risking false success.
+    const blockingRuleDetected = result.blockingRuleDetected === true
     return {
       supported: true,
       port,
-      ruleAllowed: result.ruleAllowed === true,
+      ruleAllowed:
+        !blockingRuleDetected &&
+        hasSufficientWindowsFirewallRemoteScope(
+          result.matchingRuleScopes,
+          result.localAddress,
+          result.localPrefixLength
+        ),
+      blockingRuleDetected,
       privateFirewallEnabled: result.privateFirewallEnabled !== false,
       networkCategory: parseNetworkCategory(result.networkCategory),
       inspectionAvailable: true
@@ -124,6 +138,7 @@ function unavailableStatus(port: number): WindowsMobileFirewallStatus {
     supported: true,
     port,
     ruleAllowed: false,
+    blockingRuleDetected: false,
     privateFirewallEnabled: true,
     networkCategory: 'unknown',
     inspectionAvailable: false
@@ -152,33 +167,64 @@ function buildInspectionScript(port: number, executablePath: string, address?: s
     ? `
 try {
   $ip = Get-NetIPAddress -IPAddress ${quotePowerShell(address)} -ErrorAction Stop | Select-Object -First 1
+  $localAddress = [string]$ip.IPAddress
+  $localPrefixLength = [int]$ip.PrefixLength
   $profile = Get-NetConnectionProfile -InterfaceIndex $ip.InterfaceIndex -ErrorAction Stop | Select-Object -First 1
   if ($profile) { $networkCategory = [string]$profile.NetworkCategory }
 } catch {}`
     : ''
+  // Why: NetSecurity filter properties are stable across localized Windows
+  // display output and keep every rule's address scope independent. ActiveStore
+  // includes GPO-applied rules the default persistent store hides, so managed
+  // Block rules cannot produce a false success after repair.
   return `$ErrorActionPreference = 'Stop'
-$ruleAllowed = $false
-$rules = @(Get-NetFirewallApplicationFilter -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' })
+$matchingRuleScopes = @()
+$blockingRuleDetected = $false
+$rules = @(Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' })
 foreach ($rule in $rules) {
   $portFilter = $rule | Get-NetFirewallPortFilter
   $protocol = [string]$portFilter.Protocol
   $profile = [string]$rule.Profile
   $portMatches = @($portFilter.LocalPort | Where-Object { [string]$_ -eq 'Any' -or [string]$_ -eq '${port}' }).Count -gt 0
   if (($protocol -eq 'Any' -or $protocol -eq 'TCP' -or $protocol -eq '6') -and ($profile -eq 'Any' -or $profile -match 'Private') -and $portMatches) {
-    $ruleAllowed = $true
+    if ([string]$rule.Action -eq 'Block') {
+      $blockingRuleDetected = $true
+    } elseif ([string]$rule.Action -eq 'Allow') {
+      $addressFilter = $rule | Get-NetFirewallAddressFilter
+      $matchingRuleScopes += [pscustomobject]@{
+        remoteAddresses = @($addressFilter.RemoteAddress | ForEach-Object { [string]$_ })
+      }
+    }
   }
 }
-$privateFirewallEnabled = [bool](Get-NetFirewallProfile -Name Private).Enabled
+$privateFirewallEnabled = [bool](Get-NetFirewallProfile -PolicyStore ActiveStore -Name Private).Enabled
 $networkCategory = 'Unknown'${addressLookup}
 [pscustomobject]@{
-  ruleAllowed = $ruleAllowed
+  matchingRuleScopes = @($matchingRuleScopes)
+  blockingRuleDetected = $blockingRuleDetected
+  localAddress = $localAddress
+  localPrefixLength = $localPrefixLength
   privateFirewallEnabled = $privateFirewallEnabled
   networkCategory = $networkCategory
-} | ConvertTo-Json -Compress`
+} | ConvertTo-Json -Depth 4 -Compress`
 }
 
 function buildRepairScript(port: number, executablePath: string): string {
+  // Why: Windows gives explicit Block rules precedence over narrower Allow
+  // rules, so the user's repair action must remove exact-app conflicts first.
+  // Removal deliberately ignores the Block rule's remote-address scope,
+  // mirroring the fail-closed inspection (the phone address is unknown).
   return `$ErrorActionPreference = 'Stop'
+$blockingRules = @(Get-NetFirewallApplicationFilter -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' })
+foreach ($rule in $blockingRules) {
+  $portFilter = $rule | Get-NetFirewallPortFilter
+  $protocol = [string]$portFilter.Protocol
+  $profile = [string]$rule.Profile
+  $portMatches = @($portFilter.LocalPort | Where-Object { [string]$_ -eq 'Any' -or [string]$_ -eq '${port}' }).Count -gt 0
+  if (($protocol -eq 'Any' -or $protocol -eq 'TCP' -or $protocol -eq '6') -and ($profile -eq 'Any' -or $profile -match 'Private') -and $portMatches) {
+    $rule | Remove-NetFirewallRule
+  }
+}
 Get-NetFirewallRule -Name ${quotePowerShell(FIREWALL_RULE_NAME)} -ErrorAction SilentlyContinue | Remove-NetFirewallRule
 New-NetFirewallRule -Name ${quotePowerShell(FIREWALL_RULE_NAME)} -DisplayName ${quotePowerShell(FIREWALL_RULE_DISPLAY_NAME)} -Description 'Allows Orca Mobile to connect to this Orca desktop on private networks.' -Direction Inbound -Action Allow -Enabled True -Profile Private -Protocol TCP -LocalPort ${port} -Program ${quotePowerShell(executablePath)} -EdgeTraversalPolicy Block | Out-Null`
 }

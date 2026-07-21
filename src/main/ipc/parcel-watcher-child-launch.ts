@@ -4,6 +4,8 @@ import {
   createWatcherCanaryDirectory,
   removeWatcherCanaryDirectory
 } from './parcel-watcher-canary-directory'
+import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { registerWatcherChildPhysicalExit } from './parcel-watcher-child-termination'
 import type { WatcherToHostMessage } from './parcel-watcher-process-protocol'
 
 export type LaunchedWatcherChild = {
@@ -17,6 +19,13 @@ export function launchWatcherChild(
   onMessage: (child: ChildProcess, message: WatcherToHostMessage) => void,
   onGone: (child: ChildProcess, code?: number | null, signal?: NodeJS.Signals | null) => void
 ): LaunchedWatcherChild | null {
+  const releaseReservation = reserveWatcherChild()
+  if (!releaseReservation) {
+    console.error('[parcel-watcher-process] physical watcher child limit reached')
+    // Why: capacity is transient and has an event-driven retry owner. Preserve
+    // its type so the desktop root is not cached permanently unavailable.
+    throw new WatcherChildCapacityError()
+  }
   const canaryDir = currentCanaryDir ?? createWatcherCanaryDirectory()
   let child: ChildProcess
   try {
@@ -30,6 +39,7 @@ export function launchWatcherChild(
       ...(process.platform === 'win32' ? { windowsHide: true } : {})
     })
   } catch (error) {
+    releaseReservation()
     removeWatcherCanaryDirectory(canaryDir)
     console.error('[parcel-watcher-process] failed to fork watcher process:', error)
     return null
@@ -48,10 +58,26 @@ export function launchWatcherChild(
     console.error('[parcel-watcher-process]', String(chunk).trimEnd())
   })
   child.on('message', (message) => onMessage(child, message as WatcherToHostMessage))
+  const signalPhysicalExit = registerWatcherChildPhysicalExit(child)
+  let finalized = false
+  const finalizePhysicalExit = (): void => {
+    if (finalized) {
+      return
+    }
+    finalized = true
+    signalPhysicalExit()
+    releaseReservation()
+  }
   // Why: Node can close IPC before emitting exit. Recover at disconnect so a
   // concurrent subscribe cannot replace the child without restoring old roots.
   child.on('disconnect', () => onGone(child))
   child.on('error', () => onGone(child))
-  child.on('exit', (code, signal) => onGone(child, code, signal))
+  // Why: asynchronous spawn failures emit error then close without exit; close
+  // must release the physical-process budget even though no child was created.
+  child.once('close', finalizePhysicalExit)
+  child.on('exit', (code, signal) => {
+    finalizePhysicalExit()
+    onGone(child, code, signal)
+  })
   return { child, canaryDir }
 }

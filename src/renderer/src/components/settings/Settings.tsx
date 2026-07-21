@@ -10,7 +10,7 @@ import {
   type MutableRefObject
 } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings, OrcaHooks } from '../../../../shared/types'
+import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
@@ -29,7 +29,11 @@ import {
   mergeFontSuggestions
 } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
 import { GeneralPane } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
@@ -49,6 +53,7 @@ import { SshPane } from './SshPane'
 import { ExperimentalPane } from './ExperimentalPane'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
+import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
 import { IntegrationsPane } from './IntegrationsPane'
@@ -89,21 +94,33 @@ import type {
 } from '@/lib/settings-navigation-types'
 import {
   COMPUTER_USE_SKILL_NAME,
+  LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
+  useInstalledAgentSkill,
+  useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import {
-  deriveNeededRepoIds,
-  deriveNeededSectionIds,
-  getInitialMountedSectionIds,
-  getRuntimeTargetIdentity
-} from './settings-load-performance'
+  getAgentSkillNavInstallStatus,
+  getLinearAgentSkillNavInstallStatus
+} from '@/lib/agent-skill-nav-install-status'
+import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
+import { getRepoHostIdentity } from '../../store/slices/repo-host-identity'
+import {
+  buildRepoIdToHostSelection,
+  buildRepoIdToRepresentative,
+  buildSettingsProjectList,
+  getSettingsProjectHostRepo,
+  removeSettingsProjectFromAllHosts,
+  resolveSettingsTargetRepoId
+} from './settings-project-list'
 
 const DevToolsPane = import.meta.env.DEV
   ? lazy(() => import('./DevToolsPane').then((module) => ({ default: module.DevToolsPane })))
@@ -157,9 +174,14 @@ const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
 
-function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): string {
+function getSettingsSectionId(
+  pane: SettingsNavTarget,
+  repoId: string | null,
+  repoIdToRepresentative: Map<string, string>
+): string {
   if (pane === 'repo' && repoId) {
-    return `repo-${repoId}`
+    // Why: Settings renders one collapsed pane per project, so resolve a repoId target to its project's representative section.
+    return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`
   }
   return pane
 }
@@ -189,16 +211,6 @@ function getSettingsNavGroupDefinitionsForSearch(
   })
 }
 
-function getSkillNavInstallStatus(skill: {
-  installed: boolean
-  loading: boolean
-}): SettingsNavInstallStatus {
-  if (skill.loading) {
-    return 'checking'
-  }
-  return skill.installed ? 'installed' : 'install'
-}
-
 function hasReadyVoiceModel(
   settings: GlobalSettings,
   modelStates: readonly SpeechModelState[]
@@ -224,10 +236,7 @@ function getSettingsScrollTarget(
 }
 
 function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {
-  // Why: deep links into Settings can target a specific subsection inside a
-  // pane (e.g. a particular row). The pane itself is now swapped in
-  // wholesale, so this only needs to nudge the inner scroll if the pane has
-  // grown taller than the viewport.
+  // Why: the pane is swapped in wholesale, so a subsection deep link only nudges inner scroll when the pane exceeds the viewport.
   const target = getSettingsScrollTarget(targetId, container)
   if (!target) {
     return
@@ -283,11 +292,31 @@ function Settings(): React.JSX.Element {
   const removeProject = useAppStore((s) => s.removeProject)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
+  const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
+  const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
   const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
+
+  // Why: one entry per project (derived from repos to match nav metadata) — the source of truth for the pane list.
+  const settingsProjectList = useMemo(() => buildSettingsProjectList(repos), [repos])
+  const repoIdToRepresentative = useMemo(
+    () => buildRepoIdToRepresentative(settingsProjectList),
+    [settingsProjectList]
+  )
+  // Why: lets a deep-link's repoId select the owning project's host so host-specific subsection anchors exist.
+  const repoIdToHostSelection = useMemo(
+    () => buildRepoIdToHostSelection(settingsProjectList),
+    [settingsProjectList]
+  )
+  // Why: pane-level "Remove Project" removes every host setup, not just the selected host (per-host remove lives in "Available Hosts").
+  const removeProjectAllHosts = useCallback(
+    (setups: readonly ProjectHostSetup[]): Promise<void> =>
+      removeSettingsProjectFromAllHosts(setups, removeProject),
+    [removeProject]
+  )
 
   const [repoHooksMap, setRepoHooksMap] = useState<
     Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
@@ -297,8 +326,15 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
+  // Why: mirror the nav registry's gate so the Linear sidebar entry and section appear/disappear together.
+  const linearConnected = useLinearProviderConnected()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+  const linearSkill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
+    enabled: linearConnected,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -307,14 +343,14 @@ function Settings(): React.JSX.Element {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  // Why: skill freshness only covers the validated global rail (not WSL), so the nav pill stays presence-only under WSL.
+  const { inventory: skillFreshnessInventory } = useSkillFreshness()
+  const skillFreshnessApplies = activeSkillRuntime.agentRuntime?.runtime !== 'wsl'
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
-  // Why: the Terminal settings section shares one search index with the
-  // sidebar. We trim platform-only entries on other platforms so search never
-  // reveals controls that the renderer will intentionally hide.
+  // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(settings?.terminalScrollbackRows)
-  // Why: Appearance owns terminal visual controls, but the Ghostty import flow
-  // still needs Settings-level state so the modal survives section remounts.
+  // Why: keep Ghostty import state at Settings level so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
@@ -334,10 +370,7 @@ function Settings(): React.JSX.Element {
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
-  // Why: the hidden-experimental group is an unlock — Shift-clicking the
-  // Experimental sidebar entry reveals it for the remainder of the session.
-  // Not persisted on purpose: it's a power-user affordance we don't want to
-  // leak through into a normal reopen of Settings.
+  // Why: session-only (deliberately not persisted) unlock — Shift-click the Experimental entry reveals the hidden group.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -348,15 +381,12 @@ function Settings(): React.JSX.Element {
   const pendingScrollTargetRef = useRef<string | null>(null)
   const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
-  const repoHooksRuntimeIdentityRef = useRef<string>('local')
   const shortcutsEscapeConfirmUntilRef = useRef(0)
   const sourceControlAiWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
-  // Why: the window-close guard registers once for Settings' lifetime, so it
-  // reads the latest dirty state from a ref instead of a closure that would lag
-  // behind the draft state until the next effect commit.
+  // Why: the close guard registers once, so it reads latest dirty state from a ref instead of a lagging closure.
   const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
   hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
@@ -384,8 +414,7 @@ function Settings(): React.JSX.Element {
       if (node) {
         return
       }
-      // Why: the settings search is a transient in-page filter. Leaving it behind makes the next
-      // visit look partially broken because whole sections stay hidden before the user types again.
+      // Why: clear the transient search filter on close, else the next visit opens with whole sections still hidden.
       setSettingsSearchQuery('')
     },
     [setSettingsSearchQuery]
@@ -396,14 +425,12 @@ function Settings(): React.JSX.Element {
     if (node !== null) {
       return
     }
-    // Why: pending subsection jumps are scoped to the scroll container; cancel
-    // them with the container so a stale deep-link frame cannot run after close.
+    // Why: cancel pending subsection jumps with the scroll container so a stale deep-link frame can't run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
   }, [])
 
   useEffect(() => {
-    // Why: React dev StrictMode replays mount effects; async font requests
-    // should still commit while the Settings view is actually mounted.
+    // Why: StrictMode replays mount effects; async font requests should still commit while Settings is mounted.
     settingsMountedRef.current = true
     return () => {
       settingsMountedRef.current = false
@@ -421,8 +448,7 @@ function Settings(): React.JSX.Element {
         if (!settingsMountedRef.current) {
           return
         }
-        // Latch after the first successful attempt even when empty, so a font-less
-        // system doesn't reissue listFonts() on every picker interaction.
+        // Latch after the first successful attempt even when empty, so a font-less system doesn't reissue listFonts() each time.
         installedFontsLoadedRef.current = true
         if (fonts.length === 0) {
           return
@@ -437,9 +463,7 @@ function Settings(): React.JSX.Element {
       })
   }, [])
 
-  // Pure "discard and leave?" prompt — no side effects. Why separate from the
-  // discard helper below: the window-close guard must ask without clearing the
-  // drafts, since a later guard/handler can still cancel the close.
+  // Pure prompt (no side effects): the close guard must ask without clearing drafts, since a later guard can still cancel the close.
   const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
     return confirm({
       title: translate(
@@ -486,8 +510,7 @@ function Settings(): React.JSX.Element {
       return
     }
     let canceled = false
-    // Why: modelStates starts empty, so Voice should not briefly look missing
-    // before the first speech-model scan reports the real installed state.
+    // Why: modelStates starts empty, so Voice shouldn't look missing before the first speech-model scan reports state.
     setVoiceModelStatesLoading(true)
     void refreshModelStates().finally(() => {
       if (!canceled) {
@@ -498,8 +521,6 @@ function Settings(): React.JSX.Element {
       canceled = true
     }
   }, [refreshModelStates, showDesktopOnlySettings])
-
-  const runtimeTargetIdentity = getRuntimeTargetIdentity(settings)
 
   useEffect(() => {
     const hasVisibleOverlay = (): boolean =>
@@ -524,16 +545,11 @@ function Settings(): React.JSX.Element {
       if (event.key !== 'Escape' || event.defaultPrevented) {
         return
       }
-      // Why: nested dialogs and menus own Escape before Settings page-level
-      // navigation, including the unsaved Source Control AI confirmation dialog.
+      // Why: nested dialogs/menus own Escape before Settings page-level navigation.
       if (hasVisibleOverlay()) {
         return
       }
-      // Why: Escape in an editable control usually means "cancel this edit",
-      // not "close Settings". Closing the entire page would discard the user's
-      // in-progress typing. Defer to the field's own handler when focus is on
-      // an input/textarea/select or contenteditable region; a subsequent
-      // Escape (with focus back on the body) will then close the page.
+      // Why: Escape in an editable control means "cancel this edit", not "close Settings" — defer to the field's own handler.
       if (isEditableTarget(event.target)) {
         return
       }
@@ -567,14 +583,7 @@ function Settings(): React.JSX.Element {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeSectionId, closeSettingsPageWithPromptGuard])
 
-  // Why: route window close / quit through the same discard dialog as in-app
-  // navigation. A raw beforeunload preventDefault only silently vetoes the close
-  // (no UI), which on the no-workspace Settings page reads as an unquittable
-  // window. Register one stable guard for Settings' lifetime, reading the latest
-  // dirty state from a ref. Why the pure prompt (no discard side effect): a
-  // downstream guard/handler can still cancel the close (e.g. a dirty-editor save
-  // dialog), and clearing the drafts up front would lose them while the window
-  // stays open; on an actual close they fall away with the renderer anyway.
+  // Why: route window close/quit through the discard dialog; a bare beforeunload veto shows no UI and reads as an unquittable window.
   useEffect(() => {
     return registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
@@ -615,12 +624,23 @@ function Settings(): React.JSX.Element {
 
     const paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane as SettingsNavTarget,
-      settingsNavigationTarget.repoId
+      settingsNavigationTarget.repoId,
+      repoIdToRepresentative
     )
+    // Why: select the target repo's host before scrolling so its host-specific subsection anchor renders and the scroll lands.
+    const targetRepoId = resolveSettingsTargetRepoId(
+      settingsNavigationTarget,
+      repoIdToHostSelection.keys()
+    )
+    if (targetRepoId) {
+      const hostSelection = repoIdToHostSelection.get(targetRepoId)
+      if (hostSelection) {
+        setSettingsProjectHostSelection(hostSelection.projectId, hostSelection.hostId)
+      }
+    }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    // Why: Appearance nests status-bar controls under a collapsed accordion;
-    // force that accordion open before scrolling so the row is actually visible.
+    // Why: force Appearance's collapsed status-bar accordion open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -636,14 +656,19 @@ function Settings(): React.JSX.Element {
       }
       return new Set(previous).add(paneSectionId)
     })
-    // Why: target consumption stores refs, so bump state to guarantee the
-    // scroll effect runs even when the visible section set is otherwise stable.
+    // Why: bump state so the scroll effect runs even when the visible section set is unchanged (target is kept in refs).
     setPendingNavRequestTick((tick) => tick + 1)
     clearSettingsTarget()
-  }, [clearSettingsTarget, settings, settingsNavigationTarget])
+  }, [
+    clearSettingsTarget,
+    repoIdToHostSelection,
+    repoIdToRepresentative,
+    setSettingsProjectHostSelection,
+    settings,
+    settingsNavigationTarget
+  ])
 
-  // Why: only recompute scrollback mode when the row value actually changes,
-  // not on every unrelated settings mutation.
+  // Why: recompute scrollback mode only when the row value changes, not on every settings mutation.
   if (settings?.terminalScrollbackRows !== prevScrollbackRows) {
     setPrevScrollbackRows(settings?.terminalScrollbackRows)
     if (settings) {
@@ -665,24 +690,45 @@ function Settings(): React.JSX.Element {
   const baseNavSections = useSettingsNavigationMetadata()
   const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
     orchestrationSkill
+  const {
+    installed: linearSkillInstalled,
+    loading: linearSkillLoading,
+    skills: linearSkills
+  } = linearSkill
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
+    const applicableFreshnessInventory = skillFreshnessApplies ? skillFreshnessInventory : null
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
-        getSkillNavInstallStatus({
+        getAgentSkillNavInstallStatus({
+          name: ORCHESTRATION_SKILL_NAME,
           installed: orchestrationSkillInstalled,
-          loading: orchestrationSkillLoading
+          loading: orchestrationSkillLoading,
+          inventory: applicableFreshnessInventory
         })
       ]
     ])
+    if (linearConnected) {
+      next.set(
+        'linear',
+        getLinearAgentSkillNavInstallStatus({
+          skills: linearSkills,
+          installed: linearSkillInstalled,
+          loading: linearSkillLoading,
+          inventory: applicableFreshnessInventory
+        })
+      )
+    }
     if (showDesktopOnlySettings) {
       next.set(
         'computer-use',
-        getSkillNavInstallStatus({
+        getAgentSkillNavInstallStatus({
+          name: COMPUTER_USE_SKILL_NAME,
           installed: computerUseSkillInstalled,
-          loading: computerUseSkillLoading
+          loading: computerUseSkillLoading,
+          inventory: applicableFreshnessInventory
         })
       )
       if (settings) {
@@ -700,11 +746,17 @@ function Settings(): React.JSX.Element {
   }, [
     computerUseSkillInstalled,
     computerUseSkillLoading,
+    linearConnected,
+    linearSkillInstalled,
+    linearSkillLoading,
+    linearSkills,
     modelStates,
     orchestrationSkillInstalled,
     orchestrationSkillLoading,
     settings,
     showDesktopOnlySettings,
+    skillFreshnessApplies,
+    skillFreshnessInventory,
     voiceModelStatesLoading
   ])
   const navSections = useMemo(
@@ -794,82 +846,87 @@ function Settings(): React.JSX.Element {
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget
   )
-  // Why: WSL can be unsupported on macOS/Linux, or supported-but-unavailable on Windows.
-  // Only the latter should render disabled WSL controls.
+  // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).
   const wslSupportedPlatform = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
   const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
-    // Why: lazy Settings sections are remembered for the session; record newly
-    // needed sections during render so panes do not wait for a follow-up Effect.
+    // Why: record newly needed sections during render so panes don't wait for a follow-up Effect.
     setMountedSectionIds(neededSectionIds)
   }
 
-  const neededRepoIds = useMemo(
-    () => deriveNeededRepoIds(repos, neededSectionIds),
-    [neededSectionIds, repos]
-  )
+  // Why: load hooks for the selected host's repo id, not the representative id (they differ for non-default hosts).
+  const neededRepos = useMemo(() => {
+    const reposByHostIdentity = new Map<string, Repo>()
+    for (const settingsProject of settingsProjectList) {
+      if (!neededSectionIds.has(`repo-${settingsProject.representativeRepoId}`)) {
+        continue
+      }
+      const repo = getSettingsProjectHostRepo(
+        settingsProject,
+        repos,
+        settingsProjectHostSelection[settingsProject.projectId]
+      )
+      if (repo) {
+        reposByHostIdentity.set(getRepoHostIdentity(repo), repo)
+      }
+    }
+    return [...reposByHostIdentity.values()]
+  }, [neededSectionIds, repos, settingsProjectHostSelection, settingsProjectList])
 
   useEffect(() => {
-    const repoIdSet = new Set(repos.map((repo) => repo.id))
+    const repoHostIdentitySet = new Set(repos.map(getRepoHostIdentity))
     setRepoHooksMap((previous) => {
       const next = Object.fromEntries(
-        Object.entries(previous).filter(([repoId]) => repoIdSet.has(repoId))
+        Object.entries(previous).filter(([identity]) => repoHostIdentitySet.has(identity))
       ) as Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
       return Object.keys(next).length === Object.keys(previous).length ? previous : next
     })
   }, [repos])
 
   useEffect(() => {
-    if (repoHooksRuntimeIdentityRef.current !== runtimeTargetIdentity) {
-      repoHooksRuntimeIdentityRef.current = runtimeTargetIdentity
-      repoHooksRequestSeqRef.current += 1
-      setRepoHooksMap({})
-    }
-  }, [runtimeTargetIdentity])
-
-  useEffect(() => {
-    if (neededRepoIds.length === 0) {
+    if (neededRepos.length === 0) {
       return
     }
 
     let stale = false
     const requestSeq = ++repoHooksRequestSeqRef.current
-    const repoById = new Map(repos.map((repo) => [repo.id, repo] as const))
+    const liveRepoHostIdentities = new Set(repos.map(getRepoHostIdentity))
 
     void Promise.all(
-      neededRepoIds.map(async (repoId) => {
-        const repo = repoById.get(repoId)
-        if (!repo) {
-          return
-        }
+      neededRepos.map(async (repo) => {
+        const repoHostIdentity = getRepoHostIdentity(repo)
         if (isFolderRepo(repo)) {
           setRepoHooksMap((previous) => {
-            if (previous[repoId]) {
+            if (previous[repoHostIdentity]) {
               return previous
             }
             return {
               ...previous,
-              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+              [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
             }
           })
           return
         }
         try {
+          const hostId = getRepoExecutionHostId(repo)
+          const parsedHost = parseExecutionHostId(hostId)
           const result = await checkRuntimeHooks(
-            runtimeTargetIdentity === 'local'
-              ? { activeRuntimeEnvironmentId: null }
-              : { activeRuntimeEnvironmentId: runtimeTargetIdentity },
-            repoId
+            {
+              activeRuntimeEnvironmentId:
+                parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+            },
+            repo.id,
+            hostId
           )
           if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
             return
           }
           setRepoHooksMap((previous) => {
-            if (!repos.some((entry) => entry.id === repoId)) {
+            if (!liveRepoHostIdentities.has(repoHostIdentity)) {
               return previous
             }
-            return { ...previous, [repoId]: result }
+            return { ...previous, [repoHostIdentity]: result }
           })
         } catch {
           // Keep last known value on transient failures.
@@ -877,15 +934,15 @@ function Settings(): React.JSX.Element {
             return
           }
           setRepoHooksMap((previous) => {
-            if (!repos.some((entry) => entry.id === repoId)) {
+            if (!liveRepoHostIdentities.has(repoHostIdentity)) {
               return previous
             }
-            if (previous[repoId]) {
+            if (previous[repoHostIdentity]) {
               return previous
             }
             return {
               ...previous,
-              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+              [repoHostIdentity]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
             }
           })
         }
@@ -895,16 +952,13 @@ function Settings(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [neededRepoIds, repos, runtimeTargetIdentity])
+  }, [neededRepos, repos])
 
   useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
-    // Why: subsection deep links (scrollTarget ≠ pane id) must not keep a
-    // leftover search filter that can hide the target row. Pane-level deep
-    // links may intentionally pair with a filter (e.g. Appearance + "Usage
-    // percentages") so accordion sections force-open to the matching control.
+    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching accordion.
     if (
       scrollTargetId &&
       pendingNavSectionId &&
@@ -916,9 +970,7 @@ function Settings(): React.JSX.Element {
     }
 
     if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
-      // Why: inactive Settings panes no longer render in the empty-search view.
-      // Activate the pane first, then wait for the next render before looking
-      // for any subsection target inside it.
+      // Why: inactive panes don't render; activate the pane first, then find the subsection next render.
       if (activeSectionId !== pendingNavSectionId) {
         setActiveSectionId(pendingNavSectionId)
         return
@@ -927,11 +979,9 @@ function Settings(): React.JSX.Element {
       if (container) {
         container.scrollTo({ top: 0 })
       }
-      // Why: deep links can target a row inside the pane; the pane itself is
-      // already in view because the sidebar swap rendered just it.
+      // Why: deep links can target a row inside the already-visible pane.
       if (scrollTargetId !== pendingNavSectionId) {
-        // Why: target navigation can arrive before the lazy section has mounted;
-        // keep the pending refs alive until the mounted-section update commits.
+        // Why: target can arrive before the lazy section mounts; keep pending refs until it does.
         if (!getSettingsScrollTarget(scrollTargetId, container)) {
           return
         }
@@ -979,11 +1029,7 @@ function Settings(): React.JSX.Element {
       if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
         return
       }
-      // Why: Shift-clicking the Experimental sidebar entry unlocks a hidden
-      // power-user group. Keep this scoped to the Experimental row so normal
-      // shortcut combos on other rows don't accidentally flip state. The
-      // unlock persists for the life of the Settings view (resets when
-      // Settings is reopened).
+      // Why: Shift-click the Experimental row unlocks the hidden power-user group (session-only).
       if (sectionId === 'experimental' && modifiers?.shiftKey) {
         setHiddenExperimentalUnlocked((previous) => !previous)
       }
@@ -992,9 +1038,7 @@ function Settings(): React.JSX.Element {
         container.scrollTo({ top: 0 })
       }
       if (settingsSearchQuery.trim() !== '') {
-        // Why: sidebar search is a discovery tool. Once a user selects a
-        // section from the filtered results, show the actual pane instead of
-        // keeping another matching pane rendered by the stale query.
+        // Why: clear the search filter so selecting a result shows that pane, not the stale query's.
         setSettingsSearchQuery('')
       }
       setActiveSectionId(sectionId)
@@ -1017,8 +1061,7 @@ function Settings(): React.JSX.Element {
       setSettingsSearchQuery('')
       return
     }
-    // Why: the pending section refs do not schedule a render by themselves.
-    // When search is already clear, this reruns the centralized jump effect.
+    // Why: pending refs don't schedule a render; bump state to rerun the jump effect.
     setPendingNavRequestTick((tick) => tick + 1)
   }, [confirmDiscardSourceControlAiPromptChanges, setSettingsSearchQuery, settingsSearchQuery])
 
@@ -1171,6 +1214,20 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
 
+                {linearConnected ? (
+                  <SettingsSection
+                    id="linear"
+                    title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
+                    description={translate(
+                      'auto.components.settings.Settings.linearDescription',
+                      'Give agents the skill to read and update your linked Linear tickets.'
+                    )}
+                    searchEntries={getSectionSearchEntries('linear')}
+                  >
+                    {isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
+                  </SettingsSection>
+                ) : null}
+
                 {showDesktopOnlySettings ? (
                   <>
                     <SettingsSection
@@ -1233,6 +1290,8 @@ function Settings(): React.JSX.Element {
                     <GeneralPane
                       settings={settings}
                       updateSettings={updateSettings}
+                      fontSuggestions={terminalFontSuggestions}
+                      onRequestFontSuggestions={requestFontSuggestions}
                       wslSupportedPlatform={wslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
@@ -1646,32 +1705,44 @@ function Settings(): React.JSX.Element {
                   ) : null}
                 </SettingsSection>
 
-                {repos.map((repo) => {
-                  const repoSectionId = `repo-${repo.id}`
-                  const repoHooksState = repoHooksMap[repo.id]
-                  const project = projectByRepoId.get(repo.id) ?? null
+                {settingsProjectList.map((settingsProject) => {
+                  const repoSectionId = `repo-${settingsProject.representativeRepoId}`
+                  // Why: use the switcher-selected host's repo so identity/host-specific edits follow "Available Hosts".
+                  const repo = getSettingsProjectHostRepo(
+                    settingsProject,
+                    repos,
+                    settingsProjectHostSelection[settingsProject.projectId]
+                  )
+                  if (!repo) {
+                    return null
+                  }
+                  const repoHostIdentity = getRepoHostIdentity(repo)
+                  const repoHooksState = repoHooksMap[repoHostIdentity]
+                  const project = projectByRepoId.get(repo.id) ?? settingsProject.project
 
                   return (
                     <SettingsSection
-                      key={repo.id}
+                      key={repoSectionId}
                       id={repoSectionId}
                       title={translate(
                         'auto.components.settings.Settings.3bf149e873',
                         'Project Settings > {{value0}}',
-                        { value0: repo.displayName }
+                        { value0: project.displayName }
                       )}
                       description={repo.path}
                       searchEntries={getSectionSearchEntries(repoSectionId)}
                     >
                       {isSectionMounted(repoSectionId) ? (
+                        // Why: re-key per host so same-id hosts don't reuse the prior host's drafts/effects.
                         <RepositoryPane
+                          key={repoHostIdentity}
                           repo={repo}
                           yamlHooks={repoHooksState?.hooks ?? null}
                           hasHooksFile={repoHooksState?.hasHooks ?? false}
                           hooksInspectionReady={Boolean(repoHooksState)}
                           mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
                           updateRepo={updateRepo}
-                          removeProject={removeProject}
+                          removeProject={() => void removeProjectAllHosts(settingsProject.setups)}
                           project={project}
                           isLocalWindowsProject={
                             getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&

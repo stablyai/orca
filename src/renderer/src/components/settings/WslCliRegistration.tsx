@@ -217,7 +217,7 @@ export function WslCliRegistration({
             {translate(
               'auto.components.settings.WslCliRegistration.1dbb0377d9',
               'Existing launcher target:'
-            )}
+            )}{' '}
             <code>{status.currentTarget}</code>
           </p>
         ) : null}

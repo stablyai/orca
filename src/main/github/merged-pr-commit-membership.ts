@@ -1,5 +1,7 @@
 import { ghExecFileAsync } from './gh-utils'
-import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
+import { githubHostExecOptions } from './github-api-repository'
+import { githubRepoIdentityKey } from '../../shared/github-repository-identity-key'
 import type { OwnerRepo } from './github-repository-identity'
 
 type GhExecOptions = Parameters<typeof ghExecFileAsync>[1]
@@ -59,7 +61,8 @@ export async function isCommitPartOfMergedPR(args: {
   }
   const owner = args.ownerRepo.owner
   const repo = args.ownerRepo.repo
-  const cacheKey = `${owner.toLowerCase()}/${repo.toLowerCase()}#${args.prNumber}@${oid}`
+  const cacheKey = `${githubRepoIdentityKey(args.ownerRepo)}#${args.prNumber}@${oid}`
+  const ghOptions = { ...args.ghOptions, ...githubHostExecOptions(args.ownerRepo) }
   const now = Date.now()
   pruneMergedPRCommitMembershipCache(now)
   const cached = membershipCache.get(cacheKey)
@@ -68,7 +71,7 @@ export async function isCommitPartOfMergedPR(args: {
   }
   // Why blocked stays unknown: hiding a transient branch match is safe, but
   // callers must not clear a durable linked PR when the probe never ran.
-  if (rateLimitGuard('core').blocked) {
+  if (repositoryRateLimitGuard(args.ownerRepo, 'core', ghOptions).blocked) {
     return 'unknown'
   }
   try {
@@ -79,20 +82,20 @@ export async function isCommitPartOfMergedPR(args: {
     // found (contained) or a short page proves absence (not-contained); only the
     // pathological all-full case up to the cap stays 'unknown'.
     for (let page = 1; page <= COMMIT_PULLS_MAX_PAGES; page += 1) {
-      if (page > 1 && rateLimitGuard('core').blocked) {
+      if (page > 1 && repositoryRateLimitGuard(args.ownerRepo, 'core', ghOptions).blocked) {
         membershipCache.set(cacheKey, {
           value: 'unknown',
           expiresAt: now + MEMBERSHIP_ERROR_TTL_MS
         })
         return 'unknown'
       }
-      noteRateLimitSpend('core')
+      noteRepositoryRateLimitSpend(args.ownerRepo, 'core', 1, ghOptions)
       const { stdout } = await ghExecFileAsync(
         [
           'api',
           `repos/${owner}/${repo}/commits/${oid}/pulls?per_page=${COMMIT_PULLS_PAGE_SIZE}&page=${page}`
         ],
-        args.ghOptions
+        ghOptions
       )
       const parsed = JSON.parse(stdout) as unknown
       // Why: a non-array success payload is a shape mismatch, not an empty page;

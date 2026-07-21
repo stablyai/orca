@@ -48,6 +48,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').uiLanguage).toBe('system')
   })
 
+  it('defaults the menu bar icon on so the value round-trips across platforms', () => {
+    expect(getDefaultSettings('/tmp').showMenuBarIcon).toBe(true)
+  })
+
   it('confirms before closing pinned tabs by default', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
@@ -85,6 +89,12 @@ describe('getDefaultSettings', () => {
   it('keeps per-workspace environments disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
   })
+
+  it('keeps the agent dashboard popout disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalAgentDashboardPopout).toBe(false)
+  })
+
+  it('routes fresh Codex profiles through the real-home rollout by default', () => {})
 
   it('defaults local Windows projects to the host runtime', () => {
     expect(getDefaultSettings('/tmp').localWindowsRuntimeDefault).toEqual({

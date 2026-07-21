@@ -1,0 +1,103 @@
+name: Windows terminal restart E2E
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+    paths:
+      - '.github/workflows/windows-terminal-restart-e2e.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'electron.vite.config.ts'
+      - 'config/patches/**'
+      - 'config/scripts/ensure-native-runtime.mjs'
+      - 'config/scripts/rebuild-native-deps.mjs'
+      - 'tests/playwright.config.ts'
+      - 'tests/e2e/global-setup.ts'
+      - 'tests/e2e/global-teardown.ts'
+      - 'tests/e2e/helpers/**'
+      - 'tests/e2e/restart-restore-terminal-input.spec.ts'
+      - 'tests/e2e/restored-terminal-input-readiness.unit.test.ts'
+      - 'tests/e2e/terminal-probe-input-sequence.ts'
+      - 'tests/e2e/terminal-probe-input-sequence.unit.test.ts'
+      - 'tests/e2e/terminal-restart-persistence.spec.ts'
+      - 'src/main/daemon/**'
+      - 'src/main/ipc/pty*.ts'
+      - 'src/main/providers/**'
+      - 'src/main/pty/**'
+      - 'src/preload/**'
+      - 'src/renderer/src/components/terminal-pane/**'
+      - 'src/renderer/src/lib/pane-manager/**'
+      - 'src/shared/pty-session-id-format.ts'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to check out
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-terminal-restart-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-terminal-restart:
+    name: Windows terminal restart regressions
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      # Why: pnpm must exist before setup-node resolves its dependency cache.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for Windows E2E
+        run: pnpm exec electron-vite build --mode e2e
+
+      - name: Run Windows terminal restart regressions
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E: '1'
+        # Why: pnpm forwards a literal `--` to Playwright, which makes the
+        # grep and worker flags positional filters instead of CLI options.
+        run: >-
+          pnpm run test:e2e
+          tests/e2e/restart-restore-terminal-input.spec.ts
+          tests/e2e/terminal-restart-persistence.spec.ts
+          --grep "clean restart with a live daemon session|cold-restored pane accepts typing|daemon snapshot relaunch preserves"
+          --workers=1
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-terminal-restart-playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

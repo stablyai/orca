@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
 
@@ -15,7 +15,7 @@ function getWorktreeOwnerHostId(
   repoMap: Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
 ): string | null {
   const repo = repoMap.get(worktree.repoId)
-  return worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : null)
+  return repo ? getWorktreeExecutionHostId(worktree, repo) : (worktree.hostId ?? null)
 }
 
 export function getEligibleWorktreeParents({

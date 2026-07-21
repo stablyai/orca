@@ -111,7 +111,8 @@ const GitHubProjectRef = z
   .object({
     owner: z.string(),
     ownerType: z.enum(['organization', 'user']),
-    number: z.number().int()
+    number: z.number().int(),
+    host: z.string().optional()
   })
   .strict()
 const GitHubProjectSettings = z
@@ -191,6 +192,9 @@ export const UiUpdate = z
     workspaceHostScope: z.string().optional(),
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     workspaceHostOrder: z.array(z.string()).optional(),
+    manualRepoOrder: z
+      .array(z.object({ hostId: z.string(), repoId: z.string() }).strict())
+      .optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
     hideAutomationGeneratedWorkspaces: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
@@ -216,6 +220,7 @@ export const UiUpdate = z
     _grokStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
+    statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
     dismissedUpdateVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
     pendingUpdateNudgeId: NullableString.optional(),

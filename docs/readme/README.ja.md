@@ -3,21 +3,21 @@
 </h1>
 
 <p align="center">
-  <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="GitHub スター数" /></a>
+  <a href="https://github.com/stablyai/orca"><img src="https://img.shields.io/github/stars/stablyai/orca?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub スター数" /></a>
   <a href="https://github.com/stablyai/orca/releases"><img src="../assets/readme-downloads.svg" alt="全リリースの合計ダウンロード数" /></a>
-  <img src="https://badgen.net/github/license/stablyai/orca" alt="ライセンス" />
+  <img src="https://img.shields.io/badge/license-MIT-08C?style=flat" alt="ライセンス: MIT" />
   <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Orca の Discord に参加" /></a>
   <a href="https://x.com/orca_build"><img src="https://img.shields.io/badge/X-000000?logo=x&logoColor=white" alt="X で Orca をフォロー" /></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="対応プラットフォーム: macOS、Windows、Linux" />
 </p>
 
 <p align="center">
-  <sub><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt.md">Português</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ko.md">한국어</a></sub>
+  <sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.pt.md">Português</a></sub>
 </p>
 
 <p align="center">
   <strong>100x ビルダーのための AI オーケストレーター。</strong><br/>
-  Claude Code、OpenClaude、Codex、OpenCode を並べて実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。
+  Codex、Claude Code、OpenCode、Pi を並べて実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Orca をダウンロード</ins></a></h3>
@@ -36,7 +36,7 @@
 
 スマートフォンからエージェントを監視・操作 — エージェントの完了を通知で受け取り、どこからでもフォローアップを送信できます。
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.27/app-release.apk) · [ドキュメント →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk) · [ドキュメント →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -227,7 +227,7 @@ yay -S stably-orca-bin
 デスクトップアプリとペアリングして、スマートフォンからエージェントを監視・操作できます。
 
 - **iOS:** [App Store からダウンロード](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [APK をダウンロード](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.27/app-release.apk)
+- **Android:** [APK をダウンロード](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk)
 
 ---
 

@@ -17,6 +17,19 @@ type OpenMarkdownDocumentOptions = {
   anchor?: string | null
 }
 
+export async function saveMarkdownAndRefreshDocuments(
+  content: string,
+  save: (content: string) => Promise<boolean>,
+  refresh: () => Promise<void>
+): Promise<boolean> {
+  const didSave = await save(content)
+  if (!didSave) {
+    return false
+  }
+  await refresh()
+  return true
+}
+
 type UseMarkdownDocumentsResult = {
   markdownDocuments: MarkdownDocument[]
   openMarkdownDocument: (
@@ -31,14 +44,14 @@ type UseMarkdownDocumentsResult = {
       options?: OpenMarkdownDocumentOptions
     ) => Promise<void>
   }
-  mdSave: (content: string) => Promise<void>
+  mdSave: (content: string) => Promise<boolean>
 }
 
 export function useMarkdownDocuments(
   activeFile: OpenFile,
   isMarkdown: boolean,
   viewMode: MarkdownViewMode,
-  onSave: (content: string) => Promise<void>
+  onSave: (content: string) => Promise<boolean>
 ): UseMarkdownDocumentsResult {
   const worktreeId = activeFile.worktreeId
   // Why: PTY activity replaces worktree metadata; only a routing-path change
@@ -179,7 +192,8 @@ export function useMarkdownDocuments(
   )
 
   const mdSave = useCallback(
-    (content: string) => onSave(content).then(() => refreshMarkdownDocuments(true)),
+    (content: string) =>
+      saveMarkdownAndRefreshDocuments(content, onSave, () => refreshMarkdownDocuments(true)),
     [onSave, refreshMarkdownDocuments]
   )
 

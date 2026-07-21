@@ -18,6 +18,7 @@ import {
   processGoneDedupe,
   type ProcessGoneDedupe
 } from './process-gone-dedupe'
+import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
 import { flushActiveSink, startSpan } from '../observability/tracer'
 
 export type ProcessGoneCrashEvent = {
@@ -84,7 +85,11 @@ export function recordProcessGoneCrash(
   if (!claim) {
     return
   }
-  const crashDetails = buildProcessGoneCrashDetails(event.details)
+  const mainProcessLifecycle = getMainProcessLifecycleIdentity()
+  const crashDetails = buildProcessGoneCrashDetails({
+    ...event.details,
+    ...mainProcessLifecycle
+  })
   const breadcrumbs = getCrashBreadcrumbSnapshot()
   const span = startSpan('electron.process_gone', {
     attributes: {
@@ -98,6 +103,9 @@ export function recordProcessGoneCrash(
       arch: process.arch,
       electronVersion: process.versions.electron,
       chromeVersion: process.versions.chrome,
+      'app.main_process.pid': mainProcessLifecycle.mainProcessPid,
+      'app.main_process.launch_id': mainProcessLifecycle.mainProcessLaunchId,
+      'app.main_process.started_at': mainProcessLifecycle.mainProcessStartedAt,
       details: crashDetails,
       breadcrumbs
     }

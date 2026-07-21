@@ -7,6 +7,7 @@ import {
   ORCHESTRATION_SKILL_INSTALL_COMMAND,
   ORCHESTRATION_SKILL_UPDATE_COMMAND
 } from '@/lib/orchestration-install-command'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
@@ -75,6 +76,9 @@ export function OrchestrationSetupCard(props: {
           : ensureOrcaCliAvailableForAgentSkillTerminal())
       }}
       onRecheck={skill.refresh}
+      freshnessSkillName={
+        activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCHESTRATION_SKILL_NAME
+      }
     />
   )
 

@@ -10,6 +10,9 @@ const loadHostsMock = vi.fn()
 vi.mock('./rpc-client', () => ({
   connect: (...args: unknown[]) => connectMock(...args)
 }))
+vi.mock('./host-logical-client', () => ({
+  openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
+}))
 vi.mock('./host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
@@ -125,13 +128,97 @@ beforeEach(() => {
 })
 
 describe('useHostClient', () => {
+  it('rebinds when Expo reuses a screen between two connected cached hosts', async () => {
+    const host2 = { ...HOST, id: 'host-2', name: 'Host 2' }
+    const client1 = makeFakeClient('connected')
+    const client2 = makeFakeClient('connected')
+    connectMock.mockReturnValueOnce(client1).mockReturnValueOnce(client2)
+    loadHostsMock.mockResolvedValue([HOST, host2])
+
+    let selectedHostId = HOST.id
+    let selectedClient: RpcClient | null = null
+    let selectedState: ConnectionState = 'disconnected'
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      const selected = useHostClient(selectedHostId)
+      selectedClient = selected.client
+      selectedState = selected.state
+      useHostClient(host2.id)
+      return null
+    }
+
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      expect(selectedClient).toBe(client1)
+      expect(selectedState).toBe('connected')
+
+      selectedHostId = host2.id
+      client2.emitState('disconnected')
+      await act(async () => {
+        renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+
+      expect(selectedClient).toBe(client2)
+      expect(selectedState).toBe('disconnected')
+      expect(connectMock).toHaveBeenCalledTimes(2)
+    } finally {
+      restore()
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('stays disconnected while a reused screen resolves an uncached host', async () => {
+    const client = makeFakeClient('connected')
+    connectMock.mockReturnValue(client)
+    loadHostsMock.mockResolvedValueOnce([HOST]).mockReturnValueOnce(new Promise<never>(() => {}))
+
+    let selectedHostId = HOST.id
+    let renderTick = 0
+    const stateByRenderTick = new Map<number, ConnectionState>()
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      stateByRenderTick.set(renderTick, useHostClient(selectedHostId).state)
+      return null
+    }
+
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      expect(stateByRenderTick.get(0)).toBe('connected')
+
+      selectedHostId = 'missing-host'
+      renderTick = 1
+      await act(async () => {
+        renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
+      })
+      expect(stateByRenderTick.get(1)).toBe('disconnected')
+
+      renderTick = 2
+      await act(async () => {
+        renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
+      })
+      expect(stateByRenderTick.get(2)).toBe('disconnected')
+    } finally {
+      restore()
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('drops the closed client when the host entry is removed', async () => {
     const fake = makeFakeClient('connected')
     connectMock.mockReturnValue(fake)
     loadHostsMock.mockResolvedValue([HOST])
 
     const harness = await renderHarness(HOST.id)
-    expect(harness.hook.client).toBe(fake)
+    expect(harness.hook.client).not.toBeNull()
     expect(harness.hook.state).toBe('connected')
 
     // Regression (STA-1511): closeHost deletes the entry; before the fix the

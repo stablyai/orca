@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve as resolvePath } from 'node:path'
+import { resolve as resolvePath } from 'node:path'
 import type {
   ComputerAppQuery,
   RuntimeWorktreeListResult,
@@ -43,14 +43,6 @@ function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient)
   )
 }
 
-function isWithinPath(parentPath: string, childPath: string): boolean {
-  if (isPathInsideOrEqual(parentPath, childPath)) {
-    return true
-  }
-  const relativePath = relative(parentPath, childPath)
-  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-}
-
 export async function resolveCurrentWorktreeSelector(
   cwd: string,
   client: RuntimeClient
@@ -65,7 +57,10 @@ export async function resolveCurrentWorktreeSelector(
   let enclosingPathLength = -1
   for (const worktree of worktrees.result.worktrees) {
     const worktreePath = resolvePath(worktree.path)
-    if (!isWithinPath(worktreePath, currentPath) || worktreePath.length <= enclosingPathLength) {
+    if (
+      !isPathInsideOrEqual(worktreePath, currentPath) ||
+      worktreePath.length <= enclosingPathLength
+    ) {
       continue
     }
     enclosingWorktree = worktree

@@ -13,7 +13,8 @@ vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   requestTerminalBacklogRecovery: vi.fn()
 }))
 vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
-  enforceTerminalCurrentScrollIntent: vi.fn()
+  enforceTerminalCurrentScrollIntent: vi.fn(),
+  syncTerminalScrollIntentFromViewport: vi.fn()
 }))
 vi.mock('./pane-helpers', () => ({
   fitAndFocusPanes: vi.fn(),
@@ -25,6 +26,13 @@ vi.mock('./terminal-webgl-atlas-recovery', () => ({
   // Why: the light-tab reveal must recover the atlas immediately, decoupled from
   // the terminal-output debounce (which a background stream could otherwise defer).
   scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
+}))
+const resetTerminalLinkifierHoverState = vi.fn()
+const isTerminalLinkifierHoverActive = vi.fn((_terminal: unknown) => false)
+vi.mock('@/lib/pane-manager/terminal-linkifier-hover-reset', () => ({
+  resetTerminalLinkifierHoverState: (terminal: unknown) =>
+    resetTerminalLinkifierHoverState(terminal),
+  isTerminalLinkifierHoverActive: (terminal: unknown) => isTerminalLinkifierHoverActive(terminal)
 }))
 
 type FakeManager = {
@@ -73,12 +81,71 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(scheduleTabRevealWebglAtlasRecovery).toHaveBeenCalledTimes(1)
   })
 
+  it('captures native trim movement before enforcing viewport intent', async () => {
+    const terminal = { name: 'trimmed-terminal' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal }])
+    const { enforceTerminalCurrentScrollIntent, syncTerminalScrollIntentFromViewport } = vi.mocked(
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    )
+
+    resumeTerminalVisibility(resumeArgs(manager, true))
+
+    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledWith(terminal)
+    expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
+      enforceTerminalCurrentScrollIntent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
+  })
+
+  it('resets each pane linkifier hover cache on reveal so links recover without a scroll', () => {
+    const first = { name: 'pane-a' }
+    const second = { name: 'pane-b' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: first }, { terminal: second }])
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(first)
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(second)
+  })
+
   it('schedules the repaint after rendering resumes on a heavy reveal', () => {
     const order: string[] = []
     const manager = createManager(order)
     resumeTerminalVisibility(resumeArgs(manager, false))
 
     expect(order).toEqual(['resume-rendering', 'reveal-repaint'])
+  })
+
+  it('resets each pane linkifier hover cache on window wake recovery so links recover without a scroll', () => {
+    const first = { name: 'pane-a' }
+    const second = { name: 'pane-b' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: first }, { terminal: second }])
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(first)
+    expect(resetTerminalLinkifierHoverState).toHaveBeenCalledWith(second)
+  })
+
+  it('keeps a genuinely-hovered link intact on window wake recovery', () => {
+    const hovered = { name: 'hovered-pane' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: hovered }])
+    isTerminalLinkifierHoverActive.mockReturnValueOnce(true)
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(resetTerminalLinkifierHoverState).not.toHaveBeenCalled()
   })
 
   it('schedules the atlas-clearing repaint on genuine wake recovery', () => {

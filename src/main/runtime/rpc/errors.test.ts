@@ -9,6 +9,16 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it.each(['terminal_tab_close_timeout', 'terminal_tab_not_found', 'terminal_tab_pinned'])(
+    'preserves the durable terminal tab close failure %s',
+    (code) => {
+      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
+        ok: false,
+        error: { code, message: code }
+      })
+    }
+  )
+
   it.each([
     ['window_not_focused', 'keyboard input requires focus', 'restore-window'],
     ['permission_denied', 'missing DBUS_SESSION_BUS_ADDRESS', 'permissions'],
