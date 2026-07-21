@@ -10321,6 +10321,12 @@
           "saveFailed": "无法保存可见性默认设置。",
           "updateServer": "请更新此服务器以配置来源默认设置。",
           "updateServerDefaults": "请更新此服务器以配置可见性默认设置。"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "编辑器按键绑定",
+          "1b23c01cc6": "默认",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "在代码编辑器中使用 Vim 模式按键绑定，而非标准编辑方式。"
         }
       },
       "right": {
