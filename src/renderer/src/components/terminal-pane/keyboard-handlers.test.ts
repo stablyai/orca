@@ -4,10 +4,17 @@ import { useEffect } from 'react'
 import type * as React from 'react'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
 
+const { resetTerminalKeyboardProtocolAfterInterruptMock } = vi.hoisted(() => ({
+  resetTerminalKeyboardProtocolAfterInterruptMock: vi.fn()
+}))
+
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return { ...actual, useEffect: vi.fn() }
 })
+vi.mock('./use-terminal-pane-lifecycle', () => ({
+  resetTerminalKeyboardProtocolAfterInterrupt: resetTerminalKeyboardProtocolAfterInterruptMock
+}))
 import {
   matchFileSearchShortcut,
   matchSearchNavigate,
@@ -342,6 +349,7 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
   }
 
   afterEach(() => {
+    resetTerminalKeyboardProtocolAfterInterruptMock.mockClear()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -355,6 +363,9 @@ describe('useTerminalKeyboardShortcuts copy selection', () => {
     })
 
     expect(harness.input).toHaveBeenCalledWith('\x03')
+    expect(resetTerminalKeyboardProtocolAfterInterruptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ input: harness.input })
+    )
     expect(harness.writeClipboardText).not.toHaveBeenCalled()
     expect(harness.event.preventDefault).toHaveBeenCalledOnce()
     expect(harness.event.stopImmediatePropagation).toHaveBeenCalledOnce()

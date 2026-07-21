@@ -47,6 +47,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import { TERMINAL_INTERRUPT_INPUT } from './xterm-bypass-policy'
+import { resetTerminalKeyboardProtocolAfterInterrupt } from './use-terminal-pane-lifecycle'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
@@ -545,6 +546,7 @@ export function useTerminalKeyboardShortcuts({
         }
         // Why: xterm's input path preserves PTY accounting for TUI-owned copy.
         pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
+        resetTerminalKeyboardProtocolAfterInterrupt(pane.terminal)
         e.preventDefault()
         e.stopImmediatePropagation()
         return
