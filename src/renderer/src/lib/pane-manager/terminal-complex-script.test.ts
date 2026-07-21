@@ -66,6 +66,35 @@ describe('terminalOutputPrefersRenderRefresh', () => {
     expect(terminalOutputPrefersRenderRefresh('\x1b[104m bright selected block \x1b[0m')).toBe(true)
   })
 
+  it('detects OMP-style inverse-video cursor rewrite frames', () => {
+    expect(terminalOutputPrefersRenderRefresh('\x1b[H\x1b[2K\x1b[7m Todos \x1b[27m')).toBe(true)
+    expect(terminalOutputPrefersRenderRefresh('\x1b[1;1H\x1b[K\x1b[7m Subagents \x1b[0m')).toBe(
+      true
+    )
+  })
+
+  it('does not refresh on renderer-risk SGR without an in-place rewrite', () => {
+    // Inverse video alone is ordinary styling; only a repaint-in-place frame
+    // (cursor move / erase / CR) pairs with it to signal the HUD corruption shape.
+    expect(terminalOutputPrefersRenderRefresh('\x1b[7m inverse \x1b[27m')).toBe(false)
+    expect(terminalOutputPrefersRenderRefresh('\x1b[7mhighlighted\x1b[0m')).toBe(false)
+  })
+
+  it('does not refresh on a cursor rewrite without renderer-risk SGR', () => {
+    expect(terminalOutputPrefersRenderRefresh('\x1b[H\x1b[2K plain redraw \x1b[0m')).toBe(false)
+    expect(terminalOutputPrefersRenderRefresh('\rprogress 50%')).toBe(false)
+  })
+
+  it('detects a renderer-risk frame whose rewrite and SGR split across chunks', () => {
+    // The write path prepends a carried-over tail to the next chunk; neither half
+    // is risky alone, but the rejoined sequence must schedule one refresh.
+    const head = '\x1b[H\x1b[2K'
+    const tail = '\x1b[7m Todos \x1b[27m'
+    expect(terminalOutputPrefersRenderRefresh(head)).toBe(false)
+    expect(terminalOutputPrefersRenderRefresh(tail)).toBe(false)
+    expect(terminalOutputPrefersRenderRefresh(`${head}${tail}`)).toBe(true)
+  })
+
   it('does not disable WebGL for ordinary terminal output or ANSI controls alone', () => {
     expect(terminalOutputPrefersRenderRefresh('abc 123 ✓')).toBe(false)
     expect(terminalOutputPrefersRenderRefresh('\x1b[32mplain green\x1b[0m')).toBe(false)
