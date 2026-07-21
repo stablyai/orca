@@ -5,6 +5,7 @@ import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import type { Worktree } from '../../../../shared/types'
 import {
   resolveChecksPanelTerminalPtyId,
@@ -32,7 +33,8 @@ type ChecksPanelTerminalWorktree = {
  * getCwd reads the local shell pid, so it is correct for that case. Remote
  * runtime PTYs are skipped (their cwd lives on the relay host). Polling is
  * gated on panel visibility, so a hidden panel does no background work and the
- * caller's fallback worktree is used.
+ * caller's fallback worktree is used. On Windows, where local cwd resolution
+ * is unsupported, polling is skipped entirely and the fallback is always used.
  *
  * Resolution is scoped to locally-executing worktrees: the cwd comes from a
  * local PTY, and worktree paths are not unique across hosts (an SSH worktree
@@ -75,7 +77,10 @@ export function useChecksPanelTerminalWorktree(args: {
     activeTerminalPtyId !== null &&
     !isRemoteRuntimePtyId(activeTerminalPtyId) &&
     parseAppSshPtyId(activeTerminalPtyId) === null
-  const shouldPollCwd = isPanelVisible && isLocalTerminalPty
+  // Why: cwd resolution is not implemented on Windows (getCwd always returns
+  // ''), so polling would just schedule a doomed IPC round-trip every 4s.
+  const isCwdResolutionSupported = getRendererAppPlatform() !== 'win32'
+  const shouldPollCwd = isPanelVisible && isLocalTerminalPty && isCwdResolutionSupported
 
   const [polledCwd, setPolledCwd] = useState<{ ptyId: string; cwd: string | null } | null>(null)
 

@@ -92,6 +92,11 @@ export function resolveDefaultCwd(
  * Tries /proc on Linux and lsof on macOS before falling back to `fallbackCwd`.
  */
 export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promise<string> {
+  // Why: a Windows relay host has no /proc and no native lsof — both probes
+  // are guaranteed to fail, so skip straight to the fallback without spawning.
+  if (process.platform === 'win32') {
+    return fallbackCwd
+  }
   // Try to read /proc/{pid}/cwd on Linux. Skip an existsSync gate — the
   // check+read pair races a concurrent exit anyway, and the catch already
   // falls through to lsof.

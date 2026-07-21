@@ -10,8 +10,9 @@ import { readlink } from 'node:fs/promises'
  * the duplication is cheaper than reshaping both bundle graphs.
  *
  * Tries `/proc/<pid>/cwd` on Linux, falls back to `lsof -d cwd` on macOS.
- * Returns `''` when neither works (including Windows, where `/proc` is
- * absent and `lsof` is not native).
+ * Returns `''` when neither works. Windows is unsupported and returns `''`
+ * without probing (see the early return below); real resolution there
+ * (NtQueryInformationProcess) is a potential follow-up.
  *
  * Results are coalesced and briefly cached per-pid: rapid repeat calls
  * (e.g. chained Cmd+D on macOS) reuse a single `lsof` child rather than
@@ -27,6 +28,11 @@ const resultCache = new Map<number, CacheEntry>()
 const inflight = new Map<number, Promise<string>>()
 
 export async function resolveProcessCwd(pid: number): Promise<string> {
+  // Why: Windows has no /proc and no native lsof — both probes are guaranteed
+  // to fail, so return the "unknown" sentinel before spawning anything.
+  if (process.platform === 'win32') {
+    return ''
+  }
   // Assumes the caller holds a live reference to `pid` for the TTL window.
   // If a pid is recycled within 1.5s of a prior query, the cache would
   // return the previous process's cwd — acceptable because our callers

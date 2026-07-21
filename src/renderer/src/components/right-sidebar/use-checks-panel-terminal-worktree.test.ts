@@ -68,8 +68,13 @@ async function runNextCwdPoll(): Promise<void> {
 beforeEach(() => {
   vi.useFakeTimers()
   getCwdMock.mockReset().mockResolvedValue('')
+  // Pin a POSIX platform: the hook skips cwd polling entirely on win32, and
+  // the fallback UA sniff in getRendererAppPlatform is environment-dependent.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
-  ;(window as any).api = { pty: { getCwd: getCwdMock } }
+  ;(window as any).api = {
+    pty: { getCwd: getCwdMock },
+    platform: { get: () => ({ platform: 'darwin' }) }
+  }
 
   useAppStore.setState(initialAppState, true)
   useAppStore.setState({
@@ -114,6 +119,25 @@ describe('useChecksPanelTerminalWorktree', () => {
 
     await renderHook(parentWorktree, false)
     await flushMicrotasks()
+
+    expect(getCwdMock).not.toHaveBeenCalled()
+    expect(latest?.worktree).toBe(parentWorktree)
+  })
+
+  it('does not poll on win32, where local cwd resolution is unsupported', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
+    ;(window as any).api = {
+      pty: { getCwd: getCwdMock },
+      platform: { get: () => ({ platform: 'win32' }) }
+    }
+    getCwdMock.mockResolvedValue(`${CHILD_PATH}/src`)
+
+    await renderHook(parentWorktree)
+    await flushMicrotasks()
+    // Advance past several poll intervals to prove no timer was scheduled.
+    await act(async () => {
+      vi.advanceTimersByTime(10_000)
+    })
 
     expect(getCwdMock).not.toHaveBeenCalled()
     expect(latest?.worktree).toBe(parentWorktree)

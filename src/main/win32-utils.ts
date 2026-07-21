@@ -45,6 +45,17 @@ export function isWindowsBatchScript(commandPath: string): boolean {
   return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
 }
 
+// Why cache: a PATH scan is ~80-160 existsSync probes (dirs × 4 name variants)
+// and runs per gh/glab invocation; NTFS + Defender make each probe costly.
+// Keyed by (command, PATH string) so a PATH change invalidates via the key.
+// Hits are kept for the process lifetime; misses expire after a short TTL so
+// a CLI installed mid-session is picked up without re-scanning on every call.
+const COMMAND_RESOLUTION_CACHE_MAX_ENTRIES = 64
+const MISSING_COMMAND_RETRY_MS = 30_000
+
+type CommandResolutionEntry = { resolved: string; found: boolean; at: number }
+const commandResolutionCache = new Map<string, CommandResolutionEntry>()
+
 export function resolveWindowsCommand(
   command: string,
   env: NodeJS.ProcessEnv = process.env
@@ -61,6 +72,32 @@ export function resolveWindowsCommand(
     return command
   }
 
+  // \0 cannot appear in a command or env value, so the key is unambiguous.
+  const cacheKey = `${command}\0${pathEnv}`
+  const cached = commandResolutionCache.get(cacheKey)
+  if (cached && (cached.found || Date.now() - cached.at < MISSING_COMMAND_RETRY_MS)) {
+    return cached.resolved
+  }
+
+  const resolved = scanPathForCommand(command, pathEnv)
+  commandResolutionCache.set(cacheKey, {
+    resolved: resolved ?? command,
+    found: resolved !== null,
+    at: Date.now()
+  })
+  // Why bound: callers pass arbitrary env objects, so distinct PATH strings
+  // could otherwise accumulate keys for the process lifetime.
+  while (commandResolutionCache.size > COMMAND_RESOLUTION_CACHE_MAX_ENTRIES) {
+    const oldest = commandResolutionCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    commandResolutionCache.delete(oldest)
+  }
+  return resolved ?? command
+}
+
+function scanPathForCommand(command: string, pathEnv: string): string | null {
   for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
     for (const name of [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]) {
       const candidate = join(directory, name)
@@ -69,7 +106,7 @@ export function resolveWindowsCommand(
       }
     }
   }
-  return command
+  return null
 }
 
 export const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'

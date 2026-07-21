@@ -13,6 +13,14 @@ vi.mock('fs/promises', () => ({
   readlink: readlinkMock
 }))
 
+function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
+  const original = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  return fn().finally(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: original })
+  })
+}
+
 describe('resolveProcessCwd', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -28,6 +36,17 @@ describe('resolveProcessCwd', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('returns "" on win32 without attempting any probe', async () => {
+    await withPlatform('win32', async () => {
+      const { resolveProcessCwd } = await import('./process-cwd')
+
+      await expect(resolveProcessCwd(42)).resolves.toBe('')
+
+      expect(readlinkMock).not.toHaveBeenCalled()
+      expect(execFileMock).not.toHaveBeenCalled()
+    })
   })
 
   it('bounds cached cwd results across unique process ids', async () => {
