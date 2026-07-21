@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
@@ -63,11 +63,16 @@ export function usePetAgentAsk(target: PetAgentTarget | null): {
   askAgent: (prompt: string) => Promise<void>
 } {
   const boundSession = useSyncExternalStore(subscribeToPetBoundSession, getPetBoundSession)
-  const boundRequest = useAppStore((state) =>
-    resolvePetBoundNoteTarget(boundSession, {
-      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-      tabsByWorktree: state.tabsByWorktree
-    })
+  // Select the STABLE store slices, not a derived object. A selector that
+  // returns `resolvePetBoundNoteTarget(...)` builds a fresh object every call,
+  // and zustand's Object.is equality then re-renders forever — React error #185,
+  // which fired the instant a spawn set a bound session (before that the result
+  // was a stable null). Resolve in a memo keyed on the raw inputs instead.
+  const terminalLayoutsByTabId = useAppStore((state) => state.terminalLayoutsByTabId)
+  const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
+  const boundRequest = useMemo(
+    () => resolvePetBoundNoteTarget(boundSession, { terminalLayoutsByTabId, tabsByWorktree }),
+    [boundSession, terminalLayoutsByTabId, tabsByWorktree]
   )
 
   // Why the bound session wins over the status-derived target: the bound one is
