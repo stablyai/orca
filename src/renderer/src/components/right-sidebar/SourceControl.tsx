@@ -6503,8 +6503,8 @@ export function CommitArea({
     .filter(Boolean)
     .join(' ')
 
-  // Why: 配置错误由生成对话框负责校验，入口可见性只跟随功能开关。
-  // Why: 创建 PR 流程已接管生成状态，避免在输入框中重复显示进度。
+  // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
+  // Why: Create PR intent owns generation, so a second composer spinner would stack on the primary spinner.
   const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
   let generateTooltip: string | undefined
   if (isGenerating) {
