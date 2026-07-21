@@ -139,6 +139,48 @@ class AudioEngine (context: Context) {
         }
     }
 
+    /**
+     * Re-assert speaker routing immediately before playback.
+     *
+     * Why this is needed: updateAudioRouting() previously ran ONLY at engine
+     * construction and on device add/remove. But the communication device is
+     * cleared whenever audio focus is abandoned or the audio mode leaves
+     * MODE_IN_COMMUNICATION, which happens routinely between a mic turn and a
+     * later TTS reply. The AudioTrack is built with USAGE_VOICE_COMMUNICATION,
+     * so with no communication device set Android falls back to the EARPIECE —
+     * audio plays perfectly and is inaudible unless the phone is held to the
+     * operator's ear.
+     *
+     * Observed on a Nord N10 5G (Android 14) 2026-07-21: 69,982 bytes of mesh
+     * TTS were queued AND fully written to the AudioTrack, while dumpsys audio
+     * reported "Active communication device: type:earpiece" with both Computed
+     * and Applied preferred communication device null.
+     *
+     * Only re-evaluates when routing is unset or has fallen back to the
+     * earpiece, so a genuinely connected headset keeps the audio.
+     */
+    @SuppressLint("NewApi")
+    private fun ensurePlaybackRouting() {
+        try {
+            if (audioManager.mode != AudioManager.MODE_IN_COMMUNICATION) {
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val current = audioManager.communicationDevice
+                if (current == null || current.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) {
+                    Log.d("AudioEngine", "[routing] re-asserting output before playback")
+                    updateAudioRouting()
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                updateAudioRouting()
+            } else {
+                updateLegacyAudioRouting()
+            }
+        } catch (e: Exception) {
+            Log.e("AudioEngine", "Error ensuring playback routing", e)
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.M)
     private fun updateAudioRouting() {
         val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
@@ -325,6 +367,7 @@ class AudioEngine (context: Context) {
     }
 
     fun playPCMData(data: ByteArray) {
+        ensurePlaybackRouting()
         audioSampleQueue.add(data)
         playbackEvents += 1
         playbackQueuedBytes += data.size.toLong()
