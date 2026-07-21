@@ -153,6 +153,57 @@ export function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
 
+/**
+ * How close to an edge counts as touching it, in normalized units.
+ *
+ * Lives here, not per surface, because "on an edge" and "where an arrival
+ * lands" are two ends of the same geometry. They used to be defined in three
+ * places — the renderer hook, mobile `pet-edge`, and `entryPointFor`'s literal
+ * 0/1 — and those three disagreed. See EDGE_ENTRY_INSET.
+ */
+export const EDGE_THRESHOLD = 0.02
+
+/**
+ * How far INSIDE the receiving surface an arriving pet is placed.
+ *
+ * Must be strictly greater than EDGE_THRESHOLD, and that is the whole point.
+ * `entryPointFor` used to return exactly 0 or 1 — a coordinate that
+ * `edgeAtNormalized` reads as "against the edge". So the pet arrived already
+ * touching a wall, the receiving surface reported an exit on its very first
+ * frame, and the two surfaces threw the pet back and forth at RPC speed.
+ *
+ * That is the flicker still seen AFTER the zombie-surface fix: same symptom,
+ * different cause, which is why fixing bug 2 did not clear it. Observed live
+ * 2026-07-21 in `~/.config/orca/pet/presence.json`: `"x": 0`.
+ *
+ * A pet stepping through a doorway stands inside the room, not in the frame.
+ */
+export const EDGE_ENTRY_INSET = 0.06
+
+/**
+ * Which edge (if any) a normalized position is against. Horizontal wins in a
+ * corner: handing off sideways reads as walking out of a screen, upward reads
+ * as falling out of one.
+ *
+ * Shared by every surface so a pet leaves each one at the same proximity — and
+ * so an arrival can be defined as the negation of it.
+ */
+export function edgeAtNormalized(position: PetPoint): PetEdge | null {
+  if (position.x <= EDGE_THRESHOLD) {
+    return 'left'
+  }
+  if (position.x >= 1 - EDGE_THRESHOLD) {
+    return 'right'
+  }
+  if (position.y <= EDGE_THRESHOLD) {
+    return 'top'
+  }
+  if (position.y >= 1 - EDGE_THRESHOLD) {
+    return 'bottom'
+  }
+  return null
+}
+
 export function oppositeEdge(edge: PetEdge): PetEdge {
   switch (edge) {
     case 'left':
@@ -171,23 +222,40 @@ export function isSurfaceAlive(surface: PetSurface, now: number): boolean {
 }
 
 /**
+ * Keep a coordinate clear of BOTH edges of its axis.
+ *
+ * Applied to the perpendicular axis of a crossing, not just the entry axis: a
+ * pet leaving the right wall at y=0.99 would otherwise arrive at x=inset but
+ * y=0.99, which `edgeAtNormalized` reads as 'bottom' — the identical instant
+ * re-exit, just via the other axis. Corners are where this bug hides.
+ */
+function insetFromEdges(value: number): number {
+  return Math.min(1 - EDGE_ENTRY_INSET, Math.max(EDGE_ENTRY_INSET, clamp01(value)))
+}
+
+/**
  * Where the pet lands when it exits `edge`. It enters on the OPPOSITE edge —
  * leaving rightwards means arriving from the left — and keeps its position on
  * the perpendicular axis so the crossing reads as continuous motion rather
  * than a teleport to a corner.
+ *
+ * The landing point is inset from every wall by EDGE_ENTRY_INSET, so an arriving
+ * pet is never already touching an edge. Read that constant's note before
+ * changing these numbers: an arrival that satisfies `edgeAtNormalized` is a
+ * handoff loop, not a position.
  */
 export function entryPointFor(exitEdge: PetEdge, exitPosition: PetPoint): PetPoint {
-  const x = clamp01(exitPosition.x)
-  const y = clamp01(exitPosition.y)
+  const x = insetFromEdges(exitPosition.x)
+  const y = insetFromEdges(exitPosition.y)
   switch (exitEdge) {
     case 'right':
-      return { x: 0, y }
+      return { x: EDGE_ENTRY_INSET, y }
     case 'left':
-      return { x: 1, y }
+      return { x: 1 - EDGE_ENTRY_INSET, y }
     case 'bottom':
-      return { x, y: 0 }
+      return { x, y: EDGE_ENTRY_INSET }
     case 'top':
-      return { x, y: 1 }
+      return { x, y: 1 - EDGE_ENTRY_INSET }
   }
 }
 
@@ -264,6 +332,18 @@ export function applyEdgeExit(
 ): PetPresence {
   const { fromSurfaceId, edge, position, now } = input
   if (presence.surfaceId !== fromSurfaceId) {
+    return presence
+  }
+  // A pet cannot walk out before it has finished walking in. `enteredFromEdge`
+  // is non-null only between arrival and the receiving surface acknowledging it,
+  // so this rejects exactly the exit reported off an arrival position — the
+  // flicker loop — while costing a legitimate exit nothing: the surface acks on
+  // its first arrival frame and any real edge contact after that is honoured.
+  //
+  // Redundant with EDGE_ENTRY_INSET on purpose. The inset makes the loop
+  // geometrically impossible; this makes it impossible even if some future
+  // surface computes its edges slightly differently.
+  if (presence.enteredFromEdge !== null) {
     return presence
   }
   const target = pickHandoffTarget(surfaces, fromSurfaceId, now, presence.petId)

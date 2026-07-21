@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   clamp01,
+  edgeAtNormalized,
   initialPresence,
   type PetEdge,
   type PetPoint,
@@ -21,27 +22,15 @@ import {
  *  cannot get a live window swept out from under the pet. */
 const HEARTBEAT_MS = 8_000
 
-/** How close to an edge counts as touching it, in normalized units. Roughly a
- *  pet's width on a typical window — tight enough that a pet strolling past
- *  mid-screen never trips it. */
-const EDGE_THRESHOLD = 0.02
-
-/** Which edge (if any) a normalized position is against. */
-export function edgeAt(position: PetPoint): PetEdge | null {
-  if (position.x <= EDGE_THRESHOLD) {
-    return 'left'
-  }
-  if (position.x >= 1 - EDGE_THRESHOLD) {
-    return 'right'
-  }
-  if (position.y <= EDGE_THRESHOLD) {
-    return 'top'
-  }
-  if (position.y >= 1 - EDGE_THRESHOLD) {
-    return 'bottom'
-  }
-  return null
-}
+/**
+ * Which edge (if any) a normalized position is against.
+ *
+ * Delegates to the shared rules module rather than keeping a local threshold.
+ * The local copy agreed with mobile's local copy and both disagreed with
+ * `entryPointFor`, which is how an arriving pet landed already touching a wall
+ * and bounced straight back — see EDGE_ENTRY_INSET.
+ */
+export const edgeAt = edgeAtNormalized
 
 function newSurfaceId(kind: PetSurfaceKind): string {
   // Per WINDOW, not per app: two Orca windows are two destinations the pet can

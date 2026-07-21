@@ -3,6 +3,7 @@ import {
   acknowledgeEntry,
   applyEdgeExit,
   applyPetIdentity,
+  edgeAtNormalized,
   entryPointFor,
   facingAfterEntry,
   initialPresence,
@@ -13,6 +14,10 @@ import {
   surfaceHoldsPet,
   SURFACE_STALE_AFTER_MS,
   HANDOFF_TARGET_MAX_AGE_MS,
+  EDGE_THRESHOLD,
+  EDGE_ENTRY_INSET,
+  type PetEdge,
+  type PetPoint,
   type PetPresence,
   type PetSurface
 } from './pet-presence'
@@ -35,13 +40,46 @@ describe('edge geometry', () => {
   })
 
   it('keeps the perpendicular axis so a crossing reads as continuous motion', () => {
-    expect(entryPointFor('right', { x: 1, y: 0.23 })).toEqual({ x: 0, y: 0.23 })
-    expect(entryPointFor('bottom', { x: 0.77, y: 1 })).toEqual({ x: 0.77, y: 0 })
+    const fromRight = entryPointFor('right', { x: 1, y: 0.23 })
+    expect(fromRight.x).toBeCloseTo(EDGE_ENTRY_INSET)
+    expect(fromRight.y).toBeCloseTo(0.23)
+
+    const fromBottom = entryPointFor('bottom', { x: 0.77, y: 1 })
+    expect(fromBottom.x).toBeCloseTo(0.77)
+    expect(fromBottom.y).toBeCloseTo(EDGE_ENTRY_INSET)
   })
 
   it('clamps a position reported outside the surface', () => {
-    expect(entryPointFor('right', { x: 5, y: 9 })).toEqual({ x: 0, y: 1 })
-    expect(entryPointFor('left', { x: -3, y: Number.NaN })).toEqual({ x: 1, y: 0.5 })
+    const overshoot = entryPointFor('right', { x: 5, y: 9 })
+    expect(overshoot.x).toBeCloseTo(EDGE_ENTRY_INSET)
+    expect(overshoot.y).toBeCloseTo(1 - EDGE_ENTRY_INSET)
+
+    const nonsense = entryPointFor('left', { x: -3, y: Number.NaN })
+    expect(nonsense.x).toBeCloseTo(1 - EDGE_ENTRY_INSET)
+    expect(nonsense.y).toBeCloseTo(0.5)
+  })
+
+  // The flicker regression, stated as the invariant it violated. An arrival that
+  // satisfies edgeAtNormalized makes the receiving surface report an exit on its
+  // first frame, and the pet ping-pongs between surfaces at RPC speed.
+  it('never lands an arriving pet on an edge — including out of a corner', () => {
+    const edges: PetEdge[] = ['left', 'right', 'top', 'bottom']
+    const corners: PetPoint[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 0.5, y: 0.5 }
+    ]
+    for (const edge of edges) {
+      for (const corner of corners) {
+        expect(edgeAtNormalized(entryPointFor(edge, corner))).toBeNull()
+      }
+    }
+  })
+
+  it('insets by more than it considers an edge, or the two rules contradict', () => {
+    expect(EDGE_ENTRY_INSET).toBeGreaterThan(EDGE_THRESHOLD)
   })
 
   it('faces inward after a horizontal entry and keeps facing on a vertical one', () => {
@@ -115,15 +153,19 @@ describe('pickHandoffTarget', () => {
     })
     expect(toPopout.surfaceId).toBe('pop')
 
-    // And back out again: a popout is a real destination, not a dead end.
-    const backToDesk = applyEdgeExit(toPopout, surfaces, {
+    // And back out again: a popout is a real destination, not a dead end. The
+    // ack is required, not incidental — a pet may not walk out of a surface it
+    // has not finished walking into.
+    const settled = acknowledgeEntry(toPopout, 'pop', NOW + 2)
+    const backToDesk = applyEdgeExit(settled, surfaces, {
       fromSurfaceId: 'pop',
       edge: 'left',
       position: { x: 0, y: 0.3 },
-      now: NOW + 2
+      now: NOW + 3
     })
     expect(backToDesk.surfaceId).toBe('desk')
-    expect(backToDesk.position).toEqual({ x: 1, y: 0.3 })
+    expect(backToDesk.position.x).toBeCloseTo(1 - EDGE_ENTRY_INSET)
+    expect(backToDesk.position.y).toBeCloseTo(0.3)
   })
 
   it('breaks ties on most recently seen', () => {
@@ -152,9 +194,42 @@ describe('applyEdgeExit', () => {
       now: NOW + 1
     })
     expect(next.surfaceId).toBe('phone')
-    expect(next.position).toEqual({ x: 0, y: 0.4 })
+    expect(next.position.x).toBeCloseTo(EDGE_ENTRY_INSET)
+    expect(next.position.y).toBeCloseTo(0.4)
     expect(next.enteredFromEdge).toBe('left')
     expect(next.facing).toBe('right')
+  })
+
+  it('refuses an exit reported before the arrival was acknowledged', () => {
+    // The flicker loop in one assertion: the receiving surface sees the pet at
+    // its entry position and reports an exit on the same frame. Honouring that
+    // bounces the pet straight back and the two surfaces trade it forever.
+    const arriving = applyEdgeExit({ ...initialPresence(NOW), surfaceId: 'desk' }, surfaces, {
+      fromSurfaceId: 'desk',
+      edge: 'right',
+      position: { x: 1, y: 0.4 },
+      now: NOW + 1
+    })
+    expect(arriving.surfaceId).toBe('phone')
+    expect(arriving.enteredFromEdge).toBe('left')
+
+    const bounced = applyEdgeExit(arriving, surfaces, {
+      fromSurfaceId: 'phone',
+      edge: 'left',
+      position: { x: 0, y: 0.4 },
+      now: NOW + 2
+    })
+    expect(bounced).toBe(arriving)
+
+    // Once acknowledged, a genuine edge contact is honoured as normal.
+    const settled = acknowledgeEntry(arriving, 'phone', NOW + 3)
+    const left = applyEdgeExit(settled, surfaces, {
+      fromSurfaceId: 'phone',
+      edge: 'left',
+      position: { x: 0, y: 0.4 },
+      now: NOW + 4
+    })
+    expect(left.surfaceId).toBe('desk')
   })
 
   it('leaves the pet exactly where it was when there is nowhere to go', () => {
@@ -192,15 +267,18 @@ describe('applyEdgeExit', () => {
     expect(surfaceHoldsPet(presence, 'phone')).toBe(true)
     expect(surfaceHoldsPet(presence, 'desk')).toBe(false)
 
+    // The phone finishes arriving before it can leave again.
+    presence = acknowledgeEntry(presence, 'phone', NOW + 2)
     presence = applyEdgeExit(presence, surfaces, {
       fromSurfaceId: 'phone',
       edge: 'left',
       position: { x: 0, y: 0.6 },
-      now: NOW + 2
+      now: NOW + 3
     })
     expect(surfaceHoldsPet(presence, 'desk')).toBe(true)
     expect(surfaceHoldsPet(presence, 'phone')).toBe(false)
-    expect(presence.position).toEqual({ x: 1, y: 0.6 })
+    expect(presence.position.x).toBeCloseTo(1 - EDGE_ENTRY_INSET)
+    expect(presence.position.y).toBeCloseTo(0.6)
   })
 })
 

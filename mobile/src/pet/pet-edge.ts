@@ -1,24 +1,10 @@
-import type { PetEdge, PetPoint } from '../../../src/shared/pet-presence'
-
-/** How close to an edge counts as touching it, in normalized units. Mirrors the
- *  desktop's threshold so a pet leaves both surfaces at the same proximity. */
-const EDGE_THRESHOLD = 0.02
-
-/** Which edge (if any) a normalized position is against. Horizontal wins in a
- *  corner: handing off sideways reads as walking out of a screen, upward reads
- *  as falling out of one. */
-export function edgeAtNormalized(position: PetPoint): PetEdge | null {
-  if (position.x <= EDGE_THRESHOLD) {
-    return 'left'
-  }
-  if (position.x >= 1 - EDGE_THRESHOLD) {
-    return 'right'
-  }
-  if (position.y <= EDGE_THRESHOLD) {
-    return 'top'
-  }
-  if (position.y >= 1 - EDGE_THRESHOLD) {
-    return 'bottom'
-  }
-  return null
-}
+// Edge geometry is a SHARED rule, not a per-surface constant.
+//
+// This file used to carry its own copy of EDGE_THRESHOLD "mirroring the
+// desktop's". It did mirror the desktop — but neither mirrored entryPointFor,
+// which landed arriving pets at exactly 0 or 1, i.e. inside the threshold. Two
+// surfaces agreeing with each other while disagreeing with the rules module is
+// how the handoff loop survived a fix aimed at it.
+//
+// Re-exported rather than deleted so mobile call sites keep reading naturally.
+export { edgeAtNormalized } from '../../../src/shared/pet-presence'
