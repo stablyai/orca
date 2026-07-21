@@ -104,25 +104,6 @@ Result: **2 files, 62 tests passed**, including both new characterizations.
 
 These tests materially improve reproduction without claiming which path occurred on the reporter's machines. The visible-host and `serve` parity argues against treating legacy relay writeback as the only cause: the relay characterization is strongest for direct SSH, while the epoch/empty-publication characterization also applies to runtime mirroring and headless transitions. The plan remains aligned by keeping the protocols separate and requiring both event sequences to be fixed.
 
-## Remote Orca Server PTY lifecycle audit
-
-For the Remote Orca Server path, use one simple model: the host daemon owns the PTY; desktop and mobile are consumers. Three independent facts must not be conflated:
-
-1. the OS/provider process is live;
-2. the host has a persisted tab-to-PTY binding;
-3. a consumer currently displays the tab.
-
-The audit found:
-
-- Consumer disconnect calls `onClientDisconnected`, which releases drivers, subscriptions, and resize state; it does **not** kill PTYs.
-- Renderer reload with an empty graph intentionally preserves a live daemon PTY. Existing `orca-runtime.test.ts` coverage proves `terminal list` still returns the PTY before its renderer pane rebinds. Therefore a disappearing tab does not prove the process was killed; it can be a projection/binding failure around a still-running PTY.
-- Natural provider exit calls `onPtyExit`, marks the PTY and leaves disconnected, records the exit code, clears driver/layout state, and republishes readiness. Disconnected records may remain bounded for status/history; these are records, not live OS zombies.
-- A successful provider listing marks an absent PTY disconnected only when no renderer leaf still references it. A stale leaf can therefore delay dead classification. Listing failure preserves state intentionally because transport failure is not death evidence.
-- Whole-tab close for a visible host renderer is acknowledged after renderer state removal and persistence, but renderer PTY teardown runs through fire-and-forget `Promise.allSettled`. Existing `terminal-tab-retirement-store.test.ts` coverage proves that provider teardown may reject while the tab stays retired. This is a confirmed **hidden live-PTY/zombie window**: the caller can observe a successful tab close while the provider process may still be alive.
-- Headless/serve close removes persistence, invokes main-owned PTY kill, and publishes the reduced snapshot. Current coverage proves the call is made, but close success is not fenced on a subsequent provider listing that proves the PTY is gone.
-
-Focused lifecycle tests passed: the live PTY survives an empty renderer reload, serve-owned close invokes kill and removes persistence, and provider teardown rejection leaves the tab retired. The implementation should make destructive terminal close complete only after host-side kill acknowledgement plus fresh liveness confirmation, while ordinary consumer disconnect/reload must continue preserving PTYs.
-
 ## Mandatory gate status
 
 | Slice 0 item | Status | Evidence / gap |

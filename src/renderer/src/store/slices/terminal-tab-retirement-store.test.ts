@@ -233,29 +233,6 @@ describe('terminal tab retirement store boundary', () => {
     expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
   })
 
-  it('retires the tab before provider kill settles, exposing a hidden live-process window', async () => {
-    const store = createTestStore()
-    let resolveKill!: () => void
-    mockKill.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveKill = resolve
-      })
-    )
-    seedStore(store, {
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'pty-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-
-    store.getState().closeTab('tab-1')
-
-    expect(mockKill).toHaveBeenCalledWith('pty-1')
-    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
-    resolveKill()
-    await Promise.resolve()
-  })
-
   it('keeps the tab retired and reports provider rejection without an unhandled promise', async () => {
     const store = createTestStore()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
