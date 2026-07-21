@@ -22,7 +22,7 @@ describe('requestTerminalTabCloseFromRenderer', () => {
 
   it('waits for the targeted renderer durability acknowledgement', async () => {
     const { requestTerminalTabCloseFromRenderer } =
-      await import('./terminal-tab-close-request-relay')
+      await import('./renderer-tab-close-request-relay')
     const webContents = { isDestroyed: () => false, send: vi.fn() }
     const otherWebContents = {}
     const mainWindow = { isDestroyed: () => false, webContents }
@@ -50,9 +50,34 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     await expect(pending).resolves.toBeUndefined()
   })
 
+  it('waits for an acknowledged generic session-tab result', async () => {
+    const { requestSessionTabCloseFromRenderer } =
+      await import('./renderer-tab-close-request-relay')
+    const webContents = { isDestroyed: () => false, send: vi.fn() }
+    const pending = requestSessionTabCloseFromRenderer(
+      { isDestroyed: () => false, webContents } as never,
+      'file-tab-1',
+      'wt-1'
+    )
+    const request = webContents.send.mock.calls[0]?.[1] as {
+      requestId: string
+      tabId: string
+      worktreeId: string
+    }
+
+    expect(request).toMatchObject({ tabId: 'file-tab-1', worktreeId: 'wt-1' })
+    ipcEmitter.emit(
+      'ui:sessionTabCloseResponse',
+      { sender: webContents },
+      { requestId: request.requestId, result: 'already-absent' }
+    )
+
+    await expect(pending).resolves.toBe('already-absent')
+  })
+
   it('propagates renderer cancellation instead of reporting success', async () => {
     const { requestTerminalTabCloseFromRenderer } =
-      await import('./terminal-tab-close-request-relay')
+      await import('./renderer-tab-close-request-relay')
     const webContents = { isDestroyed: () => false, send: vi.fn() }
     const pending = requestTerminalTabCloseFromRenderer(
       { isDestroyed: () => false, webContents } as never,

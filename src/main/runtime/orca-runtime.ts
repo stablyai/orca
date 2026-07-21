@@ -165,6 +165,7 @@ import {
 } from '../../shared/runtime-navigation'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
+import type { SessionTabCloseResult } from '../../shared/terminal-tab-close'
 import type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,
@@ -1466,7 +1467,7 @@ type RuntimeNotifier = {
   renameTerminal(tabId: string, title: string | null): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
-  closeSessionTab?(tabId: string, worktreeId: string): void
+  closeSessionTab?(tabId: string, worktreeId: string): Promise<SessionTabCloseResult>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   openFile?(
     worktreeId: string,
@@ -5304,7 +5305,37 @@ export class OrcaRuntimeService {
       // snapshot so paired clients stop showing it.
       await this.closeHeadlessMobileBrowserTab(worktreeId, snapshot!, tab)
     } else {
-      this.notifier?.closeSessionTab?.(tab.id, worktreeId)
+      if (!this.notifier?.closeSessionTab) {
+        throw new Error('renderer_unavailable')
+      }
+      await this.notifier.closeSessionTab(tab.id, worktreeId)
+      const current = this.mobileSessionTabsByWorktree.get(worktreeId)
+      if (current) {
+        const nextTabs = current.tabs.filter((candidate) => candidate.id !== tab.id)
+        const nextActiveTab =
+          current.activeTabId === tab.id
+            ? (nextTabs[0] ?? null)
+            : (nextTabs.find((candidate) => candidate.id === current.activeTabId) ?? null)
+        this.mobileSessionTabsByWorktree.set(worktreeId, {
+          ...current,
+          snapshotVersion: current.snapshotVersion + 1,
+          activeTabId: nextActiveTab?.id ?? null,
+          activeTabType: nextActiveTab?.type ?? null,
+          tabGroups: current.tabGroups?.map((group) => {
+            const tabOrder = group.tabOrder.filter((id) => id !== tab.id)
+            return {
+              ...group,
+              tabOrder,
+              activeTabId: group.activeTabId === tab.id ? (tabOrder[0] ?? null) : group.activeTabId,
+              ...(group.recentTabIds
+                ? { recentTabIds: group.recentTabIds.filter((id) => id !== tab.id) }
+                : {})
+            }
+          }),
+          tabs: nextTabs
+        })
+        this.notifyMobileSessionTabsChanged(worktreeId)
+      }
     }
     return { closed: true }
   }

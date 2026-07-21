@@ -2821,6 +2821,11 @@ describe('useIpcEvents browser tab close routing', () => {
   type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
   type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
   type TerminalTabCloseRequestListener = (data: { requestId: string; tabId: string }) => void
+  type SessionTabCloseRequestListener = (data: {
+    requestId: string
+    tabId: string
+    worktreeId: string
+  }) => void
 
   async function useIpcEventsForCloseRouting({
     closeActiveTabListenerRef,
@@ -2831,6 +2836,8 @@ describe('useIpcEvents browser tab close routing', () => {
     replyTabClose = vi.fn(),
     terminalTabCloseRequestListenerRef,
     respondTerminalTabClose = vi.fn(),
+    sessionTabCloseRequestListenerRef,
+    respondSessionTabClose = vi.fn(),
     persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
   }: {
     closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
@@ -2841,6 +2848,8 @@ describe('useIpcEvents browser tab close routing', () => {
     replyTabClose?: ReturnType<typeof vi.fn>
     terminalTabCloseRequestListenerRef?: { current: TerminalTabCloseRequestListener | null }
     respondTerminalTabClose?: ReturnType<typeof vi.fn>
+    sessionTabCloseRequestListenerRef?: { current: SessionTabCloseRequestListener | null }
+    respondSessionTabClose?: ReturnType<typeof vi.fn>
     persistWorkspaceSession?: ReturnType<typeof vi.fn>
   }): Promise<void> {
     vi.doMock('react', async () => {
@@ -2985,6 +2994,13 @@ describe('useIpcEvents browser tab close routing', () => {
             return () => {}
           },
           respondTerminalTabClose,
+          onSessionTabCloseRequest: (listener: SessionTabCloseRequestListener) => {
+            if (sessionTabCloseRequestListenerRef) {
+              sessionTabCloseRequestListenerRef.current = listener
+            }
+            return () => {}
+          },
+          respondSessionTabClose,
           onSleepWorktree: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -3117,6 +3133,86 @@ describe('useIpcEvents browser tab close routing', () => {
     // must keep closeUnifiedTab so the editor-only routing stays scoped.
     expect(closeUnifiedTab).toHaveBeenCalledWith('sim-tab-1')
     expect(closeFile).not.toHaveBeenCalled()
+  })
+
+  it('acknowledges an already-absent session tab without rewriting the session', async () => {
+    const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
+    const respondSessionTabClose = vi.fn()
+    const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+
+    await useIpcEventsForCloseRouting({
+      sessionTabCloseRequestListenerRef: listenerRef,
+      respondSessionTabClose,
+      persistWorkspaceSession,
+      getState: () => ({ browserTabsByWorktree: {}, unifiedTabsByWorktree: {}, openFiles: [] })
+    })
+
+    listenerRef.current?.({ requestId: 'close-absent', tabId: 'gone', worktreeId: 'wt-1' })
+
+    expect(respondSessionTabClose).toHaveBeenCalledWith({
+      requestId: 'close-absent',
+      result: 'already-absent'
+    })
+    expect(persistWorkspaceSession).not.toHaveBeenCalled()
+  })
+
+  it('rejects a dirty editor session tab instead of silently losing it', async () => {
+    const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
+    const respondSessionTabClose = vi.fn()
+    const closeFile = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      sessionTabCloseRequestListenerRef: listenerRef,
+      respondSessionTabClose,
+      getState: () => ({
+        closeFile,
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', entityId: 'file-1', contentType: 'editor', isPinned: false }]
+        },
+        openFiles: [{ id: 'file-1', worktreeId: 'wt-1', isDirty: true }]
+      })
+    })
+
+    listenerRef.current?.({ requestId: 'close-dirty', tabId: 'tab-1', worktreeId: 'wt-1' })
+
+    expect(respondSessionTabClose).toHaveBeenCalledWith({
+      requestId: 'close-dirty',
+      error: 'session_tab_dirty'
+    })
+    expect(closeFile).not.toHaveBeenCalled()
+  })
+
+  it('acknowledges an editor close only after session persistence', async () => {
+    const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
+    const respondSessionTabClose = vi.fn()
+    const closeFile = vi.fn()
+    const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+
+    await useIpcEventsForCloseRouting({
+      sessionTabCloseRequestListenerRef: listenerRef,
+      respondSessionTabClose,
+      persistWorkspaceSession,
+      getState: () => ({
+        closeFile,
+        browserTabsByWorktree: {},
+        unifiedTabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', entityId: 'file-1', contentType: 'editor', isPinned: false }]
+        },
+        openFiles: [{ id: 'file-1', worktreeId: 'wt-1', isDirty: false }]
+      })
+    })
+
+    listenerRef.current?.({ requestId: 'close-editor', tabId: 'tab-1', worktreeId: 'wt-1' })
+
+    expect(closeFile).toHaveBeenCalledWith('file-1')
+    await vi.waitFor(() =>
+      expect(respondSessionTabClose).toHaveBeenCalledWith({
+        requestId: 'close-editor',
+        result: 'closed'
+      })
+    )
+    expect(persistWorkspaceSession).toHaveBeenCalledTimes(1)
   })
 
   it('delegates terminal close IPC without a pane id to the shared terminal close flow', async () => {

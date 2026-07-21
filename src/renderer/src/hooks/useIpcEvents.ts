@@ -1858,6 +1858,64 @@ export function useIpcEvents(): void {
       })
     )
 
+    if (window.api.ui.onSessionTabCloseRequest) {
+      unsubs.push(
+        window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId }) => {
+          let responded = false
+          const respond = (result?: 'closed' | 'already-absent', error?: string): void => {
+            if (responded) {
+              return
+            }
+            responded = true
+            window.api.ui.respondSessionTabClose({
+              requestId,
+              ...(result ? { result } : {}),
+              ...(error ? { error } : {})
+            })
+          }
+          const store = useAppStore.getState()
+          const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+          const unifiedTab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
+            (candidate) => candidate.id === tabId || candidate.entityId === tabId
+          )
+          const file = store.openFiles.find(
+            (candidate) =>
+              candidate.worktreeId === worktreeId &&
+              (candidate.id === tabId || candidate.id === unifiedTab?.entityId)
+          )
+          if (!browserTarget && !unifiedTab && !file) {
+            respond('already-absent')
+            return
+          }
+          const pinnedTargetId = browserTarget?.workspaceId ?? unifiedTab?.id ?? tabId
+          if (isPinnedSessionTab(store, worktreeId, pinnedTargetId)) {
+            respond(undefined, 'session_tab_pinned')
+            return
+          }
+          if (file?.isDirty) {
+            respond(undefined, 'session_tab_dirty')
+            return
+          }
+          if (browserTarget) {
+            store.closeBrowserTab(browserTarget.workspaceId)
+          } else {
+            closeMobileSessionTabInStore(store, worktreeId, tabId)
+          }
+          void (async () => {
+            const next = useAppStore.getState()
+            await persistWorkspaceSessionByHost(
+              window.api.session,
+              buildWorkspaceSessionPayload(next),
+              next
+            )
+            respond('closed')
+          })().catch((error: unknown) => {
+            respond(undefined, error instanceof Error ? error.message : 'session_tab_close_failed')
+          })
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onMoveSessionTab((move) => {
         const { tabId, targetGroupId } = move

@@ -19066,7 +19066,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('closes browser mobile session tabs when addressed by browser workspace id', async () => {
-    const closeSessionTab = vi.fn()
+    const closeSessionTab = vi.fn().mockResolvedValue('closed')
     const runtime = new OrcaRuntimeService(store)
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -19116,6 +19116,11 @@ describe('OrcaRuntimeService', () => {
     await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'browser-workspace-1')
 
     expect(closeSessionTab).toHaveBeenCalledWith('browser-unified-1', TEST_WORKTREE_ID)
+    await expect(runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    })
   })
 
   it('creates mobile session terminals in a headless runtime server', async () => {

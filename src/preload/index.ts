@@ -3721,6 +3721,17 @@ const api = {
     respondTerminalTabClose: (response) => {
       ipcRenderer.send('ui:terminalTabCloseResponse', response)
     },
+    onSessionTabCloseRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: Parameters<typeof callback>[0]
+      ) => callback(request)
+      ipcRenderer.on('ui:sessionTabCloseRequest', listener)
+      return () => ipcRenderer.removeListener('ui:sessionTabCloseRequest', listener)
+    },
+    respondSessionTabClose: (response) => {
+      ipcRenderer.send('ui:sessionTabCloseResponse', response)
+    },
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
         callback(data)
