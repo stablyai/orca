@@ -51,6 +51,49 @@ describe('daemon-entry parseArgs', () => {
     })
   })
 
+  it('parses the internal PID-record ownership pair', () => {
+    expect(
+      parseArgs([
+        '--socket',
+        '/tmp/t.sock',
+        '--token',
+        '/tmp/t.token',
+        '--pid-record',
+        '/tmp/t.pid',
+        '--launch-nonce',
+        'launch-a'
+      ])
+    ).toEqual({
+      socketPath: '/tmp/t.sock',
+      tokenPath: '/tmp/t.token',
+      pidPath: '/tmp/t.pid',
+      launchNonce: 'launch-a'
+    })
+  })
+
+  it('rejects either PID-record ownership argument without its pair', () => {
+    expect(() =>
+      parseArgs([
+        '--socket',
+        '/tmp/t.sock',
+        '--token',
+        '/tmp/t.token',
+        '--pid-record',
+        '/tmp/t.pid'
+      ])
+    ).toThrow('provided together')
+    expect(() =>
+      parseArgs([
+        '--socket',
+        '/tmp/t.sock',
+        '--token',
+        '/tmp/t.token',
+        '--launch-nonce',
+        'launch-a'
+      ])
+    ).toThrow('provided together')
+  })
+
   it('still requires --socket and --token when --log-file is given', () => {
     expect(() => parseArgs(['--log-file', '/tmp/daemon.log'])).toThrow('Usage:')
   })

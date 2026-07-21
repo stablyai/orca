@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown, FolderOpen } from 'lucide-react'
+import { Check, ChevronsUpDown, FolderOpen, FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -22,6 +22,7 @@ type ProjectComboboxProps = {
   value: string | null
   onValueChange: (projectId: string) => void
   onValueSelected?: (projectId: string) => void
+  onAddProject?: () => void
   placeholder?: string
   triggerClassName?: string
   invalid?: boolean
@@ -33,6 +34,7 @@ export default function ProjectCombobox({
   value,
   onValueChange,
   onValueSelected,
+  onAddProject,
   placeholder = 'Choose project',
   triggerClassName,
   invalid = false,
@@ -99,6 +101,12 @@ export default function ProjectCombobox({
     },
     [onValueChange, onValueSelected]
   )
+
+  const handleAddProject = useCallback((): void => {
+    setOpen(false)
+    setQuery('')
+    onAddProject?.()
+  }, [onAddProject])
 
   const handleTriggerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>): void => {
@@ -219,6 +227,29 @@ export default function ProjectCombobox({
               </CommandItem>
             ))}
           </CommandList>
+          {onAddProject ? (
+            // Why: pinned below the scrollable list so "Add a new project" stays
+            // reachable in every state, including when the list is empty and
+            // CommandEmpty shows "No projects match your search."
+            <div className="border-t border-border">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleAddProject}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setCommandValue('')}
+                className="h-8 w-full justify-start rounded-none px-3 text-xs font-normal"
+              >
+                <FolderPlus className="size-3.5 text-muted-foreground" />
+                <span>
+                  {translate(
+                    'auto.components.new.workspace.ProjectCombobox.addProject',
+                    'Add a new project'
+                  )}
+                </span>
+              </Button>
+            </div>
+          ) : null}
         </Command>
       </PopoverContent>
     </Popover>

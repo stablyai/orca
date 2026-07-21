@@ -80,6 +80,12 @@ function FileExplorerFiles(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
+  const supportsFolderDownload = useAppStore((s) => {
+    const connectionId = activeRepo?.connectionId
+    return connectionId
+      ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
+      : false
+  })
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
   )
@@ -746,6 +752,7 @@ function FileExplorerFiles(): React.JSX.Element {
                 deleteShortcutLabel={deleteShortcutLabel}
                 connectionId={activeRepo?.connectionId ?? null}
                 runtimeDownloadContext={runtimeDownloadContext}
+                supportsFolderDownload={supportsFolderDownload}
                 onClick={handleRowClick}
                 onDoubleClick={handleDoubleClick}
                 onViewFile={handleClick}

@@ -43,6 +43,11 @@ export type WorkspaceSessionHostRead = {
   runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
 }
 
+export type WorkspaceSessionHostSnapshot = {
+  state: WorkspaceSessionState
+  hostId?: ExecutionHostId
+}
+
 const WORKSPACE_SESSION_KEYED_FIELDS = [
   'tabsByWorktree',
   'openFilesByWorktree',
@@ -245,16 +250,26 @@ export async function persistWorkspaceSessionByHost(
   await api.flush()
 }
 
+/** Build local-first full-session snapshots for the beforeunload / quit paths. */
+export function buildWorkspaceSessionHostSnapshots(
+  payload: WorkspaceSessionState,
+  state: HostPersistenceState
+): WorkspaceSessionHostSnapshot[] {
+  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
+  return [
+    { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
+    ...nonLocalEntries(slices).map(([hostId, hostState]) => ({ state: hostState, hostId }))
+  ]
+}
+
 /** Synchronous full-session split for the beforeunload / quit paths. */
 export function persistWorkspaceSessionByHostSync(
   api: SessionApi,
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): void {
-  const slices = splitWorkspaceSessionByHost(payload, buildHostIdByWorktreeId(state))
-  api.setSync(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)
-  for (const [hostId, slice] of nonLocalEntries(slices)) {
-    api.setSync(slice, hostId)
+  for (const snapshot of buildWorkspaceSessionHostSnapshots(payload, state)) {
+    api.setSync(snapshot.state, snapshot.hostId)
   }
 }
 

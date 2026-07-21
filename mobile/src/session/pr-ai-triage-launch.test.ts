@@ -24,7 +24,10 @@ describe('createTerminalAndSendPrompt', () => {
     await createTerminalAndSendPrompt(client, 'wt-1', 'do the thing')
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(1, 'session.tabs.createTerminal', {
-      worktree: 'id:wt-1'
+      worktree: 'id:wt-1',
+      activate: false,
+      select: true,
+      navigation: 'caller'
     })
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'terminal.send', {
       terminal: 'term-1',

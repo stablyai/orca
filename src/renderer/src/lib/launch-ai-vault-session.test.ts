@@ -99,6 +99,7 @@ describe('launchAiVaultSessionInNewTab', () => {
       worktreeId: 'wt-1',
       command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      envToDelete: ['CODEX_HOME'],
       launchConfig: {
         agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
         agentArgs: '--dangerously-skip-permissions --effort max',
@@ -109,6 +110,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      envToDelete: ['CODEX_HOME'],
       launchConfig: {
         agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
         agentArgs: '--dangerously-skip-permissions --effort max',
@@ -146,6 +148,7 @@ describe('launchAiVaultSessionInNewTab', () => {
       targetGroupId: 'group-1',
       command: "codex resume 'session-1'",
       env: { CODEX_PROFILE: 'runtime' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       launchConfig: {
         agentCommand: 'codex',
         agentArgs: '',
@@ -160,6 +163,7 @@ describe('launchAiVaultSessionInNewTab', () => {
       targetGroupId: 'group-1',
       command: "codex resume 'session-1'",
       env: { CODEX_PROFILE: 'runtime' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       launchConfig: {
         agentCommand: 'codex',
         agentArgs: '',

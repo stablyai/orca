@@ -1,7 +1,5 @@
-// Why: the browser method surface area is large enough that keeping every
-// schema in the same file as its handler registration pushes the file past
-// the 300-line lint cap. Grouping all browser schemas here keeps each
-// handler file focused on dispatch wiring.
+// Why: browser schemas stay separate from handler registration so both sides
+// remain under the line cap and dispatch wiring stays scannable.
 import { z } from 'zod'
 import {
   BrowserTarget,

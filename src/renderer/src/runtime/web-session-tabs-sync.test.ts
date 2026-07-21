@@ -64,6 +64,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     activeWorktreeId: WT,
     agentStatusByPaneKey: {},
     agentStatusEpoch: 0,
+    browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},
     browserTabsByWorktree: {},
     groupsByWorktree: {},
@@ -2023,85 +2024,87 @@ describe('applyWebSessionTabsSnapshot', () => {
       isPinned: false
     }
 
-    const patch = applyWebSessionTabsSnapshot(
-      makeState({
-        activeTabId: shellTabId,
-        activeTabIdByWorktree: { [WT]: shellTabId },
-        activeTabType: 'terminal',
-        activeTabTypeByWorktree: { [WT]: 'terminal' },
-        tabsByWorktree: {
-          [WT]: [
-            {
-              id: agentTabId,
-              ptyId: 'remote:web-env-1@@terminal-1',
-              worktreeId: WT,
-              title: 'codex [working]',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: NOW
-            },
-            {
-              id: shellTabId,
-              ptyId: 'remote:web-env-1@@terminal-2',
-              worktreeId: WT,
-              title: 'shell',
-              customTitle: null,
-              color: null,
-              sortOrder: 1,
-              createdAt: NOW + 1
-            }
-          ]
-        },
-        unifiedTabsByWorktree: { [WT]: [agentUnifiedTab, shellUnifiedTab] },
-        tabBarOrderByWorktree: { [WT]: [agentTabId, shellTabId] },
-        groupsByWorktree: {
-          [WT]: [
-            {
-              id: 'host-group-1',
-              worktreeId: WT,
-              activeTabId: shellTabId,
-              tabOrder: [agentTabId, shellTabId],
-              recentTabIds: [agentTabId, shellTabId]
-            }
-          ]
-        }
-      }),
-      makeSnapshot(
-        [
+    const state = makeState({
+      activeTabId: shellTabId,
+      activeTabIdByWorktree: { [WT]: shellTabId },
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [WT]: 'terminal' },
+      tabsByWorktree: {
+        [WT]: [
           {
-            type: 'terminal',
-            id: `host-tab-1::${LEAF_ID}`,
-            title: 'codex [thinking]',
-            parentTabId: 'host-tab-1',
-            leafId: LEAF_ID,
-            isActive: true,
-            status: 'ready',
-            terminal: 'terminal-1'
+            id: agentTabId,
+            ptyId: 'remote:web-env-1@@terminal-1',
+            worktreeId: WT,
+            title: 'codex [working]',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: NOW
           },
           {
-            type: 'terminal',
-            id: `host-tab-2::${SECOND_LEAF_ID}`,
+            id: shellTabId,
+            ptyId: 'remote:web-env-1@@terminal-2',
+            worktreeId: WT,
             title: 'shell',
-            parentTabId: 'host-tab-2',
-            leafId: SECOND_LEAF_ID,
-            isActive: false,
-            status: 'ready',
-            terminal: 'terminal-2'
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: NOW + 1
           }
-        ],
+        ]
+      },
+      unifiedTabsByWorktree: { [WT]: [agentUnifiedTab, shellUnifiedTab] },
+      tabBarOrderByWorktree: { [WT]: [agentTabId, shellTabId] },
+      groupsByWorktree: {
+        [WT]: [
+          {
+            id: 'host-group-1',
+            worktreeId: WT,
+            activeTabId: shellTabId,
+            tabOrder: [agentTabId, shellTabId],
+            recentTabIds: [agentTabId, shellTabId]
+          }
+        ]
+      }
+    })
+    const remoteActiveSnapshot = makeSnapshot(
+      [
         {
-          activeTabId: `host-tab-1::${LEAF_ID}`,
-          activeTabType: 'terminal',
-          tabGroups: [
-            {
-              id: 'host-group-1',
-              activeTabId: 'host-tab-1',
-              tabOrder: ['host-tab-1', 'host-tab-2']
-            }
-          ]
+          type: 'terminal',
+          id: `host-tab-1::${LEAF_ID}`,
+          title: 'codex [thinking]',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        },
+        {
+          type: 'terminal',
+          id: `host-tab-2::${SECOND_LEAF_ID}`,
+          title: 'shell',
+          parentTabId: 'host-tab-2',
+          leafId: SECOND_LEAF_ID,
+          isActive: false,
+          status: 'ready',
+          terminal: 'terminal-2'
         }
-      ),
+      ],
+      {
+        activeTabId: `host-tab-1::${LEAF_ID}`,
+        activeTabType: 'terminal',
+        tabGroups: [
+          {
+            id: 'host-group-1',
+            activeTabId: 'host-tab-1',
+            tabOrder: ['host-tab-1', 'host-tab-2']
+          }
+        ]
+      }
+    )
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      remoteActiveSnapshot,
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
@@ -2112,11 +2115,18 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabId: shellTabId,
       tabOrder: [agentTabId, shellTabId]
     })
+
+    const followed = applyWebSessionTabsSnapshot(
+      state,
+      { ...remoteActiveSnapshot, navigationIntent: 'follow' },
+      ENV,
+      NOW + 10
+    ) as Partial<WebSessionTabsSyncState>
+    expect(followed.activeTabIdByWorktree?.[WT]).toBe(agentTabId)
+    expect(followed.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(agentTabId)
   })
 
-  it('focuses a brand-new remote terminal that the snapshot marks active', () => {
-    // Why: opening a new terminal must take focus. Distinct from the #5435 case
-    // above (existing tab echoed active = keep focus); here the active tab is new.
+  it('focuses a caller-created terminal even when an older host leaves it inactive', () => {
     const existingTabId = toWebTerminalSurfaceTabId('host-tab-1')
     const newTabId = toWebTerminalSurfaceTabId('host-tab-2')
     // Simulate createWebRuntimeSessionTerminal recording focus intent for the new tab.
@@ -2178,7 +2188,7 @@ describe('applyWebSessionTabsSnapshot', () => {
             title: 'shell',
             parentTabId: 'host-tab-1',
             leafId: LEAF_ID,
-            isActive: false,
+            isActive: true,
             status: 'ready',
             terminal: 'terminal-1'
           },
@@ -2188,18 +2198,18 @@ describe('applyWebSessionTabsSnapshot', () => {
             title: 'new shell',
             parentTabId: 'host-tab-2',
             leafId: SECOND_LEAF_ID,
-            isActive: true,
+            isActive: false,
             status: 'ready',
             terminal: 'terminal-2'
           }
         ],
         {
-          activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
+          activeTabId: `host-tab-1::${LEAF_ID}`,
           activeTabType: 'terminal',
           tabGroups: [
             {
               id: 'host-group-1',
-              activeTabId: 'host-tab-2',
+              activeTabId: 'host-tab-1',
               tabOrder: ['host-tab-1', 'host-tab-2']
             }
           ]
@@ -2359,6 +2369,21 @@ describe('applyWebSessionTabsSnapshot', () => {
             loading: false,
             canGoBack: true,
             canGoForward: false,
+            loadError: {
+              code: -202,
+              description: 'ERR_CERT_AUTHORITY_INVALID',
+              validatedUrl: 'https://localhost:3443/'
+            },
+            certificateFailure: {
+              challengeId: 'challenge-1',
+              browserPageId: 'host-browser-page',
+              errorCode: -202,
+              error: 'ERR_CERT_AUTHORITY_INVALID',
+              origin: 'https://localhost:3443',
+              displayHost: 'localhost:3443',
+              canProceed: true,
+              observedAt: 123
+            },
             color: '#3b82f6',
             isPinned: true,
             isActive: true
@@ -2390,12 +2415,27 @@ describe('applyWebSessionTabsSnapshot', () => {
         worktreeId: WT,
         url: 'https://example.com/',
         title: 'Example Domain',
-        loading: false
+        loading: false,
+        loadError: {
+          code: -202,
+          description: 'ERR_CERT_AUTHORITY_INVALID',
+          validatedUrl: 'https://localhost:3443/'
+        }
       }
     ])
     expect(patch.remoteBrowserPageHandlesByPageId?.['host-browser-page']).toEqual({
       environmentId: ENV,
       remotePageId: 'host-browser-page'
+    })
+    expect(patch.browserCertificateFailuresByPageId?.['host-browser-page']).toEqual({
+      challengeId: 'challenge-1',
+      browserPageId: 'host-browser-page',
+      errorCode: -202,
+      error: 'ERR_CERT_AUTHORITY_INVALID',
+      origin: 'https://localhost:3443',
+      displayHost: 'localhost:3443',
+      canProceed: true,
+      observedAt: 123
     })
     expect(patch.unifiedTabsByWorktree?.[WT]).toEqual(
       expect.arrayContaining([
@@ -2888,6 +2928,18 @@ describe('applyWebSessionTabsSnapshot', () => {
         remoteBrowserPageHandlesByPageId: {
           [page.id]: { environmentId: ENV, remotePageId: 'host-browser-page' }
         },
+        browserCertificateFailuresByPageId: {
+          [page.id]: {
+            challengeId: 'stale-challenge',
+            browserPageId: 'host-browser-page',
+            errorCode: -202,
+            error: 'ERR_CERT_AUTHORITY_INVALID',
+            origin: 'https://localhost:3443',
+            displayHost: 'localhost:3443',
+            canProceed: true,
+            observedAt: 100
+          }
+        },
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: existingTabs }
       }),
@@ -2945,6 +2997,9 @@ describe('applyWebSessionTabsSnapshot', () => {
         })
       ])
     )
+    // Why: older runtimes omit this transient field. Omission must clear an
+    // earlier challenge instead of leaving an unsafe action wired to stale RPC input.
+    expect(patch.browserCertificateFailuresByPageId).toEqual({})
   })
 
   it('uses local markdown preview file ids while preserving the host unified tab id', () => {

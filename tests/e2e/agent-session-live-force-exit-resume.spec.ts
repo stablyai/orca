@@ -209,7 +209,7 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
 
     // Exercise quit capture: origin:'quit' changes the live record, triggering the
     // hydration-gated writer before polling persisted state.
-    await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions())
+    await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions('quit'))
 
     // Why: the record reaches disk via the debounced session writer (150ms) plus
     // the main-process scheduleSave (up to 5s). Under CI event-loop starvation —

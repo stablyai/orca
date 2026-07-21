@@ -4,7 +4,7 @@
  * Why: owns the cold-park policy bookkeeping (hiddenSince tracking, recheck
  * timers, parked-set selection) and the parked byte-watcher reconciliation so
  * the overlay layer only consumes the final parked tab set when deciding to
- * render a slot as null. See docs/reference/terminal-hidden-view-parking.md.
+ * render a slot as null.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TerminalTab } from '../../../../shared/types'

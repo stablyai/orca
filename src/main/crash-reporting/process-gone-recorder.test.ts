@@ -108,11 +108,25 @@ describe('recordProcessGoneCrash', () => {
 
     await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
     expect(record).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'renderer', reason: 'crashed', exitCode: 5 })
+      expect.objectContaining({
+        source: 'renderer',
+        reason: 'crashed',
+        exitCode: 5,
+        details: expect.objectContaining({
+          mainProcessPid: process.pid,
+          mainProcessLaunchId: expect.any(String),
+          mainProcessStartedAt: expect.any(String)
+        })
+      })
     )
     expect(sink.records).toEqual([
       expect.objectContaining({
         name: 'electron.process_gone',
+        attributes: expect.objectContaining({
+          'app.main_process.pid': process.pid,
+          'app.main_process.launch_id': expect.any(String),
+          'app.main_process.started_at': expect.any(String)
+        }),
         exit: expect.objectContaining({ _tag: 'Failure' })
       })
     ])

@@ -131,6 +131,62 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('forwards and replays Pi session identity as metadata-only', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/pi`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'remote',
+          version: '1',
+          payload: {
+            hook_event_name: 'session_start',
+            session_id: 'pi-session-1',
+            session_file: '/tmp/pi-session-1.jsonl'
+          }
+        })
+      })
+
+      expect(res.status).toBe(204)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        source: 'pi',
+        paneKey: PANE_KEY,
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-session-1',
+          transcriptPath: '/tmp/pi-session-1.jsonl'
+        }
+      })
+
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'pi',
+          providerSessionOnly: true,
+          providerSession: expect.objectContaining({
+            transcriptPath: '/tmp/pi-session-1.jsonl'
+          }),
+          isReplay: true
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
   it('does not replay paneKeys after clearPaneState', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

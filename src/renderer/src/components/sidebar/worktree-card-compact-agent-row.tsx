@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 
 function formatShortTimeAgo(ts: number, now: number): string {
@@ -24,24 +25,6 @@ function formatShortTimeAgo(ts: number, now: number): string {
     return `${hours}h`
   }
   return `${Math.floor(hours / 24)}d`
-}
-
-function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
-  // Why: idle subagent child rows are alive-but-idle (teammates persist
-  // between turns), not finished — fall through to the started-at timestamp.
-  if (agent.rowSource === 'subagent' && agent.state === 'idle') {
-    return null
-  }
-  const entry = agent.entry
-  if (entry.state === 'done') {
-    return entry.stateStartedAt
-  }
-  for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {
-    if (entry.stateHistory[i].state === 'done') {
-      return entry.stateHistory[i].startedAt
-    }
-  }
-  return null
 }
 
 function getCompactAgentPrimary(agent: DashboardAgentRowData): string {

@@ -1,8 +1,8 @@
 /**
  * Renderer consumer registry for the `pty:sideEffect` channel.
  *
- * Why: with main as the side-effect parser for local-daemon/SSH PTYs
- * (docs/reference/terminal-side-effect-authority.md), the renderer no longer
+ * Why: with main as the side-effect parser for local-daemon/SSH PTYs, the
+ * renderer no longer
  * derives title/bell/agent facts from bytes for those PTYs. This module is
  * the single channel subscriber; mounted panes and parked-tab watchers
  * register exactly one fact consumer per PTY (their existing policy

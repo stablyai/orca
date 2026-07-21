@@ -4,10 +4,13 @@ import type { WorkspaceSessionState } from '../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildHostIdByWorktreeId,
+  buildWorkspaceSessionHostSnapshots,
   fetchWorkspaceSessionFromHosts,
   fetchWorkspaceSessionWithRuntimeHostOwners,
   patchWorkspaceSessionByHost,
-  persistWorkspaceSessionByHost
+  persistWorkspaceSessionByHost,
+  persistWorkspaceSessionByHostSync,
+  type HostPersistenceState
 } from './workspace-session-host-persistence'
 
 describe('fetchWorkspaceSessionFromHosts', () => {
@@ -383,6 +386,55 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     })
 
     expect(owner(worktreeWorkspaceKey(worktreeId))).toBe('runtime:env-1')
+  })
+
+  it('builds local-first host snapshots reused by synchronous persistence', () => {
+    const localWorktreeId = 'local-repo::C:\\src\\local'
+    const remoteWorktreeId = 'remote-repo::/srv/remote'
+    const makeTab = (id: string, worktreeId: string) => ({
+      id,
+      ptyId: null,
+      worktreeId,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const payload: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [localWorktreeId]: [makeTab('local-tab', localWorktreeId)],
+        [remoteWorktreeId]: [makeTab('remote-tab', remoteWorktreeId)]
+      }
+    }
+    const state = {
+      repos: [
+        { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+        { id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+      ],
+      worktreesByRepo: {
+        'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
+        'remote-repo': [{ id: remoteWorktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
+      }
+    } satisfies HostPersistenceState
+
+    const snapshots = buildWorkspaceSessionHostSnapshots(payload, state)
+
+    expect(snapshots.map((snapshot) => snapshot.hostId)).toEqual([undefined, 'runtime:env-1'])
+    expect(snapshots[0].state.tabsByWorktree).toEqual({
+      [localWorktreeId]: [expect.objectContaining({ id: 'local-tab' })]
+    })
+    expect(snapshots[1].state.tabsByWorktree).toEqual({
+      [remoteWorktreeId]: [expect.objectContaining({ id: 'remote-tab' })]
+    })
+
+    const setSync = vi.fn()
+    persistWorkspaceSessionByHostSync({ get: vi.fn(), patch: vi.fn(), setSync }, payload, state)
+
+    expect(setSync.mock.calls).toEqual(
+      snapshots.map((snapshot) => [snapshot.state, snapshot.hostId])
+    )
   })
 })
 

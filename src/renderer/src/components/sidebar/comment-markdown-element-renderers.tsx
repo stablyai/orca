@@ -97,14 +97,38 @@ export function createCompactCommentMarkdownComponents(
     li: ({ children }) => (
       <li className="leading-normal [&>input]:pointer-events-none">{children}</li>
     ),
-    // Headings render as bold text at the same size — no visual hierarchy needed
-    // in a tiny sidebar card.
-    h1: ({ children }) => <span className="font-bold">{children}</span>,
-    h2: ({ children }) => <span className="font-bold">{children}</span>,
-    h3: ({ children }) => <span className="font-semibold">{children}</span>,
-    h4: ({ children }) => <span className="font-semibold">{children}</span>,
-    h5: ({ children }) => <span className="font-semibold">{children}</span>,
-    h6: ({ children }) => <span className="font-semibold">{children}</span>,
+    // Spans preserve compact flow on shared surfaces; roles keep the source
+    // heading hierarchy navigable when the PR sidebar promotes them visually.
+    h1: ({ children }) => (
+      <span className="comment-md-h comment-md-h1 font-bold" role="heading" aria-level={1}>
+        {children}
+      </span>
+    ),
+    h2: ({ children }) => (
+      <span className="comment-md-h comment-md-h2 font-bold" role="heading" aria-level={2}>
+        {children}
+      </span>
+    ),
+    h3: ({ children }) => (
+      <span className="comment-md-h comment-md-h3 font-semibold" role="heading" aria-level={3}>
+        {children}
+      </span>
+    ),
+    h4: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={4}>
+        {children}
+      </span>
+    ),
+    h5: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={5}>
+        {children}
+      </span>
+    ),
+    h6: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={6}>
+        {children}
+      </span>
+    ),
     // Horizontal rules as a subtle divider
     hr: () => <hr className="my-1 border-border/50" />,
     // Compact blockquotes

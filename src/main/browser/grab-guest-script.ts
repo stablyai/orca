@@ -1,20 +1,6 @@
-/* eslint-disable max-lines -- Why: the guest overlay runtime is a single
-self-contained JS string template that must be injected atomically into the
-guest page. Splitting it across modules would require a string concatenation
-build step that adds complexity without improving auditability. */
-// ---------------------------------------------------------------------------
-// Browser Context Grab — guest overlay runtime builder
-//
-// This module produces self-contained JavaScript strings that main injects into
-// browser guests via executeJavaScript(). The guest runtime is intentionally
-// ephemeral: it installs on arm, resolves once on finalize, and fully removes
-// itself on teardown.
-//
-// Why a string builder rather than a bundled file: Orca's browser guests have
-// no preload and no Node access. The injected code must be a plain JS string
-// that runs in the page's own world. Keeping it as a template here lets main
-// version it alongside the rest of the grab lifecycle.
-// ---------------------------------------------------------------------------
+/* eslint-disable max-lines -- the guest overlay runtime is one self-contained JS string injected atomically; splitting it adds a concat build step for no auditability gain. */
+// Browser Context Grab — builds self-contained JS strings injected into guests via executeJavaScript().
+// Why a string builder not a bundle: guests have no preload/Node; injected code must be plain JS in the page's own world.
 
 type GuestScriptAction = 'arm' | 'awaitClick' | 'finalize' | 'extractHover' | 'teardown'
 
@@ -42,10 +28,7 @@ export function buildGuestOverlayScript(action: GuestScriptAction): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// The arm script installs the overlay container and hover tracking.
-// It stores state on window.__orcaGrab so finalize/teardown can access it.
-// ---------------------------------------------------------------------------
+// arm: install the overlay + hover tracking; state lives on window.__orcaGrab so finalize/teardown can reach it.
 const ARM_SCRIPT = `(function() {
   'use strict';
 
@@ -839,11 +822,7 @@ const ARM_SCRIPT = `(function() {
   return true;
 })()`
 
-// ---------------------------------------------------------------------------
-// The awaitClick script returns a Promise that resolves when the user clicks
-// on the full-viewport overlay. The click never reaches the page because the
-// overlay host has pointer-events:all and the handler calls stopPropagation.
-// ---------------------------------------------------------------------------
+// awaitClick: resolve when the user clicks the overlay; stopPropagation + pointer-events:all keep the click off the page.
 const AWAIT_CLICK_SCRIPT = `new Promise(function(resolve, reject) {
   'use strict';
   var grab = window.__orcaGrab;
@@ -919,9 +898,6 @@ const AWAIT_CLICK_SCRIPT = `new Promise(function(resolve, reject) {
   };
 })`
 
-// ---------------------------------------------------------------------------
-// The finalize script extracts the payload for the currently hovered element.
-// ---------------------------------------------------------------------------
 const FINALIZE_SCRIPT = `(function() {
   'use strict';
   var grab = window.__orcaGrab;
@@ -939,12 +915,7 @@ const FINALIZE_SCRIPT = `(function() {
   return payload;
 })()`
 
-// ---------------------------------------------------------------------------
-// The extractHover script reads the payload for the currently hovered element
-// WITHOUT cleaning up. The overlay and awaitClick listener stay active so the
-// user can continue picking elements. Used by keyboard shortcuts (C/S) that
-// copy the hovered element without requiring a click first.
-// ---------------------------------------------------------------------------
+// extractHover: read payload but keep overlay/listeners active so the user can keep picking (C/S shortcut copy, no click).
 const EXTRACT_HOVER_SCRIPT = `(function() {
   'use strict';
   var grab = window.__orcaGrab;
@@ -958,9 +929,6 @@ const EXTRACT_HOVER_SCRIPT = `(function() {
   }
 })()`
 
-// ---------------------------------------------------------------------------
-// The teardown script removes the overlay and cleans up all state.
-// ---------------------------------------------------------------------------
 const TEARDOWN_SCRIPT = `(function() {
   'use strict';
   var grab = window.__orcaGrab;

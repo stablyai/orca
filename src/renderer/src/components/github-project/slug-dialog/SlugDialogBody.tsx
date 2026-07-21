@@ -24,7 +24,7 @@ export function SlugDialogBody({
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onClose: () => void
 }): React.JSX.Element {
-  const { owner, repo, number, type, cacheKey } = projectOrigin
+  const { owner, repo, host, number, type, cacheKey } = projectOrigin
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
 
@@ -64,10 +64,10 @@ export function SlugDialogBody({
           >(
             target,
             'github.project.workItemDetailsBySlug',
-            { owner, repo, number, type },
+            { owner, repo, host, number, type },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, number, type })
+        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, host, number, type })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {
@@ -91,7 +91,7 @@ export function SlugDialogBody({
         }
         setLoading(false)
       })
-  }, [owner, repo, number, type, sourceSettings])
+  }, [owner, repo, host, number, type, sourceSettings])
 
   const title = row?.content.title ?? details?.item.title ?? ''
   const url = row?.content.url ?? details?.item.url ?? null
@@ -221,6 +221,7 @@ export function SlugDialogBody({
           <LabelsEditor
             owner={owner}
             repo={repo}
+            host={host}
             selected={labels}
             disabled={!row}
             sourceSettings={sourceSettings}
@@ -242,6 +243,7 @@ export function SlugDialogBody({
           <AssigneesEditor
             owner={owner}
             repo={repo}
+            host={host}
             selected={assignees}
             disabled={!row}
             sourceSettings={sourceSettings}
@@ -337,6 +339,7 @@ export function SlugDialogBody({
               <CommentsList
                 owner={owner}
                 repo={repo}
+                host={host}
                 comments={details.comments}
                 sourceSettings={sourceSettings}
                 onChange={(next) => setDetails((d) => (d ? { ...d, comments: next } : d))}
@@ -344,6 +347,7 @@ export function SlugDialogBody({
               <NewCommentForm
                 owner={owner}
                 repo={repo}
+                host={host}
                 number={number}
                 sourceSettings={sourceSettings}
                 onAdded={(c) => setDetails((d) => (d ? { ...d, comments: [...d.comments, c] } : d))}

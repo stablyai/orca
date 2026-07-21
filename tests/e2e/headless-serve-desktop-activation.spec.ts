@@ -3,11 +3,16 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect, forwardElectronProcessLogs } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import {
+  assertElectronResolvedIsolatedHome,
+  createElectronHomeIsolation,
+  type ElectronHomeIsolation
+} from './helpers/electron-home-isolation'
 import {
   discoverActivePtyId,
   execInTerminal,
@@ -32,18 +37,22 @@ const electronPath = path.join(
   readFileSync(path.join(electronPackageDir, 'path.txt'), 'utf8').trim()
 )
 
-function createLaunchEnv(userDataDir: string): NodeJS.ProcessEnv {
+function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
-  return {
-    ...cleanEnv,
-    NODE_ENV: 'development',
-    ORCA_E2E_USER_DATA_DIR: userDataDir,
-    ORCA_E2E_HEADLESS: '1',
-    // Why: production builds always use the lock; this opt-in makes the dev
-    // E2E bundle exercise the same second-instance ownership path.
-    ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
-  }
+  return createElectronHomeIsolation({
+    inheritedEnv: cleanEnv,
+    launchEnv: {
+      NODE_ENV: 'development',
+      ORCA_E2E_HEADLESS: '1',
+      // Why: production builds always use the lock; this opt-in makes the dev
+      // E2E bundle exercise the same second-instance ownership path.
+      ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
+    },
+    extraEnv: {},
+    userDataDir,
+    codexRealHomeEnabled: false
+  })
 }
 
 function readDaemonPid(userDataDir: string): number {
@@ -78,7 +87,7 @@ async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promi
 test.describe.configure({ mode: 'serial' })
 
 test('promotes the headless owner without replacing its daemon terminal', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns both launches and intentionally opts out of the default app fixture.
-{}) => {
+{}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
@@ -87,7 +96,8 @@ test('promotes the headless owner without replacing its daemon terminal', async 
 
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-serve-promotion-'))
-  const env = createLaunchEnv(userDataDir)
+  const homeIsolation = createHeadlessLaunchIsolation(userDataDir)
+  const env = homeIsolation.env
   let serveApp: ElectronApplication | null = null
   let activatingProcess: ChildProcess | null = null
 
@@ -101,6 +111,10 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       args: [...getOrcaElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
       env
     })
+    const resolvedHome = await serveApp.evaluate(({ app }) => app.getPath('home'))
+    assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+    // Why: this spec bypasses the app fixture, so opt into its gated Electron log capture for CI failures.
+    forwardElectronProcessLogs(serveApp, testInfo)
     const ownerPid = serveApp.process().pid
     const client = new RuntimeClient(userDataDir, 5_000)
 
@@ -142,13 +156,26 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       )
       .toContain(beforeMarker)
 
+    const forwardAppLogs = process.env.ORCA_E2E_FORWARD_APP_LOGS === '1'
     activatingProcess = spawn(electronPath, getOrcaElectronLaunchArgs(mainPath, false), {
       env,
-      stdio: 'ignore'
+      stdio: forwardAppLogs ? 'pipe' : 'ignore'
     })
     activatingProcess.on('error', (error) => {
       console.error('[e2e] activating process failed to spawn:', error)
     })
+    if (forwardAppLogs) {
+      const prefix = '[e2e] activating process'
+      activatingProcess.stdout?.on('data', (chunk: Buffer) => {
+        console.log(`${prefix} stdout: ${chunk.toString().trimEnd()}`)
+      })
+      activatingProcess.stderr?.on('data', (chunk: Buffer) => {
+        console.error(`${prefix} stderr: ${chunk.toString().trimEnd()}`)
+      })
+      activatingProcess.on('exit', (code, signal) => {
+        console.log(`${prefix} exit: code=${code ?? 'null'} signal=${signal ?? 'null'}`)
+      })
+    }
 
     const page = await serveApp.firstWindow({ timeout: 60_000 })
     await page.waitForLoadState('domcontentloaded')

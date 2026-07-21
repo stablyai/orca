@@ -14,7 +14,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created https://github.com/acme/orca/pull/42\r\n')).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       }
     ])
@@ -26,7 +26,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe(`${issue8126Url}\x1b[22m\n`)).toEqual([
       {
         url: issue8126Url,
-        slug: { owner: 'owner', repo: 'repo' },
+        slug: { owner: 'owner', repo: 'repo', host: 'github.com' },
         number: 10
       }
     ])
@@ -39,7 +39,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('[22m\n')).toEqual([
       {
         url: issue8126Url,
-        slug: { owner: 'owner', repo: 'repo' },
+        slug: { owner: 'owner', repo: 'repo', host: 'github.com' },
         number: 10
       }
     ])
@@ -73,7 +73,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe(`${issue8126Url}\x1b[22m\n${issue8126Url}\n`)).toEqual([
       {
         url: issue8126Url,
-        slug: { owner: 'owner', repo: 'repo' },
+        slug: { owner: 'owner', repo: 'repo', host: 'github.com' },
         number: 10
       }
     ])
@@ -86,7 +86,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('2\r\n')).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       }
     ])
@@ -99,7 +99,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('ub.com/acme/orca/pull/42\n')).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       }
     ])
@@ -132,7 +132,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created https://github.my-company.net/MyOrg/my_repo/pull/395\r\n')).toEqual([
       {
         url: 'https://github.my-company.net/MyOrg/my_repo/pull/395',
-        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        slug: { owner: 'MyOrg', repo: 'my_repo', host: 'github.my-company.net' },
         number: 395
       }
     ])
@@ -144,7 +144,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created http://github.internal/MyOrg/my_repo/pull/395\r\n')).toEqual([
       {
         url: 'http://github.internal/MyOrg/my_repo/pull/395',
-        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        slug: { owner: 'MyOrg', repo: 'my_repo', host: 'github.internal' },
         number: 395
       }
     ])
@@ -156,7 +156,8 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe('Created https://github.internal:8443/MyOrg/my_repo/pull/397\r\n')).toEqual([
       {
         url: 'https://github.internal:8443/MyOrg/my_repo/pull/397',
-        slug: { owner: 'MyOrg', repo: 'my_repo' },
+        // Why: GHES on a non-default port needs the port in its host identity.
+        slug: { owner: 'MyOrg', repo: 'my_repo', host: 'github.internal:8443' },
         number: 397
       }
     ])
@@ -170,7 +171,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     expect(observe(`${noise}Created https://github.com/acme/orca/pull/42\r\n`)).toEqual([
       {
         url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
         number: 42
       }
     ])

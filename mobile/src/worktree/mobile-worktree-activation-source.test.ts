@@ -20,5 +20,6 @@ describe('mobile worktree activation', () => {
 
     expect(openSession).toContain("sendRequest('worktree.activate'")
     expect(openSession).toContain('notifyClients: false')
+    expect(openSession).toContain("navigation: 'caller'")
   })
 })

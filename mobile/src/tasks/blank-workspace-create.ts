@@ -14,10 +14,12 @@ export async function createBlankWorkspace(args: {
   createdWithAgentId: TuiAgent | undefined
   comment: string | undefined
   setupDecision: WorkspaceCreateSetupDecision
+  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
 }): Promise<WorktreeCreateResult> {
   return createWorktreeWithNameRetry({
     client: args.client,
     baseName: args.baseName,
+    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
     buildParams: (name) => {
       const params: Record<string, unknown> = {
         repo: `id:${args.repoId}`,

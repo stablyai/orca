@@ -214,8 +214,7 @@ describe('removeProject cascade', () => {
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
 
-    // The tabs are gone before async exit events can close them, so retaining
-    // their one-shot guards would leak ephemeral PTY ids for the renderer session.
+    // Tabs are gone before async exit events fire, so retaining one-shot guards would leak ephemeral PTY ids.
     expect(s.suppressedPtyExitIds['pty1']).toBeUndefined()
     expect(s.suppressedPtyExitIds['pty2']).toBeUndefined()
     expect(s.pendingCodexPaneRestartIds['pty1']).toBeUndefined()
@@ -224,8 +223,7 @@ describe('removeProject cascade', () => {
     store.getState().clearTabPtyId('tab1', 'pty1')
     store.getState().clearTabPtyId('tab2', 'pty2')
 
-    // Why: exit IPC can arrive after repo purge but before the mounted pane
-    // unmounts. A late exit must not recreate an index for a tab with no owner.
+    // Why: exit IPC can arrive after repo purge but before the pane unmounts; a late exit must not recreate an index for an ownerless tab.
     expect(store.getState().ptyIdsByTabId['tab1']).toBeUndefined()
     expect(store.getState().ptyIdsByTabId['tab2']).toBeUndefined()
   })
@@ -318,9 +316,7 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.terminalLayoutsByTabId['tab-valid']).toBeDefined()
     expect(s.terminalLayoutsByTabId['tab-invalid']).toBeUndefined()
 
-    // Why: with two-phase hydration, workspaceSessionReady stays false after
-    // hydrateWorkspaceSession. It flips to true in reconnectPersistedTerminals()
-    // after all eager PTY spawns complete.
+    // Why: two-phase hydration keeps workspaceSessionReady false until reconnectPersistedTerminals() flips it after eager spawns.
     expect(s.workspaceSessionReady).toBe(false)
   })
 
@@ -373,8 +369,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('preserves tabs for a known repo whose worktrees have not loaded yet', () => {
-    // Why (#1158): empty per-repo worktrees can mean a degraded local fetch or
-    // SSH reconnect race, not that every persisted tab for the repo is stale.
+    // Why (#1158): empty per-repo worktrees can mean a degraded fetch or reconnect race, not that persisted tabs are stale.
     const store = createTestStore()
     const stalledWt = 'repo1::/path/wt1'
 
@@ -440,8 +435,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('drops tabs when an authoritative scan reports no matching worktrees', () => {
-    // Why: once git has answered authoritatively, an empty repo list means
-    // deleted local worktrees, not a startup race.
+    // Why: once git answers authoritatively, an empty repo list means deleted local worktrees, not a startup race.
     const store = createTestStore()
     const staleWt = 'repo1::/path/deleted'
 
@@ -475,9 +469,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('drops tabs for an unknown repo', () => {
-    // Why: the carve-out only forgives missing worktrees for repos that still
-    // exist in the repos list. If the user removed the whole repo, its tabs
-    // are genuinely stale and must be dropped.
+    // Why: the carve-out only forgives missing worktrees for repos still in the repos list; a removed repo's tabs are genuinely stale.
     const store = createTestStore()
     const orphanWt = 'repoGone::/path/wt1'
 
@@ -537,13 +529,10 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.activeTabId).toBe('tab1')
     expect(s.activeRepoId).toBe('repo1')
 
-    // Why: restored tabs receive pendingActivationSpawn so the pane mount's
-    // reattach (or fresh spawn if the daemon session died) does not count as
-    // activity and bounce the worktree to the top of Recent.
+    // Why: pendingActivationSpawn keeps the mount's reattach/respawn from counting as activity and bouncing the worktree up Recent.
     expect(s.tabsByWorktree[validWt][0].pendingActivationSpawn).toBe(true)
 
-    // The restored-active worktree is marked ever-activated so a later click
-    // doesn't retag (which would suppress a real codex-restart / new-pane bump).
+    // Marked ever-activated so a later click doesn't retag and suppress a real codex-restart/new-pane bump.
     expect(s.everActivatedWorktreeIds.has(validWt)).toBe(true)
   })
 })
@@ -773,8 +762,7 @@ describe('hydrateBrowserSession', () => {
         repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       activeWorktreeId: wt,
-      // Simulate hydrateEditorSession returning {} (no editor files) —
-      // activeTabTypeByWorktree stays at the initial empty object
+      // Simulate hydrateEditorSession returning {} (no editor files) — activeTabTypeByWorktree stays empty.
       activeTabTypeByWorktree: {}
     })
 
@@ -792,8 +780,7 @@ describe('hydrateBrowserSession', () => {
     })
 
     const s = store.getState()
-    // hydrateBrowserSession must merge 'browser' entries into activeTabTypeByWorktree
-    // so setActiveWorktree doesn't default to 'terminal' and cause a blank screen
+    // hydrateBrowserSession must merge 'browser' into activeTabTypeByWorktree, else setActiveWorktree defaults to 'terminal' → blank screen.
     expect(s.activeTabTypeByWorktree[wt]).toBe('browser')
     expect(s.activeTabType).toBe('browser')
     expect(s.activeBrowserTabId).toBe('browser-1')
@@ -1156,20 +1143,13 @@ describe('terminal slice behaviors', () => {
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
-  // Why: clicking a worktree in the sidebar triggers a generation bump on
-  // dead-PTY tabs which remounts TerminalPane and fresh-spawns a PTY. That
-  // fresh spawn calls updateTabPtyId → bumpWorktreeActivity. Without the
-  // pendingActivationSpawn tag, the just-clicked worktree would be stamped
-  // with Date.now() and float to the top of Recent on every click. isReattach
-  // is not set on fresh spawns, so this bug slips past PR 310e9daf.
+  // Why: a click's fresh spawn on dead-PTY tabs would bump activity and float the worktree up Recent; pendingActivationSpawn prevents it (PR 310e9daf).
   it('does not bump lastActivityAt when a click-driven fresh spawn follows setActiveWorktree', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     const originalLastActivityAt = 1000
 
-    // Why: a tab with a null ptyId triggers the allDead branch in
-    // setActiveWorktree, which bumps generation and sets
-    // pendingActivationSpawn so the subsequent fresh spawn is suppressed.
+    // Why: a null-ptyId tab hits setActiveWorktree's allDead branch, which tags pendingActivationSpawn to suppress the fresh spawn.
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
@@ -1224,8 +1204,7 @@ describe('terminal slice behaviors', () => {
         updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
       })
     )
-    // The flag is consumed so a later legitimate respawn (codex restart etc.)
-    // is not silently suppressed as well.
+    // The flag is consumed so a later legit respawn (codex restart etc.) isn't silently suppressed too.
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
@@ -1280,13 +1259,7 @@ describe('terminal slice behaviors', () => {
     expect(tab.pendingActivationSpawn).toBe(true)
   })
 
-  // Why: the FIRST activation of a worktree tags every tab — even if tab.ptyId
-  // already looks live, because reconnectPersistedTerminals can re-populate
-  // tab.ptyId with a restored daemon session ID before the pane mounts, making
-  // the upcoming updateTabPtyId look like new activity when it is really just
-  // the click-driven reattach. Subsequent activations of the SAME worktree
-  // must NOT re-tag — otherwise a later split-pane spawn or codex restart
-  // would be silently suppressed.
+  // Why: first activation tags every tab (even live-looking ptyIds, since reconnect may repopulate before mount); re-activation must not re-tag or it drops later spawns.
   it('tags on first activation but not on re-activation', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -1332,20 +1305,13 @@ describe('terminal slice behaviors', () => {
     store.getState().updateTabPtyId('tab-1', 'pty-live')
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
 
-    // Switch away, then re-activate. The re-activation must NOT tag again,
-    // or a later legitimate spawn (codex restart, new pane) would be dropped.
+    // Switch away, then re-activate: re-activation must NOT tag again, or a later legit spawn (codex restart, new pane) is dropped.
     store.getState().setActiveWorktree(null)
     store.getState().setActiveWorktree(worktreeId)
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
-  // Why: re-activating a worktree whose PTYs died while the user was away (e.g.
-  // relay disconnect, sleep) hits the allDead generation bump, which remounts
-  // TerminalPane and fresh-spawns a PTY. That respawn is a side-effect of the
-  // click, not real activity. First-activation tagging doesn't cover it
-  // (everActivatedWorktreeIds already has the worktree), so without tagging the
-  // allDead bump the worktree would stamp lastActivityAt and jump to the top of
-  // Recent on every re-click — the reported "click bounces it to the top" bug.
+  // Why: re-activating dead-PTY worktrees triggers the allDead respawn (a click side-effect, not activity) that first-activation tagging misses, so tag it too.
   it('does not bump lastActivityAt when a re-activation respawns dead PTYs', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -1365,9 +1331,7 @@ describe('terminal slice behaviors', () => {
           })
         ]
       },
-      // Tab retains a wake-hint ptyId but has no live PTY, and the worktree was
-      // already activated this session — so this is a re-activation, not a
-      // first activation.
+      // Wake-hint ptyId but no live PTY, and worktree already activated this session — a re-activation, not a first activation.
       tabsByWorktree: {
         [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'wake-hint-session' })]
       },
@@ -1396,15 +1360,12 @@ describe('terminal slice behaviors', () => {
     })
 
     store.getState().setActiveWorktree(worktreeId)
-    // The allDead generation bump must tag the tab so the click-driven respawn
-    // is suppressed, even though this is not the first activation.
+    // The allDead generation bump must tag the tab so the click-driven respawn is suppressed, even on a non-first activation.
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
     const sortEpochBeforeSpawn = store.getState().sortEpoch
 
-    // Simulate the stale wake-hint reattach failing before TerminalPane falls
-    // back to a fresh spawn. The clear suppresses its own activity bump without
-    // consuming the spawn suppression.
+    // Stale wake-hint reattach fails before a fresh spawn; the clear suppresses its own bump without consuming the spawn suppression.
     store.getState().clearTabPtyId('tab-1', 'wake-hint-session')
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
@@ -1499,11 +1460,7 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
-  // Why: first-visit worktrees (no tabs yet) trigger Terminal.tsx's activation
-  // fallback which calls createTab(). That auto-created tab passes
-  // pendingActivationSpawn: true so its PTY spawn is suppressed — otherwise
-  // clicking a never-visited worktree in the sidebar would stamp lastActivityAt
-  // and reshuffle Recent/Smart (the user-reported bounce ~5s after click).
+  // Why: first-visit worktrees auto-create a pendingActivationSpawn tab so the spawn doesn't stamp lastActivityAt and bounce Recent.
   it('does not bump lastActivityAt when createTab auto-creates for a first-visit worktree', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -1523,8 +1480,7 @@ describe('terminal slice behaviors', () => {
           })
         ]
       },
-      // No tabs yet — this is a fresh worktree the user is visiting for the
-      // first time in this session.
+      // No tabs yet — a fresh worktree visited for the first time this session.
       tabsByWorktree: {},
       ptyIdsByTabId: {},
       activeWorktreeId: worktreeId
@@ -1551,8 +1507,7 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
-  // Why: real background events (agent output, OSC titles) must still bump
-  // activity. Only the specific activation-driven spawn is suppressed.
+  // Why: real background events (agent output, OSC titles) must still bump activity; only activation-driven spawns are suppressed.
   it('bumps lastActivityAt for a fresh spawn with no activation tag', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -1600,11 +1555,7 @@ vi.mock('@/components/terminal-pane/pty-transport', () => ({
 describe('reconnectPersistedTerminals', () => {
   let ptyIdCounter: number
 
-  // Why: reconnect-by-daemon-session-ID is an opt-in path (the experimental
-  // daemon toggle). These tests exercise that path, so each store created here
-  // must have the toggle set to true before hydrateWorkspaceSession runs —
-  // otherwise hydration clears pendingReconnectPtyIdByTabId and tab.ptyId
-  // never gets rehydrated.
+  // Why: the daemon toggle must be on before hydration, else hydration clears reconnect state and tab.ptyId never rehydrates.
   function createDaemonEnabledStore(): ReturnType<typeof createTestStore> {
     return createTestStore()
   }
@@ -1658,9 +1609,7 @@ describe('reconnectPersistedTerminals', () => {
 
     const s = store.getState()
     expect(s.workspaceSessionReady).toBe(true)
-    // Why: Option 2 defers actual pty.spawn to connectPanePty. The store
-    // records daemon session IDs as tab-level ptyIds so connectPanePty
-    // can pass them as sessionId to the daemon's createOrAttach.
+    // Why: spawn is deferred to connectPanePty; the store records daemon session IDs as tab-level ptyIds for it to reattach.
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('old-pty-1')
     expect(s.tabsByWorktree[wt2][0].ptyId).toBeNull()
     expect(s.ptyIdsByTabId.tab1).toEqual(['old-pty-1'])
@@ -1760,8 +1709,7 @@ describe('reconnectPersistedTerminals', () => {
       }
     })
 
-    // No activeWorktreeIdsOnShutdown — simulates session from older build
-    // The tab still has a ptyId from the raw session data
+    // No activeWorktreeIdsOnShutdown — simulates a session from an older build.
     store.getState().hydrateWorkspaceSession({
       activeRepoId: 'repo1',
       activeWorktreeId: wt1,
@@ -1956,12 +1904,9 @@ describe('reconnectPersistedTerminals', () => {
     const s = store.getState()
     // Why: deferred reattach doesn't call spawn — connectPanePty handles it
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
-    // Why: reconnect restores the tab-level ptyId so getWorktreeStatus()
-    // sees the tab as active (green dot) even before the terminal mounts.
-    // connectPanePty reads ptyIdsByLeafId for per-leaf daemon sessions.
+    // Why: reconnect restores the tab-level ptyId so getWorktreeStatus() shows active (green dot) before the terminal mounts.
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('daemon-session-B')
-    // ptyIdsByLeafId preserved from hydration for connectPanePty to consume,
-    // but legacy pane:* leaves are reminted to durable UUID leaves at hydration.
+    // ptyIdsByLeafId preserved for connectPanePty; legacy pane:* leaves reminted to durable UUID leaves at hydration.
     const layout = s.terminalLayoutsByTabId['tab1']
     const bindings = layout.ptyIdsByLeafId ?? {}
     expect(Object.keys(bindings)).toHaveLength(2)
@@ -2049,8 +1994,7 @@ describe('hydrateEditorSession', () => {
       worktreesByRepo: {
         repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
-      // Why: hydrateEditorSession reads activeWorktreeId from the store
-      // (set by hydrateWorkspaceSession), not from the raw session.
+      // Why: hydrateEditorSession reads activeWorktreeId from the store (set by hydrateWorkspaceSession), not the raw session.
       activeWorktreeId: wt
     })
 

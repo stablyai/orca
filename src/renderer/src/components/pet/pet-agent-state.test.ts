@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import { selectPetAnimationName } from './pet-agent-state'
+import { nextPetDragAnimation, selectPetAnimationName } from './pet-agent-state'
 
 const NOW = 1_000
 const STALE_AFTER_MS = 500
@@ -28,6 +28,8 @@ function select(
     entries,
     retainedCount: 0,
     dragging: false,
+    dragAnimation: null,
+    hovering: false,
     now: NOW,
     staleAfterMs: STALE_AFTER_MS,
     ...options
@@ -63,7 +65,57 @@ describe('selectPetAnimationName', () => {
     expect(select([entry('working'), entry('done', { interrupted: true })])).toBe('running')
   })
 
-  it('uses jumping while the pet is being dragged', () => {
-    expect(select([entry('blocked')], { dragging: true })).toBe('jumping')
+  it('keeps the live agent state while grabbed and held still (no drag direction)', () => {
+    expect(select([entry('blocked')], { dragging: true })).toBe('waiting')
+    expect(select([entry('working')], { dragging: true })).toBe('running')
+    expect(select([], { dragging: true })).toBe('idle')
+  })
+
+  it('runs toward the drag direction while the pet is dragged horizontally', () => {
+    expect(select([entry('blocked')], { dragging: true, dragAnimation: 'running-right' })).toBe(
+      'running-right'
+    )
+    expect(select([], { dragging: true, dragAnimation: 'running-left' })).toBe('running-left')
+  })
+
+  it('uses jumping while hovered but not dragging', () => {
+    expect(select([], { hovering: true })).toBe('jumping')
+    expect(select([entry('working')], { hovering: true })).toBe('jumping')
+  })
+
+  it('prefers the live state over hover while grabbed (drag suppresses the hover jump)', () => {
+    expect(select([entry('working')], { dragging: true, hovering: true })).toBe('running')
+  })
+})
+
+describe('nextPetDragAnimation', () => {
+  it('keeps the direction and baseline for sub-threshold horizontal travel', () => {
+    expect(nextPetDragAnimation(null, 3)).toEqual({ animation: null, accepted: false })
+    expect(nextPetDragAnimation('running-right', -3)).toEqual({
+      animation: 'running-right',
+      accepted: false
+    })
+  })
+
+  it('picks the horizontal direction at the 4px threshold and advances the baseline', () => {
+    expect(nextPetDragAnimation(null, 4)).toEqual({
+      animation: 'running-right',
+      accepted: true
+    })
+    expect(nextPetDragAnimation(null, -4)).toEqual({
+      animation: 'running-left',
+      accepted: true
+    })
+  })
+
+  it('keeps the last direction without advancing when horizontal travel stays under 4px', () => {
+    // A vertical/near-vertical drag has ~0 horizontal delta: keep the direction
+    // but do not reset the baseline, so accumulated horizontal travel still adds
+    // up toward the threshold on a slow diagonal drag.
+    expect(nextPetDragAnimation('running-left', 0)).toEqual({
+      animation: 'running-left',
+      accepted: false
+    })
+    expect(nextPetDragAnimation(null, 0)).toEqual({ animation: null, accepted: false })
   })
 })

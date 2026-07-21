@@ -17,9 +17,7 @@ type NotificationEvent = {
   body: string
   worktreeId?: string
   notificationId?: string
-  // Mirrors the desktop-assigned MobileNotificationEvent.notificationSeq used
-  // for reconnect catch-up (#8129). Optional because older runtimes / non-
-  // replay events may omit it.
+  // Desktop-assigned seq for reconnect catch-up (#8129); optional since older runtimes may omit it.
   notificationSeq?: number
 }
 
@@ -42,12 +40,7 @@ type ScheduledNotificationState = {
 
 const scheduledNotificationsByHostAndNotificationId = new Map<string, ScheduledNotificationState>()
 
-// Why: notificationId embeds a per-completion timestamp (buildAgentNotificationId),
-// so every agent-task-complete inserts a new, never-reused key. Entries are only
-// removed when the desktop sends a matching dismiss — which a remote mobile user
-// (not at the desktop) frequently never gets — so the map grew for the app's whole
-// life. Bound it; a settled entry only retains a small identifier used for later
-// programmatic dismissal, unnecessary for long-past completions.
+// Why: keys never repeat and are only freed on desktop dismiss (which remote users often miss), so bound the map to stop unbounded growth.
 const MAX_SCHEDULED_NOTIFICATIONS = 256
 let maxScheduledNotifications = MAX_SCHEDULED_NOTIFICATIONS
 
@@ -55,8 +48,7 @@ function getStoredNotificationKey(hostId: string, notificationId: string): strin
   return `${encodeURIComponent(hostId)}:${encodeURIComponent(notificationId)}`
 }
 
-// Evict the oldest SETTLED entries (never one mid-schedule) until within the cap.
-// Map iteration is insertion order, so the first match is the oldest.
+// Evict oldest settled entries (never mid-schedule); Map iteration is insertion order so the first match is oldest.
 function boundScheduledNotifications(): void {
   while (scheduledNotificationsByHostAndNotificationId.size > maxScheduledNotifications) {
     let evicted = false
@@ -91,16 +83,13 @@ export async function getNotificationPermissionState(): Promise<NotificationPerm
     granted: status === 'granted',
     status,
     canAskAgain,
-    // Why: Android before API 33 has no runtime notification permission, so
-    // Expo's default "granted" state is capability evidence, not user consent.
+    // Why: Android <33 has no runtime notification permission, so "granted" is capability, not user consent.
     authorizationReflectsUserChoice:
       status === 'granted' && (Platform.OS !== 'android' || Number(Platform.Version) >= 33)
   }
 }
 
-// Why: permissions must be requested before scheduling any local notification.
-// Read the OS state every time because users can change it in Settings while
-// Orca remains alive in the background.
+// Why: re-read OS state every call — users can change it in Settings while Orca is backgrounded.
 export async function ensureNotificationPermissions(): Promise<boolean> {
   const existing = await getNotificationPermissionState()
   if (existing.granted) {
@@ -225,8 +214,7 @@ async function dismissLocalNotification(
     return
   }
   if (state.pending) {
-    // Why: desktop can send dismiss while iOS/Android is still scheduling the
-    // matching local notification. Remember it so no stale banner survives.
+    // Why: dismiss can arrive while the OS is still scheduling; defer it so no stale banner survives.
     state.dismissAfterSchedule = true
     return
   }
@@ -237,29 +225,15 @@ async function dismissLocalNotification(
   await Notifications.dismissNotificationAsync(state.identifier).catch(() => {})
 }
 
-// Why: each host connection gets its own notification subscription. When the
-// connection drops, the unsubscribe function cleans up the streaming RPC.
-// On reconnect the same subscribe stream is re-established by the RPC client;
-// we use its `ready` event to trigger catch-up (#8129): fetch notifications
-// dispatched while the socket was reaped, watermarked by the last seq we
-// already delivered so the desktop never re-sends an already-pushed one.
-// Returns an unsubscribe function.
+// Per-connection subscription; a reconnect `ready` triggers watermarked catch-up (#8129) so already-pushed events aren't re-sent.
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
   configureNotificationChannel()
 
   let subscriptionId: string | null = null
   let disposed = false
-  // Highest seq delivered on the live stream or replay for this connection.
-  // Persisted per-host so a cold app start still resumes from the right cut.
+  // Highest seq delivered (live or replay) this connection; persisted per-host so cold start resumes from the right cut.
   let lastDeliveredSeq = 0
-  // Why: per-connection dedup guard applied ONLY to the replay path
-  // (fetchMissed), never the live stream. The desktop already guarantees the
-  // replay cannot contain an event with seq <= lastDeliveredSeq (both live and
-  // replay advance the same watermark), so live + replay never overlap there.
-  // This set is defense-in-depth: if the desktop's bounded buffer evicted an
-  // old entry and a reconnect re-fetches across a boundary, an id delivered in
-  // the same connection isn't pushed twice. Bounded (RECENTLY_SEEN_CAP) so a
-  // long-lived session can't grow without limit.
+  // Why: defense-in-depth dedup for replayed events if the desktop's bounded buffer evicted across a reconnect boundary.
   const seenReplay = createSeenNotificationGuard()
 
   function deliverLive(
@@ -270,10 +244,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       lastDeliveredSeq = event.notificationSeq
       void saveLastSeenSeq(hostId, lastDeliveredSeq)
     }
-    // Why (#8129 dedup): mark the event seen on EVERY delivery path (live AND
-    // replay) so a replay that re-includes an id already pushed live in this
-    // connection is dropped instead of double-pushed. fetchMissed also
-    // pre-checks seenReplay, but without this the live path never populated it.
+    // Why (#8129): mark seen on the live path too, so a later replay of an already-pushed id dedups instead of double-pushing.
     const key = seenKeyForEvent(event)
     if (key) {
       seenReplay.add(key)
@@ -284,12 +255,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     return dismissLocalNotification(event as DismissNotificationEvent, hostId)
   }
 
-  // Why: on a reconnect `ready` the desktop has already dispatched whatever we
-  // missed; ask for it from our persisted watermark. Because the desktop cuts
-  // by seq > lastSeenSeq this is idempotent — we only ever get events we have
-  // not delivered before. The seenReplay guard is a second layer so a replay
-  // that somehow re-includes an id already delivered this connection is
-  // dropped instead of double-pushed.
+  // Why: desktop cuts by seq > lastSeenSeq, so re-fetching from the watermark is idempotent (seenReplay guards residual overlap).
   async function fetchMissed(): Promise<void> {
     if (disposed) {
       return
@@ -321,10 +287,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     }
   }
 
-  // Why: lazily seed the watermark from durable storage on first use so we
-  // don't block subscribe() on an AsyncStorage read. The first `ready` (cold
-  // open) does NOT need catch-up — the live stream starts fresh; only
-  // subsequent reconnect `ready` events fetch missed notifications.
+  // Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
   let watermarkLoaded = false
   void loadLastSeenSeq(hostId).then((seq) => {
     lastDeliveredSeq = Math.max(lastDeliveredSeq, seq)
@@ -352,10 +315,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         unsubscribeStream()
         return
       }
-      // Why: first ready is the cold-open live stream — no catch-up needed.
-      // Every later ready is a reconnect; fetch what we missed from the
-      // watermark. Guard on watermarkLoaded so a fast reconnect doesn't
-      // fetch from a stale 0 watermark (which would re-push everything).
+      // Why: only reconnects fetch missed; watermarkLoaded guards against fetching from a stale 0 (which re-pushes everything).
       if (reconnectReadyCount > 1 && watermarkLoaded) {
         void fetchMissed()
       }
@@ -379,12 +339,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
 
   return () => {
     disposed = true
-    // Why: the client may already be closed when this cleanup runs (component
-    // unmount races with disconnect). sendRequest rejects immediately on a
-    // closed client — swallow it since server-side cleanup happens via
-    // connection-close anyway.
-    // Always drop the local stream first; readiness can race unmount and we
-    // must not retain the callback while waiting for a subscription id.
+    // Why: drop the local stream first — readiness can race unmount; don't hold the callback while a subscription id is pending.
     unsubscribeStream()
     if (subscriptionId) {
       unsubscribeServer(subscriptionId)

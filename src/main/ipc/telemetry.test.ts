@@ -1,10 +1,4 @@
-// IPC boundary behavior for the telemetry surface. Strict type narrows must
-// drop obviously-malformed calls before they reach the validator (the
-// renderer is in the threat model). Pins the consent-mutation rate limit:
-// ≤5 consent-related IPC calls per session. Pins the main-side `via`
-// derivation: both `OptInVia` branches are reachable from renderer input,
-// and the one path that must NOT emit (`acknowledgeBanner`) has its own
-// channel and handler rather than being a flag on `setOptIn`.
+// Telemetry IPC boundary tests: the renderer is in the threat model, so handlers drop malformed calls, cap consent mutations, and derive `via` main-side.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/types'
@@ -58,9 +52,7 @@ function captureHandlers(): void {
   }
 }
 
-// Build a fake Store with a settable `telemetry` block. Tests reassign
-// `settings.telemetry` between handler invocations to seed the two
-// derivation states.
+// Fake Store whose `telemetry` block tests reassign between invocations to seed derivation states.
 type FakeStoreState = { settings: GlobalSettings }
 function makeFakeStore(telemetry: GlobalSettings['telemetry']): {
   store: Store
@@ -125,10 +117,7 @@ describe('telemetry IPC handlers', () => {
     expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: 2 })
   })
 
-  // The IPC handler's selectivity is load-bearing: schemas are `.strict()`,
-  // so injecting `nth_repo_added` on a non-cohort event would silently
-  // drop the entire event at the validator. Events outside `COHORT_EXTENDED`
-  // must reach `track()` unmodified.
+  // Schemas are `.strict()`, so injecting `nth_repo_added` on a non-cohort event would drop the whole event at the validator.
   it('does NOT inject cohort on events outside COHORT_EXTENDED', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
@@ -141,9 +130,7 @@ describe('telemetry IPC handlers', () => {
     expect(getCohortAtEmitMock).not.toHaveBeenCalled()
   })
 
-  // The renderer-only Setup-step events fire from React `onClick` and
-  // depend on the IPC handler injecting cohort — call sites stay
-  // synchronous and pass only their own props.
+  // Renderer-only Setup-step events depend on the handler injecting cohort so call sites stay synchronous.
   it('injects cohort for add_repo_setup_step_action (renderer-only event)', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 1 })
@@ -213,8 +200,7 @@ describe('telemetry IPC handlers', () => {
     })
   })
 
-  // Fail-soft: a degraded classifier returns `{ nth_repo_added: undefined }`.
-  // The schemas declare the field optional, so the event still validates.
+  // Fail-soft: `nth_repo_added` is optional, so an undefined cohort still validates.
   it('forwards undefined cohort when the classifier returns undefined', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: undefined })
@@ -223,11 +209,7 @@ describe('telemetry IPC handlers', () => {
     expect(trackMock).toHaveBeenCalledWith('app_opened', { nth_repo_added: undefined })
   })
 
-  // Threat-model parity with the cohort override test: a compromised
-  // renderer must NOT be able to forge `nth_repo_added` either. The same
-  // spread-order invariant applies — `{ ...baseProps, ...getCohortAtEmit() }`
-  // — and the same future-refactor regression risk exists. Pinning both
-  // fields keeps the threat model symmetric.
+  // Security: same spread-order invariant as cohort — main-derived `nth_repo_added` overrides any renderer-forged value.
   it('main-derived nth_repo_added overrides renderer-supplied value', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
@@ -265,11 +247,7 @@ describe('telemetry IPC handlers', () => {
     expect(trackMock).toHaveBeenCalledWith('onboarding_started', { cohort: undefined })
   })
 
-  // Threat-model invariant: a compromised renderer must NOT be able to forge
-  // `cohort` by including it in the props payload. The IPC handler spreads
-  // the main-derived cohort AFTER the caller-supplied props, so the main
-  // value wins. This test pins that invariant — flipping the spread order
-  // would silently let a compromised renderer fake any cohort value.
+  // Security: main spreads cohort after caller props so main wins; flipping the order would let a renderer forge `cohort`.
   it('main-derived cohort overrides renderer-supplied cohort', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: 'fresh_install' })
@@ -281,20 +259,12 @@ describe('telemetry IPC handlers', () => {
     })
   })
 
-  // Threat-model invariant under degraded classifier: a compromised
-  // renderer must NOT be able to forge `cohort` even when the classifier
-  // fails soft to `{ cohort: undefined }`. The IPC handler spreads the
-  // classifier output AFTER the caller-supplied props, so an explicit
-  // `undefined` from the classifier still overwrites a forged value. A
-  // future refactor that switches the spread to a conditional assign
-  // (`if (c.cohort !== undefined) baseProps.cohort = c.cohort`) would
-  // silently regress this — pinning it here.
+  // Security: a fail-soft undefined cohort must still overwrite a forged value; a conditional-assign refactor would regress this.
   it('main-derived undefined cohort overrides renderer-supplied cohort (degraded classifier)', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: true, optedIn: true })
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: undefined })
     const handler = handlers.get('telemetry:track')!
-    // Compromised renderer attempts to forge cohort='upgrade_backfill';
-    // main strips it via the explicit-undefined spread.
+    // Forged cohort='upgrade_backfill' is stripped by the explicit-undefined spread.
     handler({}, 'onboarding_started', { cohort: 'upgrade_backfill' })
     expect(trackMock).toHaveBeenCalledWith('onboarding_started', {
       cohort: undefined
@@ -354,9 +324,7 @@ describe('telemetry IPC handlers', () => {
   // ── telemetry:setOptIn — `via` derivation ────────────────────────────
 
   it("derives via='first_launch_banner' for an existing user with optedIn=null clicking Turn off", () => {
-    // Existing-user notice is the only path where an existing user (cohort
-    // marker true) with optedIn=null flips to false. That is the contract
-    // the notice's "Turn off" button routes through.
+    // Only path where an existing user (optedIn=null) flips to false: the notice's "Turn off" button.
     registerWith({
       installId: 'x',
       existedBeforeTelemetryRelease: true,
@@ -368,12 +336,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it("derives via='settings' (not 'first_launch_banner') for a defensive opt-in call from the pre-notice state", () => {
-    // Defensive: the notice's opt-in path is the ✕ (silent acknowledge),
-    // which does NOT route through setOptIn. A compromised renderer
-    // could try to call telemetrySetOptIn(true) in the pre-notice state
-    // and synthesize a spurious telemetry_opted_in { via:
-    // 'first_launch_banner' }. The derivation must refuse that tag for
-    // the true-incoming case and fall through to 'settings'.
+    // Security: refuse via='first_launch_banner' on a forged setOptIn(true) pre-notice; fall through to 'settings'.
     registerWith({
       installId: 'x',
       existedBeforeTelemetryRelease: true,
@@ -385,10 +348,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it("derives via='settings' for a new user toggling off from Settings (no first-launch surface exists)", () => {
-    // New users (existedBeforeTelemetryRelease=false) are initialized with
-    // optedIn=true at migration and see no first-launch surface. Any
-    // opt-out from this cohort routes through Settings → Privacy and
-    // must tag as `via: 'settings'`.
+    // New users (existed=false) see no first-launch surface, so any opt-out routes through Settings.
     registerWith({
       installId: 'x',
       existedBeforeTelemetryRelease: false,
@@ -400,8 +360,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it("derives via='settings' for an opt-in toggle flip after a prior opt-out", () => {
-    // User flipped off in Settings, flipping back on in Settings. Neither
-    // cohort marker nor notice state triggers a first-launch tag.
+    // Re-opt-in from Settings: neither cohort marker nor notice state triggers a first-launch tag.
     registerWith({
       installId: 'x',
       existedBeforeTelemetryRelease: true,
@@ -424,8 +383,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   it("derives via='settings' when the telemetry block is missing (defensive)", () => {
-    // Should never happen post-migration, but if it does the handler must
-    // fall through to 'settings' rather than throwing or mis-tagging.
+    // Should never happen post-migration; handler must fall through to 'settings', not throw.
     registerWith(undefined)
     const handler = handlers.get('telemetry:setOptIn')!
     handler({}, true)
@@ -435,10 +393,7 @@ describe('telemetry IPC handlers', () => {
   // ── telemetry:acknowledgeBanner — silent-persist path ────────────────
 
   it('routes banner ✕ through persistBannerAcknowledgeWithoutEmitting without invoking setOptIn', () => {
-    // This is the whole point of the separate channel: the silent-persist
-    // path MUST NOT reach setOptIn, which would derive a `via` and fire
-    // `telemetry_opted_in`. The client primitive may unlock `app_opened`,
-    // but the acknowledge channel itself must not emit an opt-in event.
+    // Why the separate channel: reaching setOptIn would derive a `via` and fire `telemetry_opted_in`; acknowledge must persist silently.
     registerWith({
       installId: 'x',
       existedBeforeTelemetryRelease: true,
@@ -464,13 +419,7 @@ describe('telemetry IPC handlers', () => {
   })
 
   // ── telemetry:acknowledgeBanner — state-precondition guard ───────────
-  // These tests pin the guard, which rejects any cohort/optedIn
-  // combination other than (existed=true, optedIn=null). The guard is
-  // the defense against a compromised renderer silently flipping
-  // optedIn=true for a user who already resolved consent — a future
-  // refactor that weakens it must fail here. The guard also runs BEFORE
-  // consumeConsentMutationToken, so a rejected call must not burn a
-  // token either.
+  // Security: guard passes only (existed=true, optedIn=null) and runs before token consumption, blocking a compromised renderer from flipping resolved consent.
 
   it('acknowledgeBanner rejects an existing user who already opted in', () => {
     registerWith({

@@ -726,6 +726,35 @@ describe('remote hook service installers', () => {
     expect(byAgent.get('copilot')).toBe('installed')
   })
 
+  it('stops before the next installer when its relay request is cancelled', async () => {
+    const controller = new AbortController()
+    const claudeInstall = vi
+      .spyOn(claudeHookService, 'installRemote')
+      .mockImplementation(async () => {
+        controller.abort()
+        return {
+          agent: 'claude',
+          state: 'installed',
+          configPath: '/home/dev/.claude/settings.json',
+          managedHooksPresent: true,
+          detail: null
+        }
+      })
+    const openClaudeInstall = vi.spyOn(openClaudeHookService, 'installRemote')
+    try {
+      const { sftp } = createFakeSftp()
+
+      await expect(
+        installRemoteManagedAgentHooks(sftp, '/home/dev', { signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' })
+      expect(claudeInstall).toHaveBeenCalledTimes(1)
+      expect(openClaudeInstall).not.toHaveBeenCalled()
+    } finally {
+      claudeInstall.mockRestore()
+      openClaudeInstall.mockRestore()
+    }
+  })
+
   it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {
     const { sftp, fs } = createFakeSftp()
 
