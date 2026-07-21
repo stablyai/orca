@@ -2950,6 +2950,10 @@
           },
           "TerminalTabLeadingIcon": {
             "7ab2964bea": "Unread agent completion"
+          },
+          "tab-color-swatch": {
+            "clearTabColor": "Clear tab color",
+            "setTabColor": "Set tab color {{value0}}"
           }
         }
       },
@@ -13029,12 +13033,17 @@
           "beb2c19173": "Unread",
           "5651b216c6": "Unknown project",
           "22b22034bc": "Standalone terminal unavailable in Activity.",
-          "afdc2139a8": "Agent terminal closed. Open a new terminal in this workspace to continue."
+          "afdc2139a8": "Agent terminal closed. Open a new terminal in this workspace to continue.",
+          "renameThreadTab": "Rename agent tab {{value0}}"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "unread",
           "d6a8de3934": "agents",
           "dc708f3eff": "Close agents"
+        },
+        "ActivityThreadRowContextMenu": {
+          "clearTabColor": "Clear tab color",
+          "setTabColor": "Set tab color {{value0}}"
         }
       },
       "confirmation": {

@@ -2927,6 +2927,10 @@
           },
           "TerminalTabLeadingIcon": {
             "7ab2964bea": "Finalización de agente sin leer"
+          },
+          "tab-color-swatch": {
+            "clearTabColor": "Clear tab color",
+            "setTabColor": "Set tab color {{value0}}"
           }
         }
       },
@@ -13006,12 +13010,17 @@
           "beb2c19173": "No leído",
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
-          "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar."
+          "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
+          "renameThreadTab": "Rename agent tab {{value0}}"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "no leído",
           "d6a8de3934": "agentes",
           "dc708f3eff": "Agents cercanos"
+        },
+        "ActivityThreadRowContextMenu": {
+          "clearTabColor": "Clear tab color",
+          "setTabColor": "Set tab color {{value0}}"
         }
       },
       "confirmation": {
