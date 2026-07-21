@@ -9925,7 +9925,8 @@
             "f9d7ca753d": "复制路径",
             "3161c4e425": "文件夹",
             "e887fa4b2e": "在终端中打开",
-            "1d8e182c32": "查看文件"
+            "1d8e182c32": "查看文件",
+            "6ccddc27bd": "添加到 .gitignore"
           },
           "FileExplorerToolbar": {
             "d238264654": "显示 Git 忽略的文件",
@@ -11076,6 +11077,15 @@
           },
           "activityBar": {
             "error": "错误"
+          },
+          "useFileExplorerGitignore": {
+            "d07c6646df": "已更新 .gitignore，但无法刷新文件资源管理器",
+            "8123eafa6b": "已更新 .gitignore：已添加 {{value0}} 项，{{value1}} 项已存在",
+            "c17e6b4e06": "{{value0}} 项已存在于 .gitignore 中",
+            "dbd677f334": "“{{value0}}”已存在于 .gitignore 中",
+            "f6e5ab1c32": "已将 {{value0}} 项添加到 .gitignore",
+            "726acd5472": "已将“{{value0}}”添加到 .gitignore",
+            "updateFailed": "无法更新 .gitignore"
           }
         }
       },

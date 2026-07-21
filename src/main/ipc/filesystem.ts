@@ -83,6 +83,8 @@ import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
 } from '../git/huge-folder-ignore'
+import { appendGitignoreEntries, appendGitignoreEntriesWithProvider } from '../git/gitignore-entry'
+import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../../shared/gitignore-entry'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
@@ -1217,6 +1219,21 @@ export function registerFilesystemHandlers(
     async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return appendFolderToGitignore(worktreePath, args.folderName)
+    }
+  )
+
+  ipcMain.handle(
+    'git:appendGitignoreEntries',
+    async (
+      _event,
+      args: { worktreePath: string; entries: GitignoreEntry[]; connectionId?: string }
+    ): Promise<AppendGitignoreEntriesResult> => {
+      if (args.connectionId) {
+        const provider = requireSshFilesystemProvider(args.connectionId)
+        return appendGitignoreEntriesWithProvider(args.worktreePath, args.entries, provider)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return appendGitignoreEntries(worktreePath, args.entries)
     }
   )
 

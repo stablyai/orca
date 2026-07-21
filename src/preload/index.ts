@@ -5,6 +5,7 @@ import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
+import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../shared/gitignore-entry'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
@@ -3189,6 +3190,12 @@ const api = {
       ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
     appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
       ipcRenderer.invoke('git:appendGitignore', args),
+    appendGitignoreEntries: (args: {
+      worktreePath: string
+      entries: GitignoreEntry[]
+      connectionId?: string
+    }): Promise<AppendGitignoreEntriesResult> =>
+      ipcRenderer.invoke('git:appendGitignoreEntries', args),
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),

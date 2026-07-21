@@ -9925,7 +9925,8 @@
             "f9d7ca753d": "경로 복사",
             "3161c4e425": "폴더",
             "e887fa4b2e": "터미널에서 열기",
-            "1d8e182c32": "파일 보기"
+            "1d8e182c32": "파일 보기",
+            "6ccddc27bd": ".gitignore에 추가"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git이 무시한 파일 표시",
@@ -11076,6 +11077,15 @@
           },
           "activityBar": {
             "error": "오류"
+          },
+          "useFileExplorerGitignore": {
+            "d07c6646df": ".gitignore를 업데이트했지만 파일 탐색기를 새로 고칠 수 없습니다",
+            "8123eafa6b": ".gitignore 업데이트: {{value0}}개 추가, {{value1}}개는 이미 존재",
+            "c17e6b4e06": "{{value0}}개 항목이 이미 .gitignore에 있습니다",
+            "dbd677f334": "'{{value0}}'은(는) 이미 .gitignore에 있습니다",
+            "f6e5ab1c32": "{{value0}}개 항목을 .gitignore에 추가했습니다",
+            "726acd5472": "'{{value0}}'을(를) .gitignore에 추가했습니다",
+            "updateFailed": ".gitignore를 업데이트할 수 없습니다"
           }
         }
       },

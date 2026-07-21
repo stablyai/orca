@@ -3,6 +3,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
+  GitAppendGitignoreEntries,
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
@@ -115,6 +116,12 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitCheckIgnored,
     handler: async (params, { runtime }) =>
       runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
+  }),
+  defineMethod({
+    name: 'git.appendGitignoreEntries',
+    params: GitAppendGitignoreEntries,
+    handler: async (params, { runtime }) =>
+      runtime.appendRuntimeGitignoreEntries(params.worktree, params.entries)
   }),
   defineMethod({
     name: 'git.submoduleStatus',

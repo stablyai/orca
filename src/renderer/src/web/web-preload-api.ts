@@ -7,6 +7,7 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { AppendGitignoreEntriesResult } from '../../../shared/gitignore-entry'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -1850,6 +1851,13 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     // Why: the "add huge folder to .gitignore" flow is desktop-only; the web runtime makes no offer, so return no candidates.
     findHugeFoldersToIgnore: async () => [],
     appendGitignore: async () => false,
+    appendGitignoreEntries: async ({ worktreePath, entries }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult<AppendGitignoreEntriesResult>('git.appendGitignoreEntries', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        entries
+      })
+    },
     history: async ({ worktreePath, limit, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.history', {

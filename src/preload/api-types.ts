@@ -9,6 +9,7 @@ import type {
   HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
+import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../shared/gitignore-entry'
 import type { DashboardSnapshot, DashboardRevealAgentArgs } from '../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -2848,6 +2849,11 @@ export type PreloadApi = {
     }) => Promise<string[]>
     findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
     appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
+    appendGitignoreEntries: (args: {
+      worktreePath: string
+      entries: GitignoreEntry[]
+      connectionId?: string
+    }) => Promise<AppendGitignoreEntriesResult>
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ) => Promise<GitHistoryResult>

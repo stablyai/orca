@@ -9948,7 +9948,8 @@
             "f9d7ca753d": "Copy Paths",
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
-            "1d8e182c32": "View File"
+            "1d8e182c32": "View File",
+            "6ccddc27bd": "Add to .gitignore"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -11099,6 +11100,15 @@
           },
           "activityBar": {
             "error": "Error"
+          },
+          "useFileExplorerGitignore": {
+            "d07c6646df": "Updated .gitignore, but could not refresh the File Explorer",
+            "8123eafa6b": "Updated .gitignore: {{value0}} added, {{value1}} already present",
+            "c17e6b4e06": "{{value0}} items are already in .gitignore",
+            "dbd677f334": "'{{value0}}' is already in .gitignore",
+            "f6e5ab1c32": "Added {{value0}} items to .gitignore",
+            "726acd5472": "Added '{{value0}}' to .gitignore",
+            "updateFailed": "Could not update .gitignore"
           }
         }
       },

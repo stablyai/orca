@@ -22,6 +22,7 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../../../shared/gitignore-entry'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -261,6 +262,26 @@ export async function getRuntimeGitIgnoredPaths(
     target,
     'git.checkIgnored',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), paths },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function appendRuntimeGitignoreEntries(
+  context: RuntimeGitContext,
+  entries: GitignoreEntry[]
+): Promise<AppendGitignoreEntriesResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.appendGitignoreEntries({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId,
+      entries
+    })
+  }
+  return callRuntimeRpc<AppendGitignoreEntriesResult>(
+    target,
+    'git.appendGitignoreEntries',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), entries },
     { timeoutMs: 15_000 }
   )
 }

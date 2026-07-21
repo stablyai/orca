@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
-import { appendFile, readFile, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { checkIgnoredPaths } from './check-ignored-paths'
+import { appendGitignoreEntries } from './gitignore-entry'
 import type { GitRuntimeOptions } from './git-runtime-options'
 
 // Why: the overwhelmingly common cause of a status listing big enough to hit the
@@ -56,23 +57,8 @@ export async function appendFolderToGitignore(
   if (!KNOWN_HUGE_FOLDER_NAMES.includes(safeFolderName) || /[\\/\r\n]/.test(safeFolderName)) {
     throw new Error(`Refusing to add unrecognized folder to .gitignore: ${folderName}`)
   }
-  const gitignorePath = path.join(worktreePath, '.gitignore')
-  const line = `${safeFolderName}/`
-  let existingContent = ''
-  try {
-    existingContent = await readFile(gitignorePath, 'utf-8')
-  } catch {
-    // .gitignore doesn't exist yet — we'll create it below
-  }
-  const alreadyListed = existingContent
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .some((l) => l === safeFolderName || l === line)
-  if (alreadyListed) {
-    return false
-  }
-  // Why: keep a clean trailing newline whether or not the file ended with one.
-  const needsLeadingNewline = existingContent.length > 0 && !existingContent.endsWith('\n')
-  await appendFile(gitignorePath, `${needsLeadingNewline ? '\n' : ''}${line}\n`, 'utf-8')
-  return true
+  const result = await appendGitignoreEntries(worktreePath, [
+    { relativePath: safeFolderName, isDirectory: true }
+  ])
+  return result.added.length > 0
 }

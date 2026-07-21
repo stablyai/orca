@@ -9925,7 +9925,8 @@
             "f9d7ca753d": "パスのコピー",
             "3161c4e425": "フォルダ",
             "e887fa4b2e": "ターミナルで開く",
-            "1d8e182c32": "ファイルを表示"
+            "1d8e182c32": "ファイルを表示",
+            "6ccddc27bd": ".gitignore に追加"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",
@@ -11076,6 +11077,15 @@
           },
           "activityBar": {
             "error": "エラー"
+          },
+          "useFileExplorerGitignore": {
+            "d07c6646df": ".gitignore を更新しましたが、ファイルエクスプローラーを更新できませんでした",
+            "8123eafa6b": ".gitignore を更新しました：{{value0}} 件を追加、{{value1}} 件は追加済みです",
+            "c17e6b4e06": "{{value0}} 件はすでに .gitignore にあります",
+            "dbd677f334": "「{{value0}}」はすでに .gitignore にあります",
+            "f6e5ab1c32": "{{value0}} 件を .gitignore に追加しました",
+            "726acd5472": "「{{value0}}」を .gitignore に追加しました",
+            "updateFailed": ".gitignore を更新できませんでした"
           }
         }
       },

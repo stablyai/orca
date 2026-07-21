@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  appendRuntimeGitignoreEntries,
   bulkDiscardRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   cancelRuntimeGenerateCommitMessage,
@@ -26,6 +27,7 @@ import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 const gitStatus = vi.fn()
 const gitCancelStatus = vi.fn()
 const gitCheckIgnored = vi.fn()
+const gitAppendGitignoreEntries = vi.fn()
 const gitSubmoduleStatus = vi.fn()
 const gitDiff = vi.fn()
 const gitHistory = vi.fn()
@@ -50,6 +52,7 @@ beforeEach(() => {
   gitCancelStatus.mockReset()
   gitCancelStatus.mockResolvedValue(undefined)
   gitCheckIgnored.mockReset()
+  gitAppendGitignoreEntries.mockReset()
   gitSubmoduleStatus.mockReset()
   gitDiff.mockReset()
   gitHistory.mockReset()
@@ -76,6 +79,7 @@ beforeEach(() => {
         status: gitStatus,
         cancelStatus: gitCancelStatus,
         checkIgnored: gitCheckIgnored,
+        appendGitignoreEntries: gitAppendGitignoreEntries,
         submoduleStatus: gitSubmoduleStatus,
         diff: gitDiff,
         history: gitHistory,
@@ -269,6 +273,28 @@ describe('runtime git client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('appends gitignore entries through local git IPC', async () => {
+    gitAppendGitignoreEntries.mockResolvedValue({ added: ['dist'], alreadyPresent: [] })
+    const entries = [{ relativePath: 'dist', isDirectory: true }]
+
+    const result = await appendRuntimeGitignoreEntries(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      entries
+    )
+
+    expect(gitAppendGitignoreEntries).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      entries
+    })
+    expect(result).toEqual({ added: ['dist'], alreadyPresent: [] })
+  })
+
   it('passes submodule status area through local git IPC', async () => {
     gitSubmoduleStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
 
@@ -349,6 +375,14 @@ describe('runtime git client', () => {
       },
       { limit: 50, baseRef: 'origin/main' }
     )
+    await appendRuntimeGitignoreEntries(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      [{ relativePath: 'dist', isDirectory: true }]
+    )
 
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
@@ -371,6 +405,15 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.history',
       params: { worktree: 'id:wt-1', limit: 50, baseRef: 'origin/main' },
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
+      selector: 'env-1',
+      method: 'git.appendGitignoreEntries',
+      params: {
+        worktree: 'id:wt-1',
+        entries: [{ relativePath: 'dist', isDirectory: true }]
+      },
       timeoutMs: 15_000
     })
   })

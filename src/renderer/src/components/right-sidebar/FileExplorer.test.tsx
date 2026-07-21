@@ -1057,4 +1057,62 @@ describe('FileExplorerRow collapse folder action', () => {
 
     expect(onViewFile).toHaveBeenCalledWith(fileNode)
   })
+
+  it('passes gitignore availability, pending state, and the row node to the action', async () => {
+    const onAddToGitignore = vi.fn().mockResolvedValue(undefined)
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'index.ts', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      rowProjection: createFileExplorerRowProjection([fileNode]),
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set(),
+      dirCache: {},
+      selectedPaths: new Set([fileNode.path]),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      canAddToGitignore: true,
+      isAddingToGitignore: true,
+      onAddToGitignore,
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onViewFile: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onAddFolderAsProject: vi.fn(),
+      canAddFolderAsProject: () => false,
+      onOpenInTerminal: vi.fn(),
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree: vi.fn(),
+      onFindInFolder: vi.fn(),
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+    await (row.props.onAddToGitignore as () => Promise<void>)()
+
+    expect(row.props.canAddToGitignore).toBe(true)
+    expect(row.props.isAddingToGitignore).toBe(true)
+    expect(onAddToGitignore).toHaveBeenCalledWith(fileNode)
+  })
 })

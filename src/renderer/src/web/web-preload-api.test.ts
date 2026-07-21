@@ -3223,6 +3223,14 @@ describe('web git preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+          if (method === 'git.appendGitignoreEntries') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { added: ['dist'], alreadyPresent: [] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: false,
@@ -3246,10 +3254,23 @@ describe('web git preload API', () => {
         sha: TEST_COMMIT_OID
       })
     ).resolves.toBe(`https://git.example.com/project/commit/${TEST_COMMIT_OID}`)
+    await expect(
+      globals.window.api.git.appendGitignoreEntries({
+        worktreePath: '/workspace/repo',
+        entries: [{ relativePath: 'dist', isDirectory: true }]
+      })
+    ).resolves.toEqual({ added: ['dist'], alreadyPresent: [] })
     expect(runtimeCalls).toEqual([
       { method: 'repo.list', params: undefined },
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
-      { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
+      { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } },
+      {
+        method: 'git.appendGitignoreEntries',
+        params: {
+          worktree: 'id:wt-1',
+          entries: [{ relativePath: 'dist', isDirectory: true }]
+        }
+      }
     ])
   })
 })

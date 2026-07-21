@@ -12,6 +12,7 @@ const {
   trashItemMock,
   readdirMock,
   readFileMock,
+  appendFileMock,
   writeFileMock,
   statMock,
   openMock,
@@ -57,6 +58,7 @@ const {
   trashItemMock: vi.fn(),
   readdirMock: vi.fn(),
   readFileMock: vi.fn(),
+  appendFileMock: vi.fn(),
   writeFileMock: vi.fn(),
   statMock: vi.fn(),
   openMock: vi.fn(),
@@ -115,6 +117,7 @@ vi.mock('electron', () => ({
 vi.mock('fs/promises', () => ({
   readdir: readdirMock,
   readFile: readFileMock,
+  appendFile: appendFileMock,
   writeFile: writeFileMock,
   stat: statMock,
   open: openMock,
@@ -277,6 +280,7 @@ describe('registerFilesystemHandlers', () => {
       trashItemMock,
       readdirMock,
       readFileMock,
+      appendFileMock,
       writeFileMock,
       statMock,
       openMock,
@@ -1590,6 +1594,46 @@ describe('registerFilesystemHandlers', () => {
     expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', [
       path.join('build', 'output.js')
     ])
+  })
+
+  it('appends gitignore entries through local and SSH filesystem owners', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    appendFileMock.mockResolvedValue(undefined)
+    const remoteWrite = vi.fn().mockResolvedValue(undefined)
+    getSshFilesystemProviderMock.mockReturnValue({
+      readFile: vi.fn().mockResolvedValue({ content: 'coverage/\n', isBinary: false }),
+      writeFileBase64Chunk: remoteWrite
+    })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:appendGitignoreEntries')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        entries: [{ relativePath: 'dist', isDirectory: true }]
+      })
+    ).resolves.toEqual({ added: ['dist'], alreadyPresent: [] })
+    await expect(
+      handlers.get('git:appendGitignoreEntries')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1',
+        entries: [
+          { relativePath: 'coverage', isDirectory: true },
+          { relativePath: 'dist', isDirectory: true }
+        ]
+      })
+    ).resolves.toEqual({ added: ['dist'], alreadyPresent: ['coverage'] })
+
+    expect(appendFileMock).toHaveBeenCalledWith(
+      path.join(WORKTREE_FEATURE_PATH, '.gitignore'),
+      'dist/\n',
+      expect.objectContaining({ encoding: 'utf8', flag: expect.any(Number) })
+    )
+    expect(remoteWrite).toHaveBeenCalledWith(
+      '/remote/repo/.gitignore',
+      Buffer.from('dist/\n').toString('base64'),
+      true
+    )
   })
 
   it('routes abort merge through local and SSH git providers', async () => {

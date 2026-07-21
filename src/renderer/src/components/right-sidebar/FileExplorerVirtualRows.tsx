@@ -37,6 +37,9 @@ type FileExplorerVirtualRowsProps = {
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  canAddToGitignore?: boolean
+  isAddingToGitignore?: boolean
+  onAddToGitignore?: (node: TreeNode) => void | Promise<void>
   onAddFolderAsProject: (node: TreeNode) => void
   canAddFolderAsProject: (node: TreeNode) => boolean
   onOpenInTerminal: (node: TreeNode) => void
@@ -83,6 +86,9 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     onStartNew,
     onStartRename,
     onDuplicate,
+    canAddToGitignore = false,
+    isAddingToGitignore = false,
+    onAddToGitignore,
     onAddFolderAsProject,
     canAddFolderAsProject,
     onOpenInTerminal,
@@ -191,6 +197,9 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               onStartNew={onStartNew}
               onStartRename={onStartRename}
               onDuplicate={onDuplicate}
+              canAddToGitignore={canAddToGitignore}
+              isAddingToGitignore={isAddingToGitignore}
+              onAddToGitignore={onAddToGitignore ? () => onAddToGitignore(n) : undefined}
               onAddFolderAsProject={() => onAddFolderAsProject(n)}
               canAddAsProject={canAddFolderAsProject(n)}
               onOpenInTerminal={() => onOpenInTerminal(n)}

@@ -7301,6 +7301,8 @@ export class OrcaRuntimeService {
     this.gitCommands.getRuntimeGitSubmoduleStatus.bind(this.gitCommands)
   checkRuntimeGitIgnoredPaths: RuntimeGitCommands['checkRuntimeGitIgnoredPaths'] =
     this.gitCommands.checkRuntimeGitIgnoredPaths.bind(this.gitCommands)
+  appendRuntimeGitignoreEntries: RuntimeGitCommands['appendRuntimeGitignoreEntries'] =
+    this.gitCommands.appendRuntimeGitignoreEntries.bind(this.gitCommands)
   getRuntimeGitHistory: RuntimeGitCommands['getRuntimeGitHistory'] =
     this.gitCommands.getRuntimeGitHistory.bind(this.gitCommands)
   getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation'] =

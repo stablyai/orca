@@ -19,6 +19,7 @@ import type {
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../../shared/gitignore-entry'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   type ResolvedSourceControlAiGenerationParams
@@ -59,6 +60,8 @@ import {
 } from '../providers/ssh-git-dispatch'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
+import { appendGitignoreEntries, appendGitignoreEntriesWithProvider } from '../git/gitignore-entry'
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -238,6 +241,21 @@ export class RuntimeGitCommands {
       return provider.checkIgnoredPaths(target.worktree.path, relativePaths)
     }
     return checkIgnoredPaths(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
+  }
+
+  async appendRuntimeGitignoreEntries(
+    worktreeSelector: string,
+    entries: GitignoreEntry[]
+  ): Promise<AppendGitignoreEntriesResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    if (target.connectionId) {
+      return appendGitignoreEntriesWithProvider(
+        target.worktree.path,
+        entries,
+        requireSshFilesystemProvider(target.connectionId)
+      )
+    }
+    return appendGitignoreEntries(target.worktree.path, entries)
   }
 
   async getRuntimeGitHistory(

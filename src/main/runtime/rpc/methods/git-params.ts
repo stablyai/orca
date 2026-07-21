@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import {
+  MAX_GITIGNORE_ENTRY_COUNT,
+  MAX_GITIGNORE_RELATIVE_PATH_LENGTH
+} from '../../../../shared/gitignore-entry'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -15,6 +19,24 @@ export const GitStatusParams = WorktreeSelector.extend({
 
 export const GitCheckIgnored = WorktreeSelector.extend({
   paths: z.array(z.string().min(1, 'Missing path')).max(2000)
+})
+
+export const GitAppendGitignoreEntries = WorktreeSelector.extend({
+  entries: z
+    .array(
+      z.object({
+        relativePath: z
+          .string()
+          .min(1, 'Missing path')
+          .max(MAX_GITIGNORE_RELATIVE_PATH_LENGTH)
+          .refine(
+            (value) => !value.includes('\0') && !value.includes('\r') && !value.includes('\n'),
+            'Invalid path'
+          ),
+        isDirectory: z.boolean()
+      })
+    )
+    .max(MAX_GITIGNORE_ENTRY_COUNT)
 })
 
 export const GitSubmoduleStatus = WorktreeSelector.extend({

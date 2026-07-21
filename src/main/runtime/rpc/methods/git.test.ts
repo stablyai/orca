@@ -128,6 +128,51 @@ describe('git RPC methods', () => {
     })
   })
 
+  it('appends validated gitignore entries for a selected worktree', async () => {
+    const appendRuntimeGitignoreEntries = vi.fn().mockResolvedValue({
+      added: ['dist'],
+      alreadyPresent: ['coverage']
+    })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      appendRuntimeGitignoreEntries
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const entries = [
+      { relativePath: 'dist', isDirectory: true },
+      { relativePath: 'coverage', isDirectory: true }
+    ]
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.appendGitignoreEntries', { worktree: 'id:wt-1', entries })
+    )
+
+    expect(appendRuntimeGitignoreEntries).toHaveBeenCalledWith('id:wt-1', entries)
+    expect(response).toMatchObject({
+      ok: true,
+      result: { added: ['dist'], alreadyPresent: ['coverage'] }
+    })
+  })
+
+  it('rejects malformed gitignore entry payloads before dispatch', async () => {
+    const appendRuntimeGitignoreEntries = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      appendRuntimeGitignoreEntries
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.appendGitignoreEntries', {
+        worktree: 'id:wt-1',
+        entries: [{ relativePath: 'dist\nsecrets', isDirectory: true }]
+      })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(appendRuntimeGitignoreEntries).not.toHaveBeenCalled()
+  })
+
   it('returns submodule status for a selected worktree area', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
