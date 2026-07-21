@@ -25,6 +25,17 @@ export type PetSurface = {
   kind: PetSurfaceKind
   /** Last time this surface reported itself alive (ms epoch). */
   seenAt: number
+  /**
+   * Pet ids this surface can draw, or null for "anything".
+   *
+   * Desktop surfaces read sprites off disk and report null. A phone can only
+   * draw what was compiled into its bundle, so it reports that list. Without
+   * this, identity and location disagree: the phone receives a pet it has no
+   * sheet for and draws whatever it has — which is how the operator watched a
+   * gandalf walk off the desktop and a pepe walk onto the phone. A surface that
+   * cannot draw the current pet is not a destination.
+   */
+  renderablePetIds: string[] | null
 }
 
 export type PetEdge = 'left' | 'right' | 'top' | 'bottom'
@@ -41,6 +52,17 @@ export type PetPoint = { x: number; y: number }
 export type PetPresence = {
   /** Surface currently holding the pet, or null when no surface is alive. */
   surfaceId: string | null
+  /**
+   * WHICH pet is travelling — the creature's identity, not just its location.
+   *
+   * Presence used to carry only who holds the pet and where, so each surface
+   * picked its own sprite and the "handoff" was really two unrelated pets
+   * taking turns being visible. Identity belongs here, next to position and
+   * ownership, because it is the same fact: there is one pet.
+   *
+   * Null before any surface has reported the operator's selection.
+   */
+  petId: string | null
   position: PetPoint
   /** Which way the pet is facing, so an arrival animation can march inward. */
   facing: 'left' | 'right'
@@ -80,6 +102,43 @@ export const HANDOFF_TARGET_MAX_AGE_MS = 20_000
 /** Stricter liveness used only when choosing where the pet may GO. */
 export function isSurfaceHandoffEligible(surface: PetSurface, now: number): boolean {
   return now - surface.seenAt < HANDOFF_TARGET_MAX_AGE_MS
+}
+
+/**
+ * Can this surface draw this particular pet?
+ *
+ * A null roster means "anything" (desktop surfaces load sprites from disk). A
+ * null petId means nothing has claimed an identity yet, which no surface should
+ * be blocked on.
+ *
+ * The deliberate consequence: a custom pet that was never bundled into the
+ * phone simply does not cross to the phone. It stays on the desktop rather than
+ * arriving as a different creature. Silent substitution is the bug, not the
+ * fallback.
+ */
+export function canSurfaceRenderPet(surface: PetSurface, petId: string | null): boolean {
+  if (petId === null || surface.renderablePetIds === null) {
+    return true
+  }
+  return surface.renderablePetIds.includes(petId)
+}
+
+/**
+ * Record which pet the operator has selected. Called by whichever surface owns
+ * that selection (the desktop); phones mirror it and never write it.
+ *
+ * Returns the presence by identity when unchanged, so the authority's commit
+ * check stays an exact comparison rather than a deep diff.
+ */
+export function applyPetIdentity(
+  presence: PetPresence,
+  petId: string,
+  now: number
+): PetPresence {
+  if (presence.petId === petId) {
+    return presence
+  }
+  return { ...presence, petId, updatedAt: now }
 }
 
 /** Order handoff destinations are considered in. Earlier kinds win, so a pet
@@ -156,10 +215,14 @@ export function facingAfterEntry(
 export function pickHandoffTarget(
   surfaces: PetSurface[],
   fromSurfaceId: string,
-  now: number
+  now: number,
+  petId: string | null = null
 ): PetSurface | null {
   const candidates = surfaces.filter(
-    (surface) => surface.id !== fromSurfaceId && isSurfaceHandoffEligible(surface, now)
+    (surface) =>
+      surface.id !== fromSurfaceId &&
+      isSurfaceHandoffEligible(surface, now) &&
+      canSurfaceRenderPet(surface, petId)
   )
   if (candidates.length === 0) {
     return null
@@ -179,6 +242,7 @@ export function pickHandoffTarget(
 export function initialPresence(now: number): PetPresence {
   return {
     surfaceId: null,
+    petId: null,
     position: { x: 0.5, y: 0.5 },
     facing: 'right',
     enteredFromEdge: null,
@@ -202,12 +266,13 @@ export function applyEdgeExit(
   if (presence.surfaceId !== fromSurfaceId) {
     return presence
   }
-  const target = pickHandoffTarget(surfaces, fromSurfaceId, now)
+  const target = pickHandoffTarget(surfaces, fromSurfaceId, now, presence.petId)
   if (!target) {
     return presence
   }
   const entryEdge = oppositeEdge(edge)
   return {
+    ...presence,
     surfaceId: target.id,
     position: entryPointFor(edge, position),
     facing: facingAfterEntry(entryEdge, presence.facing),
@@ -253,12 +318,17 @@ export function reconcileSurfaces(
   if (holderAlive) {
     return presence
   }
+  const ranked = [...alive].sort(
+    (a, b) =>
+      HANDOFF_PREFERENCE.indexOf(a.kind) - HANDOFF_PREFERENCE.indexOf(b.kind) ||
+      b.seenAt - a.seenAt
+  )
+  // Prefer a surface that can actually draw this pet, but fall back to any live
+  // surface rather than stranding it. Recovery differs from handoff here on
+  // purpose: refusing to hand off leaves the pet somewhere visible, whereas
+  // refusing to adopt would leave it nowhere at all.
   const adopted =
-    [...alive].sort(
-      (a, b) =>
-        HANDOFF_PREFERENCE.indexOf(a.kind) - HANDOFF_PREFERENCE.indexOf(b.kind) ||
-        b.seenAt - a.seenAt
-    )[0] ?? null
+    ranked.find((surface) => canSurfaceRenderPet(surface, presence.petId)) ?? ranked[0] ?? null
   if (!adopted) {
     return presence
   }

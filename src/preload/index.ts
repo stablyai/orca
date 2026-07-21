@@ -2304,6 +2304,7 @@ const api = {
       ipcRenderer.invoke('petPresence:reportExit', surfaceId, edge, position),
     acknowledgeEntry: (surfaceId: string) =>
       ipcRenderer.invoke('petPresence:acknowledgeEntry', surfaceId),
+    setPetId: (petId: string) => ipcRenderer.invoke('petPresence:setPetId', petId),
     claim: (surfaceId: string) => ipcRenderer.invoke('petPresence:claim', surfaceId),
     onChanged: (callback: (snapshot: PetPresenceSnapshot) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, snapshot: PetPresenceSnapshot): void =>

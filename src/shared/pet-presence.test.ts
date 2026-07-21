@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   acknowledgeEntry,
   applyEdgeExit,
+  applyPetIdentity,
   entryPointFor,
   facingAfterEntry,
   initialPresence,
@@ -18,8 +19,13 @@ import {
 
 const NOW = 1_700_000_000_000
 
-function surface(id: string, kind: PetSurface['kind'], seenAt = NOW): PetSurface {
-  return { id, kind, seenAt }
+function surface(
+  id: string,
+  kind: PetSurface['kind'],
+  seenAt = NOW,
+  renderablePetIds: string[] | null = null
+): PetSurface {
+  return { id, kind, seenAt, renderablePetIds }
 }
 
 describe('edge geometry', () => {
@@ -257,5 +263,88 @@ describe('reconcileSurfaces', () => {
       NOW
     )
     expect(next).toBe(presence)
+  })
+})
+
+describe('pet identity travels with the pet (bug 3)', () => {
+  it('records the selected pet and no-ops on an unchanged id', () => {
+    const presence = initialPresence(NOW)
+    const named = applyPetIdentity(presence, 'mini-gandalf-the-grey', NOW + 1)
+    expect(named.petId).toBe('mini-gandalf-the-grey')
+    // Identity by reference on a repeat: the authority's commit check depends
+    // on it, so this is behaviour and not an optimisation detail.
+    expect(applyPetIdentity(named, 'mini-gandalf-the-grey', NOW + 2)).toBe(named)
+  })
+
+  it('carries identity across a handoff unchanged', () => {
+    const presence = {
+      ...initialPresence(NOW),
+      surfaceId: 'desk',
+      petId: 'mini-gandalf-the-grey'
+    }
+    const next = applyEdgeExit(
+      presence,
+      [
+        surface('desk', 'desktop-window'),
+        surface('phone', 'phone', NOW, ['mini-gandalf-the-grey', 'apupepe'])
+      ],
+      { fromSurfaceId: 'desk', edge: 'right', position: { x: 1, y: 0.5 }, now: NOW + 1 }
+    )
+    expect(next.surfaceId).toBe('phone')
+    // The whole point: a gandalf that walks off the desktop is still a gandalf.
+    expect(next.petId).toBe('mini-gandalf-the-grey')
+  })
+
+  it('refuses to hand a pet to a surface that cannot draw it', () => {
+    // The operator's report: a custom pet arriving on the phone as 'apupepe'.
+    // Staying put is correct; silent substitution is the bug.
+    const presence = { ...initialPresence(NOW), surfaceId: 'desk', petId: 'custom-wizard' }
+    const next = applyEdgeExit(
+      presence,
+      [surface('desk', 'desktop-window'), surface('phone', 'phone', NOW, ['apupepe'])],
+      { fromSurfaceId: 'desk', edge: 'right', position: { x: 1, y: 0.5 }, now: NOW + 1 }
+    )
+    expect(next).toBe(presence)
+  })
+
+  it('still hands over when the phone has the pet bundled', () => {
+    const presence = { ...initialPresence(NOW), surfaceId: 'desk', petId: 'apupepe' }
+    const next = applyEdgeExit(
+      presence,
+      [surface('desk', 'desktop-window'), surface('phone', 'phone', NOW, ['apupepe'])],
+      { fromSurfaceId: 'desk', edge: 'right', position: { x: 1, y: 0.5 }, now: NOW + 1 }
+    )
+    expect(next.surfaceId).toBe('phone')
+  })
+
+  it('a null roster means the surface can draw anything', () => {
+    const target = pickHandoffTarget(
+      [surface('desk', 'desktop-window'), surface('popout', 'popout-window')],
+      'desk',
+      NOW,
+      'some-custom-pet'
+    )
+    expect(target?.id).toBe('popout')
+  })
+
+  it('adopts a renderable surface over a nearer one that cannot draw the pet', () => {
+    // Recovery still prefers correctness, but must never strand the pet.
+    const presence = { ...initialPresence(NOW), surfaceId: 'dead', petId: 'custom-wizard' }
+    const next = reconcileSurfaces(
+      presence,
+      [surface('phone', 'phone', NOW, ['apupepe']), surface('desk', 'desktop-window')],
+      NOW + 1
+    )
+    expect(next.surfaceId).toBe('desk')
+  })
+
+  it('falls back to any live surface rather than leaving the pet nowhere', () => {
+    const presence = { ...initialPresence(NOW), surfaceId: 'dead', petId: 'custom-wizard' }
+    const next = reconcileSurfaces(
+      presence,
+      [surface('phone', 'phone', NOW, ['apupepe'])],
+      NOW + 1
+    )
+    expect(next.surfaceId).toBe('phone')
   })
 })

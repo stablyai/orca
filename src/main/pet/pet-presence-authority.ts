@@ -4,6 +4,7 @@ import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getCanonicalUserDataPath } from '../persistence'
 import {
   applyEdgeExit,
+  applyPetIdentity,
   acknowledgeEntry,
   initialPresence,
   isSurfaceAlive,
@@ -78,6 +79,10 @@ class PetPresenceAuthority {
           y: typeof stored.position?.y === 'number' ? stored.position.y : 0.5
         },
         facing: stored.facing === 'left' ? 'left' : 'right',
+        // Why petId IS restored while surfaceId is not: identity outlives a
+        // restart (it is the operator's choice of creature), whereas a surface
+        // is a live window that no longer exists.
+        petId: typeof stored.petId === 'string' ? stored.petId : null,
         // Why surfaceId is dropped: it names a window that no longer exists.
         // reconcileSurfaces adopts a live surface as soon as one registers.
         surfaceId: null
@@ -168,11 +173,16 @@ class PetPresenceAuthority {
 
   /** Register or heartbeat a surface. Clients call this on mount and on a timer;
    *  a surface that stops calling is swept by reconcile(). */
-  registerSurface(id: string, kind: PetSurfaceKind): PetPresenceSnapshot {
+  registerSurface(
+    id: string,
+    kind: PetSurfaceKind,
+    /** Pet ids this surface can draw; null (the desktop case) means anything. */
+    renderablePetIds: string[] | null = null
+  ): PetPresenceSnapshot {
     this.load()
     const now = Date.now()
     const isNew = !this.surfaces.has(id)
-    this.surfaces.set(id, { id, kind, seenAt: now })
+    this.surfaces.set(id, { id, kind, seenAt: now, renderablePetIds })
     this.ensureTimer()
     const changed = this.commit(
       reconcileSurfaces(this.presence, [...this.surfaces.values()], now)
@@ -213,6 +223,17 @@ class PetPresenceAuthority {
         now
       })
     )
+    return this.snapshot()
+  }
+
+  /**
+   * Record which pet the operator has selected, so identity travels with the
+   * pet instead of each surface guessing. Called by desktop surfaces, which own
+   * that selection; a phone mirrors what it is told.
+   */
+  setPetId(petId: string): PetPresenceSnapshot {
+    this.load()
+    this.commit(applyPetIdentity(this.presence, petId, Date.now()))
     return this.snapshot()
   }
 

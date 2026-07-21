@@ -20,7 +20,15 @@ const Edge = z.enum(['left', 'right', 'top', 'bottom'])
 
 const RegisterSurfaceParams = z.object({
   surfaceId: SurfaceId,
-  kind: SurfaceKind
+  kind: SurfaceKind,
+  // Which pets this surface can draw. Omitted means "anything", the desktop
+  // case; a phone sends the list its bundle actually contains so the pet is
+  // never handed somewhere it would be drawn as a different creature.
+  renderablePetIds: z.array(z.string().min(1)).max(500).nullable().optional()
+})
+
+const SetPetIdParams = z.object({
+  petId: z.string().min(1, 'Missing petId').max(200)
 })
 
 const SurfaceOnlyParams = z.object({ surfaceId: SurfaceId })
@@ -49,7 +57,18 @@ export const PET_PRESENCE_METHODS: readonly RpcAnyMethod[] = [
     name: 'pet.registerSurface',
     params: RegisterSurfaceParams,
     handler: async (params) =>
-      petPresenceAuthority.registerSurface(params.surfaceId, params.kind)
+      petPresenceAuthority.registerSurface(
+        params.surfaceId,
+        params.kind,
+        params.renderablePetIds ?? null
+      )
+  }),
+  defineMethod({
+    // Identity, not location: which creature is travelling. Written by the
+    // surface that owns the operator's selection.
+    name: 'pet.setPetId',
+    params: SetPetIdParams,
+    handler: async (params) => petPresenceAuthority.setPetId(params.petId)
   }),
   defineMethod({
     name: 'pet.removeSurface',

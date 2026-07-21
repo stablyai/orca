@@ -2357,6 +2357,9 @@ export type PreloadApi = {
       position: PetPoint
     ) => Promise<PetPresenceSnapshot>
     acknowledgeEntry: (surfaceId: string) => Promise<PetPresenceSnapshot>
+    /** Tell the authority which pet the operator has selected, so identity
+     *  travels with the pet across surfaces instead of each one guessing. */
+    setPetId: (petId: string) => Promise<PetPresenceSnapshot>
     claim: (surfaceId: string) => Promise<PetPresenceSnapshot>
     onChanged: (callback: (snapshot: PetPresenceSnapshot) => void) => () => void
   }

@@ -34,20 +34,30 @@ type PetFrameManifest = Record<
 
 const FRAMES = petFrames as PetFrameManifest
 
+/** Every pet this build has sheets for. Reported to the authority so it never
+ *  routes a creature here that this bundle cannot draw. */
+const RENDERABLE_PET_IDS = Object.keys(FRAMES)
+
 export function MobilePetOverlay({
   client,
-  petId,
   enabled = true
 }: {
   client: RpcClient | null
-  /** Which bundled pet to draw. Falls back to the first available. */
-  petId?: string
   enabled?: boolean
 }): React.JSX.Element | null {
   const { width, height } = useWindowDimensions()
-  const presence = useMobilePetPresence({ client, enabled })
+  const presence = useMobilePetPresence({
+    client,
+    enabled,
+    renderablePetIds: RENDERABLE_PET_IDS
+  })
 
-  const resolvedId = petId && FRAMES[petId] ? petId : Object.keys(FRAMES)[0]
+  // Identity comes from the authority, NEVER a local default. The old fallback
+  // to Object.keys(FRAMES)[0] — alphabetically 'apupepe' — is exactly why a
+  // gandalf walking off the desktop arrived here as a pepe. Drawing nothing is
+  // correct for a pet we cannot render; the authority also refuses to hand one
+  // here, so this is belt-and-braces rather than a reachable blank screen.
+  const resolvedId = presence.petId
   const entry = resolvedId ? FRAMES[resolvedId] : undefined
   const sheet = resolvedId ? petSheetFor(resolvedId) : null
 

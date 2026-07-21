@@ -15,7 +15,7 @@ import { buildSpriteAnimationCss } from './sprite-animation-css'
 import { PetBubble } from './pet-bubble'
 import { clampPositionToViewport, type Position } from '../../../../shared/pet-roam'
 import { usePetRoam } from './usePetRoam'
-import { usePetPresence, usePetSurfaceSync } from './use-pet-presence'
+import { usePetIdentityReporting, usePetPresence, usePetSurfaceSync } from './use-pet-presence'
 import type { PetSurfaceKind } from '../../../../shared/pet-presence'
 
 type Sprite = NonNullable<CustomPet['sprite']>
@@ -365,6 +365,10 @@ export function PetOverlay({
   // popouts, the phone). The authority decides who holds the pet; we only
   // register, report edges, and draw when told.
   const presence = usePetPresence(true, surfaceKind)
+
+  // Identity travels with the pet: the desktop owns the operator's choice of
+  // creature, so it publishes it. Without this the phone drew a different pet.
+  usePetIdentityReporting(useAppStore((s) => s.petId))
 
   // Why roam is gated on holding the pet: a window that does not hold it must
   // not be simulating a second pet in the background, or the two would drift

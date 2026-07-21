@@ -43,6 +43,8 @@ const SURFACE_ID = `phone-${Date.now().toString(36)}-${Math.random().toString(36
 export type MobilePetPresence = {
   /** True when this phone should be drawing the pet. */
   holdsPet: boolean
+  /** WHICH pet the authority says is travelling, or null before it has said. */
+  petId: string | null
   position: PetPoint
   facing: 'left' | 'right'
   enteredFromEdge: PetEdge | null
@@ -55,8 +57,17 @@ export type MobilePetPresence = {
 export function useMobilePetPresence(options: {
   client: RpcClient | null
   enabled: boolean
+  /**
+   * Pet ids this phone actually has sheets for. Sent with every heartbeat so
+   * the authority never hands the pet to a device that would draw a different
+   * creature — a custom pet that was not bundled simply stays on the desktop.
+   */
+  renderablePetIds: string[]
 }): MobilePetPresence {
-  const { client, enabled } = options
+  const { client, enabled, renderablePetIds } = options
+  // Stringified so a fresh array literal from the caller does not restart the
+  // heartbeat on every render.
+  const renderableKey = renderablePetIds.join(',')
   const surfaceIdRef = useRef<string>(SURFACE_ID)
   const [snapshot, setSnapshot] = useState<PetPresenceSnapshot>(() => ({
     presence: initialPresence(Date.now()),
@@ -104,7 +115,11 @@ export function useMobilePetPresence(options: {
 
     const beat = (): void => {
       if (!disposed) {
-        void call('pet.registerSurface', { surfaceId, kind: 'phone' })
+        void call('pet.registerSurface', {
+          surfaceId,
+          kind: 'phone',
+          renderablePetIds: renderableKey === '' ? [] : renderableKey.split(',')
+        })
       }
     }
     beat()
@@ -123,7 +138,7 @@ export function useMobilePetPresence(options: {
       // it on a phone for the full stale window.
       void call('pet.removeSurface', { surfaceId })
     }
-  }, [enabled, client, call])
+  }, [enabled, client, call, renderableKey])
 
   const reportExit = useCallback(
     (edge: PetEdge, position: PetPoint) => {
@@ -152,6 +167,7 @@ export function useMobilePetPresence(options: {
   const { presence, surfaces } = snapshot
   return {
     holdsPet: authorityAnswered && presence.surfaceId === surfaceId,
+    petId: presence.petId,
     position: presence.position,
     facing: presence.facing,
     enteredFromEdge: presence.enteredFromEdge,

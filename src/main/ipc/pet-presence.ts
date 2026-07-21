@@ -66,6 +66,12 @@ export function registerPetPresenceHandlers(): void {
   )
 
   ipcMain.handle(
+    'petPresence:setPetId',
+    async (_event, petId: string): Promise<PetPresenceSnapshot> =>
+      petPresenceAuthority.setPetId(petId)
+  )
+
+  ipcMain.handle(
     'petPresence:claim',
     async (_event, surfaceId: string): Promise<PetPresenceSnapshot> =>
       petPresenceAuthority.claim(surfaceId)

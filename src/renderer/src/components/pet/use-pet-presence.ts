@@ -159,6 +159,27 @@ export function usePetPresence(
   }
 }
 
+/**
+ * Publish which pet the operator has selected, so identity travels with the pet.
+ *
+ * Desktop surfaces own that selection (it lives in the app store); a phone only
+ * mirrors it. Before this, presence carried who held the pet and where but never
+ * WHICH pet, so each surface picked its own sprite — the phone drew the first
+ * pet in its bundle and the "handoff" was two different creatures taking turns.
+ *
+ * Idempotent by design: every window reports the same value and the authority
+ * no-ops on an unchanged id, so it does not matter which one gets there first.
+ */
+export function usePetIdentityReporting(petId: string | null | undefined): void {
+  useEffect(() => {
+    const api = window.api?.petPresence
+    if (!api || !petId) {
+      return
+    }
+    void api.setPetId(petId)
+  }, [petId])
+}
+
 /** Pixel position within a surface, as the overlay tracks it. */
 type PixelPosition = { x: number; y: number }
 
