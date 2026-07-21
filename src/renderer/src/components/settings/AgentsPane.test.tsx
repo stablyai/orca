@@ -314,6 +314,31 @@ describe('AgentsPane', () => {
     expect(detectedAgentsMock.refresh).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the WSL runtime selectable when capability detection is unavailable', async () => {
+    const updateSettings = vi.fn()
+    const element = AgentRuntimeSetting({
+      settings: getDefaultSettings('/tmp'),
+      updateSettings,
+      refresh: detectedAgentsMock.refresh,
+      wslSupportedPlatform: true,
+      wslAvailable: false,
+      wslDistros: [],
+      wslCapabilitiesLoading: false
+    })
+    const control = findSegmentedControl(element, 'Agent runtime')
+    const options = control.props.options as { value: string; disabled?: boolean }[]
+    const onChange = control.props.onChange as (value: 'windows-host' | 'wsl') => void
+
+    expect(options.find((option) => option.value === 'wsl')?.disabled).toBe(false)
+    onChange('wsl')
+    await flushPromiseQueue()
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
+    })
+    expect(detectedAgentsMock.refresh).toHaveBeenCalledTimes(1)
+  })
+
   it('describes Windows lid behavior according to the device', () => {
     expect(getAgentAwakeDescription('Windows')).toBe(
       "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings."

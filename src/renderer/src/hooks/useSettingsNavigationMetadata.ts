@@ -78,6 +78,7 @@ import { buildSettingsProjectList } from '@/components/settings/settings-project
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getWindowsTerminalCapabilityOwnerKey,
+  useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -114,6 +115,7 @@ function getDevToolsPaneSearchEntries(): SettingsNavSection['searchEntries'] {
 export function buildSettingsNavigationMetadata({
   isMac,
   isWindows,
+  isLocalWindowsHost = isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
   isDev = import.meta.env.DEV,
@@ -122,6 +124,7 @@ export function buildSettingsNavigationMetadata({
 }: {
   isMac: boolean
   isWindows: boolean
+  isLocalWindowsHost?: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
   isDev?: boolean
@@ -156,7 +159,7 @@ export function buildSettingsNavigationMetadata({
         'Manage AI agents, set a default, and customize commands.'
       ),
       icon: Bot,
-      searchEntries: getAgentsPaneSearchEntries({ includeAgentRuntime: isWindowsTerminalHost }),
+      searchEntries: getAgentsPaneSearchEntries({ includeAgentRuntime: isLocalWindowsHost }),
       group: 'capabilities'
     },
     {
@@ -269,7 +272,7 @@ export function buildSettingsNavigationMetadata({
         'Workspace defaults, app setup, and maintenance.'
       ),
       icon: SlidersHorizontal,
-      searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isWindowsTerminalHost }),
+      searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isLocalWindowsHost }),
       group: 'setup'
     },
     {
@@ -633,6 +636,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget
   )
+  const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(isWebClient)
+  const isLocalWindowsHost = isWindows || localWindowsTerminalCapabilities.hostPlatform === 'win32'
   const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
@@ -643,6 +648,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       buildSettingsNavigationMetadata({
         isMac,
         isWindows,
+        isLocalWindowsHost,
         isWindowsTerminalHost,
         isWebClient,
         isDev: import.meta.env.DEV,
@@ -650,6 +656,15 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         repos
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
-    [isMac, isWindows, isWindowsTerminalHost, isWebClient, isLinearConnected, repos, activeLocale]
+    [
+      isMac,
+      isWindows,
+      isLocalWindowsHost,
+      isWindowsTerminalHost,
+      isWebClient,
+      isLinearConnected,
+      repos,
+      activeLocale
+    ]
   )
 }

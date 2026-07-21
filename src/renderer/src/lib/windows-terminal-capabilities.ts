@@ -263,6 +263,14 @@ export function useWindowsTerminalCapabilities(
   return selectWindowsTerminalCapabilitiesForOwner(state, enabled, resolvedOwnerKey)
 }
 
+export function useLocalWindowsTerminalCapabilities(
+  enabled: boolean,
+  forceRefreshOnMount = false
+): WindowsTerminalCapabilities {
+  // 原因：本机全局设置的能力所有者不能随当前附加的远程运行环境切换。
+  return useWindowsTerminalCapabilities(enabled, forceRefreshOnMount, 'local', { kind: 'local' })
+}
+
 export function resetWindowsTerminalCapabilitiesForTests(): void {
   cachedCapabilitiesByOwnerKey.clear()
   pendingCapabilitiesByOwnerKey.clear()

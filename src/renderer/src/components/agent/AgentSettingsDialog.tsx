@@ -9,11 +9,7 @@ import {
 import { AgentsPane } from '@/components/settings/AgentsPane'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import {
-  getWindowsTerminalCapabilityOwnerKey,
-  useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useLocalWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/lib/web-client-location'
 
 type AgentSettingsDialogProps = {
@@ -27,20 +23,15 @@ export default function AgentSettingsDialog({
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const runtimeTarget = getActiveRuntimeTarget(settings)
-  const runtimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
-  const capabilitiesOwnerKey = getWindowsTerminalCapabilityOwnerKey(runtimeEnvironmentId)
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    open && (isWindowsRenderer || isWebClient || runtimeTarget.kind === 'environment'),
-    false,
-    capabilitiesOwnerKey,
-    runtimeTarget
+  const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
+    open && (isWindowsRenderer || isWebClient),
+    false
   )
   const wslSupportedPlatform =
-    isWindowsRenderer || windowsTerminalCapabilities.hostPlatform === 'win32'
+    isWindowsRenderer || localWindowsTerminalCapabilities.hostPlatform === 'win32'
 
   if (!settings) {
     return null
@@ -69,9 +60,9 @@ export default function AgentSettingsDialog({
             settings={settings}
             updateSettings={updateSettings}
             wslSupportedPlatform={wslSupportedPlatform}
-            wslAvailable={windowsTerminalCapabilities.wslAvailable}
-            wslDistros={windowsTerminalCapabilities.wslDistros}
-            wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+            wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
+            wslDistros={localWindowsTerminalCapabilities.wslDistros}
+            wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
           />
         </div>
       </DialogContent>

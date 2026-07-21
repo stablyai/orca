@@ -100,6 +100,28 @@ describe('DefaultWindowsProjectRuntimeSetting', () => {
     })
   })
 
+  it('saves a repairable WSL default when capability detection is unavailable', () => {
+    const updateSettings = vi.fn()
+    const element = renderSetting({
+      settings: getDefaultSettings('/tmp'),
+      updateSettings,
+      wslSupportedPlatform: true,
+      wslAvailable: false,
+      wslDistros: [],
+      wslCapabilitiesLoading: false
+    })
+    const control = findRuntimeControl(element)
+    const options = control.props.options as { value: string; disabled?: boolean }[]
+    const onChange = control.props.onChange as (value: 'windows-host' | 'wsl') => void
+
+    expect(options.find((option) => option.value === 'wsl')?.disabled).toBe(false)
+    onChange('wsl')
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
+    })
+  })
+
   it('updates the selected WSL distro for the global default', () => {
     const updateSettings = vi.fn()
     const element = renderSetting({

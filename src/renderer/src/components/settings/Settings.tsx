@@ -78,6 +78,7 @@ import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
   getWindowsTerminalCapabilityOwnerKey,
+  useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -842,23 +843,37 @@ function Settings(): React.JSX.Element {
   const needsRepoWindowsRuntimeCapabilities = [...neededSectionIds].some((sectionId) =>
     sectionId.startsWith('repo-')
   )
+  const needsLocalWindowsRuntimeCapabilities =
+    (isWindows || isWebClient) &&
+    (neededSectionIds.has('agents') || neededSectionIds.has('general'))
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
     ((isWindows || isWebClient) &&
       (neededSectionIds.has('terminal') ||
-        neededSectionIds.has('general') ||
         neededSectionIds.has('accounts') ||
-        neededSectionIds.has('agents') ||
-        needsRepoWindowsRuntimeCapabilities))
-  // Why: General owns the Orca CLI controls, including WSL skill-location setup.
+        needsRepoWindowsRuntimeCapabilities ||
+        (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities)))
+  // 原因：终端、账号和项目设置描述当前执行宿主，需保留环境级能力。
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget
   )
+  // 原因：全局 Agent 和项目默认运行时归本机所有，不能继承当前远程环境的能力。
+  const remoteViewLocalWindowsRuntimeCapabilities = useLocalWindowsTerminalCapabilities(
+    needsLocalWindowsRuntimeCapabilities && runtimeTarget.kind === 'environment',
+    true
+  )
+  const localWindowsRuntimeCapabilities =
+    runtimeTarget.kind === 'local'
+      ? windowsTerminalCapabilities
+      : remoteViewLocalWindowsRuntimeCapabilities
   // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).
-  const wslSupportedPlatform = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const runtimeWslSupportedPlatform =
+    isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const localWslSupportedPlatform =
+    isWindows || localWindowsRuntimeCapabilities.hostPlatform === 'win32'
   const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
 
   if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
@@ -1183,10 +1198,10 @@ function Settings(): React.JSX.Element {
                     <AgentsPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={wslSupportedPlatform}
-                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
-                      wslDistros={windowsTerminalCapabilities.wslDistros}
-                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
+                      wslDistros={localWindowsRuntimeCapabilities.wslDistros}
+                      wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1211,7 +1226,7 @@ function Settings(): React.JSX.Element {
                     <AccountsPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={wslSupportedPlatform}
+                      wslSupportedPlatform={runtimeWslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
@@ -1310,10 +1325,10 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       fontSuggestions={terminalFontSuggestions}
                       onRequestFontSuggestions={requestFontSuggestions}
-                      wslSupportedPlatform={wslSupportedPlatform}
-                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
-                      wslDistros={windowsTerminalCapabilities.wslDistros}
-                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
+                      wslDistros={localWindowsRuntimeCapabilities.wslDistros}
+                      wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
                     />
                   ) : null}
                 </SettingsSection>
