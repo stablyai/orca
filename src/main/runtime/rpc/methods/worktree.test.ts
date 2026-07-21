@@ -34,7 +34,7 @@ describe('worktree RPC methods', () => {
 
     await dispatcher.dispatch(makeRequest('worktree.ps', { repo: 'id:repo-a', limit: 1 }))
 
-    expect(runtime.getWorktreePs).toHaveBeenCalledWith('id:repo-a', 1)
+    expect(runtime.getWorktreePs).toHaveBeenCalledWith(1, { repoSelector: 'id:repo-a' })
   })
 
   it('routes mobile session-only activation without notifying desktop clients', async () => {

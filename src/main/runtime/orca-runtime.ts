@@ -10841,6 +10841,7 @@ export class OrcaRuntimeService {
       throw new Error('invalid_limit')
     }
     const graphEpoch = this.graphStatus === 'ready' ? this.rendererGraphEpoch : null
+    const repoId = opts.repoSelector ? (await this.resolveRepoSelector(opts.repoSelector)).id : null
     const explicitTargetWorktreeId = worktreeSelector
       ? this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
       : null
@@ -10860,8 +10861,12 @@ export class OrcaRuntimeService {
         : null
     const targetWorktree =
       worktreeSelector && !explicitTargetWorktreeId
-        ? await this.resolveWorktreeSelector(worktreeSelector)
+        ? await this.resolveWorktreeSelector(worktreeSelector, repoId)
         : (cachedExplicitTargetWorktree ?? parsedExplicitTargetWorktree)
+    // Why: repo scope is a safety boundary; a worktree from another repo must not bypass it.
+    if (targetWorktree && repoId !== null && targetWorktree.repoId !== repoId) {
+      throw new Error('selector_not_found')
+    }
     const targetWorktreeId = explicitTargetWorktreeId ?? targetWorktree?.id ?? null
     const classificationResolvedWorktreeCache = this.resolvedWorktreeCache
     const classificationResolvedWorktrees =
@@ -10875,10 +10880,6 @@ export class OrcaRuntimeService {
         : targetWorktreeId && explicitTargetWorktreeId
           ? this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
           : null
-    const repoId =
-      !targetWorktreeId && opts.repoSelector
-        ? (await this.resolveRepoSelector(opts.repoSelector)).id
-        : null
     const worktreesById =
       targetWorktreeId && targetWorktree
         ? new Map([[targetWorktree.id, targetWorktree]])
@@ -10893,7 +10894,7 @@ export class OrcaRuntimeService {
       this.assertStableReadyGraph(graphEpoch)
     }
 
-    const resolvedWorktrees =
+    const resolvedWorktrees = (
       targetWorktreeId && classificationResolvedWorktrees
         ? classificationResolvedWorktrees
         : targetWorktreeId && targetWorktree
@@ -10901,6 +10902,7 @@ export class OrcaRuntimeService {
           : targetWorktreeId
             ? []
             : [...worktreesById.values()]
+    ).filter((worktree) => repoId === null || worktree.repoId === repoId)
     const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
       resolvedWorktrees,
       targetWorktreeId
@@ -12096,20 +12098,18 @@ export class OrcaRuntimeService {
   }
 
   async getWorktreePs(
-    repoSelectorOrLimit?: string | number,
-    requestedLimit = DEFAULT_WORKTREE_PS_LIMIT
+    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    opts: { repoSelector?: string } = {}
   ): Promise<{
     worktrees: RuntimeWorktreePsSummary[]
     totalCount: number
     truncated: boolean
   }> {
-    const repoSelector = typeof repoSelectorOrLimit === 'string' ? repoSelectorOrLimit : undefined
-    const limit = typeof repoSelectorOrLimit === 'number' ? repoSelectorOrLimit : requestedLimit
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
+    const repoId = opts.repoSelector ? (await this.resolveRepoSelector(opts.repoSelector)).id : null
     const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
-    const repoId = repoSelector ? (await this.resolveRepoSelector(repoSelector)).id : null
     const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter(
       (worktree) =>
         this.isRuntimeWorktreeVisible(worktree) && (repoId === null || worktree.repoId === repoId)
@@ -20658,9 +20658,14 @@ export class OrcaRuntimeService {
     return worktreeId
   }
 
-  private async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
+  private async resolveWorktreeSelector(
+    selector: string,
+    repoId: string | null = null
+  ): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
-    const worktrees = await this.listResolvedWorktrees()
+    const worktrees = (await this.listResolvedWorktrees()).filter(
+      (worktree) => repoId === null || worktree.repoId === repoId
+    )
     let candidates: ResolvedWorktree[]
 
     if (selector === 'active') {

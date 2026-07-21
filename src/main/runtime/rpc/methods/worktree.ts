@@ -24,7 +24,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.ps',
     params: WorktreePsParams,
-    handler: async (params, { runtime }) => runtime.getWorktreePs(params.repo, params.limit)
+    handler: async (params, { runtime }) =>
+      runtime.getWorktreePs(params.limit, { repoSelector: params.repo })
   }),
   defineMethod({
     name: 'worktree.list',

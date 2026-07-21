@@ -19427,7 +19427,7 @@ describe('OrcaRuntimeService', () => {
           {
             path: repoBWorktreePath,
             head: 'def',
-            branch: 'feature/bar',
+            branch: 'feature/foo',
             isBare: false,
             isMainWorktree: false
           }
@@ -19495,6 +19495,36 @@ describe('OrcaRuntimeService', () => {
       'pty-fallback-a'
     ])
     expect(listed.terminals.map((terminal) => terminal.preview)).toEqual(['', 'repo a fallback'])
+
+    const scopedByBranch = await runtime.listTerminals('branch:feature/foo', undefined, {
+      repoSelector: `id:${TEST_REPO_ID}`
+    })
+    expect(scopedByBranch.terminals).toHaveLength(2)
+    expect(
+      scopedByBranch.terminals.every((terminal) => terminal.worktreeId === TEST_WORKTREE_ID)
+    ).toBe(true)
+  })
+
+  it('keeps repo scope authoritative when listing an explicit worktree', async () => {
+    const repoB = {
+      id: 'repo-2',
+      path: '/tmp/repo-b',
+      displayName: 'repo-b',
+      badgeColor: 'green',
+      addedAt: 2
+    }
+    const repos = [store.getRepos()[0]!, repoB]
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    } as never)
+
+    await expect(
+      runtime.listTerminals(`id:${TEST_WORKTREE_ID}`, undefined, {
+        repoSelector: `id:${repoB.id}`
+      })
+    ).rejects.toThrow('selector_not_found')
   })
 
   it('shows and resolves active PTY-backed mobile session terminals without a renderer graph', async () => {
@@ -23994,7 +24024,9 @@ describe('OrcaRuntimeService', () => {
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
 
-    const listed = await runtime.getWorktreePs(`id:${TEST_REPO_ID}`)
+    const listed = await runtime.getWorktreePs(undefined, {
+      repoSelector: `id:${TEST_REPO_ID}`
+    })
 
     expect(
       listed.worktrees.find((worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY)
