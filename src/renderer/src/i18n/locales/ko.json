@@ -13383,6 +13383,12 @@
         "PanelSplitMenu": {
           "chooseTile": "Choose tile to open"
         }
+      },
+      "voice": {
+        "SpeakBackToggle": {
+          "on": "Speak agent replies: on",
+          "off": "Speak agent replies: off"
+        }
       }
     },
     "i18n": {

@@ -48,6 +48,8 @@ import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
+import { SpeakBackToggle } from './components/voice/SpeakBackToggle'
+import { useDesktopSessionSpeakBack } from './lib/voice/use-desktop-session-speak-back'
 import Sidebar from './components/Sidebar'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
@@ -422,6 +424,9 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
+  // Desktop speak-back: speaks a summary when any watched agent finishes a turn.
+  // No-ops until the titlebar SpeakBackToggle is on.
+  useDesktopSessionSpeakBack()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
   const floatingWorkspaceTourInteractionSnapshotRef = useRef<{
     wasPreviouslyInteracted?: boolean
@@ -2212,6 +2217,7 @@ function App(): React.JSX.Element {
         </Tooltip>
       )}
       {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
+      <SpeakBackToggle />
       {/* Why: when the right sidebar is open, its own header renders
       an identical close button — hide this copy so only one is
       visible at a time. */}
