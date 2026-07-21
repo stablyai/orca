@@ -13922,13 +13922,13 @@
         }
       },
       "GitHubIssueWorkspaceLaunchButton": {
-        "f20e260a05": "Start workspace from issue",
-        "e4bb9f1ece": "Start",
-        "c8a6bec97e": "Choose an agent for this workspace",
-        "01be61ba14": "Start with agent",
-        "cf532aff14": "Detecting agents…",
-        "9635bbe266": "Unable to load agents",
-        "9f82809820": "No enabled agents detected"
+        "f20e260a05": "从议题启动工作区",
+        "e4bb9f1ece": "启动",
+        "c8a6bec97e": "为此工作区选择智能体",
+        "01be61ba14": "使用智能体启动",
+        "cf532aff14": "正在检测智能体…",
+        "9635bbe266": "无法加载智能体",
+        "89f202d990": "没有可用的智能体"
       }
     },
     "i18n": {

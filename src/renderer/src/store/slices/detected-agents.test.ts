@@ -352,6 +352,33 @@ describe('createDetectedAgentsSlice WSL context', () => {
     })
   })
 
+  it('detects agents for the requested repo instead of the active repo', async () => {
+    const store = createTestStore({
+      repos: [
+        makeRepo({ id: 'repo-active', path: 'C:\\active' }),
+        makeRepo({
+          id: 'repo-target',
+          path: '\\\\wsl.localhost\\Debian\\home\\alice\\target'
+        })
+      ],
+      activeRepoId: 'repo-active',
+      activeWorktreeId: null
+    })
+
+    await expect(
+      store.getState().ensureDetectedAgents({ repoId: 'repo-target' })
+    ).resolves.toEqual(['claude'])
+
+    expect(detectAgents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wslDistro: 'Debian',
+        projectRuntime: expect.objectContaining({
+          runtime: expect.objectContaining({ projectId: 'repo-target', distro: 'Debian' })
+        })
+      })
+    )
+  })
+
   it('does not keep previous context agents when detection fails after a context switch', async () => {
     detectAgents
       .mockReset()

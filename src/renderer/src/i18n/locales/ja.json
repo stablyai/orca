@@ -13922,13 +13922,13 @@
         }
       },
       "GitHubIssueWorkspaceLaunchButton": {
-        "f20e260a05": "Start workspace from issue",
-        "e4bb9f1ece": "Start",
-        "c8a6bec97e": "Choose an agent for this workspace",
-        "01be61ba14": "Start with agent",
-        "cf532aff14": "Detecting agents…",
-        "9635bbe266": "Unable to load agents",
-        "9f82809820": "No enabled agents detected"
+        "f20e260a05": "Issueからワークスペースを開始",
+        "e4bb9f1ece": "開始",
+        "c8a6bec97e": "このワークスペースで使用するエージェントを選択",
+        "01be61ba14": "エージェントで開始",
+        "cf532aff14": "エージェントを検出中…",
+        "9635bbe266": "エージェントを読み込めません",
+        "89f202d990": "利用可能なエージェントがありません"
       }
     },
     "i18n": {

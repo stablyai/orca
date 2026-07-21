@@ -111,6 +111,21 @@ export function getLocalRepoProjectExecutionRuntimeContext(
   })
 }
 
+export function getLocalRepoAgentPreflightContext(
+  state: LocalProjectRuntimeState,
+  repoId: string,
+  appPlatform: NodeJS.Platform = getRendererAppPlatform(),
+  wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext()
+): LocalPreflightContext {
+  const projectRuntime = getLocalRepoProjectExecutionRuntimeContext(
+    state,
+    repoId,
+    appPlatform,
+    wslContext
+  )
+  return projectRuntime ? getProjectRuntimePreflightContext(projectRuntime) : undefined
+}
+
 export function getLocalPreflightContext(
   state: AppState,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),

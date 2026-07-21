@@ -10,14 +10,21 @@ import {
   buildGitHubWorkItemStartupPlan,
   buildInitialGitHubWorkItemRequest,
   type GitHubWorkItemBackgroundStoreSnapshot,
-  resolvePreferredQuickAgentForGitHubWorkItem
+  resolvePreferredQuickAgentForGitHubWorkItem as resolveQuickAgent
 } from '@/lib/github-work-item-background-request'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import {
+  findPendingGitHubWorkItemCreate,
+  type GitHubWorkItemBackgroundFallbackReason
+} from '@/lib/github-work-item-background-match'
 import {
   resolveDirectPrStartPoint,
   resolveDirectSetupDecision
 } from '@/lib/launch-work-item-direct-preflight'
-import { agentLaunchCommandErrorMessage } from '@/lib/launch-work-item-direct-messages'
+import {
+  agentLaunchCommandErrorMessage,
+  unavailableAgentErrorMessage
+} from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { renderIssueCommandTemplate } from '@/lib/new-workspace'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
@@ -39,7 +46,7 @@ export type BackgroundGitHubWorkItemCreateResult =
   | { kind: 'error' }
   | {
       kind: 'fallback'
-      reason: 'repo-missing' | 'host-unavailable' | 'setup-ask' | 'pr-start-point' | 'agent-startup'
+      reason: GitHubWorkItemBackgroundFallbackReason
     }
 
 type AppActiveView = ReturnType<typeof useAppStore.getState>['activeView']
@@ -101,24 +108,6 @@ const DEFAULT_DEPS: BackgroundGitHubWorkItemCreateDeps = {
   toastError: (message) => toast.error(message)
 }
 
-function findPendingGitHubWorkItemCreate(
-  store: GitHubWorkItemBackgroundStoreSnapshot,
-  request: WorktreeCreationRequest
-): string | null {
-  if (!request.linkedIssue && !request.linkedPR) {
-    return null
-  }
-  const match = Object.values(store.pendingWorktreeCreations).find((entry) => {
-    const pending = entry.request
-    return (
-      pending.repoId === request.repoId &&
-      pending.linkedIssue === request.linkedIssue &&
-      pending.linkedPR === request.linkedPR
-    )
-  })
-  return match?.creationId ?? null
-}
-
 function repoHostUnavailable(store: GitHubWorkItemBackgroundStoreSnapshot, repo: Repo): boolean {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   if (host?.kind === 'ssh') {
@@ -169,8 +158,14 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     return { kind: 'fallback', reason: 'repo-missing' }
   }
 
-  const initialRequest = buildInitialGitHubWorkItemRequest(args, repo)
-  const existingPendingCreateId = findPendingGitHubWorkItemCreate(store, initialRequest)
+  const initialRequest = {
+    ...buildInitialGitHubWorkItemRequest(args, repo),
+    ...(args.agentOverride ? { agent: args.agentOverride } : {})
+  }
+  const existingPendingCreateId = findPendingGitHubWorkItemCreate(
+    store.pendingWorktreeCreations,
+    initialRequest
+  )
   if (existingPendingCreateId) {
     deps.activatePendingCreate(existingPendingCreateId)
     return { kind: 'background-started' }
@@ -239,15 +234,22 @@ export async function createGitHubWorkItemWorkspaceInBackground(
     }
     const setupDecision: SetupDecision =
       trustDecision === 'skip' ? 'skip' : setupResolution.decision
-    const agent = await resolvePreferredQuickAgentForGitHubWorkItem(store, repo, args.agentOverride)
+    const agent = await resolveQuickAgent(deps.getStore, repo, args.agentOverride)
     if (!deps.hasPendingCreate(creationId)) {
       return { kind: 'background-started' }
     }
+    if (args.agentOverride && !agent) {
+      deps.toastError(unavailableAgentErrorMessage())
+      abandonStagedCreate(creationId, restoreView, deps)
+      args.openModalFallback()
+      return { kind: 'fallback', reason: 'agent-unavailable' }
+    }
+    const launchStore = deps.getStore()
     const { startupPlan, quickPrompt, quickTelemetry } = buildGitHubWorkItemStartupPlan({
       agent,
       item: args.item,
       repo,
-      store
+      store: launchStore
     })
     if (agent && !startupPlan) {
       deps.toastError(agentLaunchCommandErrorMessage())

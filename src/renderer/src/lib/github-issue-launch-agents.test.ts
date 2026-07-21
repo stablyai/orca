@@ -26,14 +26,14 @@ describe('loadGitHubIssueLaunchAgents', () => {
     const agents = await loadGitHubIssueLaunchAgents(localRepo, store)
 
     expect(agents.map((agent) => agent.id)).toEqual(['claude', 'opencode'])
-    expect(store.ensureDetectedAgents).toHaveBeenCalledTimes(1)
+    expect(store.ensureDetectedAgents).toHaveBeenCalledWith({ repoId: 'repo-1' })
     expect(store.ensureRemoteDetectedAgents).not.toHaveBeenCalled()
     expect(store.ensureRuntimeDetectedAgents).not.toHaveBeenCalled()
   })
 
   it('detects agents on the owning SSH host', async () => {
     const store = makeStore()
-    const repo: Repo = { ...localRepo, connectionId: 'devbox' }
+    const repo: Repo = { ...localRepo, executionHostId: 'ssh:devbox' }
 
     const agents = await loadGitHubIssueLaunchAgents(repo, store)
 

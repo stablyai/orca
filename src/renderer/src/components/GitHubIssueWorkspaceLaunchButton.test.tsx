@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Repo } from '../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
@@ -51,11 +52,13 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
     const onStartDefault = vi.fn()
     const onStartWithAgent = vi.fn()
     render(
-      <GitHubIssueWorkspaceLaunchButton
-        repo={repo}
-        onStartDefault={onStartDefault}
-        onStartWithAgent={onStartWithAgent}
-      />
+      <TooltipProvider>
+        <GitHubIssueWorkspaceLaunchButton
+          repo={repo}
+          onStartDefault={onStartDefault}
+          onStartWithAgent={onStartWithAgent}
+        />
+      </TooltipProvider>
     )
 
     await user.click(screen.getByRole('button', { name: 'Start workspace from issue' }))
@@ -69,11 +72,13 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
     const user = userEvent.setup()
     const onStartWithAgent = vi.fn()
     render(
-      <GitHubIssueWorkspaceLaunchButton
-        repo={repo}
-        onStartDefault={vi.fn()}
-        onStartWithAgent={onStartWithAgent}
-      />
+      <TooltipProvider>
+        <GitHubIssueWorkspaceLaunchButton
+          repo={repo}
+          onStartDefault={vi.fn()}
+          onStartWithAgent={onStartWithAgent}
+        />
+      </TooltipProvider>
     )
 
     await user.click(screen.getByRole('button', { name: 'Choose an agent for this workspace' }))
@@ -81,5 +86,38 @@ describe('GitHubIssueWorkspaceLaunchButton', () => {
     await waitFor(() => expect(mocks.loadAgents).toHaveBeenCalledWith(repo))
     await user.click(await screen.findByRole('menuitem', { name: 'Claude' }))
     expect(onStartWithAgent).toHaveBeenCalledWith('claude')
+  })
+
+  it('ignores an in-flight agent result after the repository changes', async () => {
+    let resolveFirst: (agents: Awaited<ReturnType<typeof mocks.loadAgents>>) => void = () => {}
+    mocks.loadAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveFirst = resolve
+      })
+    )
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <TooltipProvider>
+        <GitHubIssueWorkspaceLaunchButton
+          repo={repo}
+          onStartDefault={vi.fn()}
+          onStartWithAgent={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    await user.click(screen.getByRole('button', { name: 'Choose an agent for this workspace' }))
+
+    rerender(
+      <TooltipProvider>
+        <GitHubIssueWorkspaceLaunchButton
+          repo={{ ...repo, id: 'repo-2' }}
+          onStartDefault={vi.fn()}
+          onStartWithAgent={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+    await act(() => resolveFirst([{ id: 'claude', label: 'Claude', cmd: 'claude' }]))
+
+    expect(screen.queryByRole('menuitem', { name: 'Claude' })).toBeNull()
   })
 })

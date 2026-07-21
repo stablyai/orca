@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { PathSource, ShellHydrationFailureReason, TuiAgent } from '../../../../shared/types'
 import {
   getLocalAgentPreflightContext,
+  getLocalRepoAgentPreflightContext,
   localPreflightContextKey
 } from '@/lib/local-preflight-context'
 
@@ -18,7 +19,9 @@ export type DetectedAgentsSlice = {
   pathFailureReason: ShellHydrationFailureReason | null
   /** Runs `preflight.detectAgents` once per session. Subsequent callers reuse
    *  the in-flight promise so every surface sees the same result. */
-  ensureDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  ensureDetectedAgents: (
+    target?: { repoId: string } | { worktreeId: string | null }
+  ) => Promise<TuiAgent[]>
   /** Re-runs `preflight.refreshAgents` (re-reads shell PATH). Concurrent callers
    *  receive the same pending promise; store fields update once on resolve so
    *  every subscribed surface re-renders in the same tick. */
@@ -62,8 +65,12 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
   pathSource: null,
   pathFailureReason: null,
 
-  ensureDetectedAgents: (worktreeId) => {
-    const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
+  ensureDetectedAgents: (target) => {
+    const context = target
+      ? 'repoId' in target
+        ? getLocalRepoAgentPreflightContext(get(), target.repoId)
+        : getLocalAgentPreflightContext(get(), undefined, undefined, target.worktreeId)
+      : getLocalAgentPreflightContext(get())
     const contextKey = localPreflightContextKey(context)
     const existing = get().detectedAgentIds
     if (existing && detectedContextKey === contextKey) {

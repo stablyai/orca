@@ -13922,13 +13922,13 @@
         }
       },
       "GitHubIssueWorkspaceLaunchButton": {
-        "f20e260a05": "Start workspace from issue",
-        "e4bb9f1ece": "Start",
-        "c8a6bec97e": "Choose an agent for this workspace",
-        "01be61ba14": "Start with agent",
-        "cf532aff14": "Detecting agents…",
-        "9635bbe266": "Unable to load agents",
-        "9f82809820": "No enabled agents detected"
+        "f20e260a05": "이슈에서 워크스페이스 시작",
+        "e4bb9f1ece": "시작",
+        "c8a6bec97e": "이 워크스페이스에 사용할 에이전트 선택",
+        "01be61ba14": "에이전트로 시작",
+        "cf532aff14": "에이전트 감지 중…",
+        "9635bbe266": "에이전트를 불러올 수 없습니다",
+        "89f202d990": "사용 가능한 에이전트가 없습니다"
       }
     },
     "i18n": {

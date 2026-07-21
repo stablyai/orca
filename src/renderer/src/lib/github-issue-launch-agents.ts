@@ -6,27 +6,37 @@ import type { Repo, TuiAgent } from '../../../shared/types'
 
 type GitHubIssueLaunchAgentStore = {
   settings?: { disabledTuiAgents?: Iterable<unknown> | null } | null
-  ensureDetectedAgents: () => Promise<TuiAgent[]>
+  ensureDetectedAgents: (target?: { repoId: string }) => Promise<TuiAgent[]>
   ensureRemoteDetectedAgents: (connectionId: string) => Promise<TuiAgent[]>
   ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
 }
 
+type GitHubIssueLaunchAgentStoreSource =
+  | GitHubIssueLaunchAgentStore
+  | (() => GitHubIssueLaunchAgentStore)
+
+function readStore(source: GitHubIssueLaunchAgentStoreSource): GitHubIssueLaunchAgentStore {
+  return typeof source === 'function' ? source() : source
+}
+
 export async function loadGitHubIssueLaunchAgents(
   repo: Repo | null,
-  store: GitHubIssueLaunchAgentStore = useAppStore.getState()
+  storeSource: GitHubIssueLaunchAgentStoreSource = () => useAppStore.getState()
 ): Promise<AgentCatalogEntry[]> {
   if (!repo) {
     return []
   }
+  const store = readStore(storeSource)
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   const detectedAgents =
     host?.kind === 'ssh'
       ? await store.ensureRemoteDetectedAgents(host.targetId)
       : host?.kind === 'runtime'
         ? await store.ensureRuntimeDetectedAgents(host.environmentId)
-        : await store.ensureDetectedAgents()
+        : await store.ensureDetectedAgents({ repoId: repo.id })
+  const currentStore = readStore(storeSource)
   const enabledAgents = new Set(
-    filterEnabledTuiAgents(detectedAgents, store.settings?.disabledTuiAgents)
+    filterEnabledTuiAgents(detectedAgents, currentStore.settings?.disabledTuiAgents)
   )
   return getAgentCatalog().filter((agent) => enabledAgents.has(agent.id))
 }
