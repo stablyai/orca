@@ -438,6 +438,10 @@ export function createRemoteRuntimePtyTransport(
     })
   }
 
+  function terminalCreateRecoveryCutoffReached(): boolean {
+    return recovery.currentPhase === 'disconnected'
+  }
+
   async function createTerminalWithUnknownOutcomeRecovery(
     params: Record<string, unknown>,
     environmentId: string,
@@ -454,7 +458,7 @@ export function createRemoteRuntimePtyTransport(
     while (
       !destroyed &&
       lifecycleEpoch === expectedLifecycleEpoch &&
-      recovery.currentPhase !== 'disconnected'
+      !terminalCreateRecoveryCutoffReached()
     ) {
       if (recoveryDeadlineAt !== null && recoveryDeadlineAt - Date.now() <= 0) {
         break
@@ -464,7 +468,7 @@ export function createRemoteRuntimePtyTransport(
         !idempotencySupported &&
         !destroyed &&
         lifecycleEpoch === expectedLifecycleEpoch &&
-        recovery.currentPhase !== 'disconnected'
+        !terminalCreateRecoveryCutoffReached()
       ) {
         let status: RuntimeStatus
         try {
@@ -497,7 +501,7 @@ export function createRemoteRuntimePtyTransport(
           const remainingMs = recoveryDeadlineAt - Date.now()
           if (
             remainingMs <= 0 ||
-            recovery.currentPhase === 'disconnected' ||
+            terminalCreateRecoveryCutoffReached() ||
             !(await waitForTerminalCreateRetry(Math.min(statusDelayMs, remainingMs)))
           ) {
             break
@@ -548,7 +552,7 @@ export function createRemoteRuntimePtyTransport(
           break
         }
         const remainingMs = recoveryDeadlineAt - Date.now()
-        if (remainingMs <= 0 || recovery.currentPhase === 'disconnected') {
+        if (remainingMs <= 0 || terminalCreateRecoveryCutoffReached()) {
           break
         }
         const delayMs =
