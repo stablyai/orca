@@ -17,6 +17,7 @@ import { clampPositionToViewport, type Position } from '../../../../shared/pet-r
 import { usePetRoam } from './usePetRoam'
 import { usePetIdentityReporting, usePetPresence, usePetSurfaceSync } from './use-pet-presence'
 import type { PetSurfaceKind } from '../../../../shared/pet-presence'
+import { PetContextMenu } from './pet-context-menu'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -370,10 +371,7 @@ export function PetOverlay({
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   void agentStatusEpoch
-  const agentEntries = useMemo(
-    () => Object.values(agentStatusByPaneKey),
-    [agentStatusByPaneKey]
-  )
+  const agentEntries = useMemo(() => Object.values(agentStatusByPaneKey), [agentStatusByPaneKey])
   // P2 presence: this window is one surface among several (other windows,
   // popouts, the phone). The authority decides who holds the pet; we only
   // register, report edges, and draw when told.
@@ -447,50 +445,52 @@ export function PetOverlay({
       }}
     >
       <div className="pointer-events-none flex size-full items-center justify-end">
-        <div
-          {...handlers}
-          className="pointer-events-auto relative flex h-fit w-fit select-none"
-          style={{
-            cursor: dragging ? 'grabbing' : 'grab',
-            animation: 'pet-bob 1.2s ease-in-out infinite',
-            animationPlayState: bobAnimate ? 'running' : 'paused',
-            touchAction: 'none',
-            // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
-            // otherwise collapse to 0×0 during the image-load window.
-            minWidth: 24,
-            minHeight: 24
-          }}
-        >
-          <style>{PET_BOB_KEYFRAMES_CSS}</style>
-          <PetBubble />
-          {sprite ? (
-            // Why: remount per pet so a switched-to sprite starts a fresh
-            // animation instead of inheriting the prior pet's currentTime.
-            <SpriteFrame
-              key={url}
-              url={url}
-              sprite={sprite}
-              animate={spriteAnimate}
-              maxSize={size}
-              animationName={animationName}
-              restartKey={dragGeneration}
-            />
-          ) : detected ? (
-            <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
-          ) : (
-            // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
-            // fit-content, so max-w/h-full has no fixed box to resolve against
-            // and the image would otherwise render at its intrinsic size and
-            // overflow the persisted size box that clamping still assumes.
-            <img
-              src={url}
-              alt=""
-              className="max-h-full max-w-full object-contain"
-              style={{ maxWidth: size, maxHeight: size }}
-              draggable={false}
-            />
-          )}
-        </div>
+        <PetContextMenu entries={agentEntries}>
+          <div
+            {...handlers}
+            className="pointer-events-auto relative flex h-fit w-fit select-none"
+            style={{
+              cursor: dragging ? 'grabbing' : 'grab',
+              animation: 'pet-bob 1.2s ease-in-out infinite',
+              animationPlayState: bobAnimate ? 'running' : 'paused',
+              touchAction: 'none',
+              // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
+              // otherwise collapse to 0×0 during the image-load window.
+              minWidth: 24,
+              minHeight: 24
+            }}
+          >
+            <style>{PET_BOB_KEYFRAMES_CSS}</style>
+            <PetBubble />
+            {sprite ? (
+              // Why: remount per pet so a switched-to sprite starts a fresh
+              // animation instead of inheriting the prior pet's currentTime.
+              <SpriteFrame
+                key={url}
+                url={url}
+                sprite={sprite}
+                animate={spriteAnimate}
+                maxSize={size}
+                animationName={animationName}
+                restartKey={dragGeneration}
+              />
+            ) : detected ? (
+              <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
+            ) : (
+              // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
+              // fit-content, so max-w/h-full has no fixed box to resolve against
+              // and the image would otherwise render at its intrinsic size and
+              // overflow the persisted size box that clamping still assumes.
+              <img
+                src={url}
+                alt=""
+                className="max-h-full max-w-full object-contain"
+                style={{ maxWidth: size, maxHeight: size }}
+                draggable={false}
+              />
+            )}
+          </div>
+        </PetContextMenu>
       </div>
     </div>
   )

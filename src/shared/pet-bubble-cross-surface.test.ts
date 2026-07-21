@@ -123,6 +123,6 @@ describe('bubble mood selection', () => {
       NOW,
       STALE
     )
-    expect(winner).toEqual({ mood: 'waiting', agentType: 'claude', count: 2 })
+    expect(winner).toEqual({ mood: 'waiting', agentType: 'claude', count: 2, paneKey: 'a' })
   })
 })

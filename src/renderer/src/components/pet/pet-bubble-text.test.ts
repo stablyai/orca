@@ -33,7 +33,7 @@ describe('selectPetBubbleWinner', () => {
       NOW,
       STALE_AFTER_MS
     )
-    expect(winner).toEqual({ mood: 'waiting', agentType: 'grok', count: 1 })
+    expect(winner).toEqual({ mood: 'waiting', agentType: 'grok', count: 1, paneKey: 'tab:blocked' })
   })
 
   it('prioritizes waiting over a fresher failed/waving/running signal', () => {
@@ -61,7 +61,7 @@ describe('selectPetBubbleWinner', () => {
       NOW,
       STALE_AFTER_MS
     )
-    expect(winner).toEqual({ mood: 'waiting', agentType: 'grok', count: 3 })
+    expect(winner).toEqual({ mood: 'waiting', agentType: 'grok', count: 3, paneKey: 'aaa' })
   })
 
   it('does not treat an interrupted completion as a celebration', () => {
@@ -70,19 +70,19 @@ describe('selectPetBubbleWinner', () => {
       NOW,
       STALE_AFTER_MS
     )
-    expect(winner).toEqual({ mood: 'failed', agentType: 'codex', count: 1 })
+    expect(winner).toEqual({ mood: 'failed', agentType: 'codex', count: 1, paneKey: 'tab:done' })
   })
 
   it('falls back to running when only work is in flight', () => {
     const winner = selectPetBubbleWinner([entry('working', { agentType: 'omp' })], NOW, STALE_AFTER_MS)
-    expect(winner).toEqual({ mood: 'running', agentType: 'omp', count: 1 })
+    expect(winner).toEqual({ mood: 'running', agentType: 'omp', count: 1, paneKey: 'tab:working' })
   })
 })
 
 describe('formatPetBubbleText', () => {
   it('composes agent label + mood line with no suffix for a lone winner', () => {
     const text = formatPetBubbleText(
-      { mood: 'waiting', agentType: 'grok', count: 1 },
+      { mood: 'waiting', agentType: 'grok', count: 1, paneKey: 'tab:leaf' },
       'waiting…',
       (n) => `+${n}`
     )
@@ -91,7 +91,7 @@ describe('formatPetBubbleText', () => {
 
   it('appends a +N suffix for extra agents sharing the mood', () => {
     const text = formatPetBubbleText(
-      { mood: 'waiting', agentType: 'grok', count: 3 },
+      { mood: 'waiting', agentType: 'grok', count: 3, paneKey: 'tab:leaf' },
       'waiting…',
       (n) => `+${n}`
     )
@@ -100,7 +100,7 @@ describe('formatPetBubbleText', () => {
 
   it('labels an unattributed/unknown agent generically', () => {
     const text = formatPetBubbleText(
-      { mood: 'running', agentType: undefined, count: 1 },
+      { mood: 'running', agentType: undefined, count: 1, paneKey: 'tab:leaf' },
       'working…',
       (n) => `+${n}`
     )

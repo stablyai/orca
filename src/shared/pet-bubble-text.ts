@@ -25,6 +25,12 @@ export type PetBubbleWinner = {
   /** Total number of fresh entries sharing the winning mood, including the
    *  attributed one. 1 means no count suffix is needed. */
   count: number
+  /** The pane this winner is attributed to — the same `sorted[0]` the mood and
+   *  agentType come from. Exposed so a surface can ACT on the agent the pet is
+   *  talking about (right-click → jump to it) without re-running the ladder and
+   *  risking a different answer than the one on screen: attribution and action
+   *  must agree, or the pet names one agent and takes you to another. */
+  paneKey: string
 }
 
 /**
@@ -108,7 +114,12 @@ export function selectPetBubbleWinner(
       continue
     }
     const sorted = [...winners].sort((a, b) => a.paneKey.localeCompare(b.paneKey))
-    return { mood, agentType: sorted[0].agentType ?? undefined, count: sorted.length }
+    return {
+      mood,
+      agentType: sorted[0].agentType ?? undefined,
+      count: sorted.length,
+      paneKey: sorted[0].paneKey
+    }
   }
   return null
 }
