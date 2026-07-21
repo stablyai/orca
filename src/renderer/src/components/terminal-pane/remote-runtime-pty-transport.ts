@@ -166,50 +166,66 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
-  async function waitForHostSessionHandle(hostTabId: string): Promise<string | null> {
+  async function waitForHostSessionHandle(hostTabId: string): Promise<string | null | undefined> {
     if (!worktreeId) {
       return null
     }
     const worktree = toRuntimeWorktreeSelector(worktreeId)
-    const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
-      worktree,
-      tabId: hostTabId,
-      ...(leafId ? { leafId } : {}),
-      notifyClients: false,
-      navigation: 'caller'
-    })
-    const immediate = findReadyHostSessionHandle(activated, hostTabId)
-    if (immediate) {
-      return immediate
+    let sawPendingSurface = false
+    let inventoryUnavailable = false
+    try {
+      const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
+        worktree,
+        tabId: hostTabId,
+        ...(leafId ? { leafId } : {}),
+        notifyClients: false,
+        navigation: 'caller'
+      })
+      const immediate = findReadyHostSessionHandle(activated, hostTabId)
+      if (immediate) {
+        return immediate
+      }
+      sawPendingSurface = hasHostSessionTerminalSurface(activated, hostTabId)
+      if (!sawPendingSurface) {
+        return null
+      }
+    } catch {
+      inventoryUnavailable = true
     }
 
     const startedAt = Date.now()
     while (!destroyed) {
       const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
       if (remainingMs <= 0) {
-        return null
+        return inventoryUnavailable || sawPendingSurface ? undefined : null
       }
-      // Why: host mirrors can publish before their PTY handle is ready, but a stuck pending surface must not poll forever.
       await new Promise((resolve) =>
         setTimeout(resolve, Math.min(HOST_SESSION_ATTACH_POLL_MS, remainingMs))
       )
-      const listed = await listRemoteRuntimeSessionTabsDeduped({
-        environmentId: currentRuntimeEnvironmentId,
-        worktreeId,
-        load: () =>
-          callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
-            worktree
-          })
-      })
-      const handle = findReadyHostSessionHandle(listed, hostTabId)
-      if (handle) {
-        return handle
-      }
-      if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
-        return null
+      try {
+        const listed = await listRemoteRuntimeSessionTabsDeduped({
+          environmentId: currentRuntimeEnvironmentId,
+          worktreeId,
+          load: () =>
+            callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+              worktree
+            })
+        })
+        inventoryUnavailable = false
+        const handle = findReadyHostSessionHandle(listed, hostTabId)
+        if (handle) {
+          return handle
+        }
+        sawPendingSurface = hasHostSessionTerminalSurface(listed, hostTabId)
+        if (!sawPendingSurface) {
+          return null
+        }
+      } catch {
+        // Why: a waking Mac can start Orca before Wi-Fi; unknown inventory keeps the mirror loading instead of declaring the host PTY dead.
+        inventoryUnavailable = true
       }
     }
-    return null
+    return undefined
   }
 
   async function waitForResubscribeHostSessionHandle(
@@ -284,7 +300,7 @@ export function createRemoteRuntimePtyTransport(
     const hostTabId = toHostSessionTabId(tabId)
     const hostHandle = await waitForHostSessionHandle(hostTabId)
     if (!hostHandle || destroyed) {
-      if (!destroyed) {
+      if (hostHandle === null && !destroyed) {
         storedCallbacks.onError?.('Remote terminal was closed.')
       }
       return undefined

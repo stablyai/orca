@@ -1636,7 +1636,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(15_000)
 
       await expect(connect).resolves.toBeUndefined()
-      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(onError).not.toHaveBeenCalled()
       expect(
         runtimeCall.mock.calls.some((call) => call[0].method.startsWith('session.tabs.close'))
       ).toBe(false)
@@ -1686,7 +1686,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(15_000)
 
       await expect(connect).resolves.toBeUndefined()
-      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(onError).not.toHaveBeenCalled()
       expect(runtimeCall).toHaveBeenCalledWith(
         expect.objectContaining({ method: 'session.tabs.activate' })
       )
@@ -1704,6 +1704,34 @@ describe('createRemoteRuntimePtyTransport', () => {
         String(call[0].method).startsWith('session.tabs.close')
       )
       expect(closeCalls).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps an offline startup mirror loading instead of reporting the terminal closed', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeCall.mockRejectedValue(new Error('runtime unavailable'))
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-host-tab-1',
+        leafId: 'leaf-1'
+      })
+
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await expect(connect).resolves.toBeUndefined()
+      expect(onError).not.toHaveBeenCalled()
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'session.tabs.activate' })
+      )
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'session.tabs.list' })
+      )
     } finally {
       vi.useRealTimers()
     }
