@@ -2123,6 +2123,11 @@ function App(): React.JSX.Element {
             </TooltipContent>
           </Tooltip>
         )}
+        {/* Why here and not the right titlebar strip: speak-back is a global
+            mode, not a per-tab control, so it belongs in the one chrome that is
+            present on every view — pinned beside the sidebar toggle so the
+            operator always finds it in the same place. */}
+        {showSidebar && <SpeakBackToggle />}
       </div>
       {/* Why: Back/Forward traverse mixed worktree + page history, so the
           cluster is shown wherever the history shortcut is live. Hidden in
@@ -2217,7 +2222,6 @@ function App(): React.JSX.Element {
         </Tooltip>
       )}
       {showProfileSwitcherInTopRight ? <OrcaProfileSwitcher /> : null}
-      <SpeakBackToggle />
       {/* Why: when the right sidebar is open, its own header renders
       an identical close button — hide this copy so only one is
       visible at a time. */}

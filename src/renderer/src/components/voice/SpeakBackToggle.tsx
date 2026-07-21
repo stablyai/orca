@@ -25,7 +25,7 @@ export function SpeakBackToggle(): React.JSX.Element {
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="titlebar-icon-button"
+          className="sidebar-toggle"
           aria-label={label}
           aria-pressed={enabled}
           onClick={() => setSpeakBackEnabled(!enabled)}
