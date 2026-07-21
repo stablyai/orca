@@ -33,6 +33,8 @@ const EMPTY_WEB_PANELS: readonly PinnedWebPanel[] = []
 export function PanelCanvasPopoutRoot(): React.JSX.Element {
   useTranslation()
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const hydratePersistedUI = useAppStore((s) => s.hydratePersistedUI)
+  const [petIdentityHydrated, setPetIdentityHydrated] = React.useState(false)
   const terminalPanels = useAppStore(
     (s) => s.settings?.pinnedTerminalPanels ?? EMPTY_TERMINAL_PANELS
   )
@@ -57,6 +59,37 @@ export function PanelCanvasPopoutRoot(): React.JSX.Element {
     })
     return unsubscribe
   }, [fetchSettings])
+
+  // Why: a popout is a separate renderer with its own store, and `petId` /
+  // `customPets` live in persisted UI state — NOT in settings, so fetchSettings
+  // above does not bring them. Without this the popout sat at the store default
+  // (DEFAULT_PET_ID) with an empty custom-pet list, so usePetUrl fell through
+  // `findBundledPet(petId) ?? BUNDLED_PET` and the operator's pet visibly turned
+  // into Claudino the moment it was dragged across.
+  //
+  // The pet must not report identity until this lands — see PetOverlay's
+  // reportsPetIdentity gate. Same lesson as the UUID/slug fix: one definition of
+  // "which pet", and a surface that does not know it must stay quiet rather than
+  // publish a guess.
+  React.useEffect(() => {
+    let cancelled = false
+    void window.api.ui
+      .get()
+      .then((persistedUI) => {
+        if (cancelled) {
+          return
+        }
+        hydratePersistedUI(persistedUI, 'sync')
+        // Only on success: a failed read leaves the store at its default, and
+        // a surface that does not know the operator's pet must never publish
+        // one. Staying unhydrated keeps this popout a silent mirror.
+        setPetIdentityHydrated(true)
+      })
+      .catch(console.error)
+    return () => {
+      cancelled = true
+    }
+  }, [hydratePersistedUI])
 
   React.useEffect(() => {
     void window.api.panelCanvasPopout.getBootPayload().then((payload) => {
@@ -144,7 +177,7 @@ export function PanelCanvasPopoutRoot(): React.JSX.Element {
       {/* P5: a popout is its own pet surface, so the pet can walk out of the
           main window and into a detached canvas. It registers as
           'popout-window' rather than masquerading as the main window. */}
-      <PetOverlay surfaceKind="popout-window" />
+      <PetOverlay surfaceKind="popout-window" reportsPetIdentity={petIdentityHydrated} />
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border px-2">
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-tight">
           {boot.title ??

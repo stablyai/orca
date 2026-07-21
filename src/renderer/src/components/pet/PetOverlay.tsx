@@ -304,11 +304,24 @@ function defaultPosition(size: number = SIZE): Position {
 const PET_BOB_KEYFRAMES_CSS =
   '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
 export function PetOverlay({
-  surfaceKind = 'desktop-window'
+  surfaceKind = 'desktop-window',
+  reportsPetIdentity = true
 }: {
   /** Popout windows pass 'popout-window' so they are their own handoff
    *  destination rather than masquerading as the main window. */
   surfaceKind?: PetSurfaceKind
+  /**
+   * Whether this surface may publish WHICH pet the operator chose.
+   *
+   * Defaults true for the main window, which owns the selection. A surface
+   * whose store has not been hydrated with `petId`/`customPets` must pass
+   * false: reporting from an unhydrated store publishes the store DEFAULT
+   * (Claudino) to the authority, which overwrites the operator's real pet
+   * everywhere — including on the phone. The earlier "idempotent by design:
+   * every window reports the same value" assumption held only while every
+   * window happened to be hydrated, and a popout is not.
+   */
+  reportsPetIdentity?: boolean
 } = {}): React.JSX.Element | null {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
@@ -368,7 +381,8 @@ export function PetOverlay({
 
   // Identity travels with the pet: the desktop owns the operator's choice of
   // creature, so it publishes it. Without this the phone drew a different pet.
-  usePetIdentityReporting(useAppStore((s) => s.petId))
+  const selectedPetId = useAppStore((s) => s.petId)
+  usePetIdentityReporting(reportsPetIdentity ? selectedPetId : null)
 
   // Why roam is gated on holding the pet: a window that does not hold it must
   // not be simulating a second pet in the background, or the two would drift
