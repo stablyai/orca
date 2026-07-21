@@ -192,7 +192,7 @@
         "daemon",
         "ssh"
       ],
-      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. A macOS Electron journey covers headless promotion and persistent PTY identity. A live packaged ShipIt/LaunchAgent update and Linux/Windows serve updates remain uncollected.",
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8457",
         "https://github.com/stablyai/orca/issues/9563"
@@ -345,7 +345,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The original updater regression was observed red with one native install call, one paired-client disconnect, one cleanup start, no replacement owner, and a stranded staged installer. The root-cause harness was then observed red because the Electron child received no handoff path and the CLI parent exited, allowing launchd to spawn the old version while ShipIt still required zero running target apps. The final harness keeps that parent, observes the atomic bundle swap, and verifies the new serving version before clearing state. Earlier activation evidence also fixed second-owner and replacement-PTY failures."
+        "evidence": "The original updater regression was observed red with one native install call, one paired-client disconnect, one cleanup start, no replacement owner, and a stranded staged installer. The root-cause harness was then observed red because the Electron child received no handoff path and the CLI parent exited, allowing launchd to spawn the old version while ShipIt still required zero running target apps. A live canary then exposed MacUpdater ignoring quitAndInstall relaunch arguments and starting a second desktop owner; disabling its independent relaunch for supervised mode produced one stable LaunchAgent parent, one verified replacement, and a surviving session across the real ShipIt swap. The final deterministic harness keeps that parent, observes the atomic bundle swap, and verifies the new serving version before clearing state. Earlier activation evidence also fixed second-owner and replacement-PTY failures."
       },
       "performanceBudget": {
         "required": true,
@@ -358,7 +358,7 @@
       ],
       "knownGaps": [
         "The Electron journey uses an isolated development bundle rather than the installed application so it cannot disturb a real user session.",
-        "The ShipIt/LaunchAgent handoff is deterministic filesystem/process coverage; a live signed packaged update has not yet been run.",
+        "The live ShipIt/LaunchAgent canary used a disposable minimal Electron bundle plus the compiled production supervisor; a full packaged Orca update has not yet been run.",
         "Linux and Windows single-instance activation have unit coverage but no live Electron evidence yet.",
         "SSH identity transfer is deterministic unit coverage only; the live Electron journey currently exercises the local daemon provider."
       ],

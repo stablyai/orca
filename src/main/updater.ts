@@ -1364,6 +1364,8 @@ export function setupAutoUpdater(
   autoUpdater.autoDownload = false
   // Why: supervised serve installs require an explicit handoff; ordinary service quits must never install implicitly.
   autoUpdater.autoInstallOnAppQuit = updateInstallMode === 'interactive'
+  // Why: MacUpdater ignores quitAndInstall arguments; the surviving CLI supervisor must be the only serve relaunch owner.
+  autoUpdater.autoRunAppAfterInstall = updateInstallMode === 'interactive'
 
   // Why: our only on-machine window into electron-updater; otherwise an unexpected update-not-available or failed fetch is invisible.
   autoUpdater.logger = {

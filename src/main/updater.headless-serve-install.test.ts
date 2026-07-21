@@ -37,6 +37,7 @@ const {
   const autoUpdaterMock = {
     autoDownload: false,
     autoInstallOnAppQuit: false,
+    autoRunAppAfterInstall: true,
     allowPrerelease: false,
     checkForUpdates: vi.fn().mockResolvedValue(null),
     downloadUpdate: vi.fn(),
@@ -113,6 +114,7 @@ describe('headless serve update install handoff', () => {
     autoUpdaterMock.setFeedURL.mockReset()
     autoUpdaterMock.on.mockClear()
     autoUpdaterMock.autoInstallOnAppQuit = false
+    autoUpdaterMock.autoRunAppAfterInstall = true
     nativeUpdaterMock.on.mockReset()
     appMock.on.mockClear()
     appMock.quit.mockReset()
@@ -305,6 +307,7 @@ describe('headless serve update install handoff', () => {
 
     expect(requestServeUpdateHandoffMock).toHaveBeenCalledWith('1.0.61')
     expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+    expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(false)
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledOnce()
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(true, false)
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
@@ -483,6 +486,7 @@ describe('headless serve update install handoff', () => {
     downloadUpdate()
 
     expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(true)
+    expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(true)
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
     expect(recordUpdaterLifecycleMock).not.toHaveBeenCalledWith(
       'headless_serve_install_deferred',
