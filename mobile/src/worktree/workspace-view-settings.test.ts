@@ -5,6 +5,7 @@ import {
   groupModeFromDesktop,
   groupModeToDesktop,
   sortModeFromDesktop,
+  toDesktopViewSettingsPayload,
   type MobileViewState,
   type WorkspaceViewSettings
 } from './workspace-view-settings'
@@ -21,7 +22,7 @@ const base: MobileViewState = {
 
 describe('group mode mapping', () => {
   it('round-trips every mobile group mode through the desktop value', () => {
-    for (const mode of ['none', 'workspaceStatus', 'repo', 'prStatus'] as const) {
+    for (const mode of ['none', 'workspaceStatus', 'repo', 'prStatus', 'projectGroup'] as const) {
       expect(groupModeFromDesktop(groupModeToDesktop(mode))).toBe(mode)
     }
   })
@@ -29,6 +30,7 @@ describe('group mode mapping', () => {
   it('maps the desktop kebab-case values back to mobile', () => {
     expect(groupModeFromDesktop('workspace-status')).toBe('workspaceStatus')
     expect(groupModeFromDesktop('pr-status')).toBe('prStatus')
+    expect(groupModeFromDesktop('project-group')).toBe('projectGroup')
     expect(groupModeFromDesktop(undefined)).toBeNull()
   })
 })
@@ -81,5 +83,32 @@ describe('applyDesktopViewSettings', () => {
   it('ignores an unrecognized groupBy rather than blanking the mode', () => {
     const next = applyDesktopViewSettings(base, { groupBy: 'mystery' as never })
     expect(next.groupMode).toBe('repo')
+  })
+
+  it('applies a desktop project-group grouping onto the mobile mode', () => {
+    const next = applyDesktopViewSettings(base, { groupBy: 'project-group' })
+    expect(next.groupMode).toBe('projectGroup')
+  })
+})
+
+describe('toDesktopViewSettingsPayload', () => {
+  it('includes groupBy when the grouping mode changed', () => {
+    const next: MobileViewState = { ...base, groupMode: 'projectGroup' }
+
+    const payload = toDesktopViewSettingsPayload(next, { groupMode: 'projectGroup' })
+
+    expect(payload.groupBy).toBe('project-group')
+    expect(payload.sortBy).toBe('recent')
+  })
+
+  it('omits groupBy when the change did not touch the grouping mode', () => {
+    const next: MobileViewState = { ...base, groupMode: 'projectGroup', sortMode: 'name' }
+
+    const payload = toDesktopViewSettingsPayload(next, { sortMode: 'name' })
+
+    // Why: keeps a held 'project-group' out of unrelated ui.set calls so an old
+    // desktop rejecting it doesn't also drop these other settings.
+    expect('groupBy' in payload).toBe(false)
+    expect(payload.sortBy).toBe('name')
   })
 })

@@ -1138,6 +1138,19 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
   })
 
+  it('persists the raw project-group value, never the desktop render alias', () => {
+    // Why: 'project-group' renders as 'repo' via effectiveGroupByForRender, but the
+    // write path must store the raw value so a phone's choice survives the round-trip.
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setGroupBy('project-group')
+
+    expect(store.getState().groupBy).toBe('project-group')
+    expect(setUI).toHaveBeenCalledWith({ groupBy: 'project-group', collapsedGroups: [] })
+  })
+
   it('hydrates persisted per-worktree dotfile visibility', () => {
     const store = createUIStore()
 

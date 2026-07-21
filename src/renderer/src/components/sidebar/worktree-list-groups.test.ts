@@ -7,6 +7,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-
 import {
   ALL_GROUP_META,
   buildRows,
+  effectiveGroupByForRender,
   getGroupKeyForWorktree,
   getGroupKeysForWorktree,
   getLineageGroupKey,
@@ -132,6 +133,20 @@ function makeDetectedWorktree(overrides: Partial<DetectedWorktree> = {}): Detect
     ...overrides
   }
 }
+
+describe('effectiveGroupByForRender', () => {
+  it('renders project-group as the repo (Project) view', () => {
+    // Why: desktop has no distinct project-group layout; rendering it as 'repo'
+    // avoids buildRows' bare-else fall-through to pr-status grouping.
+    expect(effectiveGroupByForRender('project-group')).toBe('repo')
+  })
+
+  it('passes the other grouping values through unchanged', () => {
+    for (const value of ['none', 'workspace-status', 'repo', 'pr-status'] as const) {
+      expect(effectiveGroupByForRender(value)).toBe(value)
+    }
+  })
+})
 
 describe('getPRGroupKey', () => {
   it('puts merged PRs in the done group', () => {

@@ -1320,6 +1320,15 @@ describe('Store', () => {
     expect(store.getUI().groupBy).toBe('workspace-status')
   })
 
+  it('preserves project-group grouping so a phone selection survives sync', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'project-group' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('project-group')
+  })
+
   it('defaults projectOrderBy to manual when absent, even with recent sortBy', async () => {
     writeDataFile({
       schemaVersion: 1,

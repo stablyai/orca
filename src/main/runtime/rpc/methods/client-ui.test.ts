@@ -657,6 +657,20 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).not.toHaveBeenCalled()
   })
 
+  it('accepts the project-group grouping value so mobile can sync it', async () => {
+    const updated: PersistedUIState = { ...getDefaultUIState(), groupBy: 'project-group' }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('ui.set', { groupBy: 'project-group' }))
+
+    expect(runtime.updateUIState).toHaveBeenCalledWith({ groupBy: 'project-group' })
+    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+  })
+
   // Why the contract flipped: an unknown VALUE used to fail the whole batch, so
   // one drifted enum member took sidebar widths, filters and agent acks down
   // with it. Unknown KEYS still reject — the parity assertions catch those.
@@ -664,7 +678,8 @@ describe('client UI RPC methods', () => {
     ['worktree card property', { worktreeCardProperties: ['status', 'pr-status'] }],
     ['feature interaction id', { featureInteractions: { unknown: { firstInteractedAt: 100 } } }],
     ['feature tip id', { featureTipsSeenIds: ['voice-dictation', 'unknown-tip'] }],
-    ['right sidebar tab', { rightSidebarTab: 'not-a-tab' }]
+    ['right sidebar tab', { rightSidebarTab: 'not-a-tab' }],
+    ['grouping value', { groupBy: 'folders' }]
   ])('drops an unknown %s instead of rejecting the batch around it', async (_label, drifted) => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

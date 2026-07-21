@@ -139,6 +139,30 @@ export function getProjectGroupSubtreeIds(
   return subtreeIds
 }
 
+/** Resolve the top-level (root) ancestor of a project group by walking
+ *  `parentGroupId` upward. Used to collapse a repo in any nested subgroup into a
+ *  single displayed folder section (mobile v1 flat grouping). Returns the input
+ *  id if the group is missing or already a root; a visited-set guards cycles. */
+export function resolveTopLevelProjectGroupId(
+  groupsById: ReadonlyMap<string, Pick<ProjectGroup, 'id' | 'parentGroupId'>>,
+  groupId: string
+): string {
+  let current = groupsById.get(groupId)
+  if (!current) {
+    return groupId
+  }
+  const visited = new Set<string>()
+  while (current.parentGroupId && !visited.has(current.id)) {
+    visited.add(current.id)
+    const parent = groupsById.get(current.parentGroupId)
+    if (!parent) {
+      break
+    }
+    current = parent
+  }
+  return current.id
+}
+
 /** Manual rank for a project inside a group bucket. Explicit
  *  `projectGroupOrder` wins; otherwise fall back to global repo order so drag
  *  midpoint math and sidebar sorting stay aligned. */

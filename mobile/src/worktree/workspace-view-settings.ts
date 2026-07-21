@@ -6,13 +6,13 @@
 import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
-export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
+export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus' | 'projectGroup'
 // Desktop sort adds 'manual'; mobile renders it but sorts by server order.
 export type MobileSortMode = 'smart' | 'name' | 'recent' | 'repo' | 'manual'
 
 // Desktop PersistedUIState fields this screen syncs (a structural subset).
 export type WorkspaceViewSettings = {
-  groupBy?: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy?: 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'project-group'
   sortBy?: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   hideSleepingWorkspaces?: boolean
   hideDefaultBranchWorkspace?: boolean
@@ -26,14 +26,20 @@ const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSetting
   none: 'none',
   workspaceStatus: 'workspace-status',
   repo: 'repo',
-  prStatus: 'pr-status'
+  prStatus: 'pr-status',
+  // Mixed-version caveat: a desktop predating 'project-group' rejects this value on
+  // ui.set (strict enum), so the mode won't persist there. toDesktopViewSettingsPayload
+  // only sends groupBy when the mode itself changes, so only that one call fails —
+  // unrelated settings still sync. Self-heals on desktop update.
+  projectGroup: 'project-group'
 }
 
 const GROUP_FROM_DESKTOP: Record<NonNullable<WorkspaceViewSettings['groupBy']>, MobileGroupMode> = {
   none: 'none',
   'workspace-status': 'workspaceStatus',
   repo: 'repo',
-  'pr-status': 'prStatus'
+  'pr-status': 'prStatus',
+  'project-group': 'projectGroup'
 }
 
 const SORT_VALUES: readonly MobileSortMode[] = ['smart', 'name', 'recent', 'repo', 'manual']
@@ -92,4 +98,22 @@ export function applyDesktopViewSettings(
     workspaceStatuses
   }
   return next
+}
+
+// Build the ui.set payload for a mobile view-settings change. groupBy is included
+// ONLY when the grouping mode actually changed (patch carries groupMode), so a
+// desktop that rejects a newer value (strict enum, e.g. 'project-group') fails only
+// the grouping change itself instead of dropping every other bundled setting too.
+export function toDesktopViewSettingsPayload(
+  next: MobileViewState,
+  patch: Partial<MobileViewState>
+): WorkspaceViewSettings {
+  return {
+    ...('groupMode' in patch ? { groupBy: groupModeToDesktop(next.groupMode) } : {}),
+    sortBy: next.sortMode,
+    hideSleepingWorkspaces: next.hideSleeping,
+    hideDefaultBranchWorkspace: next.hideDefaultBranch,
+    filterRepoIds: next.filterRepoIds,
+    collapsedGroups: next.collapsedGroups
+  }
 }

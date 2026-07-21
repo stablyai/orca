@@ -1,4 +1,5 @@
 import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../src/shared/project-groups'
 import {
   DEFAULT_MOBILE_WORKSPACE_STATUSES,
   coerceMobileWorkspaceStatuses,
@@ -13,6 +14,10 @@ import { sortWorktrees } from './workspace-list-ordering'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
+
+// Resolved top-level project group a repo belongs to, for groupMode 'projectGroup'.
+// Built in the screen from repo.list (projectGroupId) + projectGroup.list (name/tabOrder).
+export type ProjectGroupBucket = { groupId: string; groupName: string; tabOrder: number }
 
 function makeSection(
   key: string,
@@ -128,7 +133,8 @@ export function buildSections(
   pinnedIds: Set<string>,
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
-  collapsedGroups: ReadonlySet<string> = new Set()
+  collapsedGroups: ReadonlySet<string> = new Set(),
+  projectGroupByRepoId: ReadonlyMap<string, ProjectGroupBucket | null> = new Map()
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
@@ -230,6 +236,39 @@ export function buildSections(
           )
         )
       }
+    }
+  } else if (groupMode === 'projectGroup') {
+    // Why: mirror desktop's sidebar folders — one section per top-level project
+    // group (nested subgroups collapse into their root), ungrouped repos last.
+    const byGroup = new Map<string, { name: string; tabOrder: number; items: Worktree[] }>()
+    for (const w of canonicalGroupWorktrees) {
+      const bucket = projectGroupByRepoId.get(w.repoId) ?? null
+      const key = bucket ? `project-group:${bucket.groupId}` : UNGROUPED_PROJECT_GROUP_KEY
+      const existing = byGroup.get(key)
+      if (existing) {
+        existing.items.push(w)
+      } else {
+        byGroup.set(key, {
+          name: bucket ? bucket.groupName : 'Ungrouped',
+          // Ungrouped sorts last; groups keep their desktop tabOrder.
+          tabOrder: bucket ? bucket.tabOrder : Number.POSITIVE_INFINITY,
+          items: [w]
+        })
+      }
+    }
+    const ordered = [...byGroup.entries()].sort(
+      ([, a], [, b]) => a.tabOrder - b.tabOrder || a.name.localeCompare(b.name)
+    )
+    for (const [key, group] of ordered) {
+      sections.push(
+        makeSection(
+          key,
+          group.name,
+          orderMainWorktreeFirst(group.items),
+          undefined,
+          collapsedGroups
+        )
+      )
     }
   }
 

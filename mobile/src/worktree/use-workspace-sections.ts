@@ -4,6 +4,7 @@ import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import {
   buildSections,
   type FilterState,
+  type ProjectGroupBucket,
   type Section,
   type Worktree
 } from './workspace-list-sections'
@@ -26,6 +27,7 @@ export function useWorkspaceSections(args: {
   repoColorsByName: Map<string, string>
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  projectGroupByRepoId: ReadonlyMap<string, ProjectGroupBucket | null>
 }): {
   sections: Section[]
   rawSections: Section[]
@@ -42,7 +44,8 @@ export function useWorkspaceSections(args: {
     repoIdsByName,
     repoColorsByName,
     collapsedGroups,
-    workspaceStatuses
+    workspaceStatuses,
+    projectGroupByRepoId
   } = args
 
   const uniqueRepos = useMemo(() => {
@@ -74,7 +77,8 @@ export function useWorkspaceSections(args: {
         pinnedIds,
         repoIdsByName,
         workspaceStatuses,
-        collapsedGroups
+        collapsedGroups,
+        projectGroupByRepoId
       ),
     [
       displayWorktrees,
@@ -85,7 +89,8 @@ export function useWorkspaceSections(args: {
       pinnedIds,
       repoIdsByName,
       workspaceStatuses,
-      collapsedGroups
+      collapsedGroups,
+      projectGroupByRepoId
     ]
   )
 

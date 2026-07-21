@@ -9,6 +9,14 @@ import {
   sortWorktrees
 } from './workspace-list-sections'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
+import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../src/shared/project-groups'
+import { folderWorkspaceRepoId } from '../../../src/shared/folder-workspace-worktree'
+
+const NO_FILTERS = {
+  filterRepoIds: new Set<string>(),
+  hideSleeping: false,
+  hideDefaultBranch: false
+}
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
@@ -316,6 +324,109 @@ describe('buildSections', () => {
       'desktop-first',
       'mobile-fallback-first'
     ])
+  })
+
+  it('groups by top-level project group ordered by tabOrder, ungrouped last', () => {
+    const platform = worktree({
+      worktreeId: 'w-platform',
+      repoId: 'repo-platform',
+      repo: 'platform'
+    })
+    const web = worktree({ worktreeId: 'w-web', repoId: 'repo-web', repo: 'web' })
+    const loose = worktree({ worktreeId: 'w-loose', repoId: 'repo-loose', repo: 'loose' })
+    const projectGroupByRepoId = new Map([
+      ['repo-platform', { groupId: 'g-backend', groupName: 'Backend', tabOrder: 1 }],
+      ['repo-web', { groupId: 'g-frontend', groupName: 'Frontend', tabOrder: 0 }],
+      ['repo-loose', null]
+    ])
+
+    const sections = buildSections(
+      [platform, web, loose],
+      'name',
+      NO_FILTERS,
+      '',
+      'projectGroup',
+      new Set(),
+      new Map(),
+      DEFAULT_MOBILE_WORKSPACE_STATUSES,
+      new Set(),
+      projectGroupByRepoId
+    )
+
+    expect(sections.map((section) => [section.key, section.title])).toEqual([
+      ['project-group:g-frontend', 'Frontend'],
+      ['project-group:g-backend', 'Backend'],
+      [UNGROUPED_PROJECT_GROUP_KEY, 'Ungrouped']
+    ])
+    // Every worktree stays visible exactly once.
+    expect(sections.flatMap((section) => section.data.map((item) => item.worktreeId))).toEqual([
+      'w-web',
+      'w-platform',
+      'w-loose'
+    ])
+  })
+
+  it('merges repos sharing a top-level project group into one section', () => {
+    const api = worktree({ worktreeId: 'w-api', repoId: 'repo-api', repo: 'api' })
+    const workerA = worktree({ worktreeId: 'w-worker', repoId: 'repo-worker', repo: 'worker' })
+    const bucket = { groupId: 'g-backend', groupName: 'Backend', tabOrder: 0 }
+    // repo-orphan has no map entry at all -> treated as Ungrouped via `?? null`.
+    const orphan = worktree({ worktreeId: 'w-orphan', repoId: 'repo-orphan', repo: 'orphan' })
+
+    const sections = buildSections(
+      [api, workerA, orphan],
+      'name',
+      NO_FILTERS,
+      '',
+      'projectGroup',
+      new Set(),
+      new Map(),
+      DEFAULT_MOBILE_WORKSPACE_STATUSES,
+      new Set(),
+      new Map([
+        ['repo-api', bucket],
+        ['repo-worker', bucket]
+      ])
+    )
+
+    expect(sections.map((section) => section.key)).toEqual([
+      'project-group:g-backend',
+      UNGROUPED_PROJECT_GROUP_KEY
+    ])
+    expect(sections[0]?.data.map((item) => item.worktreeId).sort()).toEqual(['w-api', 'w-worker'])
+    expect(sections[1]?.data.map((item) => item.worktreeId)).toEqual(['w-orphan'])
+  })
+
+  it('groups folder-workspace worktrees under their owning project group', () => {
+    const folder = worktree({
+      worktreeId: 'w-folder',
+      workspaceKind: 'folder-workspace',
+      repoId: folderWorkspaceRepoId('g-backend'),
+      repo: 'context',
+      branch: ''
+    })
+    const projectGroupByRepoId = new Map([
+      [
+        folderWorkspaceRepoId('g-backend'),
+        { groupId: 'g-backend', groupName: 'Backend', tabOrder: 0 }
+      ]
+    ])
+
+    const sections = buildSections(
+      [folder],
+      'name',
+      NO_FILTERS,
+      '',
+      'projectGroup',
+      new Set(),
+      new Map(),
+      DEFAULT_MOBILE_WORKSPACE_STATUSES,
+      new Set(),
+      projectGroupByRepoId
+    )
+
+    expect(sections.map((section) => section.key)).toEqual(['project-group:g-backend'])
+    expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual(['w-folder'])
   })
 
   it('uses desktop display-name tie-breaks for equal persisted smart ranks', () => {

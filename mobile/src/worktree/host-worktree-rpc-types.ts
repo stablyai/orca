@@ -17,4 +17,6 @@ export type RepoSummary = {
   executionHostId?: ExecutionHostId | null
   badgeColor?: string
   repoIcon?: RepoIcon | null
+  // Membership used by the 'projectGroup' grouping mode; already on the repo.list wire.
+  projectGroupId?: string | null
 }

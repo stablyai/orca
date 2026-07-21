@@ -88,6 +88,7 @@ import {
   ALL_GROUP_KEY,
   PINNED_GROUP_KEY,
   buildRows,
+  effectiveGroupByForRender,
   getProjectGroupHeaderKey,
   getGroupKeysForWorktree,
   getLineageGroupKey,
@@ -5211,7 +5212,9 @@ const WorktreeList = React.memo(function WorktreeList({
     () => getActiveSidebarWorkspaceId(activeWorkspaceKey, activeWorktreeId),
     [activeWorkspaceKey, activeWorktreeId]
   )
-  const groupBy = useAppStore((s) => s.groupBy)
+  // Why: 'project-group' has no distinct desktop layout; render it as 'repo'
+  // (Project) grouping. The raw value is still persisted by App.tsx's writer.
+  const groupBy = useAppStore((s) => effectiveGroupByForRender(s.groupBy))
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)

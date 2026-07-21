@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
+import { effectiveGroupByForRender } from './worktree-list-groups'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import { translate } from '@/i18n/i18n'
@@ -17,7 +18,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
 }: SidebarHeaderProps) {
   const openModal = useAppStore((s) => s.openModal)
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
-  const groupBy = useAppStore((s) => s.groupBy)
+  // Why: 'project-group' is the Project view on desktop (see effectiveGroupByForRender).
+  const groupBy = useAppStore((s) => effectiveGroupByForRender(s.groupBy))
   const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
 

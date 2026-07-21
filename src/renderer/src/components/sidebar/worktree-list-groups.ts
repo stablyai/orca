@@ -56,13 +56,23 @@ export { getLineageRenderInfo } from './worktree-lineage-projection'
 
 export { branchName }
 
-export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status' | 'project-group'
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
 
 export function getPinnedWorktreeDisplayPolicy(
   settings?: { showPinnedWorktreesInGroups?: boolean } | null
 ): PinnedWorktreeDisplayPolicy {
   return settings?.showPinnedWorktreesInGroups === true ? 'duplicate-in-groups' : 'single-location'
+}
+
+// Why: desktop has no distinct 'project-group' layout — its 'repo' (Project) view
+// already nests project groups. Render 'project-group' as 'repo' while keeping the
+// persisted value intact so a phone's choice survives the ui.get/ui.set round-trip.
+// Persistence/write-back paths (App.tsx debounced ui.set) must NOT use this.
+export function effectiveGroupByForRender(
+  groupBy: WorktreeGroupBy
+): Exclude<WorktreeGroupBy, 'project-group'> {
+  return groupBy === 'project-group' ? 'repo' : groupBy
 }
 
 export type GroupHeaderRow = {

@@ -201,7 +201,7 @@ const UiUpdateFields = z
     rightSidebarWidth: z.number().finite().optional(),
     markdownTocPanelWidth: z.number().finite().optional(),
     combinedDiffFileTreeWidth: z.number().finite().optional(),
-    groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
+    groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status', 'project-group']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
     sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
     projectOrderBy: z.enum(['manual', 'recent']).optional(),

@@ -3,6 +3,12 @@ import { folderWorkspaceKey } from './workspace-scope'
 import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 
+// Synthetic repoId a folder workspace carries in place of a real git repo id.
+// Encodes its owning project group so consumers can recover group membership.
+export function folderWorkspaceRepoId(projectGroupId: string): string {
+  return `folder-workspace:${projectGroupId}`
+}
+
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(folderWorkspace.creatorProvenance)
@@ -12,7 +18,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
   const parsedHost = parseExecutionHostId(hostId)
   return {
     id: folderWorkspaceKey(folderWorkspace.id),
-    repoId: `folder-workspace:${folderWorkspace.projectGroupId}`,
+    repoId: folderWorkspaceRepoId(folderWorkspace.projectGroupId),
     ...(creatorProvenance ? { creatorProvenance } : {}),
     displayName: folderWorkspace.name,
     comment: folderWorkspace.comment,

@@ -26,6 +26,7 @@ import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-
 import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection'
 import { translate } from '@/i18n/i18n'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
+import { effectiveGroupByForRender } from './worktree-list-groups'
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -50,7 +51,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
-  const groupBy = useAppStore((s) => s.groupBy)
+  // Why: 'project-group' shows as the Project (repo) grouping on desktop, so the
+  // toggle highlights Project and the project-order controls stay available.
+  const groupBy = useAppStore((s) => effectiveGroupByForRender(s.groupBy))
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)

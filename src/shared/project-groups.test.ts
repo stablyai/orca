@@ -6,9 +6,10 @@ import {
   getNextProjectGroupOrder,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName,
-  normalizeProjectGroups
+  normalizeProjectGroups,
+  resolveTopLevelProjectGroupId
 } from './project-groups'
-import type { Repo } from './types'
+import type { ProjectGroup, Repo } from './types'
 
 function repo(overrides: Partial<Repo>): Repo {
   return {
@@ -138,6 +139,37 @@ describe('project-groups', () => {
         )
       ].sort()
     ).toEqual(['child', 'grandchild', 'root'])
+  })
+
+  it('resolves the top-level ancestor by walking parentGroupId upward', () => {
+    const groupsById = new Map<string, Pick<ProjectGroup, 'id' | 'parentGroupId'>>([
+      ['root', { id: 'root', parentGroupId: null }],
+      ['child', { id: 'child', parentGroupId: 'root' }],
+      ['grandchild', { id: 'grandchild', parentGroupId: 'child' }]
+    ])
+
+    expect(resolveTopLevelProjectGroupId(groupsById, 'grandchild')).toBe('root')
+    expect(resolveTopLevelProjectGroupId(groupsById, 'root')).toBe('root')
+  })
+
+  it('returns the input id when the group is missing or the chain breaks', () => {
+    const groupsById = new Map<string, Pick<ProjectGroup, 'id' | 'parentGroupId'>>([
+      ['child', { id: 'child', parentGroupId: 'gone' }]
+    ])
+
+    expect(resolveTopLevelProjectGroupId(groupsById, 'unknown')).toBe('unknown')
+    // Parent id points outside the map: stop at the last resolvable node.
+    expect(resolveTopLevelProjectGroupId(groupsById, 'child')).toBe('child')
+  })
+
+  it('guards cycles instead of looping forever', () => {
+    const groupsById = new Map<string, Pick<ProjectGroup, 'id' | 'parentGroupId'>>([
+      ['a', { id: 'a', parentGroupId: 'b' }],
+      ['b', { id: 'b', parentGroupId: 'a' }]
+    ])
+
+    // Terminates once a node is revisited rather than spinning forever.
+    expect(resolveTopLevelProjectGroupId(groupsById, 'a')).toBe('a')
   })
 
   it('collects wide descendant groups without overflowing argument limits', () => {
