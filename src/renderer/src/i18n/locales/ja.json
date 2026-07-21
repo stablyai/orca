@@ -12814,6 +12814,12 @@
           "shownPluginCount_one": "これを含む {{count}} 件の一致するプラグインを表示",
           "shownPluginCount_other": "これを含む {{count}} 件の一致するプラグインを表示",
           "samePublisher": "{{value0}} として掲載された他のプラグイン"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "エディターのキーバインド",
+          "1b23c01cc6": "デフォルト",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "標準の編集の代わりに、コードエディターで Vim のモーダルキーバインドを使用します。"
         }
       },
       "right": {

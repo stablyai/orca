@@ -66,6 +66,7 @@ export function buildDefaultSettings(args: {
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
+    editorKeybindings: 'default',
     richMarkdownSpellcheckEnabled: true,
     markdownDefaultViewMode: 'rich',
     markdownReviewToolsEnabled: true,
