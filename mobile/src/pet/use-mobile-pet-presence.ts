@@ -25,9 +25,20 @@ const HEARTBEAT_MS = 8_000
  *  this is the reconnect-safety net, not the primary path. */
 const POLL_MS = 6_000
 
-function newSurfaceId(): string {
-  return `phone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
+/**
+ * One surface id per APP RUN, not per component mount.
+ *
+ * Why module-level: the overlay unmounts and remounts on every navigation. A
+ * per-mount id meant each remount registered a NEW surface while the authority
+ * still considered the previous one alive for its full 30s stale window — so
+ * the pet stayed stranded on an id nothing was rendering, and the phone drew
+ * nothing. Observed live 2026-07-21: the authority held
+ * `phone-mrur90ht-5jirsu` while the mounted component was asking about a
+ * different id entirely.
+ *
+ * The device is the surface. Its identity must outlive any one screen.
+ */
+const SURFACE_ID = `phone-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 export type MobilePetPresence = {
   /** True when this phone should be drawing the pet. */
@@ -46,7 +57,7 @@ export function useMobilePetPresence(options: {
   enabled: boolean
 }): MobilePetPresence {
   const { client, enabled } = options
-  const surfaceIdRef = useRef<string>(newSurfaceId())
+  const surfaceIdRef = useRef<string>(SURFACE_ID)
   const [snapshot, setSnapshot] = useState<PetPresenceSnapshot>(() => ({
     presence: initialPresence(Date.now()),
     surfaces: []
