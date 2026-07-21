@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: split-tab group state has to update layout,
- * per-group focus, and tab membership atomically. Keeping those transitions in
- * one slice avoids split-brain behavior between the unified tab model and the
- * legacy terminal/editor/browser content slices. */
+/* eslint-disable max-lines -- Why: split-tab group state updates layout, focus, and tab membership atomically in one slice to avoid split-brain. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
@@ -44,8 +41,7 @@ export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
-  // Why: signals the matching tab's inline title editor to open. A global
-  // keyboard shortcut (tab.rename) sets this; the tab clears it on consume.
+  // Why: id of the tab whose inline title editor should open; shortcut (tab.rename) sets it, the tab clears it on consume.
   renamingTabId: string | null
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
@@ -118,8 +114,7 @@ export type TabsSlice = {
   setTabLabel: (tabId: string, label: string) => void
   /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
   setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
-  /** Flip a tab between the terminal and native chat renderings. The live
-   *  TerminalPane stays mounted — this only changes which surface is shown. */
+  /** Flip a tab between terminal and native-chat renderings; the live TerminalPane stays mounted. */
   toggleTabViewMode: (tabId: string) => void
   setTabCustomLabel: (
     tabId: string,
@@ -182,9 +177,7 @@ export type TabsSlice = {
   ) => void
 }
 
-// Why: keep the TerminalTab (tabsByWorktree) pin in sync with the unified-tab
-// pin so reconcile's `existing.isPinned` fallback stays authoritative locally.
-// Returns an empty patch when the tab isn't a persisted TerminalTab.
+// Why: keep the TerminalTab pin in sync with the unified pin so reconcile's existing.isPinned fallback stays authoritative locally.
 function patchTerminalTabPinned(
   tabsByWorktree: Record<string, TerminalTab[]>,
   worktreeId: string,
@@ -203,14 +196,11 @@ function patchTerminalTabPinned(
   }
 }
 
-// Why: pin is host-authoritative for remote-server tabs, so mirror it to the
-// host (like setTabColor) or it's lost on reconnect/restart/other clients.
+// Why: pin is host-authoritative for remote-server tabs, so mirror it (like setTabColor) or it's lost on reconnect/other clients.
 // Dynamic import keeps this store slice off the runtime layer.
 function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: boolean): void {
   const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
-  // Why: only terminal tab pins are persisted host-side today (browser/editor
-  // tracked in #5729), so skip the RPC for other types instead of a no-op round
-  // trip.
+  // Why: only terminal tab pins are persisted host-side today (browser/editor in #5729); skip the RPC for other types.
   if (
     !found ||
     found.tab.contentType !== 'terminal' ||
@@ -224,18 +214,15 @@ function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: boolean
   )
 }
 
-// Why: viewMode is host-tracked like color/pin, so mirror the local toggle/set to
-// the host or it's lost on reconnect/restart and never reaches paired clients.
-// Only the user/RPC-set action path mirrors — never the reconcile that applies a
-// host value — so the echoed snapshot can't re-trigger an outbound RPC (no loop).
+// Why: viewMode is host-tracked like color/pin, so mirror local sets or they're lost on reconnect and to paired clients.
+// Only the action path mirrors (never reconcile applying a host value), so the echoed snapshot can't re-trigger an outbound RPC.
 function mirrorTabViewModeToHost(
   state: AppState,
   tabId: string,
   viewMode: 'terminal' | 'chat'
 ): void {
   const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
-  // Why: only terminal tab viewMode is persisted host-side; skip the RPC for other
-  // types instead of a no-op round trip.
+  // Why: only terminal tab viewMode is persisted host-side; skip the RPC for other types instead of a no-op round trip.
   if (
     !found ||
     found.tab.contentType !== 'terminal' ||
@@ -487,9 +474,7 @@ function deriveActiveSurfaceForWorktree(
   } else if (hasGroupOwnedSurface) {
     activeFileId = fileStillOpen ? restoredFileId : null
     activeBrowserTabId = browserTabStillOpen ? restoredBrowserTabId : (browserTabs[0]?.id ?? null)
-    // Why: when the user focuses an empty split, global shortcuts should
-    // target that group's default terminal area instead of the previously
-    // active browser/editor in another group.
+    // Why: focusing an empty split should target its default terminal area, not the previously active browser/editor in another group.
     activeTabType = 'terminal'
   } else if (browserTabStillOpen) {
     activeFileId = fileStillOpen ? restoredFileId : null
@@ -669,8 +654,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const shouldActivate = init?.activate ?? true
       const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
       const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
-      // Why: automation-created browser tabs need to exist and paint without
-      // stealing the visible group selection from the user's current tab.
+      // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
       const nextRecent = shouldActivate
         ? pushRecentTabId(sanitizedRecent, created.id)
         : sanitizedRecent
@@ -827,13 +811,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         return {}
       }
       const { tab, worktreeId } = found
-      // Why: activating a terminal tab dismisses the tab-level bell — the user
-      // has now moved their eyes to this tab.
-      //
-      // Why (activeWorktree guard below): only dismiss the tab-level bell when
-      // the tab is in the active worktree — otherwise the tab is not visible
-      // yet and the signal would be lost before the user saw it. Mirrors the
-      // guard in focusGroup.
+      // Why: activating a terminal tab dismisses its tab-level bell — the user has moved their eyes here.
+      // Why (activeWorktree guard below): only when the tab is in the active worktree, else the unseen signal is lost (mirrors focusGroup).
       const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
       const nextUnreadTerminalTabs =
         state.activeWorktreeId === worktreeId &&
@@ -861,10 +840,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               ? {
                   ...group,
                   activeTabId: tabId,
-                  // Why: MRU tracks every activation within the group so
-                  // closeUnifiedTab can jump back to the previous tab instead
-                  // of the visual neighbor. Sanitize first to prune ids from
-                  // removed tabs that may have lingered in persisted state.
+                  // Why: track every activation in the group's MRU so closeUnifiedTab returns to the previous tab; sanitize to prune removed ids.
                   recentTabIds: pushRecentTabId(
                     sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
                     tabId
@@ -877,9 +853,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...state.activeGroupIdByWorktree,
           [worktreeId]: tab.groupId
         },
-        // Why: skip writing unreadTerminalTabs when the reference is unchanged —
-        // avoids a no-op top-level state allocation that would force re-evaluation
-        // of full-state selectors. Mirrors focusGroup / reconcileWorktreeTabModel.
+        // Why: skip writing unreadTerminalTabs when the reference is unchanged, avoiding a no-op alloc that re-runs full-state selectors.
         ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {})
@@ -902,8 +876,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     if (tab.contentType === 'terminal' && !opts?.terminalRetirementHandled) {
       const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
       const wasLastTab = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId)).length === 0
-      // Why: unified-only hydrated tabs still own provider sessions even when
-      // their legacy terminal row is missing, so every terminal close retires by entity id.
+      // Why: unified-only hydrated tabs still own provider sessions without a legacy row, so retire every terminal close by entity id.
       get().closeTab(tab.entityId, { recordInteraction: opts?.recordInteraction })
       return { closedTabId: tabId, wasLastTab, worktreeId }
     }
@@ -911,10 +884,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
     const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
     const wasLastTab = remainingOrder.length === 0
-    // Why: when closing the active tab, walk the group's MRU stack back to the
-    // previously-active tab instead of the visual neighbor. `pickNextActiveTab`
-    // falls back to pickNeighbor when the MRU is empty (hydrated sessions,
-    // never-visited siblings) so behavior degrades gracefully.
+    // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
     const nextActiveTabId =
       group.activeTabId === tabId
         ? wasLastTab
@@ -931,10 +901,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter(
         (item) => item.id !== tabId
       )
-      // Why: closeUnifiedTab can be invoked without going through terminals.closeTab
-      // (e.g., close-to-right / close-others gestures via closeOtherTabs and
-      // closeTabsToRight). The unread-flag map is keyed by terminal entityId and
-      // would otherwise leak a stale dot for a tab that no longer renders.
+      // Why: close-to-right/others bypass terminals.closeTab, so clear the entityId-keyed unread flag here or a stale dot leaks.
       let nextUnreadTerminalTabs = current.unreadTerminalTabs
       if (terminalEntityId && current.unreadTerminalTabs[terminalEntityId]) {
         nextUnreadTerminalTabs = { ...current.unreadTerminalTabs }
@@ -978,18 +945,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         },
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-        // Why: skip writing unreadTerminalTabs when the reference is unchanged —
-        // avoids a no-op top-level state allocation that would force re-evaluation
-        // of full-state selectors. Mirrors focusGroup / reconcileWorktreeTabModel.
+        // Why: skip writing unreadTerminalTabs when the reference is unchanged, avoiding a no-op alloc that re-runs full-state selectors.
         ...(nextUnreadTerminalTabs !== current.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {}),
-        // Why: the split-group model can legally derive "terminal with no
-        // active tab" after the final unified tab closes. That leaves the
-        // worktree selected but render-empty, so the workspace shows a blank
-        // pane instead of Orca's landing screen. When that happens, write the
-        // landing-state fallback directly instead of recomputing active-surface
-        // fields from a worktree that is no longer active.
+        // Why: closing the last tab can leave the worktree selected but render-empty, so write the landing-state fallback directly.
         ...(shouldDeactivateWorktree
           ? {
               activeWorktreeId: null,
@@ -1052,9 +1012,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         if (!group) {
           continue
         }
-        // Why: drag-and-drop should preserve a single canonical position for
-        // each tab. Sanitizing here restores the invariant at the store
-        // boundary so later group operations do not branch on duplicate ids.
+        // Why: dedupe at the store boundary so each tab keeps one canonical position and later group ops don't branch on duplicate ids.
         const nextTabOrder = dedupeTabOrder(tabIds)
         reordered = true
         const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
@@ -1099,13 +1057,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (!found) {
         return {}
       }
-      // Why: default is 'terminal' for legacy/missing, so the first toggle flips
-      // to 'chat'. patchTab mutates only this tab, leaving split siblings intact.
+      // Why: viewMode defaults to 'terminal' for legacy/missing, so the first toggle flips to 'chat'.
       const fromMode: 'terminal' | 'chat' = found.tab.viewMode === 'chat' ? 'chat' : 'terminal'
       const nextMode = fromMode === 'chat' ? 'terminal' : 'chat'
-      // Why: `launchAgent` lives on the legacy terminal tab keyed by the unified
-      // tab's entityId — resolve it here so the toggle telemetry can attribute
-      // adoption by agent without threading it through every caller.
+      // Why: launchAgent lives on the legacy terminal tab (keyed by entityId); resolve it here so toggle telemetry can attribute by agent.
       const agent =
         (state.tabsByWorktree[found.worktreeId] ?? []).find(
           (terminal) => terminal.id === found.tab.entityId
@@ -1169,9 +1124,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...state.unifiedTabsByWorktree,
           [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
         },
-        // Why: reconcile derives a tab's pin from the TerminalTab (tabsByWorktree),
-        // so mirror the pin there too — otherwise an unrelated host snapshot
-        // recomputes isPinned:false and visually un-pins during the echo window.
+        // Why: reconcile derives pin from the TerminalTab, so mirror it there too or a host snapshot recomputes isPinned:false and un-pins during the echo window.
         ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, true),
         groupsByWorktree: {
           ...state.groupsByWorktree,
@@ -1278,9 +1231,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
     const groupId = createBrowserUuid()
     set((state) => ({
-      // Why: a freshly selected worktree can legitimately have zero tabs, but
-      // split-group affordances still need a canonical root group so new tabs
-      // and splits land in a deterministic place like VS Code's editor area.
+      // Why: a zero-tab worktree still needs a canonical root group so new tabs and splits land in a deterministic place.
       groupsByWorktree: {
         ...state.groupsByWorktree,
         [worktreeId]: [{ id: groupId, worktreeId, activeTabId: null, tabOrder: [] }]
@@ -1306,15 +1257,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             ...state.activeGroupIdByWorktree,
             [worktreeId]: groupId
           }
-      // Why: focusing a split group surfaces whichever terminal tab is already
-      // active in that group, so the tab-level bell is no longer needed.
-      //
-      // Why (activeWorktree guard below): only clear unreadTerminalTabs when
-      // focusing a group within the *active* worktree. If the caller is
-      // focusing a group in a background worktree, that tab is not visible
-      // yet — dismissing its bell here would silently swallow the signal
-      // before the user ever sees the tab. All current callers only fire for
-      // the active worktree, but this guard prevents future misuse.
+      // Why: focusing a group surfaces its active terminal tab, so dismiss the tab-level bell.
+      // Why (activeWorktree guard below): only when the group is in the active worktree, else the unseen tab's bell is swallowed.
       if (state.activeWorktreeId !== worktreeId) {
         if (groupAlreadyFocused) {
           return state
@@ -1365,11 +1309,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
       return {
         ...(groupAlreadyFocused ? {} : { activeGroupIdByWorktree: nextActiveGroupIdByWorktree }),
-        // Why: only write unreadTerminalTabs back into state when it actually
-        // changed. The IIFE above returns state.unreadTerminalTabs by reference
-        // on no-op; preserving that reference via conditional spread keeps
-        // downstream selectors/subscribers from firing spuriously. This matches
-        // the pattern used by activateTab and closeUnifiedTab.
+        // Why: only write unreadTerminalTabs when it changed — preserving the reference keeps selectors/subscribers from firing spuriously.
         ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
           ? { unreadTerminalTabs: nextUnreadTerminalTabs }
           : {}),
@@ -1396,8 +1336,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         groupId,
         remainingGroups[0]?.id ?? null
       )
-      // Why: drop the dead group's recent-quick-command entry so the in-memory
-      // map can't grow unbounded as users open/close groups.
+      // Why: drop the dead group's recent-quick-command entry so the map can't grow unbounded as groups open/close.
       const { [groupId]: _droppedRecent, ...remainingRecent } = current.recentQuickCommandIdByGroup
       return {
         groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
@@ -1476,9 +1415,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
       const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
       const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
-      // Why: defensive filter so target order can't grow a duplicate if the
-      // tab id somehow already exists there (stale state, prior bug). See
-      // dropUnifiedTab for the same guard.
+      // Why: defensive dedupe so target order can't grow a duplicate id (stale state); see dropUnifiedTab for the same guard.
       const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
       const targetIndex = Math.max(
         0,
@@ -1499,9 +1436,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             ...group,
             activeTabId:
               group.activeTabId === tabId
-                ? // Why: when the moved tab was active in the source, keep
-                  // MRU-aware selection so the user lands on their previously
-                  // focused tab rather than a visual neighbor.
+                ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
                   pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
                 : group.activeTabId,
             tabOrder: sourceOrder,
@@ -1603,9 +1538,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           layout
         })
       ) {
-        // Why: dragging the final tab in a group onto that same group's edge,
-        // or onto the adjacent sibling's matching edge, creates a transient
-        // column only to collapse the emptied source immediately.
+        // Why: dropping a group's last tab on its own/sibling matching edge only makes a transient column that immediately collapses.
         return {}
       }
 
@@ -1651,11 +1584,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
       const destinationGroup =
         nextGroups.find((group) => group.id === resolvedTargetGroupId) ?? targetGroup
-      // Why: the target group's stored order can already contain this tab id
-      // from a prior racey write or a same-group split where the source and
-      // destination transiently share it. Splicing without filtering first
-      // would leave the same id in the order twice, which React surfaces as
-      // a duplicate-key warning in TabBar and can mis-reconcile xterm panes.
+      // Why: target order may already hold this tab id (racey write / same-group split); dedupe first or React hits a duplicate key.
       const targetOrder = dedupeTabOrder(destinationGroup.tabOrder.filter((id) => id !== tabId))
       const targetIndex = Math.max(
         0,
@@ -1673,9 +1602,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             ...group,
             activeTabId:
               group.activeTabId === tabId
-                ? // Why: same MRU-aware fallback as moveUnifiedTabToGroup so
-                  // the pane left behind by a drag keeps the user on their
-                  // previously-active tab.
+                ? // Why: same MRU-aware fallback as moveUnifiedTabToGroup — the drag keeps the user on their previously-active tab.
                   pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
                 : group.activeTabId,
             tabOrder: sourceOrder,
@@ -1809,9 +1736,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return {
         layoutByWorktree: {
           ...state.layoutByWorktree,
-          // Why: split sizing is part of the tab-group model, not transient UI
-          // state. Persisting ratios here keeps restores and multi-step group
-          // operations in sync with what the user actually resized.
+          // Why: split ratios belong to the tab-group model (not transient UI), so persist them for restores and multi-step group ops.
           [worktreeId]: updateSplitRatio(
             currentLayout,
             nodePath.length > 0 ? nodePath.split('.') : [],
@@ -1834,15 +1759,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (unifiedTerminalEntityIds.has(tab.id)) {
         return false
       }
-      // Why: this is a one-shot migration filter for tabs not yet promoted
-      // to unifiedTabs — keeping the wake-hint `tab.ptyId` clause is
-      // intentional. tab.ptyId is the preserved sessionId (so wake can
-      // reattach to the same daemon-history dir / relay session); a slept
-      // tab will have `livePtyIds` empty *and* `tab.ptyId` populated, and
-      // we want it included in the migration sweep so reconcile picks it
-      // up. Reconcile fires again post-reattach, so the eventual live PTY
-      // also routes through this branch. Do *not* repurpose this as an
-      // "is this tab alive?" check — those reads must use ptyIdsByTabId.
+      // Why: migration filter — tab.ptyId (preserved sessionId) keeps slept tabs in the sweep for wake reattach; NOT a liveness check (use ptyIdsByTabId).
       const livePtyIds = state.ptyIdsByTabId[tab.id] ?? []
       return livePtyIds.length > 0 || tab.ptyId != null
     })
@@ -1880,10 +1797,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             }))
     const reconciledUnifiedTabs =
       restoredLegacyTabs.length > 0 ? [...unifiedTabs, ...restoredLegacyTabs] : unifiedTabs
-    // Why: when a freshly-ensured group has no active tab yet, seed it from the
-    // worktree's remembered selection before the first restored tab. Otherwise
-    // returning to a worktree whose terminals only exist in the runtime slice
-    // always reopens on Terminal 1 and drops the tab the user left on.
+    // Why: seed a freshly-ensured group's active tab from the remembered selection, else the worktree always reopens on Terminal 1.
     const rememberedLegacyActiveTabId = state.activeTabIdByWorktree[worktreeId]
     const restoredLegacyTabIds = new Set(restoredLegacyTabs.map((tab) => tab.id))
     const legacyFallbackActiveTabId =
@@ -1894,10 +1808,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       restoredLegacyTabs.length > 0 && reconciliationGroup
         ? updateGroup(ensuredGroupState!.groupsByWorktree[worktreeId] ?? [], {
             ...reconciliationGroup,
-            // Why: legacy terminal tabs can still exist in the runtime slice
-            // after split groups became the source of truth. Restoring them
-            // into the active/root group keeps existing live PTYs reachable
-            // instead of making activation spawn a duplicate "Terminal 2".
+            // Why: restore runtime-slice legacy tabs into the active/root group so live PTYs stay reachable instead of spawning a duplicate.
             activeTabId: reconciliationGroup.activeTabId ?? legacyFallbackActiveTabId,
             tabOrder: dedupeTabOrder([
               ...reconciliationGroup.tabOrder,
@@ -1940,9 +1851,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const tabOrderUnchanged =
         tabOrder.length === group.tabOrder.length &&
         tabOrder.every((tabId, index) => tabId === group.tabOrder[index])
-      // Why: reconciliation can drop backing tabs (stale persisted ids, dead
-      // PTYs, closed editor files). Keep the MRU stack in sync so the next
-      // close doesn't try to activate a tab the renderer no longer owns.
+      // Why: keep the MRU stack in sync with dropped tabs so the next close doesn't activate one the renderer no longer owns.
       const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, tabOrder)
       const recentUnchanged =
         recentTabIds.length === (group.recentTabIds ?? []).length &&
@@ -1993,11 +1902,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       layoutChanged ||
       orphanTerminalIds.size > 0
     ) {
-      // Why: when reconcile drops a unified terminal tab (stale persisted id,
-      // dead PTY, closed editor), its entry in unreadTerminalTabs (keyed by the
-      // terminal tab's entityId) would otherwise linger forever and bleed into
-      // downstream persistence/selectors. Mirrors the cleanup in closeUnifiedTab
-      // which removes the unread flag when a terminal tab is torn down.
+      // Why: drop unreadTerminalTabs entries (keyed by entityId) for terminal tabs reconcile removed, or the stale flag lingers forever.
       const droppedTerminalEntityIds: string[] = []
       for (const tab of unifiedTabs) {
         if (tab.contentType !== 'terminal') {
@@ -2036,10 +1941,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             ? {
                 layoutByWorktree: {
                   ...current.layoutByWorktree,
-                  // Why: a restored live runtime terminal needs a concrete leaf
-                  // in the split-group model before activation runs again.
-                  // Without this, the worktree still looks render-empty and the
-                  // activation fallback spawns a duplicate "Terminal 2".
+                  // Why: restored runtime terminal needs a concrete leaf before activation, else the fallback spawns a duplicate "Terminal 2".
                   [worktreeId]: nextLayout!
                 }
               }

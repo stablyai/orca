@@ -31,6 +31,7 @@ export function VaultSessionRow({
   session,
   liveState,
   resumeStartup,
+  realHomeResumeStartup,
   worktreeInfo,
   vaultScope,
   detailsExpanded,
@@ -54,6 +55,7 @@ export function VaultSessionRow({
   session: AiVaultSession
   liveState: AgentStatusState | null
   resumeStartup: AiVaultResumeStartup
+  realHomeResumeStartup: AiVaultResumeStartup
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope
   detailsExpanded: boolean
@@ -99,12 +101,15 @@ export function VaultSessionRow({
         command: resumeStartup.command,
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
+        codexHome: session.codexHome,
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
-        ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {})
+        ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
+        ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {}),
+        realHomeStartup: realHomeResumeStartup
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
-    [resumeDisabled, session, resumeStartup]
+    [realHomeResumeStartup, resumeDisabled, session, resumeStartup]
   )
 
   return (

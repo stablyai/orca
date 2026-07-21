@@ -1,8 +1,4 @@
-// Why: the WebSocket transport enables mobile clients to connect to the Orca
-// runtime over the local network. When TLS cert/key are provided it uses wss://
-// to prevent passive sniffing; otherwise it falls back to plain ws://. Per-device
-// tokens (validated by the message handler in OrcaRuntimeRpcServer) provide auth
-// regardless of transport encryption.
+// WebSocket transport letting mobile clients reach the Orca runtime over LAN (wss:// with TLS, else ws://); auth is per-device tokens, independent of transport encryption.
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -10,14 +6,9 @@ import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
-// Why: desktop remote-host clients can legitimately hold many concurrent
-// streams (session tabs, terminals, file watches, browser streams). Keep the
-// cap high enough that leaked/stale streams do not starve short control RPCs.
+// Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
 const MAX_WS_CONNECTIONS = 128
-// Why: hard-bound this listener's descriptor use above the WS-upgrade cap.
-// Node accepts then drops sockets beyond maxConnections, so raw/pre-upgrade
-// clients cannot grow without bound while the existing WS budget remains
-// available to legitimate long-lived streams.
+// Why: bound pre-upgrade descriptor use above the WS cap so raw sockets can't grow without bound.
 const MAX_TCP_CONNECTIONS = MAX_WS_CONNECTIONS * 2
 const PRE_AUTH_TIMEOUT_MS = 10_000
 type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
@@ -29,16 +20,7 @@ type WebSocketMessageHandler = {
   ): void
 }['bivarianceHack']
 
-// Why: mobile clients (iOS/Android) regularly background-suspend their
-// sockets without the OS sending a TCP FIN/RST, leaving the server with
-// half-open WebSockets that count toward MAX_WS_CONNECTIONS. Without this
-// heartbeat the only thing that ever reaps them is the OS's TCP keepalive
-// (default macOS: ~2 hours idle + 11 min of probes), which is the
-// "connection randomly turns green again after a long delay" symptom.
-// Pinging every 15s and terminating any client that hasn't pong'd by the
-// next tick collapses that worst case to ~30s. RN/browser WebSocket
-// runtimes auto-respond to server pings with pongs at the protocol layer,
-// so this works for any client that speaks RFC 6455.
+// Why: mobile clients background-suspend sockets with no TCP FIN, leaving half-opens that otherwise only the OS keepalive (~2h) reaps; a 15s ping/pong sweep bounds that to ~30s (clients auto-pong per RFC 6455).
 const HEARTBEAT_INTERVAL_MS = 15_000
 
 export type WebSocketTransportOptions = {
@@ -50,19 +32,11 @@ export type WebSocketTransportOptions = {
   heartbeatIntervalMs?: number
   // Why: test-only override. Production uses PRE_AUTH_TIMEOUT_MS.
   preAuthTimeoutMs?: number
-  // Why: the pairing server can also serve the browser client, so users do
-  // not need a second dev/static server once the web bundle is built.
+  // Why: the pairing server can also serve the browser client, avoiding a second static server.
   staticRoot?: string
-  // Why: paired mobile devices store the full ws://ip:port endpoint. Once a
-  // fallback port has been assigned and persisted, devices paired while it was
-  // active point at it, so it must be bound FIRST on later launches — binding
-  // the (now free) preferred port instead would strand those pairings
-  // (STA-1511). Callers pass the previously assigned fallback port here.
+  // Why: devices paired while the fallback port was active point at it, so it must bind first on later launches or those pairings strand (STA-1511).
   fallbackPort?: number
-  // Why: `orca serve --port <P>` clients dial the pinned port. Prefer that port
-  // first (fallback second) so a stale mobile-ws-fallback-port.json cannot
-  // silently steal the pin (issue #8535). Default auto/desktop keeps
-  // fallback-first for STA-1511 pairing stability.
+  // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
   preferPinnedPort?: boolean
 }
 
@@ -79,16 +53,13 @@ export class WebSocketTransport implements RpcTransport {
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
-  // Why: tracks whether each socket has pong'd since the last heartbeat
-  // sweep. A socket missing from the set when the next sweep fires is
-  // assumed dead and terminated.
+  // Why: a socket absent from this set at the next heartbeat sweep is presumed dead and terminated.
   private wsAlive = new WeakSet<WebSocket>()
   private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler:
     | ((clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void)
     | null = null
-  // Why: maps each WebSocket to the clientId (deviceToken) that authenticated it,
-  // so ws.on('close') can notify the runtime which mobile client disconnected.
+  // Why: maps each socket to its authenticated clientId so close can report which device disconnected.
   private wsClientIds = new Map<WebSocket, string>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
 
@@ -118,12 +89,7 @@ export class WebSocketTransport implements RpcTransport {
     this.messageHandler = handler
   }
 
-  // Why: handlers receive the closing `ws` so per-connection state can be
-  // targeted exactly (one paired device may hold multiple concurrent sockets,
-  // e.g. host screen + accounts screen). `hasOtherConnections` tells the
-  // runtime whether other sockets for the same deviceToken are still alive,
-  // so client-scoped teardown (mobile-fit overrides, etc.) only fires on the
-  // last disconnect.
+  // Why: pass the closing `ws` and whether other sockets share its deviceToken, so client-scoped teardown fires only on the last disconnect.
   onConnectionClose(
     handler: (clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void
   ): void {
@@ -140,16 +106,13 @@ export class WebSocketTransport implements RpcTransport {
       .filter(([, candidateClientId]) => candidateClientId === clientId)
       .map(([ws]) => ws)
     for (const ws of sockets) {
-      // Why: revocation is a security boundary; terminate skips the close
-      // handshake so a revoked mobile stream stops immediately.
+      // Why: revocation is a security boundary; terminate() skips the handshake so a revoked stream stops immediately.
       ws.terminate()
     }
     return sockets.length
   }
 
-  // Why: when port 0 is passed the OS assigns a random available port. The
-  // runtime metadata and mobile QR code need the real port, so callers read
-  // it here after start() resolves.
+  // Why: with port 0 the OS assigns a random port; callers read the real bound port here for metadata and the mobile QR.
   get resolvedPort(): number {
     const addr = this.httpServer?.address()
     if (addr && typeof addr === 'object') {
@@ -163,16 +126,7 @@ export class WebSocketTransport implements RpcTransport {
       return
     }
 
-    // Why: default order binds a persisted fallback FIRST — devices paired
-    // while it was active store ws://ip:<fallback> and would be stranded if a
-    // later launch grabbed the (now free) preferred port instead (STA-1511).
-    // Explicit serve --port flips the order so the pinned port wins when free
-    // (issue #8535); fallback remains a secondary candidate for EADDRINUSE.
-    // Without a persisted fallback only the preferred port is tried. On
-    // EADDRINUSE each candidate falls through to the next, ending at port 0
-    // (OS-assigned) so mobile pairing still works when everything is taken.
-    // The QR code reads resolvedPort after start, so it always advertises the
-    // port that actually bound.
+    // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); on failure each candidate falls through to OS-assigned port 0.
     const persistedFallbackPort =
       this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
         ? this.fallbackPort
@@ -188,12 +142,7 @@ export class WebSocketTransport implements RpcTransport {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
-        // Why: a persisted fallback can become unbindable for reasons beyond
-        // EADDRINUSE (e.g. Windows reserves dynamic-range ports for Hyper-V
-        // after a reboot → EACCES). Any fallback failure must degrade to the
-        // next candidate — aborting would disable the transport every launch
-        // while the store still names that port. Only preferred-port failures
-        // other than EADDRINUSE are fatal.
+        // Why: any fallback-port failure must degrade to the next candidate (Windows can reserve the port → EACCES, not just EADDRINUSE); only non-EADDRINUSE preferred-port failures are fatal.
         if (port !== persistedFallbackPort && (!isEAddressInUse(error) || port === 0)) {
           throw error
         }
@@ -215,9 +164,7 @@ export class WebSocketTransport implements RpcTransport {
       : createHttpServer(requestListener)
   }
 
-  // Why: the WebSocketServer is attached only after listen succeeds. If we
-  // attached it before, the WSS would re-emit the EADDRINUSE error from the
-  // httpServer as an uncatchable exception, preventing the fallback from working.
+  // Why: attach the WSS only after listen succeeds; earlier it re-emits httpServer's EADDRINUSE as an uncatchable exception and breaks the fallback.
   private async tryListen(port: number): Promise<void> {
     const httpServer = this.createHttpServer()
 
@@ -229,8 +176,7 @@ export class WebSocketTransport implements RpcTransport {
       })
     })
 
-    // Why: the WS cap applies only after upgrade. A separate TCP cap prevents
-    // raw and pre-upgrade sockets from consuming an unbounded descriptor budget.
+    // Why: the WS cap applies only post-upgrade; a separate TCP cap bounds raw/pre-upgrade descriptor use.
     httpServer.maxConnections = MAX_TCP_CONNECTIONS
 
     const wss = new WebSocketServer({
@@ -251,26 +197,16 @@ export class WebSocketTransport implements RpcTransport {
     this.startHeartbeat()
   }
 
-  // Why: over the WS-upgrade cap, request a graceful 1013 close but force the
-  // socket down shortly after. A backgrounded/half-open phone may never ack the
-  // close frame, so a bare ws.close() can retain the descriptor until the next
-  // heartbeat. Under a reconnect flood, shortening that window bounds the
-  // number of rejected sockets that can accumulate behind the WS cap. The
-  // 'error' listener prevents a reset while closing from becoming unhandled.
+  // Why: force-terminate soon after the 1013 close since a half-open phone may never ack and would hold the descriptor past the WS cap; the 'error' listener absorbs a reset while closing.
   private rejectOverCapacity(ws: WebSocket): void {
     ws.on('error', () => {})
     ws.close(1013, 'Maximum connections reached')
-    // Why: give the 1013 close a brief window, then hard-terminate so the
-    // descriptor is freed even if the client never acks the close frame.
     const terminateTimer = setTimeout(() => ws.terminate(), 1_000)
     terminateTimer.unref?.()
     ws.once('close', () => clearTimeout(terminateTimer))
   }
 
-  // Why: ping every live socket on a fixed cadence and terminate any that
-  // didn't pong since the previous tick. This is the only thing that
-  // reliably reaps half-open mobile sockets stranded by background
-  // suspension without a TCP FIN. See HEARTBEAT_INTERVAL_MS comment.
+  // Why: the only reliable reaper of half-open mobile sockets stranded by background suspension without a TCP FIN.
   private startHeartbeat(): void {
     if (this.heartbeatTimer) {
       return
@@ -283,9 +219,7 @@ export class WebSocketTransport implements RpcTransport {
       let reaped = 0
       for (const ws of wss.clients) {
         if (!this.wsAlive.has(ws)) {
-          // Why: terminate() (vs close()) skips the close handshake and
-          // immediately fires the 'close' event, freeing the slot. close()
-          // on an already-dead socket can hang for the OS-level TCP timeout.
+          // Why: terminate() frees the slot immediately; close() on a dead socket can hang for the OS-level TCP timeout.
           ws.terminate()
           reaped++
           continue
@@ -294,12 +228,10 @@ export class WebSocketTransport implements RpcTransport {
         try {
           ws.ping()
         } catch {
-          // Why: ping() can throw on a socket that's mid-tear-down; the
-          // close handler will run regardless, so swallow the throw.
+          // Why: ping() can throw on a mid-teardown socket; the close handler runs regardless, so swallow it.
         }
       }
-      // Why: steady reaping or a client count riding the cap are early overload
-      // signals; surface them without logging on healthy heartbeat ticks.
+      // Why: steady reaping or riding the cap are early overload signals; stay quiet on healthy ticks.
       if (reaped > 0 || wss.clients.size >= MAX_WS_CONNECTIONS) {
         console.warn(
           `[ws-transport] heartbeat reaped ${reaped}; ${wss.clients.size} tracked sockets`
@@ -327,8 +259,7 @@ export class WebSocketTransport implements RpcTransport {
 
     if (wss) {
       for (const client of wss.clients) {
-        // Why: stop() is a teardown path. A half-open mobile socket may never
-        // answer a graceful close frame, which keeps httpServer.close pending.
+        // Why: a half-open mobile socket may never answer a close frame, which keeps httpServer.close pending.
         client.terminate()
       }
       wss.close()
@@ -347,20 +278,14 @@ export class WebSocketTransport implements RpcTransport {
     }
   }
 
-  // Why: WebSocket connections are long-lived (unlike Unix socket which is
-  // one-per-request). Multiple requests can be multiplexed on the same
-  // connection via the RPC `id` field. The transport delegates all auth
-  // and dispatch logic to the message handler set by OrcaRuntimeRpcServer.
+  // Why: WS connections are long-lived and multiplex many RPCs by `id`; auth and dispatch are delegated to the message handler.
   private handleConnection(ws: WebSocket): void {
     let finalized = false
     const onPong = (): void => {
       this.wsAlive.add(ws)
     }
     const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
-      // Why: any inbound traffic counts as proof of life, not just pongs.
-      // RN's WebSocket runtime auto-pongs server pings transparently, but
-      // app-level frames also count toward liveness so an actively-talking
-      // client doesn't get terminated mid-request.
+      // Why: any inbound frame counts as proof of life, so an actively-talking client isn't reaped mid-request.
       this.wsAlive.add(ws)
       const msg =
         typeof data === 'string'
@@ -371,8 +296,7 @@ export class WebSocketTransport implements RpcTransport {
       this.messageHandler?.(
         msg,
         (response) => {
-          // Why: mobile clients disconnect frequently (backgrounding, network
-          // switch, phone locked). Guard writes to avoid errors on dead sockets.
+          // Why: mobile clients disconnect often; guard the write so we don't throw on a dead socket.
           if (ws.readyState === ws.OPEN) {
             ws.send(response)
           }
@@ -381,8 +305,7 @@ export class WebSocketTransport implements RpcTransport {
       )
     }
     const onError = (): void => {
-      // Why: close is not guaranteed after every ws error path; finalize here
-      // too so pre-auth E2EE channels and connection ids cannot leak.
+      // Why: close isn't guaranteed after every error path; finalize here too so pre-auth E2EE state and connection ids can't leak.
       finalizeConnection()
       ws.close()
     }
@@ -405,9 +328,7 @@ export class WebSocketTransport implements RpcTransport {
 
     const preAuthTimer = setTimeout(() => {
       if (!this.wsClientIds.has(ws)) {
-        // Why: a silent client that only auto-pongs can otherwise occupy one
-        // of the finite mobile WebSocket slots forever without ever starting
-        // the E2EE handshake.
+        // Why: a silent auto-ponging client would otherwise hold a finite mobile slot forever without starting the E2EE handshake.
         ws.terminate()
       }
     }, this.preAuthTimeoutMs)
@@ -416,17 +337,13 @@ export class WebSocketTransport implements RpcTransport {
     }
     this.preAuthTimers.set(ws, preAuthTimer)
 
-    // Why: seed alive=true so the first heartbeat tick after connect doesn't
-    // treat a fresh socket as dead. Subsequent pongs (or any inbound traffic)
-    // re-arm it.
+    // Why: seed alive so the first heartbeat tick doesn't reap a fresh socket before its first pong.
     this.wsAlive.add(ws)
 
     ws.on('pong', onPong)
     ws.on('message', onMessage)
 
-    // Why: mobile clients disconnect when the phone locks, loses wifi, or
-    // backgrounds the app. The runtime must clean up connection-scoped state
-    // (e.g., mobile-fit overrides) to prevent orphaned phone-fit on desktop.
+    // Why: clean up connection-scoped state (e.g. mobile-fit overrides) so a dropped phone doesn't leave orphaned phone-fit on desktop.
     ws.on('close', finalizeConnection)
     ws.on('error', onError)
   }

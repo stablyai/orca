@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
+  CodexSystemDefaultIdentity,
   GlobalSettings
 } from '../../../../shared/types'
 import { Badge } from '../ui/badge'
@@ -173,6 +174,29 @@ function getCodexAccountLabel(
     return 'System default'
   }
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
+
+// Why: the system-default row has no stored identity, so surface the real
+// ~/.codex login live — the OAuth email when signed in, a clear custom-provider
+// note for env-key logins, and the generic fallback when signed out.
+function getCodexSystemDefaultSubtitle(
+  identity: CodexSystemDefaultIdentity | undefined,
+  runtimeSentenceLabel: string
+): string {
+  if (identity?.authKind === 'oauth' && identity.email) {
+    return identity.email
+  }
+  if (identity?.authKind === 'api-key') {
+    return translate(
+      'auto.components.settings.AccountsPane.codexSystemDefaultCustomProvider',
+      'Custom provider — no usage tracked.'
+    )
+  }
+  return translate(
+    'auto.components.settings.AccountsPane.fcc4093fc1',
+    'Use your current {{value0}} Codex login.',
+    { value0: runtimeSentenceLabel }
+  )
 }
 
 function getClaudeAccountLabel(
@@ -385,20 +409,25 @@ export function AccountsPane({
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )
-  // Why: the auth warning is derived from the desktop's own rate-limit poll;
-  // with a remote owner it would misattribute local auth state to the server.
-  const activeCodexAuthWarning =
-    codexAccountsLoaded && !isRemoteAccountScope
-      ? getCodexAccountAuthWarning({
-          limits: codexRateLimits,
-          target: codexRateLimitTarget,
-          runtime: accountRuntime,
-          activeAccountId: activeCodexAccountId,
-          accountId: activeCodexAccountId
-        })
-      : null
-  const systemCodexNeedsReauthentication =
-    activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
+  // Why: the system default's real identity is host-scoped (it reflects the
+  // runtime's own ~/.codex), so only surface it in the host view. Per-distro
+  // WSL falls back to the generic label.
+  const systemCodexIdentity =
+    accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
+  // Why: remote snapshots own their system-default identity, but the desktop's
+  // rate-limit poll must not be misattributed to a remote account owner.
+  const activeCodexAuthWarning = codexAccountsLoaded
+    ? getCodexAccountAuthWarning({
+        limits: isRemoteAccountScope ? null : codexRateLimits,
+        target: codexRateLimitTarget,
+        runtime: accountRuntime,
+        activeAccountId: activeCodexAccountId,
+        accountId: activeCodexAccountId,
+        authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
+      })
+    : null
+  const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
+  const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
@@ -1050,16 +1079,22 @@ export function AccountsPane({
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                {activeCodexAccountId
+                {systemCodexMissingSignIn
                   ? translate(
-                      'auto.components.settings.AccountsPane.75ca9b718e',
-                      'Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.'
-                    )
-                  : translate(
-                      'auto.components.settings.AccountsPane.e4a28e8894',
-                      'Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.',
+                      'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
+                      'No Codex sign-in was found for {{value0}}.',
                       { value0: accountRuntimeSentenceLabel }
-                    )}
+                    )
+                  : activeCodexAccountId
+                    ? translate(
+                        'auto.components.settings.AccountsPane.75ca9b718e',
+                        'Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.'
+                      )
+                    : translate(
+                        'auto.components.settings.AccountsPane.e4a28e8894',
+                        'Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.',
+                        { value0: accountRuntimeSentenceLabel }
+                      )}
               </span>
             </div>
           ) : null}
@@ -1126,7 +1161,7 @@ export function AccountsPane({
               }
               disabled={codexAction !== 'idle' || accountRuntimeUnavailable}
               className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-                systemCodexNeedsReauthentication
+                systemCodexNeedsSignIn
                   ? 'border-destructive/50 bg-destructive/5'
                   : systemCodexActive
                     ? 'border-foreground/20 bg-accent/15'
@@ -1149,7 +1184,7 @@ export function AccountsPane({
                       {translate('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
                     </Badge>
                   ) : null}
-                  {systemCodexNeedsReauthentication ? (
+                  {systemCodexNeedsSignIn ? (
                     <Badge
                       variant="destructive"
                       className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
@@ -1163,19 +1198,24 @@ export function AccountsPane({
                 </div>
                 <span
                   className={`truncate text-[11px] ${
-                    systemCodexNeedsReauthentication ? 'text-destructive' : 'text-muted-foreground'
+                    systemCodexNeedsSignIn ? 'text-destructive' : 'text-muted-foreground'
                   }`}
                 >
-                  {systemCodexNeedsReauthentication
-                    ? translate(
-                        'auto.components.settings.AccountsPane.fd62f37c24',
-                        'Codex reported this {{value0}} login is out of date.',
-                        { value0: accountRuntimeSentenceLabel }
-                      )
-                    : translate(
-                        'auto.components.settings.AccountsPane.fcc4093fc1',
-                        'Use your current {{value0}} Codex login.',
-                        { value0: accountRuntimeSentenceLabel }
+                  {systemCodexNeedsSignIn
+                    ? systemCodexMissingSignIn
+                      ? translate(
+                          'auto.components.settings.AccountsPane.codexSystemDefaultNeedsSignIn',
+                          'No Codex sign-in was found for {{value0}}.',
+                          { value0: accountRuntimeSentenceLabel }
+                        )
+                      : translate(
+                          'auto.components.settings.AccountsPane.fd62f37c24',
+                          'Codex reported this {{value0}} login is out of date.',
+                          { value0: accountRuntimeSentenceLabel }
+                        )
+                    : getCodexSystemDefaultSubtitle(
+                        systemCodexIdentity,
+                        accountRuntimeSentenceLabel
                       )}
                 </span>
               </div>

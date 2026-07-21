@@ -1378,6 +1378,30 @@ describe('registerFilesystemHandlers', () => {
     expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
   })
 
+  it('returns capped-state metadata unchanged across local and SSH status IPC', async () => {
+    const cappedStatus = {
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown',
+      didHitLimit: true,
+      statusLength: 1_001
+    }
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue(cappedStatus)
+    const sshProvider = { getStatus: vi.fn().mockResolvedValue(cappedStatus) }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+    ).resolves.toEqual(cappedStatus)
+    await expect(
+      handlers.get('git:status')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual(cappedStatus)
+  })
+
   it('forwards upstream-negative-cache bypass through local and SSH git status IPC', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })

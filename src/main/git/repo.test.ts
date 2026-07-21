@@ -15,9 +15,7 @@ import {
   searchBaseRefs
 } from './repo'
 
-// Why: these tests exercise real git state (not mocked gitExecFileAsync)
-// because the change under test is in the `for-each-ref` glob argument
-// shape — the exact kind of bug a mock-based test would miss.
+// Why: use real git state (not mocked) because the bug is in the for-each-ref glob shape a mock would miss.
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -25,21 +23,14 @@ function git(cwd: string, args: string[]): string {
 
 function initRepo(dir: string): void {
   git(dir, ['init', '--quiet'])
-  // Why: explicit symbolic-ref rather than `git init --initial-branch=main`
-  // (which requires git >= 2.28). Setting HEAD before the first commit
-  // makes the initial branch `main` regardless of host git version or
-  // `init.defaultBranch` config.
+  // Why: `--initial-branch=main` needs git >= 2.28; symbolic-ref before the first commit forces `main` on any git version.
   git(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   git(dir, ['config', 'user.email', 'test@test.com'])
   git(dir, ['config', 'user.name', 'Test'])
   git(dir, ['commit', '--allow-empty', '-m', 'initial', '--quiet'])
 }
 
-/**
- * Create a remote-tracking ref in `mainDir` at the given short-name
- * (e.g. `origin/main`) by creating a packed ref under refs/remotes.
- * Uses `update-ref` so we don't need to actually configure a live remote.
- */
+/** Create a remote-tracking ref via `update-ref`, avoiding a live remote. */
 function createRemoteRef(mainDir: string, shortName: string, sha: string): void {
   git(mainDir, ['update-ref', `refs/remotes/${shortName}`, sha])
 }
@@ -137,7 +128,6 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/main', sha)
     createRemoteRef(tmpDir, 'upstream/main', sha)
-    // symbolic-ref creates the HEAD pseudo-ref
     git(tmpDir, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
     git(tmpDir, ['symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main'])
 
@@ -164,9 +154,7 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(results).toContain('local-only')
   })
 
-  // Why: a single-word query must match a term in ANY segment of a slashed
-  // branch name (`user/feature`), not just the leaf. fnmatch `*` does not
-  // cross `/`, so the glob must use `**` to span ref segments.
+  // Why: fnmatch `*` doesn't cross `/`, so a single-word query needs `**` to match any segment of a slashed name.
   it('finds a local slashed branch when the query lands in a deep segment', async () => {
     git(tmpDir, ['branch', 'feature/login'])
 
@@ -311,10 +299,7 @@ describe('searchBaseRefs (widened glob)', () => {
     await expect(searchBaseRefs(tmpDir, '', Number.NaN)).resolves.toEqual([])
   })
 
-  // Why: the picker displays results as `<remote>/<branch>` and labels
-  // `origin/main` as "Current", so users naturally retype the displayed
-  // format. Before segment-wise globbing this returned [] because the
-  // slash in the query made every fnmatch pattern unable to match.
+  // Why: users retype the displayed `<remote>/<branch>` format, so a slashed query must still match.
   it('finds the ref when the query is in display format `<remote>/<branch>`', async () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
@@ -334,8 +319,7 @@ describe('searchBaseRefs (widened glob)', () => {
 
     expect(results).toContain('upstream/feature-x')
     expect(results).toContain('upstream/feature-y')
-    // Why: `upstream/feat` pins the remote segment to *upstream*, so
-    // origin/feature-x must not leak in.
+    // Why: `upstream/feat` pins the remote segment to *upstream*, so origin/feature-x must not leak in.
     expect(results).not.toContain('origin/feature-x')
   })
 
@@ -343,10 +327,7 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    // Why: `main/upstream` means "remote matching *main*, branch matching
-    // *upstream*". upstream/main has remote=upstream (no `main`) and
-    // branch=main (no `upstream`), so it must NOT match — confirms each
-    // token is pinned to its own segment, not treated as a free substring.
+    // Why: each token is pinned to its own segment (remote vs branch), so `main/upstream` must not match `upstream/main`.
     const results = await searchBaseRefs(tmpDir, 'main/upstream')
 
     expect(results).not.toContain('upstream/main')
@@ -357,10 +338,7 @@ describe('searchBaseRefs (widened glob)', () => {
     createRemoteRef(tmpDir, 'upstream/main', sha)
     git(tmpDir, ['symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main'])
 
-    // Why: typing `upstream/HEAD` must not surface the pseudo-ref even
-    // though it's a valid display-format query — the HEAD filter runs
-    // after the glob match, so coverage of the filter must survive
-    // changes to the glob shape.
+    // Why: the HEAD filter runs after the glob match, so display-format queries must still drop the pseudo-ref.
     const results = await searchBaseRefs(tmpDir, 'upstream/HEAD')
 
     expect(results).not.toContain('upstream/HEAD')
@@ -370,10 +348,7 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
-    // Why: empty tokens from trailing/leading/doubled slashes would
-    // degrade to `**` segments with fnmatch, matching nothing useful
-    // and silently breaking the feature. Filtering empty tokens keeps
-    // the query behavior identical to the intended non-empty tokens.
+    // Why: empty tokens from stray slashes would degrade to `**` and match nothing, so they're filtered out.
     expect(await searchBaseRefs(tmpDir, 'upstream/')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, '/upstream')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, 'upstream//main')).toContain('upstream/main')
@@ -515,15 +490,13 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
   })
 
   it('does NOT fall through to upstream/main when origin/* is absent', () => {
-    // Why: this is the explicit design decision — the default probe order
-    // is origin-only. upstream-aware defaulting is deferred work.
+    // Why: default probe order is origin-only by design; upstream-aware defaulting is deferred.
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'upstream/main', sha)
 
     const result = getDefaultBaseRef(tmpDir)
 
-    // With no origin/* but a local main branch (initRepo creates one),
-    // we expect the local `main` — NOT `upstream/main`.
+    // initRepo creates a local `main`, so with no origin/* we expect it — not `upstream/main`.
     expect(result).toBe('main')
     expect(result).not.toBe('upstream/main')
   })

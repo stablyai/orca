@@ -124,6 +124,32 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toMatch(/\.catch\(\(error: unknown\) =>/)
   })
 
+  it('clears only repo-scoped linked work items when the repo or project changes', () => {
+    // Why: Linear and Jira issues are workspace-scoped context — a repo or
+    // project switch must keep them attached. Jira used to be dropped because
+    // this path special-cased Linear only.
+    const repoChangeSection = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRepoChange',
+      'const handleFolderSourceRepoChange'
+    )
+    expect(repoChangeSection).toContain(
+      '!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)'
+    )
+
+    const folderSourceSection = sourceBetween(
+      HOOK_SOURCE,
+      'const handleFolderSourceRepoChange',
+      'const handleProjectHostSetupChange'
+    )
+    expect(folderSourceSection).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(current)')
+
+    // No switch path may gate the linked-item clear on a Linear-only predicate
+    // again. (isLinearLinkedWorkItem itself may still appear — it drives the
+    // separate Linear branch-name feature — but never the preservation decision.)
+    expect(HOOK_SOURCE).not.toContain('if (!preserveLinearLinkedWorkItem)')
+  })
+
   it('does not use local SSH gates for runtime-owned folder targets', () => {
     const targetSection = sourceBetween(
       HOOK_SOURCE,
@@ -568,7 +594,7 @@ describe('useComposerState host-context boundaries', () => {
       'const handleProjectChange = useCallback',
       'const handleSmartGitHubItemSelect'
     )
-    expect(section).toContain("linkedProvider !== 'linear' && linkedProvider !== 'jira'")
+    expect(section).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)')
   })
 
   it('resolves quick-create base refs through the worktree-create precedence helper', () => {

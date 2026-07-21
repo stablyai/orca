@@ -49,6 +49,7 @@ function createMockSubprocess(): SubprocessHandle & {
 
 type DaemonServerPrivate = {
   server: Server | null
+  pendingPtySpawnPreparations: Map<string, Set<unknown>>
   host: {
     kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
   }
@@ -311,6 +312,56 @@ describe('DaemonServer', () => {
       await canceledCreate
       await shutdown
       expect(spawnSubprocess).not.toHaveBeenCalled()
+    })
+
+    it('cancels a disconnecting client’s pending preparation to avoid an orphan PTY (F4)', async () => {
+      let finishPreparation!: () => void
+      const preparation = new Promise<void>((resolve) => {
+        finishPreparation = resolve
+      })
+      const preparePtySpawn = vi.fn(() => preparation)
+      const spawnSubprocess = vi.fn(() => createMockSubprocess())
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        preparePtySpawn,
+        spawnSubprocess
+      })
+      await server.start()
+      const c = await connectClient()
+
+      // Hangs in preflight; the control-socket close must abort it before spawn.
+      c.request('createOrAttach', {
+        sessionId: 'disconnect-pending',
+        cols: 80,
+        rows: 24
+      }).catch(() => {
+        /* the disconnect rejects the in-flight request; that's expected */
+      })
+      await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
+
+      c.disconnect()
+      // Wait for the server to process the close (and cancel the prep) before
+      // releasing the preflight, else the resumed spawn races ahead of cancellation.
+      await vi.waitFor(() =>
+        expect((server as unknown as DaemonServerPrivate).clients.size).toBe(0)
+      )
+      finishPreparation()
+      await vi.waitFor(() =>
+        expect((server as unknown as DaemonServerPrivate).pendingPtySpawnPreparations.size).toBe(0)
+      )
+      expect(spawnSubprocess).not.toHaveBeenCalled()
+    })
+
+    it('kill with no pending preparation still surfaces SessionNotFoundError (F7)', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      // No preparation was canceled, so the host's not-found verdict must propagate
+      // rather than be swallowed by the pending-spawn kill reconciliation.
+      await expect(
+        c.request('kill', { sessionId: 'never-created', immediate: true })
+      ).rejects.toThrow('Session not found: never-created')
     })
 
     it('persists only an allowlisted launch identity across reattach', async () => {

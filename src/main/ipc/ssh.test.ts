@@ -1225,6 +1225,49 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 
+  it('invalidates a pending connect when disconnect wins and allows a fresh connect', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const staleConn = {}
+    const freshConn = {}
+    let resolveStaleConnect!: (connection: unknown) => void
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStaleConnect = resolve
+      })
+    )
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    const staleConnect = handlers.get('ssh:connect')!(null, {
+      targetId: 'ssh-1'
+    }) as Promise<SshConnectionState>
+    await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
+
+    await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+    mockConnectionManager.connect.mockResolvedValueOnce(freshConn)
+    const freshConnect = handlers.get('ssh:connect')!(null, {
+      targetId: 'ssh-1'
+    }) as Promise<SshConnectionState>
+    await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(2))
+
+    resolveStaleConnect(staleConn)
+
+    await expect(staleConnect).rejects.toThrow('SSH connection attempt was cancelled')
+    await expect(freshConnect).resolves.toMatchObject({ targetId: 'ssh-1', status: 'connected' })
+    expect(mockDeployAndLaunchRelay).toHaveBeenCalledTimes(1)
+  })
+
   it('ssh:terminateSessions preserves tracking when relay shutdown fails', async () => {
     const target: SshTarget = {
       id: 'ssh-1',

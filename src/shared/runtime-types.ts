@@ -499,6 +499,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   command?: string
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   launchAgent?: TuiAgent

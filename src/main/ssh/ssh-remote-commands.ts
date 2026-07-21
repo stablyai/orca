@@ -78,12 +78,14 @@ export function probeRelayInstalledCommand(
 ): string {
   const relayJs = joinRemotePath(host, remoteRelayDir, 'relay.js')
   const relayWatcherJs = joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')
+  const managedHookRuntimeJs = joinRemotePath(host, remoteRelayDir, 'managed-hook-runtime.js')
   const installComplete = joinRemotePath(host, remoteRelayDir, '.install-complete')
   if (!isWindowsRemoteHost(host)) {
     return (
       `test -d ${shellEscape(remoteRelayDir)} ` +
       `&& test -f ${shellEscape(relayJs)} ` +
       `&& test -f ${shellEscape(relayWatcherJs)} ` +
+      `&& test -f ${shellEscape(managedHookRuntimeJs)} ` +
       `&& test -f ${shellEscape(installComplete)} ` +
       `&& echo OK || echo MISSING`
     )
@@ -93,8 +95,9 @@ export function probeRelayInstalledCommand(
       `$dir = ${powerShellLiteral(remoteRelayDir)}`,
       `$relay = ${powerShellLiteral(relayJs)}`,
       `$watcher = ${powerShellLiteral(relayWatcherJs)}`,
+      `$managedHooks = ${powerShellLiteral(managedHookRuntimeJs)}`,
       `$complete = ${powerShellLiteral(installComplete)}`,
-      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
+      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $managedHooks -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
     ].join('; ')
   )
 }

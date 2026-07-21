@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: the PR/Issue details service groups the
-   body/comments/files/checks fetch paths alongside the file-contents resolver
-   so the drawer's rate-limit and caching strategy lives in one place. */
+/* eslint-disable max-lines -- Why: groups the PR/Issue fetch paths and file-contents resolver so caching/rate-limit strategy lives in one place. */
 import type {
   GitHubAssignableUser,
   GitHubPRFile,
@@ -28,17 +26,12 @@ import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 import { getPRReviewCommentLineNumbersFromPatch } from './pr-review-comment-lines'
 import { isMaxBufferOverflowError } from '../git/max-buffer-overflow'
 
-// Why: a PR "changed file" listing returned by the REST endpoint is paginated
-// at 100 per page; we cap at a reasonable total so a massive PR cannot starve
-// the gh semaphore while we fetch file listings.
+// Why: cap total PR files so a massive PR can't starve the gh semaphore while paging (100/page).
 const MAX_PR_FILES = 300
-// Why: issue timelines can be extremely noisy from automation and cross-links.
-// Bound drawer detail work so one huge issue cannot monopolize gh/API time.
+// Why: bound noisy issue timelines so one huge issue can't monopolize gh/API time.
 const MAX_ISSUE_TIMELINE_ITEMS = 300
 const GITHUB_REST_PAGE_SIZE = 100
-// Why: hosted PR files must exceed the renderer's large-diff threshold before
-// we give up on the raw fetch; otherwise the UI sees an empty diff instead of
-// the safety fallback.
+// Why: raw-fetch buffer must exceed the renderer's large-diff threshold, else the UI shows an empty diff instead of the fallback.
 const GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES = 8 * 1024 * 1024
 
 function localGitOptionArgs(options: LocalGitExecOptions = {}): [] | [LocalGitExecOptions] {
@@ -75,12 +68,7 @@ const WORK_ITEM_PARTICIPANTS_QUERY = `query($owner: String!, $repo: String!, $nu
   }
 }`
 
-// Why: a single GraphQL round-trip replaces three serial gh subprocesses on
-// the issue path (REST issue + REST comments + GraphQL participants). The
-// previous fan-out could spawn ~3 `gh` processes per drawer-open; this drops
-// it to one. We still fall back to the legacy REST+GraphQL path if the
-// collapsed query throws or returns missing data — see the strict-fallback
-// branch in getWorkItemDetails.
+// Why: one GraphQL round-trip replaces the 3 serial gh subprocesses (REST issue + comments + participants); falls back to the legacy path on failure.
 const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
@@ -300,8 +288,7 @@ async function getIssueTimelineItems(
         ],
         ghOptions
       )
-      // Why: --jq emits compact NDJSON while explicit pages let us stop once
-      // supported activity reaches the drawer cap.
+      // Why: --jq emits NDJSON and explicit paging lets us stop once we hit the drawer cap.
       const pageEvents = parseRestTimelineEventLines(stdout)
       for (const event of pageEvents) {
         const item = mapRestTimelineEvent(event)
@@ -324,10 +311,9 @@ async function getIssueTimelineItems(
 }
 
 /**
- * Fetch an issue's body, comments, assignees, participants, and timeline in a
- * single GraphQL round-trip. Returns null on any partial error so the caller
- * falls back to the strict REST path. Assignee/participant avatars are resolved
- * here so GitHub Enterprise users don't render blank.
+ * Fetch an issue's body, comments, assignees, participants, and timeline in one GraphQL round-trip.
+ * Returns null on any partial error so the caller falls back to the strict REST path.
+ * Avatars are resolved here so GHE users don't render blank.
  */
 async function getIssueDetailsViaGraphQL(
   repoPath: string,
@@ -338,9 +324,7 @@ async function getIssueDetailsViaGraphQL(
   body: string
   comments: PRComment[]
   assignees: string[]
-  // Avatar-bearing assignees, kept separate from the `assignees` login list so
-  // callers that only need logins are unaffected; used to enrich assignee
-  // avatars that `gh` leaves blank (notably GitHub Enterprise users).
+  // Avatar-bearing assignees, kept separate from the login-only `assignees`; enriches avatars `gh` leaves blank (GHE).
   assigneeUsers: GitHubAssignableUser[]
   participants: GitHubAssignableUser[]
   timelineItems: GitHubIssueTimelineItem[]
@@ -376,9 +360,7 @@ async function getIssueDetailsViaGraphQL(
     )
     const parsed = JSON.parse(stdout) as GraphQLIssueDetailsResponse
     if (parsed.errors && parsed.errors.length > 0) {
-      // Why: any partial GraphQL error (permissions, unknown field on a fork)
-      // forces the strict REST fallback so the drawer never paints a half-built
-      // shell. The fallback path's behavior is the historical contract.
+      // Why: any partial GraphQL error forces the strict REST fallback so the drawer never paints a half-built shell.
       return null
     }
     const issue = parsed.data?.repository?.issue
@@ -436,8 +418,7 @@ function mergeGitHubUsers(users: GitHubAssignableUser[]): GitHubAssignableUser[]
     const key = user.login.toLowerCase()
     const existing = byLogin.get(key)
     if (existing) {
-      // Why: avoid mutating caller-provided objects — return a new merged record
-      // so upstream references to `user`/`existing` stay unchanged.
+      // Why: return a new merged record instead of mutating caller-provided objects.
       byLogin.set(key, {
         login: existing.login,
         name: existing.name ?? user.name ?? null,
@@ -486,14 +467,10 @@ function mapFileStatus(raw: string): GitHubPRFile['status'] {
   }
 }
 
-// Why: GitHub's REST file listing does not explicitly flag binary files, but it
-// omits the `patch` field for them. When a file has changes but no patch, we
-// treat it as binary so the drawer's diff tab can show a placeholder instead of
-// attempting to fetch contents that would render as noise in a text diff viewer.
+// Why: REST doesn't flag binaries but omits `patch` for them; treat "changes but no patch" as binary so the diff tab shows a placeholder.
 function isBinaryHint(file: RESTPRFile): boolean {
   if (file.status === 'removed' || file.status === 'added') {
-    // A newly added or removed file with zero patch text but non-zero changes
-    // is almost always binary (images, lockfiles over the size cap, etc.).
+    // Added/removed file with changes but no patch is almost always binary (images, oversized lockfiles).
     return file.patch === undefined && file.changes > 0
   }
   return file.patch === undefined && file.changes > 0
@@ -543,9 +520,7 @@ async function getPRHeadBaseSha(
   }
 }
 
-// Why: null signals a failed/blocked fetch (rate limit, auth, unresolved
-// remote) so the Files tab can show a retryable error instead of the
-// misleading "No files changed." empty state; [] means a genuinely empty PR.
+// Why: null = failed/blocked fetch (Files tab shows retry, not "No files changed."); [] = genuinely empty PR.
 async function getPRFiles(
   repoPath: string,
   prNumber: number,
@@ -822,9 +797,7 @@ async function getWorkItemParticipants(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
-  // Why: work items in a fork live on the upstream remote, so participants must
-  // be resolved via the same upstream-first resolvers the body/comment fetches
-  // use (getIssueOwnerRepo for issues, getOwnerRepo for PRs; see #7331).
+  // Why: fork work items live upstream, so resolve owner/repo with the same upstream-first resolvers as body/comments (#7331).
   const ownerRepo =
     item.type === 'issue'
       ? await getIssueOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
@@ -895,8 +868,7 @@ async function getGitHubUsersByLogin(
     return []
   }
   if (rateLimitGuard('graphql').blocked) {
-    // Why: surface the skip. Callers degrade silently to login-based avatar URLs
-    // (blank on GHE), so without this log "why are avatars missing" is untraceable.
+    // Why: log the skip — callers degrade silently to blank GHE avatars, so it's otherwise untraceable.
     console.warn(
       `getGitHubUsersByLogin skipped: GraphQL rate-limit budget exhausted (${uniqueLogins.length} logins unresolved)`
     )
@@ -945,15 +917,9 @@ async function getGitHubUsersByLogin(
 }
 
 /**
- * Stamp GraphQL-resolved avatars onto a work item's author, reviewers, review
- * requests, latest reviews, and assignees.
+ * Stamp GraphQL-resolved avatars onto a work item's author, reviewers, review requests, latest reviews, and assignees.
  *
- * The work item's users come from `gh pr view`, which omits avatar_url. On
- * GitHub Enterprise the login-based `github.com/{login}.png` URL 404s, so those
- * avatars render blank while comment avatars (fetched via GraphQL) work.
- * `knownUsers` (participants + the mention-author batch, which already includes
- * the item's reviewers/assignees) carries the resolved avatars, so we apply
- * them without any extra round-trip. See #8784.
+ * Why: `gh pr view` omits avatar_url, so login-based avatars 404 on GHE; knownUsers carries the GraphQL-resolved ones. See #8784.
  */
 function enrichItemDisplayAvatars(
   item: Omit<GitHubWorkItem, 'repoId'>,
@@ -968,16 +934,11 @@ function enrichItemDisplayAvatars(
   if (avatarByLogin.size === 0) {
     return item
   }
-  // Why: prefer the GraphQL-resolved avatar over whatever `gh` returned. `gh pr
-  // view` often yields an empty avatar or the default `u/0` placeholder for
-  // enterprise users; the resolved avatar is the authoritative one for that
-  // login. Fall back to the original only when the lookup found nothing.
+  // Why: prefer the GraphQL-resolved avatar — `gh pr view` returns empty/`u/0` placeholders for enterprise users; fall back to the original only when the lookup is empty.
   const avatarFor = (login: string): string | undefined => avatarByLogin.get(login.toLowerCase())
   const resolvedAvatar = (login: string, existing?: string | null): string | undefined =>
     avatarFor(login) || existing || undefined
-  // Callers coalesce a missing result to the field's "no avatar" sentinel (''
-  // for GitHubAssignableUser, null for GitHubPRReviewSummary); GitHubUserAvatar
-  // treats both as falsy and falls back to the login URL then initials.
+  // Callers coalesce a missing result to each field's "no avatar" sentinel ('' or null); GitHubUserAvatar falls back to login URL then initials.
   const authorAvatarUrl = (item.author ? avatarFor(item.author) : undefined) || item.authorAvatarUrl
   return {
     ...item,
@@ -1020,17 +981,8 @@ async function getMentionParticipants(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
-  // Why: resolve mention authors AND the item's reviewers/assignees in ONE
-  // aliased GraphQL round-trip. Folding the display users in here means the
-  // caller can reuse this result to stamp avatars (see enrichItemDisplayAvatars)
-  // without a second, separately rate-limited lookup — which is what made GHE
-  // reviewer/assignee avatars resolve intermittently. See #8784.
-  // Why: order the always-visible display users (author, reviewers, assignees)
-  // before comment authors so the 40-login cap in getGitHubUsersByLogin never
-  // drops a reviewer/assignee avatar on a PR with many commenters. On a PR with
-  // 40+ distinct participants the trailing comment authors are dropped from this
-  // batch and lose only their @mention-suggestion avatar; rendered comment
-  // avatars are unaffected (they carry their own avatarUrl from the comment).
+  // Why: resolve mention authors + display users (reviewers/assignees) in one aliased trip so avatars reuse it without a second rate-limited lookup (#8784).
+  // Why: order display users before comment authors so the 40-login cap in getGitHubUsersByLogin can't drop a reviewer/assignee avatar.
   const visibleLogins = [
     item.author ?? '',
     ...(item.reviewRequests ?? []).map((user) => user.login),
@@ -1065,8 +1017,7 @@ async function getPRChecksForDetails(
       ...localGitOptionArgs(localGitOptions)
     )
   } catch (err) {
-    // Why: checks are auxiliary PR metadata; a gh CLI edge case must not block
-    // the user from opening the PR review drawer and reading the files/comments.
+    // Why: checks are auxiliary — a gh failure must not block opening the PR drawer.
     console.warn('getWorkItemDetails PR checks failed:', err)
     return []
   }
@@ -1079,9 +1030,7 @@ export async function getWorkItemDetails(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubWorkItemDetails | null> {
-  // Why: getWorkItem already handles acquire/release. We call it first (outside
-  // our semaphore) so the known-cheap lookup doesn't compete with the richer
-  // detail fetches that follow.
+  // Why: getWorkItem self-manages acquire/release; call it outside our semaphore so the cheap lookup doesn't block detail fetches.
   const item: Omit<GitHubWorkItem, 'repoId'> | null = await getWorkItem(
     repoPath,
     number,
@@ -1096,13 +1045,7 @@ export async function getWorkItemDetails(
   await acquire()
   try {
     if (item.type === 'issue') {
-      // Why: try the collapsed single-GraphQL path first — body, assignees,
-      // participants, and comments all return in one round-trip. On any
-      // failure (permissions, partial errors, non-GitHub remote), strictly
-      // fall back to the legacy REST+GraphQL fan-out so historical behavior
-      // is preserved. The GraphQL `participants` connection includes every
-      // commenter, so we skip the extra `getMentionParticipants` aliased
-      // user-hydration trip when the collapsed path succeeds.
+      // Why: one GraphQL round-trip returns everything (its participants include commenters, so getMentionParticipants is skipped); fall back to REST+GraphQL on any failure.
       const collapsed = await getIssueDetailsViaGraphQL(
         repoPath,
         item.number,
@@ -1111,9 +1054,7 @@ export async function getWorkItemDetails(
       )
       if (collapsed) {
         return {
-          // Include assigneeUsers: a non-participating assignee is absent from
-          // the participants connection, so without them item.assignees keeps a
-          // blank/placeholder avatar (common for GitHub Enterprise users).
+          // Include assigneeUsers: non-participating assignees are absent from participants and keep a blank avatar (GHE).
           item: enrichItemDisplayAvatars(item, [
             ...collapsed.participants,
             ...collapsed.assigneeUsers
@@ -1125,8 +1066,7 @@ export async function getWorkItemDetails(
           timelineItems: collapsed.timelineItems
         }
       }
-      // Why: fall back to body/comments and GraphQL participants in parallel;
-      // the mention-participant merge is a cheap local operation afterward.
+      // Fallback: fetch body/comments and participants in parallel.
       const [{ body, comments, assignees, timelineItems }, participants] = await Promise.all([
         getIssueBodyAndComments(repoPath, item.number, connectionId, localGitOptions),
         getWorkItemParticipants(repoPath, item, connectionId, localGitOptions)
@@ -1165,9 +1105,7 @@ export async function getWorkItemDetails(
       getWorkItemParticipants(repoPath, item, connectionId, localGitOptions)
     ])
 
-    // Why: run the mention-author GraphQL lookup in parallel with the final
-    // checks fetch instead of serially — both depend only on data from the
-    // Promise.all above, so there's no ordering requirement between them.
+    // Why: mention-author lookup and checks are independent, so run them in parallel.
     const [mentionParticipants, checks] = await Promise.all([
       getMentionParticipants(repoPath, item, comments, participants, connectionId, localGitOptions),
       getPRChecksForDetails(repoPath, item.number, shas?.headSha, connectionId, localGitOptions)
@@ -1181,8 +1119,7 @@ export async function getWorkItemDetails(
       baseSha: shas?.baseSha,
       pullRequestId: viewedStates?.pullRequestId,
       checks,
-      // Why: distinguish a failed file fetch (null) from an empty PR so the
-      // Files tab surfaces a retry instead of "No files changed."
+      // Why: null (failed fetch) vs empty PR — Files tab shows retry, not "No files changed."
       files: files === null ? undefined : mergePRFileViewedStates(files, viewedStates),
       filesUnavailable: files === null,
       participants: mentionParticipants
@@ -1192,10 +1129,7 @@ export async function getWorkItemDetails(
   }
 }
 
-// Why: base64-decoded contents at specific commits are needed to feed Orca's
-// Monaco-based DiffViewer (which expects original/modified text, not unified
-// diff patches). Fetching via gh api --cache keeps rate-limit usage bounded
-// during rapid file-expand clicks in the drawer.
+// Why: Monaco DiffViewer needs original/modified text (not patches); --cache bounds rate-limit spend on rapid file-expands.
 async function fetchContentAtRef(args: {
   repoPath: string
   connectionId?: string | null
@@ -1222,9 +1156,7 @@ async function fetchContentAtRef(args: {
         maxBuffer: GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES
       }
     )
-    // Raw content response: Electron's execFile returns string in utf-8. If the
-    // file is binary, the string will contain replacement characters — we treat
-    // anything with a NUL byte in the first 2KB as binary and skip rendering.
+    // Heuristic: a NUL byte in the first 2KB means binary (execFile decodes as lossy utf-8).
     const sample = stdout.slice(0, 2048)
     if (sample.includes('\u0000')) {
       return { content: '', isBinary: true }
@@ -1265,9 +1197,7 @@ export async function getPRFileContents(args: {
 
   await acquire()
   try {
-    // Why: for added files there's no original content at the base ref; for
-    // removed files there's no modified content at the head ref. Skipping the
-    // redundant fetches keeps latency down and avoids spurious 404 warnings.
+    // Why: added files have no base-ref original, removed files no head-ref modified; skip those to avoid spurious 404s.
     const needsOriginal = args.status !== 'added'
     const needsModified = args.status !== 'removed'
     const originalRef = args.baseSha

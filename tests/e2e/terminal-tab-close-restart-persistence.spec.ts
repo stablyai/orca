@@ -99,7 +99,23 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     // Why: wait past initial worktree effects so this checks resurrection, not
     // only the first hydrated frame before default-tab logic has run.
     await secondLaunch.page.waitForTimeout(1_000)
-    expect(await getWorktreeTabs(secondLaunch.page, worktreeId)).toEqual([])
+    // Why: reattaching to an emptied worktree intentionally spawns a fresh
+    // "Terminal 1" tab (Terminal.tsx's shouldAutoCreateInitialTerminal
+    // fallback fires whenever the active worktree has zero renderable tabs —
+    // true for a durably-closed worktree just like a brand-new one). That
+    // fallback is unrelated to this test and reproduces even mid-session with
+    // no restart at all, so asserting an eternally-empty tab list here is
+    // wrong. What "durable" actually promises is that the specific closed
+    // split tab never comes back — assert on its identity, not on tab count.
+    const restoredTabs = await getWorktreeTabs(secondLaunch.page, worktreeId)
+    expect(restoredTabs.some((tab) => tab.id === closedTabId)).toBe(false)
+
+    const afterRestart = await client.call<RuntimeTerminalListResult>('terminal.list', {
+      worktree: `id:${worktreeId}`
+    })
+    expect(
+      afterRestart.result.terminals.filter((terminal) => terminal.tabId === closedTabId)
+    ).toEqual([])
   } finally {
     if (firstApp) {
       await session.close(firstApp)

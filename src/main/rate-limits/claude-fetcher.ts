@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: this module keeps Claude credential source
-ordering, OAuth usage fetch semantics, and PTY fallback behavior together so
-subscription usage state cannot drift across code paths. */
+/* eslint-disable max-lines -- Why: keep Claude credential ordering, OAuth usage fetch, and PTY fallback together so usage state can't drift across paths. */
 import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -53,13 +51,7 @@ const LIVE_CLAUDE_REFRESH_DEFERRED_MESSAGE =
 
 /**
  * Bridge standard HTTP proxy env vars into Electron's session proxy config.
- *
- * Why: Electron's net.fetch uses Chromium's networking stack which respects
- * OS-level proxy settings but ignores HTTP_PROXY / HTTPS_PROXY env vars.
- * Users in regions where api.anthropic.com is only reachable via proxy (see
- * #521, #800) often set these env vars rather than configuring system proxy.
- * Without this bridge, the usage indicator silently fails and the app may hit
- * Anthropic from an unexpected IP, risking rate-limit signals on the account.
+ * Why: net.fetch ignores HTTP_PROXY/HTTPS_PROXY; users behind a proxy for api.anthropic.com set those env vars (#521, #800).
  */
 async function ensureProxyFromEnv(): Promise<void> {
   await ensureElectronProxyFromEnvironment({
@@ -94,8 +86,6 @@ type OAuthCredentialReadOptions = {
 
 type OAuthCredentialSource = 'scoped-keychain' | 'legacy-keychain' | 'credentials-file' | 'none'
 
-// Why: factored out so both the active-account Keychain reader and the
-// managed-account reader share the same JSON parsing + refreshability check.
 function parseOAuthCredentialsJson(
   raw: string,
   source: OAuthCredentialSource
@@ -113,9 +103,7 @@ function parseOAuthCredentialsJson(
         source
       }
     }
-    // Why: Claude's local expiresAt metadata is not authoritative for the
-    // /api/oauth/usage endpoint. Real Claude Code 2.1 credentials have been
-    // observed authenticating there after expiresAt, so let the server decide.
+    // Why: local expiresAt isn't authoritative for /api/oauth/usage (creds authenticate there after expiry); let the server decide.
     return {
       token,
       hasRefreshableCredentials,
@@ -145,8 +133,7 @@ function keychainUnavailableOAuthCredentialReadResult(): OAuthCredentialReadResu
 
 /**
  * Read OAuth token from macOS Keychain.
- * Why: Claude Code 2.1+ scopes OAuth Keychain services by CLAUDE_CONFIG_DIR;
- * older builds used the legacy unsuffixed service. The shared reader handles both.
+ * Why: Claude Code 2.1+ scopes Keychain services by CLAUDE_CONFIG_DIR; older builds used the legacy unsuffixed service.
  */
 async function readFromKeychain(configDir?: string): Promise<OAuthCredentialReadResult> {
   if (process.platform !== 'darwin') {
@@ -159,9 +146,7 @@ async function readFromKeychain(configDir?: string): Promise<OAuthCredentialRead
       return scopedCredentials
     }
     const legacyCredentials = await readCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
-    // Why: Orca cannot refresh tokens itself, so an actual access token from
-    // either item beats refresh-only credentials. A scoped item the CLI stopped
-    // maintaining must not shadow a still-working legacy token.
+    // Why: a real access token beats refresh-only creds (Orca can't refresh), so a stale scoped item can't shadow a working legacy token.
     if (legacyCredentials.token) {
       return legacyCredentials
     }
@@ -202,8 +187,7 @@ async function readCredentialsFromStrictKeychain(
 
 /**
  * Read OAuth token from ~/.claude/.credentials.json (legacy path).
- * Why: older Claude CLI versions store credentials in this plain JSON
- * file. We keep it as a fallback for compatibility.
+ * Why: older Claude CLI versions store credentials here; kept as a fallback.
  */
 async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredentialReadResult> {
   const credPath = path.join(configDir ?? path.join(homedir(), '.claude'), '.credentials.json')
@@ -217,9 +201,7 @@ async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredent
 
 /**
  * Try credential sources that yield a genuine OAuth bearer token.
- * Why: we intentionally do NOT read ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY
- * here — those are API keys which return 401 on the OAuth usage endpoint.
- * API-key users are served by the PTY fallback instead.
+ * Why: skip ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY — those are API keys that 401 on the OAuth usage endpoint (PTY fallback serves them).
  */
 async function readOAuthCredentials(
   options?: OAuthCredentialReadOptions
@@ -255,8 +237,7 @@ function resolveOAuthCredentialReadOptions(
   if (!authPreparation) {
     return undefined
   }
-  // Why: Claude Code 2.1+ can scope even the default config dir's macOS
-  // Keychain item. Try scoped first, with legacy still handled as fallback.
+  // Why: Claude Code 2.1+ can scope even the default config dir's Keychain item; try scoped first, legacy as fallback.
   const readOptions: OAuthCredentialReadOptions = {
     credentialsFileConfigDir: authPreparation.configDir,
     keychainConfigDir: authPreparation.configDir
@@ -403,8 +384,7 @@ function mapWindow(
 }
 
 function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null {
-  // Why: model quotas moved into structured scoped limits; prefer that current
-  // contract while retaining explicit legacy weekly fields for older responses.
+  // Why: model quotas moved to structured scoped limits; prefer them but keep legacy weekly fields for older responses.
   const scoped = Array.isArray(data.limits)
     ? data.limits.find(
         (limit) =>
@@ -435,21 +415,18 @@ async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<Provi
     return abortedClaudeRateLimitResult()
   }
 
-  // Compose the caller's cancel signal with the request timeout so a timeout
-  // and an external cancel both abort the fetch.
+  // Compose caller cancel with the request timeout so either aborts the fetch.
   const requestSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
     : AbortSignal.timeout(API_TIMEOUT_MS)
 
   try {
-    // Why: net.fetch uses Chromium's networking stack which respects OS proxy
-    // settings and certificates. Env var proxies are bridged by ensureProxyFromEnv.
+    // Why: net.fetch uses Chromium's stack for OS proxy/certs; env-var proxies are bridged by ensureProxyFromEnv.
     const res = await net.fetch(OAUTH_USAGE_URL, {
       headers: {
         Authorization: `Bearer ${token}`,
         'anthropic-beta': OAUTH_BETA_HEADER,
-        // Why: Claude's OAuth usage endpoint is the Claude Code usage API;
-        // matching the CLI user-agent keeps Orca aligned with that contract.
+        // Why: match the Claude Code CLI user-agent to stay aligned with the OAuth usage API contract.
         'User-Agent': CLAUDE_CODE_USER_AGENT
       },
       signal: requestSignal
@@ -588,9 +565,7 @@ function canSupplementOAuthUsageFromCli(input: {
   authPreparation?: ClaudeRuntimeAuthPreparation
   allowUsagePanelSupplement: boolean
 }): boolean {
-  // Why: Fable is visible in Claude's interactive /usage panel even when the
-  // OAuth usage endpoint only reports documented 5h/7d windows. This runs only
-  // after OAuth succeeds, so it must not become a broad auth-recovery fallback.
+  // Why: Fable shows in Claude's /usage panel even when the OAuth endpoint reports only 5h/7d windows; supplement only after OAuth already succeeded.
   return Boolean(
     input.allowUsagePanelSupplement &&
     !input.authPreparation?.managedRefreshDeferredByLivePty &&
@@ -677,11 +652,7 @@ function canRetryWithLegacyKeychainToken(input: {
   oauthCredentials: OAuthCredentialReadResult
   authPreparation?: ClaudeRuntimeAuthPreparation
 }): boolean {
-  // Why: the CLI only maintains the legacy keychain item for the default config
-  // dir, so a scoped item can hold a token that expired long ago and will 401
-  // on every fetch with no recovery path. Host system-default auth may retry
-  // with the legacy item; managed/WSL credentials must never be answered with
-  // the host user's legacy keychain account.
+  // Why: only host auth may fall back to the legacy keychain item when a scoped item holds a dead token that 401s forever; managed/WSL must never use the host's legacy account.
   return (
     input.classification.failureKind === 'stale-token' &&
     input.oauthCredentials.source === 'scoped-keychain' &&
@@ -1071,9 +1042,7 @@ type ManagedCredentialsLocation =
   | { kind: 'keychain'; accountId: string; managedAuthPath: string }
   | { kind: 'file'; managedAuthPath: string }
 
-// Why: resolves where an inactive account's credentials live without
-// materializing them into the shared runtime location. Using
-// ClaudeRuntimeAuthService would overwrite the active account's auth.
+// Why: resolve where inactive credentials live without materializing them — ClaudeRuntimeAuthService would overwrite the active account's auth.
 function resolveManagedCredentialsLocation(
   account: InactiveClaudeAccountInfo
 ): ManagedCredentialsLocation | null {
@@ -1087,8 +1056,7 @@ function resolveManagedCredentialsLocation(
   if (!managedAuthPath) {
     return null
   }
-  // macOS stores host managed credentials in the Keychain; everything else
-  // (and WSL, handled above) stores them as a file under the managed dir.
+  // macOS stores host managed credentials in the Keychain; other platforms use a file under the managed dir.
   if (process.platform === 'darwin') {
     return { kind: 'keychain', accountId: account.id, managedAuthPath }
   }
@@ -1201,9 +1169,7 @@ function canTrustManagedUsagePanelSupplement(
       ? windowsAgree(oauthLimits.weekly, cliLimits.weekly)
       : null
   ].filter((match): match is boolean => match !== null)
-  // Why: macOS inactive previews temporarily stage managed credentials in a
-  // scoped Keychain item. If an older Claude build ignores scoped Keychains,
-  // matching OAuth windows prevent active-account Fable data from leaking in.
+  // Why: an older Claude build may ignore the scoped Keychain, so require matching OAuth windows to keep active-account Fable data from leaking in.
   return sharedWindowMatches.length > 0 && sharedWindowMatches.every(Boolean)
 }
 
@@ -1298,11 +1264,7 @@ export async function fetchManagedAccountUsage(
     }
   }
 
-  // Why: own the refresh for inactive accounts (claude-swap's model) — when the
-  // stored token is expiring, refresh and persist the rotated token back to
-  // managed storage before fetching usage. This keeps inactive accounts'
-  // single-use refresh tokens fresh so a later switch-in never materializes a
-  // stale token. Persistence failure is non-fatal: we still try the fetch.
+  // Why: refresh+persist an expiring token now so inactive accounts' single-use refresh tokens stay fresh for a later switch-in (persist failure is non-fatal).
   let token = parseOAuthCredentialsJson(credentialsJson, 'credentials-file').token
   if (isOauthTokenExpiring(credentialsJson)) {
     const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
@@ -1313,8 +1275,7 @@ export async function fetchManagedAccountUsage(
       try {
         await writeManagedCredentialsJson(location, refreshed)
       } catch {
-        // Keep going with the refreshed token in memory even if the write
-        // failed; worst case the next poll refreshes again.
+        // Keep the refreshed token in memory; next poll refreshes again if the write failed.
       }
       credentialsJson = refreshed
       token = parseOAuthCredentialsJson(refreshed, 'credentials-file').token
@@ -1332,9 +1293,7 @@ export async function fetchManagedAccountUsage(
     }
   }
 
-  // Why: PTY fallback is intentionally omitted for inactive accounts. The PTY
-  // path is used only as a supplement after OAuth succeeds, and it points
-  // directly at the managed account's isolated config so selection is unchanged.
+  // Why: no PTY fallback for inactive accounts — PTY only supplements after OAuth succeeds.
   const oauthLimits = await fetchViaOAuth(token, options.signal)
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()

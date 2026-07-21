@@ -1,5 +1,5 @@
-import type { GitStatusEntry } from '../../shared/git-status-types'
-import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
+import type { GitStatusEntry } from './git-status-types'
+import { decodeGitCQuotedPath } from './git-cquoted-path'
 
 /**
  * Incremental parser for `git status --porcelain=v2 --branch` output.
@@ -12,9 +12,9 @@ import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
  * carried across chunks.
  *
  * Sync record types (1/2/?/!) are parsed into `entries`/`ignoredPaths` here.
- * Unmerged (`u`) records need async per-file git lookups, so their raw lines are
- * collected and resolved by the caller after the stream ends — they signal
- * conflict states and are never the source of huge output.
+ * Unmerged (`u`) records need per-file worktree lookups, so their raw lines are
+ * collected and resolved by the caller after the stream ends. They still count
+ * toward the limit so a conflict-heavy merge cannot bypass the cap.
  */
 export type BranchMetadata = {
   head?: string
@@ -22,6 +22,10 @@ export type BranchMetadata = {
   upstreamName?: string
   upstreamAheadBehind?: { ahead: number; behind: number }
 }
+
+export type StatusPorcelainRecord =
+  | { type: 'entry'; entry: GitStatusEntry }
+  | { type: 'unmerged'; line: string }
 
 export class StatusPorcelainParser {
   private carry = ''
@@ -32,6 +36,8 @@ export class StatusPorcelainParser {
   readonly ignoredPaths: string[] = []
   /** Raw `u ` lines for the caller to resolve asynchronously. */
   readonly unmergedLines: string[] = []
+  /** Changed records in Git's output order, including deferred unmerged rows. */
+  readonly statusRecords: StatusPorcelainRecord[] = []
   readonly branch: BranchMetadata = {}
 
   /** Total changed-file entries observed (including any past the limit). */
@@ -123,7 +129,9 @@ export class StatusPorcelainParser {
       return
     }
     if (line.startsWith('u ')) {
+      this.count += 1
       this.unmergedLines.push(line)
+      this.statusRecords.push({ type: 'unmerged', line })
     }
   }
 
@@ -185,6 +193,7 @@ export class StatusPorcelainParser {
   private push(entry: GitStatusEntry): void {
     this.count += 1
     this.entries.push(entry)
+    this.statusRecords.push({ type: 'entry', entry })
   }
 }
 

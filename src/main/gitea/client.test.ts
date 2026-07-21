@@ -21,8 +21,25 @@ import {
   _resetGiteaPullRequestScanCache,
   scanGiteaPullRequests
 } from './pull-request-scan-cache'
+import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
 const OLD_ENV = process.env
+
+/** Serve the remote URL plus the #9171 default-branch resolver probes. */
+function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote') {
+      return { stdout: 'https://git.example.com/team/repo.git\n', stderr: '' }
+    }
+    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
+      return { stdout: `${defaultRef}\n`, stderr: '' }
+    }
+    if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
+      return { stdout: 'default-oid\n', stderr: '' }
+    }
+    throw new Error(`unexpected git call: ${args.join(' ')}`)
+  })
+}
 
 function giteaPr(index = 7, branch = 'feature/gitea') {
   return {
@@ -52,7 +69,71 @@ describe('Gitea client', () => {
     })
     _resetGiteaRepoRefCache()
     _resetGiteaPullRequestScanCache()
+    __resetRepoDefaultBranchCacheForTests()
     vi.unstubAllGlobals()
+  })
+
+  it('hides a stale closed PR whose source branch is the repo default branch (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      return Response.json([{ ...giteaPr(7, 'main'), state: 'closed' }])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
+  })
+
+  it('hides a stale merged PR on the default branch but keeps an open one', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      return Response.json([{ ...giteaPr(9, 'main'), merged: true }])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
+
+    _resetGiteaPullRequestScanCache()
+    __resetRepoDefaultBranchCacheForTests()
+    const openFetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      return Response.json([giteaPr(10, 'main')])
+    })
+    vi.stubGlobal('fetch', openFetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toMatchObject({
+      number: 10,
+      state: 'open'
+    })
+  })
+
+  it('discards a closed default-branch shadow and refetches the linked PR via the fallback (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      if (parsed.pathname.endsWith('/pulls/42')) {
+        return Response.json(giteaPr(42, 'main'))
+      }
+      return Response.json([{ ...giteaPr(7, 'main'), state: 'closed' }])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getGiteaPullRequestForBranch('/repo', 'refs/heads/main', 42)
+    ).resolves.toMatchObject({ number: 42 })
   })
 
   it('normalizes Gitea API base URLs', () => {

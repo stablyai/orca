@@ -17,8 +17,7 @@ import type {
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 
-// Why: leaf UUID is the remint-stable pane identity; the tab half changes on
-// break-out. Exact string match covers legacy/unparseable keys.
+// Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
   if (a === b) {
     return true
@@ -72,8 +71,7 @@ function exposeUtcTimestamp(timestamp: string | null): string | null {
 }
 
 function exposeMessageTimestamps(message: MessageRow): MessageRow {
-  // Why: SQLite stores UTC as a timezone-less space format for internal SQL
-  // ordering, but RPC/CLI consumers need an explicit offset to interpret it.
+  // Why: SQLite stores UTC as timezone-less space format for SQL ordering, but RPC/CLI consumers need an explicit offset.
   return {
     ...message,
     created_at: exposeUtcTimestamp(message.created_at) ?? message.created_at,
@@ -85,16 +83,7 @@ function exposeMessageListTimestamps(messages: MessageRow[]): MessageRow[] {
   return messages.map(exposeMessageTimestamps)
 }
 
-// Why: v1 → v2 added `'heartbeat'` to messages.type CHECK + `last_heartbeat_at`
-// column (preamble-hardening PR). v2 → v3 adds `delivered_at` column so
-// push-on-idle can distinguish queued-but-undelivered from user-acknowledged
-// messages without touching the `read` bit (check-wait PR). v3 → v4 records
-// the terminal that created a task so task-record worktree creation can infer
-// the parent workspace even when no dispatch context exists. v4 → v5 adds
-// explicit task_title/display_name fields for orchestration worker UI labels.
-// v5 → v6 adds pane-identity columns (dispatch_contexts.assignee_pane_key,
-// messages.sender_pane_key) so worker_done ownership survives terminal handle
-// remints without accepting completions from unrelated panes.
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane-identity columns.
 const SCHEMA_VERSION = 6
 
 export class OrchestrationDb {
@@ -205,12 +194,7 @@ export class OrchestrationDb {
     this.createUndeliveredInboxIndexIfPossible()
   }
 
-  // Why: `CREATE TABLE IF NOT EXISTS` is a no-op against an existing on-disk
-  // DB, so new schema shapes (added columns, widened CHECK constraints) do
-  // not reach an upgraded user unless we migrate explicitly. The transaction
-  // guarantees atomicity — a mid-migration crash leaves the DB at the prior
-  // version because `user_version` is bumped only on success. Idempotent
-  // re-invocation is a no-op (current >= SCHEMA_VERSION short-circuit).
+  // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
   private migrate(): void {
     const current = this.db.pragma('user_version', { simple: true }) as number
     if (current >= SCHEMA_VERSION) {
@@ -219,24 +203,14 @@ export class OrchestrationDb {
 
     this.db.exec('BEGIN')
     try {
-      // v1 → v2: add last_heartbeat_at column; widen messages.type CHECK to
-      // include 'heartbeat'. SQLite cannot ALTER a CHECK constraint, so we
-      // rebuild the messages table. We also include `delivered_at` in the
-      // rebuilt schema so DBs migrating from v1 pick up the v3 column in a
-      // single table-rewrite pass (avoids a second messages-rebuild later).
+      // v1 → v2: SQLite can't ALTER a CHECK, so rebuild messages to allow 'heartbeat'; fold in v3's delivered_at to skip a second rebuild.
       if (current < 2) {
         if (!this.hasColumn('dispatch_contexts', 'last_heartbeat_at')) {
           this.db.exec(`ALTER TABLE dispatch_contexts ADD COLUMN last_heartbeat_at TEXT`)
         }
 
         if (!this.messagesTypeCheckAllowsHeartbeat()) {
-          // Why — index list is not optional. createTables() already attached
-          // idx_messages_id / idx_inbox / idx_messages_undelivered_inbox /
-          // idx_thread to the old messages table; DROP TABLE removes those
-          // indexes with it. CREATE INDEX IF NOT EXISTS in createTables() only
-          // runs on the next process startup, so skipping explicit recreation
-          // here would leave message lookups full-scanning for the rest of this
-          // process's lifetime — a silent O(N) perf regression.
+          // Why: recreate indexes here — DROP TABLE drops them; createTables re-runs only next startup, so skipping full-scans until restart.
           this.db.exec(`
             CREATE TABLE messages_new (
               id            TEXT NOT NULL,
@@ -278,12 +252,7 @@ export class OrchestrationDb {
         }
       }
 
-      // v2 → v3: add `delivered_at` column to messages. A DB that reached v2
-      // via the v1 → v2 rebuild above already has the column (we included
-      // it in messages_new); this handles DBs that were at v2 before this
-      // release shipped (preamble PR deployed standalone, then check-wait
-      // merged). ALTER TABLE is idempotent via the hasColumn probe — a
-      // duplicate-column error would abort the whole transaction.
+      // v2 → v3: add messages.delivered_at. hasColumn probe skips DBs that already got it via the v1→v2 rebuild (else a dup-column error aborts the txn).
       if (current < 3) {
         if (!this.hasColumn('messages', 'delivered_at')) {
           this.db.exec(`ALTER TABLE messages ADD COLUMN delivered_at TEXT`)
@@ -335,10 +304,7 @@ export class OrchestrationDb {
     `)
   }
 
-  // Why: sqlite_master stores the original CREATE TABLE SQL including the
-  // CHECK clause. Inspecting that text is the cheapest reliable way to tell
-  // whether the pre-rebuild schema already knows about 'heartbeat' without
-  // needing a dedicated schema_meta row.
+  // Why: sqlite_master holds the table's CREATE SQL incl. the CHECK — cheapest reliable probe for whether it already allows 'heartbeat'.
   private messagesTypeCheckAllowsHeartbeat(): boolean {
     const row = this.db
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'")
@@ -408,8 +374,7 @@ export class OrchestrationDb {
     const originalBody = message.body ? `\n\nOriginal body:\n${message.body}` : ''
     const body = `Orca rejected this ${message.type}: ${reason}${originalBody}`
     const payload = addLifecycleRejectionMarker(message.payload, reason)
-    // Why: rejected lifecycle signals must remain auditable without reaching
-    // later read paths as actionable completion or liveness events.
+    // Why: rejected lifecycle signals stay auditable but must not reach read paths as actionable completion/liveness events.
     this.db
       .prepare(
         `UPDATE messages
@@ -420,12 +385,7 @@ export class OrchestrationDb {
     return this.getMessageById(messageId)
   }
 
-  // Why: push-on-idle delivery must not replay messages that were already
-  // injected into the PTY. `read` flips only when a check-caller consumes a
-  // message, so delivered-but-unread rows would otherwise be re-injected on
-  // every later idle transition (the replay bug). Filter on
-  // `delivered_at IS NULL` so each row is auto-pushed at most once; explicit
-  // `check` still sees them via getUnreadMessages.
+  // Why: delivered_at IS NULL filter — push-on-idle delivers each row at most once; read (set only by check) wouldn't prevent replay.
   getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
     if (types && types.length > 0) {
       const placeholders = types.map(() => '?').join(',')
@@ -469,11 +429,7 @@ export class OrchestrationDb {
     this.db.prepare(`UPDATE messages SET read = 1 WHERE id IN (${placeholders})`).run(...ids)
   }
 
-  // Why: `delivered_at` is stamped via SQLite's datetime('now') rather than a
-  // JS ISO string so it uses the same 'YYYY-MM-DD HH:MM:SS' UTC shape as the
-  // other SQL-default timestamps on this table. A future ORDER BY or
-  // comparison against created_at relies on this format consistency.
-  // See design doc §3.2.
+  // Why: use datetime('now') so delivered_at matches the space-format UTC shape of the table's other timestamps for correct ordering (§3.2).
   markAsDelivered(ids: string[]): void {
     if (ids.length === 0) {
       return
@@ -489,8 +445,7 @@ export class OrchestrationDb {
       return
     }
     const placeholders = ids.map(() => '?').join(',')
-    // Why: superseded lifecycle messages stay queryable through history but
-    // must not be consumed or injected after their dispatch has finished.
+    // Why: superseded lifecycle messages stay in history but must not be consumed or injected after their dispatch finished.
     this.db
       .prepare(
         `UPDATE messages SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')) WHERE id IN (${placeholders})`
@@ -506,10 +461,7 @@ export class OrchestrationDb {
     )
   }
 
-  // Why: used by `check --all` and `inbox --terminal <handle>` — returns every
-  // message for a handle regardless of read/delivered state; never touches the
-  // read bit. Stale-handle safe: if the handle no longer exists, the query
-  // just returns whatever historical rows remain (§3.3).
+  // Why: read-only history for a handle — returns every message regardless of read/delivered state, never flips the read bit (§3.3).
   getAllMessagesForHandle(toHandle: string, limit = 100, types?: MessageType[]): MessageRow[] {
     if (types && types.length > 0) {
       const placeholders = types.map(() => '?').join(',')
@@ -528,12 +480,7 @@ export class OrchestrationDb {
     )
   }
 
-  // Why: thread-scoped read for the `orchestration.ask` wait loop. Filtered
-  // by `to_handle` so a worker only sees replies addressed to it (not
-  // messages it sent), and ordered by `sequence` so the first post-ask
-  // reply is returned first. `afterSequence` lets the caller resume past an
-  // already-seen marker without re-reading the outbound ask itself. Uses
-  // the existing idx_thread index (see createTables) — no new index.
+  // Why: ask wait-loop read — to_handle filter shows only replies to the worker; afterSequence resumes past its own outbound ask.
   getThreadMessagesFor(threadId: string, toHandle: string, afterSequence?: number): MessageRow[] {
     if (afterSequence !== undefined) {
       return exposeMessageListTimestamps(
@@ -607,12 +554,7 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
   }
 
-  // Why: surfaces the active dispatch (assignee handle + dispatch context id)
-  // alongside each task so coordinators can answer "who is working on task X?"
-  // from a single query. The LEFT JOIN keeps non-dispatched tasks in the result
-  // with NULL assignee/dispatch fields so non-dispatched output stays stable.
-  // The inner subquery picks the most recent active dispatch per task to match
-  // the semantics of getDispatchContext for dispatched tasks.
+  // Why: LEFT JOIN keeps non-dispatched tasks (NULL assignee); the MAX(rowid) subquery matches getDispatchContext's most-recent-active-dispatch semantics.
   listTasksWithDispatch(filter?: { status?: TaskStatus; ready?: boolean }): (TaskRow & {
     assignee_handle: string | null
     dispatch_id: string | null
@@ -668,11 +610,7 @@ export class OrchestrationDb {
     return this.getTask(id)
   }
 
-  // Why: when a task completes, check if any pending tasks that depended on it
-  // now have all deps satisfied. If so, promote them to 'ready'. This is the
-  // DAG resolution step — it runs synchronously inside the same transaction as
-  // the status update, so there's no window where a task is completable but its
-  // children haven't been promoted.
+  // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
   private promoteReadyTasks(completedTaskId: string): void {
     const candidates = this.db
       .prepare("SELECT * FROM tasks WHERE status = 'pending'")
@@ -699,9 +637,7 @@ export class OrchestrationDb {
   createDispatchContext(
     taskId: string,
     assigneeHandle: string,
-    // Why: the pane key is the remint-stable identity behind the handle;
-    // recording it at dispatch time lets worker_done ownership survive
-    // restarts that reissue the handle.
+    // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
     assigneePaneKey?: string
   ): DispatchContextRow {
     const task = this.getTask(taskId)
@@ -712,10 +648,7 @@ export class OrchestrationDb {
       throw new Error(`Task ${taskId} is ${task.status}; only ready tasks can be dispatched`)
     }
 
-    // Why: handle match covers legacy rows without pane keys; when both the
-    // new assignee and an active row have usable pane keys, also lock on
-    // equivalent pane identity so a reminted handle cannot open a second
-    // concurrent dispatch on the same pane.
+    // Why: lock on pane identity too, so a reminted handle can't open a second concurrent dispatch on the same pane.
     const existing = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
 
     if (existing) {
@@ -724,8 +657,7 @@ export class OrchestrationDb {
       )
     }
 
-    // Carry forward failure_count from prior contexts so the circuit breaker
-    // accumulates across retries for the same task.
+    // Carry forward failure_count so the circuit breaker accumulates across retries for the same task.
     const prior = this.db
       .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
       .get(taskId) as { max_failures: number | null } | undefined
@@ -829,12 +761,7 @@ export class OrchestrationDb {
     return active ? this.failDispatch(active.id, error) : undefined
   }
 
-  // Why: only touch rows that are currently dispatched. A straggler heartbeat
-  // from a dispatch that already transitioned to `completed` / `failed` /
-  // `circuit_broken` MUST NOT retroactively bump `last_heartbeat_at`, because
-  // the stale-dispatch detector is the signal the coordinator uses to know a
-  // newer dispatch for the same task has hung. Silently no-op'ing keeps the
-  // zombie-heartbeat race from masking a hung retry (§5.3.4).
+  // Why: only bump status='dispatched' — a zombie heartbeat from a finished dispatch would mask a hung retry from the stale detector (§5.3.4).
   recordHeartbeat(dispatchId: string, at: string): void {
     this.db
       .prepare(
@@ -843,17 +770,7 @@ export class OrchestrationDb {
       .run(at, dispatchId)
   }
 
-  // Why: the query restricts to currently-dispatched contexts AND respects a
-  // dispatched-at grace. Without `status = 'dispatched'`, every completed /
-  // failed / circuit_broken row with an old-or-null last_heartbeat_at would
-  // warn every tick (warning storm). Without `dispatched_at < :threshold`,
-  // a freshly-dispatched worker would trip the warning during its first
-  // heartbeat interval (false positive). The stored columns are space-format
-  // (datetime('now'), "2026-07-12 12:00:00") while the threshold is ISO-Z, so
-  // raw TEXT ordering compares ' ' (0x20) below 'T' (0x54) at index 10 and
-  // flags fresh same-date rows as stale (#8452). julianday() parses both
-  // formats as UTC for a correct numeric comparison; a malformed timestamp
-  // yields NULL, so that row simply isn't flagged.
+  // Why: dispatched_at grace skips workers still within their first heartbeat interval; julianday() vs raw-TEXT compare avoids misflagging space-format timestamps as stale (#8452).
   getStaleDispatches(thresholdIso: string): DispatchContextRow[] {
     return this.db
       .prepare(
@@ -883,10 +800,7 @@ export class OrchestrationDb {
       )
       .run(newStatus, newFailureCount, error, ctxId)
 
-    // Why: set the task back to 'ready' (not 'pending') so the coordinator can
-    // re-dispatch it on the next tick. The task's deps are already satisfied —
-    // setting it to 'pending' would strand it since promoteReadyTasks only runs
-    // when a dep completes.
+    // Why: back to 'ready' not 'pending' — 'pending' would strand it since promoteReadyTasks only runs when a dep completes.
     const taskStatus: TaskStatus = newStatus === 'circuit_broken' ? 'failed' : 'ready'
     this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(taskStatus, ctx.task_id)
 
@@ -924,9 +838,7 @@ export class OrchestrationDb {
       )
       .run(resolution, gateId)
 
-    // Why: unblock the task so the coordinator can re-dispatch it with the
-    // resolution context. Setting to 'ready' rather than the previous status
-    // because the worker needs to be re-engaged with the decision outcome.
+    // Why: set to 'ready' (not the previous status) so the coordinator re-dispatches the worker with the resolution context.
     this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(gate.task_id)
 
     return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
@@ -1018,8 +930,6 @@ export class OrchestrationDb {
   // ── Queries for Coordinator ──
 
   getIdleTerminals(excludeHandles: string[] = []): string[] {
-    // Why: returns terminal handles that have no active dispatch, so the
-    // coordinator knows which terminals are available for new task assignments.
     const active = this.db
       .prepare(
         "SELECT DISTINCT assignee_handle FROM dispatch_contexts WHERE status IN ('pending', 'dispatched')"

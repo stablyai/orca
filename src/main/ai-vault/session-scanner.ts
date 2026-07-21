@@ -8,6 +8,11 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/exec
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
+  codexRolloutHardlinkIdentity,
+  dedupeCodexRolloutFileAliases,
+  dedupeCodexSessionsBySessionId
+} from './codex-session-root-dedup'
+import {
   createAntigravityWorkspaceResolver,
   type AntigravityWorkspaceResolver
 } from './session-scanner-antigravity-history'
@@ -70,24 +75,35 @@ export async function scanAiVaultSessions(
     await ensureSessionParseCacheLoaded()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
 
-    const candidates = discoveries
-      .flatMap((discovery) =>
-        discovery.files.map(
-          (file): SessionFileCandidate => ({
-            agent: discovery.agent,
-            file,
-            codexHome:
-              discovery.agent === 'codex'
-                ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
-                : null,
-            antigravityHistoryPath:
-              discovery.agent === 'antigravity'
-                ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-                : undefined
-          })
+    const candidates = dedupeCodexRolloutFileAliases(
+      discoveries
+        .flatMap((discovery) =>
+          discovery.files.map(
+            (file): SessionFileCandidate => ({
+              agent: discovery.agent,
+              file,
+              codexHome:
+                discovery.agent === 'codex'
+                  ? codexHomeForSessionsDir(
+                      discovery.rootDir,
+                      options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
+                    )
+                  : null,
+              antigravityHistoryPath:
+                discovery.agent === 'antigravity'
+                  ? antigravityHistoryPathForBrainDir(discovery.rootDir)
+                  : undefined
+            })
+          )
         )
-      )
-      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+        .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
+      {
+        isCodex: (candidate) => candidate.agent === 'codex',
+        getFilePath: (candidate) => candidate.file.path,
+        getCodexHome: (candidate) => candidate.codexHome,
+        getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
+      }
+    )
 
     const parsedSessions = await parseSessionCandidates({
       candidates,
@@ -99,7 +115,7 @@ export async function scanAiVaultSessions(
       antigravityWorkspaceResolver
     })
 
-    const cappedSessions = parsedSessions
+    const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
       .slice(0, limit)
 
@@ -230,6 +246,11 @@ async function parseSessionCandidates(args: {
         sessions.push(result.session)
       }
     }
+
+    // Why: cross-volume backfill copies have no shared inode, so collapse
+    // parsed aliases before they can crowd the unique-session parse budget.
+    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+    sessions.splice(0, sessions.length, ...uniqueSessions)
 
     index += batchSize
   }

@@ -17,7 +17,7 @@
 
 import { _electron as electron } from '@stablyai/playwright-test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { seedFreshProfile } from './onboarding-profile.mjs'
 
@@ -30,6 +30,15 @@ const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 const TERMINAL_SURFACE_VISIBLE = '[data-terminal-tab-id]:visible'
 const XTERM_CONTAINER_VISIBLE = '.xterm:visible'
 const XTERM_INPUT = '.xterm-helper-textarea'
+const RESTRICTED_E2E_ENV_KEYS = new Set([
+  'HOME',
+  'USERPROFILE',
+  'CODEX_HOME',
+  'ORCA_CODEX_HOME',
+  'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
+  'ORCA_E2E_HOME_DIR',
+  'ORCA_E2E_USER_DATA_DIR'
+])
 
 /**
  * Launch the installed Orca.exe. Pointing userDataDir at a harness-owned temp
@@ -45,11 +54,33 @@ export async function launchInstalledApp({
   seedProfile = null,
   extraEnv = {}
 }) {
-  const { ELECTRON_RUN_AS_NODE: _drop, ...cleanEnv } = process.env
+  const {
+    ELECTRON_RUN_AS_NODE: _drop,
+    CODEX_HOME: _codexHome,
+    ORCA_CODEX_HOME: _orcaCodexHome,
+    ...cleanEnv
+  } = process.env
+  void _drop
+  void _codexHome
+  void _orcaCodexHome
+  const restrictedExtraEnvKey = Object.keys(extraEnv).find((key) =>
+    RESTRICTED_E2E_ENV_KEYS.has(key.toUpperCase())
+  )
+  if (restrictedExtraEnvKey) {
+    throw new Error(`extraEnv.${restrictedExtraEnvKey} cannot override E2E home isolation`)
+  }
   mkdirSync(userDataDir, { recursive: true })
   if (seedProfile) {
     seedFreshProfile(userDataDir, seedProfile)
   }
+  // Why: userData relocation does not change Node's home; the packaged E2E
+  // must not resolve the default Codex account against the runner's profile.
+  const requestedIsolatedHome = path.join(userDataDir, 'home')
+  mkdirSync(requestedIsolatedHome, { recursive: true })
+  // Why: temp paths on runners use 8.3 aliases (RUNNER~1). Git canonicalizes
+  // worktree paths, so a non-canonical HOME makes created worktrees invisible
+  // to the app's listing comparisons.
+  const isolatedHome = realpathSync.native(requestedIsolatedHome)
   const app = await electron.launch({
     executablePath: exePath,
     args: [],
@@ -57,8 +88,12 @@ export async function launchInstalledApp({
       ...cleanEnv,
       // Packaged main honors ORCA_E2E_USER_DATA_DIR to relocate userData
       // (logs/daemon/terminal-history) under a controlled dir.
+      ...extraEnv,
       ORCA_E2E_USER_DATA_DIR: userDataDir,
-      ...extraEnv
+      HOME: isolatedHome,
+      USERPROFILE: isolatedHome,
+      ORCA_E2E_HOME_DIR: isolatedHome,
+      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0'
     }
   })
   // If firstWindow times out (the launched main never shows a window), the

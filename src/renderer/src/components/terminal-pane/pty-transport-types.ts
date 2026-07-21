@@ -84,6 +84,7 @@ export type PtyTransport = {
     initiallyHidden?: boolean
     command?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     launchToken?: string
     launchAgent?: TuiAgent
@@ -140,6 +141,7 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   cwdFallback?: 'worktree'
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string

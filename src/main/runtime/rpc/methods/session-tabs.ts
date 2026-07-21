@@ -48,6 +48,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         command: params.command,
         cwd: params.cwd,
         ...(params.env ? { env: params.env } : {}),
+        ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
         ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),

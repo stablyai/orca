@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: this hook is the single orchestrator for every onboarding-step transition (navigation, persistence, telemetry, ref-mirror, auto-select); splitting would force callers to coordinate ordering across multiple hooks and lose the controller-shape contract OnboardingFlow.tsx consumes. */
+/* eslint-disable max-lines -- Why: single orchestrator for every onboarding-step transition; splitting would scatter ordering across hooks and lose the controller-shape contract OnboardingFlow.tsx consumes. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
@@ -132,14 +132,11 @@ export function remapOpenOnboardingLastCompletedStep({
   if (outcome === 'completed' && lastCompletedStep >= 4) {
     return ONBOARDING_FINAL_STEP
   }
-  // Why: v3 was the four-step flow before the Windows terminal preference
-  // page. Step 4 already meant notifications, so open progress should resume
-  // there rather than treating it as the newly inserted Windows step.
+  // Why: in v3 (four-step, pre-Windows-terminal) step 4 already meant notifications, so resume there.
   if (flowVersion === 3) {
     return Math.min(4, lastCompletedStep)
   }
-  // Why: v2 was the five-step flow; missing/older versions were seven-step
-  // data where step 4 was removed agent setup, not completed integrations.
+  // Why: v2 (five-step) and older seven-step data used step 4 for removed agent setup, not integrations.
   if (flowVersion === 2) {
     if (lastCompletedStep === 3) {
       return 2
@@ -183,8 +180,7 @@ export async function prepareSkippedOnboardingPreferences({
   setError
 }: SkippedOnboardingPreferenceOptions): Promise<boolean> {
   try {
-    // Why: theme tiles save immediately for a stable preview, but skip still
-    // means "do not keep this step's choice."
+    // Why: theme tiles save immediately for a stable preview, but skip must not keep this step's choice.
     if (currentStepId === 'theme') {
       const themeToRestore = themeBeforePreview ?? settingsTheme
       if (themeToRestore) {
@@ -193,8 +189,7 @@ export async function prepareSkippedOnboardingPreferences({
         await updateSettings({ theme: themeToRestore })
       }
     }
-    // Why: the repo step seeds folder terminals from saved settings. Preserve
-    // the visible agent choice when optional preferences are skipped.
+    // Why: the repo step seeds folder terminals from saved settings, so preserve the visible agent choice on skip.
     if (currentStepId === 'agent' && selectedAgent) {
       await updateSettings({ defaultTuiAgent: selectedAgent })
     }
@@ -242,11 +237,9 @@ export function useOnboardingFlow(
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
-  // Why: App hydrates repos before mounting onboarding. Reading the store
-  // synchronously lets the final step render its already-added state without a flash.
+  // Why: repos are hydrated before onboarding mounts; the sync read lets the final step render added state without a flash.
   const repos = useAppStore((s) => s.repos)
-  // Why: renderToStaticMarkup uses Zustand's initial server snapshot. The
-  // synchronous read keeps tests and the first client render aligned.
+  // Why: renderToStaticMarkup uses Zustand's initial snapshot; the sync read keeps tests and the first client render aligned.
   const effectivePreflightStatus = preflightStatus ?? useAppStore.getState().preflightStatus
 
   const skipIntegrations = shouldSkipIntegrationsStep(effectivePreflightStatus)
@@ -273,8 +266,7 @@ export function useOnboardingFlow(
       agentDefaultEnv: settings?.agentDefaultEnv
     }) !== 'manual'
   )
-  // Why: hydrate theme from saved settings instead of hardcoding 'dark' so users
-  // who already configured a theme see their choice preselected.
+  // Why: hydrate theme from saved settings so users who already chose one see it preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   const [cloneUrl, setCloneUrl] = useState('')
   const [serverPath, setServerPath] = useState('')
@@ -291,9 +283,7 @@ export function useOnboardingFlow(
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Why: settings load async; the lazy useState initializers above run before
-  // settings hydrates. Re-sync once before commit so children never paint the
-  // fallback defaults, unless the user already interacted with that field.
+  // Why: settings hydrate async after the lazy initializers run; re-sync once before commit unless the user edited the field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
   const yoloPermissionsInteractedRef = useRef(false)
@@ -326,26 +316,19 @@ export function useOnboardingFlow(
     }
   }
 
-  // Why: track user interaction so async settings hydration above doesn't
-  // overwrite a value the user explicitly chose.
+  // Why: track interaction so async settings hydration doesn't overwrite a value the user chose.
   const setThemeInteractive = useCallback((value: GlobalSettings['theme']) => {
     themeInteractedRef.current = true
     setTheme(value)
   }, [])
-  // `fromCollapsedSection` is the click-site signal for whether the picked
-  // agent lived under the `<details>` disclosure in AgentStep. AgentStep is
-  // the only call site that has the real answer; main-side detected_count /
-  // detection_state are merged in here from the store.
+  // `fromCollapsedSection`: whether the picked agent lived under AgentStep's `<details>` disclosure — only that call site knows.
   const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
   const isDetectingRef = useRef<boolean>(isDetectingAgents)
   const selectedAgentRef = useRef(selectedAgent)
-  // Why: refs let `setSelectedAgentInteractive` (a stable useCallback) read
-  // the freshest hydration classification at click time. Mirrors the
-  // detectedAgentIdsRef / isDetectingRef pattern.
+  // Why: refs let the stable `setSelectedAgentInteractive` read the freshest hydration classification at click time.
   const pathSourceRef = useRef(pathSource)
   const pathFailureReasonRef = useRef(pathFailureReason)
-  // Why: stable onboarding handlers read these values at click/async time, so
-  // keep the mirrors fresh before events can run.
+  // Why: keep these mirrors fresh so stable handlers read current values at click/async time.
   selectedAgentRef.current = selectedAgent
   detectedAgentIdsRef.current = detectedAgentIds ?? []
   isDetectingRef.current = isDetectingAgents
@@ -354,17 +337,13 @@ export function useOnboardingFlow(
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
-      // Why: de-dup re-clicks on the current agent so dashboards count
-      // mind-changes only, not idle reselection of the same option.
+      // Why: de-dup re-clicks on the current agent so telemetry counts mind-changes, not idle reselection.
       const prev = selectedAgentRef.current
       setSelectedAgent(value)
       if (value === null || value === prev) {
         return
       }
-      // Why: emit at click time, not at step completion, so we capture
-      // mind-changes within the step. The payload builder is extracted so the
-      // store-fields-attached invariant has unit coverage — see
-      // agent-picked-payload.test.ts.
+      // Why: emit at click time (not step completion) to capture mind-changes; payload builder extracted for coverage — see agent-picked-payload.test.ts.
       track(
         'onboarding_agent_picked',
         buildAgentPickedPayload({
@@ -386,10 +365,7 @@ export function useOnboardingFlow(
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
-  // Why: the stepper shows exactly the steps the user will land on. Skipped
-  // optional steps — Windows terminal off Windows, integrations when the GitHub
-  // CLI is already installed — are dropped entirely rather than rendered as
-  // dead, unreachable dots the user silently skips past on Continue.
+  // Why: the stepper shows only steps the user will land on; skipped optional steps are dropped, not rendered as dead dots.
   const progressSteps = useMemo(
     () =>
       STEPS.map((step, index) => ({ step, index })).filter(
@@ -397,10 +373,7 @@ export function useOnboardingFlow(
       ),
     [skipOptions]
   )
-  // Why: while resuming, stepIndex can momentarily point at a step that just
-  // became skipped (preflight resolving to gh-installed) before the auto-skip
-  // effect advances it. Resolve forward so the count reflects the step we're
-  // about to land on instead of flashing "1 of N" with no active dot.
+  // Why: while resuming, stepIndex can briefly point at a just-skipped step; resolve forward so the count reflects the landing step.
   const displayedStepIndex = resolveStepIndex(stepIndex, skipOptions, 'forward')
   const progressStepIndex = Math.max(
     0,
@@ -411,8 +384,7 @@ export function useOnboardingFlow(
   // Why: pin start time once so onboarding_completed reports a real funnel duration.
   const startTimeRef = useRef<number>(Date.now())
 
-  // Why: track the latest persisted theme in a ref so the unmount-only revert
-  // below uses the freshest value without retriggering on each settings change.
+  // Why: ref so the unmount-only revert reads the freshest theme without retriggering on each settings change.
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   persistedThemeRef.current = settings?.theme ?? 'dark'
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
@@ -425,8 +397,7 @@ export function useOnboardingFlow(
     if (!settings || themeStepEntryCapturedRef.current) {
       return
     }
-    // Why: theme tile clicks persist immediately for normal progression, but
-    // "Skip to project setup" should keep the preference the user arrived with.
+    // Why: capture entry theme so "Skip to project setup" keeps the preference the user arrived with.
     themeStepEntryCapturedRef.current = true
     themeStepEntryThemeRef.current = settings.theme
   }, [currentStep.id, settings])
@@ -456,9 +427,7 @@ export function useOnboardingFlow(
     }
     const nextIndex = getNextStepIndex(stepIndex)
     setStepIndex(nextIndex)
-    // Why: users with gh already on PATH don't need this setup page, but
-    // persistence must still resume them at the next visible step instead of
-    // bouncing back through skipped optional pages.
+    // Why: persistence must resume at the next visible step, not bounce back through skipped optional pages.
     const skippedThroughStepNumber = Math.max(
       currentStep.stepNumber,
       STEPS[nextIndex].stepNumber - 1
@@ -484,16 +453,14 @@ export function useOnboardingFlow(
     stepIndex
   ])
 
-  // Why: ref guard prevents StrictMode's double-invoke from emitting
-  // `onboarding_started` twice on mount.
+  // Why: ref guard stops StrictMode's double-invoke from emitting onboarding_started twice.
   const startedTrackedRef = useRef(false)
   useEffect(() => {
     if (startedTrackedRef.current) {
       return
     }
     startedTrackedRef.current = true
-    // Why: `resumed_from_step` is the step the user finished, not the
-    // step we resume into.
+    // Why: resumed_from_step is the step the user finished, not the one we resume into.
     const lastCompleted = remappedLastCompletedStep
     track(
       'onboarding_started',
@@ -504,11 +471,7 @@ export function useOnboardingFlow(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Session-local step duration: re-pinned on every step view so a resumed
-  // user emits `duration_ms` for the visible step measuring only the
-  // post-resume time. Optional on the schema so a missing baseline (e.g. the
-  // _viewed effect was skipped or StrictMode double-mounted) fail-soft drops
-  // the field rather than the event. See docs/onboarding-telemetry-extensions.md.
+  // Why: re-pinned per step view so duration_ms measures only post-resume time; optional so a missing baseline drops the field, not the event. See docs/onboarding-telemetry-extensions.md.
   const stepStartedAtRef = useRef<number>(Date.now())
   useEffect(() => {
     stepStartedAtRef.current = Date.now()
@@ -526,8 +489,7 @@ export function useOnboardingFlow(
     if (node !== null) {
       return
     }
-    // Why: onboarding previews theme state outside this component; tie
-    // final cleanup to the modal root detaching instead of passive Effects.
+    // Why: theme preview mutates state outside this component, so revert on modal-root detach rather than a passive Effect.
     applyDocumentTheme(persistedThemeRef.current)
   }, [])
 
@@ -537,8 +499,7 @@ export function useOnboardingFlow(
       durationMs: number,
       advancedVia: 'button' | 'keyboard'
     ): void => {
-      // Why: one low-cardinality snapshot answers whether task sources were
-      // usable at step exit without paying for per-button telemetry.
+      // Why: one low-cardinality snapshot captures task-source usability at step exit without per-button telemetry.
       track('onboarding_task_sources_snapshot', {
         github_status: getGitHubTaskSourceStatus(preflightStatus, preflightStatusLoading),
         linear_status: getLinearTaskSourceStatus(linearStatus, linearStatusChecked),
@@ -550,17 +511,14 @@ export function useOnboardingFlow(
     [linearStatus, linearStatusChecked, preflightStatus, preflightStatusLoading]
   )
 
-  // Why: only auto-pick on first mount when detection completes; otherwise
-  // selecting an agent would re-trigger this effect and clobber/race user clicks.
+  // Why: auto-pick only on first mount; otherwise re-running would clobber/race the user's own agent selection.
   const didAutoSelectRef = useRef(false)
   useEffect(() => {
     if (didAutoSelectRef.current) {
       return
     }
     didAutoSelectRef.current = true
-    // Why: re-read PATH on wizard mount instead of reusing the session cache.
-    // The cache can be poisoned if a prior caller ran before shell PATH
-    // hydration finished, leaving the wizard with a false "no agents" state.
+    // Why: re-read PATH on mount; the session cache can be poisoned by callers that ran before shell PATH hydration, giving a false "no agents" state.
     void refreshDetectedAgents().then((ids) => {
       if (selectedAgentRef.current !== null) {
         return
@@ -580,8 +538,7 @@ export function useOnboardingFlow(
   const completeRepo = useCallback(
     async (projectId: string, isGit: boolean, path: 'open_folder' | 'clone_url') => {
       await fetchRepos()
-      // Why: once the project is persisted, a non-authoritative Git refresh
-      // should still complete onboarding onto the project row as a fallback.
+      // Why: a non-authoritative Git refresh should still complete onboarding onto the project row as a fallback.
       await fetchWorktrees(projectId, isGit ? { requireAuthoritative: true } : undefined)
       const worktrees = useAppStore.getState().worktreesByRepo[projectId] ?? []
       if (isGit) {
@@ -593,16 +550,12 @@ export function useOnboardingFlow(
       } else {
         const worktree = worktrees[0] ?? null
         if (worktree) {
-          // Why: onboarding asks for a default agent immediately before this step.
-          // Non-git folders skip the composer, so seed their first terminal here.
+          // Why: non-git folders skip the composer, so seed their first terminal with the chosen default agent here.
           const startup = buildOnboardingFolderAgentStartup(settings)
           activateAndRevealWorktree(worktree.id, { startup })
         }
       }
-      // Why: next() short-circuits the repo step, so emit step_completed here
-      // once the repo is successfully added to keep the funnel consistent.
-      // Gate on closeWith's success so a persistence failure doesn't
-      // double-count.
+      // Why: next() short-circuits the repo step; emit step_completed here, gated on closeWith success so a persistence failure can't double-count.
       const closed = await closeWith(
         'completed',
         isGit ? { addedRepo: true } : { addedFolder: true },
@@ -612,10 +565,7 @@ export function useOnboardingFlow(
       if (!closed) {
         return
       }
-      // Why: the repo step has no keyboard-vs-button advance — Cmd+Enter
-      // routes to `openFolder()` which collapses both into the path-clicked
-      // path. Emit `duration_ms` only; `advanced_via` is intentionally absent
-      // for the final step. See docs/onboarding-telemetry-extensions.md §3.
+      // Why: the final repo step has no keyboard-vs-button distinction, so emit duration_ms without advanced_via. See docs/onboarding-telemetry-extensions.md §3.
       track('onboarding_step_completed', {
         step: ONBOARDING_FINAL_STEP,
         value_kind: 'repo',
@@ -644,11 +594,7 @@ export function useOnboardingFlow(
     setError
   })
 
-  // Why: synchronous re-entry latch. `busyLabel` is React state and only
-  // commits after the awaited persistCurrentStep round-trip resolves, so a
-  // second Cmd+Enter (auto-repeat fires every ~30ms) re-enters next() before
-  // the first call's setStepIndex has run, advancing twice and skipping a
-  // step. A ref flips synchronously so re-entries bail immediately.
+  // Why: sync latch; busyLabel state commits too late to stop a ~30ms Cmd+Enter auto-repeat from re-entering next() and skipping a step.
   const nextInFlightRef = useRef(false)
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
@@ -709,8 +655,7 @@ export function useOnboardingFlow(
           const nextIndex = getNextStepIndex(stepIndex)
           const skippedThroughStepNumber = STEPS[nextIndex].stepNumber - 1
           if (skippedThroughStepNumber > currentStep.stepNumber) {
-            // Why: resolveStepIndex can skip optional pages before they render,
-            // but persisted progress must still resume at the visible page.
+            // Why: skipped optional pages must still persist progress at the next visible page.
             try {
               onOnboardingChange(await persistStep(skippedThroughStepNumber))
             } catch (err) {
@@ -929,8 +874,7 @@ export function useOnboardingFlow(
       const result = await importNestedRepos({
         parentPath: nestedScan.selectedPath,
         groupName: '',
-        // Why: Set insertion order can drift after deselect/reselect; import
-        // ordering should match the visible scan order users reviewed.
+        // Why: Set insertion order can drift after deselect/reselect; match the visible scan order users reviewed.
         projectPaths: selectedProjectPaths,
         ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
         mode
@@ -960,8 +904,7 @@ export function useOnboardingFlow(
         )
       }
       for (const importedRepoId of importedRepoIds) {
-        // Why: imported repos are already persisted; non-authoritative SSH
-        // refreshes should not block onboarding from revealing the first project.
+        // Why: imported repos are already persisted, so a non-authoritative SSH refresh shouldn't block revealing the first project.
         await fetchWorktrees(importedRepoId, { requireAuthoritative: true })
       }
       await completeRepo(projectId, true, 'open_folder')
@@ -1029,8 +972,7 @@ export function useOnboardingFlow(
     onboardingNestedRepoRuntimeKind
   ])
 
-  // Why: lets the user back out of the nested-repo step in onboarding to
-  // re-pick a folder/clone target. Mirrors the dialog's left-aligned Back.
+  // Why: lets the user back out of the nested-repo step to re-pick a folder/clone target.
   const cancelNested = useCallback(() => {
     if (busyLabel !== null && !nestedScanInProgress) {
       return
@@ -1162,8 +1104,7 @@ export function useOnboardingFlow(
       if (!closed) {
         return
       }
-      // Why: the repo picker moved to the Add Project dialog, so skipping
-      // optional setup now closes onboarding and hands off to that modal.
+      // Why: repo picker now lives in the Add Project dialog, so skipping optional setup closes onboarding and hands off to it.
       track('onboarding_step_skipped', {
         step: stepNumber,
         value_kind: valueKind,
@@ -1248,12 +1189,9 @@ export function useOnboardingFlow(
       )
       return
     }
-    // Why: Settings renders behind the fullscreen onboarding layer; SSH users
-    // need a temporary detour without marking required repo setup dismissed.
+    // Why: SSH users need a temporary Settings detour without marking required repo setup dismissed.
     onSettingsDetourStart?.()
-    // Why: keep the target in the store before the Settings view mounts. A
-    // timer here can run before the lazy view subscribes and strand users on
-    // the default General pane.
+    // Why: set the target before the lazy Settings view mounts; a timer could fire before it subscribes and strand users on General.
     openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
     openSettingsPage()
   }, [

@@ -92,7 +92,7 @@ describe('CodexRestartChip helpers', () => {
     expect(clearCodexRestartNotice).toHaveBeenCalledTimes(2)
   })
 
-  it('renders a stale Codex restart notice without an external-store update loop', async () => {
+  it('renders only account-resolution actions without an external-store update loop', async () => {
     useAppStore.setState({
       tabsByWorktree: {
         'worktree-1': [
@@ -124,5 +124,8 @@ describe('CodexRestartChip helpers', () => {
     })
 
     expect(container.textContent).toContain('Codex is still signed in as old@example.com')
+    expect(
+      Array.from(container.querySelectorAll('button'), (button) => button.textContent?.trim())
+    ).toEqual(['Keep old account', 'Restart'])
   })
 })

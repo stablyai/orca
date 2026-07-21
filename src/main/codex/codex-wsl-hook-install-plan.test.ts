@@ -6,7 +6,7 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock
 }))
 
-import { _internals } from './codex-wsl-hook-install-plan'
+import { _internals, createCodexWslRuntimeHookInstallPlan } from './codex-wsl-hook-install-plan'
 
 const originalPlatform = process.platform
 
@@ -24,6 +24,17 @@ afterEach(() => {
 })
 
 describe('canonicalizeWslLinuxPath', () => {
+  it('joins guest paths without producing a double slash at the filesystem root', () => {
+    const plan = createCodexWslRuntimeHookInstallPlan(
+      'C:\\runtime',
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      () => '/'
+    )
+
+    expect(plan?.commandScriptPath).toBe('/.orca/agent-hooks/codex-hook.sh')
+    expect(plan?.trustConfigPath).toBe('/hooks.json')
+  })
+
   it('returns the path unchanged off Windows without spawning wsl.exe', () => {
     setPlatform('linux')
     expect(_internals.canonicalizeWslLinuxPath('Ubuntu', '/home/alice')).toBe('/home/alice')

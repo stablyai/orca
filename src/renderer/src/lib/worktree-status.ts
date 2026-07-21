@@ -33,22 +33,10 @@ export function getWorktreeStatus(
   runtimePaneTitlesByTabId: Record<string, Record<number, string>> = {},
   options: WorktreeStatusHeuristicOptions = {}
 ): WorktreeStatus {
-  // Why: liveness gates every promotion. tab.ptyId is the wake-hint sessionId
-  // preserved across sleep (so wake can reattach to the same daemon history
-  // dir / relay session) — it is *not* a liveness signal. ptyIdsByTabId is the
-  // source of truth: sleep clears it to []; pty.spawn writes it; pty.kill
-  // clears it. Reading the live-pty map keeps the dot honest after sleep,
-  // crash, or any path where the wake-hint outlives the actual PTY.
+  // Why: tab.ptyId is a wake-hint that survives sleep, not a liveness signal; gate on ptyIdsByTabId, which sleep/kill clear when the PTY dies.
   const liveTabs = tabs.filter((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
 
-  // Why: a split-pane tab can host multiple concurrent agents, but `tab.title`
-  // only reflects the most-recently-focused pane (see onActivePaneChange in
-  // use-terminal-pane-lifecycle.ts). Reading just `tab.title` causes the
-  // sidebar spinner to follow the focused pane instead of the aggregate tab
-  // state — e.g. clicking an idle Claude pane while Codex is still working in
-  // another pane would collapse the spinner to solid green. Consult per-pane
-  // titles first (same pattern as countWorkingAgentsForTab) and only fall back
-  // to `tab.title` for tabs that have no mounted panes yet.
+  // Why: tab.title tracks only the most-recently-focused pane (onActivePaneChange in use-terminal-pane-lifecycle.ts); consult per-pane titles so the spinner reflects aggregate tab state.
   const hasStatus = (status: 'permission' | 'working'): boolean =>
     liveTabs.some((tab) => tabHasStatus(tab, runtimePaneTitlesByTabId, status, options))
 
@@ -59,8 +47,7 @@ export function getWorktreeStatus(
     return 'working'
   }
   if (liveTabs.length > 0 || browserTabs.length > 0) {
-    // Why: browser-only worktrees are still active from the user's point of
-    // view even when they have no PTY-backed terminal.
+    // Why: browser-only worktrees (no PTY) are still active from the user's point of view.
     return 'active'
   }
   return 'inactive'
@@ -80,9 +67,7 @@ function tabHasStatus(
     const paneTitleEntries = Object.entries(paneTitles)
     for (const [runtimePaneId, title] of paneTitleEntries) {
       const leafId = resolveRuntimePaneTitleLeafIdFromRoot(tabLayoutRoot, runtimePaneId)
-      // Why: runtime titles can arrive before layout hydration in SSH/replay
-      // paths. With exactly one title and one authoritative agent row, the tab
-      // is unambiguous enough to prefer that row over a stale spinner.
+      // Why: runtime titles can precede layout hydration (SSH/replay); with one title and one agent row, prefer that row over a stale spinner.
       const hasSingleUnmappedAgentStatusPane =
         leafId === null && agentStatusPaneIds?.size === 1 && paneTitleEntries.length === 1
       if (
@@ -98,21 +83,14 @@ function tabHasStatus(
     }
     return false
   }
-  // Why: a tab-level title does not identify which split pane it came from.
-  // Once any visible agent row owns a pane in that tab, prefer the row state
-  // to avoid resurrecting stale "working" titles for a completed pane.
+  // Why: a tab title can't identify its pane; once an agent row owns one, prefer the row over a completed pane's stale "working" title.
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
   return classifyTitleActivity(tab.title) === status && titleStatusIsAgentAttributable(tab.title)
 }
 
-// Why: the title heuristic is only a fallback — hook-managed agents promote the
-// worktree via hasLiveWorking/hasPermission in resolveWorktreeStatus, not here.
-// A bare braille-spinner title (e.g. an exited agent's never-cleared "⠐ task"
-// frame) classifies as working yet produces no sidebar agent row, spinning the
-// worktree forever with "0 agents". Require the same agent attribution the row
-// builder uses, so a title only spins the dot when it would also show a row.
+// Why: require agent attribution so a bare never-cleared spinner title can't spin the dot "0 agents" forever with no matching sidebar row.
 function titleStatusIsAgentAttributable(title: string): boolean {
   return resolveAgentTypeFromTerminalTitle(title) !== null
 }
@@ -123,27 +101,12 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
 
 /**
  * Apply the WorktreeCard priority overlay (permission > working > done >
- * heuristic) on top of the title-heuristic base. Live PTY liveness still gates
- * title-derived working/permission, but explicit agent rows are allowed to
- * promote the dot: if the sidebar shows a running/completed/blocking inline
- * agent row, the worktree status must agree with that visible row. Sleep
- * cleanup owns removing stale retained rows; once they are gone, no promotion
- * occurs.
+ * heuristic) on top of the title-heuristic base. Explicit agent rows may
+ * promote the dot; sleep cleanup owns removing stale retained rows.
  *
- * Argument semantics (sourced by the WorktreeCard caller from the store):
- * - `tabs`, `browserTabs`: the worktree's terminal and browser tabs.
- * - `ptyIdsByTabId`: live-PTY map narrowed to this worktree (the liveness
- *   gate; see tabHasLivePty).
- * - `runtimePaneTitlesByTabId`: per-tab pane title map narrowed to this
- *   worktree (used by the title-heuristic for split-pane spinners).
- * - `hasPermission`: any fresh hook entry in {blocked, waiting} for a tab in
- *   this worktree.
- * - `hasLiveWorking`: any fresh hook entry in {working} for a tab in this
- *   worktree.
- * - `hasLiveDone`: any fresh hook entry in {done} for a tab in this worktree.
- * - `hasRetainedDone`: any retained-agent snapshot scoped to this worktreeId.
- * - `agentStatusPaneIdsByTabId`: stable leaf ids and legacy runtime pane ids
- *   whose visible agent rows should override title-derived heuristics.
+ * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
+ * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
+ * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId.
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title'>[]
@@ -172,17 +135,11 @@ export function resolveWorktreeStatus(args: {
   if (args.hasPermission) {
     return 'permission'
   }
-  // Why: heuristic 'permission' must outrank heuristic 'working' (a tab can
-  // be "working" while another pane in the same tab is blocked on permission;
-  // the user-actionable signal wins). Both this branch and the args.hasPermission
-  // branch above return 'permission' — they're separated only because
-  // args.hasPermission must also outrank heuristic 'working' below.
+  // Why: heuristic 'permission' outranks heuristic 'working' — the user-actionable signal wins when panes in one tab disagree.
   if (heuristic === 'permission') {
     return 'permission'
   }
-  // Why: restored-but-unfocused cards may have the startup hook snapshot before
-  // their terminal pane mounts and repopulates runtimePaneTitlesByTabId.
-  // Trust the fresh explicit working row so those cards stay yellow on restart.
+  // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
   if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
   }

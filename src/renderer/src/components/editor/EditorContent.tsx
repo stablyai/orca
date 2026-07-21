@@ -1,9 +1,4 @@
-/* eslint-disable max-lines -- Why: EditorContent is the dispatch surface for
-every editor mode (edit, diff, conflict, markdown-preview, combined-diff, and
-now Changes view mode). Keeping the mode-selection branches colocated is easier
-to reason about than scattering the switch across per-mode wrappers. Individual
-renderers (MonacoEditor, DiffViewer, ChangesModeView, MarkdownPreview, etc.)
-already live in their own modules. */
+/* eslint-disable max-lines -- Why: dispatch surface for every editor mode; keeping the mode-selection branches colocated beats scattering the switch across per-mode wrappers. */
 import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
@@ -46,9 +41,7 @@ const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
 
-// Why: stable no-op callbacks for read-only tabs so Monaco never routes a
-// content-change or save through the writable pipeline (and so we don't create
-// a new function identity each render).
+// Why: module-level for a stable no-op identity so read-only tabs don't rebuild callbacks each render.
 const noopEditorContentChange = (_content: string): void => {}
 const noopEditorSave = (_content: string): void => {}
 
@@ -234,9 +227,7 @@ export function EditorContent({
           const line = blocks[nextIndex].startLine
           const markerLineLength = getGitConflictMarkerLineLength(content, line)
           setConflictNavigationIndexByFile((prev) => ({ ...prev, [file.id]: nextIndex }))
-          // Why: a same-location reveal can be requested twice before Monaco
-          // consumes the first one. Clearing first guarantees the prop changes
-          // and the mounted editor runs its reveal effect again.
+          // Why: clear first so a repeated same-location reveal still changes the prop and re-runs the editor's reveal effect.
           setPendingEditorReveal(null)
           queueMicrotask(() => {
             setPendingEditorReveal({
@@ -310,11 +301,7 @@ export function EditorContent({
   }
 
   const renderMonacoEditor = (fc: FileContent): React.JSX.Element => (
-    // Why: Without a key, React reuses the same MonacoEditor instance when
-    // switching tabs or split panes, just updating props. That means
-    // useLayoutEffect cleanup (which snapshots scroll position) never fires.
-    // Keying on the visible pane and path forces remount before a retained target
-    // model mounts, so the old path cannot receive the new file's reconciliation.
+    // Why: without a key React reuses the instance and skips cleanup (scroll snapshot); key forces a remount per pane+path.
     <MonacoEditor
       key={`${viewStateScopeId}\u0000${activeFile.filePath}`}
       fileId={activeFile.id}
@@ -323,9 +310,7 @@ export function EditorContent({
       relativePath={activeFile.relativePath}
       content={editBuffers[activeFile.id] ?? fc.content}
       language={monacoLanguage}
-      // Why: read-only tabs (AI Vault View Log) block edits in Monaco and no-op
-      // the change/save callbacks so no draft, dirty state, or write can occur —
-      // mirrors the conflict-review read-only rendering pattern.
+      // Why: read-only tabs no-op the change/save callbacks so no draft, dirty state, or write can occur.
       readOnly={activeFile.readOnly === true}
       liveTail={activeFile.liveTail === true}
       onContentChange={activeFile.readOnly === true ? noopEditorContentChange : handleContentChange}
@@ -362,14 +347,11 @@ export function EditorContent({
     })
 
     if (activeFile.conflict?.conflictStatus === 'unresolved') {
-      // Why: conflict markers are source text the user must edit directly.
-      // Rich/preview markdown modes can hide or reinterpret those marker lines.
+      // Why: rich/preview modes hide the conflict-marker source text the user must edit directly.
       return <div className="h-full min-h-0">{renderMonacoEditor(fc)}</div>
     }
 
-    // Why: the render-mode helper already folded size into the mode decision.
-    // Keep the explanatory banner here so the user understands why "rich" view
-    // currently shows Monaco instead.
+    // Why: banner explains why the "rich" view is showing Monaco source (size forced a source-mode fallback).
     if (renderMode === 'source' && mdViewMode === 'rich') {
       const richFallbackMessage =
         richModeUnsupportedMessage ??
@@ -385,11 +367,7 @@ export function EditorContent({
     }
 
     if (renderMode === 'rich-editor') {
-      // Why: front-matter is stripped before the rich editor sees the content
-      // because Tiptap has no front-matter node and would silently drop it.
-      // The raw block is displayed as a read-only banner and recombined with
-      // the body on every content change and save so the edit buffer always
-      // holds the complete document.
+      // Why: Tiptap has no front-matter node and would drop it, so strip it here and recombine on change/save.
       const fm = extractFrontMatter(currentContent)
       const editorContent = fm ? fm.body : currentContent
 
@@ -404,11 +382,7 @@ export function EditorContent({
       return (
         <div className="flex h-full min-h-0 flex-col">
           <div className="min-h-0 flex-1">
-            {/* Why: same remount reasoning as MonacoEditor — see renderMonacoEditor.
-                The boundary contains a TipTap/ProseMirror render crash (e.g.
-                when a setContent transaction throws under split-pane external
-                reload, issue #826) to this pane instead of letting it tear down
-                the whole renderer tree. */}
+            {/* Why: keyed for remount like MonacoEditor; boundary contains a TipTap render crash (issue #826) to this pane. */}
             <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
               <RichMarkdownEditor
                 fileId={activeFile.id}
@@ -428,10 +402,7 @@ export function EditorContent({
                 markdownAnnotationFilePath={activeFile.relativePath}
                 markdownSourceLineOffset={fm ? getMarkdownSourceLineOffset(fm.raw) : 0}
                 markdownReviewContent={currentContent}
-                // Why: render the front-matter banner below the editor toolbar
-                // (inside the editor shell) so formatting controls remain at
-                // the top of the pane — the banner is read-only context, not
-                // a header above the toolbar.
+                // Why: banner goes below the toolbar (inside the editor shell) so formatting controls stay at the top of the pane.
                 headerSlot={
                   fm && showMarkdownFrontmatter ? <FrontMatterBanner raw={fm.raw} /> : null
                 }
@@ -451,10 +422,7 @@ export function EditorContent({
               {richModeUnsupportedMessage}
             </div>
           ) : null}
-          {/* Why: before rich editing shipped, Orca already had a stable markdown
-          preview surface. If Tiptap cannot safely own a document, falling back
-          to that renderer preserves readable preview mode instead of forcing the
-          user out of preview entirely. Source mode remains available for edits. */}
+          {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
           <div className="min-h-0 flex-1">
             <MarkdownPreview
               key={viewStateScopeId}
@@ -474,10 +442,7 @@ export function EditorContent({
       )
     }
 
-    // Why: Monaco sizes itself against the immediate parent when `height="100%"`
-    // is used. Markdown source mode briefly wrapped it in a non-flex container
-    // with no explicit height, which made the code surface collapse even though
-    // the surrounding editor pane was tall enough.
+    // Why: Monaco with height="100%" sizes to its immediate parent, so the wrapper needs an explicit height or it collapses.
     return <div className="h-full min-h-0">{renderMonacoEditor(fc)}</div>
   }
 
@@ -913,8 +878,7 @@ export function EditorContent({
     modifiedDiffBuffer === undefined &&
     dc.modifiedContent.length === 0
   )
-  // Why: rendered once for every diff sub-branch below (preview and source)
-  // so a dirty markdown diff in preview mode surfaces the conflict too.
+  // Why: shared by both diff sub-branches (preview and source) so preview mode surfaces the external change too.
   const diffExternalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
       <ExternalFileChangeBanner
@@ -928,10 +892,7 @@ export function EditorContent({
       <div className="flex h-full min-h-0 flex-col">
         {diffExternalChangeBanner}
         <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {/* Why: a rendered markdown preview cannot express additions and
-          deletions simultaneously, so preview mode intentionally shows the
-          modified side of the diff. Source mode remains available for the
-          actual line-by-line comparison. */}
+          {/* Why: markdown preview can't show additions and deletions at once, so it shows only the modified side. */}
           {translate(
             'auto.components.editor.EditorContent.9640d1d3db',
             'Previewing the modified version of this diff. Switch to source mode to inspect changes.'
@@ -955,16 +916,13 @@ export function EditorContent({
       </div>
     )
   }
-  // Why: kept Monaco models ignore refreshed git blobs unless the model identity
-  // rotates. Key off fetched diff content and explicit reload nonce, not live
-  // edit-buffer text, so editable unstaged diffs keep their undo stack.
+  // Why: key off fetched diff content + reload nonce (not the edit buffer) so Monaco reloads refreshed blobs but keeps undo.
   const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
   const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(dc.originalContent)}`
   const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
   const diffViewer = (
     <DiffViewer
-      // Why: content already refreshes in place via modifiedModelKey below, so
-      // keying the component off content too remounts Monaco and flashes on every save.
+      // Why: content refreshes via modifiedModelKey; keying off content too would remount Monaco and flash on every save.
       key={`${viewStateScopeId}:${diffReloadNonce}`}
       modelKey={diffViewStateKey}
       originalModelKey={originalModelKey}
@@ -983,17 +941,12 @@ export function EditorContent({
       onSave={isEditable ? (isMarkdown ? md.mdSave : handleSave) : undefined}
     />
   )
-  // Why: editable unstaged diffs can hold unsaved edits, so they get the same
-  // changed-on-disk recovery banner as edit tabs; its reload refetches the
-  // diff body rather than plain file content.
+  // Why: editable diffs get the changed-on-disk banner; its reload refetches the diff body, not plain file content.
   if (activeFile.externalMutation !== 'changed') {
     return diffViewer
   }
   return (
-    // Why: h-full (not flex-1) — the diff-mode container is not a flex parent,
-    // so flex-1 resolves to zero height and collapses this wrapper. The inner
-    // div must itself be a flex column because DiffViewer's root sizes with
-    // flex-1 and collapses to 0px inside a block parent.
+    // Why: parent isn't a flex container, so flex-1 collapses to 0px — use h-full here and a flex column inside.
     <div className="flex h-full min-h-0 flex-col">
       {diffExternalChangeBanner}
       <div className="flex min-h-0 flex-1 flex-col">{diffViewer}</div>
@@ -1001,10 +954,7 @@ export function EditorContent({
   )
 }
 
-// Why: a minimal read-only banner that shows the raw front-matter content
-// above the rich editor so the user knows it exists and can switch to source
-// mode to edit it. Kept deliberately simple — no collapsible state — to avoid
-// layout shifts that would interfere with ProseMirror's scroll management.
+// Why: no collapsible state — layout shifts would interfere with ProseMirror's scroll management.
 function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
   // Strip the opening/closing delimiters to show only the YAML/TOML content.
   const inner = raw

@@ -79,74 +79,36 @@ export type RpcClient = {
     viewport: { cols: number; rows: number }
   ) => void
   getState: () => ConnectionState
-  // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
-  // a threshold. 0 means never failed; counter is reset on successful open.
+  // 0 means never failed (reset on successful open); the UI escalates "Reconnecting…" to "Can't connect" past a threshold.
   getReconnectAttempt: () => number
-  // Why: timestamp (ms epoch) of the last time we reached 'connected'.
-  // null = never connected since the client was created. Used by the UI
-  // to distinguish "host moved/never reachable" from "transient blip".
+  // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
   getLastConnectedAt: () => number | null
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
-  // Why: app-resume hook. Android/iOS can kill the TCP path or park the
-  // reconnect loop while the app is backgrounded; callers invoke this on
-  // AppState 'active' so the session recovers without an app restart.
+  // Why: app-resume hook — iOS/Android can kill the TCP path while backgrounded; call on AppState 'active' to recover.
   notifyForeground: () => void
   close: () => void
 }
 
-// Why: tiered backoff. The first four entries (500ms→4s) keep
-// auto-recovery snappy for the common case — a brief Wi-Fi blip,
-// laptop wake, or AP-isolation cycle. Beyond that we slow down
-// (8s→60s) so a phone whose desktop is genuinely unreachable doesn't
-// burn a TCP SYN every 4s indefinitely while still healing on its
-// own when the network recovers. With 12 total attempts, the last
-// four reuse the 60s cap (Math.min(idx, length-1)), so total elapsed
-// time across all 12 attempts is ≈ 6 minutes before the give-up cap
-// fires (0.5+1+2+4+8+15+30+60+60+60+60+60 ≈ 360s).
+// Why: tiered backoff — fast early entries recover blips; the slow tail avoids burning a SYN every 4s on an unreachable desktop.
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
-// Why: cap fast auto-retry once we're clearly unreachable for a long time.
-// With the tiered backoff above this is ≈ 6 minutes of continuous
-// failure before the UI surfaces the re-pair banner. The longer
-// runway tolerates flaky AP-isolation routers and laptop sleep cycles
-// that briefly drop the LAN path. MUST stay aligned with
-// connection-health.ts UNREACHABLE_ATTEMPTS so the "unreachable"
-// verdict matches the moment the loop slows to the trickle cadence.
+// Why: ≈6 min of failure before the re-pair banner; MUST stay aligned with connection-health.ts UNREACHABLE_ATTEMPTS.
 const GIVE_UP_AFTER_ATTEMPTS = 12
-// Why: past the cap the loop must never park permanently. A wedged
-// Tailscale/VPN tunnel produces no AppState or network-type transition
-// (still Wi-Fi, still "online"), so no revival nudge ever fires — users
-// had to toggle Tailscale off/on just to force one. A slow trickle dial
-// self-heals once the tunnel recovers while staying cheap: one TCP
-// attempt per 90s, foreground-only (iOS/Android suspend JS timers in
-// the background).
+// Why: never park past the cap — a wedged VPN fires no AppState/network nudge to revive it, so trickle-dial every 90s to self-heal.
 const TRICKLE_RECONNECT_DELAY_MS = 90_000
-// Why: a single `unauthorized`/`e2ee_error` is not proof the pairing is dead.
-// Issue #5200: a tablet showed "Auth failed" and forced a needless re-pair
-// while the desktop still listed it as paired with a valid token — a transient
-// rejection (mid-session resume race, a stale frame after background) latched
-// the terminal auth-failed state permanently. Retry the full handshake this
-// many times with a clean reconnect before declaring auth dead. A genuinely
-// revoked token is rejected on every attempt and converges to auth-failed in
-// seconds; a one-off glitch self-heals without the user re-pairing.
+// Why: one unauthorized isn't proof the pairing is dead (issue #5200) — retry the handshake this many times before latching auth-failed.
 const AUTH_RETRY_BUDGET = 3
 const REQUEST_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
-// Why: RN's WebSocket implementation may not expose static readyState
-// constants, but the protocol value for CONNECTING is stable across runtimes.
+// Why: RN may not expose WebSocket.readyState constants, but the CONNECTING protocol value (0) is stable across runtimes.
 const WEBSOCKET_CONNECTING_STATE = 0
 
-// Why: RN auto-pongs WebSocket pings natively, so JS needs an app-level
-// liveness probe to detect half-open sockets. Any inbound app traffic after
-// a probe starts proves the link is alive; otherwise an unanswered probe
-// force-closes the socket so the reconnect path can recover.
+// Why: RN auto-pongs pings natively, so JS needs an app-level probe to detect half-open sockets.
 const ACTIVITY_PROBE_INTERVAL_MS = 20_000
 
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
-  // Fires for every observable lifecycle event so the UI can render a
-  // detailed connection log. Useful when 'Connecting…' hangs forever
-  // (e.g. broken Tailscale route) and you need to see *where* it's stuck.
+  // Fires for every lifecycle event so the UI can show where 'Connecting…' is stuck (e.g. broken Tailscale route).
   onLog?: ConnectionLogSink
 }
 
@@ -185,14 +147,10 @@ export function connect(
   let handshakeTimer: ReturnType<typeof setTimeout> | null = null
   let activityProbeTimer: ReturnType<typeof setInterval> | null = null
   let intentionallyClosed = false
-  // Why: consecutive auth rejections since the last successful connect. We
-  // tolerate up to AUTH_RETRY_BUDGET (issue #5200) before latching auth-failed
-  // so a transient rejection doesn't force a needless re-pair. Reset to 0 on
-  // every 'connected'.
+  // Consecutive auth rejections; tolerate up to AUTH_RETRY_BUDGET (issue #5200) before latching to avoid a needless re-pair.
   let authRejectionCount = 0
   let lastConnectedAt: number | null = null
-  // Why: cheap diagnostics for RN/OkHttp process-state poisoning: do retry
-  // attempts differ, is anything inbound, and are closes instant or slow?
+  // Why: cheap diagnostics for RN/OkHttp process-state poisoning (retry cadence, inbound traffic, close timing).
   let lastInboundAt: number | null = null
   let inboundSequence = 0
   let lastWsClosedAt: number | null = null
@@ -200,7 +158,6 @@ export function connect(
   let currentWsOpenedAt: number | null = null
 
   // Why: fresh ephemeral keypair per connection provides forward secrecy.
-  // The shared key is derived from our ephemeral secret + server's static public key.
   let sharedKey: Uint8Array | null = null
   const serverPublicKey = publicKeyFromBase64(serverPublicKeyB64)
 
@@ -218,9 +175,7 @@ export function connect(
     stateListeners.add(onStateChange)
   }
 
-  // Diagnostic: tracks how long we've been in the current state. Useful
-  // for spotting "stuck in connecting" or "stuck in reconnecting" cases
-  // in the logs.
+  // Diagnostic: dwell time in the current state, for spotting "stuck in connecting/reconnecting".
   let stateEnteredAt = Date.now()
 
   function rejectConnectWaiters(reason: string) {
@@ -250,8 +205,7 @@ export function connect(
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
-      // Why: a clean handshake proves the token is valid — clear the auth
-      // retry budget so a future isolated rejection gets the full budget again.
+      // Why: a clean handshake proves the token is valid — reset the auth retry budget.
       authRejectionCount = 0
       for (const waiter of connectWaiters.splice(0)) {
         if (waiter.timeout) {
@@ -269,8 +223,7 @@ export function connect(
     }
   }
 
-  // Why: don't dump device tokens / full URLs into log scrolls; truncate to
-  // the host:port so reconnect lifecycles are still readable.
+  // Why: keep device tokens / full URLs out of log scrolls — truncate to host:port.
   function redactedEndpoint(ep: string): string {
     try {
       const m = ep.match(/^wss?:\/\/([^/]+)/i)
@@ -288,17 +241,13 @@ export function connect(
       return Promise.reject(new Error('Client closed'))
     }
     if (state === 'reconnecting' && reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS) {
-      // Why: past the retry cap the loop only trickles every 90s — callers
-      // must fail fast rather than hang on a host that's been unreachable
-      // for minutes. A trickle dial that succeeds flips state to 'connected'
-      // and later requests go through normally.
+      // Why: past the cap the loop only trickles every 90s — fail fast instead of hanging on a long-unreachable host.
       return Promise.reject(new Error('Connection retry limit reached'))
     }
     return new Promise((resolve, reject) => {
       const waiter: ConnectWaiter = { resolve, reject, timeout: null }
       if (timeoutMs !== undefined) {
-        // Why: explicit per-request timeouts must include offline/reconnect
-        // waiting, not only the RPC after the socket becomes connected.
+        // Why: per-request timeouts must cover offline/reconnect waiting, not just the RPC after connect.
         waiter.timeout = setTimeout(
           () => {
             const index = connectWaiters.indexOf(waiter)
@@ -328,11 +277,7 @@ export function connect(
     console.log('[net] openConnection', {
       attempt: reconnectAttempt,
       endpoint: redactedEndpoint(endpoint),
-      // Why: process-poisoning diagnostic. If wsCount is high (e.g. >50)
-      // and every recent open fails with 1006, suspect RN/OkHttp internal
-      // pool corruption that only force-quit clears. Compare msSinceLast*
-      // values to the failure cadence: instant repeated fails with no
-      // inbound traffic between them = process-state stuck.
+      // Why: diagnostic for RN/OkHttp pool corruption — high wsCount + repeated 1006 closes means process-state stuck.
       wsCount: wsConstructionCounter,
       msSinceLastConnected: lastConnectedAt != null ? now - lastConnectedAt : null,
       msSinceLastClose: lastWsClosedAt != null ? now - lastWsClosedAt : null,
@@ -354,8 +299,7 @@ export function connect(
       if (ws === openingWs) {
         return false
       }
-      // Why: React Native can deliver callbacks from a timed-out socket after
-      // reconnect has swapped in a replacement; stale events must not mutate it.
+      // Why: RN can deliver callbacks from a timed-out socket after reconnect swapped in a replacement — ignore them.
       console.log('[net] stale ws event ignored', {
         eventName,
         state,
@@ -364,9 +308,7 @@ export function connect(
       return true
     }
 
-    // Why: React Native can leave TCP/WebSocket opens pending indefinitely on
-    // flaky network handoffs. Force the existing onclose reconnect path if
-    // onopen never arrives, instead of leaving the UI stuck at "Connecting...".
+    // Why: RN can leave opens pending forever on flaky handoffs — force reconnect if onopen never arrives.
     connectTimer = setTimeout(() => {
       connectTimer = null
       if (ws === openingWs && openingWs.readyState === WEBSOCKET_CONNECTING_STATE) {
@@ -396,9 +338,7 @@ export function connect(
       setState('handshaking')
       emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
 
-      // Why: generate a fresh ephemeral keypair for each connection.
-      // This provides forward secrecy — compromising one session's key
-      // doesn't compromise past or future sessions.
+      // Why: fresh ephemeral keypair per connection provides forward secrecy.
       const ephemeral = generateKeyPair()
       const hello = JSON.stringify({
         type: 'e2ee_hello',
@@ -437,8 +377,7 @@ export function connect(
       lastInboundAt = Date.now()
       const raw = typeof rawData === 'string' ? rawData : null
 
-      // Why: during handshaking, e2ee_ready is plaintext because it precedes
-      // encrypted auth; e2ee_authenticated/e2ee_error are encrypted.
+      // Why: e2ee_ready is plaintext (precedes encrypted auth); e2ee_authenticated/e2ee_error are encrypted.
       if (state === 'handshaking') {
         if (raw === null) {
           return
@@ -481,9 +420,7 @@ export function connect(
                 removeStreamListener(id)
                 continue
               }
-              // Why: setState('connected') notifies UI listeners synchronously;
-              // a listener may subscribe and send immediately before this
-              // reconnect replay loop resumes.
+              // Why: a UI listener notified synchronously by setState('connected') may already have sent this stream — skip it.
               if (stream.sent) {
                 continue
               }
@@ -515,8 +452,7 @@ export function connect(
         return
       }
 
-      // Why: guard against decrypt with an invalid key — sharedKey can be null
-      // after destroy() or if a message arrives during a reconnect race.
+      // Why: sharedKey can be null after destroy() or a reconnect race — don't decrypt with an invalid key.
       if (!sharedKey || sharedKey.length !== 32) {
         return
       }
@@ -553,10 +489,7 @@ export function connect(
       }
       recordValidatedInboundTraffic()
 
-      // Why: a mid-session unauthorized may be a transient glitch, not a dead
-      // pairing (issue #5200). handleAuthRejection retries the handshake a few
-      // times before latching auth-failed, while still bounding churn via the
-      // budget so a genuinely revoked token doesn't reconnect forever.
+      // Why: a mid-session unauthorized may be transient (issue #5200) — handleAuthRejection retries before latching auth-failed.
       if (!response.ok && response.error.code === 'unauthorized') {
         handleAuthRejection('Unauthorized — pairing may be revoked')
         return
@@ -646,18 +579,12 @@ export function connect(
     ws.onclose = (event) => {
       const e = event as { code?: number; reason?: string; wasClean?: boolean } | undefined
       const closeAt = Date.now()
-      // Why: time-since-construct distinguishes failure modes. Instant
-      // close (<300ms) = TCP RST / port closed / route unreachable / RN
-      // synchronous reject. Mid (300ms–3s) = DNS/connect attempt + reset.
-      // Slow (>3s) = TCP SYN timeout / packet loss / NAT wedge. If an
-      // entire reconnect burst is all instant, the problem is local
-      // process state or routing, not packet loss.
+      // Why: time-since-construct classifies the failure — instant close = RST/unreachable, slow = SYN timeout/packet loss.
       const constructToCloseMs = currentWsOpenedAt != null ? closeAt - currentWsOpenedAt : null
       const aliveMs =
         currentWsOpenedAt != null && state === 'connected' ? closeAt - currentWsOpenedAt : null
       const inboundIdleMs = lastInboundAt != null ? closeAt - lastInboundAt : null
-      // Why: statically imported (not closure-built) — an earlier hot-reload
-      // bug came from a stale closure capturing a half-loaded module.
+      // Why: statically imported — a hot-reload bug came from a stale closure capturing a half-loaded module.
       const closeEvent = describeSocketEvent(event)
       console.log('[net] ws.onclose', {
         code: e?.code,
@@ -682,9 +609,7 @@ export function connect(
       if (ignoreStaleSocketEvent('error')) {
         return
       }
-      // Why: RN surfaces network errors here (DNS failure, TCP RST, etc).
-      // onclose fires right after, but logging the error message gives us
-      // the original cause that the close code alone can hide.
+      // Why: RN surfaces the original network error here — onclose follows but its close code alone hides the cause.
       const e = event as { message?: string } | undefined
       const errEvent = describeSocketEvent(event)
       console.log('[net] ws.onerror', {
@@ -734,11 +659,7 @@ export function connect(
     scheduleReconnect()
   }
 
-  // Why: a token rejection (handshake e2ee_error/unauthorized or a mid-session
-  // unauthorized RPC) may be transient — issue #5200. Retry the full handshake
-  // up to AUTH_RETRY_BUDGET times before declaring auth dead, so a one-off
-  // glitch self-heals instead of forcing the user to re-pair. A genuinely
-  // revoked token fails every retry and latches auth-failed within seconds.
+  // Why: an auth rejection may be transient (issue #5200) — retry up to AUTH_RETRY_BUDGET times before latching auth-failed.
   function handleAuthRejection(reason: string): void {
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
@@ -754,9 +675,7 @@ export function connect(
         'Authentication rejected',
         `Retrying (${authRejectionCount}/${AUTH_RETRY_BUDGET})`
       )
-      // Why: close the current socket but DON'T set intentionallyClosed —
-      // we want handleSocketClosed to route into the reconnect path so the
-      // token gets a fresh handshake. rejectAllPending unblocks in-flight RPCs.
+      // Why: close without setting intentionallyClosed so handleSocketClosed routes to reconnect and retries the handshake.
       const closing = ws
       ws = null
       sharedKey = null
@@ -782,19 +701,11 @@ export function connect(
   }
 
   function scheduleReconnect() {
-    // Why: spinning fast reconnects forever drains battery and floods logs
-    // when the host is genuinely unreachable (wrong IP, port closed,
-    // host moved). Past GIVE_UP_AFTER_ATTEMPTS the UI surfaces a
-    // "Can't reach desktop, re-pair?" banner and the loop drops to the
-    // 90s trickle cadence instead of parking — a permanently parked loop
-    // could only be revived by an AppState/network transition, which a
-    // wedged VPN tunnel never produces.
+    // Why: past the cap, trickle (never park) — a parked loop only revives on a network transition a wedged VPN never produces.
     const pastGiveUpCap = reconnectAttempt >= GIVE_UP_AFTER_ATTEMPTS
     let delay: number
     if (pastGiveUpCap) {
-      // Why: the counter holds at the cap — connection-health thresholds and
-      // the "Can't reach desktop" verdict key off attempts >= 12, and a
-      // successful open resets it to 0 anyway.
+      // Why: hold the counter at the cap — connection-health's "Can't reach desktop" verdict keys off attempts >= 12.
       delay = TRICKLE_RECONNECT_DELAY_MS
       rejectConnectWaiters('Connection retry limit reached')
     } else {
@@ -824,10 +735,7 @@ export function connect(
     }
   }
 
-  // Why: app-level liveness probe — see ACTIVITY_PROBE_INTERVAL_MS comment
-  // at the top of the file. Fires while the channel is in 'connected'
-  // state, sends a tiny status.get, and force-closes the WS if the probe
-  // fails (which the existing onclose path then turns into a reconnect).
+  // Why: app-level liveness probe (see ACTIVITY_PROBE_INTERVAL_MS) — force-closes the WS on failure so onclose reconnects.
   function runActivityProbe() {
     if (state !== 'connected' || !ws) {
       return
@@ -966,8 +874,7 @@ export function connect(
       removeStreamListener(id)
       return
     }
-    // Why: sent streams may still reply with `ready`; keep a tombstone so we
-    // can immediately unsubscribe. Queued streams never reached desktop.
+    // Why: a sent stream may still reply `ready`; keep the tombstone to unsubscribe it (queued streams never reached the desktop).
     if (!stream.sent) {
       removeStreamListener(id)
     }
@@ -1013,11 +920,7 @@ export function connect(
       hasKey: !!sharedKey,
       state
     })
-    // Why: if the state machine still thinks we're connected but the
-    // underlying WebSocket has flipped to CLOSING/CLOSED without onclose
-    // having fired (RN's WebSocket sometimes drops the event, or the
-    // server half-closed the stream), force a reconnect. Without this
-    // every send silently fails forever and the user sees a frozen UI.
+    // Why: RN can drop onclose, leaving state 'connected' over a dead socket; force reconnect or every send silently fails forever.
     if (state === 'connected' && ws && ws.readyState !== WebSocket.OPEN) {
       console.log('[net] sendEncrypted detected ws desync — forcing reconnect', {
         readyState: ws.readyState
@@ -1125,9 +1028,7 @@ export function connect(
         if (pendingBrowserScreencastRequestId && pendingBrowserScreencastRequestId !== id) {
           disposeBrowserScreencastStream(pendingBrowserScreencastRequestId)
         }
-        // Why: browser screencast frames are connection-scoped and carry no
-        // stream id. Wait for the replacement stream's ready response before
-        // routing frames, so in-flight old-page pixels are dropped.
+        // Why: screencast frames carry no stream id, so route only after the new stream's ready to drop stale old-page pixels.
         pendingBrowserScreencastRequestId = id
         activeBrowserScreencastRequestId = null
       }
@@ -1140,9 +1041,7 @@ export function connect(
           removeStreamListener(id)
         }
       } else {
-        // Stream is registered but the actual outbound subscribe will be
-        // sent (or re-sent) when the channel reaches 'connected'. Useful
-        // when terminals don't load — confirms the request is queued.
+        // Registered now; the outbound subscribe is (re-)sent once the channel reaches 'connected'.
         console.log('[net] subscribe queued — waiting for connected', { method, state })
       }
 
@@ -1157,12 +1056,7 @@ export function connect(
           return
         }
         if (stream?.method === 'terminal.subscribe') {
-          // Why: the runtime registers cleanup under the composite key
-          // `${terminal}:${clientId}` so two phones subscribing to the same
-          // terminal handle don't evict each other. Echo that composite key
-          // back on unsubscribe; also include `client.id` so the server can
-          // reconstruct it if a stale build emits a bare-handle id. See
-          // docs/mobile-presence-lock.md.
+          // Why: server keys cleanup by composite `${terminal}:${clientId}` so two phones don't evict each other. See docs/mobile-presence-lock.md.
           const unsubscribeParams = buildTerminalUnsubscribeParams(stream.params)
           if (unsubscribeParams) {
             sendEncrypted({
@@ -1211,20 +1105,14 @@ export function connect(
         return
       }
       if (state === 'connected') {
-        // Why: the OS can kill the TCP path while the app is backgrounded
-        // without delivering onclose, leaving a half-open socket that
-        // blackholes input. Probe now so death is detected in ≤8s instead
-        // of waiting out the 20s interval (issue #5049).
+        // Why: OS can kill the TCP path while backgrounded without onclose; probe now to detect the half-open socket in ≤8s (issue #5049).
         console.log('[net] foreground — probing live connection')
         startActivityProbe()
         runActivityProbe()
         return
       }
       if (state === 'reconnecting') {
-        // Why: while backgrounded the retry loop may be sitting on a 60s
-        // backoff or 90s trickle timer. Returning to the foreground is a
-        // strong user signal — restart with a fresh attempt budget
-        // immediately instead of waiting out the timer.
+        // Why: foreground is a strong user signal — restart immediately instead of waiting out a 60s/90s backoff timer.
         console.log('[net] foreground — restarting reconnect loop', {
           attempt: reconnectAttempt,
           hadTimer: !!reconnectTimer

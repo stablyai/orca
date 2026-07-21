@@ -93,15 +93,21 @@ export async function killAllProcessesForWorktree(
     return current
   }
 
-  // Why: headless CLI has no ready renderer graph; only that known sentinel
-  // may fall through to the provider and registry physical-owner sweeps.
+  // Why: headless CLI has no ready renderer graph, and a just-created/removed
+  // worktree may not resolve in the graph yet; either case means zero
+  // runtime-owned PTYs, so both sentinels fall through instead of failing
+  // destructive removal closed.
   const runtimeSweep = deps.runtime
     ? settleBeforeDeadline(
         () => deps.runtime!.stopTerminalsForWorktree(worktreeId, { deadline, stopPty }),
         { stopped: 0 },
         deadline,
         deps.requirePhysicalStop ? deadlineError : undefined,
-        (error) => !(error instanceof Error && error.message === 'runtime_unavailable')
+        (error) =>
+          !(
+            error instanceof Error &&
+            (error.message === 'runtime_unavailable' || error.message === 'selector_not_found')
+          )
       )
     : Promise.resolve({ stopped: 0 })
   const providerSweep = settleBeforeDeadline(

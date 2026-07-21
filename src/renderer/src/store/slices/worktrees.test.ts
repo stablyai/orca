@@ -1,7 +1,4 @@
-/* eslint-disable max-lines --
- * Why: this slice test keeps the worktree store scenarios in one file so the
- * shared mock store setup stays consistent across closely related behaviors.
- */
+/* eslint-disable max-lines -- keeps all worktree-slice test scenarios in one file for a consistent shared mock store setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -127,8 +124,7 @@ function createTestStore() {
   return create<AppState>()(
     (...a) =>
       ({
-        // Why: this test isolates the worktree slice, so it only provides the
-        // state surface that `createWorktreeSlice` reads and writes.
+        // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
         trustedOrcaHooks: {},
         repos: [],
@@ -419,8 +415,7 @@ describe('fetchWorktrees', () => {
       linkedPR: 101,
       pushTarget: { remoteName: 'origin', branchName: 'feature-one' }
     })
-    // Persisted metadata still carries the stale link when the listing refresh
-    // is the first path to observe the terminal branch switch.
+    // Persisted metadata still carries the stale link when the listing refresh first observes the terminal branch switch.
     const refreshed = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -1256,8 +1251,7 @@ describe('fetchWorktrees', () => {
 
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledWith({ repoId: 'repo-ssh' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    // Why: SSH worktrees are fetched via local IPC but belong to the SSH host;
-    // they must carry the repo's ssh host id, not the local default.
+    // Why: SSH worktrees are fetched via local IPC but belong to the SSH host, so they carry the repo's ssh host id.
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
       { ...sshWorktree, hostId: 'ssh:ssh-1' }
     ])
@@ -1265,8 +1259,7 @@ describe('fetchWorktrees', () => {
 
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
     const store = createTestStore()
-    // Why: a remote runtime returns its worktrees from its own perspective, so
-    // their hostId arrives as the default "local" even though they live remotely.
+    // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".
     const remote = makeWorktree({
       id: 'repo-remote::/remote/wt1',
       repoId: 'repo-remote',
@@ -1816,8 +1809,7 @@ describe('worktree lineage state', () => {
       repoId: 'repo-remote',
       path: '/remote/child'
     })
-    // Why: the remote returns the updated worktree from its own perspective, so
-    // it arrives with the default local host even though the repo is remote.
+    // Why: the remote returns the updated worktree from its own perspective, so it arrives with the default local host.
     const updatedChild = { ...child, hostId: 'local' as const, lineage }
     store.setState({
       repos: [
@@ -2965,8 +2957,7 @@ describe('createWorktree base status merge', () => {
       id: 'repo-remote::/remote/feature',
       repoId: 'repo-remote',
       path: '/remote/feature',
-      // Why: the remote creates the worktree and reports it from its own
-      // perspective, so it comes back with the default local host.
+      // Why: the remote reports the worktree from its own perspective, so it comes back with the default local host.
       hostId: 'local'
     })
     store.setState({
@@ -3139,8 +3130,7 @@ describe('createWorktree base status merge', () => {
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
-    // The button workflow (Keep main up to date / Settings link) lives in the
-    // toast component's own test; here we just assert the sticky nudge is raised.
+    // Button workflow is tested in the toast component; here we just assert the sticky nudge is raised.
     expect(toast.info).toHaveBeenCalledWith(
       'Local main is behind origin/main',
       expect.objectContaining({
@@ -3194,8 +3184,7 @@ describe('createWorktree base status merge', () => {
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
     }
-    // The Turn On success path dismisses the toast, which fires onDismiss; that
-    // must not be recorded as a decline now that the feature is enabled.
+    // Turn On dismisses the toast (firing onDismiss); that must not be recorded as a decline.
     options.onDismiss()
     await Promise.resolve()
 
@@ -3436,8 +3425,7 @@ describe('removeWorktree state cleanup', () => {
         [removed.id]: [makeTerminalTab({ id: 'removed-tab', worktreeId: removed.id })],
         [surviving.id]: [makeTerminalTab({ id: 'surviving-tab', worktreeId: surviving.id })]
       },
-      // Split panes write these even when false; only closeTab deleted them
-      // before, so removeWorktree used to strand them for the whole session.
+      // Split panes write these even when false; removeWorktree used to strand them (only closeTab deleted them).
       expandedPaneByTabId: { 'removed-tab': true, 'surviving-tab': false },
       canExpandPaneByTabId: { 'removed-tab': false, 'surviving-tab': true }
     } as unknown as Partial<AppState>)
@@ -3721,8 +3709,7 @@ describe('removeWorktree state cleanup', () => {
       globalWithDocument.document = originalDocument
     }
 
-    // The anchor must be captured while the row still exists so the post-delete
-    // restore pins the pre-removal position instead of the already-shifted list.
+    // The anchor must be captured while the row still exists so restore pins the pre-removal position.
     expect(worktreePresentWhenRecorded).toBe(true)
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
   })
@@ -3930,12 +3917,7 @@ describe('removeWorktree state cleanup', () => {
   })
 
   it('clears recentlyClosedBrowserTabsByWorktree for the removed worktree', async () => {
-    // Why: closeBrowserTab (which shutdownWorktreeBrowsers delegates to) pushes
-    // each closed workspace into recentlyClosedBrowserTabsByWorktree for the
-    // Cmd+Shift+T undo path. When the owning worktree is deleted those
-    // snapshots reference entities that can never be restored — removeWorktree
-    // must clear the worktree key symmetrically with browserTabsByWorktree
-    // (design §1.1).
+    // Why: undo snapshots for a deleted worktree can never be restored, so removeWorktree clears the key (design §1.1).
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
 
@@ -5562,10 +5544,7 @@ describe('worktree remote runtime mutations', () => {
   })
 })
 
-// Why: ghostty "show until interact" model — BEL must raise the sidebar dot
-// even on the active worktree, and only clearWorktreeUnread (called from the
-// terminal pane on keystroke / pointerdown) dismisses it. Pins both halves
-// of that contract.
+// Why: ghostty "show until interact" — BEL raises the dot even on the active worktree; only clearWorktreeUnread clears it.
 describe('worktree unread (show-until-interact)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -5679,12 +5658,7 @@ describe('worktree unread (show-until-interact)', () => {
   })
 })
 
-// Why: design §4.4 — the hydration-time purge must be gated behind a
-// per-repo success check (F1 regression) so a transient git error on one
-// repo cannot silently wipe every persisted tabsByWorktree entry for that
-// repo. An empty-but-successful fetch from a newly-cloned sibling repo is
-// also unsafe to treat as authoritative on its own. Pins both halves of
-// that contract plus the happy-path purge.
+// Why: design §4.4 — hydration purge gated on per-repo success (F1 regression) so a git error can't wipe tabsByWorktree.
 describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -5711,8 +5685,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
     const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
 
-    // Stub: repoA succeeds; repoB throws. Stale tabsByWorktree entry for
-    // repoA::/a/stale must NOT be purged while any repo fetch is degraded.
+    // repoA succeeds, repoB throws; a stale tabsByWorktree entry must NOT be purged while any repo fetch is degraded.
     mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
       if (repoId === 'repoA') {
         return [wtA]
@@ -5756,9 +5729,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
   it('defers the purge when every repo succeeds but none returns worktrees (empty-sibling safety)', async () => {
     const store = createTestStore()
 
-    // Both repos succeed but legitimately return empty (newly-cloned). The
-    // union of valid ids would be empty — declaring that authoritative
-    // would wipe every persisted tabsByWorktree entry. Must defer instead.
+    // Empty valid-id union (both repos newly-cloned, empty) isn't authoritative — defer instead of wiping tabsByWorktree.
     mockApi.worktrees.list.mockResolvedValue([])
 
     store.setState({
@@ -5906,10 +5877,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     })
   })
 
-  // Why: multi-host regression — once hydration has fired, a mid-session
-  // fetchAllWorktrees (e.g. triggered by switching focus) must NEVER purge
-  // terminal state, even if a host transiently reports zero worktrees. The
-  // hydration-time purge is the only purge path here; it is gated to boot.
+  // Why: multi-host regression — after hydration a mid-session fetch must never purge, even if a host reports zero worktrees.
   it('does not purge another host tab state when hasHydratedWorktreePurge is already true and a host reports zero worktrees', async () => {
     const store = createTestStore()
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
@@ -6141,10 +6109,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
   })
 
   it('does not coalesce a foreground re-probe onto a background reuse:true scan for a remote repo', async () => {
-    // Why: the reuse flag is part of the coalescing key for remote targets, so a
-    // foreground fetchWorktrees (reuse:false) must run its own compat-preflighted
-    // scan instead of sharing a background reuse:true scan that may have reused a
-    // stale failure — the foreground caller must always re-probe.
+    // Why: reuse is part of the coalescing key, so a foreground reuse:false scan must re-probe, not reuse a stale background failure.
     const store = createTestStore()
     const remote = makeWorktree({ id: 'repo1::/remote/wt', repoId: 'repo1', path: '/remote/wt' })
     store.setState({
@@ -6307,12 +6272,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
   })
 })
 
-// Why: design §4.4 — purgeWorktreeTerminalState wipes every worktree-scoped
-// map symmetrically so a single removed-worktree event cannot leave
-// per-worktree entries stranded. The full cascade is already covered by
-// removeWorktree tests above; this block exercises the action directly to
-// confirm cross-map coverage (worktree key, tab id, file id, and top-level
-// actives).
+// Why: design §4.4 — purgeWorktreeTerminalState wipes every worktree-scoped map symmetrically so no entry is stranded.
 describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -6818,8 +6778,7 @@ describe('setWorktreesPinnedAndReveal', () => {
     // Only the focused row is revealed, not the first-changed one.
     expect(reveal).toHaveBeenCalledTimes(1)
     expect(reveal).toHaveBeenCalledWith(focused.id, { behavior: 'smooth', highlight: true })
-    // Every targeted row is pinned, not just the revealed one, and the
-    // already-pinned row is left untouched.
+    // Every targeted row is pinned, not just the revealed one; the already-pinned row is untouched.
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[2].isPinned).toBe(true)
@@ -6957,8 +6916,7 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
     // The two maps absent from the purge list are still re-keyed.
     expect(s.recentlyClosedEditorTabsByWorktree[NEW]).toEqual([{ id: 'f1', worktreeId: NEW }])
-    // Terminal reopen snapshots re-key AND remap startupCwd under the old
-    // worktree path; paths outside the renamed folder stay as-is.
+    // Terminal reopen snapshots re-key and remap startupCwd under the old path; outside paths stay as-is.
     expect(s.recentlyClosedTerminalTabsByWorktree[OLD]).toBeUndefined()
     expect(s.recentlyClosedTerminalTabsByWorktree[NEW]).toEqual([
       { startupCwd: '/ws/worktree-creation-spinner/packages/app' },

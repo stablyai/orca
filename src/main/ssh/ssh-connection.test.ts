@@ -60,6 +60,9 @@ vi.mock('ssh2', () => {
     }
     connect(config?: unknown) {
       this.lastConnectConfig = config
+      const hostVerifier = (config as { hostVerifier?: (key: Buffer) => boolean } | undefined)
+        ?.hostVerifier
+      hostVerifier?.(Buffer.from('mock-ssh-host-key'))
       setTimeout(() => {
         const next = connectSequence.shift()
         if (next instanceof Error) {
@@ -318,6 +321,35 @@ describe('SshConnection', () => {
 
     expect(clientInstances).toHaveLength(1)
     expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
+  })
+
+  it('captures the negotiated SSH server key fingerprint', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    expect(conn.getHostKeyFingerprint()).toMatch(/^SHA256:[A-Za-z\d+/]{43}$/)
+  })
+
+  it('ignores a late host fingerprint from an obsolete connect generation', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const firstVerifier = (
+      clientInstances[0].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+    ).hostVerifier
+
+    const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
+    await privateConn.attemptConnect()
+    const secondVerifier = (
+      clientInstances[1].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+    ).hostVerifier
+    expect(firstVerifier).toBeTypeOf('function')
+    expect(secondVerifier).toBeTypeOf('function')
+
+    secondVerifier?.(Buffer.from('newer-ssh-host-key'))
+    const currentFingerprint = conn.getHostKeyFingerprint()
+    firstVerifier?.(Buffer.from('obsolete-ssh-host-key'))
+
+    expect(conn.getHostKeyFingerprint()).toBe(currentFingerprint)
   })
 
   it('allows concurrent exec commands for ssh2 transport', async () => {
@@ -1248,6 +1280,7 @@ describe('SshConnection', () => {
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(conn.getHostKeyFingerprint()).toBeUndefined()
     expect(onCredentialRequest).not.toHaveBeenCalled()
   })
 

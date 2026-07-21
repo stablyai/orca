@@ -55,9 +55,7 @@ export default function DiffViewer({
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
-  // Why: subscribe to the raw comments array on the worktree so selector
-  // identity only changes when diffComments actually changes on this worktree.
-  // Filtering by relativePath happens in a memo below.
+  // Why: subscribe to the raw array so selector identity only changes when this worktree's comments change; filtering happens below.
   const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
@@ -90,9 +88,7 @@ export default function DiffViewer({
   )
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
-  // Why: only forward the pending scroll id when this viewer owns the matching
-  // comment (worktree+path). Otherwise unrelated viewers would also try to
-  // scroll and ack the request first, racing the intended viewer.
+  // Why: only forward the pending scroll id when this viewer owns the comment, else unrelated viewers race to ack it.
   const pendingScrollForThisViewer = useMemo(() => {
     if (!worktreeId || !scrollToDiffCommentId) {
       return null
@@ -100,9 +96,7 @@ export default function DiffViewer({
     return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, diffComments, worktreeId])
 
-  // Why: gate the decorator on having a comment target. Local diffs persist
-  // notes to worktree metadata; GitHub PR diffs post line comments remotely.
-  // updateDiffComment is only wired for local diffs (worktreeId present).
+  // Why: gate the decorator on a comment target; updateDiffComment is only wired for local diffs (worktreeId present).
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: modifiedModelKey ?? modelKey,
@@ -155,29 +149,17 @@ export default function DiffViewer({
       contentSub.dispose()
       layoutSub.dispose()
     }
-    // Why: depend on popover.lineNumber (not the whole popover object) so the
-    // effect doesn't re-subscribe on every top update it dispatches.
+    // Why: depend on popover.lineNumber (not the whole object) so the effect doesn't re-subscribe on every top update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modifiedEditor, popover?.lineNumber])
 
-  // Why: on a fresh open (no cached view state, no pending scroll-to-note),
-  // center the first diff change in the viewport. We do this from a dedicated
-  // effect — not from handleMount — so it sequences AFTER the comment
-  // decorator inserts its view zones. If we scrolled during handleMount, late
-  // zone insertion would shift content downward and the user would land on a
-  // note further down the file instead of the first change.
-  //
-  // `getTopForLineNumber(line, /* includeViewZones */ true)` accounts for any
-  // zones already in the layout, so the math survives whatever the decorator
-  // added in this render pass. The didScroll guard makes this strictly
-  // one-shot per mount.
+  // Why: center the first diff from a dedicated effect (not handleMount) so it runs after the decorator's view zones, which would otherwise shift content downward.
   const didAutoScrollFirstDiffRef = useRef(false)
   const didAutoScrollModelKeyRef = useRef(modelKey)
   useEffect(() => {
     if (didAutoScrollModelKeyRef.current !== modelKey) {
       didAutoScrollModelKeyRef.current = modelKey
-      // Why: the one-shot above is intentionally per-modelKey. Reset inside
-      // this Effect before its first-diff guard runs for the new file.
+      // Why: reset the per-modelKey one-shot here before the first-diff guard runs for the new file.
       didAutoScrollFirstDiffRef.current = false
     }
     const diffEditor = diffEditorRef.current
@@ -191,11 +173,7 @@ export default function DiffViewer({
       return
     }
     if (pendingScrollForThisViewer) {
-      // Why: the decorator owns this scroll for this mount, so permanently
-      // yield by setting the one-shot flag. Otherwise, when the decorator
-      // ack's and `pendingScrollForThisViewer` flips back to null, this
-      // effect would re-run with empty cache + un-set flag and overwrite
-      // the comment scroll with a jump to the first diff.
+      // Why: decorator owns this scroll, so set the one-shot flag; else we'd re-run and overwrite it when pendingScroll flips back to null.
       didAutoScrollFirstDiffRef.current = true
       return
     }
@@ -209,9 +187,7 @@ export default function DiffViewer({
         return
       }
       const line = Math.max(1, changes[0].modifiedStartLineNumber)
-      // Defer one frame so any view zones added in this render pass are part
-      // of the layout before we measure. Cancel any earlier pending rAF so
-      // a late onDidUpdateDiff can't enqueue a redundant scroll.
+      // Defer one frame so view zones are laid out before measuring; cancel any earlier rAF to avoid a redundant scroll.
       if (rafId !== null) {
         cancelAnimationFrame(rafId)
       }
@@ -227,8 +203,7 @@ export default function DiffViewer({
         didAutoScrollFirstDiffRef.current = true
       })
     }
-    // If the diff result is already available, run immediately; otherwise
-    // wait for it. onDidUpdateDiff fires once the diff computation lands.
+    // Run now if the diff is ready; otherwise onDidUpdateDiff fires once the computation lands.
     if (diffEditor.getLineChanges()) {
       run()
     }
@@ -242,12 +217,10 @@ export default function DiffViewer({
   }, [modifiedEditor, modelKey, pendingScrollForThisViewer])
 
   const handleEnterLargeDiffFallback = useCallback(() => {
-    // Why: when a tab transitions to the safety fallback, stale Monaco refs
-    // must not keep comment decorators or save handlers talking to disposed UI.
+    // Why: on fallback transition, drop stale Monaco refs so decorators/save handlers don't talk to disposed UI.
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = null
-    // Why: capture before nulling so we unregister the exact instance the
-    // navigator may still hold (identity guard no-ops a stale dispose).
+    // Why: capture before nulling so we unregister the exact instance (identity guard no-ops a stale dispose).
     const fallenBackEditor = diffEditorRef.current
     diffEditorRef.current = null
     if (fallenBackEditor) {
@@ -275,9 +248,7 @@ export default function DiffViewer({
     if (!worktreeId) {
       return
     }
-    // Why: await persistence before closing — if addDiffComment resolves null
-    // (store rolled back after IPC failure), keep the popover open so the user
-    // can retry instead of silently losing their draft.
+    // Why: await persistence — a null result (failed save) keeps the popover open for retry instead of losing the draft.
     const result = await addDiffComment({
       worktreeId,
       filePath: relativePath,
@@ -328,17 +299,12 @@ export default function DiffViewer({
       setupCopy(modifiedEditor, monaco, filePath, propsRef)
       setModifiedEditor(modifiedEditor)
 
-      // Why: restoring the full diff view state matches VS Code more closely
-      // than replaying scrollTop alone, and avoids divergent cursor/selection
-      // state between the original and modified panes.
+      // Why: restore full diff view state (not just scrollTop) so cursor/selection stay consistent across both panes.
       const savedViewState = diffViewStateCache.get(modelKey)
       if (savedViewState) {
         requestAnimationFrame(() => diffEditor.restoreViewState(savedViewState))
       }
-      // Auto-scroll to first diff is handled in a separate useEffect below so
-      // it can sequence after the comment-decorator inserts its view zones —
-      // otherwise late zones shift content downward and the user lands away
-      // from the first change (e.g. on a note further down the file).
+      // Auto-scroll to first diff lives in a separate effect below so it sequences after the decorator's view zones land.
 
       if (editable) {
         const cleanupSaveShortcut = installEditorSaveShortcut(
@@ -355,8 +321,7 @@ export default function DiffViewer({
           onContentChangeRef.current?.(modifiedEditor.getValue())
         })
         modifiedEditor.onDidDispose(() => {
-          // Why: editable diff views own both panes' shortcut bridges and the
-          // model subscription for the lifetime of this Monaco diff instance.
+          // Why: this diff instance owns both panes' shortcut bridges + the model sub, so dispose them with it.
           cleanupSaveShortcut()
           cleanupOriginalFindShortcut()
           cleanupModifiedFindShortcut()
@@ -368,8 +333,7 @@ export default function DiffViewer({
         diffEditor.focus()
       }
 
-      // Why: clear modifiedEditor on dispose so decorator effects (scroll-to-note,
-      // popover position) don't invoke methods on a disposed Monaco editor.
+      // Why: clear modifiedEditor on dispose so decorator effects don't call into a disposed Monaco editor.
       diffEditor.onDidDispose(() => {
         lineNumberOptionsSubRef.current?.dispose()
         lineNumberOptionsSubRef.current = null
@@ -382,9 +346,7 @@ export default function DiffViewer({
     [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
   )
 
-  // Why: VS Code snapshots diff view state on deactivation, not on scroll events.
-  // The useLayoutEffect cleanup fires synchronously before React unmounts the
-  // component on tab switch, which is Orca's equivalent of VS Code's clearInput().
+  // Why: snapshot view state on deactivation (layoutEffect cleanup fires before unmount), not on scroll.
   useLayoutEffect(() => {
     return () => {
       const de = diffEditorRef.current
@@ -447,13 +409,8 @@ export default function DiffViewer({
             modified={modifiedContent}
             theme={isDark ? 'vs-dark' : 'vs'}
             onMount={handleMount}
-            // Why: A single file can have multiple live diff tabs at once
-            // (staged, unstaged, branch compare versions). The kept Monaco models
-            // must therefore key off the tab identity, not the raw file path, or
-            // one diff tab can incorrectly reuse another tab's model contents.
-            // Why: Changes mode sometimes needs to rotate only the original-side
-            // model after HEAD moves, while preserving the modified-side model's
-            // undo stack for continued editing.
+            // Why: a file can have multiple live diff tabs, so key models off tab identity (not file path) to avoid cross-tab reuse.
+            // Why: Changes mode rotates only the original-side model after HEAD moves, preserving the modified side's undo stack.
             originalModelPath={currentDiffModelPaths.originalModelPath}
             modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
             keepCurrentOriginalModel

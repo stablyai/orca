@@ -1,9 +1,4 @@
-/* eslint-disable max-lines -- Why: ProjectV2 GraphQL has its own normalization
-layer, retry policy (parent-field dance), paste-to-add parser, and discovery
-pagination. Co-locating the read path keeps the retry/classify/normalize
-contract reviewable as one surface. Lower-level plumbing (slug validation,
-error classifier, runGraphql/runRest) lives in ./project-view/internals; the
-slug-addressed write path lives in ./project-view/mutations. */
+/* eslint-disable max-lines -- Why: co-locate the ProjectV2 read path (normalize/retry/paste-parser/discovery) as one reviewable surface; plumbing lives in ./project-view/internals and mutations. */
 import {
   acquire,
   release,
@@ -52,8 +47,7 @@ import {
   isGitHubProjectRefInputTooLarge
 } from '../../shared/github-project-ref-input'
 
-// Re-export the public API so existing call sites (`./project-view`) keep
-// working unchanged. The split is internal-only.
+// Re-export the public API so existing `./project-view` call sites keep working; the split is internal-only.
 export {
   isValidOwnerSlug,
   isValidRepoSlug,
@@ -77,14 +71,7 @@ export {
 
 // ─── Constants ─────────────────────────────────────────────────────────
 
-// Why: these defaults were deliberately shrunk from 50/50/100 to cut quota
-// spend in the most expensive gh call reachable from TaskPage. Discovery
-// walks viewer projects, then up to `DISCOVERY_MAX_ORGS` orgs × a nested
-// `projectsV2(first:N)` query. The org loop dominates the cost and is the
-// path that produced the user-visible HTTP 504 when one org was slow. Users
-// with projects outside this window can still paste a URL to reach them —
-// no functional loss. Prior values: MAX_ORGS=50, ORG_PAGE_SIZE=30,
-// PROJECTS_PER_OWNER=100, nested projectsV2 first=50.
+// Why: defaults deliberately shrunk to cut quota spend in discovery — the org loop dominates and produced the HTTP 504; overflow owners can paste a URL.
 const ITEM_PAGE_SIZE = 100
 const MAX_ITEMS = 500
 const VIEWS_PAGE_SIZE = 20
@@ -98,9 +85,7 @@ export const PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES = 512
 
 // ─── Module-scope caches (reset on HMR — intentional) ──────────────────
 
-// Why: pasted and discovered GitHub owners are user-controlled across a long
-// main-process session; keep capability probes bounded to avoid unbounded
-// retention while preserving the hot-owner fast path.
+// Why: owners are user-controlled over a long session; bound cache entries to avoid unbounded retention while keeping the hot-owner fast path.
 function rememberProjectViewCacheEntry<K, V>(
   cache: Map<K, V>,
   key: K,
@@ -129,20 +114,12 @@ function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined
   return value
 }
 
-// Why: HMR reloading should re-probe capability. Both caches live as plain
-// module locals so a dev-time code swap naturally re-runs capability probes
-// instead of carrying a stale "unsupported" flag into fresh code.
+// Why: plain module locals so HMR code swaps re-run capability probes instead of carrying a stale "unsupported" flag.
 const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
-// Why: keyed by `${owner}\0${ownerType}` rather than a process-global flag so
-// a single owner's capability gap (e.g. token without scope on org A) doesn't
-// poison every subsequent fetch for unrelated owners that DO support
-// Issue.parent. See bug-scan finding 2.
+// Why: keyed per owner (not a process-global flag) so one owner's capability gap doesn't poison others that DO support Issue.parent (bug-scan finding 2).
 const parentFieldRetriedByOwner = new Map<string, true>()
 const parentFieldWarningLoggedByOwner = new Map<string, true>()
-// Why: concurrent fetchAllItems calls for the same owner all observe the
-// same "not-yet-retried" state, each issuing a duplicate first-page probe
-// and racing to set the flag. Use an in-flight promise per owner so only
-// one caller drives the probe; siblings await the same result.
+// Why: in-flight promise per owner so concurrent fetchAllItems callers share one probe instead of each racing a duplicate first-page probe.
 const parentFieldProbeInFlight = new Map<string, Promise<void>>()
 
 function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType): string {
@@ -392,8 +369,7 @@ export function normalizeFieldValue(
     }
     case undefined:
     default:
-      // Unknown __typename → forward-compat: drop silently, do not throw,
-      // do not classify as drift (see design §Error Handling).
+      // Unknown __typename → forward-compat: drop silently, don't classify as drift (see design §Error Handling).
       return null
   }
 }
@@ -713,13 +689,7 @@ async function fetchViewFieldsContinuation(
 ): Promise<
   { ok: true; fields: RawProjectV2Field[] } | { ok: false; error: GitHubProjectViewError }
 > {
-  // Why: address the view directly via `node(id:)` instead of re-fetching the
-  // whole project + walking views every page. Previous shape paid an
-  // unnecessary `${VIEWS_PAGE_SIZE}` views fan-out per field-continuation
-  // page; the new shape is one round-trip per field page, which is the
-  // minimum possible cost. Field-paged views are rare (>50 fields), so this
-  // only matters for the few projects that hit it — but when they do, the
-  // savings compound across pagination loops.
+  // Why: address the view directly via node(id:) instead of re-walking all views each page — one round-trip per field page.
   const query = `
     query($after:String!, $viewId:ID!) {
       node(id:$viewId) {
@@ -844,9 +814,7 @@ type RawItemsPage = {
   nodes?: (RawItem | null)[]
 }
 
-// Why: runGraphql returns the classified error but not the raw GraphQL
-// errors; for the parent-field retry decision we need those. This variant
-// returns the raw envelope so callers can re-inspect.
+// Why: unlike runGraphql, return the raw GraphQL error envelope so the parent-field retry decision can re-inspect it.
 async function fetchItemsPageWithRaw(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
@@ -925,9 +893,7 @@ async function fetchItemsPageWithRaw(args: {
     try {
       parsed = JSON.parse(stdout)
     } catch {
-      // Why: when gh exits non-zero with no parseable JSON on stdout (network,
-      // auth, rate-limit, missing scope), classify against stderr so callers
-      // see the real cause instead of a synthesized drift/not-found.
+      // Why: gh exited non-zero with unparseable stdout; classify against stderr so callers see the real cause, not a synthesized drift/not-found.
       if (execFailed) {
         return {
           ok: false,
@@ -943,9 +909,7 @@ async function fetchItemsPageWithRaw(args: {
         stderr
       }
     }
-    // Why: gh exec rejected but stdout still had a parseable error envelope —
-    // fall through to the parsed.errors branch below. If parsed has neither
-    // data nor errors, surface the stderr classification rather than not_found.
+    // Why: gh rejected but stdout parsed; fall through to parsed.errors below, else surface the stderr classification rather than not_found.
     if (execFailed && (!parsed.errors || parsed.errors.length === 0) && !parsed.data) {
       return {
         ok: false,
@@ -987,26 +951,16 @@ async function fetchAllItems(args: {
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
   | { ok: false; error: GitHubProjectViewError; totalCount?: number }
 > {
-  // Why: caches keyed by (owner, ownerType) so a single owner's lack of
-  // Issue.parent capability (e.g. token without scope on org A) doesn't
-  // poison fetches for unrelated owners. See bug-scan finding 2.
+  // Why: keyed by (owner, ownerType) so one owner's missing Issue.parent capability doesn't poison unrelated owners.
   const scopeKey = ownerScopeKey(args.owner, args.ownerType)
-  // Why: if another caller for the SAME owner is currently probing whether
-  // Issue.parent is supported, await its decision so we don't fire a
-  // duplicate with-parent probe. We must re-read the retried flag AFTER
-  // awaiting because the probe may have flipped it.
+  // Why: await any in-flight same-owner probe so we don't duplicate it, then re-read the retried flag (the probe may have flipped it).
   const inFlight = parentFieldProbeInFlight.get(scopeKey)
   if (inFlight) {
     await inFlight.catch(() => {})
   }
   let includeParent = !hasParentFieldRetried(scopeKey)
   let parentFieldDropped = !includeParent
-  // First page — single-flight the with-parent attempt PER OWNER so
-  // concurrent callers for the same owner observe one probe result instead
-  // of each issuing their own. We must assign the in-flight promise
-  // synchronously (no await between the get() check and the set()) so
-  // concurrent callers race on the same promise rather than each creating
-  // a duplicate probe.
+  // Single-flight the with-parent probe per owner; assign the in-flight promise synchronously (no await between get() and set()) so callers share one probe.
   let first: Awaited<ReturnType<typeof fetchItemsPageWithRaw>>
   let probePromise: Promise<Awaited<ReturnType<typeof fetchItemsPageWithRaw>>> | null = null
   if (includeParent && !parentFieldProbeInFlight.has(scopeKey)) {
@@ -1026,12 +980,7 @@ async function fetchAllItems(args: {
           after: null,
           includeParent: true
         })
-        // Why: flip parentFieldRetriedByOwner BEFORE resolveProbe()/clearing
-        // parentFieldProbeInFlight so siblings that awoke on `inFlight.catch()`
-        // observe the updated flag. Doing this in the outer block (after
-        // `await probePromise`) leaves a gap where siblings see
-        // parentFieldProbeInFlight=null and parentFieldRetriedByOwner without
-        // the scopeKey, then issue duplicate with-parent probes.
+        // Why: set the retried flag BEFORE resolving/clearing the probe so siblings awoken on inFlight.catch() see it and don't fire duplicate with-parent probes.
         if (!result.ok && errorsIndicateParentField(result.rawErrors, result.stderr)) {
           markParentFieldRetried(scopeKey)
         }
@@ -1054,9 +1003,7 @@ async function fetchAllItems(args: {
     })
   }
   if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
-    // Retry the whole table without parent. Mark this owner as retried so
-    // subsequent fetches against the same owner skip the probe — but other
-    // owners are unaffected.
+    // Retry the whole table without parent; mark this owner retried so later fetches skip the probe (other owners unaffected).
     markParentFieldRetried(scopeKey)
     includeParent = false
     parentFieldDropped = true
@@ -1255,16 +1202,7 @@ export async function getProjectViewTable(
         matchStrength = m
       }
     }
-    // Why: stop as soon as we have ANY match — including 'default' (first
-    // table view). Continuing to walk views pages for a default selector
-    // costs one extra GraphQL call per page with no upside: the default
-    // contract is "first table view we see", and view layouts don't change
-    // ordering between pages such that a later view would outrank the
-    // first table layout. Previously we kept walking on default match
-    // because the precedence comment hinted at re-ranking, but no real
-    // selector promotes a 'default' to a stronger match within the same
-    // selector input — those ranks only matter when the caller supplied
-    // a selector. Bail early on any non-null selectedRaw.
+    // Why: stop on ANY match (incl. 'default' = first table view); walking further pages costs a GraphQL call per page with no re-ranking upside.
     if (selectedRaw) {
       break
     }
@@ -1300,15 +1238,11 @@ export async function getProjectViewTable(
   }
   const selectedView = finalized.view
 
-  // Why: an explicit empty-string override means "no filter"; treat undefined
-  // as "use the view's filter as-is". The override is ephemeral — never
-  // persisted to GitHub — so users can clear the search without mutating the
-  // view's stored filter.
+  // Why: empty-string override means "no filter"; undefined means "use the view's stored filter". The override is ephemeral, never persisted.
   const effectiveQuery =
     typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
 
-  // Unsupported layout: return without paginating items; attempt a cheap
-  // count-only query best-effort.
+  // Unsupported layout: skip item pagination; best-effort count-only query.
   if (selectedView.layout !== 'TABLE_LAYOUT') {
     const count = await fetchItemsCountOnly({
       owner: args.owner,
@@ -1389,10 +1323,7 @@ type RawViewerDiscovery = {
 export async function listAccessibleProjects(): Promise<ListAccessibleProjectsResult> {
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
-  // Why: per-org failures are collected so the picker can render a "some orgs
-  // didn't load" banner with the affected logins, instead of aborting the
-  // whole discovery on the first 504. Users with flaky org fetches still get
-  // viewer + other orgs in the list.
+  // Why: collect per-org failures so the picker shows a "some orgs didn't load" banner instead of aborting discovery on the first 504.
   const partialFailures: { owner: string; message: string }[] = []
   let viewerLogin: string | null = null
 
@@ -1423,10 +1354,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     }
     const res = await runGraphql<RawViewerDiscovery>(query, vars)
     if (!res.ok) {
-      // Why: a viewer-level failure is structural — if we can't list the
-      // user's own projects, we have nothing to build on. Propagate as a
-      // hard error instead of returning partial. Org-level errors below
-      // are non-fatal because the viewer slice is still useful on its own.
+      // Why: viewer-level failure is structural (no projects to build on), so propagate hard; org-level errors below are non-fatal.
       return { ok: false, error: res.error }
     }
     if (!res.data.viewer) {
@@ -1463,13 +1391,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
   }
 
   // 2) Organizations the viewer belongs to, each with its projectsV2.
-  // Why: we intentionally drop the per-org continuation loop that previously
-  // ran `organization(login).projectsV2(first:50, after:$after)` when the
-  // first nested page had more. That inner loop was the dominant cost
-  // multiplier and the most common 504 source — a single slow org would
-  // serially block the picker for tens of seconds. Users with more than
-  // DISCOVERY_PROJECTS_PER_ORG projects in a given org can still paste a
-  // URL to reach them; the picker is discovery, not an exhaustive index.
+  // Why: no per-org projectsV2 continuation loop — it was the dominant 504 cost; users past the cap can paste a URL instead.
   let orgCursor: string | null = null
   let orgMore = true
   let orgsSeen = 0
@@ -1498,11 +1420,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
     }
     const res = await runGraphql<RawViewerDiscovery>(query, vars)
     if (!res.ok) {
-      // Why: the org-listing query itself failed (not a nested projectsV2).
-      // Record it as a partial failure against a synthetic `*` owner so the
-      // UI banner explains why additional orgs aren't listed, but keep any
-      // viewer projects we already collected. This is the critical 504 path
-      // the user reported in the ProjectPicker.
+      // Why: org-listing failed; record a synthetic '*' partial failure so the banner explains it, but keep collected viewer projects (the reported 504 path).
       partialFailures.push({ owner: '*', message: res.error.message })
       break
     }
@@ -1516,9 +1434,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
       }
       orgsSeen++
       const login = org.login
-      // Cache owner → ownerType for downstream paste/resolve even when the
-      // nested projects query was empty or partially failed — paste-to-add
-      // uses this to disambiguate /orgs/ vs /users/ URLs.
+      // Cache owner → ownerType even when the projects query failed; paste-to-add uses it to disambiguate /orgs/ vs /users/ URLs.
       rememberOwnerType(login, 'organization')
       const nodes = org.projectsV2?.nodes ?? []
       let ownerCount = 0
@@ -1746,9 +1662,7 @@ export async function resolveProjectRef(
     ownerType,
     number: parsed.number,
     title: p.title ?? '',
-    // Why: forward the parsed view number from /views/{n} URLs so the
-    // renderer can skip the view-pick step. parsed.kind === 'bare' has no
-    // viewNumber (owner/number shorthand carries no view).
+    // Why: forward the view number from /views/{n} URLs so the renderer can skip the view-pick step (bare owner/number shorthand carries none).
     ...(parsed.kind !== 'bare' && parsed.viewNumber !== undefined
       ? { viewNumber: parsed.viewNumber }
       : {})
