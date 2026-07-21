@@ -25,6 +25,7 @@ function hasErrorCode(error: unknown, code: string): boolean {
 }
 
 function openedSameFile(pathStats: Stats, openedStats: Stats): boolean {
+  // 为什么：部分虚拟或网络文件系统不提供 dev/ino，缺失时不能把合法文件误判为被替换。
   if (
     pathStats.dev === 0 ||
     openedStats.dev === 0 ||
