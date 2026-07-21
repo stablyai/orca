@@ -68,6 +68,16 @@ describe('patched node-pty Windows Job Object contract', () => {
   it('keeps Job Object cleanup race-safe and falls back to direct-root termination', () => {
     const native = patchedLines(patchSection('src/win/conpty.cc'))
 
+    expect(native).toContain(
+      'static bool remove_pty_baton(int id) {\n  std::lock_guard<std::mutex> lock(ptyHandlesMutex)'
+    )
+    const killHandle = native.lastIndexOf(
+      'const std::shared_ptr<pty_baton> handle = get_pty_baton(id)'
+    )
+    const handleGuard = native.indexOf('if (handle != nullptr)', killHandle)
+    const takeJob = native.indexOf('HANDLE hJob = take_job_handle(handle)', killHandle)
+    expect(handleGuard).toBeGreaterThan(killHandle)
+    expect(takeJob).toBeGreaterThan(handleGuard)
     expect(native).toContain('std::shared_ptr<pty_baton>')
     expect(native).toContain('std::atomic<HANDLE> hJob')
     expect(native).toContain('hJob.exchange(nullptr)')

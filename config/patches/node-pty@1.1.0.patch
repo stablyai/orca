@@ -522,9 +522,13 @@ index 7b286d3d64..7434bcc994 100644
 @@ -60 +69 @@ static pty_baton* get_pty_baton(int id) {
 -    return it->get();
 +    return *it;
-@@ -65,0 +75 @@ static bool remove_pty_baton(int id) {
+@@ -65,6 +75,7 @@ static bool remove_pty_baton(int id) {
+ static bool remove_pty_baton(int id) {
 +  std::lock_guard<std::mutex> lock(ptyHandlesMutex);
-@@ -70 +80 @@ static bool remove_pty_baton(int id) {
+   auto it = std::remove_if(ptyHandles.begin(), ptyHandles.end(), [id](const auto& ptyHandle) {
+     return ptyHandle->id == id;
+   });
+   if (it != ptyHandles.end()) {
 -    ptyHandles.erase(it);
 +    ptyHandles.erase(it, ptyHandles.end());
 @@ -75,0 +86,42 @@ static bool remove_pty_baton(int id) {
@@ -689,10 +693,11 @@ index 7b286d3d64..7434bcc994 100644
 @@ -516 +624 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
 -  const pty_baton* handle = get_pty_baton(id);
 +  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
-@@ -547 +655 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -547,3 +655,8 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
 -  const pty_baton* handle = get_pty_baton(id);
 +  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
-@@ -549,0 +658,5 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+
+   if (handle != nullptr) {
 +    HANDLE hJob = take_job_handle(handle);
 +    if (hJob != nullptr) {
 +      TerminateJobObject(hJob, 1);
