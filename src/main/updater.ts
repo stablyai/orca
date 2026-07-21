@@ -1194,6 +1194,10 @@ export function quitAndInstall(): void {
     return
   }
 
+  if (deferHeadlessServeInstall('install', getPendingInstallVersion())) {
+    return
+  }
+
   if (
     deferMacQuitUntilInstallerReady(
       currentStatus,
@@ -1356,6 +1360,7 @@ export function setupAutoUpdater(
     sendCheckFailureStatus,
     sendErrorStatus,
     markMissingManifestPrereleaseFallbackChecking,
+    shouldDeferMacQuitForInstall: () => updateInstallMode === 'interactive',
     shouldSuppressMissingManifestPrereleaseFallbackEvent,
     suppressMissingManifestPrereleaseFallbackPromiseFailure,
     recordCompletedUpdateCheck,

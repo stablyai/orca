@@ -266,15 +266,21 @@ describe('headless serve update install handoff', () => {
       await vi.advanceTimersByTimeAsync(0)
       autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
-      const preventDefault = vi.fn()
-      appMock.emit('before-quit', { preventDefault })
+      const { deferMacQuitUntilInstallerReady } = await import('./updater-mac-install')
+      expect(
+        deferMacQuitUntilInstallerReady(
+          { state: 'downloading', percent: 100, version: '1.0.61' },
+          true,
+          () => '1.0.61',
+          send
+        )
+      ).toBe(true)
       const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
         ([event]) => event === 'update-downloaded'
       )?.[1] as (() => void) | undefined
       nativeReadyHandler?.()
       await vi.advanceTimersByTimeAsync(0)
 
-      expect(preventDefault).toHaveBeenCalledTimes(1)
       expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
       expect(killAllPtyMock).not.toHaveBeenCalled()
       expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
@@ -282,6 +288,68 @@ describe('headless serve update install handoff', () => {
         { phase: 'install', version: '1.0.61' },
         expect.objectContaining({ level: 'warn' })
       )
+      expect(send).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'error', message: expect.stringContaining('orca serve') })
+      )
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'does not reinterpret an ordinary headless app quit as an update install request',
+    async () => {
+      const send = vi.fn()
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+
+      const { checkForUpdatesFromMenu, setupAutoUpdater } = await import('./updater')
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'headless-serve'
+      })
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+      const preventDefault = vi.fn()
+      appMock.emit('before-quit', { preventDefault })
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      expect(preventDefault).not.toHaveBeenCalled()
+      expect(appMock.quit).not.toHaveBeenCalled()
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'defers before the macOS installer-readiness timeout can quit the serving owner',
+    async () => {
+      const send = vi.fn()
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+
+      const { checkForUpdatesFromMenu, quitAndInstall, setupAutoUpdater } =
+        await import('./updater')
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'headless-serve'
+      })
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      expect(appMock.quit).not.toHaveBeenCalled()
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
       expect(send).toHaveBeenCalledWith(
         'updater:status',
         expect.objectContaining({ state: 'error', message: expect.stringContaining('orca serve') })

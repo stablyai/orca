@@ -38,6 +38,7 @@ type UpdaterHandlerContext = {
   markUpdateAvailableEventPending: (attemptId: number | null) => void
   markMissingManifestPrereleaseFallbackChecking: () => void
   performQuitAndInstall: () => void | Promise<void>
+  shouldDeferMacQuitForInstall: () => boolean
   recordCompletedUpdateCheck: () => void
   sendCheckFailureStatus: (
     message: string,
@@ -77,6 +78,7 @@ export function registerAutoUpdaterHandlers({
   markUpdateAvailableEventPending,
   markMissingManifestPrereleaseFallbackChecking,
   performQuitAndInstall,
+  shouldDeferMacQuitForInstall,
   recordCompletedUpdateCheck,
   sendCheckFailureStatus,
   sendErrorStatus,
@@ -104,6 +106,9 @@ export function registerAutoUpdaterHandlers({
   }
 
   app.on('before-quit', (event) => {
+    if (!shouldDeferMacQuitForInstall()) {
+      return
+    }
     if (consumeMacInstallGuardBypass()) {
       recordUpdaterLifecycle('macos_before_quit_guard_bypassed')
       return

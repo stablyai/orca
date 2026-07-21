@@ -222,6 +222,8 @@
           "assertions": [
             "a ready update in headless serve is deferred before native install, paired-client disconnect, or active-session cleanup",
             "headless serve refuses updater staging and install-on-quit while preserving availability checks",
+            "macOS installer-readiness timeout cannot quit a headless serving owner",
+            "ordinary macOS app quit is not reinterpreted as an install request in headless serve mode",
             "repeated requests emit one deterministic status and lifecycle diagnostic while interactive installs remain unchanged"
           ]
         },
@@ -291,7 +293,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
           "result": "passed",
           "durationSeconds": 5,
-          "summary": "Five focused files passed with 113 tests. The regression harness retained the staged-installer boundary but made zero native install, paired-client disconnect, and session-cleanup calls; download staging and install-on-quit were also disabled only for serve mode."
+          "summary": "Five focused files passed with 115 tests. The regression harness retained the staged-installer boundary but made zero native install, unintended app quit, paired-client disconnect, and session-cleanup calls; download staging and install-on-quit were also disabled only for serve mode."
         },
         {
           "date": "2026-07-13",
