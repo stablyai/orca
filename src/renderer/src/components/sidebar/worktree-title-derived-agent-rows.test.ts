@@ -3,6 +3,7 @@ import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
+import { resolveAgentTypeFromTerminalTitle } from './worktree-title-derived-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
@@ -176,6 +177,57 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows).toHaveLength(0)
+  })
+
+  it('keeps a single-pane OpenCode launch stable across native, synthetic, bare, and idle titles', () => {
+    const frames = [
+      ['OC | ⠋ implementing the feature', 'working'],
+      ['⠋ OpenCode', 'working'],
+      ['⠋ implementing the feature', 'working'],
+      ['OpenCode ready', 'idle']
+    ] as const
+
+    for (const [title, state] of frames) {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { launchAgent: 'opencode' })],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
+        ptyIdsByTabId: { 'tab-1': ['pty-opencode'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+
+      expect(rows.map((row) => [row.agentType, row.state])).toEqual([['opencode', state]])
+    }
+  })
+
+  it('stops applying launch ownership after it is cleared, without weakening Claude inference', () => {
+    const rowsFor = (title: string, launchAgent?: TuiAgent) =>
+      buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', launchAgent ? { launchAgent } : {})],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
+        ptyIdsByTabId: { 'tab-1': ['pty-agent'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+
+    expect(rowsFor('⠋ implementing the feature', 'opencode').map((row) => row.agentType)).toEqual([
+      'opencode'
+    ])
+    expect(rowsFor('⠋ implementing the feature')).toHaveLength(0)
+    expect(rowsFor('⠋ Claude Code').map((row) => row.agentType)).toEqual(['claude'])
+    expect(rowsFor('zsh')).toHaveLength(0)
+  })
+
+  it('uses explicit owner evidence when resolving provider-neutral activity titles', () => {
+    expect(resolveAgentTypeFromTerminalTitle('⠋ implementing the feature', 'opencode')).toBe(
+      'opencode'
+    )
+    expect(resolveAgentTypeFromTerminalTitle('⠋ implementing the feature')).toBeNull()
+    expect(resolveAgentTypeFromTerminalTitle('⠋ Claude Code', 'opencode')).toBe('claude')
   })
 
   it('adds an idle Claude row for the Claude agents surface', () => {
