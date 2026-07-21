@@ -1,3 +1,4 @@
+import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
@@ -230,28 +231,19 @@ function buildWindowsStartupCommand(
     `set "ORCA_SETUP_MARKER=${escapeCmdSetValue(markerPath)}"`,
     `set "ORCA_SETUP_NONCE=${escapeCmdSetValue(nonce)}"`,
     'echo Waiting for setup to finish before starting agent... 1>&2',
-    `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellScript(script)}`,
+    `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`,
     'set "ORCA_SETUP_STATUS=!ERRORLEVEL!"',
     'exit /b !ORCA_SETUP_STATUS!'
   ])
 }
 
 function wrapCmd(parts: string[]): string {
-  // Why: /s strips this outer quote pair itself. Doubling the nested quotes
-  // makes cmd.exe treat the quotes in `set "VAR=value"` as literal characters.
-  // Joining without spaces also keeps the setup marker's echo payload exact.
+  // Why: /s makes cmd.exe strip exactly this outer quote pair and run the rest
+  // verbatim, so the inner `set "VAR=value"` quotes stay intact instead of being
+  // doubled (which cmd.exe treats as literal characters and breaks assignment).
+  // Joining parts with a bare `&` keeps the marker echo payload free of stray
+  // whitespace.
   return `cmd.exe /d /s /v:on /c "${parts.join('&')}"`
-}
-
-function encodePowerShellScript(script: string): string {
-  // Why: this planner also runs in the sandboxed renderer, where Node's Buffer
-  // is unavailable; PowerShell requires its encoded command as UTF-16LE.
-  let bytes = ''
-  for (let index = 0; index < script.length; index += 1) {
-    const code = script.charCodeAt(index)
-    bytes += String.fromCharCode(code & 0xff, code >>> 8)
-  }
-  return btoa(bytes)
 }
 
 function quotePosixArg(value: string): string {
