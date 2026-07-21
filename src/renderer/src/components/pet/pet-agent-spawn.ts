@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { setPetBoundSession } from './pet-bound-session'
 
 /**
  * The pet's assistant arm.
@@ -57,12 +58,19 @@ export function usePetAgentSpawn(): {
       return
     }
     try {
-      launchAgentInNewTab({
+      const result = launchAgentInNewTab({
         agent: 'omp',
         worktreeId: activeWorktreeId,
         agentArgs: buildPetOmpAgentArgs(),
         launchSource: 'pet'
       })
+      // Why bind here and not from agent status: an omp pane reports `agents:
+      // []` until its first prompt, so a pet that waited for status would spawn
+      // an assistant and then still have nothing to say to it. Binding the tab
+      // we just created is what makes the pet askable immediately.
+      if (result?.tabId) {
+        setPetBoundSession({ tabId: result.tabId, worktreeId: activeWorktreeId })
+      }
     } catch (error) {
       // Why surface rather than swallow: the pet is a 48px sprite with no
       // status line of its own, so a failed spawn would otherwise look exactly

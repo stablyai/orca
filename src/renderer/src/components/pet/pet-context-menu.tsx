@@ -32,7 +32,11 @@ export function PetContextMenu({
   const { canSpawn, spawnOmpAgent } = usePetAgentSpawn()
   const [askOpen, setAskOpen] = useState(false)
 
-  const agentLabel = formatAgentTypeLabel(agentTarget?.agentType)
+  // Why the 'omp' fallback: a just-spawned assistant is askable before it has
+  // reported any status, so there is no agentType to read yet. Every session the
+  // pet binds is one it spawned itself, and it only ever spawns omp — so naming
+  // it beats falling back to the generic "Agent".
+  const agentLabel = formatAgentTypeLabel(agentTarget?.agentType ?? (canAsk ? 'omp' : undefined))
 
   const submitAsk = useCallback(
     (prompt: string): void => {
@@ -53,48 +57,48 @@ export function PetContextMenu({
             report against a working build. A disabled row that says why is the
             cheapest possible answer to "is this thing on?". */}
         <ContextMenuContent>
+          {/* Ask is the FIRST row and the one that survives every state, because
+              typing at the pet is the primary gesture — spawning is just how you
+              get there the first time. It is driven by the pet's bound session
+              rather than agent status, so it appears the moment an assistant is
+              spawned instead of waiting for that assistant's first turn. */}
+          {canAsk ? (
+            <ContextMenuItem
+              onSelect={() => {
+                // Why deferred to a dialog rather than opened inline: onSelect
+                // fires as the menu unmounts, and mounting an input in that
+                // same tick loses the focus race with the menu's restore.
+                setAskOpen(true)
+              }}
+            >
+              {translate('auto.components.pet.PetOverlay.askAgent', 'Ask {{value0}}…', {
+                value0: agentLabel
+              })}
+            </ContextMenuItem>
+          ) : null}
+          {/* "Go to the terminal for greater detail" — the escape hatch out of
+              the bubble's summary and into the real session. */}
           {agentTarget ? (
-            <>
-              <ContextMenuItem onSelect={jumpToAgent}>
-                {translate('auto.components.pet.PetOverlay.jumpToAgent', 'Go to {{value0}}', {
-                  value0: agentLabel
-                })}
-              </ContextMenuItem>
-              {canAsk ? (
-                <ContextMenuItem
-                  onSelect={() => {
-                    // Why deferred to a dialog rather than opened inline: onSelect
-                    // fires as the menu unmounts, and mounting an input in that
-                    // same tick loses the focus race with the menu's restore.
-                    setAskOpen(true)
-                  }}
-                >
-                  {translate('auto.components.pet.PetOverlay.askAgent', 'Ask {{value0}}…', {
-                    value0: agentLabel
-                  })}
-                </ContextMenuItem>
-              ) : null}
-            </>
-          ) : (
-            /* The empty state is an offer, not an apology. With no agent
-               reporting, the useful thing a pet can do is get one — so the row
-               spawns its assistant rather than explaining why it can't help.
-               Falls back to a disabled explanation only when there is no active
-               worktree to launch into, since an agent must land somewhere and
-               guessing a repo the user isn't looking at is worse than nothing. */
+            <ContextMenuItem onSelect={jumpToAgent}>
+              {translate('auto.components.pet.PetOverlay.jumpToAgent', 'Go to {{value0}}', {
+                value0: agentLabel
+              })}
+            </ContextMenuItem>
+          ) : null}
+          {/* The empty state is an offer, not an apology: with no assistant, the
+              useful thing a pet can do is get one. Once bound, this disappears —
+              a second "give me an assistant" would silently orphan the first. */}
+          {!canAsk && !agentTarget ? (
             canSpawn ? (
               <ContextMenuItem onSelect={spawnOmpAgent}>
                 {translate('auto.components.pet.PetOverlay.spawnOmpAgent', 'Give me an assistant…')}
               </ContextMenuItem>
             ) : (
               <ContextMenuItem disabled>
-                {translate(
-                  'auto.components.pet.PetOverlay.noWorktree',
-                  'Open a workspace first'
-                )}
+                {translate('auto.components.pet.PetOverlay.noWorktree', 'Open a workspace first')}
               </ContextMenuItem>
             )
-          )}
+          ) : null}
         </ContextMenuContent>
       </ContextMenu>
       <PetAskDialog

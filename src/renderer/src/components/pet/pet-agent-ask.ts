@@ -1,5 +1,11 @@
-import { useCallback } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import {
+  getPetBoundSession,
+  resolvePetBoundNoteTarget,
+  subscribeToPetBoundSession
+} from './pet-bound-session'
 import {
   activeAgentNotesSendFailureMessage,
   sendNotesToActiveAgentSession
@@ -56,7 +62,20 @@ export function usePetAgentAsk(target: PetAgentTarget | null): {
   canAsk: boolean
   askAgent: (prompt: string) => Promise<void>
 } {
-  const request = buildPetAskRequest(target)
+  const boundSession = useSyncExternalStore(subscribeToPetBoundSession, getPetBoundSession)
+  const boundRequest = useAppStore((state) =>
+    resolvePetBoundNoteTarget(boundSession, {
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      tabsByWorktree: state.tabsByWorktree
+    })
+  )
+
+  // Why the bound session wins over the status-derived target: the bound one is
+  // *this pet's* assistant, deliberately spawned by the user, while the target
+  // is merely whichever agent the bubble is currently narrating — which changes
+  // as other agents work. Typing into the pet's box must always reach the same
+  // session, not follow the bubble around.
+  const request = boundRequest ?? buildPetAskRequest(target)
 
   const askAgent = useCallback(
     async (prompt: string): Promise<void> => {
