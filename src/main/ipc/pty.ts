@@ -4026,10 +4026,12 @@ export function registerPtyHandlers(
       }
     },
     write: (ptyId, data) => {
-      const provider = getProviderForPty(ptyId)
       try {
+        // Why: the provider lookup throws for a disconnected SSH pty; resolve inside the try so that write fails closed too.
+        const provider = getProviderForPty(ptyId)
         // Why: provider.write() silently no-ops for a pty it no longer has; report not-written so the send isn't recorded as delivered (#9169).
-        if (provider.hasPty && !provider.hasPty(ptyId)) {
+        // Only an explicit false blocks the write — absent/unknown ownership must not reject a live pty.
+        if (provider.hasPty?.(ptyId) === false) {
           return false
         }
         provider.write(ptyId, data)
