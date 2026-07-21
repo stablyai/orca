@@ -279,9 +279,7 @@ function RightSidebarInner(): React.JSX.Element {
       ref={containerRef}
       className={cn(
         'flex flex-row',
-        // Why: overlay mode floats the sidebar over the workspace so toggling
-        // it never resizes/re-wraps the terminal panes underneath; push mode
-        // keeps the classic flex-row column that shrinks the workspace.
+        // Why: removing overlay mode from flex flow prevents terminal reflow when the sidebar toggles.
         overlayLayout ? 'absolute inset-y-0 right-0 z-30' : 'relative flex-shrink-0',
         // Why: overflow-visible is needed when open so the resize handle
         // on the left edge remains interactive.  When closed (width 0),

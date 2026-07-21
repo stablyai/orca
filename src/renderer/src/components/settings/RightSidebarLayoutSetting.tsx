@@ -28,7 +28,6 @@ export function RightSidebarLayoutSetting({
     >
       <SettingsRow
         label={entry.title}
-        // Why: spell out the tradeoff — overlay covers content but keeps terminals from re-wrapping.
         description={translate(
           'auto.components.settings.AppearanceWindowSidebarSection.rightSidebarLayoutDescription',
           'Overlay floats the sidebar over the workspace so terminals keep their size when it opens.'
