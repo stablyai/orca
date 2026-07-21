@@ -89,18 +89,24 @@ function PickerTrigger(props: {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <DropdownMenuTrigger asChild disabled={props.disabled}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-label={accessibleName}
-            className="max-w-48 text-muted-foreground"
-          >
-            <span className="truncate">{props.label}</span>
-            <ChevronDown className="size-3" />
-          </Button>
-        </DropdownMenuTrigger>
+        {/* Why: keep Tooltip and Dropdown from composing refs onto the same
+            button — nesting two asChild triggers loops through Radix setRef
+            (React 19 #185, crash 34c478b4). shrink-0 mirrors the Button's own
+            flex so the wrapper stays layout-neutral. Same guard as #7096. */}
+        <span className="inline-flex shrink-0">
+          <DropdownMenuTrigger asChild disabled={props.disabled}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              aria-label={accessibleName}
+              className="max-w-48 text-muted-foreground"
+            >
+              <span className="truncate">{props.label}</span>
+              <ChevronDown className="size-3" />
+            </Button>
+          </DropdownMenuTrigger>
+        </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         <PickerTooltipContent
