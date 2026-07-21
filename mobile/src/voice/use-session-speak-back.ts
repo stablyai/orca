@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcSuccess } from '../transport/types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { summarizeForSpeech } from './summarize-for-speech'
 import { useMeshSpeak } from './use-mesh-speak'
@@ -94,13 +95,19 @@ export function useSessionSpeakBack(options: {
     let cancelled = false
     const tick = async (): Promise<void> => {
       try {
-        const res = (await client.sendRequest('worktree.ps', { limit: 10000 })) as {
-          worktrees?: { worktreeId?: string; agents?: RuntimeWorktreeAgentRow[] }[]
-        }
-        if (cancelled) {
+        const response = await client.sendRequest('worktree.ps', { limit: 10000 })
+        if (cancelled || !response.ok) {
           return
         }
-        const mine = res.worktrees?.find((w) => w.worktreeId === worktreeId)
+        // Why unwrap `.result`: sendRequest resolves the RPC ENVELOPE
+        // ({ ok, result, _meta }), not the payload. Reading `.worktrees` off the
+        // envelope silently yields undefined -> zero agents -> the feature
+        // no-ops without an error, which is exactly how this shipped broken the
+        // first time. Keep the `.result` hop explicit.
+        const result = (response as RpcSuccess).result as {
+          worktrees?: { worktreeId?: string; agents?: RuntimeWorktreeAgentRow[] }[]
+        }
+        const mine = result.worktrees?.find((w) => w.worktreeId === worktreeId)
         for (const row of mine?.agents ?? []) {
           handleAgentRow(row)
         }

@@ -4603,11 +4603,7 @@ export default function SessionScreen() {
             {/* Speak replies: folds this session's finished agent turns into
                 two or three spoken sentences. Off by default, per workspace. */}
             {worktreeId ? (
-              <SessionSpeakRepliesToggle
-                client={client}
-                hostId={hostId}
-                worktreeId={worktreeId}
-              />
+              <SessionSpeakRepliesToggle hostId={hostId} worktreeId={worktreeId} />
             ) : null}
             <MobileSessionHeaderIconButton
               active={activePanel === 'files'}

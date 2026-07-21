@@ -8,8 +8,11 @@
 // node-a LiteLLM (canonical audio path, fixed 2026-07-20). A3/settings can make
 // this host-configurable.
 export const MESH_VOICE_BASE_URL = 'http://100.92.56.51:4000'
+// Voice is operator-selectable in Settings -> Voice; read through the cached
+// preference so the speech path never awaits storage mid-utterance.
+import { currentKokoroVoice } from './kokoro-voices'
+
 const TTS_MODEL = 'mesh-tts-kokoro'
-const TTS_VOICE = 'af_heart'
 const PLAYBACK_SAMPLE_RATE = 16000
 const KOKORO_SAMPLE_RATE = 24000
 
@@ -44,7 +47,7 @@ export async function synthesizeViaMesh(text: string): Promise<Uint8Array> {
     body: JSON.stringify({
       model: TTS_MODEL,
       input: text,
-      voice: TTS_VOICE,
+      voice: currentKokoroVoice(),
       response_format: 'pcm'
     })
   })

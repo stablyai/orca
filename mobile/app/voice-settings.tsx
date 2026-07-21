@@ -18,6 +18,7 @@ import { useAllHostClients } from '../src/transport/client-context'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
+import { MeshVoicePicker } from '../src/voice/MeshVoicePicker'
 import {
   deleteDictationModel,
   downloadDictationModel,
@@ -289,6 +290,11 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
               </View>
               <ChevronRight size={18} color={colors.textMuted} />
             </Pressable>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.heading}>Mesh Voice</Text>
+            <MeshVoicePicker />
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
