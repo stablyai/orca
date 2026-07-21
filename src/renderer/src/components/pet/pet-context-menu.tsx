@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/context-menu'
 import { usePetAgentJump } from './pet-agent-jump'
 import { usePetAgentAsk } from './pet-agent-ask'
+import { usePetAgentSpawn } from './pet-agent-spawn'
 import { PetAskDialog } from './PetAskDialog'
 
 /**
@@ -28,6 +29,7 @@ export function PetContextMenu({
 }): React.JSX.Element {
   const { agentTarget, jumpToAgent } = usePetAgentJump(entries)
   const { canAsk, askAgent } = usePetAgentAsk(agentTarget)
+  const { canSpawn, spawnOmpAgent } = usePetAgentSpawn()
   const [askOpen, setAskOpen] = useState(false)
 
   const agentLabel = formatAgentTypeLabel(agentTarget?.agentType)
@@ -74,16 +76,24 @@ export function PetContextMenu({
               ) : null}
             </>
           ) : (
-            /* Why this exact wording: the overwhelmingly common cause is a
-               freshly-spawned agent that has not been prompted yet — omp panes
-               report no status at all until their first turn — so the honest
-               message names that rather than implying the pet is broken. */
-            <ContextMenuItem disabled>
-              {translate(
-                'auto.components.pet.PetOverlay.noAgentYet',
-                'No agent has reported yet — prompt one first'
-              )}
-            </ContextMenuItem>
+            /* The empty state is an offer, not an apology. With no agent
+               reporting, the useful thing a pet can do is get one — so the row
+               spawns its assistant rather than explaining why it can't help.
+               Falls back to a disabled explanation only when there is no active
+               worktree to launch into, since an agent must land somewhere and
+               guessing a repo the user isn't looking at is worse than nothing. */
+            canSpawn ? (
+              <ContextMenuItem onSelect={spawnOmpAgent}>
+                {translate('auto.components.pet.PetOverlay.spawnOmpAgent', 'Give me an assistant…')}
+              </ContextMenuItem>
+            ) : (
+              <ContextMenuItem disabled>
+                {translate(
+                  'auto.components.pet.PetOverlay.noWorktree',
+                  'Open a workspace first'
+                )}
+              </ContextMenuItem>
+            )
           )}
         </ContextMenuContent>
       </ContextMenu>

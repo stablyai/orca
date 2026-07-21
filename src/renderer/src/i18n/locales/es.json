@@ -10494,7 +10494,9 @@
         "PetOverlay": {
           "jumpToAgent": "Go to {{value0}}",
           "askAgent": "Ask {{value0}}…",
-          "noAgentYet": "No agent has reported yet — prompt one first"
+          "noAgentYet": "No agent has reported yet — prompt one first",
+          "spawnOmpAgent": "Give me an assistant…",
+          "noWorktree": "Open a workspace first"
         }
       },
       "onboarding": {

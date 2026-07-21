@@ -215,6 +215,10 @@ export const launchSourceSchema = z.enum([
   'conflict_resolution',
   'source_control_recovery',
   'terminal_context_menu',
+  // Why its own source rather than folding into terminal_context_menu: a pet
+  // spawn is the only launch with no worktree the user explicitly picked — it
+  // infers the active one — so its funnel is worth telling apart.
+  'pet',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
