@@ -25,6 +25,7 @@ import {
 } from '../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
+import { getFirstWorkGenerationSessionLimitRetryAt } from './first-work-generation-session-limit'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
 
@@ -70,12 +71,15 @@ export type FirstWorkBranchRenameDeps = {
 // inFlight blocks concurrent generation; settled caches definitive verdicts (transient bails stay unsettled to retry later).
 const inFlightWorktreeIds = new Set<string>()
 const settledWorktreeIds = new Set<string>()
+// 会话限额按工作区隔离，并复用 settled 上限避免长进程中冷却记录无限增长。
+const sessionLimitRetryAtByWorktreeId = new Map<string, number>()
 export const FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT = 500
 
 /** Test seam: clear the per-process dedupe sets. */
 export function resetFirstWorkBranchRenameState(): void {
   inFlightWorktreeIds.clear()
   settledWorktreeIds.clear()
+  sessionLimitRetryAtByWorktreeId.clear()
 }
 
 function rememberSettledWorktreeId(worktreeId: string): void {
@@ -89,6 +93,30 @@ function rememberSettledWorktreeId(worktreeId: string): void {
     }
     settledWorktreeIds.delete(oldest)
   }
+}
+
+function rememberSessionLimitRetryAt(worktreeId: string, retryAt: number): void {
+  sessionLimitRetryAtByWorktreeId.delete(worktreeId)
+  sessionLimitRetryAtByWorktreeId.set(worktreeId, retryAt)
+  while (sessionLimitRetryAtByWorktreeId.size > FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT) {
+    const oldest = sessionLimitRetryAtByWorktreeId.keys().next().value
+    if (typeof oldest !== 'string') {
+      return
+    }
+    sessionLimitRetryAtByWorktreeId.delete(oldest)
+  }
+}
+
+function isSessionLimitRetryDeferred(worktreeId: string): boolean {
+  const retryAt = sessionLimitRetryAtByWorktreeId.get(worktreeId)
+  if (retryAt === undefined) {
+    return false
+  }
+  if (Date.now() >= retryAt) {
+    sessionLimitRetryAtByWorktreeId.delete(worktreeId)
+    return false
+  }
+  return true
 }
 
 export async function maybeAutoRenameBranchOnFirstWork(
@@ -109,7 +137,11 @@ export async function maybeAutoRenameBranchOnFirstWork(
     return
   }
   // Short-circuit settled/in-flight worktrees before any logging or work.
-  if (settledWorktreeIds.has(worktreeId) || inFlightWorktreeIds.has(worktreeId)) {
+  if (
+    settledWorktreeIds.has(worktreeId) ||
+    inFlightWorktreeIds.has(worktreeId) ||
+    isSessionLimitRetryDeferred(worktreeId)
+  ) {
     return
   }
   const prompt = event.prompt?.trim()
@@ -121,6 +153,7 @@ export async function maybeAutoRenameBranchOnFirstWork(
     // settled = definitive verdict (renamed/ineligible); false = transient bail to retry later.
     const settled = await runAutoRename(worktreeId, prompt, event.assistantMessage, deps)
     if (settled) {
+      sessionLimitRetryAtByWorktreeId.delete(worktreeId)
       rememberSettledWorktreeId(worktreeId)
     }
   } catch (error) {
@@ -146,7 +179,14 @@ async function runAutoRename(
     console.info(`[auto-branch-rename] skip (${reason}) for ${worktreeId}`)
     return true
   }
-  const retry = (reason: string): false => {
+  const retry = (reason: string, retryAt: number | null = null): false => {
+    if (retryAt !== null && retryAt > Date.now()) {
+      rememberSessionLimitRetryAt(worktreeId, retryAt)
+      console.info(
+        `[auto-branch-rename] retry-after (${reason}) until ${new Date(retryAt).toISOString()} for ${worktreeId}`
+      )
+      return false
+    }
     console.info(`[auto-branch-rename] retry-later (${reason}) for ${worktreeId}`)
     return false
   }
@@ -232,7 +272,10 @@ async function runAutoRename(
     if (!generated.canceled) {
       deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
     }
-    return retry(`generation failed: ${generated.error}`)
+    return retry(
+      `generation failed: ${generated.error}`,
+      getFirstWorkGenerationSessionLimitRetryAt(generated)
+    )
   }
 
   // Re-validate after generation (takes seconds): bail if the branch changed or was published meanwhile.

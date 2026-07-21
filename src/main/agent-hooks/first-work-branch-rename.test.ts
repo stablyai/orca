@@ -313,6 +313,76 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(setRenameError).toHaveBeenLastCalledWith(WORKTREE_ID, null)
   })
 
+  it('defers Claude session-limit failures until the reported reset', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-07-21T09:00:00Z'))
+      const resetAt = Date.now() + 2 * 60 * 60_000
+      generateBranchNameMock.mockResolvedValueOnce({
+        success: false,
+        error: 'Claude CLI exited with code 1.',
+        failureOutput: {
+          label: 'Claude',
+          exitCode: 1,
+          stdout: "You've hit your session limit\nResets in 2h",
+          stderr: ''
+        }
+      })
+      const { deps, onRenamed } = makeDeps()
+
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+      vi.setSystemTime(resetAt - 1)
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+      expect(generateBranchNameMock).toHaveBeenCalledTimes(1)
+      expect(onRenamed).not.toHaveBeenCalled()
+
+      vi.setSystemTime(resetAt)
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+      expect(generateBranchNameMock).toHaveBeenCalledTimes(2)
+      expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('defers folder workspace title generation after a Claude session limit', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-07-21T09:00:00Z'))
+      generateBranchNameMock.mockResolvedValueOnce({
+        success: false,
+        error: 'Claude CLI exited with code 1.',
+        failureOutput: {
+          label: 'Claude',
+          exitCode: 1,
+          stdout: "You've hit your session limit\nResets in 2h",
+          stderr: ''
+        }
+      })
+      const { deps, onRenamed } = makeDeps({
+        resolveWorktreeIdForTab: () => FOLDER_WORKTREE_ID,
+        getFolderWorkspacePath: () => '/workspace/platform',
+        isPendingFirstAgentMessageRename: () => true
+      })
+
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+      expect(generateBranchNameMock).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(2 * 60 * 60_000)
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+      expect(generateBranchNameMock).toHaveBeenCalledTimes(2)
+      expect(onRenamed).toHaveBeenCalledWith(FOLDER_WORKTREE_ID)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('records a user-facing error and the full CLI output when generation fails', async () => {
     const failureOutput = { label: 'Pi', exitCode: 1, stdout: '', stderr: 'No API key found.' }
     generateBranchNameMock.mockResolvedValueOnce({

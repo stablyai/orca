@@ -3,6 +3,7 @@ import {
   generateBranchNameFromContext,
   resolveTextGenerationParams
 } from '../text-generation/commit-message-text-generation'
+import { getFirstWorkGenerationSessionLimitRetryAt } from './first-work-generation-session-limit'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 
@@ -17,7 +18,7 @@ export async function runFolderWorkspaceTitleAutoRename(
   assistantMessage: string | undefined,
   deps: FirstWorkBranchRenameDeps,
   stop: (reason: string, clearError?: boolean) => true,
-  retry: (reason: string) => false
+  retry: (reason: string, retryAt?: number | null) => false
 ): Promise<boolean> {
   if (deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true) {
     return stop('folder workspace is not pending title rename', true)
@@ -53,7 +54,10 @@ export async function runFolderWorkspaceTitleAutoRename(
     if (!generated.canceled) {
       deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
     }
-    return retry(`generation failed: ${generated.error}`)
+    return retry(
+      `generation failed: ${generated.error}`,
+      getFirstWorkGenerationSessionLimitRetryAt(generated)
+    )
   }
 
   const newDisplayName = humanizeBranchSlug(generated.slug)

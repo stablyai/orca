@@ -42,7 +42,10 @@ function getTimeZoneOffsetMs(timestamp: number, timeZone: string): number | null
   return Date.UTC(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute) - timestamp
 }
 
-function getTimeZoneDateParts(timestamp: number, timeZone: string): WallClockDateParts | null {
+export function getTimeZoneDateParts(
+  timestamp: number,
+  timeZone: string
+): WallClockDateParts | null {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hourCycle: 'h23',

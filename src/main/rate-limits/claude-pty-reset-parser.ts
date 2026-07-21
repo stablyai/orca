@@ -1,5 +1,5 @@
 import type { RateLimitWindow } from '../../shared/rate-limit-types'
-import { buildWallClockTimestamp } from './time-zone-wall-clock'
+import { buildWallClockTimestamp, getTimeZoneDateParts } from './time-zone-wall-clock'
 
 const RESET_LINE_RE = /resets?\s+(?:at\s+|in\s+)?(.+)/i
 const MONTH_PATTERN =
@@ -262,6 +262,30 @@ function parseTimeOnlyResetTimestamp(resetDescription: string): number | null {
   const minute = Number(match[2] ?? 0)
   if (!isValidClockTime(hour, minute)) {
     return null
+  }
+
+  const timeZone = extractResetTimeZone(resetDescription)
+  if (timeZone) {
+    const now = Date.now()
+    const dateParts = getTimeZoneDateParts(now, timeZone)
+    if (!dateParts) {
+      return null
+    }
+    let timestamp = buildWallClockTimestamp({ ...dateParts, hour, minute }, timeZone)
+    if (timestamp !== null && timestamp <= now) {
+      const nextDate = new Date(Date.UTC(dateParts.year, dateParts.monthIndex, dateParts.day + 1))
+      timestamp = buildWallClockTimestamp(
+        {
+          year: nextDate.getUTCFullYear(),
+          monthIndex: nextDate.getUTCMonth(),
+          day: nextDate.getUTCDate(),
+          hour,
+          minute
+        },
+        timeZone
+      )
+    }
+    return timestamp
   }
 
   const candidate = new Date()
