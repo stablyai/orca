@@ -2849,6 +2849,13 @@ export function registerPtyHandlers(
         env,
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
+      const startupTerminalColorQueryReplyColors = getStartupTerminalColorQueryReplyColors(args)
+      if (startupTerminalColorQueryReplyColors) {
+        spawnOptions.startupIngress = {
+          colors: startupTerminalColorQueryReplyColors,
+          deadlineMs: 5_000
+        }
+      }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
         isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
@@ -3831,10 +3838,7 @@ export function registerPtyHandlers(
       if (startupTerminalColorQueryReplyColors) {
         spawnOptions.startupIngress = {
           colors: startupTerminalColorQueryReplyColors,
-          deadlineMs: 5_000,
-          ...(nativeWindowsConptySpawn
-            ? { echoProjection: 'windows-conpty-esc-stripped' as const }
-            : {})
+          deadlineMs: 5_000
         }
       }
       const existingPaneSpawn = reservationPaneKey

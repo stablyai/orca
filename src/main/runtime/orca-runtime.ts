@@ -14,6 +14,7 @@ import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extra
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import {
   createTerminalTitleTracker,
   stripBrailleSpinnerGlyphs,
@@ -759,6 +760,7 @@ import {
 } from './terminal-model-query-authority'
 import {
   getTerminalViewAttributes,
+  getTerminalViewColorQueryReplyColors,
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
@@ -1077,6 +1079,7 @@ type TerminalCreateOptions = {
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   launchToken?: string
   launchAgent?: TuiAgent
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
@@ -1276,6 +1279,7 @@ type RuntimePtyController = {
     leafId?: string
     sessionId?: string
     persistHostSessionBinding?: boolean
+    terminalColorQueryReplies?: { foreground?: string; background?: string }
   }): Promise<{ id: string; wslDistro?: string }>
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
@@ -19190,6 +19194,8 @@ export class OrcaRuntimeService {
         tabId,
         agentTeamsPlan?.env
       )
+      const terminalColorQueryReplies =
+        launchOpts.terminalColorQueryReplies ?? getTerminalViewColorQueryReplyColors()
       const result = await this.ptyController.spawn({
         cols: 120,
         rows: 40,
@@ -19211,6 +19217,7 @@ export class OrcaRuntimeService {
         preAllocatedHandle,
         tabId,
         leafId,
+        ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
         ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
         // Why: a headless-created pane has no renderer session writer. Persist
         // its tab/leaf binding at spawn so a later promoted window reattaches

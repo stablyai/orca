@@ -915,6 +915,12 @@ const TerminalCreateParams = z.object({
     .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
+  terminalColorQueryReplies: z
+    .object({
+      foreground: z.string().max(128).optional(),
+      background: z.string().max(128).optional()
+    })
+    .optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
@@ -1350,6 +1356,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+        ...(params.terminalColorQueryReplies
+          ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
+          : {}),
         title: params.title,
         focus: params.focus === true,
         rendererBacked: params.rendererBacked === true,

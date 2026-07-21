@@ -1009,7 +1009,7 @@ describe('PtyHandler', () => {
     ).resolves.toEqual({ replay: 'prompt' })
   })
 
-  it('leaves startup queries untouched for an unsupported relay capability version', async () => {
+  it('ignores unsupported startup colors while retaining native owner suppression', async () => {
     let dataCallback: ((data: string) => void) | undefined
     const term = {
       ...mockPtyInstance,
@@ -1032,7 +1032,107 @@ describe('PtyHandler', () => {
     vi.advanceTimersByTime(8)
 
     expect(term.write).not.toHaveBeenCalled()
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+      id: 'pty-1',
+      data: '',
+      rawLength: query.length,
+      seq: query.length,
+      transformed: true
+    })
+  })
+
+  it('consumes a color query at a native Windows SSH relay owner', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', { shellOverride: 'powershell.exe' })
+
+      dataCallback!('\x1b]10;?\x07')
+      vi.advanceTimersByTime(8)
+
+      expect(term.write).not.toHaveBeenCalled()
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '',
+        rawLength: '\x1b]10;?\x07'.length,
+        seq: '\x1b]10;?\x07'.length,
+        transformed: true
+      })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('forwards color queries from a POSIX SSH relay owner', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      mockPtySpawn.mockReturnValue({
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      })
+      await dispatcher.callRequest('pty.spawn', { shellOverride: '/bin/bash' })
+      const query = '\x1b]10;?\x07'
+
+      dataCallback!(query)
+      vi.advanceTimersByTime(8)
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: query })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('keeps renderer color replies for a Windows SSH relay that owns WSL', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      let dataCallback: ((data: string) => void) | undefined
+      const term = {
+        ...mockPtyInstance,
+        onData: vi.fn((cb: (data: string) => void) => {
+          dataCallback = cb
+        }),
+        onExit: vi.fn()
+      }
+      mockPtySpawn.mockReturnValue(term)
+      await dispatcher.callRequest('pty.spawn', {
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+      const reply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+
+      dataCallback!('\x1b]11;?\x07')
+      vi.advanceTimersByTime(8)
+      dispatcher.callNotification('pty.data', { id: 'pty-1', data: reply })
+
+      expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
+        id: 'pty-1',
+        data: '\x1b]11;?\x07'
+      })
+      expect(term.write).toHaveBeenCalledWith(reply)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('coalesces background PTY output before notifying the client', async () => {

@@ -45,6 +45,7 @@ import {
   parsePtyStartupIngressIntent,
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
+import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 
 function isMissingNodePtyNativeBinding(error: unknown): boolean {
   return (
@@ -80,6 +81,7 @@ type ManagedPty = {
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
+  ownerBackend: PtyOwnerBackend
 }
 
 type PendingPtyOutput = {
@@ -500,6 +502,7 @@ export class PtyHandler {
     }
     managed.startupIngress ??= new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
+      ownerBackend: managed.ownerBackend,
       write: (data) => managed.pty.write(data),
       onEmission: emitIngressData
     })
@@ -901,9 +904,7 @@ export class PtyHandler {
     const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const startupIngressIntent =
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
-        ? parsePtyStartupIngressIntent(params.startupIngress, {
-            allowWindowsEchoProjection: false
-          })
+        ? parsePtyStartupIngressIntent(params.startupIngress)
         : undefined
     const managed: ManagedPty = {
       id,
@@ -917,6 +918,11 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: shell,
+        wslDistro: terminalWindowsWslDistro
+      }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(shouldProviderDeliverCommand
@@ -1324,6 +1330,10 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath: shell
+      }),
       ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
     })
 

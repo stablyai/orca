@@ -109,8 +109,8 @@ describe('Session', () => {
     startupIngress?: {
       colors: { foreground: string; background: string }
       deadlineMs: number
-      echoProjection?: 'windows-conpty-esc-stripped'
     }
+    ownerBackend?: 'posix-pty' | 'windows-conpty' | 'windows-wsl'
     wslDistro?: string
   }): Session {
     session = new Session({
@@ -120,6 +120,7 @@ describe('Session', () => {
       ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       wslDistro: opts?.wslDistro,
       subprocess,
+      ...(opts?.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       shellReadySupported: opts?.shellReadySupported ?? false,
       ...(opts?.startupIngress ? { startupIngress: opts.startupIngress } : {}),
       ...(opts?.shellReadyTimeoutMs !== undefined
@@ -196,10 +197,10 @@ describe('Session', () => {
 
     it('classifies startup queries and cooked echoes before model, persistence, and fanout', () => {
       createSession({
+        ownerBackend: 'windows-conpty',
         startupIngress: {
           colors: { foreground: '#2e3434', background: '#ffffff' },
-          deadlineMs: 5_000,
-          echoProjection: 'windows-conpty-esc-stripped'
+          deadlineMs: 5_000
         }
       })
       const onData = vi.fn()
@@ -229,10 +230,10 @@ describe('Session', () => {
 
     it('releases a held cooked-echo prefix before taking a snapshot', () => {
       createSession({
+        ownerBackend: 'windows-conpty',
         startupIngress: {
           colors: { foreground: '#2e3434', background: '#ffffff' },
-          deadlineMs: 5_000,
-          echoProjection: 'windows-conpty-esc-stripped'
+          deadlineMs: 5_000
         }
       })
       subprocess.simulateData('\x1b]10;?\x07')
@@ -242,6 +243,53 @@ describe('Session', () => {
 
       expect(snapshot?.snapshotAnsi).toContain(']10;rgb:2e2e/')
       expect(snapshot?.outputSequence).toBe('\x1b]10;?\x07]10;rgb:2e2e/'.length)
+    })
+
+    it('reproduces the legacy paired-runtime leak and removes its downstream producer', () => {
+      const query = '\x1b]10;?\x07'
+      const reply = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
+      const projectedEcho = ']10;rgb:2e2e/3434/3434\\'
+      createSession({ ownerBackend: 'posix-pty' })
+      session.closeStartupQueryAuthority()
+      const legacyReplyProducers: string[] = []
+      const legacyOnData = vi.fn((data: string) => {
+        if (data === query) {
+          legacyReplyProducers.push('remote-visible-renderer')
+          session.write(reply)
+          if (subprocess.written.at(-1) === reply) {
+            subprocess.simulateData(projectedEcho)
+          }
+        }
+      })
+      session.attachClient({ onData: legacyOnData, onExit: () => {} })
+
+      subprocess.simulateData(query)
+
+      expect(legacyReplyProducers).toEqual(['remote-visible-renderer'])
+      expect(subprocess.written).toEqual([reply])
+      expect(legacyOnData.mock.calls).toEqual([[query], [projectedEcho]])
+      expect(session.getSnapshot()?.snapshotAnsi).toContain(projectedEcho)
+      session.dispose()
+
+      subprocess = createMockSubprocess()
+      createSession({ ownerBackend: 'windows-conpty' })
+      session.closeStartupQueryAuthority()
+      const fixedReplyProducers: string[] = []
+      const fixedOnData = vi.fn((data: string) => {
+        if (data === query) {
+          fixedReplyProducers.push('remote-visible-renderer')
+          session.write(reply)
+        }
+      })
+      session.attachClient({ onData: fixedOnData, onExit: () => {} })
+
+      subprocess.simulateData(query)
+      subprocess.simulateData('prompt')
+
+      expect(fixedReplyProducers).toEqual([])
+      expect(subprocess.written).toEqual([])
+      expect(fixedOnData.mock.calls).toEqual([['', query.length, true, query.length], ['prompt']])
+      expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
     })
   })
 

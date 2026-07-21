@@ -1140,7 +1140,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       leafId: 'pane:1',
       command: "codex 'linked issue context'",
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
-      startupCommandDelivery: 'shell-ready'
+      startupCommandDelivery: 'shell-ready',
+      terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
     })
 
     await transport.connect({ url: '', callbacks: {} })
@@ -1152,7 +1153,8 @@ describe('createRemoteRuntimePtyTransport', () => {
         params: expect.objectContaining({
           command: "codex 'linked issue context'",
           envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
-          startupCommandDelivery: 'shell-ready'
+          startupCommandDelivery: 'shell-ready',
+          terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
         })
       })
     )

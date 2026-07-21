@@ -3045,6 +3045,7 @@ describe('OrcaRuntimeRpcServer', () => {
       params: {
         worktree: 'id:repo-1::/tmp/worktree-a',
         command: "claude 'work on the issue'",
+        terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
         tabId: 'laptop-tab',
         leafId,
         presentation: 'background'
@@ -3064,6 +3065,11 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(
       (createResponse.result as { terminal?: { warning?: string } } | undefined)?.terminal?.warning
     ).toBeUndefined()
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
+      })
+    )
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 456)
     runtime.onPtyData('laptop-created-pty', 'Claude is working...\r\n', 456)
 

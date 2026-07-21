@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
+import { PTY_STARTUP_INGRESS_VERSION } from '../../shared/pty-startup-ingress'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -60,7 +61,10 @@ describe('SshPtyProvider', () => {
 
       expect(mux.request).toHaveBeenCalledWith(
         'pty.spawn',
-        expect.objectContaining({ startupIngressVersion: 1, startupIngress })
+        expect.objectContaining({
+          startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
+          startupIngress
+        })
       )
     })
 

@@ -66,6 +66,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -878,6 +879,11 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
+      ownerBackend: resolvePtyOwnerBackend({
+        platform: process.platform,
+        shellPath,
+        wslDistro: spawnedWslDistro
+      }),
       write: (data) => proc.write(data),
       onEmission: emitIngressData
     })

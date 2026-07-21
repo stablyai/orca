@@ -98,6 +98,10 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
+import {
+  _resetTerminalViewAttributesForTest,
+  setTerminalViewAttributes
+} from './terminal-view-attribute-store'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -587,6 +591,7 @@ vi.mock('../git/git-username', async () => {
 
 function resetRuntimeTestMocks(): void {
   resetPlatform()
+  _resetTerminalViewAttributesForTest()
   advertisedUrlWatcher.clear()
   electronMocks.BrowserWindow.fromId.mockReset()
   electronMocks.BrowserWindow.fromId.mockReturnValue(null)
@@ -10244,6 +10249,37 @@ describe('OrcaRuntimeService', () => {
       tabId: spawnedEnv.ORCA_TAB_ID,
       leafId: spawnedLeafId
     })
+  })
+
+  it('passes cached view colors to background agent spawns for source-owned startup replies', async () => {
+    setTerminalViewAttributes({
+      foreground: [0xff, 0xff, 0xff],
+      background: [0x28, 0x2c, 0x34],
+      cursor: [0xff, 0xff, 0xff],
+      ansi: Array.from({ length: 256 }, () => [0, 0, 0] as [number, number, number]),
+      colorSchemeMode: 'dark',
+      cursorStyle: 'block',
+      cursorBlink: false
+    })
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'codex' })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminalColorQueryReplies: {
+          foreground: '#ffffff',
+          background: '#282c34'
+        }
+      })
+    )
   })
 
   it('applies Settings agent defaults to bare agent command terminal creates', async () => {
