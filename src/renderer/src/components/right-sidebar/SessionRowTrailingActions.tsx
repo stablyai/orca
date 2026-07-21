@@ -158,36 +158,37 @@ export function SessionRowTrailingActions({
             {resumeLabel}
           </TooltipContent>
         </Tooltip>
-      </div>
-      {onContinueInNewSession ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={translate(
+        {onContinueInNewSession ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={translate(
+                  'components.agentSessionContinuation.continueInNewSession',
+                  'Continue in New Session…'
+                )}
+                draggable={false}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onContinueInNewSession()
+                }}
+                data-testid="ai-vault-session-continue-in-new-session"
+                className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+              >
+                <MessageSquarePlus className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {translate(
                 'components.agentSessionContinuation.continueInNewSession',
                 'Continue in New Session…'
               )}
-              draggable={false}
-              onClick={(event) => {
-                event.stopPropagation()
-                onContinueInNewSession()
-              }}
-              data-testid="ai-vault-session-continue-in-new-session"
-            >
-              <MessageSquarePlus className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {translate(
-              'components.agentSessionContinuation.continueInNewSession',
-              'Continue in New Session…'
-            )}
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

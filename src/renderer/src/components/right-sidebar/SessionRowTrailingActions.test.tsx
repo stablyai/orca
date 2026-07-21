@@ -29,11 +29,15 @@ function renderActions(onContinueInNewSession?: () => void): string {
 }
 
 describe('SessionRowTrailingActions', () => {
-  it('renders the always-visible new-session action when available', () => {
+  it('renders the new-session action as a hover-revealed control when available', () => {
     const markup = renderActions(vi.fn())
 
     expect(markup).toContain('data-testid="ai-vault-session-continue-in-new-session"')
     expect(markup).toContain('aria-label="Continue in New Session…"')
+    // Why: edge-usage action lives in the hover group; the gating class is what
+    // keeps it click-proof while the row is unhovered.
+    const buttonMarkup = markup.split('data-testid="ai-vault-session-continue-in-new-session"')[0]
+    expect(buttonMarkup.slice(-600)).toContain('can-hover:pointer-events-none')
   })
 
   it('omits the new-session action when the session has no valid target', () => {
