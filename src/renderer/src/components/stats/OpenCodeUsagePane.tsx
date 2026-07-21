@@ -64,6 +64,7 @@ const RANGE_LABELS: Record<OpenCodeUsageRange, string> = {
   }
 }
 
+/** Usage statistics pane for OpenCode. */
 export function OpenCodeUsagePane(): React.JSX.Element {
   const scanState = useAppStore((state) => state.openCodeUsageScanState)
   const summary = useAppStore((state) => state.openCodeUsageSummary)

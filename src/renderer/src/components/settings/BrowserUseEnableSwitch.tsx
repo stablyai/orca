@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+/** Toggle switch to enable agent browser use. */
 export function BrowserUseEnableSwitch({
   enabled,
   onToggle

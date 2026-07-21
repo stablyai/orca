@@ -69,6 +69,7 @@ function getFallbackCommandName(platform: string): string {
   return platform === 'linux' ? 'orca-ide' : 'orca'
 }
 
+/** Settings section for CLI registration and shell integration. */
 export function CliSection({
   currentPlatform,
   settings,

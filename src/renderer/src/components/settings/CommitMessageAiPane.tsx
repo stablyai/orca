@@ -90,6 +90,7 @@ export function getCommitMessageSettingsPaneDiscoveryHostKey(
   return getCommitMessageModelDiscoveryHostKeyForScope(runtimeScope)
 }
 
+/** Settings pane for AI-assisted commit message generation. */
 export function CommitMessageAiPane({
   settings,
   updateSettings,

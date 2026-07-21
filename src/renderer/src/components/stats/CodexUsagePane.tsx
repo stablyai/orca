@@ -59,6 +59,7 @@ const RANGE_LABELS: Record<CodexUsageRange, string> = {
   }
 }
 
+/** Usage statistics pane for Codex. */
 export function CodexUsagePane(): React.JSX.Element {
   const scanState = useAppStore((state) => state.codexUsageScanState)
   const summary = useAppStore((state) => state.codexUsageSummary)

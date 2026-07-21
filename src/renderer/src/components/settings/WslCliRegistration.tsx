@@ -21,6 +21,7 @@ type WslCliRegistrationProps = {
   currentPlatform: string
 }
 
+/** Settings control for WSL CLI registration. */
 export function WslCliRegistration({
   currentPlatform
 }: WslCliRegistrationProps): React.JSX.Element | null {

@@ -317,6 +317,7 @@ function getSelectedAccountRuntime(
   return { runtime: 'host', label: getHostRuntimeLabel() }
 }
 
+/** Settings pane for account and provider configuration. */
 export function AccountsPane({
   settings,
   updateSettings,

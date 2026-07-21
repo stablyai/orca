@@ -30,6 +30,7 @@ type HostRemoveDialogProps = {
   target: NonNullable<HostRemovalTarget>
 }
 
+/** Confirmation dialog for removing a remote host. */
 export function HostRemoveDialog({
   open,
   onOpenChange,

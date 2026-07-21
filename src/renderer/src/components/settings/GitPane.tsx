@@ -130,6 +130,7 @@ export function SourceControlGroupOrderSetting({
   )
 }
 
+/** Settings pane for Git configuration. */
 export function GitPane({
   settings,
   updateSettings,

@@ -5,6 +5,7 @@ import type { ContextualTourStepControl } from '../../../../shared/contextual-to
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from './contextual-tour-composer-events'
 import { translate } from '@/i18n/i18n'
 
+/** Contextual tour overlay control with toggle. */
 export function ContextualTourControl({
   control
 }: {

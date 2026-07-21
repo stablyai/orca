@@ -4,6 +4,7 @@ import { getAgentAwakeDescription, getAgentAwakeTitle } from '../settings/agent-
 import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
+/** Card with toggle to keep the computer awake while agents run. */
 export function KeepAwakeCard(props: {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void

@@ -604,6 +604,7 @@ function useComposerFileDragOver(): {
   }
 }
 
+/** Composer card for creating new workspaces. */
 export default function NewWorkspaceComposerCard({
   contextualTourSource,
   containerClassName,

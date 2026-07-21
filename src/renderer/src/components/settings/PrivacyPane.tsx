@@ -47,6 +47,7 @@ export function computeBlockedReason(consent: TelemetryConsentState | null): Blo
   return null
 }
 
+/** Settings pane for telemetry and privacy preferences. */
 export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
   const [consent, setConsent] = useState<TelemetryConsentState | null>(null)
   const [inFlight, setInFlight] = useState(false)

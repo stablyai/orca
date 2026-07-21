@@ -10,6 +10,7 @@ type InputPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+/** Settings pane for input behavior configuration. */
 export function InputPane({ settings, updateSettings }: InputPaneProps): React.JSX.Element {
   const enabled =
     settings.primarySelectionMiddleClickPaste ??
