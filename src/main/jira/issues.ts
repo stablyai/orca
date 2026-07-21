@@ -359,9 +359,11 @@ async function buildIssueMediaOptions(
   const preferredIds = extractAttachmentContentIdsFromHtml(
     asString(renderedFields.description) || undefined
   )
+  if (preferredIds.length === 0) {
+    return undefined
+  }
   const images = await loadIssueImageAttachments(client, fields.attachment, preferredIds)
-  if (images.length === 0 && preferredIds.length === 0) {
-    // Still allow external http(s) media URLs via default ADF handling.
+  if (images.length === 0) {
     return undefined
   }
   return {
@@ -649,6 +651,20 @@ async function buildCommentMediaOptions(
   key: string,
   comments: JiraRecord[]
 ): Promise<AdfToMarkdownOptions | undefined> {
+  const preferredIds: string[] = []
+  const seen = new Set<string>()
+  for (const comment of comments) {
+    for (const id of extractAttachmentContentIdsFromHtml(asString(comment.renderedBody))) {
+      if (!seen.has(id)) {
+        seen.add(id)
+        preferredIds.push(id)
+      }
+    }
+  }
+  if (preferredIds.length === 0) {
+    return undefined
+  }
+
   // Why: comment media usually references issue-level attachments; pull them once
   // for the whole thread instead of per comment.
   let attachmentField: unknown
@@ -661,17 +677,6 @@ async function buildCommentMediaOptions(
   } catch (error) {
     console.warn('[jira] comment attachment lookup failed:', error)
     return undefined
-  }
-
-  const preferredIds: string[] = []
-  const seen = new Set<string>()
-  for (const comment of comments) {
-    for (const id of extractAttachmentContentIdsFromHtml(asString(comment.renderedBody))) {
-      if (!seen.has(id)) {
-        seen.add(id)
-        preferredIds.push(id)
-      }
-    }
   }
 
   const images = await loadIssueImageAttachments(client, attachmentField, preferredIds)

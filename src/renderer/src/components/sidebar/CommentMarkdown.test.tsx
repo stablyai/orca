@@ -90,8 +90,7 @@ describe('CommentMarkdown', () => {
   })
 
   it('renders document markdown images with an expand control for the lightbox', () => {
-    // Why: Jira/Linear issue bodies and comment threads use variant="document";
-    // without the expand control, screenshots only display and cannot open large.
+    // Why: document bodies need a large preview without a provider-specific renderer.
     const markup = renderToStaticMarkup(
       <CommentMarkdown
         variant="document"
@@ -103,6 +102,15 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('src="data:image/png;base64,abc123"')
     expect(markup).toContain('aria-label="Expand image"')
     expect(markup).toContain('type="button"')
+  })
+
+  it('adds an expand control to compact images only when requested', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown expandImages content="See this: ![ui.png](data:image/png;base64,abc123)" />
+    )
+
+    expect(markup).toContain('aria-label="Expand image"')
+    expect(markup).toContain('max-h-32')
   })
 
   it('renders bare GitHub user attachment links as document videos', () => {

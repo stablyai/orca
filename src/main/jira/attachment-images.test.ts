@@ -77,12 +77,85 @@ describe('attachment image helpers', () => {
     expect(images).toHaveLength(1)
     expect(images[0]?.id).toBe('101')
     expect(images[0]?.dataUrl.startsWith('data:image/png;base64,')).toBe(true)
+    expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'https://example.atlassian.net/rest/api/3/attachment/content/101?redirect=false'
+    )
 
     const resolve = createMediaMarkdownResolver(images, ['101'])
-    expect(resolve({ id: 'media-uuid', type: 'file', alt: 'shot.png' })).toBe(
-      `![shot.png](${images[0]?.dataUrl})`
-    )
+    const resolved = `![shot.png](${images[0]?.dataUrl})`
+    expect(resolve({ id: 'media-uuid', type: 'file', alt: 'shot.png' })).toBe(resolved)
+    expect(resolve({ id: 'media-uuid', type: 'file' })).toBe(resolved)
     expect(resolve({ id: 'media-uuid-2', type: 'file' })).toBeNull()
+  })
+
+  it('downloads only referenced attachments after prioritizing the complete metadata list', async () => {
+    jiraRequestBinaryMock.mockResolvedValue({
+      data: Uint8Array.from([1]).buffer,
+      contentType: 'image/png'
+    })
+    const { loadIssueImageAttachments } = await import('./attachment-images')
+    const attachments = Array.from({ length: 13 }, (_, index) => ({
+      id: String(index + 1),
+      filename: `${index + 1}.png`,
+      mimeType: 'image/png',
+      size: 1
+    }))
+
+    const images = await loadIssueImageAttachments(makeEntry(), attachments, ['13'])
+
+    expect(images.map((image) => image.id)).toEqual(['13'])
+    expect(jiraRequestBinaryMock).toHaveBeenCalledTimes(1)
+    expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'https://example.atlassian.net/rest/api/3/attachment/content/13?redirect=false'
+    )
+  })
+
+  it('does not download attachments when rendered content references none', async () => {
+    const { loadIssueImageAttachments } = await import('./attachment-images')
+
+    await expect(
+      loadIssueImageAttachments(
+        makeEntry(),
+        [{ id: '1', filename: 'unrelated.png', mimeType: 'image/png', size: 1 }],
+        []
+      )
+    ).resolves.toEqual([])
+    expect(jiraRequestBinaryMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the attachment content URI supplied by self-hosted Jira', async () => {
+    jiraRequestBinaryMock.mockResolvedValue({
+      data: Uint8Array.from([1]).buffer,
+      contentType: 'image/png'
+    })
+    const entry = makeEntry()
+    entry.site = {
+      ...entry.site,
+      siteUrl: 'https://jira.example.com/jira',
+      authType: 'server'
+    }
+    const { loadIssueImageAttachments } = await import('./attachment-images')
+
+    await loadIssueImageAttachments(
+      entry,
+      [
+        {
+          id: '42',
+          filename: 'server.png',
+          mimeType: 'image/png',
+          size: 1,
+          content: 'https://jira.example.com/jira/secure/attachment/42/server.png'
+        }
+      ],
+      ['42']
+    )
+
+    expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'https://jira.example.com/jira/secure/attachment/42/server.png'
+    )
   })
 
   it('skips oversized and non-image attachments', async () => {

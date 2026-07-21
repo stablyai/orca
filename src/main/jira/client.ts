@@ -459,15 +459,24 @@ export async function jiraRequest<T>(
 
 export async function jiraRequestBinary(
   client: JiraClientForSite,
-  path: string
+  pathOrUrl: string
 ): Promise<{ data: ArrayBuffer; contentType: string }> {
+  const siteUrl = new URL(client.site.siteUrl)
+  const requestUrl = /^https?:\/\//i.test(pathOrUrl)
+    ? new URL(pathOrUrl)
+    : new URL(`${client.site.siteUrl}${pathOrUrl}`)
+  if (requestUrl.origin !== siteUrl.origin) {
+    // Why: attachment metadata is provider-controlled; never forward Jira
+    // credentials if a malformed response points at another origin.
+    throw new JiraApiError('Jira attachment URL must use the configured site origin.', null)
+  }
   const headers = new Headers()
   // Why: attachment content is binary; forcing JSON Accept/Content-Type can
   // break downloads and confuses some Atlassian edge responses.
   headers.set('Accept', '*/*')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
-  const response = await jiraFetch(`${client.site.siteUrl}${path}`, { headers })
+  const response = await jiraFetch(requestUrl.toString(), { headers })
   if (!response.ok) {
     throw new JiraApiError(await readJiraError(response), response.status)
   }

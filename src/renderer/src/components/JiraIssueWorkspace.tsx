@@ -755,11 +755,11 @@ export default function JiraIssueWorkspace({
                             </span>
                           </div>
                           <div className="px-3 py-2">
-                            {/* Why: same document renderer as the description so inline
-                                screenshot data URLs open the viewport lightbox on click. */}
+                            {/* Why: Jira comment screenshots need the same preview
+                                affordance without changing compact comment typography. */}
                             <CommentMarkdown
                               content={comment.body}
-                              variant="document"
+                              expandImages
                               className="text-[13px] leading-relaxed"
                             />
                           </div>

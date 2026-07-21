@@ -7,7 +7,6 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { isMarkdownImageLightboxOpen } from '@/components/sidebar/markdown-image-lightbox-state'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -80,10 +79,6 @@ function SheetContent({
   overlayClassName,
   overlayStyle,
   style,
-  onEscapeKeyDown,
-  onPointerDownOutside,
-  onInteractOutside,
-  onFocusOutside,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> &
   VariantProps<typeof sheetContentVariants> & {
@@ -100,32 +95,6 @@ function SheetContent({
         // Why: same as SheetOverlay — the sheet content portals to the
         // document root and its header overlaps the titlebar drag strip.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        onEscapeKeyDown={(event) => {
-          // Why: markdown image lightboxes sit above sheets; Esc must close only
-          // the lightbox, not the whole issue drawer underneath.
-          if (isMarkdownImageLightboxOpen()) {
-            event.preventDefault()
-          }
-          onEscapeKeyDown?.(event)
-        }}
-        onPointerDownOutside={(event) => {
-          if (isMarkdownImageLightboxOpen()) {
-            event.preventDefault()
-          }
-          onPointerDownOutside?.(event)
-        }}
-        onInteractOutside={(event) => {
-          if (isMarkdownImageLightboxOpen()) {
-            event.preventDefault()
-          }
-          onInteractOutside?.(event)
-        }}
-        onFocusOutside={(event) => {
-          if (isMarkdownImageLightboxOpen()) {
-            event.preventDefault()
-          }
-          onFocusOutside?.(event)
-        }}
         {...props}
       >
         {children}

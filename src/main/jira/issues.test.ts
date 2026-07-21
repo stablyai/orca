@@ -412,7 +412,7 @@ describe('Jira issue operations', () => {
     )
     expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
       expect.anything(),
-      '/rest/api/3/attachment/content/10001?redirect=false'
+      'https://example.atlassian.net/rest/api/3/attachment/content/10001?redirect=false'
     )
     expect(issue?.description).toContain('See image')
     expect(issue?.description).toContain('![ui.png](data:image/png;base64,')
@@ -551,6 +551,61 @@ describe('Jira issue operations', () => {
         updatedAt: undefined
       }
     ])
+    expect(jiraRequestMock).toHaveBeenCalledTimes(1)
+    expect(String(jiraRequestMock.mock.calls[0]?.[1])).toContain('expand=renderedBody')
+    expect(jiraRequestBinaryMock).not.toHaveBeenCalled()
+  })
+
+  it('embeds only attachments referenced by rendered Jira comments', async () => {
+    jiraRequestMock
+      .mockResolvedValueOnce({
+        comments: [
+          {
+            id: 'comment-1',
+            body: {
+              type: 'doc',
+              version: 1,
+              content: [
+                {
+                  type: 'mediaSingle',
+                  content: [
+                    {
+                      type: 'media',
+                      attrs: { id: 'media-uuid', type: 'file', alt: 'comment.png' }
+                    }
+                  ]
+                }
+              ]
+            },
+            renderedBody:
+              '<img src="https://example.atlassian.net/rest/api/3/attachment/content/20002" />',
+            created: '2026-05-30T12:00:00.000Z',
+            author: { accountId: 'user-1', displayName: 'Ada' }
+          }
+        ]
+      })
+      .mockResolvedValueOnce({
+        fields: {
+          attachment: [
+            { id: '20001', filename: 'unrelated.png', mimeType: 'image/png', size: 4 },
+            { id: '20002', filename: 'comment.png', mimeType: 'image/png', size: 4 }
+          ]
+        }
+      })
+    jiraRequestBinaryMock.mockResolvedValue({
+      data: Uint8Array.from([137, 80, 78, 71]).buffer,
+      contentType: 'image/png'
+    })
+    const { getIssueComments } = await import('./issues')
+
+    const comments = await getIssueComments('ALP-1', 'site-1')
+
+    expect(comments[0]?.body).toContain('![comment.png](data:image/png;base64,')
+    expect(jiraRequestBinaryMock).toHaveBeenCalledTimes(1)
+    expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'https://example.atlassian.net/rest/api/3/attachment/content/20002?redirect=false'
+    )
   })
 
   describe('getProjectStatusOrder', () => {

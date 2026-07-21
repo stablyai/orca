@@ -51,7 +51,8 @@ function handleMarkdownImageClick(
 }
 
 export function createCompactCommentMarkdownComponents(
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  onLinkClick?: CommentMarkdownLinkClickHandler,
+  expandImages = false
 ): Components {
   return {
     // Strip <p> wrappers to avoid double margins in the tight card layout.
@@ -156,6 +157,17 @@ export function createCompactCommentMarkdownComponents(
           >
             {alt || src}
           </a>
+        )
+      }
+
+      if (expandImages) {
+        return (
+          <ExpandableMarkdownImage
+            src={src}
+            alt={alt}
+            triggerClassName="my-1"
+            className="max-h-32 max-w-full rounded-sm object-contain outline outline-1 outline-border/70"
+          />
         )
       }
 

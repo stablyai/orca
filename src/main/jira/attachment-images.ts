@@ -5,12 +5,14 @@ import type { JiraAdfMediaAttrs, JiraAdfMediaResolver } from './adf-markdown'
 // Why: images are inlined as data URLs over IPC into the renderer. Keep totals
 // modest so a screenshot-heavy ticket cannot balloon process memory.
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024
 const MAX_IMAGES = 12
 
 export type JiraImageAttachment = {
   id: string
   filename: string
   mimeType: string
+  byteSize: number
   dataUrl: string
 }
 
@@ -19,6 +21,7 @@ type AttachmentMeta = {
   filename: string
   mimeType: string
   size: number
+  contentUrl?: string
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -57,10 +60,14 @@ export function parseImageAttachmentMetas(attachmentField: unknown): AttachmentM
     if (size > MAX_IMAGE_BYTES) {
       continue
     }
-    metas.push({ id, filename, mimeType, size })
-    if (metas.length >= MAX_IMAGES) {
-      break
-    }
+    const contentUrl = asString(record.content)
+    metas.push({
+      id,
+      filename,
+      mimeType,
+      size,
+      ...(contentUrl ? { contentUrl } : {})
+    })
   }
   return metas
 }
@@ -91,11 +98,21 @@ async function downloadImageAttachment(
   client: JiraClientForSite,
   meta: AttachmentMeta
 ): Promise<JiraImageAttachment | null> {
+  if (!meta.contentUrl && client.site.authType === 'server') {
+    // Server/DC exposes attachment bytes through the metadata-provided content URI.
+    return null
+  }
   try {
-    const binary = await jiraRequestBinary(
-      client,
-      `/rest/api/3/attachment/content/${encodeURIComponent(meta.id)}?redirect=false`
-    )
+    const contentUrl = meta.contentUrl
+      ? new URL(meta.contentUrl, `${client.site.siteUrl}/`)
+      : new URL(
+          `/rest/api/3/attachment/content/${encodeURIComponent(meta.id)}`,
+          client.site.siteUrl
+        )
+    if (/\/rest\/api\/(?:2|3)\/attachment\/content\/[^/]+$/i.test(contentUrl.pathname)) {
+      contentUrl.searchParams.set('redirect', 'false')
+    }
+    const binary = await jiraRequestBinary(client, contentUrl.toString())
     if (binary.data.byteLength === 0 || binary.data.byteLength > MAX_IMAGE_BYTES) {
       return null
     }
@@ -109,6 +126,7 @@ async function downloadImageAttachment(
       id: meta.id,
       filename: meta.filename,
       mimeType: mime,
+      byteSize: binary.data.byteLength,
       dataUrl: `data:${mime};base64,${base64}`
     }
   } catch (error) {
@@ -127,7 +145,7 @@ export async function loadIssueImageAttachments(
   preferredIds: string[] = []
 ): Promise<JiraImageAttachment[]> {
   const metas = parseImageAttachmentMetas(attachmentField)
-  if (metas.length === 0) {
+  if (metas.length === 0 || preferredIds.length === 0) {
     return []
   }
 
@@ -142,16 +160,26 @@ export async function loadIssueImageAttachments(
       used.add(meta.id)
     }
   }
-  for (const meta of metas) {
-    if (!used.has(meta.id)) {
-      ordered.push(meta)
-      used.add(meta.id)
-    }
-  }
 
-  const limited = ordered.slice(0, MAX_IMAGES)
-  const downloaded = await Promise.all(limited.map((meta) => downloadImageAttachment(client, meta)))
-  return downloaded.filter((image): image is JiraImageAttachment => image !== null)
+  const images: JiraImageAttachment[] = []
+  let totalBytes = 0
+  // Why: issue details should fetch only images referenced by rendered content,
+  // in document order, without bursting many authenticated downloads at Jira.
+  for (const meta of ordered.slice(0, MAX_IMAGES)) {
+    if (meta.size > 0 && totalBytes + meta.size > MAX_TOTAL_IMAGE_BYTES) {
+      continue
+    }
+    const image = await downloadImageAttachment(client, meta)
+    if (!image) {
+      continue
+    }
+    if (totalBytes + image.byteSize > MAX_TOTAL_IMAGE_BYTES) {
+      continue
+    }
+    totalBytes += image.byteSize
+    images.push(image)
+  }
+  return images
 }
 
 export function createMediaMarkdownResolver(
@@ -160,6 +188,7 @@ export function createMediaMarkdownResolver(
 ): JiraAdfMediaResolver {
   const byId = new Map(images.map((image) => [image.id, image]))
   const byFilename = new Map<string, JiraImageAttachment[]>()
+  const resolvedByMediaId = new Map<string, string>()
   for (const image of images) {
     const key = image.filename.toLowerCase()
     const list = byFilename.get(key) ?? []
@@ -196,24 +225,35 @@ export function createMediaMarkdownResolver(
   }
 
   return (attrs: JiraAdfMediaAttrs): string | null => {
+    if (attrs.id) {
+      const cached = resolvedByMediaId.get(attrs.id)
+      if (cached) {
+        return cached
+      }
+    }
     const alt = attrs.alt?.trim() || 'Image'
     if (attrs.url && /^https?:\/\//i.test(attrs.url)) {
       return `![${escapeMarkdownAlt(alt)}](${attrs.url})`
     }
 
+    let resolved: string | null = null
+    if (attrs.id) {
+      resolved = take(byId.get(attrs.id))
+    }
     if (attrs.alt?.trim()) {
       const matches = byFilename.get(attrs.alt.trim().toLowerCase())
       if (matches && matches.length > 0) {
         const stillQueued = matches.find((image) => queue.some((entry) => entry.id === image.id))
-        const resolved = take(stillQueued ?? matches[0])
-        if (resolved) {
-          return resolved
-        }
+        resolved ??= take(stillQueued ?? matches[0])
       }
     }
 
     // Why: ADF media IDs are Media Service UUIDs, not attachment IDs. Pair remaining
     // inline images to downloaded attachments in rendered/document order.
-    return take(queue.shift())
+    resolved ??= take(queue.shift())
+    if (resolved && attrs.id) {
+      resolvedByMediaId.set(attrs.id, resolved)
+    }
+    return resolved
   }
 }
