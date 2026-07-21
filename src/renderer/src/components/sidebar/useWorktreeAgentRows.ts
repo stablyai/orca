@@ -79,9 +79,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
     useShallow((s) => (active ? selectRuntimeAgentOrchestrationForWorktree(s, worktreeId) : {}))
   )
-  // Why: the activity summary already narrows the process-identity slice per
-  // worktree with stable references; reuse it instead of subscribing to the
-  // whole paneForegroundAgentByPaneKey map (O(worktrees) render amplification).
+  // Why: reuse the stable per-worktree summary to avoid whole-map render amplification.
   const paneForegroundAgentByPaneKey = useAppStore((s) =>
     active
       ? selectWorktreeAgentActivitySummary(s, worktreeId).paneForegroundAgentByPaneKey
@@ -90,9 +88,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
   const agentFreshnessSignature = useAppStore((s) =>
     active ? selectAgentFreshness(s) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
   )
-  // Why: process-identity evidence decays by wall clock, not by store writes;
-  // this tick forces one recompute at the earliest TTL boundary so a stale row
-  // drops even when tracker/coordinator go silent after the last publish.
+  // Why: evidence decays by wall clock, so recompute at expiry even without a store write.
   const evidenceExpiryTick = usePaneForegroundAgentEvidenceExpiryTick(paneForegroundAgentByPaneKey)
 
   return useMemo<DashboardAgentRow[]>(() => {

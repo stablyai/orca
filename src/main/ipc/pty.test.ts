@@ -7525,6 +7525,82 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('reuses renderer foreground inspections as runtime wake evidence', async () => {
+    const getForegroundProcess = vi.fn(async () => 'claude')
+    const confirmForegroundProcess = vi.fn(async () => 'claude')
+    setLocalPtyProvider({
+      getForegroundProcess,
+      confirmForegroundProcess,
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => [])
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      recordPtyForegroundProcessObservation: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    restorePtyIncarnation('pty-known-launch', 'incarnation-known-launch')
+
+    try {
+      await expect(
+        handlers.get('pty:getForegroundProcess')!(null, { id: 'pty-known-launch' })
+      ).resolves.toBe('claude')
+      await expect(
+        handlers.get('pty:confirmForegroundProcess')!(null, { id: 'pty-known-launch' })
+      ).resolves.toBe('claude')
+
+      expect(runtime.recordPtyForegroundProcessObservation).toHaveBeenNthCalledWith(
+        1,
+        'pty-known-launch',
+        'claude'
+      )
+      expect(runtime.recordPtyForegroundProcessObservation).toHaveBeenNthCalledWith(
+        2,
+        'pty-known-launch',
+        'claude'
+      )
+    } finally {
+      clearProviderPtyState('pty-known-launch')
+    }
+  })
+
+  it('does not record foreground evidence after a PTY id is reused during inspection', async () => {
+    let resolveForegroundProcess: ((value: string | null) => void) | undefined
+    const foregroundProcess = new Promise<string | null>((resolve) => {
+      resolveForegroundProcess = resolve
+    })
+    setLocalPtyProvider({
+      getForegroundProcess: vi.fn(() => foregroundProcess),
+      confirmForegroundProcess: vi.fn(() => foregroundProcess),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => [])
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      recordPtyForegroundProcessObservation: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const ptyId = 'pty-reused-during-inspection'
+    restorePtyIncarnation(ptyId, 'incarnation-before-inspection')
+
+    try {
+      const foreground = handlers.get('pty:getForegroundProcess')!(null, { id: ptyId })
+      const confirmation = handlers.get('pty:confirmForegroundProcess')!(null, { id: ptyId })
+      restorePtyIncarnation(ptyId, 'incarnation-after-inspection')
+      resolveForegroundProcess?.('claude')
+
+      await expect(foreground).resolves.toBe('claude')
+      await expect(confirmation).resolves.toBe('claude')
+      expect(runtime.recordPtyForegroundProcessObservation).not.toHaveBeenCalled()
+    } finally {
+      clearProviderPtyState(ptyId)
+    }
+  })
+
   // Why: daemon resize is fire-and-forget, so pty:getSize must report the APPLIED size, not the requested one (Claude-Code split-pane desync).
   describe('pty:getSize reports applied size, not requested size', () => {
     function setupProviderWithAppliedSize(args: {

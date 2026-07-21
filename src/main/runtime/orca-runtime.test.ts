@@ -23339,6 +23339,26 @@ describe('OrcaRuntimeService', () => {
     expect(getForegroundProcess).not.toHaveBeenCalled()
   })
 
+  it('accepts foreground evidence from an existing renderer scan for a known launch agent', async () => {
+    const onPtyForegroundAgentEvidence = vi.fn()
+    const runtime = new OrcaRuntimeService(store, undefined, { onPtyForegroundAgentEvidence })
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-claude' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: vi.fn()
+    })
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      launchAgent: 'claude',
+      title: 'Claude'
+    })
+
+    expect(runtime.recordPtyForegroundProcessObservation('pty-claude', 'claude')).toBe(true)
+    expect(onPtyForegroundAgentEvidence).toHaveBeenCalledWith('pty-claude', 'claude')
+    expect(runtime.hasWakeEligibleForegroundAgent('pty-claude')).toBe(true)
+  })
+
   it('probes the foreground process only on a status transition for unknown launch agents', async () => {
     const getForegroundProcess = vi.fn(async () => 'omp')
     const runtime = createRuntime()

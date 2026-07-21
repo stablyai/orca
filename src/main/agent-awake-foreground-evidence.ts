@@ -1,7 +1,5 @@
-// Why: foreground-agent scans are event-driven (title status transitions,
-// session listing sweeps), not periodic. The TTL only bridges gaps between
-// them; expiry revalidates against the runtime's cached foreground state
-// instead of forcing a new process scan.
+// Why: scans are event-driven, so expiry revalidates cached foreground state
+// without adding process scans.
 export const AGENT_AWAKE_FOREGROUND_AGENT_TTL_MS = 5 * 60 * 1000
 
 type ForegroundAgentEvidence = {
@@ -11,11 +9,7 @@ type ForegroundAgentEvidence = {
   observedAt: number
 }
 
-/**
- * Per-PTY keep-awake evidence for recognized foreground agents (wrapper
- * claude etc.) that emit no hook statuses. Only recognized agents are ever
- * reported here — arbitrary processes never grant wake eligibility.
- */
+/** Per-PTY keep-awake evidence for recognized agents that emit no hook statuses. */
 export class ForegroundAgentEvidenceLedger {
   private readonly evidenceByPtyId = new Map<string, ForegroundAgentEvidence>()
   private readonly now: () => number
@@ -40,9 +34,8 @@ export class ForegroundAgentEvidenceLedger {
   pruneAndCount(staleAfterMs: number): number {
     const now = this.now()
     for (const [ptyId, evidence] of this.evidenceByPtyId) {
-      // Why: the 2h cap is unconditional — revalidation renews observedAt, so a
-      // TTL-only prune would keep a capped entry alive with no timer scheduled
-      // (nextExpiry treats the cap as expired) and block sleep forever.
+      // Why: revalidation renews observedAt, so only an unconditional cap can
+      // prevent evidence from surviving after its final timer.
       if (now - evidence.reportedAt >= staleAfterMs) {
         this.evidenceByPtyId.delete(ptyId)
         continue

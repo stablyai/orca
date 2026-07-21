@@ -7194,7 +7194,17 @@ export function registerPtyHandlers(
       if (!hasPtyProviderForInspection(args.id)) {
         return null
       }
-      return getProviderForPty(args.id).getForegroundProcess(args.id)
+      const inspectedIncarnationId = ptyIncarnationById.get(args.id)
+      const foregroundProcess = await getProviderForPty(args.id).getForegroundProcess(args.id)
+      // Why: launched-agent runtime probes are skipped; reuse this scan for wake
+      // evidence instead of adding another provider query.
+      if (
+        inspectedIncarnationId !== undefined &&
+        ptyIncarnationById.get(args.id) === inspectedIncarnationId
+      ) {
+        runtime?.recordPtyForegroundProcessObservation(args.id, foregroundProcess)
+      }
+      return foregroundProcess
     }
   )
 
@@ -7210,7 +7220,18 @@ export function registerPtyHandlers(
       }
       const provider = getProviderForPty(args.id)
       // Why: the cached foreground API would turn stale process identity into shell/agent authority at a command boundary.
-      return provider.confirmForegroundProcess?.(args.id) ?? null
+      if (!provider.confirmForegroundProcess) {
+        return null
+      }
+      const inspectedIncarnationId = ptyIncarnationById.get(args.id)
+      const foregroundProcess = await provider.confirmForegroundProcess(args.id)
+      if (
+        inspectedIncarnationId !== undefined &&
+        ptyIncarnationById.get(args.id) === inspectedIncarnationId
+      ) {
+        runtime?.recordPtyForegroundProcessObservation(args.id, foregroundProcess)
+      }
+      return foregroundProcess
     }
   )
 

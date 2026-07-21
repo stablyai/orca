@@ -105,9 +105,8 @@ export class AgentAwakeService {
     this.refresh('status-change')
   }
 
-  // Why: wrapper-launched/manual agents recognized by the foreground scan can
-  // run without hook statuses; their evidence holds wake eligibility too.
-  // Only recognized agents reach here — arbitrary processes never grant wake.
+  // Why: recognized wrapper/manual agents may lack hooks; arbitrary processes
+  // never reach this evidence path.
   reportForegroundAgentEvidence(ptyId: string, agent: string | null): void {
     if (this.foregroundAgentEvidence.report(ptyId, agent)) {
       this.refresh('foreground-agent-evidence')

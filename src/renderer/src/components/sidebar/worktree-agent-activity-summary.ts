@@ -19,9 +19,7 @@ export type WorktreeAgentActivitySummary = {
   hasLiveDone: boolean
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
-  /** Process-table identity entries narrowed to this worktree's panes.
-   *  Freshness (TTL) is NOT applied here — this cache is invalidated by
-   *  references, so consumers must gate with their own clock. */
+  /** Process identity narrowed by worktree; consumers apply wall-clock freshness. */
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
 }
 
@@ -230,8 +228,7 @@ function paneForegroundAgentsEqual(
   if (previousKeys.length !== Object.keys(next).length) {
     return false
   }
-  // Why: entry objects are immutable in the slice, so reference equality is
-  // exact — and observedAt bumps must NOT be equal, or freshness would freeze.
+  // Why: immutable entry identity is exact, and observedAt bumps must invalidate freshness.
   return previousKeys.every((paneKey) => previous[paneKey] === next[paneKey])
 }
 

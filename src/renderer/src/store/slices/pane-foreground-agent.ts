@@ -2,10 +2,8 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/types'
 
-// Why: attribution consumers (sidebar rows, worktree ring) must not trust
-// process identity forever — an exited agent's entry could otherwise fake a
-// working state. 30s sits above the completion coordinator's slowest cadences
-// (3s hidden backstop, 15s no-evidence poll), which re-arm the observation.
+// Why: expire identity after the coordinator's slowest 15s cadence so exited
+// agents cannot leave false working state indefinitely.
 export const PANE_FOREGROUND_AGENT_EVIDENCE_TTL_MS = 30_000
 // Why: active-tier inspections land every ~750ms; re-stamping each one would
 // churn the store, so freshness bumps are quantized well below the TTL.
@@ -35,10 +33,7 @@ export type PaneForegroundAgentEntry = {
 export type PaneForegroundAgentSlice = {
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   setPaneForegroundAgent: (paneKey: string, entry: PaneForegroundAgentEntry) => void
-  /** Freshness bump from the completion coordinator's existing inspections —
-   *  identity only, never routing trust; a differing identity is ignored so
-   *  the tracker keeps sole ownership of identity changes. `ptyId` is the PTY
-   *  the inspection ran against; it binds created/rebound evidence. */
+  /** Refresh identity from an existing inspection, never routing trust. */
   refreshPaneForegroundAgentObservation: (paneKey: string, agent: TuiAgent, ptyId?: string) => void
   clearPaneForegroundAgent: (paneKey: string) => void
   /** Wholesale teardown sweeps (tab close, worktree sleep/remove) retire pane

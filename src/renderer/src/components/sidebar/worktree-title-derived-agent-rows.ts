@@ -218,11 +218,8 @@ export function resolveTitleDerivedAgentType(
   if (agentType !== 'claude') {
     return agentType
   }
-  // Why: Claude's task-title spinner heuristic has no provider identity. In
-  // split panes it can match arbitrary terminal spinners, so sidebar rows only
-  // accept Claude when the title itself names Claude — or when fresh
-  // process-table identity proves a claude foreground (wrapper launches via a
-  // shell function never put the literal token in the title).
+  // Why: generic spinner titles may be unrelated; require either a Claude token
+  // or fresh Claude process identity before attributing them.
   if (CLAUDE_AGENT_TOKEN_RE.test(title)) {
     return agentType
   }

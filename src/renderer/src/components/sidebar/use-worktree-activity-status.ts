@@ -31,9 +31,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     agentStatusPaneIdsByTabId,
     paneForegroundAgentByPaneKey
   } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
-  // Why: process-identity evidence decays by wall clock, not by store writes;
-  // this tick forces one recompute at the earliest TTL boundary so a stale
-  // working ring drops even when tracker/coordinator go silent.
+  // Why: evidence decays by wall clock, so recompute at expiry even without a store write.
   const evidenceExpiryTick = usePaneForegroundAgentEvidenceExpiryTick(paneForegroundAgentByPaneKey)
 
   // Why: compact and detailed cards need the same status-dot semantics:
@@ -54,8 +52,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasLiveDone,
         hasRetainedDone
       }),
-    // Why: evidenceExpiryTick is an extra dep on purpose — it forces the
-    // Date.now() read inside resolveWorktreeStatus to re-evaluate at the TTL.
+    // Why: the tick forces resolveWorktreeStatus to re-read time at expiry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       evidenceExpiryTick,
