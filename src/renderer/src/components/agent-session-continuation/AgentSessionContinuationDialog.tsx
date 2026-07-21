@@ -71,6 +71,11 @@ export function AgentSessionContinuationDialog({
       return
     }
     let cancelled = false
+    setDetecting(true)
+    setDetectionFailed(false)
+    setDetectedAgents([])
+    setSelectedAgent(null)
+    setContextMode('focused')
     void detectAgentSessionContinuationAgents(request.worktreeId)
       .then((detected) => {
         if (cancelled) {
@@ -110,6 +115,7 @@ export function AgentSessionContinuationDialog({
       setShowStarting(false)
       return
     }
+    // Why: local launches are often instant; defer the spinner so fast paths do not flicker.
     const timer = window.setTimeout(() => setShowStarting(true), 200)
     return () => window.clearTimeout(timer)
   }, [starting])

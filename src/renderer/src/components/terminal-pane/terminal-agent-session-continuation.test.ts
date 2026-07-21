@@ -99,4 +99,24 @@ describe('prepareAgentSessionContinuationFromPane', () => {
       }
     })
   })
+
+  it('falls back to terminal capture when the provider transcript path is blank', () => {
+    store.agentStatusByPaneKey[`tab-1:${LEAF_ID}`]!.providerSession = { transcriptPath: '   ' }
+    const pane = makePane('latest terminal context')
+
+    const request = prepareAgentSessionContinuationFromPane({
+      pane,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null,
+      workspacePath: '/repo/worktree',
+      initialCwd: '/repo/worktree'
+    })
+
+    expect(pane.serializeAddon.serialize).toHaveBeenCalledWith({ scrollback: 800 })
+    expect(request?.source).toMatchObject({
+      capturedText: 'latest terminal context',
+      transcriptPath: null
+    })
+  })
 })

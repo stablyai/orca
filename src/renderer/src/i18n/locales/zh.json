@@ -13579,6 +13579,7 @@
       "agentDisabled": "{{agent}} 已在智能体设置中停用。",
       "agentUnavailable": "未在此工作区主机上检测到 {{agent}}。",
       "sent": "已将会话上下文发送到新的 {{agent}} 会话。",
+      "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文。",
       "launchFailed": "无法启动新的 {{agent}} 会话。"
     }
   },

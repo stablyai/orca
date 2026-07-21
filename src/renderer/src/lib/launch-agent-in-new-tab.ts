@@ -40,7 +40,6 @@ export type LaunchAgentInNewTabArgs = {
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command. */
   agentArgs?: string | null
-  /** Working directory used when the new terminal starts. */
   initialCwd?: string | null
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -129,7 +128,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null
   let submitPastedPrompt = false
-  let forcePasteAfterLaunch = false
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
 
   if (hasPrompt && promptDelivery === 'submit-after-ready') {
@@ -141,7 +139,6 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     })
     pasteDraftAfterLaunch = trimmedPrompt
     submitPastedPrompt = true
-    forcePasteAfterLaunch = true
   } else if (hasPrompt && promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
       ...startupPlanBase,
@@ -201,8 +198,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   })
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
-  if (isWebRuntimeSessionActive(runtimeEnvironmentId) && pasteDraftAfterLaunch === null) {
-    launchAgentInWebHostTab({
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    const webHostDelivery = launchAgentInWebHostTab({
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,
@@ -210,11 +207,27 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       cwd: initialCwd,
       hasPrompt,
       startupPlan,
+      ...(pasteDraftAfterLaunch !== null
+        ? {
+            promptAfterReady: {
+              content: pasteDraftAfterLaunch,
+              submit: submitPastedPrompt,
+              forcePaste: promptDelivery === 'submit-after-ready'
+            }
+          }
+        : {}),
       // Why: send the client's resolved terminal choice explicitly, else a paired host applies its own default.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
       onPromptDelivered
     })
-    return { tabId: null, startupPlan, pasteDraftAfterLaunch: false }
+    return {
+      tabId: null,
+      startupPlan,
+      pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
+      ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
+        ? { promptDeliveryResult: webHostDelivery }
+        : {})
+    }
   }
 
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
@@ -226,8 +239,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
   if (initialCwd?.trim()) {
-    // Why: continuations may originate below the workspace root; queue the
-    // recorded cwd before mount so local, WSL, and SSH panes all start there.
+    // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
     store.queueTabInitialCwd(tab.id, initialCwd)
   }
   store.queueTabStartupCommand(tab.id, {
@@ -257,7 +269,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       content: pasteDraftAfterLaunch,
       agent,
       submit: submitPastedPrompt,
-      forcePaste: forcePasteAfterLaunch,
+      forcePaste: promptDelivery === 'submit-after-ready',
       onTimeout: () => {
         const state = useAppStore.getState()
         const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []

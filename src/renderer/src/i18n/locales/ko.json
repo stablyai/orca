@@ -13579,6 +13579,7 @@
       "agentDisabled": "에이전트 설정에서 {{agent}}이(가) 비활성화되어 있습니다.",
       "agentUnavailable": "이 워크스페이스 호스트에서 {{agent}}을(를) 찾지 못했습니다.",
       "sent": "세션 컨텍스트를 새 {{agent}} 세션으로 보냈습니다.",
+      "deliveryFailed": "새 {{agent}} 세션은 시작되었지만 컨텍스트를 보내지 못했습니다.",
       "launchFailed": "새 {{agent}} 세션을 시작할 수 없습니다."
     }
   },

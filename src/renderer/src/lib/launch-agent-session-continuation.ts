@@ -30,7 +30,7 @@ export async function detectAgentSessionContinuationAgents(
     ? state.ensureRemoteDetectedAgents(connectionId)
     : runtimeEnvironmentId
       ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
-      : state.ensureDetectedAgents()
+      : state.ensureDetectedAgents(worktreeId)
 }
 
 async function ensureAgentAvailable(agent: TuiAgent, worktreeId: string): Promise<boolean> {
@@ -131,12 +131,12 @@ export async function launchAgentSessionContinuation({
     void result.promptDeliveryResult
       .then((delivery) => {
         if (!delivery.delivered && !delivery.failureNotified) {
-          notifyLaunchFailed(label)
+          notifyDeliveryFailed(label)
         }
       })
       .catch((error) => {
         console.error('Agent session continuation prompt delivery failed', error)
-        notifyLaunchFailed(label)
+        notifyDeliveryFailed(label)
       })
   }
   return true
@@ -147,6 +147,16 @@ function notifyLaunchFailed(agentLabel: string): void {
     translate(
       'components.agentSessionContinuation.launchFailed',
       'Could not start a new {{agent}} session.',
+      { agent: agentLabel }
+    )
+  )
+}
+
+function notifyDeliveryFailed(agentLabel: string): void {
+  toast.error(
+    translate(
+      'components.agentSessionContinuation.deliveryFailed',
+      'The new {{agent}} session started, but its context could not be sent.',
       { agent: agentLabel }
     )
   )

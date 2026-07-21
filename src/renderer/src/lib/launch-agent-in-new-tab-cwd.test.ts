@@ -67,6 +67,10 @@ describe('launchAgentInNewTab initial cwd', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
+    mockLaunchAgentInWebHostTab.mockResolvedValue({
+      delivered: true,
+      failureNotified: false
+    })
   })
 
   it('queues the original cwd before a local Agent session starts', async () => {
@@ -101,5 +105,34 @@ describe('launchAgentInNewTab initial cwd', () => {
       })
     )
     expect(store.createTab).not.toHaveBeenCalled()
+  })
+
+  it('delivers submit-after-ready prompts on the paired host instead of creating a local tab', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'continue the unfinished task',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    expect(mockLaunchAgentInWebHostTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        promptAfterReady: {
+          content: 'continue the unfinished task',
+          submit: true,
+          forcePaste: true
+        }
+      })
+    )
+    expect(store.createTab).not.toHaveBeenCalled()
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
   })
 })

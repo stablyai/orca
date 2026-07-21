@@ -87,6 +87,15 @@ describe('launchAgentSessionContinuation', () => {
     expect(store.ensureDetectedAgents).not.toHaveBeenCalled()
   })
 
+  it('detects local Agents in the target worktree runtime', async () => {
+    const { detectAgentSessionContinuationAgents } =
+      await import('./launch-agent-session-continuation')
+
+    await detectAgentSessionContinuationAgents('wt-1')
+
+    expect(store.ensureDetectedAgents).toHaveBeenCalledWith('wt-1')
+  })
+
   it('stops before launch when the selected Agent is unavailable', async () => {
     store.ensureDetectedAgents.mockResolvedValue(['claude'])
     const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
@@ -103,5 +112,27 @@ describe('launchAgentSessionContinuation', () => {
 
     expect(launchAgentInNewTab).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledWith('Codex was not detected on this workspace host.')
+  })
+
+  it('distinguishes prompt delivery failure from terminal launch failure', async () => {
+    launchAgentInNewTab.mockReturnValue({
+      tabId: 'tab-new',
+      promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false })
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+
+    await launchAgentSessionContinuation({
+      agent: 'codex',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      workspacePath: '/repo/worktree',
+      launchSource: 'sidebar'
+    })
+
+    await vi.waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'The new Codex session started, but its context could not be sent.'
+      )
+    )
   })
 })

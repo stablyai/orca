@@ -29,8 +29,7 @@ export function prepareAiVaultSessionContinuation(args: {
     },
     worktreeId: targetWorktreeId,
     workspacePath: targetWorkspacePath,
-    // Why: AI Vault sessions can outlive their original worktree selection;
-    // preserve the recorded cwd when starting in another currently open target.
+    // Why: sessions can outlive their worktree selection, but continuation should preserve their recorded cwd.
     initialCwd: session.cwd || targetWorkspacePath,
     launchSource: 'sidebar'
   }

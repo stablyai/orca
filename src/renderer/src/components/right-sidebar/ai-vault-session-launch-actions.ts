@@ -95,25 +95,14 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
-      const targetId = resolveAiVaultSessionLaunchTarget({
+      const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         targetWorktreeId,
         targetState
       })
-      if (targetId.status === 'missing') {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-            'Open a workspace before resuming a session.'
-          )
-        )
-        return
-      }
-
-      if (targetId.status === 'unsupported') {
-        toast.error(aiVaultResumeUnsupportedMessage(targetId.targetStatus))
+      if (!targetId) {
         return
       }
 
@@ -165,24 +154,14 @@ export function useAiVaultSessionLaunchActions({
 
   const handleContinueInNewSession = useCallback(
     (session: AiVaultSession, targetWorktreeId: string): void => {
-      const targetId = resolveAiVaultSessionLaunchTarget({
+      const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
         activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
         targetWorktreeId,
         targetState
       })
-      if (targetId.status === 'missing') {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-            'Open a workspace before resuming a session.'
-          )
-        )
-        return
-      }
-      if (targetId.status === 'unsupported') {
-        toast.error(aiVaultResumeUnsupportedMessage(targetId.targetStatus))
+      if (!targetId) {
         return
       }
 
@@ -281,6 +260,26 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   }
 
   return { status: 'ready', worktreeId: targetWorktreeId }
+}
+
+function resolveAiVaultSessionLaunchTargetOrNotify(
+  args: Parameters<typeof resolveAiVaultSessionLaunchTarget>[0]
+): Extract<AiVaultSessionLaunchTarget, { status: 'ready' }> | null {
+  const target = resolveAiVaultSessionLaunchTarget(args)
+  if (target.status === 'missing') {
+    toast.error(
+      translate(
+        'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
+        'Open a workspace before resuming a session.'
+      )
+    )
+    return null
+  }
+  if (target.status === 'unsupported') {
+    toast.error(aiVaultResumeUnsupportedMessage(target.targetStatus))
+    return null
+  }
+  return target
 }
 
 function aiVaultResumeUnsupportedMessage(

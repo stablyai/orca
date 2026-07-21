@@ -53,11 +53,10 @@ export function prepareAgentSessionContinuationFromPane({
   const paneKey = makePaneKey(tabId, pane.leafId)
   const status = state.agentStatusByPaneKey[paneKey]
   const sourceAgent = resolveSourceAgent({ pane, tabId, worktreeId })
-  const transcriptPath = status?.providerSession?.transcriptPath
+  const transcriptPath = status?.providerSession?.transcriptPath?.trim() || null
   const capturedText = transcriptPath ? '' : pane.serializeAddon.serialize({ scrollback: 800 })
   const source = {
-    // Why: an authoritative same-host transcript keeps the dialog fast and
-    // avoids serializing a large terminal buffer unless no transcript exists.
+    // Why: prefer the same-host transcript so opening the dialog does not serialize large scrollback.
     capturedText,
     sourceAgent,
     sourceLabel: paneKey,

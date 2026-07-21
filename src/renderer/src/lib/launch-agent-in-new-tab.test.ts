@@ -105,8 +105,6 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
-vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
-
 vi.mock('@/lib/telemetry', () => ({
   track: mockTrack,
   tuiAgentToAgentKind: (agent: string) => agent
