@@ -75,19 +75,25 @@ describe('patched node-pty Windows Job Object contract', () => {
       'const std::shared_ptr<pty_baton> handle = get_pty_baton(id)'
     )
     const handleGuard = native.indexOf('if (handle != nullptr)', killHandle)
-    const takeJob = native.indexOf('HANDLE hJob = take_job_handle(handle)', killHandle)
+    const takeJob = native.indexOf(
+      'const HANDLE killJobHandle = take_job_handle(handle);\n    const bool hadJobHandle = killJobHandle != nullptr',
+      killHandle
+    )
     expect(handleGuard).toBeGreaterThan(killHandle)
     expect(takeJob).toBeGreaterThan(handleGuard)
     expect(native).toContain('std::shared_ptr<pty_baton>')
     expect(native).toContain('std::atomic<HANDLE> hJob')
     expect(native).toContain('hJob.exchange(nullptr)')
-    expect(native).toContain('TerminateJobObject(')
-    expect(native).toContain('CloseHandle(hJob)')
+    expect(native).toContain('const HANDLE createdJobHandle = CreateJobObjectW(')
+    expect(native).toContain('const HANDLE resumeJobHandle = take_job_handle(handle)')
+    expect(native).toContain('TerminateJobObject(killJobHandle, 1)')
+    expect(native).toContain('CloseHandle(killJobHandle)')
+    expect(native).not.toContain('const HANDLE jobHandle =')
     expect(native).toContain('bool jobObjectAssigned = false')
     expect(native).toContain('bool jobObjectSetupFailed = false')
     expect(native).toContain('std::mutex hShellMutex')
     expect(native).toMatch(
-      /if \(hJob == nullptr &&\s*!handle->jobObjectAssigned &&\s*\(useConptyDll \|\| handle->jobObjectSetupFailed\)\)/
+      /if \(!hadJobHandle &&\s*!handle->jobObjectAssigned &&\s*\(useConptyDll \|\| handle->jobObjectSetupFailed\)\)/
     )
     expect(native).toContain('terminate_shell_process(handle)')
     expect(native).not.toContain('TerminateProcess(handle->hShell')

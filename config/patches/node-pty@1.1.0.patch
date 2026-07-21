@@ -537,9 +537,9 @@ index 7b286d3d64..7434bcc994 100644
 +}
 +
 +static void close_job_handle(const std::shared_ptr<pty_baton>& baton) {
-+  HANDLE hJob = take_job_handle(baton);
-+  if (hJob != nullptr) {
-+    CloseHandle(hJob);
++  const HANDLE closedJobHandle = take_job_handle(baton);
++  if (closedJobHandle != nullptr) {
++    CloseHandle(closedJobHandle);
 +  }
 +}
 +
@@ -643,20 +643,20 @@ index 7b286d3d64..7434bcc994 100644
 +  }
 +  bool jobAssigned = false;
 +  if (useConptyJobObject) {
-+    HANDLE hJob = CreateJobObjectW(nullptr, nullptr);
-+    if (hJob != nullptr) {
++    const HANDLE createdJobHandle = CreateJobObjectW(nullptr, nullptr);
++    if (createdJobHandle != nullptr) {
 +      JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobInfo{};
 +      jobInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 +      if (SetInformationJobObject(
-+            hJob,
++            createdJobHandle,
 +            JobObjectExtendedLimitInformation,
 +            &jobInfo,
 +            sizeof(jobInfo)) &&
-+          AssignProcessToJobObject(hJob, piClient.hProcess)) {
-+        handle->hJob.store(hJob);
++          AssignProcessToJobObject(createdJobHandle, piClient.hProcess)) {
++        handle->hJob.store(createdJobHandle);
 +        jobAssigned = true;
 +      } else {
-+        CloseHandle(hJob);
++        CloseHandle(createdJobHandle);
 +      }
 +    }
 +
@@ -665,10 +665,10 @@ index 7b286d3d64..7434bcc994 100644
 +
 +    if (ResumeThread(piClient.hThread) == static_cast<DWORD>(-1)) {
 +      const DWORD resumeError = GetLastError();
-+      HANDLE hJob = take_job_handle(handle);
-+      if (hJob != nullptr) {
-+        TerminateJobObject(hJob, 1);
-+        CloseHandle(hJob);
++      const HANDLE resumeJobHandle = take_job_handle(handle);
++      if (resumeJobHandle != nullptr) {
++        TerminateJobObject(resumeJobHandle, 1);
++        CloseHandle(resumeJobHandle);
 +      } else {
 +        terminate_shell_process(handle);
 +      }
@@ -693,20 +693,21 @@ index 7b286d3d64..7434bcc994 100644
 @@ -516 +624 @@ static Napi::Value PtyClear(const Napi::CallbackInfo& info) {
 -  const pty_baton* handle = get_pty_baton(id);
 +  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
-@@ -547,3 +655,8 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -547,3 +655,9 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
 -  const pty_baton* handle = get_pty_baton(id);
 +  const std::shared_ptr<pty_baton> handle = get_pty_baton(id);
 
    if (handle != nullptr) {
-+    HANDLE hJob = take_job_handle(handle);
-+    if (hJob != nullptr) {
-+      TerminateJobObject(hJob, 1);
-+      CloseHandle(hJob);
++    const HANDLE killJobHandle = take_job_handle(handle);
++    const bool hadJobHandle = killJobHandle != nullptr;
++    if (hadJobHandle) {
++      TerminateJobObject(killJobHandle, 1);
++      CloseHandle(killJobHandle);
 +    }
-@@ -562,2 +675,4 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -562,2 +676,4 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
 -    if (useConptyDll) {
 -      TerminateProcess(handle->hShell, 1);
-+    if (hJob == nullptr &&
++    if (!hadJobHandle &&
 +        !handle->jobObjectAssigned &&
 +        (useConptyDll || handle->jobObjectSetupFailed)) {
 +      terminate_shell_process(handle);
