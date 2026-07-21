@@ -4803,7 +4803,11 @@
           "newGroup": "New group",
           "addChildGroup": "Add nested group",
           "deleteGroup": "Delete group",
-          "deletePanel": "パネルを削除"
+          "deletePanel": "パネルを削除",
+          "unsavedCanvas": "Unsaved canvas",
+          "closeCanvas": "Close canvas",
+          "panelCanvas": "Panel Canvas",
+          "savedLayouts": "Saved Layouts"
         },
         "SidebarPanelRows": {
           "renameLabel": "Rename"

@@ -2766,8 +2766,13 @@ export type GlobalSettings = {
    *  the pinned web panels — in settings (not per-window UI state) so the
    *  fold survives relaunch, matching the terminal-panel group folds. */
   pinnedWebPanelsCollapsed?: boolean
-  /** Collapsed state of the sidebar's "Layouts" disclosure — in settings so
-   *  the fold survives relaunch, matching User Panels / Nodes. */
+  /** Collapsed state of the sidebar's "Panel Canvas" parent disclosure, which
+   *  holds the live (possibly unsaved) canvas row plus the Saved Layouts
+   *  subtree — in settings so the fold survives relaunch. */
+  panelCanvasCollapsed?: boolean
+  /** Collapsed state of the "Saved Layouts" subtree nested under Panel Canvas
+   *  — in settings so the fold survives relaunch, matching User Panels /
+   *  Nodes. */
   panelLayoutsCollapsed?: boolean
   /** Named split-window arrangements of pinned panels ("all nodes btop"),
    *  sanitized by normalizePanelLayouts on every write. Optional for profiles

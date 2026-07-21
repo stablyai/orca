@@ -21,11 +21,7 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
-import {
-  PanelLayoutButton,
-  SortableTerminalPanelButton,
-  SortableWebPanelButton
-} from './SidebarPanelRows'
+import { SortableTerminalPanelButton, SortableWebPanelButton } from './SidebarPanelRows'
 import {
   QuickAddTerminalForm,
   QuickAddTerminalPanelButton,
@@ -33,6 +29,7 @@ import {
   QuickAddWebPanelButton
 } from './QuickAddPanelPopovers'
 import { NodeGroupBranch } from './SidebarNodeGroupBranch'
+import { SidebarPanelCanvasSection } from './SidebarPanelCanvasSection'
 import { usePanelTreeMigrations } from './use-panel-tree-migrations'
 
 /**
@@ -61,23 +58,6 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   )
   const activeView = useAppStore((s) => s.activeView)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const panelLayouts = useAppStore((s) => s.settings?.panelLayouts)
-  const activePanelLayoutId = useAppStore((s) => s.activePanelLayoutId)
-  const openPanelLayoutInCanvas = useAppStore((s) => s.openPanelLayoutInCanvas)
-  const setActivePanelLayoutId = useAppStore((s) => s.setActivePanelLayoutId)
-  const deletePanelLayout = React.useCallback(
-    (layoutId: string) => {
-      void updateSettings({
-        panelLayouts: (panelLayouts ?? []).filter((layout) => layout.id !== layoutId)
-      })
-      // Why: a canvas opened from the deleted layout must not keep offering
-      // "Save" against an id that no longer exists.
-      if (useAppStore.getState().activePanelLayoutId === layoutId) {
-        setActivePanelLayoutId(null)
-      }
-    },
-    [panelLayouts, updateSettings, setActivePanelLayoutId]
-  )
   // Why: filter in a memo, not the selector — a selector returning a fresh
   // array every call would re-render on each store update.
   const pinnedTerminalPanels = React.useMemo(
@@ -186,10 +166,8 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
   }, [panelTreeGroups, updateSettings])
 
   const webPanelsCollapsed = useAppStore((s) => s.settings?.pinnedWebPanelsCollapsed === true)
-  const layoutsCollapsed = useAppStore((s) => s.settings?.panelLayoutsCollapsed === true)
   const hasWebPanels = (pinnedWebPanels ?? []).length > 0
   const hasTerminalPanels = pinnedTerminalPanels.length > 0
-  const hasLayouts = (panelLayouts ?? []).length > 0
   const hasGroupedTerminals = topLevelNodeGroups.length > 0
   // Why: always mount the rails so User Panels / Nodes + buttons exist even
   // with zero panels (quick-add without Settings). Layouts still optional.
@@ -201,45 +179,7 @@ const SidebarPanelsNav = React.memo(function SidebarPanelsNav() {
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className="flex flex-col gap-0.5">
-          {hasLayouts ? (
-            <>
-              <button
-                type="button"
-                onClick={() => void updateSettings({ panelLayoutsCollapsed: !layoutsCollapsed })}
-                aria-expanded={!layoutsCollapsed}
-                className={cn(
-                  'flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] font-semibold tracking-wide uppercase transition-colors',
-                  layoutsCollapsed &&
-                    activeView === 'panel-canvas' &&
-                    (panelLayouts ?? []).some((layout) => activePanelLayoutId === layout.id)
-                    ? 'text-worktree-sidebar-accent-foreground'
-                    : 'text-worktree-sidebar-foreground/50 hover:text-worktree-sidebar-foreground/80'
-                )}
-              >
-                <ChevronRight
-                  className={cn(
-                    'size-3 shrink-0 transition-transform',
-                    !layoutsCollapsed && 'rotate-90'
-                  )}
-                  strokeWidth={2}
-                />
-                <span className="min-w-0 flex-1 truncate">
-                  {translate('auto.components.sidebar.SidebarPanelsNav.layouts', 'Layouts')}
-                </span>
-              </button>
-              {layoutsCollapsed
-                ? null
-                : (panelLayouts ?? []).map((layout) => (
-                    <PanelLayoutButton
-                      key={layout.id}
-                      layout={layout}
-                      active={activeView === 'panel-canvas' && activePanelLayoutId === layout.id}
-                      onOpen={openPanelLayoutInCanvas}
-                      onDelete={deletePanelLayout}
-                    />
-                  ))}
-            </>
-          ) : null}
+          <SidebarPanelCanvasSection />
           <div className="flex w-full items-center gap-0.5">
             <button
               type="button"
