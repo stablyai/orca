@@ -1398,8 +1398,13 @@ function getServeOptions(argv = process.argv): ServeOptions {
 }
 
 function getBundledWebClientRoot(): string | undefined {
-  const root = join(app.getAppPath(), 'out', 'web')
-  return existsSync(join(root, 'web-index.html')) ? root : undefined
+  const appPath = app.getAppPath()
+  const roots = [
+    join(appPath, 'out', 'web'),
+    // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the web bundle.
+    join(appPath, '..', 'web')
+  ]
+  return roots.find((root) => existsSync(join(root, 'web-index.html')))
 }
 
 async function renderTerminalPairingQr(pairingUrl: string): Promise<string | null> {
