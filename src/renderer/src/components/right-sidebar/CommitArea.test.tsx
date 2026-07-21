@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { CommitArea, ConflictSummaryCard, OperationBanner } from './SourceControl'
@@ -7,8 +8,16 @@ import {
 } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 import React from 'react'
+import { render, fireEvent } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
+
+let mockIsMac = false
+
+vi.mock('@/components/terminal-pane/terminal-link-open-hints', () => ({
+  isMacPlatform: () => mockIsMac,
+  getTerminalUrlSystemBrowserHint: () => ''
+}))
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -158,13 +167,69 @@ describe('CommitArea', () => {
 
   it('renders the Commit shortcut keys inside the primary button tooltip when the action is commit', () => {
     const props = baseProps()
-    const markup = renderCommitArea({
+    
+    // macOS exact formatting check
+    mockIsMac = true
+    const markupMac = renderCommitArea({
       ...props,
       primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
     })
-    expect(markup).toContain('Enter')
-    const hasShortcutCombo = markup.includes('⌘') || markup.includes('Ctrl')
-    expect(hasShortcutCombo).toBe(true)
+    expect(markupMac).toContain('Commit changes (⌘Enter)')
+
+    // Windows/Linux exact formatting check
+    mockIsMac = false
+    const markupWin = renderCommitArea({
+      ...props,
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
+    })
+    expect(markupWin).toContain('Commit changes (Ctrl+Enter)')
+  })
+
+  it('triggers onPrimaryAction on Cmd+Enter (Mac) or Ctrl+Enter (non-Mac)', () => {
+    const onPrimaryAction = vi.fn()
+    const props = {
+      ...baseProps(),
+      primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' },
+      onPrimaryAction
+    }
+
+    // Mac platform keydown validation
+    mockIsMac = true
+    const { container: containerMac, rerender } = render(
+      <TooltipProvider>
+        <CommitArea {...props} />
+      </TooltipProvider>
+    )
+    const textareaMac = containerMac.querySelector('textarea')
+    if (!textareaMac) throw new Error('textarea not found')
+
+    // On Mac, Ctrl+Enter should NOT trigger commit
+    fireEvent.keyDown(textareaMac, { key: 'Enter', ctrlKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    // On Mac, Cmd+Enter (metaKey) SHOULD trigger commit
+    fireEvent.keyDown(textareaMac, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+
+    onPrimaryAction.mockClear()
+
+    // non-Mac platform keydown validation
+    mockIsMac = false
+    rerender(
+      <TooltipProvider>
+        <CommitArea {...props} />
+      </TooltipProvider>
+    )
+    const textareaWin = containerMac.querySelector('textarea')
+    if (!textareaWin) throw new Error('textarea not found')
+
+    // On Windows, Cmd+Enter (metaKey) should NOT trigger commit
+    fireEvent.keyDown(textareaWin, { key: 'Enter', metaKey: true })
+    expect(onPrimaryAction).not.toHaveBeenCalled()
+
+    // On Windows, Ctrl+Enter SHOULD trigger commit
+    fireEvent.keyDown(textareaWin, { key: 'Enter', ctrlKey: true })
+    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
   })
 
   it('does not render the Commit shortcut keys inside the primary button tooltip when the action is not commit', () => {

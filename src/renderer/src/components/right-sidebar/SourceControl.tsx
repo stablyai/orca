@@ -6506,10 +6506,10 @@ export function CommitArea({
 
   const isMac = isMacPlatform()
 
-  // Why: Commit with Cmd+Enter (Mac) or Ctrl+Enter / Win+Enter (Windows/Linux) when the commit action is available.
+  // Why: Commit with Cmd+Enter on Mac or Ctrl+Enter elsewhere when the commit action is available.
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      const modifierPressed = event.ctrlKey || event.metaKey
+      const modifierPressed = isMac ? event.metaKey : event.ctrlKey
       if (event.key === 'Enter' && modifierPressed) {
         if (!primaryAction.disabled && primaryAction.kind === 'commit') {
           event.preventDefault()
@@ -6517,7 +6517,7 @@ export function CommitArea({
         }
       }
     },
-    [primaryAction, onPrimaryAction]
+    [isMac, primaryAction, onPrimaryAction]
   )
 
   // Why: config errors are surfaced by the generation dialog, so entry-point visibility only follows the feature toggle.
