@@ -104,6 +104,20 @@ Result: **2 files, 62 tests passed**, including both new characterizations.
 
 These tests materially improve reproduction without claiming which path occurred on the reporter's machines. The visible-host and `serve` parity argues against treating legacy relay writeback as the only cause: the relay characterization is strongest for direct SSH, while the epoch/empty-publication characterization also applies to runtime mirroring and headless transitions. The plan remains aligned by keeping the protocols separate and requiring both event sequences to be fixed.
 
+## Follow-up: Orca starts before Wi-Fi is ready
+
+A Remote Orca Server consumer may start while the Mac is still joining Wi-Fi. The shared-control transport already retries with bounded exponential delays, but terminal UI must not translate initial transport failure into host deletion or terminal exit.
+
+Required state model:
+
+- `connecting` / `reconnecting`: keep the last full mirror when available, mark it stale/read-only, and show a loading/retry indicator;
+- no cached mirror: show a loading placeholder rather than a failed terminal;
+- `ready`: atomically relist and resubscribe, then replace the stale mirror;
+- `exited` / removed: only after an authenticated host response or successful PTY listing proves absence;
+- transport timeout/failure: never deletion evidence.
+
+Add deterministic tests for cold offline startup, Wi-Fi recovery, repeated reconnect, and a genuine host-confirmed missing PTY. The key assertion is that connection failure remains `reconnecting` and preserves tabs, while only successful host evidence may transition a terminal to exited/removed.
+
 ## Mandatory gate status
 
 | Slice 0 item | Status | Evidence / gap |
