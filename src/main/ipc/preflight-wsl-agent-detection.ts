@@ -57,9 +57,10 @@ function isWslAgentDetectionTimeoutError(error: unknown): boolean {
     return false
   }
   const code = (error as { code?: unknown }).code
-  // Why: Node's execFile timeout sets code=ETIMEDOUT; our Promise.race wrapper
-  // does the same. A killed child may surface as 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
-  // rarely, but the kill-signal path commonly uses code null with killed=true.
+  // Why: the two cold-start timeout paths surface differently — the Promise.race
+  // wrapper rejects with code=ETIMEDOUT, while Node's execFile `timeout` kills the
+  // child (code=null, killed=true). Retry on both; a real shell failure (non-zero
+  // exit / ENOENT) matches neither and propagates without a wasted retry.
   if (code === 'ETIMEDOUT') {
     return true
   }
