@@ -7,12 +7,12 @@ export type ClaudeUsageWindowInput = {
   resets_at?: string | number
 }
 
+// Why: 1e10 sits between any plausible seconds epoch (<2286) and any millisecond epoch (>2001), so it distinguishes the two units without extra metadata.
 export function parseClaudeUsageResetTimestamp(value: string | number | undefined): number | null {
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
       return null
     }
-    // Why: 1e10 splits epoch seconds from epoch ms — seconds stay below it until year 2286, ms passed it in 1970.
     return value > 10_000_000_000 ? value : value * 1000
   }
 
