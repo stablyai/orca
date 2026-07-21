@@ -39,7 +39,6 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isFixingCommitFailureWithAI: false,
     isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
-    aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
@@ -61,7 +60,9 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
 }
 
 function buttons(markup: string): string[] {
-  return [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)].map((match) => match[0])
+  return [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .filter((entry) => !entry.includes('aria-label="Generate commit message with AI"'))
 }
 
 function renderButtons(props: ReturnType<typeof baseProps>): string[] {
