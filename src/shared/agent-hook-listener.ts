@@ -1903,7 +1903,11 @@ function extractPiToolFields(
   if (
     eventName === 'tool_call' ||
     eventName === 'tool_execution_start' ||
-    eventName === 'tool_execution_end'
+    eventName === 'tool_execution_end' ||
+    // Include the approval events so the waiting row names the tool the operator
+    // is being asked to approve, not a stale one from the previous step.
+    eventName === 'tool_approval_requested' ||
+    eventName === 'tool_approval_resolved'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
     const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
@@ -3428,11 +3432,22 @@ function normalizePiCompatibleEvent(
     eventName === 'tool_call' ||
     eventName === 'tool_execution_start' ||
     eventName === 'tool_execution_end' ||
-    eventName === 'message_end'
+    eventName === 'message_end' ||
+    // Why 'working' for resolved: the operator has answered, so the gate is
+    // gone; whether approved or denied omp resumes the turn (an approved tool
+    // emits tool_execution_start next anyway). Returning to 'working' clears the
+    // wait at once rather than leaving it until the next event lands.
+    eventName === 'tool_approval_resolved'
       ? 'working'
-      : eventName === 'agent_end'
-        ? 'done'
-        : null
+      : // Why 'waiting': omp is blocked on the operator for tool approval — the
+        // same state Claude's PermissionRequest maps to. It is sticky: nothing
+        // overwrites it until tool_approval_resolved or the turn ends, so the
+        // pet's approval prompt persists instead of flashing for a frame.
+        eventName === 'tool_approval_requested'
+        ? 'waiting'
+        : eventName === 'agent_end'
+          ? 'done'
+          : null
 
   if (!stateName) {
     return null
