@@ -11845,6 +11845,12 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "Editor Keybindings",
+          "1b23c01cc6": "Default",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "Use Vim modal keybindings in the code editor instead of standard editing."
         }
       },
       "right": {

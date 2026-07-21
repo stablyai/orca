@@ -81,6 +81,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
   })
 
+  it('uses standard editor keybindings by default', () => {
+    expect(getDefaultSettings('/tmp').editorKeybindings).toBe('default')
+  })
+
   it('keeps rich Markdown spellcheck enabled by default', () => {
     expect(getDefaultSettings('/tmp').richMarkdownSpellcheckEnabled).toBe(true)
   })
