@@ -223,6 +223,53 @@ describe('serveOrcaApp', () => {
   )
 
   it.runIf(process.platform === 'darwin')(
+    'records replacement spawn failure before rejecting without a retry loop',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-spawn-failure-'))
+      temporaryDirectories.push(root)
+      const appPath = join(root, 'Orca.app')
+      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
+      const userDataPath = join(root, 'user-data')
+      await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
+      await mkdir(userDataPath, { recursive: true })
+      await writeFile(
+        join(appPath, 'Contents', 'Info.plist'),
+        '<plist><dict><key>CFBundleShortVersionString</key><string>1.0.61</string></dict></plist>'
+      )
+      const handoffPath = getServeUpdateHandoffPath(userDataPath)
+      await writeFile(
+        handoffPath,
+        JSON.stringify({
+          schemaVersion: 1,
+          phase: 'install-requested',
+          fromVersion: '1.0.51',
+          targetVersion: '1.0.61',
+          servingPid: 4101
+        })
+      )
+      process.env.ORCA_APP_EXECUTABLE = executable
+      process.env.ORCA_USER_DATA_PATH = userDataPath
+      const replacementOwner = new FakeChildProcess()
+      spawnMock.mockReturnValue(replacementOwner)
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+      const supervisor = serveOrcaApp({ json: true })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+      replacementOwner.emit('error', new Error('spawn ENOENT'))
+
+      await expect(supervisor).rejects.toThrow('spawn ENOENT')
+      expect(spawnMock).toHaveBeenCalledOnce()
+      expect(parseServeUpdateHandoffState(JSON.parse(await readFile(handoffPath, 'utf8')))).toEqual(
+        expect.objectContaining({
+          phase: 'failed',
+          targetVersion: '1.0.61',
+          reason: expect.stringContaining('spawn ENOENT')
+        })
+      )
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
     'fails a replacement that never reports runtime readiness without retrying it',
     async () => {
       vi.useFakeTimers()

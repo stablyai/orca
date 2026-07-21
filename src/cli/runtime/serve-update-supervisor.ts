@@ -115,9 +115,9 @@ function waitForForegroundChild(
       child.kill('SIGTERM')
       forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), 5000)
     }
-    const rejectReplacement = (reason: string): void => {
+    const recordReplacementFailure = (reason: string): boolean => {
       if (!expected || readiness !== 'pending') {
-        return
+        return false
       }
       readiness = 'failed'
       if (readyTimer) {
@@ -131,6 +131,12 @@ function waitForForegroundChild(
       ).catch((error) => {
         process.stderr.write(`[serve] could not record update handoff failure: ${String(error)}\n`)
       })
+      return true
+    }
+    const rejectReplacement = (reason: string): void => {
+      if (!recordReplacementFailure(reason)) {
+        return
+      }
       terminateChild()
     }
     const forwardSignal = (signal: NodeJS.Signals): void => {
@@ -188,14 +194,18 @@ function waitForForegroundChild(
         )
       }, SERVE_REPLACEMENT_READY_TIMEOUT_MS)
     }
-    child.once('error', (error) => {
-      cleanup()
-      reject(error)
-    })
-    child.once('exit', (code, signal) => {
+    const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       cleanup()
       void stateWrite.then(() => resolveWait({ code, signal, readiness }))
+    }
+    child.once('error', (error) => {
+      recordReplacementFailure(`Could not start the replacement process: ${String(error)}`)
+      cleanup()
+      child.off('exit', handleExit)
+      // Why: the LaunchAgent may restart this parent immediately, so durable failure must precede process rejection.
+      void stateWrite.then(() => reject(error))
     })
+    child.once('exit', handleExit)
   })
 }
 
