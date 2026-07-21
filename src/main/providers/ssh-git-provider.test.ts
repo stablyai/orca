@@ -177,6 +177,34 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(['dist/bundle.js'])
   })
 
+  it('appendGitignoreEntries sends a bounded relay request', async () => {
+    mux.request.mockResolvedValue({ added: ['dist'], alreadyPresent: [] })
+    const entries = [{ relativePath: 'dist', isDirectory: true }]
+
+    const result = await provider.appendGitignoreEntries('/home/user/repo', entries)
+
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.appendGitignoreEntries',
+      { worktreePath: '/home/user/repo', entries },
+      { timeoutMs: 30_000 }
+    )
+    expect(result).toEqual({ added: ['dist'], alreadyPresent: [] })
+  })
+
+  it('fails closed when the relay lacks gitignore append support', async () => {
+    const methodNotFound = new Error('Method not found: git.appendGitignoreEntries') as Error & {
+      code?: number
+    }
+    methodNotFound.code = -32601
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.appendGitignoreEntries('/home/user/repo', [
+        { relativePath: 'dist', isDirectory: true }
+      ])
+    ).rejects.toThrow('Reconnect the SSH target')
+  })
+
   it('clone sends git.clone request and forwards matching progress notifications', async () => {
     const unsubscribe = vi.fn()
     const onProgress = vi.fn()

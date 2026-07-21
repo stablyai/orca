@@ -1,38 +1,39 @@
-import { constants } from 'node:fs'
-import { appendFile, lstat, readFile } from 'node:fs/promises'
+import { constants, type Stats } from 'node:fs'
+import { lstat, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../../shared/gitignore-entry'
 import {
   MAX_GITIGNORE_ENTRY_COUNT,
   MAX_GITIGNORE_RELATIVE_PATH_LENGTH
 } from '../../shared/gitignore-entry'
-import type { IFilesystemProvider } from '../providers/types'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 
 type PreparedGitignoreEntry = GitignoreEntry & {
   pattern: string
   equivalentPatterns: string[]
 }
 
-type GitignoreFileAccess = {
-  lockKey: string
-  readExisting(): Promise<string | null>
-  append(content: string): Promise<void>
-}
-
 const appendQueues = new Map<string, Promise<void>>()
-const APPEND_FILE_FLAGS =
-  constants.O_APPEND | constants.O_CREAT | constants.O_WRONLY | constants.O_NOFOLLOW
+const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
+// 为什么：同一文件句柄完成读取和追加，避免恶意仓库在检查后把 .gitignore 换成工作树外的符号链接。
+const APPEND_FILE_FLAGS = constants.O_APPEND | constants.O_CREAT | constants.O_RDWR | OPEN_NOFOLLOW
 
-function isMissingFileError(error: unknown): boolean {
+function hasErrorCode(error: unknown, code: string): boolean {
   if (typeof error !== 'object' || error === null) {
     return false
   }
-  const candidate = error as { code?: unknown; message?: unknown }
-  return (
-    candidate.code === 'ENOENT' ||
-    (typeof candidate.message === 'string' && /\bENOENT\b|no such file/i.test(candidate.message))
-  )
+  return (error as { code?: unknown }).code === code
+}
+
+function openedSameFile(pathStats: Stats, openedStats: Stats): boolean {
+  if (
+    pathStats.dev === 0 ||
+    openedStats.dev === 0 ||
+    pathStats.ino === 0 ||
+    openedStats.ino === 0
+  ) {
+    return true
+  }
+  return pathStats.dev === openedStats.dev && pathStats.ino === openedStats.ino
 }
 
 function escapeGitignorePath(relativePath: string): string {
@@ -105,12 +106,15 @@ function buildAppendResult(
   const existingPatterns = new Set(
     existingContent.split('\n').map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
   )
-  const addedEntries = entries.filter(
-    (entry) => !entry.equivalentPatterns.some((pattern) => existingPatterns.has(pattern))
-  )
-  const alreadyPresent = entries
-    .filter((entry) => !addedEntries.includes(entry))
-    .map((entry) => entry.relativePath)
+  const addedEntries: PreparedGitignoreEntry[] = []
+  const alreadyPresent: string[] = []
+  for (const entry of entries) {
+    if (entry.equivalentPatterns.some((pattern) => existingPatterns.has(pattern))) {
+      alreadyPresent.push(entry.relativePath)
+    } else {
+      addedEntries.push(entry)
+    }
+  }
 
   if (addedEntries.length === 0) {
     return { result: { added: [], alreadyPresent }, contentToAppend: '' }
@@ -146,88 +150,44 @@ async function enqueueGitignoreAppend<T>(lockKey: string, operation: () => Promi
   }
 }
 
-async function appendEntriesWithAccess(
-  entries: unknown,
-  access: GitignoreFileAccess
+export async function appendGitignoreEntries(
+  worktreePath: string,
+  entries: unknown
 ): Promise<AppendGitignoreEntriesResult> {
   const preparedEntries = prepareGitignoreEntries(entries)
   if (preparedEntries.length === 0) {
     return { added: [], alreadyPresent: [] }
   }
-  return enqueueGitignoreAppend(access.lockKey, async () => {
-    const existingContent = (await access.readExisting()) ?? ''
-    const { result, contentToAppend } = buildAppendResult(existingContent, preparedEntries)
-    if (contentToAppend) {
-      await access.append(contentToAppend)
-    }
-    return result
-  })
-}
-
-export async function appendGitignoreEntries(
-  worktreePath: string,
-  entries: unknown
-): Promise<AppendGitignoreEntriesResult> {
   const gitignorePath = join(worktreePath, '.gitignore')
-  return appendEntriesWithAccess(entries, {
-    lockKey: `local:${gitignorePath}`,
-    readExisting: async () => {
-      try {
-        const stats = await lstat(gitignorePath)
-        if (stats.isSymbolicLink()) {
-          throw new Error('Cannot update a symbolic-link .gitignore file')
-        }
-        if (!stats.isFile()) {
-          throw new Error('Cannot update a non-regular .gitignore file')
-        }
-        return await readFile(gitignorePath, 'utf8')
-      } catch (error) {
-        if (isMissingFileError(error)) {
-          return null
-        }
-        throw error
+  return enqueueGitignoreAppend(`local:${gitignorePath}`, async () => {
+    let handle: Awaited<ReturnType<typeof open>>
+    try {
+      handle = await open(gitignorePath, APPEND_FILE_FLAGS)
+    } catch (error) {
+      if (hasErrorCode(error, 'ELOOP')) {
+        throw new Error('Cannot update a symbolic-link .gitignore file')
       }
-    },
-    append: (content) =>
-      appendFile(gitignorePath, content, { encoding: 'utf8', flag: APPEND_FILE_FLAGS })
-  })
-}
-
-export async function appendGitignoreEntriesWithProvider(
-  worktreePath: string,
-  entries: unknown,
-  provider: Pick<IFilesystemProvider, 'readFile' | 'writeFileBase64Chunk'> &
-    Partial<Pick<IFilesystemProvider, 'lstat'>>
-): Promise<AppendGitignoreEntriesResult> {
-  const gitignorePath = joinWorktreeRelativePath(worktreePath, '.gitignore')
-  return appendEntriesWithAccess(entries, {
-    lockKey: `provider:${gitignorePath}`,
-    readExisting: async () => {
-      try {
-        const stats = await provider.lstat?.(gitignorePath)
-        if (stats?.type === 'symlink') {
-          throw new Error('Cannot update a symbolic-link .gitignore file')
-        }
-        if (stats && stats.type !== 'file') {
-          throw new Error('Cannot update a non-regular .gitignore file')
-        }
-        const result = await provider.readFile(gitignorePath)
-        if (result.isBinary) {
-          throw new Error('Cannot update a binary .gitignore file')
-        }
-        return result.content
-      } catch (error) {
-        if (isMissingFileError(error)) {
-          return null
-        }
-        throw error
+      throw error
+    }
+    try {
+      const [pathStats, openedStats] = await Promise.all([lstat(gitignorePath), handle.stat()])
+      if (pathStats.isSymbolicLink()) {
+        throw new Error('Cannot update a symbolic-link .gitignore file')
       }
-    },
-    append: (content) =>
-      provider.writeFileBase64Chunk(
-        gitignorePath,
-        Buffer.from(content, 'utf8').toString('base64'),
-        true
-      )
+      if (!pathStats.isFile() || !openedStats.isFile()) {
+        throw new Error('Cannot update a non-regular .gitignore file')
+      }
+      if (!openedSameFile(pathStats, openedStats)) {
+        throw new Error('.gitignore changed while it was being opened')
+      }
+      const existingContent = await handle.readFile({ encoding: 'utf8' })
+      const { result, contentToAppend } = buildAppendResult(existingContent, preparedEntries)
+      if (contentToAppend) {
+        await handle.writeFile(contentToAppend, { encoding: 'utf8' })
+      }
+      return result
+    } finally {
+      await handle.close()
+    }
   })
 }

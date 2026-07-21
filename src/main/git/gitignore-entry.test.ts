@@ -2,12 +2,12 @@ import { mkdtempSync } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   MAX_GITIGNORE_ENTRY_COUNT,
   MAX_GITIGNORE_RELATIVE_PATH_LENGTH
 } from '../../shared/gitignore-entry'
-import { appendGitignoreEntries, appendGitignoreEntriesWithProvider } from './gitignore-entry'
+import { appendGitignoreEntries } from './gitignore-entry'
 
 describe('appendGitignoreEntries', () => {
   let dir: string
@@ -133,64 +133,4 @@ describe('appendGitignoreEntries', () => {
       await expect(fs.readFile(outsidePath, 'utf8')).resolves.toBe('keep\n')
     }
   )
-})
-
-describe('appendGitignoreEntriesWithProvider', () => {
-  it('uses the provider append capability without overwriting existing content', async () => {
-    const readFile = vi.fn().mockResolvedValue({ content: '*.log', isBinary: false })
-    const writeFileBase64Chunk = vi.fn().mockResolvedValue(undefined)
-
-    const result = await appendGitignoreEntriesWithProvider(
-      '/home/user/repo',
-      [{ relativePath: 'dist', isDirectory: true }],
-      { readFile, writeFileBase64Chunk }
-    )
-
-    expect(readFile).toHaveBeenCalledWith('/home/user/repo/.gitignore')
-    expect(writeFileBase64Chunk).toHaveBeenCalledWith(
-      '/home/user/repo/.gitignore',
-      Buffer.from('\ndist/\n').toString('base64'),
-      true
-    )
-    expect(result).toEqual({ added: ['dist'], alreadyPresent: [] })
-  })
-
-  it('creates a missing provider file through append and rejects binary content', async () => {
-    const missing = Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' })
-    const writeFileBase64Chunk = vi.fn().mockResolvedValue(undefined)
-
-    await appendGitignoreEntriesWithProvider(
-      'C:\\repo',
-      [{ relativePath: 'build\\cache', isDirectory: true }],
-      {
-        readFile: vi.fn().mockRejectedValue(missing),
-        writeFileBase64Chunk
-      }
-    )
-
-    expect(writeFileBase64Chunk).toHaveBeenCalledWith(
-      'C:\\repo\\.gitignore',
-      Buffer.from('build/cache/\n').toString('base64'),
-      true
-    )
-    await expect(
-      appendGitignoreEntriesWithProvider('/repo', [{ relativePath: 'dist', isDirectory: true }], {
-        readFile: vi.fn().mockResolvedValue({ content: '', isBinary: true }),
-        writeFileBase64Chunk
-      })
-    ).rejects.toThrow(/binary/)
-  })
-
-  it('refuses a provider symbolic-link .gitignore when lstat is available', async () => {
-    const writeFileBase64Chunk = vi.fn()
-
-    await expect(
-      appendGitignoreEntriesWithProvider('/repo', [{ relativePath: 'dist', isDirectory: true }], {
-        lstat: vi.fn().mockResolvedValue({ type: 'symlink' }),
-        readFile: vi.fn(),
-        writeFileBase64Chunk
-      })
-    ).rejects.toThrow(/symbolic-link/)
-    expect(writeFileBase64Chunk).not.toHaveBeenCalled()
-  })
 })

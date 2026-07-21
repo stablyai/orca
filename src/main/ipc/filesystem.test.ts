@@ -1596,14 +1596,27 @@ describe('registerFilesystemHandlers', () => {
     ])
   })
 
-  it('appends gitignore entries through local and SSH filesystem owners', async () => {
+  it('appends gitignore entries through local and SSH Git owners', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
-    readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-    appendFileMock.mockResolvedValue(undefined)
-    const remoteWrite = vi.fn().mockResolvedValue(undefined)
-    getSshFilesystemProviderMock.mockReturnValue({
-      readFile: vi.fn().mockResolvedValue({ content: 'coverage/\n', isBinary: false }),
-      writeFileBase64Chunk: remoteWrite
+    const localWrite = vi.fn().mockResolvedValue(undefined)
+    const localStats = {
+      dev: 1,
+      ino: 2,
+      isFile: () => true,
+      isSymbolicLink: () => false
+    }
+    lstatMock.mockResolvedValue(localStats)
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue(localStats),
+      readFile: vi.fn().mockResolvedValue(''),
+      writeFile: localWrite,
+      close: vi.fn().mockResolvedValue(undefined)
+    })
+    const appendRemoteGitignoreEntries = vi
+      .fn()
+      .mockResolvedValue({ added: ['dist'], alreadyPresent: ['coverage'] })
+    getSshGitProviderMock.mockReturnValue({
+      appendGitignoreEntries: appendRemoteGitignoreEntries
     })
     registerFilesystemHandlers(store as never)
 
@@ -1624,16 +1637,15 @@ describe('registerFilesystemHandlers', () => {
       })
     ).resolves.toEqual({ added: ['dist'], alreadyPresent: ['coverage'] })
 
-    expect(appendFileMock).toHaveBeenCalledWith(
+    expect(openMock).toHaveBeenCalledWith(
       path.join(WORKTREE_FEATURE_PATH, '.gitignore'),
-      'dist/\n',
-      expect.objectContaining({ encoding: 'utf8', flag: expect.any(Number) })
+      expect.any(Number)
     )
-    expect(remoteWrite).toHaveBeenCalledWith(
-      '/remote/repo/.gitignore',
-      Buffer.from('dist/\n').toString('base64'),
-      true
-    )
+    expect(localWrite).toHaveBeenCalledWith('dist/\n', { encoding: 'utf8' })
+    expect(appendRemoteGitignoreEntries).toHaveBeenCalledWith('/remote/repo', [
+      { relativePath: 'coverage', isDirectory: true },
+      { relativePath: 'dist', isDirectory: true }
+    ])
   })
 
   it('routes abort merge through local and SSH git providers', async () => {

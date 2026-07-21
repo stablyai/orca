@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,8 +20,7 @@ const mocks = vi.hoisted(() => ({
   resolveCommitMessageSettings: vi.fn(),
   resolveHostedReviewBodyForGeneration: vi.fn(),
   getSshGitProvider: vi.fn(),
-  getStatus: vi.fn(),
-  requireSshFilesystemProvider: vi.fn()
+  getStatus: vi.fn()
 }))
 
 vi.mock('../git/status', async () => ({
@@ -55,10 +54,6 @@ vi.mock('../text-generation/pull-request-context', async () => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: mocks.getSshGitProvider
-}))
-
-vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  requireSshFilesystemProvider: mocks.requireSshFilesystemProvider
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -108,7 +103,6 @@ describe('RuntimeGitCommands', () => {
     mocks.resolveHostedReviewBodyForGeneration.mockImplementation(async ({ body }) => body)
     mocks.getSshGitProvider.mockReset()
     mocks.getStatus.mockReset()
-    mocks.requireSshFilesystemProvider.mockReset()
     mocks.checkoutBranch.mockReset()
     mocks.listLocalBranches.mockReset()
   })
@@ -184,45 +178,6 @@ describe('RuntimeGitCommands', () => {
 
     expect(provider.abortMerge).toHaveBeenCalledWith('/remote/repo')
     expect(mocks.abortMerge).not.toHaveBeenCalled()
-  })
-
-  it('appends gitignore entries through local and SSH filesystem owners', async () => {
-    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-gitignore-'))
-    tempDirs.push(worktreePath)
-    const localCommands = makeCommands(worktreePath)
-
-    await expect(
-      localCommands.appendRuntimeGitignoreEntries('id:wt-1', [
-        { relativePath: 'dist', isDirectory: true }
-      ])
-    ).resolves.toEqual({ added: ['dist'], alreadyPresent: [] })
-    expect(readFileSync(join(worktreePath, '.gitignore'), 'utf8')).toBe('dist/\n')
-
-    const writeFileBase64Chunk = vi.fn().mockResolvedValue(undefined)
-    mocks.requireSshFilesystemProvider.mockReturnValue({
-      readFile: vi.fn().mockResolvedValue({ content: 'coverage/\n', isBinary: false }),
-      writeFileBase64Chunk
-    })
-    const remoteCommands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({
-        worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
-      }),
-      getRuntimeSettings: () => ({}) as GlobalSettings
-    })
-
-    await expect(
-      remoteCommands.appendRuntimeGitignoreEntries('id:wt-1', [
-        { relativePath: 'coverage', isDirectory: true },
-        { relativePath: 'dist', isDirectory: true }
-      ])
-    ).resolves.toEqual({ added: ['dist'], alreadyPresent: ['coverage'] })
-    expect(mocks.requireSshFilesystemProvider).toHaveBeenCalledWith('conn-1')
-    expect(writeFileBase64Chunk).toHaveBeenCalledWith(
-      '/remote/repo/.gitignore',
-      Buffer.from('dist/\n').toString('base64'),
-      true
-    )
   })
 
   it('aborts a local rebase through the resolved worktree', async () => {

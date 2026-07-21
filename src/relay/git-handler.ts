@@ -45,6 +45,7 @@ import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { capGitStatusEntries, resolveGitStatusLimit } from '../shared/git-status-limit'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
+import { appendGitignoreEntries } from '../main/git/gitignore-entry'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import {
   isExecKilledError,
@@ -205,6 +206,9 @@ export class GitHandler {
       this.getSubmoduleStatus(p, context)
     )
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
+    this.dispatcher.onRequest('git.appendGitignoreEntries', (p) =>
+      appendGitignoreEntries(p.worktreePath as string, p.entries)
+    )
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
     this.dispatcher.onRequest('git.diff', (p, context) => this.getDiff(p, context))

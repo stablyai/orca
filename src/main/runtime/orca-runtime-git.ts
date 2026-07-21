@@ -60,8 +60,7 @@ import {
 } from '../providers/ssh-git-dispatch'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
-import { appendGitignoreEntries, appendGitignoreEntriesWithProvider } from '../git/gitignore-entry'
-import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { appendGitignoreEntries } from '../git/gitignore-entry'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -248,12 +247,12 @@ export class RuntimeGitCommands {
     entries: GitignoreEntry[]
   ): Promise<AppendGitignoreEntriesResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
-      return appendGitignoreEntriesWithProvider(
-        target.worktree.path,
-        entries,
-        requireSshFilesystemProvider(target.connectionId)
-      )
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.appendGitignoreEntries(target.worktree.path, entries)
     }
     return appendGitignoreEntries(target.worktree.path, entries)
   }

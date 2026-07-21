@@ -83,7 +83,7 @@ import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
 } from '../git/huge-folder-ignore'
-import { appendGitignoreEntries, appendGitignoreEntriesWithProvider } from '../git/gitignore-entry'
+import { appendGitignoreEntries } from '../git/gitignore-entry'
 import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../../shared/gitignore-entry'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
@@ -1229,8 +1229,11 @@ export function registerFilesystemHandlers(
       args: { worktreePath: string; entries: GitignoreEntry[]; connectionId?: string }
     ): Promise<AppendGitignoreEntriesResult> => {
       if (args.connectionId) {
-        const provider = requireSshFilesystemProvider(args.connectionId)
-        return appendGitignoreEntriesWithProvider(args.worktreePath, args.entries, provider)
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.appendGitignoreEntries(args.worktreePath, args.entries)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return appendGitignoreEntries(worktreePath, args.entries)

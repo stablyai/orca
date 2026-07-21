@@ -100,6 +100,7 @@ describe('GitHandler', () => {
     const methods = Array.from(dispatcher._requestHandlers.keys())
     expect(methods).toContain('git.status')
     expect(methods).toContain('git.checkIgnored')
+    expect(methods).toContain('git.appendGitignoreEntries')
     expect(methods).toContain('git.history')
     expect(methods).toContain('git.commit')
     expect(methods).toContain('git.diff')

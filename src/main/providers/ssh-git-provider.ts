@@ -32,6 +32,7 @@ import {
 } from '../git/max-buffer-overflow'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+import type { AppendGitignoreEntriesResult, GitignoreEntry } from '../../shared/gitignore-entry'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -39,6 +40,8 @@ type NonInteractiveExecQueueEntry = {
   done: Promise<void>
   release: () => void
 }
+
+const GITIGNORE_APPEND_TIMEOUT_MS = 30_000
 
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -170,6 +173,28 @@ export class SshGitProvider implements IGitProvider {
       worktreePath,
       paths: relativePaths
     })) as string[]
+  }
+
+  async appendGitignoreEntries(
+    worktreePath: string,
+    entries: GitignoreEntry[]
+  ): Promise<AppendGitignoreEntriesResult> {
+    return this.runWithDiffDedupeClear(async () => {
+      try {
+        return (await this.mux.request(
+          'git.appendGitignoreEntries',
+          { worktreePath, entries },
+          { timeoutMs: GITIGNORE_APPEND_TIMEOUT_MS }
+        )) as AppendGitignoreEntriesResult
+      } catch (error) {
+        if (isJsonRpcMethodNotFoundError(error)) {
+          throw new Error(
+            'SSH .gitignore updates are unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+          )
+        }
+        throw error
+      }
+    })
   }
 
   async getHistory(
