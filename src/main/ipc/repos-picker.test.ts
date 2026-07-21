@@ -55,6 +55,14 @@ describe('repos folder pickers', () => {
     updateRepo: vi.fn()
   }
 
+  const callPickFolder = (args?: { defaultPath?: string }): Promise<string | null> => {
+    const handler = handlers.get('repos:pickFolder')
+    if (!handler) {
+      throw new Error('repos:pickFolder handler was never registered')
+    }
+    return handler(null, args) as Promise<string | null>
+  }
+
   const callPickFolders = (): Promise<string[]> => {
     const handler = handlers.get('repos:pickFolders')
     if (!handler) {
@@ -79,8 +87,19 @@ describe('repos folder pickers', () => {
     })
     removeHandlerMock.mockReset()
     showOpenDialogMock.mockReset()
-
     registerRepoHandlers(mockWindow as never, mockStore as never)
+  })
+
+  it('applies the caller-provided pickFolder dialog default', async () => {
+    const projectDefault = join(sep, 'some', 'dir')
+    showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+
+    await callPickFolder({ defaultPath: projectDefault })
+
+    expect(showOpenDialogMock).toHaveBeenCalledWith(mockWindow, {
+      properties: ['openDirectory'],
+      defaultPath: projectDefault
+    })
   })
 
   it('registers the multi-folder picker with handler cleanup', () => {

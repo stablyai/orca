@@ -532,11 +532,12 @@ const api = {
 
     update: (args) => ipcRenderer.invoke('repos:update', args),
 
-    pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
+    pickFolder: (args?: { defaultPath?: string }) => ipcRenderer.invoke('repos:pickFolder', args),
 
-    pickFolders: () => ipcRenderer.invoke('repos:pickFolders'),
+    pickFolders: (args?: { defaultPath?: string }) => ipcRenderer.invoke('repos:pickFolders', args),
 
-    pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
+    pickDirectory: (args?: { defaultPath?: string }) =>
+      ipcRenderer.invoke('repos:pickDirectory', args),
 
     clone: (args) => ipcRenderer.invoke('repos:clone', args),
 

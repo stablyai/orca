@@ -1042,9 +1042,9 @@ export type PreloadApi = {
         externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       }
     }) => Promise<Repo>
-    pickFolder: () => Promise<string | null>
-    pickFolders: () => Promise<string[]>
-    pickDirectory: () => Promise<string | null>
+    pickFolder: (args?: { defaultPath?: string }) => Promise<string | null>
+    pickFolders: (args?: { defaultPath?: string }) => Promise<string[]>
+    pickDirectory: (args?: { defaultPath?: string }) => Promise<string | null>
     clone: (args: { url: string; destination: string }) => Promise<Repo>
     cloneRemote: (args: { connectionId: string; url: string; destination: string }) => Promise<Repo>
     createRemote: (args: {

@@ -9248,6 +9248,12 @@
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
+        },
+        "ProjectDefaultPathSetting": {
+          "title": "Project default directory",
+          "description": "Starting directory for local project folder pickers. Leave empty to use the system's last-used location.",
+          "reset": "Reset",
+          "browse": "Browse"
         }
       },
       "right": {

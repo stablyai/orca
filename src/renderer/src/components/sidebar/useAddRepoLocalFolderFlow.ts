@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
@@ -282,7 +283,9 @@ export function useAddRepoLocalFolderFlow({
     setIsAdding(true)
     setAddProjectBusyLabel('Choose a folder...')
     try {
-      const paths = await window.api.repos.pickFolders()
+      const paths = await window.api.repos.pickFolders({
+        defaultPath: useAppStore.getState().settings?.projectDefaultPath
+      })
       if (paths.length === 0 || gen !== localAddGenRef.current) {
         return
       }

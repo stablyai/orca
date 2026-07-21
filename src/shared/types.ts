@@ -2568,6 +2568,9 @@ export type HostSettingOverrides = {
 
 export type GlobalSettings = {
   workspaceDir: string
+  /** Starting directory for client-local project folder pickers.
+   *  Unset = use the native dialog's last-used location. */
+  projectDefaultPath?: string
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>

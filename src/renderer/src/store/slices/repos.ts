@@ -2666,7 +2666,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       )
       return null
     }
-    const path = await window.api.repos.pickFolder()
+    const path = await window.api.repos.pickFolder({
+      defaultPath: get().settings?.projectDefaultPath
+    })
     if (!path) {
       return null
     }

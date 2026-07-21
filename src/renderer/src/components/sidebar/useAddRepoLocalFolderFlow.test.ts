@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 
+const storeState = vi.hoisted(() => ({ settings: { projectDefaultPath: '/projects' } }))
+
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => storeState }
+}))
+
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
   return {
@@ -104,7 +110,7 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     await handleBrowse()
 
-    expect(pickFolders).toHaveBeenCalledTimes(1)
+    expect(pickFolders).toHaveBeenCalledWith({ defaultPath: '/projects' })
     expect(addRepoPath).toHaveBeenCalledTimes(2)
     expect(addRepoPath).toHaveBeenNthCalledWith(1, '/projects/alpha')
     expect(addRepoPath).toHaveBeenNthCalledWith(2, '/projects/beta')

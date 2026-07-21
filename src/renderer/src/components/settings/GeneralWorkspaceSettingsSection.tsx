@@ -1,6 +1,7 @@
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
+import { ProjectDefaultPathSetting } from './ProjectDefaultPathSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
@@ -29,6 +30,8 @@ export function GeneralWorkspaceSettingsSection({
       />
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+
+      <ProjectDefaultPathSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(
