@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import {
   ActivateTab,
@@ -136,8 +137,25 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       let unsubscribe = (): void => {}
       let closed = false
       let initialized = false
-      const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+      const bufferedByWorktree = new Map<string, RuntimeMobileSessionTabsResult>()
+      unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
+        if (subscribedWorktree && snapshot.worktree !== subscribedWorktree) {
+          return
+        }
+        if (!initialized) {
+          bufferedByWorktree.set(snapshot.worktree, snapshot)
+          return
+        }
+        emit({ type: 'updated', ...snapshot })
+      }, pairedDeviceId)
+      const initial = await runtime
+        .listMobileSessionTabs(params.worktree, pairedDeviceId)
+        .catch((error) => {
+          unsubscribe()
+          throw error
+        })
       if (closed) {
+        unsubscribe()
         return
       }
       subscribedWorktree = initial.worktree
@@ -161,15 +179,11 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       }
       emit({ type: 'snapshot', ...initial })
       initialized = true
-      if (closed) {
-        return
+      const buffered = bufferedByWorktree.get(subscribedWorktree)
+      bufferedByWorktree.clear()
+      if (buffered) {
+        emit({ type: 'updated', ...buffered })
       }
-
-      unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-        if (snapshot.worktree === subscribedWorktree) {
-          emit({ type: 'updated', ...snapshot })
-        }
-      }, pairedDeviceId)
       if (closed) {
         unsubscribe()
       }
@@ -202,6 +216,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       // Why: initial listAll errors should return one RPC error, not a leaked
       // subscription cleanup that later emits a stray end frame.
       let initialized = false
+      const bufferedByWorktree = new Map<string, RuntimeMobileSessionTabsResult>()
       const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
       const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
       // Why: shared-control can carry multiple all-tab subscribers on one
@@ -221,6 +236,13 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
+      unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
+        if (!initialized) {
+          bufferedByWorktree.set(snapshot.worktree, snapshot)
+          return
+        }
+        emit({ type: 'updated', ...snapshot })
+      }, pairedDeviceId)
       const snapshots = await Promise.resolve(
         runtime.listAllMobileSessionTabs(pairedDeviceId)
       ).catch((error) => {
@@ -232,13 +254,14 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       }
       emit({ type: 'snapshots', snapshots })
       initialized = true
+      for (const buffered of bufferedByWorktree.values()) {
+        emit({ type: 'updated', ...buffered })
+      }
+      bufferedByWorktree.clear()
 
       if (closed) {
-        return
+        unsubscribe()
       }
-      unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-        emit({ type: 'updated', ...snapshot })
-      }, pairedDeviceId)
     }
   }),
   defineMethod({
